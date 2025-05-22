@@ -2,8 +2,9 @@
   "name": "vite-plus",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "tsx ./src/index.ts"
+    "dev": "node --import tsx/esm ./src/index.ts"
   },
   "dependencies": {
     "oxlint": "^0.16.5",
