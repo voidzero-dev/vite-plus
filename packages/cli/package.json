@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --import tsx/esm ./src/index.ts"
+    "start": "node --import tsx/esm ./src/index.ts"
   },
   "dependencies": {
     "oxlint": "^0.16.5",
