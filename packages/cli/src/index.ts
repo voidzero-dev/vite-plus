@@ -1,30 +1,67 @@
-import yargs from 'yargs/yargs'
-import { hideBin } from 'yargs/helpers'
-import { x } from 'tinyexec'
+import yargs from "yargs/yargs";
+import { hideBin } from "yargs/helpers";
+import { spawnSync } from "node:child_process";
+import path from "node:path";
 
-const args = hideBin(process.argv)
-const commandArgs = args.slice(1)
+function execPackageBin(binName: string, args: string[]) {
+  // TODO: exec from bundled packages
+  const program = path.join(
+    import.meta.dirname,
+    "../node_modules/.bin",
+    binName,
+  );
+  exec(program, args);
+}
 
-const cli = yargs(args).scriptName('vite-plus')
+function exec(program: string, args: string[]) {
+  const { status, error } = spawnSync(program, args, { stdio: "inherit" });
+  if (error !== undefined) {
+    throw error;
+  }
+  process.exit(status ?? 1);
+}
 
-cli.command(['$0', 'dev'], '', ({ argv }) => {
-  console.log('dev command', argv)
-})
-cli.command('build', '')
-cli.command('preview', '')
-cli.command('lib', '')
-cli.command('run', '')
-cli.command('lint', '', () => {
-  return x('./node_modules/.bin/oxlint', commandArgs, {
-    nodeOptions: { stdio: 'inherit' },
-  })
-})
+const args = hideBin(process.argv);
+const commandArgs = args.slice(1);
 
-cli.command('fmt', '')
-cli.command('test', '')
-cli.command('bench', '')
-cli.command('docs', '')
-cli.command('publish', '')
-cli.command('ui', '')
+const cli = yargs(args).scriptName("vite");
 
-cli.help().parse()
+for (const viteCommand of ["build", "optimize", "preview", "dev"]) {
+  // register vite command one by one instead of cli.command(['build', 'optimize', 'preview', 'dev'], ..)
+  // so that the help message won't list them as aliases (vite build [aliases: optimize, preview, dev])
+  cli.command(viteCommand, "", () => {
+    execPackageBin("vite", args);
+  });
+}
+cli.command("lib", "", () => {
+  execPackageBin("tsdown", commandArgs);
+});
+
+cli.command("run", "", () => {
+  exec("node", [
+    "--import",
+    import.meta.resolve("@oxc-node/core/register"),
+    ...commandArgs,
+  ]);
+});
+
+cli.command("lint", "", () => {
+  execPackageBin("oxlint", commandArgs);
+});
+
+cli.command("test", "", () => {
+  execPackageBin("vitest", commandArgs);
+});
+cli.command("bench", "", () => {
+  execPackageBin("vitest", ["bench", ...commandArgs]);
+});
+
+cli.command("docs", "", () => {
+  execPackageBin("vitepress", commandArgs);
+});
+
+// cli.command('fmt', '')
+// cli.command('publish', '')
+// cli.command('ui', '')
+
+cli.help().parse();
