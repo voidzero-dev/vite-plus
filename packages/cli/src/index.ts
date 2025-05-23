@@ -18,7 +18,7 @@ function exec(program: string, args: string[]) {
   if (error !== undefined) {
     throw error;
   }
-  process.exit(status ?? 1);
+  process.exit(status ?? 255);
 }
 
 const args = hideBin(process.argv);
