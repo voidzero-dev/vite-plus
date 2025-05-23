@@ -6,6 +6,9 @@
   "scripts": {
     "start": "node --import tsx/esm ./src/index.ts"
   },
+  "engines": {
+     "node": ">=20.11.0"
+  },
   "dependencies": {
     "@oxc-node/core": "^0.0.27",
     "oxlint": "^0.16.5",
