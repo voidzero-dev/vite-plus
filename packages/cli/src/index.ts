@@ -38,7 +38,7 @@ cli.command("lib", "", () => {
 });
 
 cli.command("run", "", () => {
-  exec("node", [
+  exec(process.execPath, [
     "--import",
     import.meta.resolve("@oxc-node/core/register"),
     ...commandArgs,
