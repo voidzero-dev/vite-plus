@@ -3,7 +3,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 function execPackageBin(binName: string, args: string[], cwd: string, dir?: string) {
-  const program = path.join(cwd, "node_modules/.bin", binName);
+  const program = path.join(import.meta.dirname, "../node_modules/.bin", binName);
   exec(program, args, dir ? path.join(cwd, dir) : cwd);
 }
 
