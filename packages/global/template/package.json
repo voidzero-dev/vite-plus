@@ -1,0 +1,12 @@
+{
+  "name": "my-vite-plus-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "vite-plus": "vite-plus"
+  },
+  "devDependencies": {
+    "vite-plus": "^0.0.0"
+  },
+  "packageManager": "pnpm@10.11.1"
+}

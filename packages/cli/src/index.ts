@@ -1,67 +1,52 @@
-import yargs from "yargs/yargs";
-import { hideBin } from "yargs/helpers";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { parseArgs } from "node:util";
 
-function execPackageBin(binName: string, args: string[]) {
-  // TODO: exec from bundled packages
-  const program = path.join(
-    import.meta.dirname,
-    "../node_modules/.bin",
-    binName,
-  );
-  exec(program, args);
+function execPackageBin(binName: string, args: string[], cwd: string, dir?: string) {
+  const program = path.join(cwd, "node_modules/.bin", binName);
+  exec(program, args, dir ? path.join(cwd, dir) : cwd);
 }
 
-function exec(program: string, args: string[]) {
-  const { status, error } = spawnSync(program, args, { stdio: "inherit" });
+function exec(program: string, args: string[], cwd?: string) {
+  const { status, error } = spawnSync(program, args, { stdio: "inherit", cwd });
   if (error !== undefined) {
     throw error;
   }
   process.exit(status ?? 255);
 }
 
-const args = hideBin(process.argv);
-const commandArgs = args.slice(1);
+export default function main(): void {
+  const { positionals } = parseArgs({ allowPositionals: true });
 
-const cli = yargs(args).scriptName("vite");
+  const [command, ...rest] = positionals;
 
-for (const viteCommand of ["build", "optimize", "preview", "dev"]) {
-  // register vite command one by one instead of cli.command(['build', 'optimize', 'preview', 'dev'], ..)
-  // so that the help message won't list them as aliases (vite build [aliases: optimize, preview, dev])
-  cli.command(viteCommand, "", () => {
-    execPackageBin("vite", args);
-  });
+  const tasks = rest.filter((task) => task.includes("#"));
+
+  const [subcommand, packageDir] = command === "task" && tasks.length > 0 ? tasks[0].split("#") : [command, "."];
+
+  const cwd = process.cwd();
+
+  const index = process.argv.indexOf("--");
+  const commandArgs = index === -1 ? [] : process.argv.slice(index + 1);
+
+  switch (subcommand) {
+    case "run":
+      exec(process.execPath, ["--import", import.meta.resolve("@oxc-node/core/register"), ...commandArgs], cwd);
+    case "build":
+      execPackageBin("vite", ["build", ...commandArgs], cwd, packageDir);
+    case "optimize":
+      execPackageBin("vite", ["optimize", ...commandArgs], cwd, packageDir);
+    case "preview":
+      execPackageBin("vite", ["preview", ...commandArgs], cwd, packageDir);
+    case "dev":
+      execPackageBin("vite", ["dev", ...commandArgs], cwd, packageDir);
+    case "lint":
+      execPackageBin("oxlint", commandArgs, cwd, packageDir);
+    case "test":
+      execPackageBin("vitest", commandArgs, cwd, packageDir);
+    case "bench":
+      execPackageBin("vitest", ["bench", ...commandArgs], cwd, packageDir);
+    case "docs":
+      execPackageBin("vitepress", commandArgs, cwd, packageDir);
+  }
 }
-cli.command("lib", "", () => {
-  execPackageBin("tsdown", commandArgs);
-});
-
-cli.command("run", "", () => {
-  exec(process.execPath, [
-    "--import",
-    import.meta.resolve("@oxc-node/core/register"),
-    ...commandArgs,
-  ]);
-});
-
-cli.command("lint", "", () => {
-  execPackageBin("oxlint", commandArgs);
-});
-
-cli.command("test", "", () => {
-  execPackageBin("vitest", commandArgs);
-});
-cli.command("bench", "", () => {
-  execPackageBin("vitest", ["bench", ...commandArgs]);
-});
-
-cli.command("docs", "", () => {
-  execPackageBin("vitepress", commandArgs);
-});
-
-// cli.command('fmt', '')
-// cli.command('publish', '')
-// cli.command('ui', '')
-
-cli.help().parse();

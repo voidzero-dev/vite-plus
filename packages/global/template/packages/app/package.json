@@ -1,0 +1,17 @@
+{
+  "name": "@my-vite-plus-monorepo/app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@my-vite-plus-monorepo/lib": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5",
+    "vitest": "^3.2.2"
+  }
+}
