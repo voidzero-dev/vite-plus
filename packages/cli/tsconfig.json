@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "target": "esnext",
     "lib": ["es2022"],
     "moduleDetection": "force",

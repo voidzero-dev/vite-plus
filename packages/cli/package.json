@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "bin": {
-    "vite-plus": "./bin/vite-plus"
+    "vite-plus": "./bin/vite-plus",
+    "vpl": "./bin/vpl"
   },
   "exports": {
     ".": {
