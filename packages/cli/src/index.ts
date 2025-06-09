@@ -78,6 +78,7 @@ export default function main(): void {
     switch (subcommand) {
       case "run":
         exec(process.execPath, ["--import", import.meta.resolve("@oxc-node/core/register"), ...commandArgs], cwd);
+        break;
       default: {
         const { command, args = [] } = getArgs(subcommand, commandArgs);
         if (command) execPackageBin(command, args, cwd, packageDir);

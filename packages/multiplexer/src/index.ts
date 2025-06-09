@@ -113,13 +113,14 @@ function renderScreen(
   });
 }
 
-process.stdin.setRawMode(true);
-process.stdin.resume();
-process.stdin.setEncoding("utf8");
-
 export function multiplex(commands: Command[]): void {
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding("utf8");
+
   const gutterSize = 1;
   const statusBarHeight = 1;
+
   let viewMode: Mode =
     commands.length === 4 ? "quad" : process.stdout.columns / 2 > process.stdout.rows ? "vertical" : "horizontal";
   let isFullScreen = false;
