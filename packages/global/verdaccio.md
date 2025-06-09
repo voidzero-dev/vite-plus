@@ -14,7 +14,7 @@ uplinks:
   npmjs:
     url: https://registry.npmjs.org/
 packages:
-  "**":
+  '**':
     access: $all
     publish: $all
     proxy: npmjs
@@ -38,13 +38,18 @@ Publish any package (remove `"private": true`):
 npm publish --registry http://localhost:4873 --tag latest
 ```
 
-Install `vp` globally:
+To install `vp` globally:
 
-```
+```sh
 npm i -g vp --registry http://localhost:4873
 ```
 
-Note [.npmrc][3].
+Add this to `.npmrc` to run commands without ` --registry http://localhost:4873`:
+
+```
+registry=http://localhost:4873
+//localhost:4873/:_authToken=fake
+```
 
 If a package is not found locally it goes to npm registry.
 
