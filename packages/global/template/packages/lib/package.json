@@ -4,9 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "lint": "oxlint; node -e \"import('node:fs').then(({watch}) => watch('.', {recursive: true}, () => require('child_process').spawnSync('oxlint', [], {stdio:'inherit'})));\""
   },
   "devDependencies": {
+    "oxlint": "^0.16.5",
     "vitest": "^3.2.2"
   }
 }

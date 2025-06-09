@@ -23,6 +23,9 @@ importers:
       '@oxc-node/core':
         specifier: ^0.0.27
         version: 0.0.27
+      multiplexer:
+        specifier: workspace:*
+        version: link:../multiplexer
       oxlint:
         specifier: ^0.16.5
         version: 0.16.5
@@ -47,6 +50,12 @@ importers:
       tsdown:
         specifier: ^0.12.1
         version: 0.12.1(@oxc-project/runtime@0.71.0)
+
+  packages/multiplexer:
+    dependencies:
+      fast-string-truncated-width:
+        specifier: ^1.2.1
+        version: 1.2.1
 
 packages:
 
@@ -1302,6 +1311,9 @@ packages:
   expect-type@1.2.1:
     resolution: {integrity: sha512-/kP8CAwxzLVEeFrMm4kMmy4CCDlpipyA7MYLVrdJIkV0fYF0UaigQHRsxHiuY/GEea+bh4KSv3TIlgr+2UL6bw==}
     engines: {node: '>=12.0.0'}
+
+  fast-string-truncated-width@1.2.1:
+    resolution: {integrity: sha512-Q9acT/+Uu3GwGj+5w/zsGuQjh9O1TyywhIwAxHudtWrgF09nHOPrvTLhQevPbttcxjr/SNN7mJmfOw/B1bXgow==}
 
   fdir@6.4.4:
     resolution: {integrity: sha512-1NZP+GK4GfuAv3PqKvxQRDMjdSRZjnkq7KfhlNrCNNlZ0ygQFpebfrnfnq/W7fpUnAv9aGWmY1zKx7FYL3gwhg==}
@@ -2955,6 +2967,8 @@ snapshots:
       '@types/estree': 1.0.6
 
   expect-type@1.2.1: {}
+
+  fast-string-truncated-width@1.2.1: {}
 
   fdir@6.4.4(picomatch@4.0.2):
     optionalDependencies:

@@ -24,6 +24,7 @@
   ],
   "dependencies": {
     "@oxc-node/core": "^0.0.27",
+    "multiplexer": "workspace:*",
     "oxlint": "^0.16.5",
     "tinyexec": "^1.0.1",
     "tsdown": "^0.12.1",
