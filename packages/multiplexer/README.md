@@ -11,3 +11,19 @@ vpl task test#packages/lib dev#packages/app 'exec#pnpm run -F @my-vite-plus-mono
 ```
 
 Requires [verdaccio](../global/verdaccio.md) with [vite-plus](../cli) published.
+
+Go fancy:
+
+```sh
+node demo.ts
+```
+
+Keys
+
+```
+tab and ↑/↓: cycle panels
+enter: kill/start panel process
+g: toggle grid mode
+c: cycle control panel position
+q and Ctrl-c: quit
+```

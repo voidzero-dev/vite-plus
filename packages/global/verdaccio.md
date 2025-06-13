@@ -14,7 +14,7 @@ uplinks:
   npmjs:
     url: https://registry.npmjs.org/
 packages:
-  '**':
+  "**":
     access: $all
     publish: $all
     proxy: npmjs
@@ -35,7 +35,7 @@ npm adduser --registry http://localhost:4873
 Publish any package (remove `"private": true`):
 
 ```sh
-npm publish --registry http://localhost:4873 --tag latest
+pnpm publish --registry http://localhost:4873 --tag latest --no-git-checks
 ```
 
 To install `vp` globally:

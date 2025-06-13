@@ -2,11 +2,13 @@
   "name": "my-vite-plus-monorepo",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "scripts": {
     "vite-plus": "vite-plus"
   },
   "devDependencies": {
-    "vite-plus": "^0.0.0"
+    "vite-plus": "^0.0.0",
+    "multiplexer": "^0.0.0"
   },
   "packageManager": "pnpm@10.12.1"
 }

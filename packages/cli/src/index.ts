@@ -1,12 +1,11 @@
 import { spawnSync } from "node:child_process";
-import path, { join } from "node:path";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { multiplex } from "multiplexer";
-import type { Command } from "multiplexer";
+import { multiplex, type Command } from "multiplexer";
 
 function execPackageBin(binName: string, args: string[], cwd: string, dir?: string) {
-  const program = path.join(import.meta.dirname, "../node_modules/.bin", binName);
-  exec(program, args, dir ? path.join(cwd, dir) : cwd);
+  const program = join(import.meta.dirname, "../node_modules/.bin", binName);
+  exec(program, args, dir ? join(cwd, dir) : cwd);
 }
 
 function exec(program: string, args: string[], cwd?: string) {
@@ -20,23 +19,23 @@ function exec(program: string, args: string[], cwd?: string) {
 function getArgs(subcommand: string, commandArgs: string[]) {
   switch (subcommand) {
     case "build":
-      return { command: "vite", args: ["build", ...commandArgs] };
+      return { command: "vite", mode: "stream", args: ["build", ...commandArgs] };
     case "optimize":
-      return { command: "vite", args: ["optimize", ...commandArgs] };
+      return { command: "vite", mode: "stream", args: ["optimize", ...commandArgs] };
     case "preview":
-      return { command: "vite", args: ["preview", ...commandArgs] };
+      return { command: "vite", mode: "stream", args: ["preview", ...commandArgs] };
     case "dev":
-      return { command: "vite", args: ["dev", ...commandArgs] };
+      return { command: "vite", mode: "watch", args: ["dev", ...commandArgs] };
     case "lint":
-      return { command: "oxlint", args: commandArgs };
+      return { command: "oxlint", mode: "stream", args: commandArgs };
     case "test":
-      return { command: "vitest", args: commandArgs };
+      return { command: "vitest", mode: "watch", args: commandArgs };
     case "bench":
-      return { command: "vitest", args: ["bench", ...commandArgs] };
+      return { command: "vitest", mode: "watch", args: ["bench", ...commandArgs] };
     case "docs":
-      return { command: "vitepress", args: commandArgs };
+      return { command: "vitepress", mode: "watch", args: commandArgs };
     default:
-      return { command: subcommand, args: commandArgs };
+      return { command: subcommand, mode: "stream", args: commandArgs };
   }
 }
 
@@ -63,14 +62,14 @@ export default function main(): void {
       if (subcommand === "exec") {
         // for demo purposes only
         const [cmd, ...args] = packageDir.split(" ");
-        return [{ name: task, cmd, args, cwd, env }];
+        return [{ name: task, cmd, args, cwd, env, mode: "watch" }];
       }
-      const { command, args = [] } = getArgs(subcommand, [...commandArgs]);
+      const { command, args = [], mode } = getArgs(subcommand, [...commandArgs]);
 
-      if (command === "vitest") args.push("--watch"); // for demo purposes only
+      if (command === "vitest" && mode === "watch") args.push("--watch"); // for demo purposes only
 
       const program = join(import.meta.dirname, "../node_modules/.bin", command);
-      return [{ name: task, cmd: program, args, cwd: join(cwd, packageDir), env }];
+      return [{ name: task, cmd: program, args, cwd: join(cwd, packageDir), env, mode }];
     });
 
     multiplex(commands);

@@ -4,7 +4,6 @@
     "declaration": true,
     "erasableSyntaxOnly": true,
     "esModuleInterop": true,
-    "isolatedDeclarations": true,
     "isolatedModules": true,
     "lib": ["es2022"],
     "module": "preserve",
