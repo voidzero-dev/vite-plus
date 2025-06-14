@@ -1,0 +1,27 @@
+[package]
+name = "vite_tui"
+version = "0.0.0"
+edition.workspace = true
+include = ["/src"]
+license.workspace = true
+readme = "README.md"
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+color-eyre = "0.6.5"
+crossterm = { version = "0.29.0", features = ["event-stream"] }
+ratatui = "0.29.0"
+tokio = { version = "1.45.1", features = ["full"] }
+futures = "0.3.31"
+tokio-util = "0.7.15"
+directories = "6.0.0"
+
+tracing = "0.1.41"
+tracing-error = "0.2.1"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "serde"] }
