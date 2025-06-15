@@ -1,3 +1,9 @@
+mod tasks_list;
+mod tasks_pane;
+
+pub use tasks_list::TasksList;
+pub use tasks_pane::TasksPane;
+
 use color_eyre::Result;
 use crossterm::event::{KeyEvent, MouseEvent};
 use ratatui::{
@@ -12,6 +18,7 @@ use crate::{action::Action, tui::Event};
 ///
 /// Implementors of this trait can be registered with the main application loop and will be able to
 /// receive events, update state, and be rendered on the screen.
+#[expect(unused)]
 pub trait Component: Send {
     /// Register an action handler that can send actions for processing if necessary.
     ///
