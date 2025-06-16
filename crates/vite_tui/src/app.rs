@@ -6,7 +6,6 @@ use ratatui::{
     prelude::Rect,
 };
 use tokio::sync::mpsc;
-use tracing::debug;
 
 use crate::{
     action::Action,
@@ -15,8 +14,6 @@ use crate::{
 };
 
 pub struct App {
-    tick_rate: f64,
-    frame_rate: f64,
     should_quit: bool,
     should_suspend: bool,
     last_tick_key_events: Vec<KeyEvent>,
@@ -32,8 +29,6 @@ impl App {
     pub fn new() -> Result<Self> {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Ok(Self {
-            tick_rate: 10.0,
-            frame_rate: 60.0,
             should_quit: false,
             should_suspend: false,
             last_tick_key_events: Vec::new(),
@@ -45,8 +40,9 @@ impl App {
     }
 
     /// # Errors
+    /// # Panics
     pub async fn run(&mut self) -> Result<()> {
-        let mut tui = Tui::new()?.mouse(true).tick_rate(self.tick_rate).frame_rate(self.frame_rate);
+        let mut tui = Tui::new()?.mouse(true).tick_rate(10.0).frame_rate(60.0);
         tui.enter()?;
 
         // for component in &mut self.components {
@@ -55,9 +51,59 @@ impl App {
         // for component in self.components.iter_mut() {
         // component.register_config_handler(self.config.clone())?;
         // }
-        // for component in &mut self.components {
-        // component.init(tui.size()?)?;
-        // }
+        let size = tui.size()?;
+        self.tasks_pane.init(size)?;
+
+        let pty_system = portable_pty::native_pty_system();
+        let cmd = portable_pty::CommandBuilder::new("top");
+        let pair = pty_system
+            .openpty(portable_pty::PtySize {
+                rows: size.height,
+                cols: size.width,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
+
+        // Wait for the child to complete
+        tokio::spawn(async move {
+            let mut child = pair.slave.spawn_command(cmd).unwrap();
+            let _child_exit_status = child.wait().unwrap();
+            drop(pair.slave);
+        });
+
+        let mut reader = pair.master.try_clone_reader().unwrap();
+
+        tokio::spawn({
+            let action_tx = self.action_tx.clone();
+            async move {
+                // Consume the output from the child
+                // Can't read the full buffer, since that would wait for EOF
+                let mut buf = [0u8; 8192];
+                let mut processed_buf = Vec::new();
+                loop {
+                    let size = reader.read(&mut buf).unwrap();
+                    if size == 0 {
+                        break;
+                    }
+                    if size > 0 {
+                        processed_buf.extend_from_slice(&buf[..size]);
+                        let bytes = processed_buf.iter().copied().collect();
+                        if action_tx.send(Action::Task { bytes }).is_err() {
+                            break;
+                        }
+                        // Clear the processed portion of the buffer
+                        processed_buf.clear();
+                    }
+                }
+            }
+        });
+
+        {
+            // Drop writer on purpose
+            let _writer = pair.master.take_writer().unwrap();
+        }
+        drop(pair.master);
 
         let action_tx = self.action_tx.clone();
         loop {
@@ -73,6 +119,7 @@ impl App {
                 break;
             }
         }
+
         tui.exit()?;
         Ok(())
     }
@@ -121,7 +168,7 @@ impl App {
     fn handle_actions(&mut self, tui: &mut Tui) -> Result<()> {
         while let Ok(action) = self.action_rx.try_recv() {
             if action != Action::Tick && action != Action::Render {
-                debug!("{action:?}");
+                // debug!("{action:?}");
             }
             match action {
                 Action::Tick => {
@@ -133,13 +180,11 @@ impl App {
                 Action::ClearScreen => tui.terminal.clear()?,
                 Action::Resize(w, h) => self.handle_resize(tui, w, h)?,
                 Action::Render => self.render(tui)?,
-                Action::Error(_) => {}
+                _ => {}
             }
-            // for component in &mut self.components {
-            // if let Some(action) = component.update(action.clone())? {
-            // self.action_tx.send(action)?;
-            // }
-            // }
+            if let Some(action) = self.tasks_pane.update(action)? {
+                self.action_tx.send(action)?;
+            }
         }
         Ok(())
     }
@@ -160,8 +205,8 @@ impl App {
     }
 
     fn draw(&mut self, frame: &mut Frame<'_>) -> Result<()> {
-        let layout = Layout::horizontal([Constraint::Max(20), Constraint::Fill(1)]);
-        let [left, right] = layout.areas(frame.area());
+        let [left, right] =
+            Layout::horizontal([Constraint::Max(20), Constraint::Fill(1)]).areas(frame.area());
         self.tasks_list.draw(frame, left)?;
         self.tasks_pane.draw(frame, right)?;
         Ok(())

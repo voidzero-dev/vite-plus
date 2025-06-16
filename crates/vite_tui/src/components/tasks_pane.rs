@@ -1,30 +1,51 @@
 use color_eyre::Result;
 use ratatui::{
     Frame,
-    layout::Rect,
-    widgets::{Block, Widget},
+    layout::{Rect, Size},
 };
-use tui_term::widget::PseudoTerminal;
-use vt100_ctt::Parser;
+use tui_term::{vt100::Parser, widget::PseudoTerminal};
 
-use super::Component;
+use super::{Action, Component};
 
-pub struct TasksPane {}
+pub struct TasksPane {
+    parser: Parser,
+    output: Vec<u8>,
+}
 
 impl TasksPane {
-    pub const fn new() -> Self {
-        Self {}
+    pub fn new() -> Self {
+        Self { parser: Parser::default(), output: vec![] }
+    }
+
+    pub fn resize(&mut self, rows: u16, cols: u16) {
+        self.parser = Parser::new(rows, cols, 0);
+    }
+
+    fn process(&mut self, bytes: &[u8]) {
+        self.parser.process(bytes);
+        self.output.extend(bytes);
     }
 }
 
 impl Component for TasksPane {
+    fn init(&mut self, area: Size) -> Result<()> {
+        self.resize(area.height, area.width);
+        Ok(())
+    }
+
+    fn update(&mut self, action: Action) -> Result<Option<Action>> {
+        match action {
+            Action::Resize(w, h) => self.resize(w, h),
+            Action::Task { bytes } => self.process(&bytes),
+            _ => {}
+        }
+        Ok(None)
+    }
+
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
-        let mut parser = Parser::new(24, 80, 0);
-        parser.process(b"foo");
-        let screen = parser.screen();
-        let block = Block::default().title("Terminal");
-        let pseudo_term = PseudoTerminal::new(screen).block(block);
-        pseudo_term.render(area, frame.buffer_mut());
+        let screen = self.parser.screen();
+        let pseudo_term = PseudoTerminal::new(screen);
+        frame.render_widget(pseudo_term, area);
         Ok(())
     }
 }
