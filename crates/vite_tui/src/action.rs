@@ -9,7 +9,7 @@ pub enum Action {
     Quit,
     ClearScreen,
     Error(String),
-    Task { bytes: Box<[u8]> },
+    Task { task: String, bytes: Box<[u8]> },
     Up,
     Down,
 }

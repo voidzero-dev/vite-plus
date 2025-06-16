@@ -5,7 +5,7 @@ use ratatui::{
 };
 use tui_term::{vt100::Parser, widget::PseudoTerminal};
 
-use super::{Action, Component};
+use super::Component;
 
 pub struct TasksPane {
     parser: Parser,
@@ -21,7 +21,7 @@ impl TasksPane {
         self.parser = Parser::new(rows, cols, 0);
     }
 
-    fn process(&mut self, bytes: &[u8]) {
+    pub fn process(&mut self, bytes: &[u8]) {
         self.parser.process(bytes);
         self.output.extend(bytes);
     }
@@ -31,15 +31,6 @@ impl Component for TasksPane {
     fn init(&mut self, area: Size) -> Result<()> {
         self.resize(area.height, area.width);
         Ok(())
-    }
-
-    fn update(&mut self, action: Action) -> Result<Option<Action>> {
-        match action {
-            Action::Resize(w, h) => self.resize(w, h),
-            Action::Task { bytes } => self.process(&bytes),
-            _ => {}
-        }
-        Ok(None)
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {

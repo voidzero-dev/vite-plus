@@ -2946,6 +2946,7 @@ dependencies = [
  "futures",
  "portable-pty",
  "ratatui",
+ "rustc-hash",
  "tokio",
  "tokio-util",
  "tracing",

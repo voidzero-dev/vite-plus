@@ -22,6 +22,10 @@ impl TasksList {
         Self { state: TableState::new(), selection: 0, tasks }
     }
 
+    pub fn selected_task(&self) -> &str {
+        &self.tasks[self.selection]
+    }
+
     fn select(&mut self, selection: usize) {
         self.selection = selection;
         self.state.select(Some(selection));

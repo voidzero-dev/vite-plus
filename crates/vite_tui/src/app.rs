@@ -5,6 +5,7 @@ use ratatui::{
     layout::{Constraint, Layout},
     prelude::Rect,
 };
+use rustc_hash::FxHashMap;
 use tokio::sync::mpsc;
 
 use crate::{
@@ -21,14 +22,15 @@ pub struct App {
     action_rx: mpsc::UnboundedReceiver<Action>,
 
     tasks_list: TasksList,
-    tasks_pane: TasksPane,
+    tasks_pane: FxHashMap</* task name */ String, TasksPane>,
 }
 
 impl App {
     /// # Errors
     pub fn new() -> Result<Self> {
-        let tasks = vec!["Task A".to_string(), "Task B".to_string()];
+        let tasks = vec!["top".to_string(), "df".to_string()];
         let (action_tx, action_rx) = mpsc::unbounded_channel();
+        let tasks_pane = tasks.iter().map(|task| (task.clone(), TasksPane::new())).collect();
         Ok(Self {
             should_quit: false,
             should_suspend: false,
@@ -36,7 +38,7 @@ impl App {
             action_tx,
             action_rx,
             tasks_list: TasksList::new(tasks),
-            tasks_pane: TasksPane::new(),
+            tasks_pane,
         })
     }
 
@@ -53,59 +55,64 @@ impl App {
         // component.register_config_handler(self.config.clone())?;
         // }
         let size = tui.size()?;
-        self.tasks_pane.init(size)?;
+        for (_, pane) in &mut self.tasks_pane {
+            pane.init(size)?;
+        }
         self.tasks_list.init(size)?;
 
-        let pty_system = portable_pty::native_pty_system();
-        let cmd = portable_pty::CommandBuilder::new("top");
-        let pair = pty_system
-            .openpty(portable_pty::PtySize {
-                rows: size.height,
-                cols: size.width,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .unwrap();
+        for (task, _) in &self.tasks_pane {
+            let pty_system = portable_pty::native_pty_system();
+            let cmd = portable_pty::CommandBuilder::new(task);
+            let pair = pty_system
+                .openpty(portable_pty::PtySize {
+                    rows: size.height,
+                    cols: size.width,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
+                .unwrap();
 
-        // Wait for the child to complete
-        tokio::spawn(async move {
-            let mut child = pair.slave.spawn_command(cmd).unwrap();
-            let _child_exit_status = child.wait().unwrap();
-            drop(pair.slave);
-        });
+            // Wait for the child to complete
+            tokio::spawn(async move {
+                let mut child = pair.slave.spawn_command(cmd).unwrap();
+                let _child_exit_status = child.wait().unwrap();
+                drop(pair.slave);
+            });
 
-        let mut reader = pair.master.try_clone_reader().unwrap();
+            let mut reader = pair.master.try_clone_reader().unwrap();
 
-        tokio::spawn({
-            let action_tx = self.action_tx.clone();
-            async move {
-                // Consume the output from the child
-                // Can't read the full buffer, since that would wait for EOF
-                let mut buf = [0u8; 8192];
-                let mut processed_buf = Vec::new();
-                loop {
-                    let size = reader.read(&mut buf).unwrap();
-                    if size == 0 {
-                        break;
-                    }
-                    if size > 0 {
-                        processed_buf.extend_from_slice(&buf[..size]);
-                        let bytes = processed_buf.iter().copied().collect();
-                        if action_tx.send(Action::Task { bytes }).is_err() {
+            tokio::spawn({
+                let action_tx = self.action_tx.clone();
+                let task = task.to_string();
+                async move {
+                    // Consume the output from the child
+                    // Can't read the full buffer, since that would wait for EOF
+                    let mut buf = [0u8; 8192];
+                    let mut processed_buf = Vec::new();
+                    loop {
+                        let size = reader.read(&mut buf).unwrap();
+                        if size == 0 {
                             break;
                         }
-                        // Clear the processed portion of the buffer
-                        processed_buf.clear();
+                        if size > 0 {
+                            processed_buf.extend_from_slice(&buf[..size]);
+                            let bytes = processed_buf.iter().copied().collect();
+                            if action_tx.send(Action::Task { task: task.clone(), bytes }).is_err() {
+                                break;
+                            }
+                            // Clear the processed portion of the buffer
+                            processed_buf.clear();
+                        }
                     }
                 }
-            }
-        });
+            });
 
-        {
-            // Drop writer on purpose
-            let _writer = pair.master.take_writer().unwrap();
+            {
+                // Drop writer on purpose
+                let _writer = pair.master.take_writer().unwrap();
+            }
+            drop(pair.master);
         }
-        drop(pair.master);
 
         let action_tx = self.action_tx.clone();
         loop {
@@ -183,13 +190,15 @@ impl App {
                 Action::ClearScreen => tui.terminal.clear()?,
                 Action::Resize(w, h) => self.handle_resize(tui, w, h)?,
                 Action::Render => self.render(tui)?,
+                Action::Task { task, bytes } => {
+                    if let Some(pane) = self.tasks_pane.get_mut(&task) {
+                        pane.process(&bytes);
+                    }
+                }
+                Action::Up | Action::Down => {
+                    self.tasks_list.update(action)?;
+                }
                 _ => {}
-            }
-            if let Some(action) = self.tasks_list.update(action.clone())? {
-                self.action_tx.send(action)?;
-            }
-            if let Some(action) = self.tasks_pane.update(action)? {
-                self.action_tx.send(action)?;
             }
         }
         Ok(())
@@ -214,7 +223,9 @@ impl App {
         let [left, right] =
             Layout::horizontal([Constraint::Max(20), Constraint::Fill(1)]).areas(frame.area());
         self.tasks_list.draw(frame, left)?;
-        self.tasks_pane.draw(frame, right)?;
+        if let Some(pane) = self.tasks_pane.get_mut(self.tasks_list.selected_task()) {
+            pane.draw(frame, right)?;
+        }
         Ok(())
     }
 }

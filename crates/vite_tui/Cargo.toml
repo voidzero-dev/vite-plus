@@ -23,6 +23,7 @@ tokio-util = "0.7.15"
 directories = "6.0.0"
 tui-term = "0.2.0"
 portable-pty = "0.9.0"
+rustc-hash = "2"
 
 tracing = "0.1.41"
 tracing-error = "0.2.1"
