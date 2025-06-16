@@ -10,5 +10,11 @@ rust-version.workspace = true
 [lints]
 workspace = true
 
-[lib]
-doctest = false
+[dependencies]
+anyhow = "1.0.98"
+clap = { version = "4.5.40", features = ["derive"] }
+compact_str = { version = "0.9.0", features = ["serde"] }
+ignore = "0.4.23"
+petgraph = "0.8.2"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
