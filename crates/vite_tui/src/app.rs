@@ -27,6 +27,7 @@ pub struct App {
 impl App {
     /// # Errors
     pub fn new() -> Result<Self> {
+        let tasks = vec!["Task A".to_string(), "Task B".to_string()];
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Ok(Self {
             should_quit: false,
@@ -34,7 +35,7 @@ impl App {
             last_tick_key_events: Vec::new(),
             action_tx,
             action_rx,
-            tasks_list: TasksList::new(),
+            tasks_list: TasksList::new(tasks),
             tasks_pane: TasksPane::new(),
         })
     }
@@ -53,6 +54,7 @@ impl App {
         // }
         let size = tui.size()?;
         self.tasks_pane.init(size)?;
+        self.tasks_list.init(size)?;
 
         let pty_system = portable_pty::native_pty_system();
         let cmd = portable_pty::CommandBuilder::new("top");
@@ -124,7 +126,7 @@ impl App {
         Ok(())
     }
 
-    async fn handle_events(&self, tui: &mut Tui) -> Result<()> {
+    async fn handle_events(&mut self, tui: &mut Tui) -> Result<()> {
         let Some(event) = tui.next_event().await else {
             return Ok(());
         };
@@ -137,11 +139,6 @@ impl App {
             Event::Key(key) => self.handle_key_event(key)?,
             _ => {}
         }
-        // for component in &mut self.components {
-        // if let Some(action) = component.handle_events(Some(event.clone()))? {
-        // action_tx.send(action)?;
-        // }
-        // }
         Ok(())
     }
 
@@ -150,6 +147,12 @@ impl App {
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => {
                 action_tx.send(Action::Quit)?;
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                action_tx.send(Action::Up)?;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                action_tx.send(Action::Down)?;
             }
             _ => {
                 // // If the key was not handled as a single key action,
@@ -181,6 +184,9 @@ impl App {
                 Action::Resize(w, h) => self.handle_resize(tui, w, h)?,
                 Action::Render => self.render(tui)?,
                 _ => {}
+            }
+            if let Some(action) = self.tasks_list.update(action.clone())? {
+                self.action_tx.send(action)?;
             }
             if let Some(action) = self.tasks_pane.update(action)? {
                 self.action_tx.send(action)?;

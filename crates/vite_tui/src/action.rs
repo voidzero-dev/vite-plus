@@ -1,5 +1,5 @@
 #[expect(unused)]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     Tick,
     Render,
@@ -9,5 +9,7 @@ pub enum Action {
     Quit,
     ClearScreen,
     Error(String),
-    Task { bytes: Box<[u8]> }, // Help,
+    Task { bytes: Box<[u8]> },
+    Up,
+    Down,
 }
