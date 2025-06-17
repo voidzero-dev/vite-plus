@@ -1,0 +1,14 @@
+{
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "cache": true
+    },
+    "dev": {
+      "dependsOn": ["@repo/logger#build"],
+      "cache": false,
+      "persistent": true,
+      "interactive": true
+    }
+  }
+}
