@@ -42,7 +42,9 @@ As [package.json#scripts](./package.json) has `"build": "vite-plus task build"`.
 
 ## Config
 
-Example [vite-task](./vite-task.json):
+[Task Design → Task Configuration](https://linear.app/voidzero/document/vite-task-design-doc-d6f7384ab696#heading-task-configuration-651cfdec)
+
+Example [vite-task.json](./vite-task.json):
 
 ```json
 {
@@ -54,17 +56,29 @@ Example [vite-task](./vite-task.json):
     "dev": {
       "dependsOn": ["@repo/logger#build"],
       "cache": false,
-      "persistent": true,
-      "interactive": true
+      "longRunning": true
     }
   }
 }
 ```
 
-This is borrowed from Turborepo. I think overall it's good. Yet there are things
-that we can probably optimize, e.g. default to `"^build"` and use `package.json`
-dependencies to create graph. We could also consider to default to `cache: true`
-for `build` and vice-versa no caching for `dev` tasks.
+Borrowed from Turborepo, I think overall it's good. Yet there are things that we
+can probably optimize, e.g.:
+
+- Default `dependsOn` to prefix with `^` (e.g. `"^build"`) and use
+  `package.json` dependencies to create graph
+- Default to `cache: true` for `build` tasks
+- Default to `cache: false` for `dev` tasks
+- Defaults for output folders (e.g. `dist/**` for build tasks)
+
+This should work well especially if we know that our own tools are being used.
+We can also read from our own tooling's config e.g. to use non-default output
+directory.
+
+Here's a good example of how a configuration could be reduced significantly were
+such defaults being applied:
+https://github.com/motiondivision/motion/blob/main/turbo.json (perhaps even
+zero-config).
 
 ## Execution
 
