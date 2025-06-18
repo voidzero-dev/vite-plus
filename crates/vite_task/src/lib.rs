@@ -6,7 +6,7 @@ use std::{
 
 use compact_str::CompactString;
 
-use crate::config::ViteTaskJson;
+use crate::config::{ViteTaskJson, Workspace};
 mod config;
 
 #[derive(Debug)]
@@ -15,9 +15,8 @@ pub struct Args {
 }
 
 pub fn main(cwd: PathBuf, args: Args) -> anyhow::Result<()> {
-    let config_path = cwd.join("vite-task.json");
-    let config: ViteTaskJson = serde_json::from_reader(BufReader::new(File::open(config_path)?))?;
-    let task_graph = config.to_task_graph(&cwd, args.tasks)?;
+    let workspace = Workspace::load(cwd)?;
+    let task_graph = workspace.to_task_graph(args.tasks)?;
     dbg!(task_graph);
     Ok(())
 }
