@@ -1,6 +1,7 @@
 {
   "name": "@repo/root",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "vite-plus task build"
   }

@@ -2,7 +2,25 @@
 
 This example has `apps/spa` and `apps/next`, both depend on `packages/logger`.
 
-## Build
+## Config
+
+- Workspaces are self-contained
+- Tasks can run from root (run task in all workspaces) or from child workspace dir
+- Any executable we start in child workspace `cwd` should find its config there
+- Each workspace contains its own `scripts` in `package.json`
+- Each workspace contains its own dependencies
+- Each workspace contains its own configuration files for dev, build, test, lint, etc.
+- Configuration extension should be explicit and depends on tooling (e.g. `oxlint` has `extends`)
+- We can add `extends` to `vite.config.ts`:
+
+```ts
+import { defineConfig } from "vite-plus";
+export default defineConfig({
+  extends: "../../vite.config.ts"
+});
+```
+
+## Example: `vite task build`
 
 The "canonical" way using e.g. pnpm:
 
@@ -19,7 +37,7 @@ assuming it uses
 With Vite+ (global CLI):
 
 ```sh
-vp task build
+vite task build
 ```
 
 - A task `build` is defined in `vite-task.json`
@@ -92,7 +110,7 @@ Simplified task execution graph:
         "command": "tsdown",
         "args": [],
         "cwd": "packages/logger",
-        "cachable": true
+        "cache": true
       }
     ],
     [
@@ -100,13 +118,13 @@ Simplified task execution graph:
         "command": "next",
         "args": ["build"],
         "cwd": "apps/next",
-        "cachable": true
+        "cache": true
       },
       {
         "command": "vite",
         "args": ["build"],
         "cwd": "apps/spa",
-        "cachable": true
+        "cache": true
       }
     ]
   ]
@@ -114,8 +132,8 @@ Simplified task execution graph:
 ```
 
 - Running `next` from `apps/next` and it will find its own `next.config.ts`
-- Running `vite build` will read/merge `viteplus.config.ts` from both parent +
-  child workspace and take `build` config
+- Running `vite build` from child workspace will read `vite.config.ts` (which
+  might `extend` from root config)
 
 ## dev
 
@@ -129,7 +147,7 @@ If we would pre-build `packages/logger` and then watch the apps:
         "command": "tsdown",
         "args": [],
         "cwd": "packages/logger",
-        "cachable": true
+        "cache": true
       }
     ],
     [
@@ -137,13 +155,13 @@ If we would pre-build `packages/logger` and then watch the apps:
         "command": "next",
         "args": ["dev"],
         "cwd": "apps/next",
-        "cachable": false
+        "cache": false
       },
       {
         "command": "vite",
         "args": ["dev"],
         "cwd": "apps/spa",
-        "cachable": false
+        "cache": false
       }
     ]
   ]

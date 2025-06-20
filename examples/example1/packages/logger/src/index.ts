@@ -1,2 +1,4 @@
-import console from 'node:console';
-export = console;
+export const log = (msg: string) => console.log(msg);
+
+// alert("eval");
+// eval("alert");

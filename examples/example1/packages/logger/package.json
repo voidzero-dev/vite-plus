@@ -12,11 +12,16 @@
     }
   },
   "scripts": {
-    "build": "tsdown"
+    "build": "tsdown",
+    "test": "vitest",
+    "lint": "oxlint"
   },
   "devDependencies": {
     "@types/node": "^24.0.3",
+    "oxlint": "^1.2.0",
     "tsdown": "^0.12.8",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vite-plus": "file:../../../../packages/cli",
+    "vitest": "^3.2.4"
   }
 }

@@ -1,5 +1,4 @@
 {
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
     "module": "nodenext",
@@ -7,7 +6,7 @@
     "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "paths": {
-      "@log/*": ["./src/*"]
+      "@scripts/*": ["./scripts/*"]
     }
   }
 }

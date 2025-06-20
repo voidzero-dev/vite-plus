@@ -1,5 +1,6 @@
 {
   "name": "@repo/spa",
+  "type": "module",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build"
