@@ -1,37 +1,42 @@
+use core::task;
 use std::{
     collections::HashMap,
     fs::File,
     io::BufReader,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, sync::Arc,
 };
 
+use crate::{cache::TaskCache, fs::CachedFileSystem, str::Str};
 use anyhow::{Context, Ok};
-use compact_str::CompactString;
-use petgraph::{Graph, graph::NodeIndex};
+
+use petgraph::{graph::NodeIndex, stable_graph::StableDiGraph};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskNode {
-    command: CompactString,
+    pub(crate) command: Str,
     #[serde(default)]
-    cwd: CompactString,
-    cachable: bool,
+    pub(crate) cwd: Str,
+    pub(crate) cachable: bool,
 
     #[serde(default)]
-    envs: Vec<CompactString>,
+    pub(crate) inputs: Arc<[Str]>,
 
     #[serde(default)]
-    pass_through_envs: Vec<CompactString>,
+    pub(crate) envs: Vec<Str>,
+
+    #[serde(default)]
+    pub(crate) pass_through_envs: Vec<Str>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskConfig {
     #[serde(flatten)]
-    task_node: TaskNode,
+    node: TaskNode,
     #[serde(default)]
-    depends_on: Vec<CompactString>,
+    depends_on: Vec<Str>,
 }
 
 impl TaskNode {
@@ -41,33 +46,50 @@ impl TaskNode {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ViteTaskJson {
-    tasks: HashMap<CompactString, TaskConfig>,
+    tasks: HashMap<Str, TaskConfig>,
 }
 
 pub struct Workspace {
     vite_task_json: ViteTaskJson,
-    dir: PathBuf,
+    pub(crate) dir: PathBuf,
+    pub(crate) task_cache: TaskCache,
+    pub(crate) fs: CachedFileSystem,
+}
+
+#[derive(Debug)]
+pub struct NamedTaskNode {
+    pub name: Str,
+    pub node: TaskNode,
 }
 
 impl Workspace {
     pub fn load(dir: PathBuf) -> anyhow::Result<Self> {
         let config_path = dir.join("vite-task.json");
+        let cache_path = dir.join("node_modules/.vite/task-cache.json");
         let vite_task_json: ViteTaskJson =
             serde_json::from_reader(BufReader::new(File::open(config_path)?))?;
-        Ok(Self { vite_task_json, dir })
+
+        let task_cache = TaskCache::load_from_file(&cache_path)?;
+
+        Ok(Self { vite_task_json, dir, task_cache, fs: CachedFileSystem::default() })
+    }
+
+    pub fn unload(self) -> anyhow::Result<()> {
+        self.task_cache.save()?;
+        Ok(())
     }
 
     pub fn to_task_graph(
-        self,
-        mut task_names: Vec<CompactString>,
-    ) -> anyhow::Result<Graph<TaskNode, ()>> {
-        let mut vite_task_json = self.vite_task_json;
+        &self,
+        mut task_names: Vec<Str>,
+    ) -> anyhow::Result<StableDiGraph<NamedTaskNode, ()>> {
+        let mut vite_task_json = self.vite_task_json.clone();
         let capacity = vite_task_json.tasks.len();
-        let mut task_graph = Graph::<TaskNode, ()>::with_capacity(capacity, capacity);
-        let mut ids_by_task_name = HashMap::<CompactString, NodeIndex>::with_capacity(capacity);
-        let mut edges = Vec::<(CompactString, CompactString)>::with_capacity(capacity);
+        let mut task_graph = StableDiGraph::<NamedTaskNode, ()>::with_capacity(capacity, capacity);
+        let mut ids_by_task_name = HashMap::<Str, NodeIndex>::with_capacity(capacity);
+        let mut edges = Vec::<(Str, Str)>::with_capacity(capacity);
 
         while let Some(task_name) = task_names.pop() {
             let mut task_config = vite_task_json
@@ -75,15 +97,16 @@ impl Workspace {
                 .remove(&task_name)
                 .with_context(|| format!("Task '{}' not found", &task_name))?;
 
-            task_config.task_node.resolve(&self.dir)?;
+            task_config.node.resolve(&self.dir)?;
 
-            let id = task_graph.add_node(task_config.task_node);
+            let id = task_graph
+                .add_node(NamedTaskNode { name: task_name.clone(), node: task_config.node });
             if ids_by_task_name.insert(task_name.clone(), id).is_some() {
                 anyhow::bail!("Duplicated task name '{}'", &task_name)
             }
 
             for dep in task_config.depends_on {
-                edges.push((task_name.clone(), dep.clone()));
+                edges.push((dep.clone(), task_name.clone()));
                 task_names.push(dep);
             }
         }

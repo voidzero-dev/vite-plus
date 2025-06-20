@@ -7,11 +7,7 @@ use vite_task::Args;
 
 fn main() -> anyhow::Result<()> {
     vite_task::main(
-        PathBuf::from("/Users/patr0nus/code/vuejs_core"),
-        Args { tasks: vec!["build-dts".into()] },
+        current_dir()?,
+        Args { tasks: args().skip(1).map(|arg| arg.as_str().into()).collect() },
     )
-    // vite_task::main(
-    //     current_dir()?,
-    //     Args { tasks: args().skip(1).collect() },
-    // )
 }
