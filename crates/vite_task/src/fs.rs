@@ -10,7 +10,7 @@ use dashmap::DashMap;
 
 use crate::fingerprint::PathFingerprint;
 
-pub trait FileSystem {
+pub trait FileSystem: Sync {
     fn fingerprint_path(&self, path: &Arc<OsStr>) -> io::Result<PathFingerprint>;
 }
 

@@ -1,9 +1,11 @@
-use std::{collections::BTreeMap, ffi::OsStr, fmt::Display, path::Path, sync::Arc};
+use std::{collections::HashMap, ffi::OsStr, fmt::Display, path::Path, sync::Arc};
 
 use crate::{config::TaskNode, fs::FileSystem, schedule::ExecutedTask, str::Str};
 use bincode::{Decode, Encode};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
+// use rayon::prelude::*;
 
 #[derive(Encode, Decode, PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 pub enum PathFingerprint {
@@ -15,7 +17,7 @@ pub enum PathFingerprint {
 pub struct TaskFingerprint {
     pub command: Str,
     pub config_inputs: Arc<[Str]>,
-    pub inputs: BTreeMap<Str, PathFingerprint>,
+    pub inputs: HashMap<Str, PathFingerprint>,
 }
 
 #[derive(Debug)]
@@ -49,16 +51,21 @@ impl TaskFingerprint {
         base_dir: &Path,
     ) -> anyhow::Result<Self> {
         let command = task.command.clone();
-        let mut inputs = BTreeMap::new();
 
-        for input_full_path in &executed_task.input_paths {
-            let Ok(relative_path) = Path::new(input_full_path).strip_prefix(base_dir) else {
-                continue; // skip inputs outside the base_dir
-            };
-            let relative_path = RelativePath::from_path(relative_path)?.as_str();
-            let path_fingerprint = fs.fingerprint_path(input_full_path)?;
-            inputs.insert(relative_path.into(), path_fingerprint);
-        }
+        let inputs = executed_task
+            .input_paths
+            .par_iter()
+            .flat_map(|input_full_path| {
+                let Ok(relative_path) = Path::new(input_full_path).strip_prefix(base_dir) else {
+                    return None; // skip inputs outside the base_dir
+                };
+                Some((|| {
+                    let relative_path = RelativePath::from_path(relative_path)?.as_str();
+                    let path_fingerprint = fs.fingerprint_path(input_full_path)?;
+                    anyhow::Ok((relative_path.into(), path_fingerprint))
+                })())
+            })
+            .collect::<anyhow::Result<HashMap<Str, PathFingerprint>>>()?;
 
         Ok(Self { command, inputs, config_inputs: task.inputs.clone() })
     }
@@ -80,15 +87,24 @@ impl TaskFingerprint {
                 new_inputs: task.inputs.clone(),
             }));
         }
-        for (input_relative_path, path_fingerprint) in &self.inputs {
-            let input_full_path =
-                Arc::<OsStr>::from(base_dir.join(input_relative_path).into_os_string());
-            let current_path_fingerprint = fs.fingerprint_path(&input_full_path)?;
-            if path_fingerprint != &current_path_fingerprint {
-                return Ok(Some(FingerprintMismatch::InputContentChanged {
-                    path: input_relative_path.clone(),
-                }));
-            }
+        let input_mismatch =
+            self.inputs.par_iter().find_map_any(|(input_relative_path, path_fingerprint)| {
+                let input_full_path =
+                    Arc::<OsStr>::from(base_dir.join(input_relative_path).into_os_string());
+                let current_path_fingerprint = match fs.fingerprint_path(&input_full_path) {
+                    Ok(ok) => ok,
+                    Err(err) => return Some(Err(err)),
+                };
+                if path_fingerprint != &current_path_fingerprint {
+                    Some(Ok(FingerprintMismatch::InputContentChanged {
+                        path: input_relative_path.clone(),
+                    }))
+                } else {
+                    None
+                }
+            });
+        if let Some(input_mismatch) = input_mismatch.transpose()? {
+            return Ok(Some(input_mismatch));
         }
         Ok(None)
     }
