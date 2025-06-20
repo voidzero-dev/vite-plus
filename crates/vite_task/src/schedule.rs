@@ -1,21 +1,17 @@
 use std::{
     collections::HashSet,
     env::{join_paths, split_paths},
-    ffi::{OsStr, OsString},
+    ffi::OsStr,
     io::{self, Read, Write},
     iter,
-    ops::{Deref, DerefMut},
-    path::{Path, PathBuf},
+    ops::DerefMut,
+    path::Path,
     process::{Command, Stdio},
     sync::{Arc, Mutex},
-    thread::spawn,
 };
 
 use bincode::{Decode, Encode};
-use ignore::{
-    WalkBuilder, WalkParallel, WalkState,
-    overrides::{Override, OverrideBuilder},
-};
+
 use petgraph::{algo::toposort, stable_graph::StableDiGraph};
 use serde::{Deserialize, Serialize};
 use wax::Glob;

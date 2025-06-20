@@ -1,9 +1,9 @@
-use core::task;
 use std::{
     collections::HashMap,
     fs::File,
     io::BufReader,
-    path::{Path, PathBuf}, sync::Arc,
+    path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use crate::{cache::TaskCache, fs::CachedFileSystem, str::Str};

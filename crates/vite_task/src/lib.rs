@@ -1,9 +1,9 @@
-mod config;
-mod schedule;
-mod fingerprint;
-mod str;
 mod cache;
+mod config;
+mod fingerprint;
 mod fs;
+mod schedule;
+mod str;
 
 use std::{fs::File, io::BufReader, path::PathBuf};
 

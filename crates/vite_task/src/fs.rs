@@ -1,10 +1,8 @@
 use std::{
-    collections::HashMap,
     ffi::OsStr,
     fs::File,
     hash::Hasher as _,
     io::{self, Read},
-    path::Path,
     sync::Arc,
 };
 

@@ -4,7 +4,7 @@ use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use bincode::config::{Configuration, standard};
+// use bincode::config::{Configuration, standard};
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
@@ -37,7 +37,7 @@ pub struct TaskCache {
     path: PathBuf,
 }
 
-const BINCODE_CONFIG: Configuration = standard();
+// const BINCODE_CONFIG: Configuration = standard();
 
 #[derive(Debug)]
 pub enum CacheMiss {

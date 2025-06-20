@@ -1,17 +1,26 @@
 use std::{
-    borrow::Borrow, ffi::OsStr, fmt::{Debug, Display}, iter, ops::Deref, path::Path, str::from_utf8
+    borrow::Borrow,
+    ffi::OsStr,
+    fmt::{Debug, Display},
+    iter,
+    ops::Deref,
+    path::Path,
+    str::from_utf8,
 };
 
 use bincode::{
-    de::{read::Reader, Decoder}, enc::Encoder, error::{DecodeError, EncodeError}, impl_borrow_decode, BorrowDecode as _, Decode, Encode
+    BorrowDecode as _, Decode, Encode,
+    de::{Decoder, read::Reader},
+    enc::Encoder,
+    error::{DecodeError, EncodeError},
+    impl_borrow_decode,
 };
-use serde::{Deserialize, Serialize};
 use compact_str::CompactString;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Default, Hash, PartialOrd, Ord)]
 #[serde(transparent)]
 pub struct Str(CompactString);
-
 
 impl Str {
     pub fn as_str(&self) -> &str {
