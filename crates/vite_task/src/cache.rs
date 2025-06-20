@@ -8,7 +8,7 @@ use std::sync::Arc;
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-use crate::config::{NamedTaskNode, TaskNode};
+use crate::config::{NamedTaskConfig, TaskConfig};
 use crate::fingerprint::{FingerprintMismatch, TaskFingerprint};
 use crate::fs::FileSystem;
 use crate::schedule::{ExecutedTask, StdOutput};
@@ -22,7 +22,7 @@ pub struct CachedTask {
 
 impl CachedTask {
     pub fn create(
-        task: &TaskNode,
+        task: &TaskConfig,
         executed_task: ExecutedTask,
         fs: &impl FileSystem,
         base_dir: &Path,
@@ -84,7 +84,7 @@ impl TaskCache {
 
     pub fn try_hit<'me>(
         &'me self,
-        task: &NamedTaskNode,
+        task: &NamedTaskConfig,
         fs: &impl FileSystem,
         base_dir: &Path,
     ) -> anyhow::Result<Result<&'me CachedTask, CacheMiss>> {
@@ -92,7 +92,7 @@ impl TaskCache {
             return Ok(Err(CacheMiss::NotFound));
         };
         if let Some(fingerprint_mismatch) =
-            cached_task.fingerprint.validate(&task.node, fs, base_dir)?
+            cached_task.fingerprint.validate(&task.config, fs, base_dir)?
         {
             return Ok(Err(CacheMiss::FingerprintMismatch(fingerprint_mismatch)));
         }

@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct TaskNode {
+pub struct TaskConfig {
     pub(crate) command: Str,
     #[serde(default)]
     pub(crate) cwd: Str,
@@ -32,14 +32,14 @@ pub struct TaskNode {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct TaskConfig {
+pub struct TaskConfigWithDeps {
     #[serde(flatten)]
-    node: TaskNode,
+    config: TaskConfig,
     #[serde(default)]
     depends_on: Vec<Str>,
 }
 
-impl TaskNode {
+impl TaskConfig {
     pub fn resolve(&mut self, cwd: &Path) -> anyhow::Result<()> {
         self.cwd = cwd.join(&self.cwd).to_str().context("Non-utf8 Path")?.into();
         Ok(())
@@ -48,7 +48,7 @@ impl TaskNode {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ViteTaskJson {
-    tasks: HashMap<Str, TaskConfig>,
+    tasks: HashMap<Str, TaskConfigWithDeps>,
 }
 
 pub struct Workspace {
@@ -59,9 +59,9 @@ pub struct Workspace {
 }
 
 #[derive(Debug)]
-pub struct NamedTaskNode {
+pub struct NamedTaskConfig {
     pub name: Str,
-    pub node: TaskNode,
+    pub config: TaskConfig,
 }
 
 impl Workspace {
@@ -84,10 +84,10 @@ impl Workspace {
     pub fn to_task_graph(
         &self,
         mut task_names: Vec<Str>,
-    ) -> anyhow::Result<StableDiGraph<NamedTaskNode, ()>> {
+    ) -> anyhow::Result<StableDiGraph<NamedTaskConfig, ()>> {
         let mut vite_task_json = self.vite_task_json.clone();
         let capacity = vite_task_json.tasks.len();
-        let mut task_graph = StableDiGraph::<NamedTaskNode, ()>::with_capacity(capacity, capacity);
+        let mut task_graph = StableDiGraph::<NamedTaskConfig, ()>::with_capacity(capacity, capacity);
         let mut ids_by_task_name = HashMap::<Str, NodeIndex>::with_capacity(capacity);
         let mut edges = Vec::<(Str, Str)>::with_capacity(capacity);
 
@@ -97,10 +97,10 @@ impl Workspace {
                 .remove(&task_name)
                 .with_context(|| format!("Task '{}' not found", &task_name))?;
 
-            task_config.node.resolve(&self.dir)?;
+            task_config.config.resolve(&self.dir)?;
 
             let id = task_graph
-                .add_node(NamedTaskNode { name: task_name.clone(), node: task_config.node });
+                .add_node(NamedTaskConfig { name: task_name.clone(), config: task_config.config });
             if ids_by_task_name.insert(task_name.clone(), id).is_some() {
                 anyhow::bail!("Duplicated task name '{}'", &task_name)
             }

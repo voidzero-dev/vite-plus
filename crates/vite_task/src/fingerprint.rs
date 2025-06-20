@@ -1,6 +1,6 @@
 use std::{collections::HashMap, ffi::OsStr, fmt::Display, path::Path, sync::Arc};
 
-use crate::{config::TaskNode, fs::FileSystem, schedule::ExecutedTask, str::Str};
+use crate::{config::TaskConfig, fs::FileSystem, schedule::ExecutedTask, str::Str};
 use bincode::{Decode, Encode};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use relative_path::RelativePath;
@@ -45,7 +45,7 @@ impl Display for FingerprintMismatch {
 
 impl TaskFingerprint {
     pub fn create(
-        task: &TaskNode,
+        task: &TaskConfig,
         executed_task: &ExecutedTask,
         fs: &impl FileSystem,
         base_dir: &Path,
@@ -71,7 +71,7 @@ impl TaskFingerprint {
     }
     pub fn validate(
         &self,
-        task: &TaskNode,
+        task: &TaskConfig,
         fs: &impl FileSystem,
         base_dir: &Path,
     ) -> anyhow::Result<Option<FingerprintMismatch>> {

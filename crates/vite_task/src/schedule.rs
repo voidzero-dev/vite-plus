@@ -18,19 +18,19 @@ use wax::Glob;
 
 use crate::{
     cache::{CacheMiss, CachedTask, TaskCache},
-    config::{NamedTaskNode, TaskNode, Workspace},
+    config::{NamedTaskConfig, TaskConfig, Workspace},
     fs::FileSystem,
 };
 
 #[derive(Debug)]
 pub struct ExecutionPlan {
-    steps: Vec<NamedTaskNode>,
+    steps: Vec<NamedTaskConfig>,
     // node_indices: Vec<NodeIndex>,
     // task_graph: Graph<TaskNode, ()>,
 }
 
 impl ExecutionPlan {
-    pub fn plan(mut task_graph: StableDiGraph<NamedTaskNode, ()>) -> anyhow::Result<Self> {
+    pub fn plan(mut task_graph: StableDiGraph<NamedTaskConfig, ()>) -> anyhow::Result<Self> {
         // TODO: parallel
         let node_indices = match toposort(&task_graph, None) {
             Ok(ok) => ok,
@@ -43,7 +43,7 @@ impl ExecutionPlan {
     pub fn execute(self, workspace: &mut Workspace) -> anyhow::Result<()> {
         for step in self.steps {
             println!("------- {} -------", &step.name);
-            let command = step.node.command.clone();
+            let command = step.config.command.clone();
             let (cache_miss, execute_or_replay) = get_cached_or_execute(
                 step,
                 &mut workspace.task_cache,
@@ -118,12 +118,12 @@ fn collect_std_outputs(
 }
 
 fn get_cached_or_execute<'a>(
-    task_node: NamedTaskNode,
+    task: NamedTaskConfig,
     cache: &'a mut TaskCache,
     fs: &'a impl FileSystem,
     base_dir: &'a Path,
 ) -> anyhow::Result<(Option<CacheMiss>, Box<dyn FnOnce() -> anyhow::Result<()> + 'a>)> {
-    Ok(match cache.try_hit(&task_node, fs, base_dir)? {
+    Ok(match cache.try_hit(&task, fs, base_dir)? {
         Ok(cache_task) => (
             None,
             Box::new({
@@ -145,19 +145,19 @@ fn get_cached_or_execute<'a>(
         Err(cache_miss) => (
             Some(cache_miss),
             Box::new(move || {
-                let executed_task = execute_task(&task_node.node)?;
-                let cached_task = CachedTask::create(&task_node.node, executed_task, fs, base_dir)?;
-                cache.update(task_node.name.clone(), cached_task)?;
+                let executed_task = execute_task(&task.config)?;
+                let cached_task = CachedTask::create(&task.config, executed_task, fs, base_dir)?;
+                cache.update(task.name.clone(), cached_task)?;
                 anyhow::Ok(())
             }),
         ),
     })
 }
 
-fn execute_task(task_node: &TaskNode) -> anyhow::Result<ExecutedTask> {
+fn execute_task(task: &TaskConfig) -> anyhow::Result<ExecutedTask> {
     let env_path = std::env::var_os("PATH").unwrap_or_default();
     let paths = split_paths(&env_path);
-    let node_modules_bin = Path::new(&task_node.cwd).join("node_modules/.bin");
+    let node_modules_bin = Path::new(&task.cwd).join("node_modules/.bin");
 
     let paths = iter::once(node_modules_bin).chain(paths);
     let env_path = join_paths(paths)?;
@@ -165,8 +165,8 @@ fn execute_task(task_node: &TaskNode) -> anyhow::Result<ExecutedTask> {
     let mut child = Command::new("/bin/sh")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .args(["-c", task_node.command.as_ref()])
-        .current_dir(&task_node.cwd)
+        .args(["-c", task.command.as_ref()])
+        .current_dir(&task.cwd)
         .env("PATH", env_path)
         .spawn()?;
 
@@ -188,17 +188,17 @@ fn execute_task(task_node: &TaskNode) -> anyhow::Result<ExecutedTask> {
 
     let outputs = outputs.into_inner().unwrap();
 
-    let input_paths = gather_inputs(&task_node)?;
+    let input_paths = gather_inputs(&task)?;
 
     Ok(ExecutedTask { std_outputs: outputs.into(), input_paths })
 }
 
-fn gather_inputs(task_node: &TaskNode) -> anyhow::Result<HashSet<Arc<OsStr>>> {
-    let glob = format!("{{{}}}", task_node.inputs.join(",")); // TODO: handle "," inside globs
+fn gather_inputs(task: &TaskConfig) -> anyhow::Result<HashSet<Arc<OsStr>>> {
+    let glob = format!("{{{}}}", task.inputs.join(",")); // TODO: handle "," inside globs
     let glob = Glob::new(&glob)?;
 
     let mut paths: HashSet<Arc<OsStr>> = HashSet::new();
-    for entry in glob.walk(task_node.cwd.as_str()) {
+    for entry in glob.walk(task.cwd.as_str()) {
         let entry = entry?;
         paths.insert(entry.into_path().into_os_string().into());
     }
