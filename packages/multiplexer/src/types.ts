@@ -4,7 +4,7 @@ export type Command = {
   args: string[];
   cwd: string;
   env: NodeJS.ProcessEnv;
-  mode: "stream" | "watch";
+  mode?: "watch";
 };
 
 export type Dimensions = {
@@ -15,3 +15,5 @@ export type Dimensions = {
 };
 
 export type Position = "left" | "right" | "top" | "bottom";
+
+export type PanelState = "idle" | "running" | "done" | "error";

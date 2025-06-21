@@ -1,27 +1,50 @@
 import * as readline from "node:readline";
-import type { Dimensions, Position } from "./types.ts";
+import type { Dimensions, Position, PanelState } from "./types.ts";
 import { DIVIDER_WIDTH } from "./layout.ts";
 import stringWidth from "fast-string-truncated-width";
+import { ANSI, getScreenDimensions } from "./util.ts";
+
+const stateStyles = {
+  running: { color: ANSI.yellow, symbol: "→" },
+  done: { color: ANSI.green, symbol: "✔︎" },
+  error: { color: ANSI.red, symbol: "✖︎" },
+  idle: { color: "", symbol: " " }
+};
 
 export class ControlPanel {
   position: Position;
-  names: string[];
+  items: { name: string; state: PanelState }[] = [];
+  selectedIndex = 0;
 
   constructor(options: { position: Position; names: string[] }) {
     this.position = options.position;
-    this.names = options.names.map(name => {
-      const options = { limit: 3, ellipsis: "…" };
-      const width = stringWidth(name, { limit: 16 });
-      return `${name.slice(0, width.index)}${width.ellipsed ? options.ellipsis : ""}`;
+    for (const name of options.names) this.addItem(name);
+  }
+
+  addItem(name: string) {
+    const options = { limit: 3, ellipsis: "…" };
+    const width = stringWidth(name, { limit: 16 });
+    this.items.push({
+      state: "idle",
+      name: `${name.slice(0, width.index)}${width.ellipsed ? options.ellipsis : ""}`
     });
+  }
+
+  setSelectedIndex(index: number) {
+    this.selectedIndex = index;
+  }
+
+  setItemState(index: number, state: PanelState) {
+    if (this.items[index]) this.items[index].state = state;
   }
 
   setPosition(position: Position) {
     this.position = position;
   }
 
-  getDimensions(screen: Dimensions): Dimensions {
-    const width = Math.max(...this.names.map(name => name.length)) + DIVIDER_WIDTH;
+  getDimensions(): Dimensions {
+    const screen = getScreenDimensions();
+    const width = Math.max(...this.items.map(item => item.name.length)) + DIVIDER_WIDTH + 2;
     const height = 1;
     switch (this.position) {
       case "top":
@@ -35,10 +58,16 @@ export class ControlPanel {
     }
   }
 
-  render(screen: Dimensions, selectedIndex: number) {
-    const dimensions = this.getDimensions(screen);
+  render() {
+    const dimensions = this.getDimensions();
 
-    const names = this.names.map((name, index) => (index === selectedIndex ? `\x1b[7m${name}\x1b[0m` : name));
+    const names = this.items.map((item, index) => {
+      const isSelected = index === this.selectedIndex;
+      const style = stateStyles[item.state] || stateStyles.idle;
+      const text = `${style.color}${style.symbol} ${item.name}${ANSI.reset}`;
+      return isSelected ? `${ANSI.reverse}${text}` : text;
+    });
+
     const lines = this.position === "top" || this.position === "bottom" ? [names.join(" • ")] : names;
 
     lines.forEach((line, lineIndex) => {

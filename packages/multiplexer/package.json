@@ -1,6 +1,7 @@
 {
   "name": "multiplexer",
-  "version": "0.0.4",
+  "version": "0.0.0",
+  "private": true,
   "type": "module",
   "exports": {
     ".": {
@@ -9,6 +10,7 @@
     }
   },
   "scripts": {
+    "dev": "tsdown --dts --watch",
     "prepack": "tsdown --dts"
   },
   "files": [

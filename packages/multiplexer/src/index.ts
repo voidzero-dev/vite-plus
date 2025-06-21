@@ -9,16 +9,13 @@ import { LayoutEngine } from "./layout.ts";
 //   else debugStream.write(JSON.stringify(value) + "\n");
 // };
 
-export function multiplex(commands: Command[]): void {
+export async function multiplex(commands: Command[][]) {
   process.stdin.setRawMode(true);
   process.stdin.resume();
   process.stdin.setEncoding("utf8");
   process.stdout.write("\u001B[?25l");
 
-  const engine = new LayoutEngine(commands);
-  engine.spawnAll();
-  engine.listenAll();
-  engine.render();
+  const engine = new LayoutEngine();
 
   process.stdin.on("data", data => {
     const chunk = data.toString();
@@ -34,10 +31,25 @@ export function multiplex(commands: Command[]): void {
     } else if (chunk === "c") {
       engine.toggleControlPanelPosition();
     } else if (chunk === "q" || chunk === "\u0003") {
-      engine.killAll();
-      readline.cursorTo(process.stdout, 0, process.stdout.rows);
-      process.stdout.write("\x1b[?25h");
-      process.exit();
+      quit();
     }
   });
+
+  for (const cmds of commands) engine.addCommands(cmds);
+
+  for (const cmds of commands) {
+    const start = (command: Command) => new Promise(resolve => engine.run(command, resolve));
+    const promises = cmds.map(start);
+    engine.render();
+    await Promise.all(promises);
+  }
+
+  function quit() {
+    engine.killAll();
+    readline.cursorTo(process.stdout, 0, process.stdout.rows - 1);
+    process.stdout.write("\x1b[?25h");
+    process.exit(0);
+  }
+
+  // quit();
 }

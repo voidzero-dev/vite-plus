@@ -1,7 +1,8 @@
 import * as readline from "node:readline";
-import { spawn, type ChildProcess } from "child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import type { Command, Dimensions } from "./types.ts";
 import stringWidth from "fast-string-truncated-width";
+import { ANSI } from "./util.ts";
 
 export class Panel {
   command?: Command;
@@ -21,9 +22,14 @@ export class Panel {
     }
   }
 
-  listen() {
+  isClearScreen = false;
+
+  listen(callback?: (code: number | null, signal: NodeJS.Signals | null) => void) {
     this.process?.stdout?.on("data", data => {
-      const chunk = data.toString().replace(/\x1b(?:c|\[3J)/g, "");
+      const str = data.toString();
+      const isClearScreen = str.startsWith("\u001bc");
+      if (isClearScreen) this.isClearScreen = true;
+      const chunk = str.replace(/\x1b(?:c|\[3J)/g, "");
       this.buffer.push(chunk);
       this.batchRender();
     });
@@ -33,6 +39,9 @@ export class Panel {
       this.buffer.push(chunk);
       this.batchRender();
     });
+
+    if (callback) this.process?.on("exit", callback);
+    if (callback) this.process?.on("close", callback);
   }
 
   kill() {
@@ -62,7 +71,7 @@ export class Panel {
 
     this.timeout = setTimeout(() => {
       const trimmed = this.buffer.join("").trim().split("\n");
-      if (this.command?.mode === "watch") this.lines = trimmed;
+      if (this.command?.mode === "watch" || this.isClearScreen) this.lines = trimmed;
       else this.lines.push(...trimmed);
       this.buffer = [];
       this.render();
@@ -89,7 +98,7 @@ export class Panel {
       lines.forEach((line, lineIndex) => {
         readline.cursorTo(process.stdout, dimensions.left, dimensions.top + lineIndex);
         const width = stringWidth(line, { limit: dimensions.width });
-        process.stdout.write(line.slice(0, width.index).trimEnd() + "\x1b[0m");
+        process.stdout.write(line.slice(0, width.index).trimEnd() + ANSI.reset);
         // const stripped = stripVTControlCharacters(line);
         // process.stdout.write(stripped.slice(0, dimensions.width).trimEnd());
       });
