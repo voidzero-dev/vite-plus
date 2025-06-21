@@ -9,7 +9,7 @@ npm i -g verdaccio
 Use this minimal configuration (e.g. `~/.config/verdaccio/config.yaml`):
 
 ```yaml
-storage: ~/.local/share/verdaccio/storage
+storage: storage
 uplinks:
   npmjs:
     url: https://registry.npmjs.org/
