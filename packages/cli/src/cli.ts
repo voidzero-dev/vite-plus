@@ -1,2 +1,2 @@
-import main from "./index.ts";
-main();
+import { runTasks } from "./runTasks.ts";
+runTasks();

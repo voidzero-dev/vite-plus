@@ -16,6 +16,7 @@
     "node": ">=20.11.0"
   },
   "scripts": {
+    "dev": "tsdown --watch",
     "prepack": "tsdown"
   },
   "files": [
@@ -24,6 +25,8 @@
   ],
   "dependencies": {
     "@oxc-node/core": "^0.0.27",
+    "@pnpm/sort-packages": "^1000.0.8",
+    "@pnpm/workspace.pkgs-graph": "^1000.0.15",
     "@vitest/utils": "^3.2.4",
     "multiplexer": "workspace:*",
     "oxlint": "^0.16.5",
@@ -31,6 +34,9 @@
     "tsdown": "^0.12.1",
     "vite": "npm:rolldown-vite@6.3.12",
     "vitepress": "^2.0.0-alpha.5",
-    "vitest": "^3.1.4"
+    "vitest": "^3.2.4"
+  },
+  "devDependencies": {
+    "@pnpm/types": "^1000.6.0"
   }
 }
