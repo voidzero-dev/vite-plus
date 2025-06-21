@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "vite-plus": "vite-plus"
+    "build": "vite-plus task build",
+    "lint": "vite-plus task lint",
+    "all": "vite-plus task build lint"
   },
   "devDependencies": {
     "vite-plus": "^0.0.0",
