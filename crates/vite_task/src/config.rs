@@ -1,18 +1,19 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::File,
     io::BufReader,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
 };
 
 use crate::{cache::TaskCache, fs::CachedFileSystem, str::Str};
 use anyhow::{Context, Ok};
 
+use bincode::{Decode, Encode};
 use petgraph::{graph::NodeIndex, stable_graph::StableDiGraph};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Encode, Decode, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskConfig {
     pub(crate) command: Str,
@@ -24,10 +25,10 @@ pub struct TaskConfig {
     pub(crate) inputs: Arc<[Str]>,
 
     #[serde(default)]
-    pub(crate) envs: Vec<Str>,
+    pub(crate) envs: HashSet<Str>,
 
     #[serde(default)]
-    pub(crate) pass_through_envs: Vec<Str>,
+    pub(crate) pass_through_envs: HashSet<Str>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -37,13 +38,6 @@ pub struct TaskConfigWithDeps {
     config: TaskConfig,
     #[serde(default)]
     depends_on: Vec<Str>,
-}
-
-impl TaskConfig {
-    pub fn resolve(&mut self, cwd: &Path) -> anyhow::Result<()> {
-        self.cwd = cwd.join(&self.cwd).to_str().context("Non-utf8 Path")?.into();
-        Ok(())
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -87,17 +81,16 @@ impl Workspace {
     ) -> anyhow::Result<StableDiGraph<NamedTaskConfig, ()>> {
         let mut vite_task_json = self.vite_task_json.clone();
         let capacity = vite_task_json.tasks.len();
-        let mut task_graph = StableDiGraph::<NamedTaskConfig, ()>::with_capacity(capacity, capacity);
+        let mut task_graph =
+            StableDiGraph::<NamedTaskConfig, ()>::with_capacity(capacity, capacity);
         let mut ids_by_task_name = HashMap::<Str, NodeIndex>::with_capacity(capacity);
         let mut edges = Vec::<(Str, Str)>::with_capacity(capacity);
 
         while let Some(task_name) = task_names.pop() {
-            let mut task_config = vite_task_json
+            let task_config = vite_task_json
                 .tasks
                 .remove(&task_name)
                 .with_context(|| format!("Task '{}' not found", &task_name))?;
-
-            task_config.config.resolve(&self.dir)?;
 
             let id = task_graph
                 .add_node(NamedTaskConfig { name: task_name.clone(), config: task_config.config });

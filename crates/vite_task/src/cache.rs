@@ -9,9 +9,9 @@ use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 use crate::config::{NamedTaskConfig, TaskConfig};
+use crate::execute::{ExecutedTask, StdOutput};
 use crate::fingerprint::{FingerprintMismatch, TaskFingerprint};
 use crate::fs::FileSystem;
-use crate::schedule::{ExecutedTask, StdOutput};
 use crate::str::Str;
 
 #[derive(Debug, Encode, Decode, Serialize, Deserialize)]

@@ -1,18 +1,16 @@
 mod cache;
 mod config;
+mod execute;
 mod fingerprint;
 mod fs;
 mod schedule;
 mod str;
 
-use std::{fs::File, io::BufReader, path::PathBuf};
+use std::path::PathBuf;
 
 use crate::str::Str;
 
-use crate::{
-    config::{ViteTaskJson, Workspace},
-    schedule::ExecutionPlan,
-};
+use crate::{config::Workspace, schedule::ExecutionPlan};
 
 #[derive(Debug)]
 pub struct Args {

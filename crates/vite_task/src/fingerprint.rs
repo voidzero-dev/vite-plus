@@ -1,6 +1,6 @@
 use std::{collections::HashMap, ffi::OsStr, fmt::Display, path::Path, sync::Arc};
 
-use crate::{config::TaskConfig, fs::FileSystem, schedule::ExecutedTask, str::Str};
+use crate::{config::TaskConfig, execute::ExecutedTask, fs::FileSystem, str::Str};
 use bincode::{Decode, Encode};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use relative_path::RelativePath;
@@ -15,29 +15,33 @@ pub enum PathFingerprint {
 
 #[derive(Encode, Decode, Debug, Serialize, Deserialize)]
 pub struct TaskFingerprint {
-    pub command: Str,
-    pub config_inputs: Arc<[Str]>,
+    pub config: TaskConfig,
     pub inputs: HashMap<Str, PathFingerprint>,
+    pub envs: HashMap<Str, Str>,
 }
 
 #[derive(Debug)]
 pub enum FingerprintMismatch {
-    ConfigInputsChanged { old_inputs: Arc<[Str]>, new_inputs: Arc<[Str]> },
-    CommandChanged { old_command: Str, new_command: Str },
+    ConfigChanged { old_config: TaskConfig, new_config: TaskConfig },
     InputContentChanged { path: Str },
+    EnvChanged { name: Str, old_value: Option<Str>, new_value: Option<Str> },
 }
 
 impl Display for FingerprintMismatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FingerprintMismatch::ConfigInputsChanged { old_inputs, new_inputs } => {
-                write!(f, "Config inputs changed: {:?} => {:?}", old_inputs, new_inputs)
-            }
-            FingerprintMismatch::CommandChanged { old_command, new_command } => {
-                write!(f, "Command changed: {:?} => {:?}", old_command, new_command)
+            FingerprintMismatch::ConfigChanged { old_config, new_config } => {
+                write!(f, "Config inputs changed: {:?} => {:?}", old_config, new_config)
             }
             FingerprintMismatch::InputContentChanged { path } => {
                 write!(f, "File content changed: {:?}", path)
+            }
+            FingerprintMismatch::EnvChanged { name, old_value, new_value } => {
+                write!(
+                    f,
+                    "Environment variable '{}' changed: {:?} => {:?}",
+                    name, old_value, new_value
+                )
             }
         }
     }
@@ -45,13 +49,11 @@ impl Display for FingerprintMismatch {
 
 impl TaskFingerprint {
     pub fn create(
-        task: &TaskConfig,
+        task_config: &TaskConfig,
         executed_task: &ExecutedTask,
         fs: &impl FileSystem,
         base_dir: &Path,
     ) -> anyhow::Result<Self> {
-        let command = task.command.clone();
-
         let inputs = executed_task
             .input_paths
             .par_iter()
@@ -66,8 +68,7 @@ impl TaskFingerprint {
                 })())
             })
             .collect::<anyhow::Result<HashMap<Str, PathFingerprint>>>()?;
-
-        Ok(Self { command, inputs, config_inputs: task.inputs.clone() })
+        Ok(Self { config: task_config.clone(), inputs, envs: executed_task.envs.clone() })
     }
     pub fn validate(
         &self,
@@ -75,16 +76,10 @@ impl TaskFingerprint {
         fs: &impl FileSystem,
         base_dir: &Path,
     ) -> anyhow::Result<Option<FingerprintMismatch>> {
-        if self.command != task.command {
-            return Ok(Some(FingerprintMismatch::CommandChanged {
-                old_command: self.command.clone(),
-                new_command: task.command.clone(),
-            }));
-        }
-        if self.config_inputs != task.inputs {
-            return Ok(Some(FingerprintMismatch::ConfigInputsChanged {
-                old_inputs: self.config_inputs.clone(),
-                new_inputs: task.inputs.clone(),
+        if &self.config != task {
+            return Ok(Some(FingerprintMismatch::ConfigChanged {
+                old_config: self.config.clone(),
+                new_config: task.clone(),
             }));
         }
         let input_mismatch =
