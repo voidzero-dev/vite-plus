@@ -12,10 +12,14 @@ use std::{
 
 use bincode::{Decode, Encode};
 
+use compact_str::CompactStringExt;
 use serde::{Deserialize, Serialize};
 use wax::Glob;
 
-use crate::{config::TaskConfig, str::Str};
+use crate::{
+    config::{ResolvedTask, TaskConfig},
+    str::Str,
+};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode, Serialize, Deserialize)]
 pub enum OutputKind {
@@ -32,7 +36,6 @@ pub struct StdOutput {
 #[derive(Debug)]
 pub struct ExecutedTask {
     pub std_outputs: Arc<[StdOutput]>,
-    pub envs: HashMap<Str, Str>,
     pub input_paths: HashSet<Arc<OsStr>>,
 }
 
@@ -65,43 +68,60 @@ fn collect_std_outputs(
     }
 }
 
-pub fn execute_task(task: &TaskConfig, base_dir: &Path) -> anyhow::Result<ExecutedTask> {
-    // All envs that are passed to the task
-    let mut all_task_envs: HashMap<Str, OsString> = std::env::vars_os()
-        .filter_map(|(name, value)| {
-            let Some(name) = name.to_str() else {
-                return None;
-            };
-            // TODO: glob
-            // TODO: more default passthrough envs: https://github.com/vercel/turborepo/blob/26d309f073ca3ac054109ba0c29c7e230e7caac3/crates/turborepo-lib/src/task_hash.rs#L439
-            if name == "PATH" || task.envs.contains(name) || task.pass_through_envs.contains(name) {
-                Some((Str::from(name), value))
+#[derive(Debug)]
+pub struct TaskEnvs {
+    pub all_envs: HashMap<Str, Arc<OsStr>>,
+    pub env_fingerprint: HashMap<Str, Option<Str>>,
+}
+
+impl TaskEnvs {
+    pub fn resolve(task: &TaskConfig) -> anyhow::Result<Self> {
+        // All envs that are passed to the task
+        let mut all_envs: HashMap<Str, Arc<OsStr>> = std::env::vars_os()
+            .filter_map(|(name, value)| {
+                let Some(name) = name.to_str() else {
+                    return None;
+                };
+                // TODO: glob
+                // TODO: more default passthrough envs: https://github.com/vercel/turborepo/blob/26d309f073ca3ac054109ba0c29c7e230e7caac3/crates/turborepo-lib/src/task_hash.rs#L439
+                if name == "PATH"
+                    || task.envs.contains(name)
+                    || task.pass_through_envs.contains(name)
+                {
+                    Some((Str::from(name), Arc::<OsStr>::from(value)))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let env_path =
+            all_envs.entry("PATH".into()).or_insert_with(|| Arc::<OsStr>::from(OsStr::new("")));
+        let paths = split_paths(env_path);
+        let node_modules_bin = Path::new(&task.cwd).join("node_modules/.bin");
+        *env_path = join_paths(iter::once(node_modules_bin).chain(paths))?.into();
+
+        let mut env_fingerprint = HashMap::<Str, Option<Str>>::new();
+        for name in &task.envs {
+            let value = if let Some(value) = all_envs.get(name) {
+                let Some(value) = value.to_str() else {
+                    anyhow::bail!(
+                        "the value of environment variable '{}' is not valid unicode: {:?}",
+                        name,
+                        value
+                    );
+                };
+                Some(Str::from(value))
             } else {
                 None
-            }
-        })
-        .collect();
-
-    let env_path = all_task_envs.entry("PATH".into()).or_default();
-    let paths = split_paths(env_path);
-    let node_modules_bin = Path::new(&task.cwd).join("node_modules/.bin");
-    *env_path = join_paths(iter::once(node_modules_bin).chain(paths))?;
-
-    let mut fingerprinted_envs = HashMap::<Str, Str>::new();
-    for (name, value) in &all_task_envs {
-        if !task.envs.contains(name) {
-            continue;
+            };
+            env_fingerprint.insert(name.clone(), value);
         }
-        let Some(value) = value.to_str() else {
-            anyhow::bail!(
-                "the value of environment variable '{}' is not valid unicode: {:?}",
-                name,
-                value
-            );
-        };
-        fingerprinted_envs.insert(name.clone(), value.into());
+        Ok(Self { all_envs, env_fingerprint })
     }
+}
 
+pub fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<ExecutedTask> {
     let mut child = if cfg!(windows) {
         let mut cmd = Command::new("cmd.exe");
         // https://github.com/nodejs/node/blob/dbd24b165128affb7468ca42f69edaf7e0d85a9a/lib/child_process.js#L633
@@ -112,12 +132,12 @@ pub fn execute_task(task: &TaskConfig, base_dir: &Path) -> anyhow::Result<Execut
         cmd.args(["-c"]);
         cmd
     }
-    .arg(&task.command)
+    .arg(&task.config.command)
     .stdout(Stdio::piped())
     .stderr(Stdio::piped())
-    .current_dir(base_dir.join(&task.cwd))
+    .current_dir(base_dir.join(&task.config.cwd))
     .env_clear()
-    .envs(all_task_envs)
+    .envs(&task.envs.all_envs)
     .spawn()?;
 
     let child_stdout = child.stdout.take().unwrap();
@@ -140,15 +160,18 @@ pub fn execute_task(task: &TaskConfig, base_dir: &Path) -> anyhow::Result<Execut
 
     let input_paths = gather_inputs(&task, base_dir)?;
 
-    Ok(ExecutedTask { std_outputs: outputs.into(), input_paths, envs: fingerprinted_envs })
+    Ok(ExecutedTask {
+        std_outputs: outputs.into(),
+        input_paths,
+    })
 }
 
-fn gather_inputs(task: &TaskConfig, base_dir: &Path) -> anyhow::Result<HashSet<Arc<OsStr>>> {
-    let glob = format!("{{{}}}", task.inputs.join(",")); // TODO: handle "," inside globs
+fn gather_inputs(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<HashSet<Arc<OsStr>>> {
+    let glob = format!("{{{}}}", itertools::Itertools::join(&mut task.config.inputs.iter(), ",")); // TODO: handle "," inside globs
     let glob = Glob::new(&glob)?;
 
     let mut paths: HashSet<Arc<OsStr>> = HashSet::new();
-    for entry in glob.walk(base_dir.join(task.cwd.as_str())) {
+    for entry in glob.walk(base_dir.join(task.config.cwd.as_str())) {
         let entry = entry?;
         paths.insert(entry.into_path().into_os_string().into());
     }

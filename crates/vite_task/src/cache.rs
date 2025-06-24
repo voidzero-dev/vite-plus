@@ -8,7 +8,7 @@ use std::sync::Arc;
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-use crate::config::{NamedTaskConfig, TaskConfig};
+use crate::config::{ResolvedTask};
 use crate::execute::{ExecutedTask, StdOutput};
 use crate::fingerprint::{FingerprintMismatch, TaskFingerprint};
 use crate::fs::FileSystem;
@@ -22,7 +22,7 @@ pub struct CachedTask {
 
 impl CachedTask {
     pub fn create(
-        task: &TaskConfig,
+        task: ResolvedTask,
         executed_task: ExecutedTask,
         fs: &impl FileSystem,
         base_dir: &Path,
@@ -84,7 +84,7 @@ impl TaskCache {
 
     pub fn try_hit<'me>(
         &'me self,
-        task: &NamedTaskConfig,
+        task: &ResolvedTask,
         fs: &impl FileSystem,
         base_dir: &Path,
     ) -> anyhow::Result<Result<&'me CachedTask, CacheMiss>> {

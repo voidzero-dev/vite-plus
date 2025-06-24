@@ -16,11 +16,30 @@ use bincode::{
     impl_borrow_decode,
 };
 use compact_str::CompactString;
+use diff::Diff;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Default, Hash, PartialOrd, Ord)]
 #[serde(transparent)]
 pub struct Str(CompactString);
+
+impl Diff for Str {
+    type Repr = Option<Str>;
+
+    fn diff(&self, other: &Self) -> Self::Repr {
+        if self != other { Some(other.clone()) } else { None }
+    }
+
+    fn apply(&mut self, diff: &Self::Repr) {
+        if let Some(diff) = diff {
+            *self = diff.clone()
+        }
+    }
+
+    fn identity() -> Self {
+        Str::default()
+    }
+}
 
 impl Str {
     pub fn as_str(&self) -> &str {

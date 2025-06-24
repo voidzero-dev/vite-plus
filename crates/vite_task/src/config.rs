@@ -6,14 +6,16 @@ use std::{
     sync::Arc,
 };
 
-use crate::{cache::TaskCache, fs::CachedFileSystem, str::Str};
+use crate::{cache::TaskCache, execute::TaskEnvs, fs::CachedFileSystem, str::Str};
 use anyhow::{Context, Ok};
 
 use bincode::{Decode, Encode};
+use diff::Diff;
 use petgraph::{graph::NodeIndex, stable_graph::StableDiGraph};
 use serde::{Deserialize, Serialize};
 
-#[derive(Encode, Decode, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Diff)]
+#[diff(attr(#[derive(Debug)]))]
 #[serde(rename_all = "camelCase")]
 pub struct TaskConfig {
     pub(crate) command: Str,
@@ -22,7 +24,7 @@ pub struct TaskConfig {
     pub(crate) cachable: bool,
 
     #[serde(default)]
-    pub(crate) inputs: Arc<[Str]>,
+    pub(crate) inputs: HashSet<Str>,
 
     #[serde(default)]
     pub(crate) envs: HashSet<Str>,
@@ -53,9 +55,10 @@ pub struct Workspace {
 }
 
 #[derive(Debug)]
-pub struct NamedTaskConfig {
+pub struct ResolvedTask {
     pub name: Str,
     pub config: TaskConfig,
+    pub envs: TaskEnvs,
 }
 
 impl Workspace {
@@ -78,11 +81,10 @@ impl Workspace {
     pub fn to_task_graph(
         &self,
         mut task_names: Vec<Str>,
-    ) -> anyhow::Result<StableDiGraph<NamedTaskConfig, ()>> {
+    ) -> anyhow::Result<StableDiGraph<ResolvedTask, ()>> {
         let mut vite_task_json = self.vite_task_json.clone();
         let capacity = vite_task_json.tasks.len();
-        let mut task_graph =
-            StableDiGraph::<NamedTaskConfig, ()>::with_capacity(capacity, capacity);
+        let mut task_graph = StableDiGraph::<ResolvedTask, ()>::with_capacity(capacity, capacity);
         let mut ids_by_task_name = HashMap::<Str, NodeIndex>::with_capacity(capacity);
         let mut edges = Vec::<(Str, Str)>::with_capacity(capacity);
 
@@ -92,8 +94,11 @@ impl Workspace {
                 .remove(&task_name)
                 .with_context(|| format!("Task '{}' not found", &task_name))?;
 
-            let id = task_graph
-                .add_node(NamedTaskConfig { name: task_name.clone(), config: task_config.config });
+            let id = task_graph.add_node(ResolvedTask {
+                name: task_name.clone(),
+                envs: TaskEnvs::resolve(&task_config.config)?,
+                config: task_config.config,
+            });
             if ids_by_task_name.insert(task_name.clone(), id).is_some() {
                 anyhow::bail!("Duplicated task name '{}'", &task_name)
             }

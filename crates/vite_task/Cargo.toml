@@ -16,8 +16,10 @@ bincode = { version = "2.0.1", features = ["derive"] }
 clap = { version = "4.5.40", features = ["derive"] }
 compact_str = { version = "0.9.0", features = ["serde"] }
 dashmap = "6.1.0"
+diff-struct = "0.5.3"
 globset = "0.4.16"
 ignore = "0.4.23"
+itertools = "0.14.0"
 petgraph = "0.8.2"
 rayon = "1.10.0"
 relative-path = "2.0.1"

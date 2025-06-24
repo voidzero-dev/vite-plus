@@ -1,7 +1,14 @@
 use std::{collections::HashMap, ffi::OsStr, fmt::Display, path::Path, sync::Arc};
 
-use crate::{config::TaskConfig, execute::ExecutedTask, fs::FileSystem, str::Str};
+use crate::{
+    config::{ResolvedTask, TaskConfig, TaskConfigDiff},
+    execute::{ExecutedTask, TaskEnvs},
+    fs::FileSystem,
+    str::Str,
+};
+
 use bincode::{Decode, Encode};
+use diff::{Diff as _, HashMapDiff};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
@@ -17,31 +24,33 @@ pub enum PathFingerprint {
 pub struct TaskFingerprint {
     pub config: TaskConfig,
     pub inputs: HashMap<Str, PathFingerprint>,
-    pub envs: HashMap<Str, Str>,
+    pub envs: HashMap<Str, Option<Str>>,
 }
 
 #[derive(Debug)]
 pub enum FingerprintMismatch {
-    ConfigChanged { old_config: TaskConfig, new_config: TaskConfig },
+    ConfigChanged(TaskConfigDiff),
     InputContentChanged { path: Str },
-    EnvChanged { name: Str, old_value: Option<Str>, new_value: Option<Str> },
+    EnvChanged(HashMapDiff<Str, Option<Str>>),
 }
+
+// #[derive(Debug)]
+// pub struct FingerprintMismatch {
+//     pub cause: FingerprintMismatch,
+//     pub task_envs: TaskEnvs,
+// }
 
 impl Display for FingerprintMismatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FingerprintMismatch::ConfigChanged { old_config, new_config } => {
-                write!(f, "Config inputs changed: {:?} => {:?}", old_config, new_config)
+            FingerprintMismatch::ConfigChanged(config_diff) => {
+                write!(f, "Config inputs changed: {:?}", config_diff)
             }
             FingerprintMismatch::InputContentChanged { path } => {
                 write!(f, "File content changed: {:?}", path)
             }
-            FingerprintMismatch::EnvChanged { name, old_value, new_value } => {
-                write!(
-                    f,
-                    "Environment variable '{}' changed: {:?} => {:?}",
-                    name, old_value, new_value
-                )
+            FingerprintMismatch::EnvChanged(env_diff) => {
+                write!(f, "Environment variables changed: {:?}", env_diff)
             }
         }
     }
@@ -49,7 +58,7 @@ impl Display for FingerprintMismatch {
 
 impl TaskFingerprint {
     pub fn create(
-        task_config: &TaskConfig,
+        task: ResolvedTask,
         executed_task: &ExecutedTask,
         fs: &impl FileSystem,
         base_dir: &Path,
@@ -68,39 +77,40 @@ impl TaskFingerprint {
                 })())
             })
             .collect::<anyhow::Result<HashMap<Str, PathFingerprint>>>()?;
-        Ok(Self { config: task_config.clone(), inputs, envs: executed_task.envs.clone() })
+        Ok(Self { config: task.config.clone(), inputs, envs: task.envs.env_fingerprint })
     }
+
     pub fn validate(
         &self,
-        task: &TaskConfig,
+        current_config: &TaskConfig,
         fs: &impl FileSystem,
         base_dir: &Path,
     ) -> anyhow::Result<Option<FingerprintMismatch>> {
-        if &self.config != task {
-            return Ok(Some(FingerprintMismatch::ConfigChanged {
-                old_config: self.config.clone(),
-                new_config: task.clone(),
-            }));
-        }
-        let input_mismatch =
-            self.inputs.par_iter().find_map_any(|(input_relative_path, path_fingerprint)| {
-                let input_full_path =
-                    Arc::<OsStr>::from(base_dir.join(input_relative_path).into_os_string());
-                let current_path_fingerprint = match fs.fingerprint_path(&input_full_path) {
-                    Ok(ok) => ok,
-                    Err(err) => return Some(Err(err)),
-                };
-                if path_fingerprint != &current_path_fingerprint {
-                    Some(Ok(FingerprintMismatch::InputContentChanged {
-                        path: input_relative_path.clone(),
-                    }))
-                } else {
-                    None
-                }
-            });
-        if let Some(input_mismatch) = input_mismatch.transpose()? {
-            return Ok(Some(input_mismatch));
-        }
-        Ok(None)
+        let task_envs = TaskEnvs::resolve(current_config)?;
+
+        // TODO: use diff result instead of eq
+        Ok(if &self.config != current_config {
+            Some(FingerprintMismatch::ConfigChanged(self.config.diff(current_config)))
+        } else if &self.envs != &task_envs.env_fingerprint {
+            Some(FingerprintMismatch::EnvChanged(self.envs.diff(&task_envs.env_fingerprint)))
+        } else {
+            let input_mismatch =
+                self.inputs.par_iter().find_map_any(|(input_relative_path, path_fingerprint)| {
+                    let input_full_path =
+                        Arc::<OsStr>::from(base_dir.join(input_relative_path).into_os_string());
+                    let current_path_fingerprint = match fs.fingerprint_path(&input_full_path) {
+                        Ok(ok) => ok,
+                        Err(err) => return Some(Err(err.into())),
+                    };
+                    if path_fingerprint != &current_path_fingerprint {
+                        Some(anyhow::Ok(FingerprintMismatch::InputContentChanged {
+                            path: input_relative_path.clone(),
+                        }))
+                    } else {
+                        None
+                    }
+                });
+            input_mismatch.transpose()?
+        })
     }
 }

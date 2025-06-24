@@ -4,20 +4,20 @@ use petgraph::{algo::toposort, stable_graph::StableDiGraph};
 
 use crate::{
     cache::{CacheMiss, CachedTask, TaskCache},
-    config::{NamedTaskConfig, Workspace},
+    config::{ResolvedTask, Workspace},
     execute::{OutputKind, execute_task},
     fs::FileSystem,
 };
 
 #[derive(Debug)]
 pub struct ExecutionPlan {
-    steps: Vec<NamedTaskConfig>,
+    steps: Vec<ResolvedTask>,
     // node_indices: Vec<NodeIndex>,
     // task_graph: Graph<TaskNode, ()>,
 }
 
 impl ExecutionPlan {
-    pub fn plan(mut task_graph: StableDiGraph<NamedTaskConfig, ()>) -> anyhow::Result<Self> {
+    pub fn plan(mut task_graph: StableDiGraph<ResolvedTask, ()>) -> anyhow::Result<Self> {
         // TODO: parallel
         let node_indices = match toposort(&task_graph, None) {
             Ok(ok) => ok,
@@ -58,7 +58,7 @@ impl ExecutionPlan {
 }
 
 fn get_cached_or_execute<'a>(
-    task: NamedTaskConfig,
+    task: ResolvedTask,
     cache: &'a mut TaskCache,
     fs: &'a impl FileSystem,
     base_dir: &'a Path,
@@ -85,9 +85,10 @@ fn get_cached_or_execute<'a>(
         Err(cache_miss) => (
             Some(cache_miss),
             Box::new(move || {
-                let executed_task = execute_task(&task.config, base_dir)?;
-                let cached_task = CachedTask::create(&task.config, executed_task, fs, base_dir)?;
-                cache.update(task.name.clone(), cached_task)?;
+                let executed_task = execute_task(&task, base_dir)?;
+                let task_name = task.name.clone();
+                let cached_task = CachedTask::create(task, executed_task, fs, base_dir)?;
+                cache.update(task_name, cached_task)?;
                 anyhow::Ok(())
             }),
         ),
