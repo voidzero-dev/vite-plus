@@ -1,11 +1,17 @@
-import { cp } from "node:fs/promises";
+import { cp, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
-export default async function copyTemplateFiles(targetDir: string) {
-  await copyFiles(targetDir);
+const templatesDir = join(import.meta.dirname, "../../templates");
+
+export async function getAvailableTemplates(): Promise<string[]> {
+  const dirs = await readdir(templatesDir);
+  return dirs;
 }
 
-async function copyFiles(targetDir: string) {
-  const templateDir = join(import.meta.dirname, "../../template");
+export async function copyTemplateFiles(templateDir: string, targetDir: string): Promise<void> {
+  await copyFiles(templateDir, targetDir);
+}
+
+async function copyFiles(templateDir: string, targetDir: string): Promise<void> {
   await cp(templateDir, targetDir, { force: true, recursive: true });
 }
