@@ -11,7 +11,7 @@ type Task = { dir: string; script: string; manifest: BaseManifest };
 export async function getTaskList(taskNames: string[]): Promise<Task[][]> {
   const packages: Package[] = [];
 
-  for await (const filePath of glob("{apps,packages}/*/package.json", { cwd })) {
+  for await (const filePath of glob(["package.json", "{apps,packages}/*/package.json"], { cwd })) {
     const absPath = join(cwd, filePath);
     const { default: manifest } = await import(absPath, { with: { type: "json" } });
     packages.push({ rootDir: dirname(absPath), manifest });
@@ -29,7 +29,10 @@ export async function getTaskList(taskNames: string[]): Promise<Task[][]> {
     dirs.flatMap(dir =>
       taskNames.flatMap(task => {
         const manifest = graph[dir].package.manifest;
-        if (manifest?.scripts && task in manifest.scripts) return { dir, script: manifest.scripts[task], manifest };
+        if (manifest?.scripts && task in manifest.scripts) {
+          const script = manifest.scripts[task];
+          if (!script.includes("vite-plus")) return { dir, script, manifest };
+        }
         return [];
       })
     )
