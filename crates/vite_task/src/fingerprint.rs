@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ffi::OsStr, fmt::Display, path::Path, sync::Arc};
+use std::{collections::HashMap, ffi::OsStr, fmt::Display, path::{Path, PathBuf}, sync::Arc};
 
 use crate::{
     config::{ResolvedTask, TaskConfig, TaskConfigDiff},
@@ -9,6 +9,7 @@ use crate::{
 
 use bincode::{Decode, Encode};
 use diff::{Diff as _, HashMapDiff};
+use git2::Oid;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
@@ -24,21 +25,16 @@ pub enum PathFingerprint {
 pub struct TaskFingerprint {
     pub config: TaskConfig,
     pub inputs: HashMap<Str, PathFingerprint>,
-    pub envs: HashMap<Str, Option<Str>>,
+    pub envs: HashMap<Str, Str>,
 }
 
 #[derive(Debug)]
 pub enum FingerprintMismatch {
     ConfigChanged(TaskConfigDiff),
     InputContentChanged { path: Str },
-    EnvChanged(HashMapDiff<Str, Option<Str>>),
+    EnvChanged(HashMapDiff<Str, Str>),
 }
 
-// #[derive(Debug)]
-// pub struct FingerprintMismatch {
-//     pub cause: FingerprintMismatch,
-//     pub task_envs: TaskEnvs,
-// }
 
 impl Display for FingerprintMismatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

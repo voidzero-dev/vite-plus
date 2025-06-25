@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     env::{join_paths, split_paths},
-    ffi::{OsStr, OsString},
+    ffi::OsStr,
     io::{self, Read, Write},
     iter,
     ops::DerefMut,
@@ -12,7 +12,6 @@ use std::{
 
 use bincode::{Decode, Encode};
 
-use compact_str::CompactStringExt;
 use serde::{Deserialize, Serialize};
 use wax::Glob;
 
@@ -71,7 +70,7 @@ fn collect_std_outputs(
 #[derive(Debug)]
 pub struct TaskEnvs {
     pub all_envs: HashMap<Str, Arc<OsStr>>,
-    pub env_fingerprint: HashMap<Str, Option<Str>>,
+    pub env_fingerprint: HashMap<Str, Str>,
 }
 
 impl TaskEnvs {
@@ -101,21 +100,19 @@ impl TaskEnvs {
         let node_modules_bin = Path::new(&task.cwd).join("node_modules/.bin");
         *env_path = join_paths(iter::once(node_modules_bin).chain(paths))?.into();
 
-        let mut env_fingerprint = HashMap::<Str, Option<Str>>::new();
+        let mut env_fingerprint = HashMap::<Str, Str>::new();
         for name in &task.envs {
-            let value = if let Some(value) = all_envs.get(name) {
-                let Some(value) = value.to_str() else {
-                    anyhow::bail!(
-                        "the value of environment variable '{}' is not valid unicode: {:?}",
-                        name,
-                        value
-                    );
-                };
-                Some(Str::from(value))
-            } else {
-                None
+            let Some(value) = all_envs.get(name) else {
+                continue;
             };
-            env_fingerprint.insert(name.clone(), value);
+            let Some(value) = value.to_str() else {
+                anyhow::bail!(
+                    "the value of environment variable '{}' is not valid unicode: {:?}",
+                    name,
+                    value
+                );
+            };
+            env_fingerprint.insert(name.clone(), value.into());
         }
         Ok(Self { all_envs, env_fingerprint })
     }
@@ -160,10 +157,7 @@ pub fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<Exec
 
     let input_paths = gather_inputs(&task, base_dir)?;
 
-    Ok(ExecutedTask {
-        std_outputs: outputs.into(),
-        input_paths,
-    })
+    Ok(ExecutedTask { std_outputs: outputs.into(), input_paths })
 }
 
 fn gather_inputs(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<HashSet<Arc<OsStr>>> {
