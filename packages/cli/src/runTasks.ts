@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { multiplex, type Command } from "multiplexer";
 import { getTaskList } from "./getTasks.ts";
+import { spawn } from "node:child_process";
 
 export async function runTasks(): Promise<void> {
   const { positionals } = parseArgs({ allowPositionals: true });
@@ -28,6 +29,9 @@ export async function runTasks(): Promise<void> {
       );
     }
 
-    multiplex(commands);
+    const all = commands.flat();
+    if (all.length > 1) multiplex(commands);
+    else if (all.length === 1) spawn(all[0].cmd, all[0].args, { stdio: "inherit" });
+    else console.error("404 Task Not Found");
   }
 }
