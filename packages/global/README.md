@@ -4,6 +4,24 @@
 - `vite new`
 - Everything else is delegated to [vite-plus][1] for local tasks
 
+## Overview
+
+```
+$ vite --help
+
+vite new               Scaffold new project
+vite build [dir]       Run vite build (default in: ".")
+vite optimize [dir]    Run vite optimize
+vite preview [dir]     Run vite preview
+vite dev [dir]         Run vite dev
+vite lint [dir]        Run oxlint
+vite lib [dir]         Run tsdown
+vite test [dir]        Run vitest
+vite bench [dir]       Run vitest bench
+vite docs [dir]        Run vitepress
+vite task [name]       Run [name] script of package.json#scripts in each workspace
+```
+
 ## Development
 
 - The global executable is `vite`, use `vite-dev` for development
