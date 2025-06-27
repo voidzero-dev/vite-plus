@@ -51,12 +51,23 @@ Outside this repo do `pnpm link to/vite-plus/packages/cli/`
 Now the following commands all do the same thing:
 
 ```sh
-vp task build lint
+vite lint
+pnpm vite-plus lint
+```
+
+Or use the task runner for
+
+```sh
+vite task build lint
 pnpm vite-plus task build lint
 pnpm run all
 ```
 
 ## Commands
+
+### lint, build, dev, preview, test, etc.
+
+Execute our own toolchain in current directory
 
 ### new
 
