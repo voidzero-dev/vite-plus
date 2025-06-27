@@ -132,7 +132,7 @@ pub fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<Exec
     .arg(&task.config.command)
     .stdout(Stdio::piped())
     .stderr(Stdio::piped())
-    .current_dir(base_dir.join(&task.config.cwd))
+    .current_dir(base_dir.join(&task.config_dir).join(&task.config.cwd))
     .env_clear()
     .envs(&task.envs.all_envs)
     .spawn()?;
@@ -162,11 +162,14 @@ pub fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<Exec
 
 fn gather_inputs(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<HashSet<Arc<OsStr>>> {
     // Task inferring to be implemented here
+    if task.config.inputs.is_empty() {
+        return Ok(HashSet::new());
+    }
     let glob = format!("{{{}}}", itertools::Itertools::join(&mut task.config.inputs.iter(), ",")); // TODO: handle "," inside globs
     let glob = Glob::new(&glob)?;
 
     let mut paths: HashSet<Arc<OsStr>> = HashSet::new();
-    for entry in glob.walk(base_dir.join(task.config.cwd.as_str())) {
+    for entry in glob.walk(base_dir.join(&task.config_dir)) {
         let entry = entry?;
         paths.insert(entry.into_path().into_os_string().into());
     }

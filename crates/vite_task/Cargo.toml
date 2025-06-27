@@ -6,6 +6,7 @@ include = ["/src"]
 license.workspace = true
 readme = "README.md"
 rust-version.workspace = true
+publish = false
 
 [lints]
 workspace = true
@@ -27,3 +28,4 @@ serde = { version = "1.0.219", features = ["derive", "rc"] }
 serde_json = "1.0.140"
 twox-hash = "2.1.1"
 wax = "0.6.0"
+vite_workspace = { path = "../vite_workspace" }

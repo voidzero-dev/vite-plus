@@ -1,4 +1,10 @@
-use std::{fs::File, io::BufReader, path::PathBuf};
+use std::{
+    fs::File,
+    io::BufReader,
+    iter::once,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use crate::{
     cache::TaskCache,
@@ -7,12 +13,14 @@ use crate::{
     fs::CachedFileSystem,
     str::Str,
 };
-use anyhow::{Context, Ok};
+use anyhow::Context;
 
 use bincode::{Decode, Encode};
+use compact_str::CompactString;
 use diff::Diff;
 use petgraph::{graph::NodeIndex, stable_graph::StableDiGraph};
 use serde::{Deserialize, Serialize};
+use vite_workspace::PackageInfo;
 
 #[derive(Encode, Decode, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Diff)]
 #[diff(attr(#[derive(Debug)]))]
@@ -48,7 +56,7 @@ pub struct ViteTaskJson {
 }
 
 pub struct Workspace {
-    vite_task_json: ViteTaskJson,
+    vite_task_jsons: Vec<(ViteTaskJson, PackageInfo)>,
     pub(crate) dir: PathBuf,
     pub(crate) task_cache: TaskCache,
     pub(crate) fs: CachedFileSystem,
@@ -58,20 +66,43 @@ pub struct Workspace {
 #[derive(Debug)]
 pub struct ResolvedTask {
     pub name: Str,
+    pub config_dir: Str,
     pub config: TaskConfig,
     pub envs: TaskEnvs,
 }
 
 impl Workspace {
     pub fn load(dir: PathBuf) -> anyhow::Result<Self> {
-        let config_path = dir.join("vite-task.json");
-        let cache_path = dir.join("node_modules/.vite/task-cache.json");
-        let vite_task_json: ViteTaskJson =
-            serde_json::from_reader(BufReader::new(File::open(config_path)?))?;
+        let package_graph = vite_workspace::get_package_graph(&dir)?;
+        let mut package_infos: Vec<PackageInfo> = package_graph.node_weights().cloned().collect();
+        if let Some(root_package) = package_infos.iter_mut().find(|a| a.path.is_empty()) {
+            root_package.name = "".into(); // do not prefix tasks in root package
+        } else {
+            // make sure to look for task config in root even if there's no root package there.
+            package_infos.push(PackageInfo { name: "".into(), path: "".into() });
+        }
 
+        let mut vite_task_jsons: Vec<(ViteTaskJson, PackageInfo)> = Vec::new();
+        for pkg in package_infos {
+            let config_path = dir.join(Path::new(&pkg.path)).join("vite-task.json");
+            let vite_task_json: ViteTaskJson =
+                serde_json::from_reader(BufReader::new(match File::open(config_path) {
+                    Ok(ok) => ok,
+                    Err(err) => {
+                        if err.kind() == std::io::ErrorKind::NotFound {
+                            continue;
+                        } else {
+                            return Err(err.into());
+                        }
+                    }
+                }))?;
+            vite_task_jsons.push((vite_task_json, pkg));
+        }
+
+        let cache_path = dir.join("node_modules/.vite/task-cache.json");
         let task_cache = TaskCache::load_from_file(&cache_path)?;
 
-        Ok(Self { vite_task_json, dir, task_cache, fs: CachedFileSystem::default() })
+        Ok(Self { vite_task_jsons, dir, task_cache, fs: CachedFileSystem::default() })
     }
 
     pub fn unload(self) -> anyhow::Result<()> {
@@ -83,20 +114,37 @@ impl Workspace {
         &self,
         mut task_names: Vec<Str>,
     ) -> anyhow::Result<StableDiGraph<ResolvedTask, ()>> {
-        let mut vite_task_json = self.vite_task_json.clone();
-        let capacity = vite_task_json.tasks.len();
-        let mut task_graph = StableDiGraph::<ResolvedTask, ()>::with_capacity(capacity, capacity);
-        let mut ids_by_task_name = HashMap::<Str, NodeIndex>::with_capacity(capacity);
-        let mut edges = Vec::<(Str, Str)>::with_capacity(capacity);
+        let mut tasks_by_full_name: HashMap<Str, (TaskConfigWithDeps, PackageInfo)> =
+            HashMap::new();
+        for (task_json, package_info) in &self.vite_task_jsons {
+            for (task_name, task_config_json) in &task_json.tasks {
+                let full_name = if package_info.name.is_empty() {
+                    task_name.clone()
+                } else {
+                    format!("{}#{}", &package_info.name, task_name).as_str().into()
+                };
+                if tasks_by_full_name
+                    .insert(full_name.clone(), (task_config_json.clone(), package_info.clone()))
+                    .is_some()
+                {
+                    anyhow::bail!("Duplicated task name '{}'", &full_name)
+                }
+            }
+        }
+        // let mut vite_task_json = self.vite_task_json.clone();
+        // let capacity = vite_task_json.tasks.len();
+        let mut task_graph = StableDiGraph::<ResolvedTask, ()>::new();
+        let mut ids_by_task_name = HashMap::<Str, NodeIndex>::new();
+        let mut edges = Vec::<(Str, Str)>::new();
 
         while let Some(task_name) = task_names.pop() {
-            let task_config = vite_task_json
-                .tasks
+            let (task_config, package_info) = tasks_by_full_name
                 .remove(&task_name)
                 .with_context(|| format!("Task '{}' not found", &task_name))?;
 
             let id = task_graph.add_node(ResolvedTask {
                 name: task_name.clone(),
+                config_dir: package_info.path.as_str().into(),
                 envs: TaskEnvs::resolve(&task_config.config)?,
                 config: task_config.config,
             });
