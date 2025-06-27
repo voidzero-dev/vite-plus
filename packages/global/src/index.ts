@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
 import { join } from "node:path";
-import { questionnaire } from "./command/tasks.ts";
+import { questionnaire } from "./command/new.ts";
 
 try {
   const { positionals } = parseArgs({ allowPositionals: true });
