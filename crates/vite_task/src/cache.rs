@@ -51,6 +51,8 @@ impl TaskCache {
         let cached_tasks_by_name: HashMap<Str, CachedTask> = match File::open(path) {
             Ok(file) => {
                 let reader = BufReader::new(file);
+                // Using json for easy debugging
+                // Will switch to bincode for better performance 
                 serde_json::from_reader(reader)?
                 // bincode::decode_from_std_read(&mut reader, BINCODE_CONFIG)?
             }
@@ -82,6 +84,7 @@ impl TaskCache {
         Ok(())
     }
 
+    /// Tries to get the task cache if the fingerprint matches, otherwise returns why the cache misses
     pub fn try_hit<'me>(
         &'me self,
         task: &ResolvedTask,

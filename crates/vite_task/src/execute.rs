@@ -32,12 +32,15 @@ pub struct StdOutput {
     pub content: Vec<u8>,
 }
 
+/// Contains info that is available after executing the task
 #[derive(Debug)]
 pub struct ExecutedTask {
     pub std_outputs: Arc<[StdOutput]>,
     pub input_paths: HashSet<Arc<OsStr>>,
 }
 
+
+/// Collects stdout/stderr into `outputs` and at the same time writes them to the real stdout/stderr
 fn collect_std_outputs(
     outputs: &Mutex<Vec<StdOutput>>,
     mut stream: impl Read,
@@ -161,6 +164,7 @@ pub fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<Exec
 }
 
 fn gather_inputs(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<HashSet<Arc<OsStr>>> {
+    // Task inferring to be implemented here
     let glob = format!("{{{}}}", itertools::Itertools::join(&mut task.config.inputs.iter(), ",")); // TODO: handle "," inside globs
     let glob = Glob::new(&glob)?;
 

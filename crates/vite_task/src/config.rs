@@ -54,6 +54,7 @@ pub struct Workspace {
     pub(crate) fs: CachedFileSystem,
 }
 
+/// A resolved task, ready to hit the cache or be executed
 #[derive(Debug)]
 pub struct ResolvedTask {
     pub name: Str,

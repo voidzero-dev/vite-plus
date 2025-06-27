@@ -2,14 +2,13 @@ use std::{
     borrow::Borrow,
     ffi::OsStr,
     fmt::{Debug, Display},
-    iter,
     ops::Deref,
     path::Path,
     str::from_utf8,
 };
 
 use bincode::{
-    BorrowDecode as _, Decode, Encode,
+    Decode, Encode,
     de::{Decoder, read::Reader},
     enc::Encoder,
     error::{DecodeError, EncodeError},

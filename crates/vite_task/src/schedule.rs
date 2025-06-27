@@ -57,6 +57,8 @@ impl ExecutionPlan {
     }
 }
 
+/// Replay the cached task if fingerprint matches. Otherwise execute the task.
+/// Returns (cache miss reason, function to replay or execute)
 fn get_cached_or_execute<'a>(
     task: ResolvedTask,
     cache: &'a mut TaskCache,

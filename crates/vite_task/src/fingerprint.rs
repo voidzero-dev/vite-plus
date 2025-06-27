@@ -9,11 +9,19 @@ use crate::{
 
 use bincode::{Decode, Encode};
 use diff::{Diff as _, HashMapDiff};
-use git2::Oid;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
-// use rayon::prelude::*;
+
+
+/// The fingerprint of a task. Determines if the task needs to be re-executed
+#[derive(Encode, Decode, Debug, Serialize, Deserialize)]
+pub struct TaskFingerprint {
+    pub config: TaskConfig,
+    pub inputs: HashMap<Str, PathFingerprint>,
+    pub envs: HashMap<Str, Str>,
+}
+
 
 #[derive(Encode, Decode, PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 pub enum PathFingerprint {
@@ -21,12 +29,6 @@ pub enum PathFingerprint {
     FileContentHash(u64),
 }
 
-#[derive(Encode, Decode, Debug, Serialize, Deserialize)]
-pub struct TaskFingerprint {
-    pub config: TaskConfig,
-    pub inputs: HashMap<Str, PathFingerprint>,
-    pub envs: HashMap<Str, Str>,
-}
 
 #[derive(Debug)]
 pub enum FingerprintMismatch {
@@ -53,29 +55,7 @@ impl Display for FingerprintMismatch {
 }
 
 impl TaskFingerprint {
-    pub fn create(
-        task: ResolvedTask,
-        executed_task: &ExecutedTask,
-        fs: &impl FileSystem,
-        base_dir: &Path,
-    ) -> anyhow::Result<Self> {
-        let inputs = executed_task
-            .input_paths
-            .par_iter()
-            .flat_map(|input_full_path| {
-                let Ok(relative_path) = Path::new(input_full_path).strip_prefix(base_dir) else {
-                    return None; // skip inputs outside the base_dir
-                };
-                Some((|| {
-                    let relative_path = RelativePath::from_path(relative_path)?.as_str();
-                    let path_fingerprint = fs.fingerprint_path(input_full_path)?;
-                    anyhow::Ok((relative_path.into(), path_fingerprint))
-                })())
-            })
-            .collect::<anyhow::Result<HashMap<Str, PathFingerprint>>>()?;
-        Ok(Self { config: task.config.clone(), inputs, envs: task.envs.env_fingerprint })
-    }
-
+    /// Checks if the cached fingerprint is still valid. Returns why if not.
     pub fn validate(
         &self,
         current_config: &TaskConfig,
@@ -109,4 +89,29 @@ impl TaskFingerprint {
             input_mismatch.transpose()?
         })
     }
+
+    /// Creates a new fingerprint after the task has been executed
+    pub fn create(
+        task: ResolvedTask,
+        executed_task: &ExecutedTask,
+        fs: &impl FileSystem,
+        base_dir: &Path,
+    ) -> anyhow::Result<Self> {
+        let inputs = executed_task
+            .input_paths
+            .par_iter()
+            .flat_map(|input_full_path| {
+                let Ok(relative_path) = Path::new(input_full_path).strip_prefix(base_dir) else {
+                    return None; // skip inputs outside the base_dir
+                };
+                Some((|| {
+                    let relative_path = RelativePath::from_path(relative_path)?.as_str();
+                    let path_fingerprint = fs.fingerprint_path(input_full_path)?;
+                    anyhow::Ok((relative_path.into(), path_fingerprint))
+                })())
+            })
+            .collect::<anyhow::Result<HashMap<Str, PathFingerprint>>>()?;
+        Ok(Self { config: task.config.clone(), inputs, envs: task.envs.env_fingerprint })
+    }
+
 }
