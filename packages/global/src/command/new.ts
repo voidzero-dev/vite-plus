@@ -1,10 +1,13 @@
+import { existsSync } from "node:fs";
 import { cp, readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { spawn } from "node:child_process";
 import { intro, select, outro, text, confirm, tasks, cancel } from "@clack/prompts";
 
+const findRoot = (dir: string): string => (existsSync(join(dir, "package.json")) ? dir : findRoot(dirname(dir)));
+
 const cwd = process.cwd();
-const templatesDir = join(import.meta.dirname, "../templates");
+const templatesDir = join(findRoot(import.meta.dirname), "templates");
 
 async function getAvailableTemplates(): Promise<string[]> {
   const dirs = await readdir(templatesDir);
