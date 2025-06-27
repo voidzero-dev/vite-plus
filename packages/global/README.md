@@ -1,25 +1,25 @@
-# vp
+# Vite+
 
-- Global CLI for Vite+
-- For now the package and binary are dubbed `vp`
-- Only one command: `vp new`
+- Global `vite` CLI for Vite+
+- `vite new`
 - Everything else is delegated to [vite-plus][1] for local tasks
 
 ## Development
 
-- The global executable is `vp`, use `vpg` for development
+- The global executable is `vite`, use `vite-dev` for development
 - The local executable is `vite-plus`, use `vpl` for development
 
 Example workflow:
 
-1. Make `vp` (and `vpg`) available globally:
+1. Make `vite` (and `vite-dev`) available globally:
 
 ```sh
 cd packages/global
 pnpm link
+pnpm dev
 ```
 
-1. From `vite-plus` package, link `multiplexer` package and use `vite-plus` in
+2. From `vite-plus` package, link `multiplexer` package and use `vite-plus` in
    any project's `package.json`:
 
 ```sh
@@ -37,12 +37,14 @@ pnpm dev
 
 4. Install in project
 
-Use `vp new` anywhere, or run this directly inside this repo:
+Use `vite new` anywhere, or run this directly inside this repo:
 
 ```sh
 cd packages/global/templates/minimal
 pnpm link ../../../cli/
 ```
+
+Outside this repo do `pnpm link to/vite-plus/packages/cli/`
 
 5. Run tasks
 
@@ -61,14 +63,14 @@ pnpm run all
 Run questionnaire to copy a template to current or sub directory:
 
 ```sh
-vp new
+vite new
 ```
 
-Or `vpg new` to directly use TS source code.
+Or `vite-dev new` to directly use TS source code.
 
 ### task
 
-`vp task [name]` or `vite-plus task [name]` runs script with the same `name`
+`vite task [name]` or `vite-plus task [name]` runs script with the same `name`
 from `package.json` across the monorepo (topologically sorted). Multiple `name`
 arguments supported.
 
