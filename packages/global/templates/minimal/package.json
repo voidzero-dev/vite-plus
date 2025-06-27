@@ -1,5 +1,5 @@
 {
-  "name": "vite-plus-template-minimal-js",
+  "name": "vite-plus-template-minimal",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,19 +7,8 @@
     "types": "dist/index.d.ts",
     "default": "dist/index.js"
   },
-  "scripts": {
-    "build": "tsc --build --verbose",
-    "dev": "vite",
-    "lint": "oxlint",
-    "all": "vite-plus task build lint"
-  },
+  "scripts": {},
   "devDependencies": {
-    "@types/node": "^24.0.4",
-    "multiplexer": "^0.0.0",
-    "oxlint": "^1.3.0",
-    "tsdown": "^0.12.8",
-    "typescript": "^5.8.3",
-    "vite": "^7.0.0",
     "vite-plus": "^0.0.0"
   },
   "packageManager": "pnpm@10.12.1"

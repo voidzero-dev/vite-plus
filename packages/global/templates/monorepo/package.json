@@ -3,14 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "scripts": {
-    "build": "vite-plus task build",
-    "lint": "vite-plus task lint",
-    "all": "vite-plus task build lint"
-  },
+  "scripts": {},
   "devDependencies": {
-    "vite-plus": "^0.0.0",
-    "multiplexer": "^0.0.0"
+    "vite-plus": "^0.0.0"
   },
   "packageManager": "pnpm@10.12.1"
 }
