@@ -10,35 +10,72 @@
 - The global executable is `vp`, use `vpg` for development
 - The local executable is `vite-plus`, use `vpl` for development
 
-The `vpg` and `vpl` binaries require Node.js to run `.ts` directly.
-Make them available globally, e.g. using `npm link` or alias.
+Example workflow:
+
+1. Make `vp` (and `vpg`) available globally:
+
+```sh
+cd packages/global
+pnpm link
+```
+
+1. From `vite-plus` package, link `multiplexer` package and use `vite-plus` in
+   any project's `package.json`:
+
+```sh
+cd packages/cli
+pnpm link ../multiplexer/
+pnpm dev
+```
+
+3. Build multiplexer
+
+```sh
+cd packages/multiplexer
+pnpm dev
+```
+
+4. Install in project
+
+Use `vp new` anywhere, or run this directly inside this repo:
+
+```sh
+cd packages/global/templates/minimal
+pnpm link ../../../cli/
+```
+
+5. Run tasks
+
+Now the following commands all do the same thing:
+
+```sh
+vp task build lint
+pnpm vite-plus task build lint
+pnpm run all
+```
 
 ## Commands
 
 ### new
 
-Copy files from template dir to current dir:
+Run questionnaire to copy a template to current or sub directory:
 
 ```sh
 vp new
 ```
 
+Or `vpg new` to directly use TS source code.
+
 ### task
 
-Example commands with included dummy template:
-
-```sh
-vp task dev#packages/app
-vp task build#packages/app
-vp task test#packages/lib -- run
-pnpm run vite-plus task test#packages/lib -- run  # same
-vp task run#packages/lib -- script.ts
-```
+`vp task [name]` or `vite-plus task [name]` runs script with the same `name`
+from `package.json` across the monorepo (topologically sorted). Multiple `name`
+arguments supported.
 
 ## Verdaccio
 
-Install [Verdaccio][2] for local development with actual package installs
-([pkg.pr.new][3] publishes only from CI and e.g. `npm link` doesn't always cut it).
+Install [Verdaccio][2] for local actual package installs ([pkg.pr.new][3]
+publishes only from CI and e.g. `npm link` doesn't always cut it).
 
 [1]: ../cli
 [2]: ./verdaccio.md
