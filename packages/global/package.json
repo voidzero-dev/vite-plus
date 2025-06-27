@@ -13,6 +13,7 @@
     "template"
   ],
   "scripts": {
+    "dev": "tsdown --watch",
     "prepack": "tsdown"
   },
   "devDependencies": {

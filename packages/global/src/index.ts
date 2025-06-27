@@ -10,8 +10,7 @@ try {
   if (command === "new") {
     await questionnaire();
   } else {
-    const { default: main } = await import(join(process.cwd(), "node_modules/vite-plus/dist/index.js"));
-    main();
+    await import(join(process.cwd(), "node_modules/vite-plus/dist/cli.js"));
   }
 } catch (e) {
   if (e && e.status) process.exit(e.status);
