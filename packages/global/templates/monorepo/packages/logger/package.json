@@ -12,18 +12,9 @@
       }
     }
   },
-  "scripts": {
-    "build": "tsdown",
-    "test": "vitest",
-    "lint": "oxlint",
-    "lint:watch": "oxlint; node -e \"import('node:fs').then(({watch}) => watch('.', {recursive: true}, () => require('child_process').spawnSync('oxlint', [], {stdio:'inherit'})));\""
-  },
+  "scripts": {},
   "devDependencies": {
     "@types/node": "^24.0.3",
-    "oxlint": "^1.2.0",
-    "tsdown": "^0.12.8",
-    "typescript": "^5.8.3",
-    "vite-plus": "^0.0.0",
-    "vitest": "^3.2.4"
+    "typescript": "^5.8.3"
   }
 }

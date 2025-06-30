@@ -1,11 +1,11 @@
 {
-  "name": "vp",
+  "name": "vite",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "bin": {
-    "vp": "./bin/vp",
-    "vpg": "./bin/vpg"
+    "vite": "./bin/vite",
+    "vite-dev": "./bin/vite-dev"
   },
   "files": [
     "bin",
