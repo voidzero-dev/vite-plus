@@ -42,7 +42,7 @@ function getArgs(subcommand: string, commandArgs: string[]) {
   }
 }
 
-export async function runTasks(): Promise<void> {
+export async function run(): Promise<void> {
   const { positionals } = parseArgs({ allowPositionals: true });
 
   const [subcommand, ...rest] = positionals;

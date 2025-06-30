@@ -1,2 +1,2 @@
-import { runTasks } from "./runTasks.ts";
-runTasks();
+import { run } from "./run.ts";
+run();
