@@ -1,7 +1,4 @@
-use std::{
-    env::{args, current_dir},
-    path::PathBuf,
-};
+use std::env::{args, current_dir};
 
 use vite_task::Args;
 

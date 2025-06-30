@@ -23,20 +23,20 @@ use serde::{Deserialize, Serialize};
 pub struct Str(CompactString);
 
 impl Diff for Str {
-    type Repr = Option<Str>;
+    type Repr = Option<Self>;
 
     fn diff(&self, other: &Self) -> Self::Repr {
-        if self != other { Some(other.clone()) } else { None }
+        if self == other { None } else { Some(other.clone()) }
     }
 
     fn apply(&mut self, diff: &Self::Repr) {
         if let Some(diff) = diff {
-            *self = diff.clone()
+            *self = diff.clone();
         }
     }
 
     fn identity() -> Self {
-        Str::default()
+        Self::default()
     }
 }
 
@@ -70,7 +70,7 @@ impl Deref for Str {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        self.0.deref()
+        &self.0
     }
 }
 
@@ -108,14 +108,14 @@ impl<Context> Decode<Context> for Str {
             from_utf8(buf).map_err(|utf8_error| DecodeError::Utf8 { inner: utf8_error })?;
             compact_str.set_len(len);
         }
-        Ok(Str(compact_str))
+        Ok(Self(compact_str))
     }
 }
 impl_borrow_decode!(Str);
 
 impl<'a> From<&'a str> for Str {
     fn from(value: &'a str) -> Self {
-        Str(value.into())
+        Self(value.into())
     }
 }
 

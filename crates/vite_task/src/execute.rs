@@ -4,7 +4,6 @@ use std::{
     ffi::OsStr,
     io::{self, Read, Write},
     iter,
-    ops::DerefMut,
     path::Path,
     process::{Command, Stdio},
     sync::{Arc, Mutex},
@@ -59,7 +58,7 @@ fn collect_std_outputs(
         let content = &buf[..n];
         parent_output_handle.write_all(content)?;
         let mut outputs = outputs.lock().unwrap();
-        let outputs = outputs.deref_mut();
+        let outputs = &mut *outputs;
         if let Some(last) = outputs.last_mut()
             && last.kind == kind
         {
@@ -158,7 +157,7 @@ pub fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<Exec
 
     let outputs = outputs.into_inner().unwrap();
 
-    let input_paths = gather_inputs(&task, base_dir)?;
+    let input_paths = gather_inputs(task, base_dir)?;
 
     Ok(ExecutedTask { std_outputs: outputs.into(), input_paths })
 }

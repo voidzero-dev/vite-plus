@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ffi::OsStr, fmt::Display, path::{Path, PathBuf}, sync::Arc};
+use std::{collections::HashMap, ffi::OsStr, fmt::Display, path::Path, sync::Arc};
 
 use crate::{
     config::{ResolvedTask, TaskConfig, TaskConfigDiff},
@@ -41,14 +41,14 @@ pub enum FingerprintMismatch {
 impl Display for FingerprintMismatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FingerprintMismatch::ConfigChanged(config_diff) => {
-                write!(f, "Config inputs changed: {:?}", config_diff)
+            Self::ConfigChanged(config_diff) => {
+                write!(f, "Config inputs changed: {config_diff:?}")
             }
-            FingerprintMismatch::InputContentChanged { path } => {
-                write!(f, "File content changed: {:?}", path)
+            Self::InputContentChanged { path } => {
+                write!(f, "File content changed: {path:?}")
             }
-            FingerprintMismatch::EnvChanged(env_diff) => {
-                write!(f, "Environment variables changed: {:?}", env_diff)
+            Self::EnvChanged(env_diff) => {
+                write!(f, "Environment variables changed: {env_diff:?}")
             }
         }
     }
@@ -67,7 +67,7 @@ impl TaskFingerprint {
         // TODO: use diff result instead of eq
         Ok(if &self.config != current_config {
             Some(FingerprintMismatch::ConfigChanged(self.config.diff(current_config)))
-        } else if &self.envs != &task_envs.env_fingerprint {
+        } else if self.envs != task_envs.env_fingerprint {
             Some(FingerprintMismatch::EnvChanged(self.envs.diff(&task_envs.env_fingerprint)))
         } else {
             let input_mismatch =
@@ -78,12 +78,12 @@ impl TaskFingerprint {
                         Ok(ok) => ok,
                         Err(err) => return Some(Err(err.into())),
                     };
-                    if path_fingerprint != &current_path_fingerprint {
+                    if path_fingerprint == &current_path_fingerprint {
+                        None
+                    } else {
                         Some(anyhow::Ok(FingerprintMismatch::InputContentChanged {
                             path: input_relative_path.clone(),
                         }))
-                    } else {
-                        None
                     }
                 });
             input_mismatch.transpose()?

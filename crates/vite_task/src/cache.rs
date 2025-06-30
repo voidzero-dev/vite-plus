@@ -28,7 +28,7 @@ impl CachedTask {
         base_dir: &Path,
     ) -> anyhow::Result<Self> {
         let fingerprint = TaskFingerprint::create(task, &executed_task, fs, base_dir)?;
-        Ok(CachedTask { fingerprint, std_outputs: executed_task.std_outputs })
+        Ok(Self { fingerprint, std_outputs: executed_task.std_outputs })
     }
 }
 

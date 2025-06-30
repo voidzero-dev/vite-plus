@@ -3,7 +3,6 @@ use std::{
     fs::File,
     io::BufReader,
     path::PathBuf,
-    sync::Arc,
 };
 
 use crate::{cache::TaskCache, execute::TaskEnvs, fs::CachedFileSystem, str::Str};

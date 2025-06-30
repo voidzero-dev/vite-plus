@@ -24,7 +24,7 @@ impl ExecutionPlan {
             Err(err) => anyhow::bail!("Circular depedency found in the task graph: {:?}", err),
         };
         let steps = node_indices.into_iter().map(|id| task_graph.remove_node(id).unwrap());
-        Ok(ExecutionPlan { steps: steps.collect() })
+        Ok(Self { steps: steps.collect() })
     }
 
     pub fn execute(self, workspace: &mut Workspace) -> anyhow::Result<()> {
@@ -40,11 +40,11 @@ impl ExecutionPlan {
             match cache_miss {
                 Some(CacheMiss::NotFound) => {
                     println!("Cache Not Found, executing task");
-                    println!("> {}", command);
+                    println!("> {command}");
                 }
                 Some(CacheMiss::FingerprintMismatch(mismatch)) => {
-                    println!("{}, executing task", mismatch);
-                    println!("> {}", command);
+                    println!("{mismatch}, executing task");
+                    println!("> {command}");
                 }
                 None => {
                     println!("Cache hit, replaying previously executed task");
