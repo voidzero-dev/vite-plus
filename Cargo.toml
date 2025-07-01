@@ -32,6 +32,22 @@ cargo = { level = "warn", priority = -1 }
 cargo_common_metadata = "allow"
 
 [workspace.dependencies]
+anyhow = "1.0.98"
+bincode = "2.0.1"
+compact_str = "0.9.0"
+dashmap = "6.1.0"
+diff-struct = "0.5.3"
+itertools = "0.14.0"
+petgraph = "0.8.2"
+rayon = "1.10.0"
+relative-path = "2.0.1"
+rustc-hash = "2.1.1"
+serde = "1.0.219"
+serde_json = "1.0.140"
+serde_yml = "0.0.12"
+twox-hash = "2.1.1"
+vite_workspace = { path = "crates/vite_workspace" }
+wax = "0.6.0"
 
 [profile.dev]
 # Disabling debug info speeds up local and CI builds,
