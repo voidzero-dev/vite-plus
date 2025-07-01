@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use crate::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
@@ -8,7 +8,7 @@ use std::sync::Arc;
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-use crate::config::{ResolvedTask};
+use crate::config::ResolvedTask;
 use crate::execute::{ExecutedTask, StdOutput};
 use crate::fingerprint::{FingerprintMismatch, TaskFingerprint};
 use crate::fs::FileSystem;
@@ -52,7 +52,7 @@ impl TaskCache {
             Ok(file) => {
                 let reader = BufReader::new(file);
                 // Using json for easy debugging
-                // Will switch to bincode for better performance 
+                // Will switch to bincode for better performance
                 serde_json::from_reader(reader)?
                 // bincode::decode_from_std_read(&mut reader, BINCODE_CONFIG)?
             }

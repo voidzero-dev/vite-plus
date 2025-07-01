@@ -1,5 +1,4 @@
 use std::{
-    collections::{HashMap, HashSet},
     env::{join_paths, split_paths},
     ffi::OsStr,
     io::{self, Read, Write},
@@ -15,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use wax::Glob;
 
 use crate::{
+    collections::{HashMap, HashSet},
     config::{ResolvedTask, TaskConfig},
     str::Str,
 };
@@ -38,7 +38,6 @@ pub struct ExecutedTask {
     pub input_paths: HashSet<Arc<OsStr>>,
 }
 
-
 /// Collects stdout/stderr into `outputs` and at the same time writes them to the real stdout/stderr
 fn collect_std_outputs(
     outputs: &Mutex<Vec<StdOutput>>,
@@ -58,7 +57,6 @@ fn collect_std_outputs(
         let content = &buf[..n];
         parent_output_handle.write_all(content)?;
         let mut outputs = outputs.lock().unwrap();
-        let outputs = &mut *outputs;
         if let Some(last) = outputs.last_mut()
             && last.kind == kind
         {

@@ -1,6 +1,7 @@
-use std::{collections::HashMap, ffi::OsStr, fmt::Display, path::Path, sync::Arc};
+use std::{ffi::OsStr, fmt::Display, path::Path, sync::Arc};
 
 use crate::{
+    collections::HashMap,
     config::{ResolvedTask, TaskConfig, TaskConfigDiff},
     execute::{ExecutedTask, TaskEnvs},
     fs::FileSystem,
@@ -13,7 +14,6 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
 
-
 /// The fingerprint of a task. Determines if the task needs to be re-executed
 #[derive(Encode, Decode, Debug, Serialize, Deserialize)]
 pub struct TaskFingerprint {
@@ -22,13 +22,11 @@ pub struct TaskFingerprint {
     pub envs: HashMap<Str, Str>,
 }
 
-
 #[derive(Encode, Decode, PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 pub enum PathFingerprint {
     NotFound,
     FileContentHash(u64),
 }
-
 
 #[derive(Debug)]
 pub enum FingerprintMismatch {
@@ -36,7 +34,6 @@ pub enum FingerprintMismatch {
     InputContentChanged { path: Str },
     EnvChanged(HashMapDiff<Str, Str>),
 }
-
 
 impl Display for FingerprintMismatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -113,5 +110,4 @@ impl TaskFingerprint {
             .collect::<anyhow::Result<HashMap<Str, PathFingerprint>>>()?;
         Ok(Self { config: task.config.clone(), inputs, envs: task.envs.env_fingerprint })
     }
-
 }

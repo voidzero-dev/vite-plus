@@ -1,11 +1,12 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fs::File,
-    io::BufReader,
-    path::PathBuf,
-};
+use std::{fs::File, io::BufReader, path::PathBuf};
 
-use crate::{cache::TaskCache, execute::TaskEnvs, fs::CachedFileSystem, str::Str};
+use crate::{
+    cache::TaskCache,
+    collections::{HashMap, HashSet},
+    execute::TaskEnvs,
+    fs::CachedFileSystem,
+    str::Str,
+};
 use anyhow::{Context, Ok};
 
 use bincode::{Decode, Encode};

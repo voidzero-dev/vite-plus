@@ -1,4 +1,5 @@
 mod cache;
+mod collections;
 mod config;
 mod execute;
 mod fingerprint;
