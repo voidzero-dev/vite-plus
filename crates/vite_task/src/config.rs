@@ -1,7 +1,9 @@
 use std::{
+    collections::BTreeSet,
+    ffi::OsStr,
     fs::File,
     io::BufReader,
-    iter::once,
+    iter::{self},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -16,9 +18,10 @@ use crate::{
 use anyhow::Context;
 
 use bincode::{Decode, Encode};
-use compact_str::CompactString;
 use diff::Diff;
+use itertools::Itertools;
 use petgraph::{graph::NodeIndex, stable_graph::StableDiGraph};
+use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
 use vite_workspace::PackageInfo;
 
@@ -66,9 +69,52 @@ pub struct Workspace {
 #[derive(Debug)]
 pub struct ResolvedTask {
     pub name: Str,
+    pub args: Arc<[Str]>,
+    pub resolved_config: ResolvedTaskConfig,
+    pub resolved_command: ResolvedTaskCommand,
+}
+
+#[derive(Encode, Decode, Debug, Serialize, PartialEq, Eq, Diff)]
+#[diff(attr(#[derive(Debug)]))]
+pub struct ResolvedTaskConfig {
     pub config_dir: Str,
     pub config: TaskConfig,
-    pub envs: TaskEnvs,
+}
+
+impl ResolvedTaskConfig {
+    fn resolve_command(&self, task_args: &[Str]) -> anyhow::Result<ResolvedTaskCommand> {
+        let cwd = RelativePath::new(&self.config_dir).join(self.config.cwd.as_str());
+        let command_line = iter::once(self.config.command.clone())
+            .chain(
+                task_args
+                    .iter()
+                    .map(|arg| shell_escape::escape(arg.as_str().into()).as_ref().into()),
+            )
+            .join(" ");
+        let task_envs = TaskEnvs::resolve(&self.config)?;
+        Ok(ResolvedTaskCommand {
+            fingerprint: CommandFingerprint {
+                cwd: cwd.as_str().into(),
+                command_line: command_line.as_str().into(),
+                envs_without_pass_through: task_envs.envs_without_pass_through,
+            },
+            all_envs: task_envs.all_envs,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct ResolvedTaskCommand {
+    pub fingerprint: CommandFingerprint,
+    pub all_envs: HashMap<Str, Arc<OsStr>>,
+}
+
+#[derive(Encode, Decode, Debug, Serialize, PartialEq, Eq, Diff)]
+#[diff(attr(#[derive(Debug)]))]
+pub struct CommandFingerprint {
+    pub cwd: Str,
+    pub command_line: Str,
+    pub envs_without_pass_through: HashMap<Str, Str>,
 }
 
 impl Workspace {
@@ -91,18 +137,20 @@ impl Workspace {
                     Err(err) => {
                         if err.kind() == std::io::ErrorKind::NotFound {
                             continue;
-                        } else {
-                            return Err(err.into());
                         }
+                        return Err(err.into());
                     }
                 }))?;
             vite_task_jsons.push((vite_task_json, pkg));
         }
 
-        let cache_path = dir.join("node_modules/.vite/task-cache.json");
+        let cache_path = dir.join("node_modules/.vite/task-cache.db");
         let task_cache = TaskCache::load_from_file(&cache_path)?;
 
         Ok(Self { vite_task_jsons, dir, task_cache, fs: CachedFileSystem::default() })
+    }
+    pub const fn cache(&self) -> &TaskCache {
+        &self.task_cache
     }
 
     pub fn unload(self) -> anyhow::Result<()> {
@@ -110,11 +158,12 @@ impl Workspace {
         Ok(())
     }
 
-    pub fn to_task_graph(
+    pub fn resolve_tasks(
         &self,
-        mut task_names: Vec<Str>,
+        task_names: &[Str],
+        task_args: Arc<[Str]>,
     ) -> anyhow::Result<StableDiGraph<ResolvedTask, ()>> {
-        let mut tasks_by_full_name: HashMap<Str, (TaskConfigWithDeps, PackageInfo)> =
+        let mut task_configs_by_full_name: HashMap<Str, (TaskConfigWithDeps, PackageInfo)> =
             HashMap::new();
         for (task_json, package_info) in &self.vite_task_jsons {
             for (task_name, task_config_json) in &task_json.tasks {
@@ -123,7 +172,7 @@ impl Workspace {
                 } else {
                     format!("{}#{}", &package_info.name, task_name).as_str().into()
                 };
-                if tasks_by_full_name
+                if task_configs_by_full_name
                     .insert(full_name.clone(), (task_config_json.clone(), package_info.clone()))
                     .is_some()
                 {
@@ -131,30 +180,38 @@ impl Workspace {
                 }
             }
         }
-        // let mut vite_task_json = self.vite_task_json.clone();
-        // let capacity = vite_task_json.tasks.len();
+
+        let mut task_names: BTreeSet<Str> = task_names.iter().cloned().collect();
+
         let mut task_graph = StableDiGraph::<ResolvedTask, ()>::new();
         let mut ids_by_task_name = HashMap::<Str, NodeIndex>::new();
         let mut edges = Vec::<(Str, Str)>::new();
 
-        while let Some(task_name) = task_names.pop() {
-            let (task_config, package_info) = tasks_by_full_name
+        while let Some(task_name) = task_names.pop_first() {
+            let (task_config_with_deps, package_info) = task_configs_by_full_name
                 .remove(&task_name)
                 .with_context(|| format!("Task '{}' not found", &task_name))?;
 
+            let resolved_config = ResolvedTaskConfig {
+                config_dir: package_info.path.as_str().into(),
+                config: task_config_with_deps.config,
+            };
+
+            let resolved_command = resolved_config.resolve_command(&task_args)?;
+
             let id = task_graph.add_node(ResolvedTask {
                 name: task_name.clone(),
-                config_dir: package_info.path.as_str().into(),
-                envs: TaskEnvs::resolve(&task_config.config)?,
-                config: task_config.config,
+                args: task_args.clone(),
+                resolved_command,
+                resolved_config,
             });
             if ids_by_task_name.insert(task_name.clone(), id).is_some() {
                 anyhow::bail!("Duplicated task name '{}'", &task_name)
             }
 
-            for dep in task_config.depends_on {
+            for dep in task_config_with_deps.depends_on {
                 edges.push((dep.clone(), task_name.clone()));
-                task_names.push(dep);
+                task_names.insert(dep);
             }
         }
 

@@ -16,6 +16,7 @@ use wax::Glob;
 use crate::{
     collections::{HashMap, HashSet},
     config::{ResolvedTask, TaskConfig},
+    maybe_str::MaybeString,
     str::Str,
 };
 
@@ -25,10 +26,10 @@ pub enum OutputKind {
     StdErr,
 }
 
-#[derive(Debug, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Encode, Decode, Serialize)]
 pub struct StdOutput {
     pub kind: OutputKind,
-    pub content: Vec<u8>,
+    pub content: MaybeString,
 }
 
 /// Contains info that is available after executing the task
@@ -62,7 +63,7 @@ fn collect_std_outputs(
         {
             last.content.extend_from_slice(content);
         } else {
-            outputs.push(StdOutput { kind, content: content.to_vec() });
+            outputs.push(StdOutput { kind, content: content.to_vec().into() });
         }
     }
 }
@@ -70,7 +71,7 @@ fn collect_std_outputs(
 #[derive(Debug)]
 pub struct TaskEnvs {
     pub all_envs: HashMap<Str, Arc<OsStr>>,
-    pub env_fingerprint: HashMap<Str, Str>,
+    pub envs_without_pass_through: HashMap<Str, Str>,
 }
 
 impl TaskEnvs {
@@ -94,13 +95,7 @@ impl TaskEnvs {
             })
             .collect();
 
-        let env_path =
-            all_envs.entry("PATH".into()).or_insert_with(|| Arc::<OsStr>::from(OsStr::new("")));
-        let paths = split_paths(env_path);
-        let node_modules_bin = Path::new(&task.cwd).join("node_modules/.bin");
-        *env_path = join_paths(iter::once(node_modules_bin).chain(paths))?.into();
-
-        let mut env_fingerprint = HashMap::<Str, Str>::new();
+        let mut envs_without_pass_through = HashMap::<Str, Str>::new();
         for name in &task.envs {
             let Some(value) = all_envs.get(name) else {
                 continue;
@@ -112,13 +107,21 @@ impl TaskEnvs {
                     value
                 );
             };
-            env_fingerprint.insert(name.clone(), value.into());
+            envs_without_pass_through.insert(name.clone(), value.into());
         }
-        Ok(Self { all_envs, env_fingerprint })
+
+        let env_path =
+            all_envs.entry("PATH".into()).or_insert_with(|| Arc::<OsStr>::from(OsStr::new("")));
+        let paths = split_paths(env_path);
+        let node_modules_bin = Path::new(&task.cwd).join("node_modules/.bin");
+        *env_path = join_paths(iter::once(node_modules_bin).chain(paths))?.into();
+
+        Ok(Self { all_envs, envs_without_pass_through })
     }
 }
 
 pub fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<ExecutedTask> {
+    let command = &task.resolved_command;
     let mut child = if cfg!(windows) {
         let mut cmd = Command::new("cmd.exe");
         // https://github.com/nodejs/node/blob/dbd24b165128affb7468ca42f69edaf7e0d85a9a/lib/child_process.js#L633
@@ -129,12 +132,12 @@ pub fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<Exec
         cmd.args(["-c"]);
         cmd
     }
-    .arg(&task.config.command)
+    .arg(&command.fingerprint.command_line)
     .stdout(Stdio::piped())
     .stderr(Stdio::piped())
-    .current_dir(base_dir.join(&task.config_dir).join(&task.config.cwd))
+    .current_dir(base_dir.join(&command.fingerprint.cwd))
     .env_clear()
-    .envs(&task.envs.all_envs)
+    .envs(&command.all_envs)
     .spawn()?;
 
     let child_stdout = child.stdout.take().unwrap();
@@ -162,14 +165,15 @@ pub fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<Exec
 
 fn gather_inputs(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<HashSet<Arc<OsStr>>> {
     // Task inferring to be implemented here
-    if task.config.inputs.is_empty() {
+    let inputs = &task.resolved_config.config.inputs;
+    if inputs.is_empty() {
         return Ok(HashSet::new());
     }
-    let glob = format!("{{{}}}", itertools::Itertools::join(&mut task.config.inputs.iter(), ",")); // TODO: handle "," inside globs
+    let glob = format!("{{{}}}", itertools::Itertools::join(&mut inputs.iter(), ",")); // TODO: handle "," inside globs
     let glob = Glob::new(&glob)?;
 
     let mut paths: HashSet<Arc<OsStr>> = HashSet::new();
-    for entry in glob.walk(base_dir.join(&task.config_dir)) {
+    for entry in glob.walk(base_dir.join(&task.resolved_config.config_dir)) {
         let entry = entry?;
         paths.insert(entry.into_path().into_os_string().into());
     }

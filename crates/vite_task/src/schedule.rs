@@ -30,7 +30,9 @@ impl ExecutionPlan {
     pub fn execute(self, workspace: &mut Workspace) -> anyhow::Result<()> {
         for step in self.steps {
             println!("------- {} -------", &step.name);
-            let command = step.config.command.clone();
+
+            let command_line = step.resolved_command.fingerprint.command_line.clone();
+
             let (cache_miss, execute_or_replay) = get_cached_or_execute(
                 step,
                 &mut workspace.task_cache,
@@ -40,11 +42,11 @@ impl ExecutionPlan {
             match cache_miss {
                 Some(CacheMiss::NotFound) => {
                     println!("Cache Not Found, executing task");
-                    println!("> {command}");
+                    println!("> {command_line}");
                 }
                 Some(CacheMiss::FingerprintMismatch(mismatch)) => {
                     println!("{mismatch}, executing task");
-                    println!("> {command}");
+                    println!("> {command_line}");
                 }
                 None => {
                     println!("Cache hit, replaying previously executed task");
@@ -89,8 +91,9 @@ fn get_cached_or_execute<'a>(
             Box::new(move || {
                 let executed_task = execute_task(&task, base_dir)?;
                 let task_name = task.name.clone();
+                let task_args = task.args.clone();
                 let cached_task = CachedTask::create(task, executed_task, fs, base_dir)?;
-                cache.update(task_name, cached_task)?;
+                cache.update(task_name, task_args, cached_task)?;
                 anyhow::Ok(())
             }),
         ),

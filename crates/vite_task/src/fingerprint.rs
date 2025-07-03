@@ -2,24 +2,27 @@ use std::{ffi::OsStr, fmt::Display, path::Path, sync::Arc};
 
 use crate::{
     collections::HashMap,
-    config::{ResolvedTask, TaskConfig, TaskConfigDiff},
-    execute::{ExecutedTask, TaskEnvs},
+    config::{
+        CommandFingerprint, CommandFingerprintDiff, ResolvedTask, ResolvedTaskConfig,
+        ResolvedTaskConfigDiff,
+    },
+    execute::ExecutedTask,
     fs::FileSystem,
     str::Str,
 };
 
 use bincode::{Decode, Encode};
-use diff::{Diff as _, HashMapDiff};
+use diff::Diff as _;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
 
 /// The fingerprint of a task. Determines if the task needs to be re-executed
-#[derive(Encode, Decode, Debug, Serialize, Deserialize)]
+#[derive(Encode, Decode, Debug, Serialize)]
 pub struct TaskFingerprint {
-    pub config: TaskConfig,
+    pub resolved_config: ResolvedTaskConfig,
+    pub command_fingerprint: CommandFingerprint,
     pub inputs: HashMap<Str, PathFingerprint>,
-    pub envs: HashMap<Str, Str>,
 }
 
 #[derive(Encode, Decode, PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
@@ -30,9 +33,9 @@ pub enum PathFingerprint {
 
 #[derive(Debug)]
 pub enum FingerprintMismatch {
-    ConfigChanged(TaskConfigDiff),
+    ConfigChanged(ResolvedTaskConfigDiff),
     InputContentChanged { path: Str },
-    EnvChanged(HashMapDiff<Str, Str>),
+    ResolvedCommandChanged(CommandFingerprintDiff),
 }
 
 impl Display for FingerprintMismatch {
@@ -44,8 +47,8 @@ impl Display for FingerprintMismatch {
             Self::InputContentChanged { path } => {
                 write!(f, "File content changed: {path:?}")
             }
-            Self::EnvChanged(env_diff) => {
-                write!(f, "Environment variables changed: {env_diff:?}")
+            Self::ResolvedCommandChanged(env_diff) => {
+                write!(f, "Resolved command changed: {env_diff:?}")
             }
         }
     }
@@ -55,17 +58,19 @@ impl TaskFingerprint {
     /// Checks if the cached fingerprint is still valid. Returns why if not.
     pub fn validate(
         &self,
-        current_config: &TaskConfig,
+        resolved_task: &ResolvedTask,
         fs: &impl FileSystem,
         base_dir: &Path,
     ) -> anyhow::Result<Option<FingerprintMismatch>> {
-        let task_envs = TaskEnvs::resolve(current_config)?;
-
         // TODO: use diff result instead of eq
-        Ok(if &self.config != current_config {
-            Some(FingerprintMismatch::ConfigChanged(self.config.diff(current_config)))
-        } else if self.envs != task_envs.env_fingerprint {
-            Some(FingerprintMismatch::EnvChanged(self.envs.diff(&task_envs.env_fingerprint)))
+        Ok(if self.resolved_config != resolved_task.resolved_config {
+            Some(FingerprintMismatch::ConfigChanged(
+                self.resolved_config.diff(&resolved_task.resolved_config),
+            ))
+        } else if self.command_fingerprint != resolved_task.resolved_command.fingerprint {
+            Some(FingerprintMismatch::ResolvedCommandChanged(
+                self.command_fingerprint.diff(&resolved_task.resolved_command.fingerprint),
+            ))
         } else {
             let input_mismatch =
                 self.inputs.par_iter().find_map_any(|(input_relative_path, path_fingerprint)| {
@@ -108,6 +113,10 @@ impl TaskFingerprint {
                 })())
             })
             .collect::<anyhow::Result<HashMap<Str, PathFingerprint>>>()?;
-        Ok(Self { config: task.config.clone(), inputs, envs: task.envs.env_fingerprint })
+        Ok(Self {
+            resolved_config: task.resolved_config,
+            command_fingerprint: task.resolved_command.fingerprint,
+            inputs,
+        })
     }
 }

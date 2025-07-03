@@ -14,15 +14,20 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 bincode = { workspace = true, features = ["derive"] }
+bstr = "1.12.0"
+clap = { version = "4.5.40", features = ["derive"] }
 compact_str = { workspace = true, features = ["serde"] }
 dashmap = { workspace = true }
 diff-struct = { workspace = true }
+edit = "0.1.5"
 itertools = { workspace = true }
 petgraph = { workspace = true }
 rayon = { workspace = true }
 relative-path = { workspace = true }
+rusqlite = { version = "0.36.0", features = ["bundled"] }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { workspace = true }
+shell-escape = "0.1.5"
 twox-hash = { workspace = true }
 vite_workspace = { workspace = true }
 wax = { workspace = true }
