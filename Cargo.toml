@@ -46,7 +46,7 @@ serde = "1.0.219"
 serde_json = "1.0.140"
 serde_yml = "0.0.12"
 twox-hash = "2.1.1"
-vite_workspace = { path = "crates/vite_workspace" }
+vite_package_manager = { path = "crates/vite_package_manager" }
 wax = "0.6.0"
 bstr = "1.12.0"
 clap = "4.5.40"

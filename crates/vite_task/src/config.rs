@@ -23,7 +23,7 @@ use itertools::Itertools;
 use petgraph::{graph::NodeIndex, stable_graph::StableDiGraph};
 use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
-use vite_workspace::PackageInfo;
+use vite_package_manager::PackageInfo;
 
 #[derive(Encode, Decode, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Diff)]
 #[diff(attr(#[derive(Debug)]))]
@@ -119,7 +119,7 @@ pub struct CommandFingerprint {
 
 impl Workspace {
     pub fn load(dir: PathBuf) -> anyhow::Result<Self> {
-        let package_graph = vite_workspace::get_package_graph(&dir)?;
+        let package_graph = vite_package_manager::get_package_graph(&dir)?;
         let mut package_infos: Vec<PackageInfo> = package_graph.node_weights().cloned().collect();
         if let Some(root_package) = package_infos.iter_mut().find(|a| a.path.is_empty()) {
             root_package.name = "".into(); // do not prefix tasks in root package

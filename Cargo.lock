@@ -1020,6 +1020,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "051eb1abcf10076295e815102942cc58f9d5e3b4560e46e53c21e8ff6f3af7b1"
 
 [[package]]
+name = "vite_package_manager"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "compact_str",
+ "petgraph",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "wax",
+]
+
+[[package]]
 name = "vite_task"
 version = "0.0.0"
 dependencies = [
@@ -1040,21 +1054,7 @@ dependencies = [
  "serde_json",
  "shell-escape",
  "twox-hash",
- "vite_workspace",
- "wax",
-]
-
-[[package]]
-name = "vite_workspace"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "compact_str",
- "petgraph",
- "rustc-hash",
- "serde",
- "serde_json",
- "serde_yml",
+ "vite_package_manager",
  "wax",
 ]
 
