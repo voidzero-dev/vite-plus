@@ -43,7 +43,7 @@ function getArgs(subcommand: string, commandArgs: string[]) {
 }
 
 export async function run(): Promise<void> {
-  const { positionals } = parseArgs({ allowPositionals: true });
+  const { positionals, tokens } = parseArgs({ allowPositionals: true, tokens: true });
 
   const [subcommand, ...rest] = positionals;
 
@@ -73,9 +73,14 @@ export async function run(): Promise<void> {
     else console.error("404 Task Not Found");
   } else {
     const cwd = process.cwd();
-    const index = process.argv.indexOf("--");
-    const commandArgs = index === -1 ? [] : process.argv.slice(index + 1);
-    const [dir = "."] = rest;
+
+    const isTerminator = (token: (typeof tokens)[0]) => token.kind === "option-terminator";
+    const index = tokens.findIndex(isTerminator);
+    const getValues = (tkns: typeof tokens) => tkns.filter(token => !isTerminator(token)).map(token => token.value);
+    const before = index === -1 ? rest.slice(1) : getValues(tokens.slice(1, index));
+    const after = index === -1 ? [] : getValues(tokens.slice(index + 1));
+    const [dir = "."] = before; // explicit split: before -- after
+    const commandArgs = after;
 
     switch (subcommand) {
       case "run":
