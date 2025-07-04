@@ -103,7 +103,7 @@ export class LayoutEngine {
     return getPanelDimensions(size, screen);
   }
 
-  movePanel(direction: number) {
+  selectNextPanel(direction: number) {
     const count = this.controlPanel.items.length;
     this.setSelectedIndex((this.selectedPanelIndex + direction + count) % count);
     if (this.isGrid) this.controlPanel.render();

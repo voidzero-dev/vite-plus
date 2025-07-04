@@ -21,9 +21,9 @@ export async function multiplex(commands: Command[][]) {
     const chunk = data.toString();
 
     if (chunk === "\t" || chunk === "\x1B[B") {
-      engine.movePanel(1);
+      engine.selectNextPanel(1);
     } else if (chunk === "\x1B[A") {
-      engine.movePanel(-1);
+      engine.selectNextPanel(-1);
     } else if (chunk === "\r" || chunk === "\n") {
       engine.killOrStartPanel(engine.selectedPanelIndex);
     } else if (chunk === "g") {
