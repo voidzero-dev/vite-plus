@@ -18,6 +18,11 @@ export class Panel {
         stdio: ["pipe", "pipe", "pipe"],
         cwd: command.cwd,
         env: command.env
+      }).on("error", error => {
+        delete command.env;
+        const msg = error?.stack ?? error?.toString();
+        this.buffer = [JSON.stringify(command, null, 2), "\n\n", msg];
+        this.batchRender();
       });
     }
   }
