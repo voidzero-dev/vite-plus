@@ -120,7 +120,7 @@ impl TaskEnvs {
     }
 }
 
-pub fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<ExecutedTask> {
+pub async fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<ExecutedTask> {
     let command = &task.resolved_command;
     let mut child = if cfg!(windows) {
         let mut cmd = Command::new("cmd.exe");

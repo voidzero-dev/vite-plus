@@ -31,3 +31,7 @@ shell-escape = { workspace = true }
 twox-hash = { workspace = true }
 vite_package_manager = { workspace = true }
 wax = { workspace = true }
+fspy = { workspace = true }
+futures-core = "0.3.31"
+futures-util = "0.3.31"
+tokio = { version = "1.46.1", features = ["rt-multi-thread", "io-std", "macros"] }

@@ -37,7 +37,7 @@ pub struct Args {
     pub debug: bool,
 }
 
-pub fn main(cwd: PathBuf, args: Args) -> anyhow::Result<()> {
+pub async fn main(cwd: PathBuf, args: Args) -> anyhow::Result<()> {
     let mut workspace = Workspace::load(cwd)?;
     let task_args = Arc::<[Str]>::from(args.task_args);
     let task_graph = workspace.resolve_tasks(&args.tasks, task_args.clone())?;
@@ -65,7 +65,7 @@ pub fn main(cwd: PathBuf, args: Args) -> anyhow::Result<()> {
         let _ = edit::edit(&cache_debug_json)?;
     } else {
         let plan = ExecutionPlan::plan(task_graph)?;
-        plan.execute(&mut workspace)?;
+        plan.execute(&mut workspace).await?;
 
         workspace.unload()?;
     }

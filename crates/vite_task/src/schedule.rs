@@ -1,6 +1,9 @@
 use std::{io::Write, path::Path, sync::Arc};
 
+use futures_core::future::BoxFuture;
+use futures_util::future::FutureExt as _;
 use petgraph::{algo::toposort, stable_graph::StableDiGraph};
+use tokio::io::AsyncWriteExt as _;
 
 use crate::{
     cache::{CacheMiss, CachedTask, TaskCache},
@@ -27,7 +30,7 @@ impl ExecutionPlan {
         Ok(Self { steps: steps.collect() })
     }
 
-    pub fn execute(self, workspace: &mut Workspace) -> anyhow::Result<()> {
+    pub async fn execute(self, workspace: &mut Workspace) -> anyhow::Result<()> {
         for step in self.steps {
             println!("------- {} -------", &step.name);
 
@@ -52,7 +55,7 @@ impl ExecutionPlan {
                     println!("Cache hit, replaying previously executed task");
                 }
             }
-            execute_or_replay()?;
+            execute_or_replay.await?;
             println!();
         }
         Ok(())
@@ -66,36 +69,38 @@ fn get_cached_or_execute<'a>(
     cache: &'a mut TaskCache,
     fs: &'a impl FileSystem,
     base_dir: &'a Path,
-) -> anyhow::Result<(Option<CacheMiss>, Box<dyn FnOnce() -> anyhow::Result<()> + 'a>)> {
+) -> anyhow::Result<(Option<CacheMiss>, BoxFuture<'a, anyhow::Result<()>>)> {
     Ok(match cache.try_hit(&task, fs, base_dir)? {
         Ok(cache_task) => (
             None,
-            Box::new({
+            ({
                 // replay
                 let std_outputs = Arc::clone(&cache_task.std_outputs);
-                move || {
-                    let mut stdout = std::io::stdout().lock();
-                    let mut stderr = std::io::stderr().lock();
+                async move {
+                    let mut stdout = tokio::io::stdout();
+                    let mut stderr = tokio::io::stderr();
                     for ouput_section in std_outputs.as_ref() {
                         match ouput_section.kind {
-                            OutputKind::StdOut => stdout.write_all(&ouput_section.content)?,
-                            OutputKind::StdErr => stderr.write_all(&ouput_section.content)?,
+                            OutputKind::StdOut => stdout.write_all(&ouput_section.content).await?,
+                            OutputKind::StdErr => stderr.write_all(&ouput_section.content).await?,
                         }
                     }
                     anyhow::Ok(())
                 }
+                .boxed()
             }),
         ),
         Err(cache_miss) => (
             Some(cache_miss),
-            Box::new(move || {
-                let executed_task = execute_task(&task, base_dir)?;
+            async move {
+                let executed_task = execute_task(&task, base_dir).await?;
                 let task_name = task.name.clone();
                 let task_args = task.args.clone();
                 let cached_task = CachedTask::create(task, executed_task, fs, base_dir)?;
                 cache.update(task_name, task_args, cached_task)?;
                 anyhow::Ok(())
-            }),
+            }
+            .boxed(),
         ),
     })
 }
