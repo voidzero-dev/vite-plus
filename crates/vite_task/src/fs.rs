@@ -10,6 +10,9 @@ use crate::str::Str;
 use crate::{execute::PathRead, fingerprint::PathFingerprint};
 use dashmap::DashMap;
 use std::io::BufRead;
+
+use crate::collections::HashMap;
+use crate::fingerprint::DirEntryKind;
 pub trait FileSystem: Sync {
     fn fingerprint_path(
         &self,
@@ -44,6 +47,8 @@ impl FileSystem for RealFileSystem {
         use nix::dir::Dir;
         use std::str::from_utf8;
 
+        use nix::dir::Type;
+
         let file = match File::open(path.as_ref()) {
             Ok(file) => file,
             Err(err) => {
@@ -61,23 +66,35 @@ impl FileSystem for RealFileSystem {
                 return Err(io_err.into());
             };
             // Is a directory
-            let entries = if path_read.read_dir_entries {
-                let mut entries = Vec::new();
+            let dir_entries = if path_read.read_dir_entries {
+                let mut dir_entries = HashMap::<Str, DirEntryKind>::new();
                 let dir = Dir::from_fd(reader.into_inner().into())?;
                 for entry in dir {
+                    use bstr::ByteSlice;
+
                     let entry = entry?;
+
+                    let entry_kind = match entry.file_type() {
+                        None => todo!("handle DT_UNKNOWN (see readdir(3))"),
+                        Some(Type::File) => DirEntryKind::File,
+                        Some(Type::Directory) => DirEntryKind::Dir,
+                        Some(Type::Symlink) => DirEntryKind::Symlink,
+                        Some(other_type) => anyhow::bail!(
+                            "couldn't fingerprint dir entry with special file type {:?}",
+                            other_type
+                        ),
+                    };
                     let filename = entry.file_name().to_bytes();
                     if matches!(filename, b"." | b".." | b".DS_Store") {
                         continue;
                     }
-                    entries.push(Str::from(from_utf8(filename)?));
+                    dir_entries.insert(filename.to_str()?.into(), entry_kind);
                 }
-                entries.sort_unstable();
-                Some(Arc::<[Str]>::from(entries))
+                Some(dir_entries)
             } else {
                 None
             };
-            return Ok(PathFingerprint::Folder(entries));
+            return Ok(PathFingerprint::Folder(dir_entries));
         };
         Ok(PathFingerprint::FileContentHash(hash_content(reader)?))
     }

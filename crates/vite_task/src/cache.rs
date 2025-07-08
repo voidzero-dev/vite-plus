@@ -6,7 +6,7 @@ use bincode::{Decode, Encode, decode_from_slice, encode_to_vec};
 use rusqlite::{Connection, OptionalExtension as _};
 use serde::Serialize;
 
-use crate::config::ResolvedTask;
+use crate::config::{ResolvedTask, TaskId};
 use crate::execute::{ExecutedTask, StdOutput};
 use crate::fingerprint::{FingerprintMismatch, TaskFingerprint};
 use crate::fs::FileSystem;
@@ -36,7 +36,7 @@ pub struct TaskCache {
 
 #[derive(Debug, Hash, Encode, Decode, Serialize)]
 pub struct TaskCacheKey {
-    pub task_name: Str,
+    pub task_id: TaskId,
     pub args: Arc<[Str]>,
 }
 
@@ -77,11 +77,11 @@ impl TaskCache {
 
     pub fn update(
         &mut self,
-        task_name: Str,
+        task_id: TaskId,
         args: Arc<[Str]>,
         cached_task: CachedTask,
     ) -> anyhow::Result<()> {
-        let key = TaskCacheKey { task_name, args };
+        let key = TaskCacheKey { task_id, args };
         let conn = self.conn.lock().unwrap();
         let key_blob = encode_to_vec(&key, BINCODE_CONFIG)?;
         let value_blob = encode_to_vec(&cached_task, BINCODE_CONFIG)?;
@@ -94,12 +94,12 @@ impl TaskCache {
 
     pub fn get_cache(
         &self,
-        task_name: Str,
+        task_id: TaskId,
         args: Arc<[Str]>,
     ) -> anyhow::Result<Option<CachedTask>> {
         let conn = self.conn.lock().unwrap();
         let mut select_stmt = conn.prepare_cached("SELECT value FROM tasks WHERE key=?")?;
-        let key_blob = encode_to_vec(&TaskCacheKey { task_name, args }, BINCODE_CONFIG)?;
+        let key_blob = encode_to_vec(&TaskCacheKey { task_id, args }, BINCODE_CONFIG)?;
         let Some(value_blob) =
             select_stmt.query_row::<Vec<u8>, _, _>([key_blob], |row| row.get(0)).optional()?
         else {
@@ -136,7 +136,7 @@ impl TaskCache {
         fs: &impl FileSystem,
         base_dir: &Path,
     ) -> anyhow::Result<Result<CachedTask, CacheMiss>> {
-        let Some(cached_task) = self.get_cache(task.name.clone(), task.args.clone())? else {
+        let Some(cached_task) = self.get_cache(task.id.clone(), task.args.clone())? else {
             return Ok(Err(CacheMiss::NotFound));
         };
         if let Some(fingerprint_mismatch) = cached_task.fingerprint.validate(task, fs, base_dir)? {

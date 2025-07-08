@@ -26,11 +26,18 @@ pub struct TaskFingerprint {
 }
 
 #[derive(Encode, Decode, PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
+pub enum DirEntryKind {
+    File,
+    Dir,
+    Symlink,
+}
+
+#[derive(Encode, Decode, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum PathFingerprint {
     NotFound,
     FileContentHash(u64),
-    /// Entries must be sorted lexicographically
-    Folder(Option<Arc<[Str]>>),
+    /// Folder(None) means the task opened the folder but did not read its entries
+    Folder(Option<HashMap<Str, DirEntryKind>>),
 }
 
 #[derive(Debug)]

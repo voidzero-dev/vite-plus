@@ -14,9 +14,11 @@ use std::sync::Arc;
 
 use clap::Parser;
 use itertools::Itertools;
+use serde::Serialize;
 
-use crate::cache::CachedTask;
+use crate::cache::{CachedTask, TaskCacheKey};
 use crate::collections::HashMap;
+use crate::config::TaskId;
 use crate::str::Str;
 
 use crate::{config::Workspace, schedule::ExecutionPlan};
@@ -42,23 +44,28 @@ pub async fn main(cwd: PathBuf, args: Args) -> anyhow::Result<()> {
     let task_args = Arc::<[Str]>::from(args.task_args);
     let task_graph = workspace.resolve_tasks(&args.tasks, task_args.clone())?;
     if args.debug {
+        #[derive(Serialize)]
+        struct CacheEntry {
+            cache_key: TaskCacheKey,
+            cached_task: Option<CachedTask>,
+        }
         let cache = workspace.cache();
-        let mut task_cache_map = HashMap::<String, Option<CachedTask>>::new();
+        let mut task_cache_map = Vec::<CacheEntry>::new();
         if args.tasks.is_empty() {
             cache.list_cache(|cache_key, cached_task| {
-                let key = iter::once(cache_key.task_name.clone())
-                    .chain(cache_key.args.iter().cloned())
-                    .join(" ");
-                task_cache_map.insert(key, Some(cached_task));
+                task_cache_map.push(CacheEntry { cache_key, cached_task: Some(cached_task) });
                 Ok(())
             })?;
         } else {
             for resolved_task in task_graph.node_weights() {
-                let key = iter::once(resolved_task.name.clone())
-                    .chain(task_args.iter().cloned())
-                    .join(" ");
-                let cached_task = cache.get_cache(resolved_task.name.clone(), task_args.clone())?;
-                task_cache_map.insert(key, cached_task);
+                let cached_task = cache.get_cache(resolved_task.id.clone(), task_args.clone())?;
+                task_cache_map.push(CacheEntry {
+                    cache_key: TaskCacheKey {
+                        task_id: resolved_task.id.clone(),
+                        args: task_args.clone(),
+                    },
+                    cached_task,
+                });
             }
         }
         let cache_debug_json = serde_json::to_string_pretty(&task_cache_map)?;

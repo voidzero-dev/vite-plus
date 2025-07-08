@@ -32,7 +32,7 @@ impl ExecutionPlan {
 
     pub async fn execute(self, workspace: &mut Workspace) -> anyhow::Result<()> {
         for step in self.steps {
-            println!("------- {} -------", &step.name);
+            println!("------- {} -------", &step.id);
 
             let command_line = step.resolved_command.fingerprint.command_line.clone();
 
@@ -94,7 +94,7 @@ fn get_cached_or_execute<'a>(
             Some(cache_miss),
             async move {
                 let executed_task = execute_task(&task, base_dir).await?;
-                let task_name = task.name.clone();
+                let task_name = task.id.clone();
                 let task_args = task.args.clone();
                 let cached_task = CachedTask::create(task, executed_task, fs, base_dir)?;
                 cache.update(task_name, task_args, cached_task)?;
