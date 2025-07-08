@@ -34,7 +34,7 @@ impl ExecutionPlan {
         for step in self.steps {
             println!("------- {} -------", &step.id);
 
-            let command_line = step.resolved_command.fingerprint.command_line.clone();
+            let command = step.resolved_command.fingerprint.command.clone();
 
             let (cache_miss, execute_or_replay) = get_cached_or_execute(
                 step,
@@ -45,11 +45,11 @@ impl ExecutionPlan {
             match cache_miss {
                 Some(CacheMiss::NotFound) => {
                     println!("Cache Not Found, executing task");
-                    println!("> {command_line}");
+                    println!("> {command}");
                 }
                 Some(CacheMiss::FingerprintMismatch(mismatch)) => {
                     println!("{mismatch}, executing task");
-                    println!("> {command_line}");
+                    println!("> {command}");
                 }
                 None => {
                     println!("Cache hit, replaying previously executed task");

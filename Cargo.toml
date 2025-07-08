@@ -42,7 +42,7 @@ dashmap = "6.1.0"
 diff-struct = "0.5.3"
 itertools = "0.14.0"
 petgraph = "0.8.2"
-fspy = { path = "../fspy" }
+fspy = { git = "https://github.com/branchseer/fspy/", branch = "main" } # { path = "../fspy" }
 rayon = "1.10.0"
 relative-path = "2.0.1"
 rustc-hash = "2.1.1"

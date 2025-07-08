@@ -1,7 +1,7 @@
 use std::{ffi::OsStr, fmt::Display, path::Path, sync::Arc};
 
 use crate::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     config::{
         CommandFingerprint, CommandFingerprintDiff, ResolvedTask, ResolvedTaskConfig,
         ResolvedTaskConfigDiff,
@@ -14,7 +14,6 @@ use crate::{
 use bincode::{Decode, Encode};
 use diff::Diff as _;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
 
 /// The fingerprint of a task. Determines if the task needs to be re-executed

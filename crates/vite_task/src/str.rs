@@ -119,6 +119,12 @@ impl<'a> From<&'a str> for Str {
     }
 }
 
+impl<'a> From<String> for Str {
+    fn from(value: String) -> Self {
+        Self(value.into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

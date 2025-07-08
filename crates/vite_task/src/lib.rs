@@ -7,6 +7,7 @@ mod fs;
 mod maybe_str;
 mod schedule;
 mod str;
+mod cmd;
 
 use std::iter;
 use std::path::PathBuf;

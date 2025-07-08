@@ -19,7 +19,7 @@ use wax::Glob;
 
 use crate::{
     collections::{HashMap, HashSet},
-    config::{ResolvedTask, TaskConfig},
+    config::{ResolvedTask, TaskCommand, TaskConfig},
     maybe_str::MaybeString,
     str::Str,
 };
@@ -89,7 +89,7 @@ pub struct TaskEnvs {
 }
 
 impl TaskEnvs {
-    pub fn resolve(task: &TaskConfig) -> anyhow::Result<Self> {
+    pub fn resolve(base_dir: &Path, task: &TaskConfig) -> anyhow::Result<Self> {
         // All envs that are passed to the task
         let mut all_envs: HashMap<Str, Arc<OsStr>> = std::env::vars_os()
             .filter_map(|(name, value)| {
@@ -127,7 +127,7 @@ impl TaskEnvs {
         let env_path =
             all_envs.entry("PATH".into()).or_insert_with(|| Arc::<OsStr>::from(OsStr::new("")));
         let paths = split_paths(env_path);
-        let node_modules_bin = Path::new(&task.cwd).join("node_modules/.bin");
+        let node_modules_bin = base_dir.join(&task.cwd).join("node_modules/.bin");
         *env_path = join_paths(iter::once(node_modules_bin).chain(paths))?.into();
 
         Ok(Self { all_envs, envs_without_pass_through })
@@ -135,21 +135,35 @@ impl TaskEnvs {
 }
 
 pub async fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<ExecutedTask> {
-    let command = &task.resolved_command;
+    let resolved_command = &task.resolved_command;
     let spy = Spy::global()?;
-    let mut cmd = if cfg!(windows) {
-        let mut cmd = spy.new_command("cmd.exe");
-        // https://github.com/nodejs/node/blob/dbd24b165128affb7468ca42f69edaf7e0d85a9a/lib/child_process.js#L633
-        cmd.args(["/d", "/s", "/c"]);
-        cmd
-    } else {
-        let mut cmd = spy.new_command("sh");
-        cmd.args(["-c"]);
-        cmd
+
+    let mut cmd = match &resolved_command.fingerprint.command {
+        TaskCommand::ShellScript(script) => {
+            let mut cmd = if cfg!(windows) {
+                let mut cmd = spy.new_command("cmd.exe");
+                // https://github.com/nodejs/node/blob/dbd24b165128affb7468ca42f69edaf7e0d85a9a/lib/child_process.js#L633
+                cmd.args(["/d", "/s", "/c"]);
+                cmd
+            } else {
+                let mut cmd = spy.new_command("sh");
+                cmd.args(["-c"]);
+                cmd
+            };
+            cmd.arg(script);
+            cmd.envs(&resolved_command.all_envs);
+            cmd
+        }
+        TaskCommand::Parsed(task_parsed_command) => {
+            let mut cmd = spy.new_command(&task_parsed_command.program);
+            cmd.args(&task_parsed_command.args);
+            cmd.envs(&resolved_command.all_envs);
+            cmd.envs(&task_parsed_command.envs);
+            cmd
+        }
     };
-    cmd.arg(&command.fingerprint.command_line)
-        .current_dir(base_dir.join(&command.fingerprint.cwd))
-        .envs(&command.all_envs)
+
+    cmd.current_dir(base_dir.join(&resolved_command.fingerprint.cwd))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let (mut child, mut path_accesses) = cmd.spawn().await?;
