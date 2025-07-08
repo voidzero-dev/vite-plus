@@ -1,12 +1,12 @@
 use std::{ffi::OsStr, fmt::Display, path::Path, sync::Arc};
 
 use crate::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     config::{
         CommandFingerprint, CommandFingerprintDiff, ResolvedTask, ResolvedTaskConfig,
         ResolvedTaskConfigDiff,
     },
-    execute::ExecutedTask,
+    execute::{ExecutedTask, PathRead},
     fs::FileSystem,
     str::Str,
 };
@@ -29,6 +29,8 @@ pub struct TaskFingerprint {
 pub enum PathFingerprint {
     NotFound,
     FileContentHash(u64),
+    /// Entries must be sorted lexicographically
+    Folder(Option<Arc<[Str]>>),
 }
 
 #[derive(Debug)]
@@ -76,10 +78,17 @@ impl TaskFingerprint {
                 self.inputs.par_iter().find_map_any(|(input_relative_path, path_fingerprint)| {
                     let input_full_path =
                         Arc::<OsStr>::from(base_dir.join(input_relative_path).into_os_string());
-                    let current_path_fingerprint = match fs.fingerprint_path(&input_full_path) {
-                        Ok(ok) => ok,
-                        Err(err) => return Some(Err(err.into())),
+                    let path_read = PathRead {
+                        read_dir_entries: matches!(
+                            path_fingerprint,
+                            PathFingerprint::Folder(Some(_))
+                        ),
                     };
+                    let current_path_fingerprint =
+                        match fs.fingerprint_path(&input_full_path, path_read) {
+                            Ok(ok) => ok,
+                            Err(err) => return Some(Err(err.into())),
+                        };
                     if path_fingerprint == &current_path_fingerprint {
                         None
                     } else {
@@ -100,16 +109,15 @@ impl TaskFingerprint {
         base_dir: &Path,
     ) -> anyhow::Result<Self> {
         let inputs = executed_task
-            .input_paths
+            .path_reads
             .par_iter()
-            .flat_map(|input_full_path| {
-                let Ok(relative_path) = Path::new(input_full_path).strip_prefix(base_dir) else {
-                    return None; // skip inputs outside the base_dir
-                };
+            .flat_map(|(path, path_read)| {
                 Some((|| {
-                    let relative_path = RelativePath::from_path(relative_path)?.as_str();
-                    let path_fingerprint = fs.fingerprint_path(input_full_path)?;
-                    anyhow::Ok((relative_path.into(), path_fingerprint))
+                    let path_fingerprint = fs.fingerprint_path(
+                        &base_dir.join(path).into_os_string().into(),
+                        *path_read,
+                    )?;
+                    anyhow::Ok((path.clone(), path_fingerprint))
                 })())
             })
             .collect::<anyhow::Result<HashMap<Str, PathFingerprint>>>()?;

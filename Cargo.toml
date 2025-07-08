@@ -12,7 +12,10 @@ rust-version = "1.87.0"
 absolute_paths_not_starting_with_crate = "warn"
 non_ascii_idents = "warn"
 unit-bindings = "warn"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(coverage_nightly)'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(coverage)',
+    'cfg(coverage_nightly)',
+] }
 tail_expr_drop_order = "warn"
 unsafe_op_in_unsafe_fn = "warn"
 unused_unsafe = "warn"
@@ -39,6 +42,7 @@ dashmap = "6.1.0"
 diff-struct = "0.5.3"
 itertools = "0.14.0"
 petgraph = "0.8.2"
+fspy = { path = "../fspy" }
 rayon = "1.10.0"
 relative-path = "2.0.1"
 rustc-hash = "2.1.1"
@@ -53,6 +57,9 @@ clap = "4.5.40"
 edit = "0.1.5"
 rusqlite = "0.36.0"
 shell-escape = "0.1.5"
+futures-core = "0.3.31"
+futures-util = "0.3.31"
+tokio = "1.46.1"
 
 [profile.dev]
 # Disabling debug info speeds up local and CI builds,
@@ -66,5 +73,5 @@ opt-level = 3
 lto = "fat"
 codegen-units = 1
 strip = "symbols" # set to `false` for debug information
-debug = false # set to `true` for debug information
-panic = "abort" # Let it crash and force ourselves to write safe Rust.
+debug = false     # set to `true` for debug information
+panic = "abort"   # Let it crash and force ourselves to write safe Rust.

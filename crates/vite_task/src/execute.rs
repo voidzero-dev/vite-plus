@@ -1,16 +1,20 @@
 use std::{
+    collections::hash_map::Entry,
     env::{join_paths, split_paths},
     ffi::OsStr,
-    io::{self, Read, Write},
     iter,
     path::Path,
-    process::{Command, Stdio},
+    process::{ExitStatus, Stdio},
     sync::{Arc, Mutex},
 };
 
+use anyhow::Context;
 use bincode::{Decode, Encode};
+use fspy::{AccessMode, Spy};
 
+use futures_util::future::try_join4;
 use serde::{Deserialize, Serialize};
+use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _};
 use wax::Glob;
 
 use crate::{
@@ -32,31 +36,41 @@ pub struct StdOutput {
     pub content: MaybeString,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct PathRead {
+    pub read_dir_entries: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PathWrite;
+
 /// Contains info that is available after executing the task
 #[derive(Debug)]
 pub struct ExecutedTask {
     pub std_outputs: Arc<[StdOutput]>,
-    pub input_paths: HashSet<Arc<OsStr>>,
+    pub exit_status: ExitStatus,
+    pub path_reads: HashMap<Str, PathRead>,
+    pub path_writes: HashMap<Str, PathWrite>,
 }
 
 /// Collects stdout/stderr into `outputs` and at the same time writes them to the real stdout/stderr
-fn collect_std_outputs(
+async fn collect_std_outputs(
     outputs: &Mutex<Vec<StdOutput>>,
-    mut stream: impl Read,
+    mut stream: impl AsyncRead + Unpin,
     kind: OutputKind,
-) -> io::Result<()> {
+) -> anyhow::Result<()> {
     let mut buf = [0u8; 8192];
-    let mut parent_output_handle: Box<dyn Write> = match kind {
-        OutputKind::StdOut => Box::new(std::io::stdout().lock()),
-        OutputKind::StdErr => Box::new(std::io::stderr().lock()),
+    let mut parent_output_handle: Box<dyn AsyncWrite + Unpin + Send> = match kind {
+        OutputKind::StdOut => Box::new(tokio::io::stdout()),
+        OutputKind::StdErr => Box::new(tokio::io::stderr()),
     };
     loop {
-        let n = stream.read(&mut buf)?;
+        let n = stream.read(&mut buf).await?;
         if n == 0 {
             return Ok(());
         }
         let content = &buf[..n];
-        parent_output_handle.write_all(content)?;
+        parent_output_handle.write_all(content).await?;
         let mut outputs = outputs.lock().unwrap();
         if let Some(last) = outputs.last_mut()
             && last.kind == kind
@@ -122,45 +136,81 @@ impl TaskEnvs {
 
 pub async fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<ExecutedTask> {
     let command = &task.resolved_command;
-    let mut child = if cfg!(windows) {
-        let mut cmd = Command::new("cmd.exe");
+    let spy = Spy::global()?;
+    let mut cmd = if cfg!(windows) {
+        let mut cmd = spy.new_command("cmd.exe");
         // https://github.com/nodejs/node/blob/dbd24b165128affb7468ca42f69edaf7e0d85a9a/lib/child_process.js#L633
         cmd.args(["/d", "/s", "/c"]);
         cmd
     } else {
-        let mut cmd = Command::new("sh");
+        let mut cmd = spy.new_command("sh");
         cmd.args(["-c"]);
         cmd
-    }
-    .arg(&command.fingerprint.command_line)
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .current_dir(base_dir.join(&command.fingerprint.cwd))
-    .env_clear()
-    .envs(&command.all_envs)
-    .spawn()?;
+    };
+    cmd.arg(&command.fingerprint.command_line)
+        .current_dir(base_dir.join(&command.fingerprint.cwd))
+        .envs(&command.all_envs)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let (mut child, mut path_accesses) = cmd.spawn().await?;
 
     let child_stdout = child.stdout.take().unwrap();
     let child_stderr = child.stderr.take().unwrap();
 
     let outputs = Mutex::new(Vec::<StdOutput>::new());
 
-    std::thread::scope(|scope| {
-        let stdout_collect_join_handle =
-            scope.spawn(|| collect_std_outputs(&outputs, child_stdout, OutputKind::StdOut));
-        let stderr_collect_join_handle =
-            scope.spawn(|| collect_std_outputs(&outputs, child_stderr, OutputKind::StdErr));
+    let path_accesses_fut = async move {
+        let mut path_reads = HashMap::<Str, PathRead>::new();
+        let mut path_writes = HashMap::<Str, PathWrite>::new();
+        let mut buf = Vec::<u8>::new();
+        while let Some(access) = path_accesses.next(&mut buf).await? {
+            let path = access.path.to_cow_os_str();
+            let path = Path::new(&path);
+            let Ok(relative_path) = path.strip_prefix(base_dir) else {
+                // ignore accesses outside the workspace
+                continue;
+            };
+            let relative_path = relative_path.to_str().with_context(|| {
+                format!("Non-utf8 relative path in the workspace: {:?}", relative_path)
+            })?;
+            let relative_path = Str::from(relative_path);
+            match access.mode {
+                AccessMode::Read => {
+                    path_reads.entry(relative_path).or_insert(PathRead { read_dir_entries: false });
+                }
+                AccessMode::Write => {
+                    path_writes.insert(relative_path, PathWrite);
+                }
+                AccessMode::ReadWrite => {
+                    path_reads
+                        .entry(relative_path.clone())
+                        .or_insert(PathRead { read_dir_entries: false });
+                    path_writes.insert(relative_path, PathWrite);
+                }
+                AccessMode::ReadDir => match path_reads.entry(relative_path) {
+                    Entry::Occupied(mut occupied) => occupied.get_mut().read_dir_entries = true,
+                    Entry::Vacant(vacant) => {
+                        vacant.insert(PathRead { read_dir_entries: true });
+                    }
+                },
+            }
+        }
+        anyhow::Ok((path_reads, path_writes))
+    };
 
-        stdout_collect_join_handle.join().unwrap()?;
-        stderr_collect_join_handle.join().unwrap()?;
-        io::Result::Ok(())
-    })?;
+    let ((), (), (path_reads, path_writes), exit_status) = try_join4(
+        collect_std_outputs(&outputs, child_stdout, OutputKind::StdOut),
+        collect_std_outputs(&outputs, child_stderr, OutputKind::StdErr),
+        path_accesses_fut,
+        async move { Ok(child.wait().await?) },
+    )
+    .await?;
 
     let outputs = outputs.into_inner().unwrap();
 
-    let input_paths = gather_inputs(task, base_dir)?;
+    // let input_paths = gather_inputs(task, base_dir)?;
 
-    Ok(ExecutedTask { std_outputs: outputs.into(), input_paths })
+    Ok(ExecutedTask { std_outputs: outputs.into(), exit_status, path_reads, path_writes })
 }
 
 fn gather_inputs(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<HashSet<Arc<OsStr>>> {
