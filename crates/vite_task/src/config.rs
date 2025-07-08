@@ -121,12 +121,6 @@ impl Workspace {
     pub fn load(dir: PathBuf) -> anyhow::Result<Self> {
         let package_graph = vite_package_manager::get_package_graph(&dir)?;
         let mut package_infos: Vec<PackageInfo> = package_graph.node_weights().cloned().collect();
-        if let Some(root_package) = package_infos.iter_mut().find(|a| a.path.is_empty()) {
-            root_package.name = "".into(); // do not prefix tasks in root package
-        } else {
-            // make sure to look for task config in root even if there's no root package there.
-            package_infos.push(PackageInfo { name: "".into(), path: "".into() });
-        }
 
         let mut vite_task_jsons: Vec<(ViteTaskJson, PackageInfo)> = Vec::new();
         for pkg in package_infos {
@@ -165,13 +159,16 @@ impl Workspace {
     ) -> anyhow::Result<StableDiGraph<ResolvedTask, ()>> {
         let mut task_configs_by_full_name: HashMap<Str, (TaskConfigWithDeps, PackageInfo)> =
             HashMap::new();
+
         for (task_json, package_info) in &self.vite_task_jsons {
+            let task_prefix = if package_info.path.is_empty() {
+                // do not prefix tasks in root package
+                "".to_owned()
+            } else {
+                format!("{}#", &package_info.package_json.name)
+            };
             for (task_name, task_config_json) in &task_json.tasks {
-                let full_name = if package_info.name.is_empty() {
-                    task_name.clone()
-                } else {
-                    format!("{}#{}", &package_info.name, task_name).as_str().into()
-                };
+                let full_name: Str = format!("{}{}", &task_prefix, task_name).as_str().into();
                 if task_configs_by_full_name
                     .insert(full_name.clone(), (task_config_json.clone(), package_info.clone()))
                     .is_some()

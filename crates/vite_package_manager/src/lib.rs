@@ -5,7 +5,7 @@ use petgraph::graph::NodeIndex;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
 use std::{
-    fs,
+    fs, io,
     path::{Path, PathBuf},
 };
 use wax::Glob;
@@ -78,11 +78,13 @@ pub enum DependencyType {
     Peer,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageJson {
     #[serde(default)]
     pub name: CompactString,
+    #[serde(default)]
+    pub scripts: HashMap<CompactString, CompactString>,
     #[serde(default)]
     pub dependencies: HashMap<CompactString, CompactString>,
     #[serde(default)]
@@ -118,9 +120,9 @@ impl PackageJson {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct PackageInfo {
-    pub name: CompactString,
+    pub package_json: PackageJson,
     pub path: CompactString,
 }
 
@@ -137,16 +139,13 @@ impl PackageGraphBuilder {
         package_json: PackageJson,
     ) -> anyhow::Result<()> {
         let deps = package_json.get_workspace_dependencies().collect::<Vec<_>>();
-        let id = self
-            .graph
-            .add_node(PackageInfo { name: package_json.name.clone(), path: package_path });
-        if let Some((existing_id, _)) =
-            self.id_and_deps_by_name.insert(package_json.name, (id, deps))
-        {
+        let package_name = package_json.name.clone();
+        let id = self.graph.add_node(PackageInfo { package_json, path: package_path });
+        if let Some((existing_id, _)) = self.id_and_deps_by_name.insert(package_name, (id, deps)) {
             let existing_package_info = &self.graph[existing_id];
             anyhow::bail!(
                 "duplicate package name: {} at {} and {}",
-                &existing_package_info.name,
+                &existing_package_info.package_json.name,
                 &existing_package_info.path,
                 &self.graph[id].path
             );
@@ -172,6 +171,8 @@ pub fn get_package_graph(
     let workspace: PnpmWorkspace = serde_yml::from_str(&workspace_yaml)?;
     let member_globs = workspace.into_member_globs();
     let mut graph_builder = PackageGraphBuilder::default();
+
+    let mut has_root_package = false;
     for package_json_path in member_globs.get_package_json_paths(workspace_root)? {
         let package_json: PackageJson = serde_json::from_slice(&fs::read(&package_json_path)?)?;
         let package_path = package_json_path.parent().unwrap();
@@ -185,7 +186,24 @@ pub fn get_package_graph(
         let package_path = package_path
             .to_str()
             .with_context(|| format!("Package path {:?} is not valid UTF-8", package_path))?;
+
+        has_root_package = has_root_package || package_path.is_empty();
         graph_builder.add_package(package_path.into(), package_json)?;
+    }
+    // try add the root package anyway if the member globs do not include it.
+    if !has_root_package {
+        let package_json_path = workspace_root.join("package.json");
+        match fs::read(&package_json_path) {
+            Ok(package_json) => {
+                let package_json: PackageJson = serde_json::from_slice(&package_json)?;
+                graph_builder.add_package("".into(), package_json)?;
+            }
+            Err(err) => {
+                if err.kind() != io::ErrorKind::NotFound {
+                    return Err(err.into());
+                }
+            }
+        }
     }
     Ok(graph_builder.build())
 }
