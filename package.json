@@ -5,7 +5,13 @@
   "volta": {
     "node": "22.14.0"
   },
+  "scripts": {
+    "lint": "oxlint",
+    "typecheck": "tsc -b tsconfig.json"
+  },
   "devDependencies": {
-    "@types/node": "^22.14.0"
+    "@types/node": "^22.14.0",
+    "oxlint": "^0.16.5",
+    "typescript": "^5.8.3"
   }
 }

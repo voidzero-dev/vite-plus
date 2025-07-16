@@ -3,12 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": {
-    ".": {
-      "types": "./dist/types.d.ts",
-      "default": "./dist/index.js"
-    }
-  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "scripts": {
     "dev": "tsdown --dts --watch",
     "prepack": "tsdown --dts"
@@ -20,7 +16,6 @@
     "fast-string-truncated-width": "^1.2.1"
   },
   "devDependencies": {
-    "tsdown": "^0.12.1",
-    "typescript": "^5.8.3"
+    "tsdown": "^0.12.1"
   }
 }

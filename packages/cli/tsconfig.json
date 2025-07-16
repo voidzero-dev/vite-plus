@@ -1,23 +1,12 @@
 {
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "allowImportingTsExtensions": true,
-    "declaration": true,
-    "erasableSyntaxOnly": true,
-    "esModuleInterop": true,
-    "isolatedDeclarations": true,
-    "isolatedModules": true,
-    "lib": ["es2022"],
-    "module": "preserve",
-    "moduleDetection": "force",
-    "moduleResolution": "bundler",
-    "noEmit": true,
-    "noUnusedLocals": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "esnext",
-    "types": ["node"],
-    "verbatimModuleSyntax": true
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "composite": true,
+    "outDir": "./dist"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"],
+  "references": [{ "path": "../multiplexer" }]
 }

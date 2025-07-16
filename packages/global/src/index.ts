@@ -1,14 +1,14 @@
-import { parseArgs } from "node:util";
-import { join } from "node:path";
-import { questionnaire } from "./command/new.ts";
+import { parseArgs } from 'node:util'
+import { join } from 'node:path'
+import { questionnaire } from './command/new'
 
 try {
   const { positionals, values } = parseArgs({
     allowPositionals: true,
-    options: { help: { type: "boolean", short: "h" } }
-  });
+    options: { help: { type: 'boolean', short: 'h' } },
+  })
 
-  const [command] = positionals;
+  const [command] = positionals
 
   if (values.help) {
     console.log(`Usage: vite [command] [options] -- [arguments for command]
@@ -23,13 +23,13 @@ vite lib [dir]         Run tsdown
 vite test [dir]        Run vitest
 vite bench [dir]       Run vitest bench
 vite docs [dir]        Run vitepress
-vite task [name]       Run package.json#scripts[name] in each workspace`);
-  } else if (command === "new") {
-    await questionnaire();
+vite task [name]       Run package.json#scripts[name] in each workspace`)
+  } else if (command === 'new') {
+    await questionnaire()
   } else {
-    await import(join(process.cwd(), "node_modules/vite-plus/dist/cli.js"));
+    await import(join(process.cwd(), 'node_modules/vite-plus/dist/cli.js'))
   }
-} catch (e) {
-  if (e && e.status) process.exit(e.status);
-  throw e;
+} catch (e: any) {
+  if (e && e.status) process.exit(e.status)
+  throw e
 }
