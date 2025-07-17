@@ -1,3 +1,3 @@
-import { log } from "@repo/logger";
+import { log } from '@repo/logger';
 
-log("SPA");
+log('SPA');

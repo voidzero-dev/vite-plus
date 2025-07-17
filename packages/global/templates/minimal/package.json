@@ -9,7 +9,6 @@
   },
   "scripts": {},
   "devDependencies": {
-    "vite-plus": "^0.0.0"
-  },
-  "packageManager": "pnpm@10.12.1"
+    "vite-plus": "workspace:*"
+  }
 }

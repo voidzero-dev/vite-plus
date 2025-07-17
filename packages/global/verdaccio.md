@@ -44,7 +44,7 @@ To install `vp` globally:
 npm i -g vp --registry http://localhost:4873
 ```
 
-Add this to `.npmrc` to run commands without ` --registry http://localhost:4873`:
+Add this to `.npmrc` to run commands without `--registry http://localhost:4873`:
 
 ```
 registry=http://localhost:4873

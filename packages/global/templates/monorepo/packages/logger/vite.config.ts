@@ -1,14 +1,14 @@
-import { join } from "node:path";
-import { defineConfig } from "vite-plus";
+import { join } from 'node:path';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  extends: "../../vite.config.ts",
+  extends: '../../vite.config.ts',
   resolve: {
     alias: {
-      "@log": `${join(import.meta.dirname, "src")}`
-    }
+      '@log': `${join(import.meta.dirname, 'src')}`,
+    },
   },
   test: {
-    reporters: ["default"]
-  }
+    reporters: ['default'],
+  },
 });
