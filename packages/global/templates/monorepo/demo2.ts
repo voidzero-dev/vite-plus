@@ -1,8 +1,8 @@
-import { join } from "node:path";
-import { multiplex, type Command } from "multiplexer";
+import { type Command, multiplex } from 'multiplexer';
+import { join } from 'node:path';
 
 const cwd = process.cwd();
-const env = { ...process.env, FORCE_COLOR: "true" };
+const env = { ...process.env, FORCE_COLOR: 'true' };
 
 const cmds: Command[][] = [];
 
@@ -14,12 +14,12 @@ for (let i = 0; i < getRandom(3) + 1; i++) {
       const duration = getRandom(4);
       return {
         name: `timer: ${duration}s (${i + 1})`,
-        cmd: "bash",
-        args: [join(cwd, "demo-countdown.sh"), String(duration)],
+        cmd: 'bash',
+        args: [join(cwd, 'demo-countdown.sh'), String(duration)],
         cwd,
-        env
+        env,
       };
-    })
+    }),
   );
 }
 

@@ -14,7 +14,6 @@
   "devDependencies": {
     "@types/node": "^24.0.4",
     "typescript": "^5.8.3",
-    "vite-plus": "^0.0.0"
-  },
-  "packageManager": "pnpm@10.12.1"
+    "vite-plus": "workspace:*"
+  }
 }

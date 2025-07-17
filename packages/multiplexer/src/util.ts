@@ -1,9 +1,9 @@
 export const ANSI = {
-  green: "\x1b[32m",
-  red: "\x1b[31m",
-  reset: "\x1b[0m",
-  reverse: "\x1b[7m",
-  yellow: "\x1b[33m"
+  green: '\x1b[32m',
+  red: '\x1b[31m',
+  reset: '\x1b[0m',
+  reverse: '\x1b[7m',
+  yellow: '\x1b[33m',
 };
 
 export function getScreenDimensions() {

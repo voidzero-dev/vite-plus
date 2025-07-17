@@ -14,12 +14,16 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 bincode = { workspace = true, features = ["derive"] }
+brush-parser = "0.2.18"
 bstr = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 compact_str = { workspace = true, features = ["serde"] }
 dashmap = { workspace = true }
 diff-struct = { workspace = true }
 edit = { workspace = true }
+fspy = { workspace = true }
+futures-core = { workspace = true }
+futures-util = { workspace = true }
 itertools = { workspace = true }
 petgraph = { workspace = true }
 rayon = { workspace = true }
@@ -28,14 +32,10 @@ rusqlite = { workspace = true, features = ["bundled"] }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { workspace = true }
 shell-escape = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "io-std", "macros"] }
 twox-hash = { workspace = true }
 vite_package_manager = { workspace = true }
 wax = { workspace = true }
-fspy = { workspace = true }
-futures-core = { workspace = true }
-futures-util = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "io-std", "macros"] }
-brush-parser = "0.2.18"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.30.1", features = ["dir"] }

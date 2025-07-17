@@ -1,3 +1,3 @@
-import { multiplex } from 'multiplexer'
+import { multiplex } from 'multiplexer';
 
-multiplex([])
+multiplex([]);

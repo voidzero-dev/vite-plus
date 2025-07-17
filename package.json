@@ -7,11 +7,25 @@
   },
   "scripts": {
     "lint": "oxlint",
-    "typecheck": "tsc -b tsconfig.json"
+    "typecheck": "tsc -b tsconfig.json",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.2",
     "oxlint": "^0.16.5",
     "typescript": "^5.8.3"
+  },
+  "lint-staged": {
+    "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
+      "dprint fmt --staged"
+    ],
+    "*.@(js|ts|tsx)": [
+      "pnpm lint -- --fix"
+    ],
+    "*.rs": [
+      "cargo fmt --"
+    ]
   }
 }

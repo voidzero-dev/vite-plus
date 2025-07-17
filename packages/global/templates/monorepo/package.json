@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {},
   "devDependencies": {
-    "vite-plus": "^0.0.0"
+    "multiplexer": "workspace:*",
+    "vite-plus": "workspace:*"
   },
   "packageManager": "pnpm@10.12.1"
 }
