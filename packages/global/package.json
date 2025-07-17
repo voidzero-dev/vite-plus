@@ -17,7 +17,7 @@
     "prepack": "tsdown"
   },
   "devDependencies": {
-    "tsdown": "^0.12.1"
+    "tsdown": "catalog:"
   },
   "engines": {
     "node": ">=20.11.0"

@@ -16,6 +16,6 @@
     "fast-string-truncated-width": "^1.2.1"
   },
   "devDependencies": {
-    "tsdown": "^0.12.1"
+    "tsdown": "catalog:"
   }
 }

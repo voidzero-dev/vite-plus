@@ -7,6 +7,5 @@
   "devDependencies": {
     "multiplexer": "workspace:*",
     "vite-plus": "workspace:*"
-  },
-  "packageManager": "pnpm@10.12.1"
+  }
 }

@@ -1,9 +1,9 @@
 {
   "name": "vite-plus",
   "private": true,
-  "packageManager": "pnpm@10.12.1",
+  "packageManager": "pnpm@10.13.1",
   "volta": {
-    "node": "22.14.0"
+    "node": "22.17.0"
   },
   "scripts": {
     "lint": "oxlint",
@@ -11,11 +11,11 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
+    "@types/node": "catalog:",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.2",
-    "oxlint": "^0.16.5",
-    "typescript": "^5.8.3"
+    "oxlint": "^1.7.0",
+    "typescript": "catalog:"
   },
   "lint-staged": {
     "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
