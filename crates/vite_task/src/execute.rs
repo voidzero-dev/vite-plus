@@ -89,7 +89,7 @@ pub struct TaskEnvs {
 }
 
 impl TaskEnvs {
-    pub fn resolve(base_dir: &Path, task: &TaskConfig) -> anyhow::Result<Self> {
+    pub fn resolve(base_dir: &Path, task: &TaskConfig, config_dir: &Str) -> anyhow::Result<Self> {
         // All envs that are passed to the task
         let mut all_envs: HashMap<Str, Arc<OsStr>> = std::env::vars_os()
             .filter_map(|(name, value)| {
@@ -128,7 +128,12 @@ impl TaskEnvs {
             all_envs.entry("PATH".into()).or_insert_with(|| Arc::<OsStr>::from(OsStr::new("")));
         let paths = split_paths(env_path);
         let node_modules_bin = base_dir.join(&task.cwd).join("node_modules/.bin");
-        *env_path = join_paths(iter::once(node_modules_bin).chain(paths))?.into();
+        *env_path = join_paths(
+            iter::once(node_modules_bin)
+                .chain(iter::once(base_dir.join(config_dir).join("node_modules/.bin")))
+                .chain(paths),
+        )?
+        .into();
 
         Ok(Self { all_envs, envs_without_pass_through })
     }

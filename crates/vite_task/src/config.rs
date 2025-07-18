@@ -86,7 +86,7 @@ pub struct TaskConfigWithDeps {
     depends_on: Vec<Str>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ViteTaskJson {
     tasks: HashMap<Str, TaskConfigWithDeps>,
 }
@@ -142,7 +142,7 @@ impl ResolvedTaskConfig {
                 }
             }
         };
-        let task_envs = TaskEnvs::resolve(base_dir, &self.config)?;
+        let task_envs = TaskEnvs::resolve(base_dir, &self.config, &self.config_dir)?;
         Ok(ResolvedTaskCommand {
             fingerprint: CommandFingerprint {
                 cwd: cwd.as_str().into(),
@@ -264,10 +264,14 @@ impl Workspace {
         }
 
         let cache_path = dir.join("node_modules/.vite/task-cache.db");
+        if !cache_path.exists() {
+            std::fs::create_dir_all(dir.join("node_modules/.vite"))?;
+        }
         let task_cache = TaskCache::load_from_file(&cache_path)?;
 
         Ok(Self { packages_with_task_jsons, dir, task_cache, fs: CachedFileSystem::default() })
     }
+
     pub const fn cache(&self) -> &TaskCache {
         &self.task_cache
     }

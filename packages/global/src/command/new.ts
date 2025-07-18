@@ -1,8 +1,9 @@
-import { cancel, confirm, intro, outro, select, tasks, text } from '@clack/prompts';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { cp, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+
+import { cancel, confirm, intro, outro, select, tasks, text } from '@clack/prompts';
 
 const findRoot = (dir: string): string => existsSync(join(dir, 'package.json')) ? dir : findRoot(dirname(dir));
 

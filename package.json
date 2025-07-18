@@ -1,5 +1,5 @@
 {
-  "name": "vite-plus",
+  "name": "vite-plus-monorepo",
   "private": true,
   "packageManager": "pnpm@10.13.1",
   "volta": {
@@ -15,6 +15,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^16.1.2",
     "oxlint": "^1.7.0",
+    "vite-plus": "workspace:*",
     "typescript": "catalog:"
   },
   "lint-staged": {

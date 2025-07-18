@@ -1,12 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = ["crates/*", "packages/cli"]
 
 [workspace.package]
 authors = ["Vite+ Authors"]
 edition = "2024"
 license = "MIT"
-rust-version = "1.87.0"
+rust-version = "1.88.0"
 
 [workspace.lints.rust]
 absolute_paths_not_starting_with_crate = "warn"
@@ -56,7 +56,12 @@ shell-escape = "0.1.5"
 tokio = "1.46.1"
 twox-hash = "2.1.1"
 vite_package_manager = { path = "crates/vite_package_manager" }
+vite_task = { path = "crates/vite_task" }
 wax = "0.6.0"
+
+napi = { version = "3.0.0", default-features = false, features = ["async", "error_anyhow"] }
+napi-build = "2"
+napi-derive = { version = "3.0.0", default-features = false, features = ["type-def", "strict"] }
 
 [profile.dev]
 # Disabling debug info speeds up local and CI builds,

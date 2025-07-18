@@ -1,0 +1,16 @@
+[package]
+name = "vite-plus-cli"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+clap = { workspace = true }
+napi = { workspace = true }
+napi-derive = { workspace = true }
+vite_task = { workspace = true }
+
+[build-dependencies]
+napi-build = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]

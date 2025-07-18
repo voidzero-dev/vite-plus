@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
-    "vite-plus": "./bin/vite-plus",
-    "vpl": "./bin/vpl"
+    "vite-plus": "./bin/vite-plus"
   },
   "exports": {
     ".": {
@@ -16,17 +15,30 @@
     "node": ">=20.11.0"
   },
   "scripts": {
-    "dev": "tsdown --watch",
-    "prepack": "tsdown"
+    "build": "napi build --platform --release --esm"
   },
   "files": [
     "bin",
-    "dist"
+    "index.js",
+    "index.d.ts"
   ],
   "dependencies": {
     "multiplexer": "workspace:*"
   },
   "devDependencies": {
+    "@napi-rs/cli": "catalog:",
     "tsdown": "catalog:"
+  },
+  "napi": {
+    "binaryName": "vite-plus",
+    "packageName": "@vite-plus",
+    "targets": [
+      "aarch64-apple-darwin",
+      "x86_64-apple-darwin",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-pc-windows-msvc",
+      "x86_64-pc-windows-msvc"
+    ]
   }
 }

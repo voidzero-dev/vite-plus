@@ -1,4 +1,5 @@
 mod cache;
+mod cmd;
 mod collections;
 mod config;
 mod execute;
@@ -7,19 +8,14 @@ mod fs;
 mod maybe_str;
 mod schedule;
 mod str;
-mod cmd;
 
-use std::iter;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::Parser;
-use itertools::Itertools;
 use serde::Serialize;
 
 use crate::cache::{CachedTask, TaskCacheKey};
-use crate::collections::HashMap;
-use crate::config::TaskId;
 use crate::str::Str;
 
 use crate::{config::Workspace, schedule::ExecutionPlan};
