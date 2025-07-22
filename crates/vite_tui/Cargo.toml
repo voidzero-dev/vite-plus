@@ -14,17 +14,17 @@ workspace = true
 doctest = false
 
 [dependencies]
-color-eyre = "0.6.5"
-crossterm = { version = "0.29.0", features = ["event-stream"] }
-ratatui = "0.29.0"
-tokio = { version = "1.45.1", features = ["full"] }
-futures = "0.3.31"
-tokio-util = "0.7.15"
-directories = "6.0.0"
-tui-term = "0.2.0"
-portable-pty = "0.9.0"
-rustc-hash = "2"
+color-eyre = { workspace = true }
+crossterm = { workspace = true }
+directories = { workspace = true }
+futures = { workspace = true }
+portable-pty = { workspace = true }
+ratatui = { workspace = true }
+rustc-hash = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true }
+tui-term = { workspace = true }
 
-tracing = "0.1.41"
-tracing-error = "0.2.1"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter", "serde"] }
+tracing = { workspace = true }
+tracing-error = { workspace = true }
+tracing-subscriber = { workspace = true }
