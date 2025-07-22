@@ -1,5 +1,5 @@
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout},
@@ -23,6 +23,7 @@ pub struct App {
 
     tasks_list: TasksList,
     tasks_pane: FxHashMap</* task name */ String, TasksPane>,
+    left_panel_area: Rect,
 }
 
 impl App {
@@ -39,6 +40,7 @@ impl App {
             action_rx,
             tasks_list: TasksList::new(tasks),
             tasks_pane,
+            left_panel_area: Rect::default(),
         })
     }
 
@@ -144,6 +146,7 @@ impl App {
             Event::Render => action_tx.send(Action::Render)?,
             Event::Resize(x, y) => action_tx.send(Action::Resize(x, y))?,
             Event::Key(key) => self.handle_key_event(key)?,
+            Event::Mouse(mouse) => self.handle_mouse_event(mouse)?,
             _ => {}
         }
         Ok(())
@@ -175,6 +178,35 @@ impl App {
         Ok(())
     }
 
+    fn handle_mouse_event(&self, mouse: MouseEvent) -> Result<()> {
+        let action_tx = self.action_tx.clone();
+
+        if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
+            // Check if click is within the left panel area
+            if mouse.column >= self.left_panel_area.x
+                && mouse.column < self.left_panel_area.x + self.left_panel_area.width
+                && mouse.row >= self.left_panel_area.y
+                && mouse.row < self.left_panel_area.y + self.left_panel_area.height
+            {
+                // Calculate which task was clicked based on row position
+                // Account for header (1 row) and footer (1 row), so content starts at y+1
+                if mouse.row > self.left_panel_area.y
+                    && mouse.row < self.left_panel_area.y + self.left_panel_area.height - 1
+                {
+                    let clicked_row = mouse.row - self.left_panel_area.y - 1; // -1 for header
+                    let task_count = self.tasks_list.task_count();
+
+                    if (clicked_row as usize) < task_count {
+                        // Send click action to select the task
+                        action_tx.send(Action::SelectTask(clicked_row as usize))?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn handle_actions(&mut self, tui: &mut Tui) -> Result<()> {
         while let Ok(action) = self.action_rx.try_recv() {
             if action != Action::Tick && action != Action::Render {
@@ -195,7 +227,7 @@ impl App {
                         pane.process(&bytes);
                     }
                 }
-                Action::Up | Action::Down => {
+                Action::Up | Action::Down | Action::SelectTask(_) => {
                     self.tasks_list.update(action)?;
                 }
                 _ => {}
@@ -222,6 +254,10 @@ impl App {
     fn draw(&mut self, frame: &mut Frame<'_>) -> Result<()> {
         let [left, right] =
             Layout::horizontal([Constraint::Max(20), Constraint::Fill(1)]).areas(frame.area());
+
+        // Store the left panel area for mouse event handling
+        self.left_panel_area = left;
+
         self.tasks_list.draw(frame, left)?;
         if let Some(pane) = self.tasks_pane.get_mut(self.tasks_list.selected_task()) {
             pane.draw(frame, right)?;

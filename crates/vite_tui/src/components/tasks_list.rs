@@ -26,6 +26,10 @@ impl TasksList {
         &self.tasks[self.selection]
     }
 
+    pub fn task_count(&self) -> usize {
+        self.tasks.len()
+    }
+
     fn select(&mut self, selection: usize) {
         self.selection = selection;
         self.state.select(Some(selection));
@@ -50,6 +54,11 @@ impl Component for TasksList {
         match action {
             Action::Up => self.up(),
             Action::Down => self.down(),
+            Action::SelectTask(index) => {
+                if index < self.tasks.len() {
+                    self.select(index);
+                }
+            }
             _ => {}
         }
         Ok(None)

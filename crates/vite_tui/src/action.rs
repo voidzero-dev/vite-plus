@@ -12,4 +12,5 @@ pub enum Action {
     Task { task: String, bytes: Box<[u8]> },
     Up,
     Down,
+    SelectTask(usize),
 }
