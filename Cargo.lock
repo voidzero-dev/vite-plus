@@ -2930,6 +2930,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shell-escape",
+ "thiserror 2.0.12",
  "tokio",
  "twox-hash",
  "vite_package_manager",

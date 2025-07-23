@@ -6,6 +6,7 @@
     "node": "22.17.0"
   },
   "scripts": {
+    "build:ci": "pnpm run build",
     "lint": "oxlint",
     "typecheck": "tsc -b tsconfig.json",
     "prepare": "husky"
@@ -14,7 +15,7 @@
     "@types/node": "catalog:",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.2",
-    "oxlint": "^1.7.0",
+    "oxlint": "^1.8.0",
     "vite-plus": "workspace:*",
     "typescript": "catalog:"
   },

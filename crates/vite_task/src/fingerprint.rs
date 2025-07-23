@@ -6,6 +6,7 @@ use crate::{
         CommandFingerprint, CommandFingerprintDiff, ResolvedTask, ResolvedTaskConfig,
         ResolvedTaskConfigDiff,
     },
+    error::Error,
     execute::{ExecutedTask, PathRead},
     fs::FileSystem,
     str::Str,
@@ -69,7 +70,7 @@ impl TaskFingerprint {
         resolved_task: &ResolvedTask,
         fs: &impl FileSystem,
         base_dir: &Path,
-    ) -> anyhow::Result<Option<FingerprintMismatch>> {
+    ) -> Result<Option<FingerprintMismatch>, Error> {
         // TODO: use diff result instead of eq
         Ok(if self.resolved_config != resolved_task.resolved_config {
             Some(FingerprintMismatch::ConfigChanged(
@@ -93,12 +94,12 @@ impl TaskFingerprint {
                     let current_path_fingerprint =
                         match fs.fingerprint_path(&input_full_path, path_read) {
                             Ok(ok) => ok,
-                            Err(err) => return Some(Err(err.into())),
+                            Err(err) => return Some(Err(err)),
                         };
                     if path_fingerprint == &current_path_fingerprint {
                         None
                     } else {
-                        Some(anyhow::Ok(FingerprintMismatch::InputContentChanged {
+                        Some(Ok(FingerprintMismatch::InputContentChanged {
                             path: input_relative_path.clone(),
                         }))
                     }

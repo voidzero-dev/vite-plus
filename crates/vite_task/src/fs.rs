@@ -3,9 +3,11 @@ use std::{
     fs::File,
     hash::Hasher as _,
     io::{self, Read},
+    path::PathBuf,
     sync::Arc,
 };
 
+use crate::error::Error;
 use crate::str::Str;
 use crate::{execute::PathRead, fingerprint::PathFingerprint};
 use dashmap::DashMap;
@@ -14,11 +16,8 @@ use std::io::BufRead;
 use crate::collections::HashMap;
 use crate::fingerprint::DirEntryKind;
 pub trait FileSystem: Sync {
-    fn fingerprint_path(
-        &self,
-        path: &Arc<OsStr>,
-        read: PathRead,
-    ) -> anyhow::Result<PathFingerprint>;
+    fn fingerprint_path(&self, path: &Arc<OsStr>, read: PathRead)
+    -> Result<PathFingerprint, Error>;
 }
 
 #[derive(Debug, Default)]
@@ -43,11 +42,8 @@ impl FileSystem for RealFileSystem {
         &self,
         path: &Arc<OsStr>,
         path_read: PathRead,
-    ) -> anyhow::Result<PathFingerprint> {
-        use nix::dir::Dir;
-        use std::str::from_utf8;
-
-        use nix::dir::Type;
+    ) -> Result<PathFingerprint, Error> {
+        use nix::dir::{Dir, Type};
 
         let file = match File::open(path.as_ref()) {
             Ok(file) => file,
@@ -55,7 +51,7 @@ impl FileSystem for RealFileSystem {
                 return if err.kind() == io::ErrorKind::NotFound {
                     Ok(PathFingerprint::NotFound)
                 } else {
-                    Err(err.into())
+                    Err(Error::IoWithPath { err, path: PathBuf::from(path.as_ref()) })
                 };
             }
         };
@@ -66,34 +62,34 @@ impl FileSystem for RealFileSystem {
                 return Err(io_err.into());
             };
             // Is a directory
-            let dir_entries = if path_read.read_dir_entries {
-                let mut dir_entries = HashMap::<Str, DirEntryKind>::new();
-                let dir = Dir::from_fd(reader.into_inner().into())?;
-                for entry in dir {
-                    use bstr::ByteSlice;
+            let dir_entries: Option<std::collections::HashMap<Str, DirEntryKind>> =
+                if path_read.read_dir_entries {
+                    let mut dir_entries = HashMap::<Str, DirEntryKind>::new();
+                    let dir = Dir::from_fd(reader.into_inner().into())?;
+                    for entry in dir {
+                        use bstr::ByteSlice;
 
-                    let entry = entry?;
+                        let entry = entry?;
 
-                    let entry_kind = match entry.file_type() {
-                        None => todo!("handle DT_UNKNOWN (see readdir(3))"),
-                        Some(Type::File) => DirEntryKind::File,
-                        Some(Type::Directory) => DirEntryKind::Dir,
-                        Some(Type::Symlink) => DirEntryKind::Symlink,
-                        Some(other_type) => anyhow::bail!(
-                            "couldn't fingerprint dir entry with special file type {:?}",
-                            other_type
-                        ),
-                    };
-                    let filename = entry.file_name().to_bytes();
-                    if matches!(filename, b"." | b".." | b".DS_Store") {
-                        continue;
+                        let entry_kind = match entry.file_type() {
+                            None => todo!("handle DT_UNKNOWN (see readdir(3))"),
+                            Some(Type::File) => DirEntryKind::File,
+                            Some(Type::Directory) => DirEntryKind::Dir,
+                            Some(Type::Symlink) => DirEntryKind::Symlink,
+                            Some(other_type) => {
+                                return Err(Error::UnsupportedFileType(other_type));
+                            }
+                        };
+                        let filename: &[u8] = entry.file_name().to_bytes();
+                        if matches!(filename, b"." | b".." | b".DS_Store") {
+                            continue;
+                        }
+                        dir_entries.insert(filename.to_str()?.into(), entry_kind);
                     }
-                    dir_entries.insert(filename.to_str()?.into(), entry_kind);
-                }
-                Some(dir_entries)
-            } else {
-                None
-            };
+                    Some(dir_entries)
+                } else {
+                    None
+                };
             return Ok(PathFingerprint::Folder(dir_entries));
         };
         Ok(PathFingerprint::FileContentHash(hash_content(reader)?))
@@ -111,7 +107,7 @@ impl<FS: FileSystem> FileSystem for CachedFileSystem<FS> {
         &self,
         path: &Arc<OsStr>,
         path_read: PathRead,
-    ) -> anyhow::Result<PathFingerprint> {
+    ) -> Result<PathFingerprint, Error> {
         self.underlying.fingerprint_path(path, path_read)
 
         // TODO: fingerprint memory cache

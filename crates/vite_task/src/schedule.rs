@@ -24,7 +24,7 @@ impl ExecutionPlan {
         // TODO: parallel
         let node_indices = match toposort(&task_graph, None) {
             Ok(ok) => ok,
-            Err(err) => anyhow::bail!("Circular depedency found in the task graph: {:?}", err),
+            Err(err) => anyhow::bail!("Circular dependency found in the task graph: {:?}", err),
         };
         let steps = node_indices.into_iter().map(|id| task_graph.remove_node(id).unwrap());
         Ok(Self { steps: steps.collect() })
@@ -41,7 +41,8 @@ impl ExecutionPlan {
                 &mut workspace.task_cache,
                 &workspace.fs,
                 &workspace.dir,
-            )?;
+            )
+            .await?;
             match cache_miss {
                 Some(CacheMiss::NotFound) => {
                     println!("Cache Not Found, executing task");
@@ -56,7 +57,6 @@ impl ExecutionPlan {
                 }
             }
             execute_or_replay.await?;
-            println!();
         }
         Ok(())
     }
@@ -64,25 +64,25 @@ impl ExecutionPlan {
 
 /// Replay the cached task if fingerprint matches. Otherwise execute the task.
 /// Returns (cache miss reason, function to replay or execute)
-fn get_cached_or_execute<'a>(
+async fn get_cached_or_execute<'a>(
     task: ResolvedTask,
     cache: &'a mut TaskCache,
     fs: &'a impl FileSystem,
     base_dir: &'a Path,
 ) -> anyhow::Result<(Option<CacheMiss>, BoxFuture<'a, anyhow::Result<()>>)> {
-    Ok(match cache.try_hit(&task, fs, base_dir)? {
+    Ok(match cache.try_hit(&task, fs, base_dir).await? {
         Ok(cache_task) => (
             None,
             ({
-                // replay
-                let std_outputs = Arc::clone(&cache_task.std_outputs);
                 async move {
+                    // replay
+                    let std_outputs = Arc::clone(&cache_task.std_outputs);
                     let mut stdout = tokio::io::stdout();
                     let mut stderr = tokio::io::stderr();
-                    for ouput_section in std_outputs.as_ref() {
-                        match ouput_section.kind {
-                            OutputKind::StdOut => stdout.write_all(&ouput_section.content).await?,
-                            OutputKind::StdErr => stderr.write_all(&ouput_section.content).await?,
+                    for output_section in std_outputs.as_ref() {
+                        match output_section.kind {
+                            OutputKind::StdOut => stdout.write_all(&output_section.content).await?,
+                            OutputKind::StdErr => stderr.write_all(&output_section.content).await?,
                         }
                     }
                     anyhow::Ok(())
@@ -97,7 +97,7 @@ fn get_cached_or_execute<'a>(
                 let task_name = task.id.clone();
                 let task_args = task.args.clone();
                 let cached_task = CachedTask::create(task, executed_task, fs, base_dir)?;
-                cache.update(task_name, task_args, cached_task)?;
+                cache.update(task_name, task_args, cached_task).await?;
                 anyhow::Ok(())
             }
             .boxed(),

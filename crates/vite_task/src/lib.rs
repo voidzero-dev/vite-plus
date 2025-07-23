@@ -2,6 +2,7 @@ mod cache;
 mod cmd;
 mod collections;
 mod config;
+mod error;
 mod execute;
 mod fingerprint;
 mod fs;
@@ -49,13 +50,16 @@ pub async fn main(cwd: PathBuf, args: Args) -> anyhow::Result<()> {
         let cache = workspace.cache();
         let mut task_cache_map = Vec::<CacheEntry>::new();
         if args.tasks.is_empty() {
-            cache.list_cache(|cache_key, cached_task| {
-                task_cache_map.push(CacheEntry { cache_key, cached_task: Some(cached_task) });
-                Ok(())
-            })?;
+            cache
+                .list_cache(|cache_key, cached_task| {
+                    task_cache_map.push(CacheEntry { cache_key, cached_task: Some(cached_task) });
+                    Ok(())
+                })
+                .await?;
         } else {
             for resolved_task in task_graph.node_weights() {
-                let cached_task = cache.get_cache(resolved_task.id.clone(), task_args.clone())?;
+                let cached_task =
+                    cache.get_cache(resolved_task.id.clone(), task_args.clone()).await?;
                 task_cache_map.push(CacheEntry {
                     cache_key: TaskCacheKey {
                         task_id: resolved_task.id.clone(),
@@ -71,7 +75,7 @@ pub async fn main(cwd: PathBuf, args: Args) -> anyhow::Result<()> {
         let plan = ExecutionPlan::plan(task_graph)?;
         plan.execute(&mut workspace).await?;
 
-        workspace.unload()?;
+        workspace.unload().await?;
     }
     Ok(())
 }

@@ -19,7 +19,8 @@ use wax::Glob;
 
 use crate::{
     collections::{HashMap, HashSet},
-    config::{ResolvedTask, ResolvedTaskConfig, TaskCommand, TaskConfig},
+    config::{ResolvedTask, ResolvedTaskConfig, TaskCommand},
+    error::Error,
     maybe_str::MaybeString,
     str::Str,
 };
@@ -58,7 +59,7 @@ async fn collect_std_outputs(
     outputs: &Mutex<Vec<StdOutput>>,
     mut stream: impl AsyncRead + Unpin,
     kind: OutputKind,
-) -> anyhow::Result<()> {
+) -> Result<(), Error> {
     let mut buf = [0u8; 8192];
     let mut parent_output_handle: Box<dyn AsyncWrite + Unpin + Send> = match kind {
         OutputKind::StdOut => Box::new(tokio::io::stdout()),
@@ -89,7 +90,7 @@ pub struct TaskEnvs {
 }
 
 impl TaskEnvs {
-    pub fn resolve(base_dir: &Path, task: &ResolvedTaskConfig) -> anyhow::Result<Self> {
+    pub fn resolve(base_dir: &Path, task: &ResolvedTaskConfig) -> Result<Self, Error> {
         // All envs that are passed to the task
         let mut all_envs: HashMap<Str, Arc<OsStr>> = std::env::vars_os()
             .filter_map(|(name, value)| {
@@ -115,11 +116,10 @@ impl TaskEnvs {
                 continue;
             };
             let Some(value) = value.to_str() else {
-                anyhow::bail!(
-                    "the value of environment variable '{}' is not valid unicode: {:?}",
-                    name,
-                    value
-                );
+                return Err(Error::EnvValueIsNotValidUnicode {
+                    key: name.to_string(),
+                    value: value.to_os_string(),
+                });
             };
             envs_without_pass_through.insert(name.clone(), value.into());
         }
@@ -139,7 +139,7 @@ impl TaskEnvs {
     }
 }
 
-pub async fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<ExecutedTask> {
+pub async fn execute_task(task: &ResolvedTask, base_dir: &Path) -> Result<ExecutedTask, Error> {
     let resolved_command = &task.resolved_command;
     let spy = Spy::global()?;
 
@@ -214,7 +214,7 @@ pub async fn execute_task(task: &ResolvedTask, base_dir: &Path) -> anyhow::Resul
                 },
             }
         }
-        anyhow::Ok((path_reads, path_writes))
+        Ok::<_, Error>((path_reads, path_writes))
     };
 
     let ((), (), (path_reads, path_writes), exit_status) = try_join4(

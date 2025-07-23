@@ -13,6 +13,7 @@ use crate::{
     cache::TaskCache,
     cmd::{TaskParsedCommand, try_parse_as_and_list},
     collections::{HashMap, HashSet},
+    error::Error,
     execute::TaskEnvs,
     fs::CachedFileSystem,
     str::Str,
@@ -242,7 +243,7 @@ impl TaskGraphBuilder {
 }
 
 impl Workspace {
-    pub fn load(dir: PathBuf) -> anyhow::Result<Self> {
+    pub fn load(dir: PathBuf) -> Result<Self, Error> {
         let package_graph = vite_package_manager::get_package_graph(&dir)?;
 
         let mut packages_with_task_jsons: Vec<(PackageInfo, Option<ViteTaskJson>)> = Vec::new();
@@ -276,8 +277,8 @@ impl Workspace {
         &self.task_cache
     }
 
-    pub fn unload(self) -> anyhow::Result<()> {
-        self.task_cache.save()?;
+    pub async fn unload(self) -> anyhow::Result<()> {
+        self.task_cache.save().await?;
         Ok(())
     }
 

@@ -15,7 +15,9 @@
     "node": ">=20.11.0"
   },
   "scripts": {
-    "build": "napi build --platform --release --esm"
+    "build": "pnpm run build:binding && pnpm run build:ts",
+    "build:binding": "napi build --package-json-path ../package.json --cwd binding --platform --release --esm",
+    "build:ts": "tsdown --outDir dist src/index.ts"
   },
   "files": [
     "bin",
@@ -23,7 +25,8 @@
     "index.d.ts"
   ],
   "dependencies": {
-    "multiplexer": "workspace:*"
+    "vite": "catalog:",
+    "vitest": "catalog:"
   },
   "devDependencies": {
     "@napi-rs/cli": "catalog:",

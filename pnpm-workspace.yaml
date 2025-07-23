@@ -6,8 +6,13 @@ packages:
   - packages/global/templates/monorepo/packages/*
 
 catalog:
-  "@napi-rs/cli": ^3.0.0
+  "@napi-rs/cli": ^3.0.3
   "@types/node": ^22.16.4
+  "@types/react": "^19.1.8"
+  "@types/react-dom": "^19.1.6"
+  next: "^15.4.3"
+  react: "^19.1.0"
+  "react-dom": "^19.1.0"
   rolldown: ^1.0.0-beta.27
   tsdown: ^0.12.9
   typescript: ^5.8.3

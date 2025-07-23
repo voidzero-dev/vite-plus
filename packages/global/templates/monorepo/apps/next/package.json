@@ -6,12 +6,12 @@
   },
   "dependencies": {
     "@repo/logger": "workspace:*",
-    "next": "^15.3.3",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "next": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "devDependencies": {
-    "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6"
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:"
   }
 }

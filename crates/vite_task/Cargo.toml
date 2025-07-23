@@ -32,6 +32,7 @@ rusqlite = { workspace = true, features = ["bundled"] }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { workspace = true }
 shell-escape = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "io-std", "macros"] }
 twox-hash = { workspace = true }
 vite_package_manager = { workspace = true }

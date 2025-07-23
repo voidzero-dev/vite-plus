@@ -1,12 +1,14 @@
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 // use bincode::config::{Configuration, standard};
 use bincode::{Decode, Encode, decode_from_slice, encode_to_vec};
 use rusqlite::{Connection, OptionalExtension as _};
 use serde::Serialize;
+use tokio::sync::Mutex;
 
 use crate::config::{ResolvedTask, TaskId};
+use crate::error::Error;
 use crate::execute::{ExecutedTask, StdOutput};
 use crate::fingerprint::{FingerprintMismatch, TaskFingerprint};
 use crate::fs::FileSystem;
@@ -49,7 +51,7 @@ pub enum CacheMiss {
 }
 
 impl TaskCache {
-    pub fn load_from_file(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+    pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self, Error> {
         let path = path.as_ref();
         let conn = Connection::open(path)?;
         conn.execute_batch("PRAGMA journal_mode=WAL")?;
@@ -64,25 +66,25 @@ impl TaskCache {
                 }
                 // Migration done here
                 1 => break,
-                2.. => anyhow::bail!("Unrecognized cache db version: {user_version}"),
+                2.. => return Err(Error::UnrecognizedDbVersion(user_version)),
             }
         }
         Ok(Self { conn: Mutex::new(conn) })
     }
-    pub fn save(self) -> anyhow::Result<()> {
-        let conn = self.conn.into_inner().unwrap();
+    pub async fn save(self) -> Result<(), Error> {
+        let conn = self.conn.lock().await;
         conn.execute("COMMIT", ())?;
         Ok(())
     }
 
-    pub fn update(
+    pub async fn update(
         &mut self,
         task_id: TaskId,
         args: Arc<[Str]>,
         cached_task: CachedTask,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         let key = TaskCacheKey { task_id, args };
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().await;
         let key_blob = encode_to_vec(&key, BINCODE_CONFIG)?;
         let value_blob = encode_to_vec(&cached_task, BINCODE_CONFIG)?;
         let mut update_stmt = conn.prepare_cached(
@@ -92,12 +94,12 @@ impl TaskCache {
         Ok(())
     }
 
-    pub fn get_cache(
+    pub async fn get_cache(
         &self,
         task_id: TaskId,
         args: Arc<[Str]>,
-    ) -> anyhow::Result<Option<CachedTask>> {
-        let conn = self.conn.lock().unwrap();
+    ) -> Result<Option<CachedTask>, Error> {
+        let conn = self.conn.lock().await;
         let mut select_stmt = conn.prepare_cached("SELECT value FROM tasks WHERE key=?")?;
         let key_blob = encode_to_vec(&TaskCacheKey { task_id, args }, BINCODE_CONFIG)?;
         let Some(value_blob) =
@@ -109,18 +111,18 @@ impl TaskCache {
         Ok(Some(cached_task))
     }
 
-    pub fn list_cache(
+    pub async fn list_cache(
         &self,
-        mut f: impl FnMut(TaskCacheKey, CachedTask) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
-        let conn = self.conn.lock().unwrap();
+        mut f: impl FnMut(TaskCacheKey, CachedTask) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        let conn = self.conn.lock().await;
         let mut select_stmt = conn.prepare_cached("SELECT key, value FROM tasks")?;
         let cache_list = select_stmt.query_and_then((), |row| {
             let key_blob: Vec<u8> = row.get(0)?;
             let value_blob: Vec<u8> = row.get(1)?;
             let (key, _) = decode_from_slice::<TaskCacheKey, _>(&key_blob, BINCODE_CONFIG)?;
             let (cached_task, _) = decode_from_slice::<CachedTask, _>(&value_blob, BINCODE_CONFIG)?;
-            anyhow::Ok((key, cached_task))
+            Ok::<_, Error>((key, cached_task))
         })?;
         for cache in cache_list {
             let (key, cached_task) = cache?;
@@ -130,13 +132,13 @@ impl TaskCache {
     }
 
     /// Tries to get the task cache if the fingerprint matches, otherwise returns why the cache misses
-    pub fn try_hit(
+    pub async fn try_hit(
         &self,
         task: &ResolvedTask,
         fs: &impl FileSystem,
         base_dir: &Path,
     ) -> anyhow::Result<Result<CachedTask, CacheMiss>> {
-        let Some(cached_task) = self.get_cache(task.id.clone(), task.args.clone())? else {
+        let Some(cached_task) = self.get_cache(task.id.clone(), task.args.clone()).await? else {
             return Ok(Err(CacheMiss::NotFound));
         };
         if let Some(fingerprint_mismatch) = cached_task.fingerprint.validate(task, fs, base_dir)? {

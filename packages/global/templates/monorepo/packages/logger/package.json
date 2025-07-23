@@ -12,9 +12,13 @@
       }
     }
   },
-  "scripts": {},
+  "scripts": {
+    "build": "tsdown --outDir dist src/index.ts"
+  },
   "devDependencies": {
     "@types/node": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "tsdown": "catalog:",
+    "vite-plus": "workspace:*"
   }
 }
