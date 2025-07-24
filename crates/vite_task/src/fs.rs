@@ -48,7 +48,13 @@ impl FileSystem for RealFileSystem {
         let file = match File::open(path.as_ref()) {
             Ok(file) => file,
             Err(err) => {
-                return if err.kind() == io::ErrorKind::NotFound {
+                return if matches!(
+                    err.kind(),
+                    io::ErrorKind::NotFound | 
+                    // A component used as a directory in path is not a directory,
+                    // e.g. "/foo.txt/bar" where "/foo.txt" is a file
+                    io::ErrorKind::NotADirectory
+                ) {
                     Ok(PathFingerprint::NotFound)
                 } else {
                     Err(Error::IoWithPath { err, path: PathBuf::from(path.as_ref()) })
