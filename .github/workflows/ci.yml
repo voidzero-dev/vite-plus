@@ -36,14 +36,24 @@ jobs:
       matrix:
         include:
           # - os: ubuntu-latest
+          #   target: x86_64-unknown-linux-gnu
           # - os: windows-latest
-          - os: blaze/macos-latest
+          #   target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: oxc-project/setup-rust@cd82e1efec7fef815e2c23d296756f31c7cdc03d # v1.0.0
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4305c38b25d97ef35a8ad1f985ccf2d2242004f2 # stable
+        env:
+          CARGO_INCREMENTAL: "1"
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        if: ${{ runner.os != 'Windows' }}
         with:
-          save-cache: ${{ github.ref_name == 'main' }}
+          save-if: ${{ github.ref_name == 'main' }}
+          shared-key: ${{ matrix.os }}-${{ matrix.target }}
       - run: rustup target add x86_64-unknown-linux-musl
         if: matrix.os == 'ubuntu-latest'
       - run: cargo check --all-targets --all-features
@@ -55,9 +65,12 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - uses: oxc-project/setup-rust@cd82e1efec7fef815e2c23d296756f31c7cdc03d # v1.0.0
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4305c38b25d97ef35a8ad1f985ccf2d2242004f2 # stable
+        env:
+          CARGO_INCREMENTAL: "1"
         with:
-          components: clippy rust-docs rustfmt
+          components: clippy,rust-docs,rustfmt
 
       - run: rustup target add x86_64-unknown-linux-musl
 
