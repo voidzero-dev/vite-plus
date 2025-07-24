@@ -8,6 +8,10 @@ publish = false
 readme = "README.md"
 rust-version.workspace = true
 
+[[bin]]
+name = "vt"
+path = "src/main.rs"
+
 [lints]
 workspace = true
 
