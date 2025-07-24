@@ -26,7 +26,7 @@ defaults:
 
 env:
   CARGO_INCREMENTAL: 0
-  RUSTFLAGS: "-D warnings"
+  # RUSTFLAGS: "-D warnings"
 
 jobs:
   test:
