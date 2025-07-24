@@ -2892,6 +2892,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "vite_error"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "bstr",
+ "compact_str 0.9.0",
+ "nix 0.30.1",
+ "petgraph",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "thiserror 2.0.12",
+ "wax",
+]
+
+[[package]]
 name = "vite_package_manager"
 version = "0.0.0"
 dependencies = [
@@ -2902,6 +2920,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yml",
+ "vite_error",
  "wax",
 ]
 
@@ -2933,6 +2952,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "twox-hash",
+ "vite_error",
  "vite_package_manager",
  "wax",
 ]

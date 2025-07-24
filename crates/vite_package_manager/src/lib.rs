@@ -8,6 +8,7 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
 };
+use vite_error::Error;
 use wax::Glob;
 
 pub use petgraph;
@@ -40,7 +41,7 @@ impl WorkspaceMemberGlobs {
     fn get_package_json_paths(
         self,
         workspace_root: impl AsRef<Path>,
-    ) -> anyhow::Result<impl IntoIterator<Item = PathBuf>> {
+    ) -> Result<impl IntoIterator<Item = PathBuf>, Error> {
         let workspace_root = workspace_root.as_ref();
         let mut package_json_paths = HashSet::<PathBuf>::default();
         // TODO: parallelize this
@@ -137,18 +138,17 @@ impl PackageGraphBuilder {
         &mut self,
         package_path: CompactString,
         package_json: PackageJson,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         let deps = package_json.get_workspace_dependencies().collect::<Vec<_>>();
         let package_name = package_json.name.clone();
         let id = self.graph.add_node(PackageInfo { package_json, path: package_path });
         if let Some((existing_id, _)) = self.id_and_deps_by_name.insert(package_name, (id, deps)) {
             let existing_package_info = &self.graph[existing_id];
-            anyhow::bail!(
-                "duplicate package name: {} at {} and {}",
-                &existing_package_info.package_json.name,
-                &existing_package_info.path,
-                &self.graph[id].path
-            );
+            return Err(Error::DuplicatedPackageName {
+                name: existing_package_info.package_json.name.to_string(),
+                path1: existing_package_info.path.clone(),
+                path2: self.graph[id].path.clone(),
+            });
         }
         Ok(())
     }
@@ -164,7 +164,7 @@ impl PackageGraphBuilder {
 }
 pub fn get_package_graph(
     workspace_root: impl AsRef<Path>,
-) -> anyhow::Result<Graph<PackageInfo, DependencyType>> {
+) -> Result<Graph<PackageInfo, DependencyType>, Error> {
     let workspace_root = workspace_root.as_ref();
     let workspace_yaml_path = workspace_root.join("pnpm-workspace.yaml");
     let workspace_yaml = fs::read_to_string(workspace_yaml_path)?;

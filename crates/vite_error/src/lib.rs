@@ -1,6 +1,7 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
+use compact_str::CompactString;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -41,8 +42,23 @@ pub enum Error {
     #[error(transparent)]
     Utf8Error(#[from] bstr::Utf8Error),
 
-    #[error("Task not found: {0}")]
-    TaskNotFound(String),
+    #[error(transparent)]
+    WaxBuildError(#[from] wax::BuildError),
+
+    #[error(transparent)]
+    WaxWalkError(#[from] wax::WalkError),
+
+    #[error("Duplicated task name: {0}")]
+    DuplicatedTask(String),
+
+    #[error("Duplicated package name: {name} at {path1} and {path2}")]
+    DuplicatedPackageName { name: String, path1: CompactString, path2: CompactString },
+
+    #[error("Circular dependency found : {0:?}")]
+    CycleDependenciesError(petgraph::algo::Cycle<petgraph::graph::NodeIndex>),
+
+    #[error(transparent)]
+    SerdeYmlError(#[from] serde_yml::Error),
 
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),

@@ -18,9 +18,9 @@ use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _};
 use wax::Glob;
 
 use crate::{
+    Error,
     collections::{HashMap, HashSet},
     config::{ResolvedTask, ResolvedTaskConfig, TaskCommand},
-    error::Error,
     maybe_str::MaybeString,
     str::Str,
 };
@@ -232,7 +232,7 @@ pub async fn execute_task(task: &ResolvedTask, base_dir: &Path) -> Result<Execut
     Ok(ExecutedTask { std_outputs: outputs.into(), exit_status, path_reads, path_writes })
 }
 
-fn gather_inputs(task: &ResolvedTask, base_dir: &Path) -> anyhow::Result<HashSet<Arc<OsStr>>> {
+fn gather_inputs(task: &ResolvedTask, base_dir: &Path) -> Result<HashSet<Arc<OsStr>>, Error> {
     // Task inferring to be implemented here
     let inputs = &task.resolved_config.config.inputs;
     if inputs.is_empty() {

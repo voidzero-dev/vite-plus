@@ -6,6 +6,7 @@ use petgraph::{algo::toposort, stable_graph::StableDiGraph};
 use tokio::io::AsyncWriteExt as _;
 
 use crate::{
+    Error,
     cache::{CacheMiss, CachedTask, TaskCache},
     config::{ResolvedTask, Workspace},
     execute::{OutputKind, execute_task},
@@ -20,11 +21,11 @@ pub struct ExecutionPlan {
 }
 
 impl ExecutionPlan {
-    pub fn plan(mut task_graph: StableDiGraph<ResolvedTask, ()>) -> anyhow::Result<Self> {
+    pub fn plan(mut task_graph: StableDiGraph<ResolvedTask, ()>) -> Result<Self, Error> {
         // TODO: parallel
         let node_indices = match toposort(&task_graph, None) {
             Ok(ok) => ok,
-            Err(err) => anyhow::bail!("Circular dependency found in the task graph: {:?}", err),
+            Err(err) => return Err(Error::CycleDependenciesError(err)),
         };
         let steps = node_indices.into_iter().map(|id| task_graph.remove_node(id).unwrap());
         Ok(Self { steps: steps.collect() })
@@ -69,7 +70,7 @@ async fn get_cached_or_execute<'a>(
     cache: &'a mut TaskCache,
     fs: &'a impl FileSystem,
     base_dir: &'a Path,
-) -> anyhow::Result<(Option<CacheMiss>, BoxFuture<'a, anyhow::Result<()>>)> {
+) -> Result<(Option<CacheMiss>, BoxFuture<'a, Result<(), Error>>), Error> {
     Ok(match cache.try_hit(&task, fs, base_dir).await? {
         Ok(cache_task) => (
             None,
@@ -85,7 +86,7 @@ async fn get_cached_or_execute<'a>(
                             OutputKind::StdErr => stderr.write_all(&output_section.content).await?,
                         }
                     }
-                    anyhow::Ok(())
+                    Ok(())
                 }
                 .boxed()
             }),
@@ -98,7 +99,7 @@ async fn get_cached_or_execute<'a>(
                 let task_args = task.args.clone();
                 let cached_task = CachedTask::create(task, executed_task, fs, base_dir)?;
                 cache.update(task_name, task_args, cached_task).await?;
-                anyhow::Ok(())
+                Ok(())
             }
             .boxed(),
         ),

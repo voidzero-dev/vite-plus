@@ -10,10 +10,10 @@ use std::{
 };
 
 use crate::{
+    Error,
     cache::TaskCache,
     cmd::{TaskParsedCommand, try_parse_as_and_list},
     collections::{HashMap, HashSet},
-    error::Error,
     execute::TaskEnvs,
     fs::CachedFileSystem,
     str::Str,
@@ -51,7 +51,7 @@ impl From<TaskCommand> for TaskConfig {
         TaskConfig {
             command,
             cwd: "".into(),
-            cachable: true,
+            cacheable: true,
             inputs: Default::default(),
             envs: Default::default(),
             pass_through_envs: Default::default(),
@@ -66,7 +66,7 @@ pub struct TaskConfig {
     pub(crate) command: TaskCommand,
     #[serde(default)]
     pub(crate) cwd: Str,
-    pub(crate) cachable: bool,
+    pub(crate) cacheable: bool,
 
     #[serde(default)]
     pub(crate) inputs: HashSet<Str>,
@@ -120,7 +120,7 @@ impl ResolvedTaskConfig {
         &self,
         base_dir: &Path,
         task_args: &[Str],
-    ) -> anyhow::Result<ResolvedTaskCommand> {
+    ) -> Result<ResolvedTaskCommand, Error> {
         let cwd = RelativePath::new(&self.config_dir).join(self.config.cwd.as_str());
         let command = if task_args.is_empty() {
             self.config.command.clone()
@@ -194,19 +194,19 @@ impl TaskGraphBuilder {
         &mut self,
         resolved_task: ResolvedTask,
         dep_ids: Vec<TaskId>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         if let Some((old_task, _)) = self
             .resolved_tasks_and_dep_ids_by_id
             .insert(resolved_task.id.clone(), (resolved_task, dep_ids))
         {
-            anyhow::bail!("Duplicated task name '{}'", &old_task.id.name)
+            return Err(Error::DuplicatedTask(old_task.id.name.to_string()));
         }
         Ok(())
     }
     fn build_starting_with(
         mut self,
         starting_ids: impl Iterator<Item = TaskId>,
-    ) -> anyhow::Result<StableDiGraph<ResolvedTask, ()>> {
+    ) -> Result<StableDiGraph<ResolvedTask, ()>, Error> {
         let mut remaining_task_ids: BTreeSet<TaskId> = starting_ids.collect();
 
         let mut task_graph = StableDiGraph::<ResolvedTask, ()>::new();
@@ -221,7 +221,7 @@ impl TaskGraphBuilder {
 
             let node_index = task_graph.add_node(resolved_task);
             if node_indices_by_task_ids.insert(task_id.clone(), node_index).is_some() {
-                anyhow::bail!("Duplicated task name '{}'", &task_id.name);
+                return Err(Error::DuplicatedTask(task_id.name.to_string()));
             }
 
             for dep in deps {
@@ -277,7 +277,7 @@ impl Workspace {
         &self.task_cache
     }
 
-    pub async fn unload(self) -> anyhow::Result<()> {
+    pub async fn unload(self) -> Result<(), Error> {
         self.task_cache.save().await?;
         Ok(())
     }
@@ -288,7 +288,7 @@ impl Workspace {
         package_info: &PackageInfo,
         id: TaskId,
         task_args: Arc<[Str]>,
-    ) -> anyhow::Result<ResolvedTask> {
+    ) -> Result<ResolvedTask, Error> {
         let resolved_config = ResolvedTaskConfig {
             config_dir: package_info.path.as_str().into(),
             config: user_task_config.into(),
@@ -302,7 +302,7 @@ impl Workspace {
         &self,
         task_names: &[Str],
         task_args: Arc<[Str]>,
-    ) -> anyhow::Result<StableDiGraph<ResolvedTask, ()>> {
+    ) -> Result<StableDiGraph<ResolvedTask, ()>, Error> {
         let mut task_graph_builder = TaskGraphBuilder::default();
 
         for (package_info, task_json) in &self.packages_with_task_jsons {

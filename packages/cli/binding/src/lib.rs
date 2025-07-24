@@ -10,7 +10,9 @@ use vite_task::Args;
 pub async fn run(cwd: Option<String>) -> Result<()> {
     let args = Args::parse_from(std::env::args_os().skip(1));
     let cwd = if let Some(cwd) = cwd { PathBuf::from(cwd) } else { current_dir()? };
-    vite_task::main(cwd, args).await?;
+    vite_task::main(cwd, args)
+        .await
+        .map_err(|err| napi::Error::new(Status::GenericFailure, err.to_string()))?;
 
     Ok(())
 }

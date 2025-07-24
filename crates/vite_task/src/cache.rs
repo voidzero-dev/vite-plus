@@ -7,8 +7,8 @@ use rusqlite::{Connection, OptionalExtension as _};
 use serde::Serialize;
 use tokio::sync::Mutex;
 
+use crate::Error;
 use crate::config::{ResolvedTask, TaskId};
-use crate::error::Error;
 use crate::execute::{ExecutedTask, StdOutput};
 use crate::fingerprint::{FingerprintMismatch, TaskFingerprint};
 use crate::fs::FileSystem;
@@ -26,7 +26,7 @@ impl CachedTask {
         executed_task: ExecutedTask,
         fs: &impl FileSystem,
         base_dir: &Path,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, Error> {
         let fingerprint = TaskFingerprint::create(task, &executed_task, fs, base_dir)?;
         Ok(Self { fingerprint, std_outputs: executed_task.std_outputs })
     }
@@ -137,7 +137,7 @@ impl TaskCache {
         task: &ResolvedTask,
         fs: &impl FileSystem,
         base_dir: &Path,
-    ) -> anyhow::Result<Result<CachedTask, CacheMiss>> {
+    ) -> Result<Result<CachedTask, CacheMiss>, Error> {
         let Some(cached_task) = self.get_cache(task.id.clone(), task.args.clone()).await? else {
             return Ok(Err(CacheMiss::NotFound));
         };

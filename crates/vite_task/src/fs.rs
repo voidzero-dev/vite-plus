@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::error::Error;
+use crate::Error;
 use crate::str::Str;
 use crate::{execute::PathRead, fingerprint::PathFingerprint};
 use dashmap::DashMap;

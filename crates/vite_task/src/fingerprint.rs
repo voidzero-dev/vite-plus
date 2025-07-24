@@ -1,12 +1,12 @@
 use std::{ffi::OsStr, fmt::Display, path::Path, sync::Arc};
 
 use crate::{
+    Error,
     collections::HashMap,
     config::{
         CommandFingerprint, CommandFingerprintDiff, ResolvedTask, ResolvedTaskConfig,
         ResolvedTaskConfigDiff,
     },
-    error::Error,
     execute::{ExecutedTask, PathRead},
     fs::FileSystem,
     str::Str,
@@ -114,7 +114,7 @@ impl TaskFingerprint {
         executed_task: &ExecutedTask,
         fs: &impl FileSystem,
         base_dir: &Path,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, Error> {
         let inputs = executed_task
             .path_reads
             .par_iter()
@@ -124,10 +124,10 @@ impl TaskFingerprint {
                         &base_dir.join(path).into_os_string().into(),
                         *path_read,
                     )?;
-                    anyhow::Ok((path.clone(), path_fingerprint))
+                    Ok((path.clone(), path_fingerprint))
                 })())
             })
-            .collect::<anyhow::Result<HashMap<Str, PathFingerprint>>>()?;
+            .collect::<Result<HashMap<Str, PathFingerprint>, Error>>()?;
         Ok(Self {
             resolved_config: task.resolved_config,
             command_fingerprint: task.resolved_command.fingerprint,

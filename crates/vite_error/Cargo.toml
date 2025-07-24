@@ -1,5 +1,5 @@
 [package]
-name = "vite_package_manager"
+name = "vite_error"
 version = "0.0.0"
 authors.workspace = true
 edition.workspace = true
@@ -9,14 +9,14 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+bincode = { workspace = true }
+bstr = { workspace = true }
 compact_str = { workspace = true, features = ["serde"] }
-petgraph = { workspace = true, features = ["serde-1"] }
-rustc-hash = { workspace = true }
+nix = { workspace = true }
+petgraph = { workspace = true }
+rusqlite = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yml = { workspace = true }
-vite_error = { workspace = true }
+thiserror = { workspace = true }
 wax = { workspace = true }
-
-[lints]
-workspace = true

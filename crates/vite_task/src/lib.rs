@@ -2,7 +2,6 @@ mod cache;
 mod cmd;
 mod collections;
 mod config;
-mod error;
 mod execute;
 mod fingerprint;
 mod fs;
@@ -21,6 +20,8 @@ use crate::str::Str;
 
 use crate::{config::Workspace, schedule::ExecutionPlan};
 
+pub(crate) use vite_error::Error;
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 pub struct Args {
@@ -37,7 +38,7 @@ pub struct Args {
     pub debug: bool,
 }
 
-pub async fn main(cwd: PathBuf, args: Args) -> anyhow::Result<()> {
+pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
     let mut workspace = Workspace::load(cwd)?;
     let task_args = Arc::<[Str]>::from(args.task_args);
     let task_graph = workspace.resolve_tasks(&args.tasks, task_args.clone())?;
