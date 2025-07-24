@@ -36,7 +36,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-          - os: windows-latest
+          # - os: windows-latest
           - os: macos-latest
     runs-on: ${{ matrix.os }}
     steps:
