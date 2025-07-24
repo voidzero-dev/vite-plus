@@ -8,7 +8,7 @@ use bstr::BStr;
 use serde::Serialize;
 
 /// Similar to `bstr::BString`, but also implements `bincode::{Encode`, Decode},
-/// and serializes losslessly to utf8 for outputing debug json
+/// and serializes losslessly to utf8 for outputting debug json
 
 #[derive(Encode, Decode)]
 pub struct MaybeString(Vec<u8>);

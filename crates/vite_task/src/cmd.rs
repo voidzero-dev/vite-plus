@@ -127,7 +127,7 @@ mod tests {
     #[test]
     fn test_parse_command() {
         assert_eq!(
-            try_parse_as_and_list(r#"hello world && FOO="BA\"R" program "arg1" "arg\"2" && zzz"#),
+            try_parse_as_and_list(r#"hello world && FOO="BE\"R" program "arg1" "arg\"2" && zzz"#),
             Some(vec![
                 TaskParsedCommand {
                     envs: [].into(),
@@ -135,7 +135,7 @@ mod tests {
                     args: vec!["world".into()],
                 },
                 TaskParsedCommand {
-                    envs: [("FOO".into(), "BA\"R".into())].into(),
+                    envs: [("FOO".into(), "BE\"R".into())].into(),
                     program: "program".into(),
                     args: vec!["arg1".into(), "arg\"2".into()],
                 },
