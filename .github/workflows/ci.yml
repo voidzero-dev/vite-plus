@@ -1,6 +1,8 @@
 name: CI
 
-permissions: {}
+permissions:
+  # Doing it explicitly because the default permission only includes metadata: read.
+  contents: read
 
 on:
   workflow_dispatch:
