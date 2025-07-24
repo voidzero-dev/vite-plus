@@ -50,7 +50,7 @@ impl FileSystem for RealFileSystem {
             Err(err) => {
                 return if matches!(
                     err.kind(),
-                    io::ErrorKind::NotFound | 
+                    io::ErrorKind::NotFound |
                     // A component used as a directory in path is not a directory,
                     // e.g. "/foo.txt/bar" where "/foo.txt" is a file
                     io::ErrorKind::NotADirectory
