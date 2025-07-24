@@ -37,7 +37,7 @@ jobs:
         include:
           # - os: ubuntu-latest
           # - os: windows-latest
-          - os: macos-latest
+          - os: blaze/macos-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -51,7 +51,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: macos-latest
+    runs-on: blaze/macos-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
