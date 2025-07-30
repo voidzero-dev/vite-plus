@@ -1,11 +1,11 @@
 {
   "name": "@vite-plus/global",
-  "private": true,
   "version": "0.0.0",
   "type": "module",
   "bin": {
-    "vite": "./bin/vite",
-    "vite-dev": "./bin/vite-dev"
+    "vite-plus": "./bin/vp",
+    "vp": "./bin/vp",
+    "vite-plus-dev": "./bin/vp-dev"
   },
   "files": [
     "bin",
@@ -21,9 +21,5 @@
   },
   "engines": {
     "node": ">=20.11.0"
-  },
-  "dependencies": {
-    "@clack/core": "^0.5.0",
-    "@clack/prompts": "^0.11.0"
   }
 }
