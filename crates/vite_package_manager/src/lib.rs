@@ -79,7 +79,7 @@ pub enum DependencyType {
     Peer,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageJson {
     #[serde(default)]
@@ -92,6 +92,24 @@ pub struct PackageJson {
     pub dev_dependencies: HashMap<CompactString, CompactString>,
     #[serde(default)]
     pub peer_dependencies: HashMap<CompactString, CompactString>,
+}
+
+impl std::fmt::Debug for PackageJson {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if std::env::var("VITE_DEBUG_VERBOSE").map(|v| v != "0" && v != "false").unwrap_or(false) {
+            write!(
+                f,
+                "PackageJson {{ name: {:?}, scripts: {:?}, dependencies: {:?}, dev_dependencies: {:?}, peer_dependencies: {:?} }}",
+                self.name,
+                self.scripts,
+                self.dependencies,
+                self.dev_dependencies,
+                self.peer_dependencies
+            )
+        } else {
+            write!(f, "PackageJson {{ name: {:?}, scripts: {:?} }}", self.name, self.scripts)
+        }
+    }
 }
 
 impl PackageJson {
@@ -162,6 +180,7 @@ impl PackageGraphBuilder {
         self.graph
     }
 }
+
 pub fn get_package_graph(
     workspace_root: impl AsRef<Path>,
 ) -> Result<Graph<PackageInfo, DependencyType>, Error> {

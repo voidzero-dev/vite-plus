@@ -21,7 +21,11 @@ pub struct ExecutionPlan {
 }
 
 impl ExecutionPlan {
-    pub fn plan(mut task_graph: StableDiGraph<ResolvedTask, ()>) -> Result<Self, Error> {
+    #[tracing::instrument(skip(task_graph))]
+    pub fn plan(
+        mut task_graph: StableDiGraph<ResolvedTask, ()>,
+        parallel_run: bool,
+    ) -> Result<Self, Error> {
         // TODO: parallel
         let node_indices = match toposort(&task_graph, None) {
             Ok(ok) => ok,
@@ -31,9 +35,10 @@ impl ExecutionPlan {
         Ok(Self { steps: steps.collect() })
     }
 
+    #[tracing::instrument(skip(self, workspace))]
     pub async fn execute(self, workspace: &mut Workspace) -> anyhow::Result<()> {
         for step in self.steps {
-            println!("------- {} -------", &step.id);
+            tracing::debug!("Executing task {}", &step.id);
 
             let command = step.resolved_command.fingerprint.command.clone();
 

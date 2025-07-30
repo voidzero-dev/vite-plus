@@ -6,6 +6,11 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use vite_task::Args;
 
+#[napi_derive::module_init]
+pub fn init() {
+    vite_task::init_tracing();
+}
+
 #[napi]
 pub async fn run(cwd: Option<String>) -> Result<()> {
     let args = Args::parse_from(std::env::args_os().skip(1));

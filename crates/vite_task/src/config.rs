@@ -26,7 +26,7 @@ use itertools::Itertools;
 use petgraph::{graph::NodeIndex, stable_graph::StableDiGraph};
 use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
-use vite_package_manager::PackageInfo;
+use vite_package_manager::{PackageInfo, PackageJson};
 
 #[derive(Encode, Decode, Serialize, Deserialize, Debug, PartialEq, Eq, Diff, Clone)]
 #[diff(attr(#[derive(Debug)]))]
@@ -92,13 +92,6 @@ pub struct ViteTaskJson {
     tasks: HashMap<Str, TaskConfigWithDeps>,
 }
 
-pub struct Workspace {
-    packages_with_task_jsons: Vec<(PackageInfo, Option<ViteTaskJson>)>,
-    pub(crate) dir: PathBuf,
-    pub(crate) task_cache: TaskCache,
-    pub(crate) fs: CachedFileSystem,
-}
-
 /// A resolved task, ready to hit the cache or be executed
 #[derive(Debug)]
 pub struct ResolvedTask {
@@ -155,10 +148,23 @@ impl ResolvedTaskConfig {
     }
 }
 
-#[derive(Debug)]
 pub struct ResolvedTaskCommand {
     pub fingerprint: CommandFingerprint,
     pub all_envs: HashMap<Str, Arc<OsStr>>,
+}
+
+impl std::fmt::Debug for ResolvedTaskCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if std::env::var("VITE_DEBUG_VERBOSE").map(|v| v != "0" && v != "false").unwrap_or(false) {
+            write!(
+                f,
+                "ResolvedTaskCommand {{ fingerprint: {:?}, all_envs: {:?} }}",
+                self.fingerprint, self.all_envs
+            )
+        } else {
+            write!(f, "ResolvedTaskCommand {{ fingerprint: {:?} }}", self.fingerprint)
+        }
+    }
 }
 
 #[derive(Encode, Decode, Debug, Serialize, PartialEq, Eq, Diff)]
@@ -185,7 +191,7 @@ impl Display for TaskId {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct TaskGraphBuilder {
     resolved_tasks_and_dep_ids_by_id: HashMap<TaskId, (ResolvedTask, Vec<TaskId>)>,
 }
@@ -203,15 +209,36 @@ impl TaskGraphBuilder {
         }
         Ok(())
     }
+
+    #[tracing::instrument(skip(self, starting_ids))]
     fn build_starting_with(
         mut self,
-        starting_ids: impl Iterator<Item = TaskId>,
+        starting_ids: impl Iterator<Item = TaskId> + std::fmt::Debug,
+        recursive_run: bool,
     ) -> Result<StableDiGraph<ResolvedTask, ()>, Error> {
-        let mut remaining_task_ids: BTreeSet<TaskId> = starting_ids.collect();
-
         let mut task_graph = StableDiGraph::<ResolvedTask, ()>::new();
         let mut node_indices_by_task_ids = HashMap::<TaskId, NodeIndex>::new();
         let mut edges = Vec::<(TaskId, TaskId)>::new();
+
+        let mut remaining_task_ids: BTreeSet<TaskId>;
+
+        if recursive_run {
+            remaining_task_ids = BTreeSet::new();
+            for task_id in starting_ids {
+                for (resolved_task_id, _) in self.resolved_tasks_and_dep_ids_by_id.iter() {
+                    if resolved_task_id.name.ends_with(&format!("#{}", task_id.name)) {
+                        remaining_task_ids.insert(resolved_task_id.clone());
+                    }
+                }
+            }
+        } else {
+            remaining_task_ids = starting_ids.collect();
+        }
+
+        tracing::debug!(
+            "remaining_task_ids: {:?}",
+            remaining_task_ids.iter().map(|id| id.name.as_str()).join(", ")
+        );
 
         while let Some(task_id) = remaining_task_ids.pop_first() {
             let (resolved_task, deps) = self
@@ -242,13 +269,28 @@ impl TaskGraphBuilder {
     }
 }
 
+#[derive(Debug)]
+pub struct Workspace {
+    packages_with_task_jsons: Vec<(PackageInfo, Option<ViteTaskJson>)>,
+    pub(crate) dir: PathBuf,
+    pub(crate) task_cache: TaskCache,
+    pub(crate) fs: CachedFileSystem,
+    pub(crate) package_json: PackageJson,
+}
+
 impl Workspace {
+    #[tracing::instrument]
     pub fn load(dir: PathBuf) -> Result<Self, Error> {
         let package_graph = vite_package_manager::get_package_graph(&dir)?;
 
         let mut packages_with_task_jsons: Vec<(PackageInfo, Option<ViteTaskJson>)> = Vec::new();
+        let mut package_json = None;
         for node in package_graph.into_nodes_edges().0 {
             let package = node.weight;
+            // Root
+            if package.path == "" {
+                package_json = Some(package.package_json.clone());
+            }
             let vite_task_json_path = dir.join(Path::new(&package.path)).join("vite-task.json");
             let vite_task_json: Option<ViteTaskJson> = match File::open(vite_task_json_path) {
                 Ok(vite_task_json_file) => {
@@ -266,11 +308,19 @@ impl Workspace {
 
         let cache_path = dir.join("node_modules/.vite/task-cache.db");
         if !cache_path.exists() {
-            std::fs::create_dir_all(dir.join("node_modules/.vite"))?;
+            let cache_dir = dir.join("node_modules/.vite");
+            tracing::info!("Creating task cache directory at {}", cache_dir.display());
+            std::fs::create_dir_all(cache_dir)?;
         }
         let task_cache = TaskCache::load_from_file(&cache_path)?;
 
-        Ok(Self { packages_with_task_jsons, dir, task_cache, fs: CachedFileSystem::default() })
+        Ok(Self {
+            packages_with_task_jsons,
+            dir,
+            task_cache,
+            fs: CachedFileSystem::default(),
+            package_json: package_json.unwrap_or_default(),
+        })
     }
 
     pub const fn cache(&self) -> &TaskCache {
@@ -278,6 +328,7 @@ impl Workspace {
     }
 
     pub async fn unload(self) -> Result<(), Error> {
+        tracing::debug!("Saving task cache {}", self.dir.display());
         self.task_cache.save().await?;
         Ok(())
     }
@@ -298,20 +349,24 @@ impl Workspace {
         Ok(ResolvedTask { id, args: task_args, resolved_command, resolved_config })
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn resolve_tasks(
         &self,
         task_names: &[Str],
         task_args: Arc<[Str]>,
+        recursive_run: bool,
     ) -> Result<StableDiGraph<ResolvedTask, ()>, Error> {
+        if recursive_run {
+            for task in task_names {
+                if task.contains("#") {
+                    return Err(Error::RecursiveRunWithScope(task.to_string()));
+                }
+            }
+        }
         let mut task_graph_builder = TaskGraphBuilder::default();
 
         for (package_info, task_json) in &self.packages_with_task_jsons {
-            let task_prefix = if package_info.path.is_empty() {
-                // do not prefix tasks in root package
-                "".to_owned()
-            } else {
-                format!("{}#", &package_info.package_json.name)
-            };
+            let task_prefix = format!("{}#", &package_info.package_json.name);
             if let Some(task_json) = task_json {
                 for (task_name, task_config_json) in &task_json.tasks {
                     let id = TaskId {
@@ -335,7 +390,7 @@ impl Workspace {
                 }
             }
             for (script_name, script) in package_info.package_json.scripts.iter() {
-                let name: Str = format!("{}{}", &task_prefix, script_name).into();
+                let name: Str = format!("{task_prefix}{script_name}").into();
 
                 if let Some(and_list) = try_parse_as_and_list(&script) {
                     let and_list_len = and_list.len();
@@ -373,6 +428,7 @@ impl Workspace {
 
         task_graph_builder.build_starting_with(
             task_names.iter().cloned().map(|name| TaskId { name, subcommand_index: None }),
+            recursive_run,
         )
     }
 }

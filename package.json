@@ -6,7 +6,6 @@
     "node": "22.17.0"
   },
   "scripts": {
-    "build": "pnpm -r run build",
     "lint": "oxlint",
     "typecheck": "tsc -b tsconfig.json",
     "prepare": "husky"

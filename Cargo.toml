@@ -34,6 +34,7 @@ cargo_common_metadata = "allow"
 [workspace.dependencies]
 anyhow = "1.0.98"
 bincode = "2.0.1"
+brush-parser = "0.2.18"
 bstr = "1.12.0"
 clap = "4.5.40"
 color-eyre = "0.6.5"

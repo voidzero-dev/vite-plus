@@ -1,12 +1,14 @@
 use std::env::current_dir;
 
 use clap::Parser as _;
-use vite_task::Args;
+use vite_task::{Args, init_tracing};
 
 use vite_error::Error;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    init_tracing();
+
     let args = Args::parse();
     vite_task::main(current_dir()?, args).await
 }

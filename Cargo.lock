@@ -2951,6 +2951,8 @@ dependencies = [
  "shell-escape",
  "thiserror 2.0.12",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "twox-hash",
  "vite_error",
  "vite_package_manager",

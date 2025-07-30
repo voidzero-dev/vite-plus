@@ -108,4 +108,4 @@ jobs:
         run: cargo build --bin vt
 
       - name: Run self
-        run: ./target/debug/vt vite-plus#build
+        run: ./target/debug/vt run -r build

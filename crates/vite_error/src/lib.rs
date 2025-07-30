@@ -57,6 +57,12 @@ pub enum Error {
     #[error("Circular dependency found : {0:?}")]
     CycleDependenciesError(petgraph::algo::Cycle<petgraph::graph::NodeIndex>),
 
+    #[error("The package.json name is empty at {0:?}/package.json")]
+    EmptyPackageName(PathBuf),
+
+    #[error("Recursive run is not allowed when task name contains '#': {0}")]
+    RecursiveRunWithScope(String),
+
     #[error(transparent)]
     SerdeYmlError(#[from] serde_yml::Error),
 

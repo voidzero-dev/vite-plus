@@ -32,6 +32,7 @@ impl CachedTask {
     }
 }
 
+#[derive(Debug)]
 pub struct TaskCache {
     conn: Mutex<Connection>,
 }
@@ -71,6 +72,8 @@ impl TaskCache {
         }
         Ok(Self { conn: Mutex::new(conn) })
     }
+
+    #[tracing::instrument]
     pub async fn save(self) -> Result<(), Error> {
         let conn = self.conn.lock().await;
         conn.execute("COMMIT", ())?;
