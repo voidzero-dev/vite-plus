@@ -23,7 +23,7 @@ use anyhow::Context;
 use bincode::{Decode, Encode};
 use diff::Diff;
 use itertools::Itertools;
-use petgraph::{graph::NodeIndex, stable_graph::StableDiGraph};
+use petgraph::{algo::toposort, graph::NodeIndex, stable_graph::StableDiGraph};
 use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
 use vite_package_manager::{PackageInfo, PackageJson};
@@ -226,7 +226,9 @@ impl TaskGraphBuilder {
             remaining_task_ids = BTreeSet::new();
             for task_id in starting_ids {
                 for (resolved_task_id, _) in self.resolved_tasks_and_dep_ids_by_id.iter() {
-                    if resolved_task_id.name.ends_with(&format!("#{}", task_id.name)) {
+                    if resolved_task_id.subcommand_index.is_none()
+                        && resolved_task_id.name.ends_with(&format!("#{}", task_id.name))
+                    {
                         remaining_task_ids.insert(resolved_task_id.clone());
                     }
                 }
@@ -284,9 +286,13 @@ impl Workspace {
         let package_graph = vite_package_manager::get_package_graph(&dir)?;
 
         let mut packages_with_task_jsons: Vec<(PackageInfo, Option<ViteTaskJson>)> = Vec::new();
+        let packages_topologically_sorted = match toposort(&package_graph, None) {
+            Ok(ok) => ok,
+            Err(err) => return Err(Error::CycleDependenciesError(err)),
+        };
         let mut package_json = None;
-        for node in package_graph.into_nodes_edges().0 {
-            let package = node.weight;
+        for node in packages_topologically_sorted {
+            let package = package_graph.node_weight(node).unwrap();
             // Root
             if package.path == "" {
                 package_json = Some(package.package_json.clone());
@@ -303,7 +309,7 @@ impl Workspace {
                     None
                 }
             };
-            packages_with_task_jsons.push((package, vite_task_json));
+            packages_with_task_jsons.push((package.clone(), vite_task_json));
         }
 
         let cache_path = dir.join("node_modules/.vite/task-cache.db");

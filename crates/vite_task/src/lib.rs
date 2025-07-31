@@ -52,6 +52,8 @@ pub enum Commands {
         sequential: bool,
         #[clap(short, long)]
         parallel: bool,
+        #[clap(short, long)]
+        topological: Option<bool>,
     },
 }
 
@@ -61,10 +63,16 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
     let task_args = Arc::<[Str]>::from(args.task_args);
     let mut recursive_run = false;
     let mut parallel_run = false;
+    let mut topological_run = false;
     let tasks = match &args.commands {
-        Some(Commands::Run { tasks, recursive, parallel, .. }) => {
+        Some(Commands::Run { tasks, recursive, parallel, topological, .. }) => {
             recursive_run = *recursive;
             parallel_run = *parallel;
+            if recursive_run {
+                topological_run = topological.unwrap_or(true);
+            } else {
+                topological_run = topological.unwrap_or(false);
+            }
             tasks
         }
         None => {
@@ -112,7 +120,7 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
         let cache_debug_json = serde_json::to_string_pretty(&task_cache_map)?;
         let _ = edit::edit(&cache_debug_json)?;
     } else {
-        let plan = ExecutionPlan::plan(task_graph, parallel_run)?;
+        let plan = ExecutionPlan::plan(task_graph, parallel_run, topological_run)?;
         plan.execute(&mut workspace).await?;
 
         workspace.unload().await?;
@@ -203,14 +211,21 @@ mod tests {
         let args = Args::try_parse_from(&["vite-plus", "run", "build", "test"]).unwrap();
         assert!(args.task.is_none());
 
-        if let Some(Commands::Run { tasks, task_args, recursive, sequential, parallel }) =
-            args.commands
+        if let Some(Commands::Run {
+            tasks,
+            task_args,
+            recursive,
+            sequential,
+            parallel,
+            topological,
+        }) = args.commands
         {
             assert_eq!(tasks, vec!["build".into(), "test".into()]);
             assert!(task_args.is_empty());
             assert!(!recursive);
             assert!(!sequential);
             assert!(!parallel);
+            assert!(topological.is_none());
         } else {
             panic!("Expected Run command");
         }

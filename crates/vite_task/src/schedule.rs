@@ -25,11 +25,16 @@ impl ExecutionPlan {
     pub fn plan(
         mut task_graph: StableDiGraph<ResolvedTask, ()>,
         parallel_run: bool,
+        topological_run: bool,
     ) -> Result<Self, Error> {
         // TODO: parallel
-        let node_indices = match toposort(&task_graph, None) {
-            Ok(ok) => ok,
-            Err(err) => return Err(Error::CycleDependenciesError(err)),
+        let node_indices = if topological_run {
+            match toposort(&task_graph, None) {
+                Ok(ok) => ok,
+                Err(err) => return Err(Error::CycleDependenciesError(err)),
+            }
+        } else {
+            task_graph.node_indices().collect::<Vec<_>>()
         };
         let steps = node_indices.into_iter().map(|id| task_graph.remove_node(id).unwrap());
         Ok(Self { steps: steps.collect() })
