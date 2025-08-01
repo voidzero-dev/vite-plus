@@ -1,0 +1,12 @@
+{
+  "name": "@test/web",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo 'Building @test/web'",
+    "dev": "echo 'Running @test/web in dev mode'"
+  },
+  "dependencies": {
+    "@test/app": "workspace:*",
+    "@test/core": "workspace:*"
+  }
+}

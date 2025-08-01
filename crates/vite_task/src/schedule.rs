@@ -21,25 +21,52 @@ pub struct ExecutionPlan {
 }
 
 impl ExecutionPlan {
+    /// Creates an execution plan from the task dependency graph.
+    ///
+    /// # Execution Order
+    ///
+    /// ## With topological_run = true:
+    /// Tasks are sorted in dependency order using topological sort.
+    /// Example order: [@test/core#build, @test/utils#build[0], @test/utils#build[1], ...]
+    ///
+    /// ## With topological_run = false:
+    /// Tasks are executed in the order they were discovered (no specific order).
+    ///
+    /// ## With parallel_run = true (TODO):
+    /// Tasks will be grouped by dependency level for concurrent execution.
+    /// Example groups:
+    /// - Group 1: [@test/core#build] (no dependencies)
+    /// - Group 2: [@test/utils#build[0]] (depends on Group 1)
+    /// - Group 3: [@test/utils#build[1], @test/other#build] (can run in parallel)
     #[tracing::instrument(skip(task_graph))]
     pub fn plan(
         mut task_graph: StableDiGraph<ResolvedTask, ()>,
         parallel_run: bool,
         topological_run: bool,
     ) -> Result<Self, Error> {
-        // TODO: parallel
+        // TODO: implement parallel execution grouping
         let node_indices = if topological_run {
+            // Sort tasks so dependencies are executed before dependents
             match toposort(&task_graph, None) {
                 Ok(ok) => ok,
                 Err(err) => return Err(Error::CycleDependenciesError(err)),
             }
         } else {
+            // Use discovery order (no sorting)
             task_graph.node_indices().collect::<Vec<_>>()
         };
+
+        // Extract tasks from the graph in the determined order
         let steps = node_indices.into_iter().map(|id| task_graph.remove_node(id).unwrap());
         Ok(Self { steps: steps.collect() })
     }
 
+    /// Executes the plan sequentially.
+    ///
+    /// For each task:
+    /// 1. Check if cached result exists and is valid
+    /// 2. If cache hit: replay the cached output
+    /// 3. If cache miss: execute the task and cache the result
     #[tracing::instrument(skip(self, workspace))]
     pub async fn execute(self, workspace: &mut Workspace) -> anyhow::Result<()> {
         for step in self.steps {
@@ -47,6 +74,7 @@ impl ExecutionPlan {
 
             let command = step.resolved_command.fingerprint.command.clone();
 
+            // Check cache and prepare execution
             let (cache_miss, execute_or_replay) = get_cached_or_execute(
                 step,
                 &mut workspace.task_cache,
@@ -54,6 +82,8 @@ impl ExecutionPlan {
                 &workspace.dir,
             )
             .await?;
+
+            // Print cache status
             match cache_miss {
                 Some(CacheMiss::NotFound) => {
                     println!("Cache Not Found, executing task");
@@ -67,6 +97,8 @@ impl ExecutionPlan {
                     println!("Cache hit, replaying previously executed task");
                 }
             }
+
+            // Execute or replay the task
             execute_or_replay.await?;
         }
         Ok(())

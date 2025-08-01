@@ -1,0 +1,8 @@
+{
+  "name": "@test/core",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo 'Building @test/core'",
+    "test": "echo 'Testing @test/core'"
+  }
+}

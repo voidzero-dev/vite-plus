@@ -1,7 +1,9 @@
 {
   "name": "@repo/spa",
   "type": "module",
-  "scripts": {},
+  "scripts": {
+    "build": "echo 'Building @repo/spa...'"
+  },
   "dependencies": {
     "@repo/logger": "workspace:*"
   }

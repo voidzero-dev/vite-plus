@@ -2,6 +2,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use compact_str::CompactString;
+use petgraph::graph::NodeIndex;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -55,10 +56,13 @@ pub enum Error {
     DuplicatedPackageName { name: String, path1: CompactString, path2: CompactString },
 
     #[error("Circular dependency found : {0:?}")]
-    CycleDependenciesError(petgraph::algo::Cycle<petgraph::graph::NodeIndex>),
+    CycleDependenciesError(petgraph::algo::Cycle<NodeIndex>),
 
     #[error("The package.json name is empty at {0:?}/package.json")]
     EmptyPackageName(PathBuf),
+
+    #[error("Package not found in graph, index at: {0:?}")]
+    PackageNotFound(NodeIndex),
 
     #[error("Recursive run is not allowed when task name contains '#': {0}")]
     RecursiveRunWithScope(String),

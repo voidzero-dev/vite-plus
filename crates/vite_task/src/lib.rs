@@ -57,6 +57,29 @@ pub enum Commands {
     },
 }
 
+/// Main entry point for vite-plus task execution.
+///
+/// # Execution Flow
+///
+/// ```text
+/// vite-plus run build --recursive --topological
+///      │
+///      ▼
+/// 1. Load workspace (scan for packages and their dependencies)
+///      │
+///      ▼
+/// 2. Resolve tasks (build dependency graph)
+///    - Find all packages with "build" task (recursive)
+///    - Add cross-package dependencies (topological)
+///      │
+///      ▼
+/// 3. Create execution plan
+///    - Sort tasks by dependencies (topological sort)
+///      │
+///      ▼
+/// 4. Execute plan
+///    - For each task: check cache → execute/replay → update cache
+/// ```
 #[tracing::instrument]
 pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
     let mut workspace = Workspace::load(cwd)?;
@@ -88,7 +111,9 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
         }
     };
 
-    let task_graph = workspace.resolve_tasks(&tasks, task_args.clone(), recursive_run)?;
+    let task_graph =
+        workspace.resolve_tasks(&tasks, task_args.clone(), recursive_run, topological_run)?;
+
     if args.debug {
         #[derive(Serialize)]
         struct CacheEntry {

@@ -170,6 +170,7 @@ impl PackageGraphBuilder {
         }
         Ok(())
     }
+
     fn build(mut self) -> Graph<PackageInfo, DependencyType> {
         for (_, (id, deps)) in &self.id_and_deps_by_name {
             for (dep_name, dep_type) in deps {

@@ -23,10 +23,10 @@ use anyhow::Context;
 use bincode::{Decode, Encode};
 use diff::Diff;
 use itertools::Itertools;
-use petgraph::{algo::toposort, graph::NodeIndex, stable_graph::StableDiGraph};
+use petgraph::{Graph, graph::NodeIndex, stable_graph::StableDiGraph};
 use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
-use vite_package_manager::{PackageInfo, PackageJson};
+use vite_package_manager::{DependencyType, PackageInfo, PackageJson};
 
 #[derive(Encode, Decode, Serialize, Deserialize, Debug, PartialEq, Eq, Diff, Clone)]
 #[diff(attr(#[derive(Debug)]))]
@@ -214,7 +214,9 @@ impl TaskGraphBuilder {
     fn build_starting_with(
         mut self,
         starting_ids: impl Iterator<Item = TaskId> + std::fmt::Debug,
+        package_graph: &Graph<PackageInfo, DependencyType>,
         recursive_run: bool,
+        topological_run: bool,
     ) -> Result<StableDiGraph<ResolvedTask, ()>, Error> {
         let mut task_graph = StableDiGraph::<ResolvedTask, ()>::new();
         let mut node_indices_by_task_ids = HashMap::<TaskId, NodeIndex>::new();
@@ -224,12 +226,19 @@ impl TaskGraphBuilder {
 
         if recursive_run {
             remaining_task_ids = BTreeSet::new();
+
+            // When recursive, we need to find all packages that have the requested tasks
             for task_id in starting_ids {
-                for (resolved_task_id, _) in self.resolved_tasks_and_dep_ids_by_id.iter() {
-                    if resolved_task_id.subcommand_index.is_none()
-                        && resolved_task_id.name.ends_with(&format!("#{}", task_id.name))
-                    {
-                        remaining_task_ids.insert(resolved_task_id.clone());
+                for node_index in package_graph.node_indices() {
+                    let package = &package_graph[node_index];
+                    let task_to_resolve =
+                        format!("{}#{}", &package.package_json.name, task_id.name);
+                    let task_id_to_resolve =
+                        TaskId { name: task_to_resolve.into(), subcommand_index: None };
+
+                    // Check if this task exists before adding it
+                    if self.resolved_tasks_and_dep_ids_by_id.contains_key(&task_id_to_resolve) {
+                        remaining_task_ids.insert(task_id_to_resolve);
                     }
                 }
             }
@@ -242,27 +251,89 @@ impl TaskGraphBuilder {
             remaining_task_ids.iter().map(|id| id.name.as_str()).join(", ")
         );
 
+        // Create a copy of all task IDs for dependency checking
+        // Store here to avoid the `resolved_tasks_and_dep_ids_by_id` is mutated while resolving the tasks
+        let all_task_ids: HashSet<TaskId> =
+            self.resolved_tasks_and_dep_ids_by_id.keys().cloned().collect();
+
+        // Process all tasks and collect them
+        let mut processed_tasks = HashMap::new();
+
         while let Some(task_id) = remaining_task_ids.pop_first() {
-            let (resolved_task, deps) = self
+            if processed_tasks.contains_key(&task_id) {
+                continue;
+            }
+
+            let (resolved_task, mut deps) = self
                 .resolved_tasks_and_dep_ids_by_id
                 .remove(&task_id)
                 .with_context(|| format!("Task '{}' not found", &task_id.name))?;
 
-            let node_index = task_graph.add_node(resolved_task);
-            if node_indices_by_task_ids.insert(task_id.clone(), node_index).is_some() {
-                return Err(Error::DuplicatedTask(task_id.name.to_string()));
+            // Add topological dependencies if both recursive and topological flags are set
+            if recursive_run && topological_run {
+                // Parse package name and task name from the task ID
+                if let Some((package_name, task_name)) = task_id.name.split_once('#') {
+                    // Find the current package's node index in the graph
+                    let current_package_node = package_graph
+                        .node_indices()
+                        .find(|&idx| package_graph[idx].package_json.name == package_name);
+
+                    if let Some(current_node) = current_package_node {
+                        // Only add cross-package dependencies for the FIRST subtask
+                        // (subcommand_index == Some(0) or None for non-compound commands)
+                        let is_first_subtask =
+                            task_id.subcommand_index.map_or(true, |idx| idx == 0);
+
+                        if is_first_subtask {
+                            // Get all dependencies of the current package
+                            let dependencies: Vec<_> =
+                                package_graph.neighbors(current_node).collect();
+
+                            // For each dependency package, add the LAST subtask as a dependency
+                            for dep_node in dependencies {
+                                let dep_package = &package_graph[dep_node];
+
+                                // Try to find the last subtask (with subcommand_index: None)
+                                let dep_task_id = TaskId {
+                                    name: format!(
+                                        "{}#{}",
+                                        dep_package.package_json.name, task_name
+                                    )
+                                    .into(),
+                                    subcommand_index: None,
+                                };
+
+                                // Only add if this task exists in the dependency package
+                                if all_task_ids.contains(&dep_task_id) {
+                                    deps.push(dep_task_id);
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
+            processed_tasks.insert(task_id.clone(), (resolved_task, deps.clone()));
+
             for dep in deps {
-                edges.push((dep.clone(), task_id.clone()));
+                // task_id depends on dep, so edge goes from task_id to dep
+                edges.push((task_id.clone(), dep.clone()));
                 remaining_task_ids.insert(dep);
             }
         }
 
-        for (task_name, dep_task_name) in edges {
+        // Now add all tasks to the graph
+        for (task_id, (resolved_task, _)) in processed_tasks {
+            let node_index = task_graph.add_node(resolved_task);
+            if node_indices_by_task_ids.insert(task_id.clone(), node_index).is_some() {
+                return Err(Error::DuplicatedTask(task_id.name.to_string()));
+            }
+        }
+
+        for (from_task, to_task) in edges {
             task_graph.add_edge(
-                node_indices_by_task_ids[&task_name],
-                node_indices_by_task_ids[&dep_task_name],
+                node_indices_by_task_ids[&from_task],
+                node_indices_by_task_ids[&to_task],
                 (),
             );
         }
@@ -273,10 +344,11 @@ impl TaskGraphBuilder {
 
 #[derive(Debug)]
 pub struct Workspace {
-    packages_with_task_jsons: Vec<(PackageInfo, Option<ViteTaskJson>)>,
+    packages_with_task_jsons: Vec<(PackageInfo, Option<ViteTaskJson>, NodeIndex)>,
     pub(crate) dir: PathBuf,
     pub(crate) task_cache: TaskCache,
     pub(crate) fs: CachedFileSystem,
+    pub(crate) package_graph: Graph<PackageInfo, DependencyType>,
     pub(crate) package_json: PackageJson,
 }
 
@@ -285,14 +357,12 @@ impl Workspace {
     pub fn load(dir: PathBuf) -> Result<Self, Error> {
         let package_graph = vite_package_manager::get_package_graph(&dir)?;
 
-        let mut packages_with_task_jsons: Vec<(PackageInfo, Option<ViteTaskJson>)> = Vec::new();
-        let packages_topologically_sorted = match toposort(&package_graph, None) {
-            Ok(ok) => ok,
-            Err(err) => return Err(Error::CycleDependenciesError(err)),
-        };
+        let mut packages_with_task_jsons: Vec<(PackageInfo, Option<ViteTaskJson>, NodeIndex)> =
+            Vec::new();
+
         let mut package_json = None;
-        for node in packages_topologically_sorted {
-            let package = package_graph.node_weight(node).unwrap();
+        for node_index in package_graph.node_indices() {
+            let package = &package_graph[node_index];
             // Root
             if package.path == "" {
                 package_json = Some(package.package_json.clone());
@@ -309,7 +379,7 @@ impl Workspace {
                     None
                 }
             };
-            packages_with_task_jsons.push((package.clone(), vite_task_json));
+            packages_with_task_jsons.push((package.clone(), vite_task_json, node_index));
         }
 
         let cache_path = dir.join("node_modules/.vite/task-cache.db");
@@ -321,6 +391,7 @@ impl Workspace {
         let task_cache = TaskCache::load_from_file(&cache_path)?;
 
         Ok(Self {
+            package_graph,
             packages_with_task_jsons,
             dir,
             task_cache,
@@ -355,12 +426,63 @@ impl Workspace {
         Ok(ResolvedTask { id, args: task_args, resolved_command, resolved_config })
     }
 
+    /// Resolves tasks and builds a dependency graph.
+    ///
+    /// ## Task Resolution Process
+    ///
+    /// ### Example: `vite-plus run build --recursive --topological`
+    ///
+    /// Package structure:
+    /// ```no_compile
+    /// @test/core (no deps)
+    /// @test/utils (depends on @test/core)
+    /// @test/app (depends on @test/utils)
+    /// @test/web (depends on @test/app, @test/core)
+    /// ```
+    ///
+    /// ### Step 1: Collect all tasks from packages
+    /// - For each package, find tasks from:
+    ///   - vite-task.json (custom task definitions)
+    ///   - package.json scripts
+    /// - If script contains `&&`, split into subtasks:
+    ///   - `"build": "echo a && echo b && echo c"` becomes:
+    ///     - `pkg#build` (subcommand_index: Some(0)) -> "echo a"
+    ///     - `pkg#build` (subcommand_index: Some(1)) -> "echo b"  
+    ///     - `pkg#build` (subcommand_index: None) -> "echo c"
+    ///
+    /// ### Step 2: Build dependency graph
+    ///
+    /// #### Without --topological:
+    /// ```no_compile
+    /// @test/utils#build:
+    ///   [0] ──► [1] ──► [None]
+    ///   (subtasks depend on each other within package)
+    /// ```
+    ///
+    /// #### With --recursive --topological:
+    /// ```no_compile
+    /// @test/core#build ─────────┐
+    ///                           ▼
+    /// @test/utils#build: [0] ──► [1] ──► [None]
+    ///                                      │
+    ///                                      ▼
+    ///                             @test/app#build
+    ///                                      │
+    ///      ┌───────────────────────────────┘
+    ///      ▼
+    /// @test/web#build
+    /// ```
+    ///
+    /// Cross-package dependencies rules:
+    /// - FIRST subtask (or None) depends on LAST subtask of dependencies
+    /// - Dependent packages depend on THIS package's LAST subtask
     #[tracing::instrument(skip(self))]
     pub fn resolve_tasks(
         &self,
         task_names: &[Str],
         task_args: Arc<[Str]>,
         recursive_run: bool,
+        topological_run: bool,
     ) -> Result<StableDiGraph<ResolvedTask, ()>, Error> {
         if recursive_run {
             for task in task_names {
@@ -371,7 +493,8 @@ impl Workspace {
         }
         let mut task_graph_builder = TaskGraphBuilder::default();
 
-        for (package_info, task_json) in &self.packages_with_task_jsons {
+        // First pass: collect all tasks from all packages
+        for (package_info, task_json, _) in self.packages_with_task_jsons.iter() {
             let task_prefix = format!("{}#", &package_info.package_json.name);
             if let Some(task_json) = task_json {
                 for (task_name, task_config_json) in &task_json.tasks {
@@ -434,7 +557,199 @@ impl Workspace {
 
         task_graph_builder.build_starting_with(
             task_names.iter().cloned().map(|name| TaskId { name, subcommand_index: None }),
+            &self.package_graph,
             recursive_run,
+            topological_run,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_recursive_topological_build() {
+        let fixture_path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/recursive-topological-workspace");
+
+        let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+
+        // Test recursive topological build
+        let task_graph = workspace
+            .resolve_tasks(&vec!["build".into()], Arc::default(), true, true)
+            .expect("Failed to resolve tasks");
+
+        // Verify that all build tasks are included
+        let task_names: Vec<_> =
+            task_graph.node_weights().map(|task| task.id.name.as_str()).collect();
+
+        assert!(task_names.contains(&"@test/core#build"));
+        assert!(task_names.contains(&"@test/utils#build"));
+        assert!(task_names.contains(&"@test/app#build"));
+        assert!(task_names.contains(&"@test/web#build"));
+
+        // Verify dependencies exist in the correct direction
+        let has_edge = |from: &str, to: &str| -> bool {
+            task_graph.edge_indices().any(|edge_idx| {
+                let (source, target) = task_graph.edge_endpoints(edge_idx).unwrap();
+                task_graph[source].id.name.as_str() == from
+                    && task_graph[target].id.name.as_str() == to
+            })
+        };
+
+        // With topological mode, tasks should depend on the same task in their dependencies
+        assert!(has_edge("@test/utils#build", "@test/core#build"), "Utils should depend on Core");
+        assert!(has_edge("@test/app#build", "@test/utils#build"), "App should depend on Utils");
+        assert!(has_edge("@test/web#build", "@test/app#build"), "Web should depend on App");
+        assert!(has_edge("@test/web#build", "@test/core#build"), "Web should depend on Core");
+    }
+
+    #[test]
+    fn test_recursive_without_topological() {
+        let fixture_path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/recursive-topological-workspace");
+
+        let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+
+        // Test recursive build without topological flag
+        let task_graph = workspace
+            .resolve_tasks(&vec!["build".into()], Arc::default(), true, false)
+            .expect("Failed to resolve tasks");
+
+        // Verify that all build tasks are included
+        let task_names: Vec<_> =
+            task_graph.node_weights().map(|task| task.id.name.as_str()).collect();
+
+        assert!(task_names.contains(&"@test/core#build"));
+        assert!(task_names.contains(&"@test/utils#build"));
+        assert!(task_names.contains(&"@test/app#build"));
+        assert!(task_names.contains(&"@test/web#build"));
+
+        // Without topological flag, there should only be within-package dependencies
+        // (for compound commands like @test/utils which has 3 parts)
+        for edge_idx in task_graph.edge_indices() {
+            let (source, target) = task_graph.edge_endpoints(edge_idx).unwrap();
+            let source_name = &task_graph[source].id.name;
+            let target_name = &task_graph[target].id.name;
+
+            // Extract package names
+            let source_pkg = source_name.split('#').next().unwrap();
+            let target_pkg = target_name.split('#').next().unwrap();
+
+            assert_eq!(
+                source_pkg, target_pkg,
+                "Without topological flag, dependencies should only exist within the same package"
+            );
+        }
+    }
+
+    #[test]
+    fn test_recursive_run_with_scope_error() {
+        let fixture_path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/recursive-topological-workspace");
+
+        let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+
+        // Test that specifying a scoped task with recursive flag returns an error
+        let result =
+            workspace.resolve_tasks(&vec!["@test/core#build".into()], Arc::default(), true, false);
+
+        assert!(result.is_err());
+        match result {
+            Err(Error::RecursiveRunWithScope(task)) => {
+                assert_eq!(task, "@test/core#build");
+            }
+            _ => panic!("Expected RecursiveRunWithScope error"),
+        }
+    }
+
+    #[test]
+    fn test_non_recursive_single_package() {
+        let fixture_path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/recursive-topological-workspace");
+
+        let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+
+        // Test non-recursive build of a single package
+        let task_graph = workspace
+            .resolve_tasks(&vec!["@test/utils#build".into()], Arc::default(), false, false)
+            .expect("Failed to resolve tasks");
+
+        // @test/utils has compound commands, so it should include 3 tasks
+        let all_tasks: Vec<_> = task_graph
+            .node_weights()
+            .map(|task| (task.id.name.as_str(), task.id.subcommand_index))
+            .collect();
+
+        assert_eq!(all_tasks.len(), 3, "Utils package has 3 subtasks");
+        assert!(all_tasks.contains(&("@test/utils#build", Some(0))));
+        assert!(all_tasks.contains(&("@test/utils#build", Some(1))));
+        assert!(all_tasks.contains(&("@test/utils#build", None)));
+    }
+
+    #[test]
+    fn test_recursive_topological_with_compound_commands() {
+        let fixture_path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/recursive-topological-workspace");
+
+        let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+
+        // Test recursive topological build with compound commands
+        let task_graph = workspace
+            .resolve_tasks(&vec!["build".into()], Arc::default(), true, true)
+            .expect("Failed to resolve tasks");
+
+        // Check all tasks including subcommands
+        let all_tasks: Vec<_> = task_graph
+            .node_weights()
+            .map(|task| (task.id.name.as_str(), task.id.subcommand_index))
+            .collect();
+
+        // Utils should have 3 subtasks (indices 0, 1, and None)
+        assert!(all_tasks.contains(&("@test/utils#build", Some(0))));
+        assert!(all_tasks.contains(&("@test/utils#build", Some(1))));
+        assert!(all_tasks.contains(&("@test/utils#build", None)));
+
+        // Verify dependencies
+        let has_edge = |from_name: &str,
+                        from_idx: Option<usize>,
+                        to_name: &str,
+                        to_idx: Option<usize>|
+         -> bool {
+            task_graph.edge_indices().any(|edge_idx| {
+                let (source, target) = task_graph.edge_endpoints(edge_idx).unwrap();
+                let source_task = &task_graph[source].id;
+                let target_task = &task_graph[target].id;
+                source_task.name.as_str() == from_name
+                    && source_task.subcommand_index == from_idx
+                    && target_task.name.as_str() == to_name
+                    && target_task.subcommand_index == to_idx
+            })
+        };
+
+        // Within-package dependencies for @test/utils compound command
+        assert!(
+            has_edge("@test/utils#build", Some(1), "@test/utils#build", Some(0)),
+            "Second subtask should depend on first"
+        );
+        assert!(
+            has_edge("@test/utils#build", None, "@test/utils#build", Some(1)),
+            "Last subtask should depend on second"
+        );
+
+        // Cross-package dependencies
+        // The FIRST subtask of utils should depend on core's LAST subtask (None)
+        assert!(
+            has_edge("@test/utils#build", Some(0), "@test/core#build", None),
+            "First utils subtask should depend on last core subtask"
+        );
+
+        // App should depend on utils' LAST subtask
+        assert!(
+            has_edge("@test/app#build", None, "@test/utils#build", None),
+            "App should depend on last utils subtask"
+        );
     }
 }
