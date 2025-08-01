@@ -27,7 +27,7 @@ impl ExecutionPlan {
     ///
     /// ## With topological_run = true:
     /// Tasks are sorted in dependency order using topological sort.
-    /// Example order: [@test/core#build, @test/utils#build[0], @test/utils#build[1], ...]
+    /// Example order: [@test/core#build, @test/utils#build\[0\], @test/utils#build\[1\], ...]
     ///
     /// ## With topological_run = false:
     /// Tasks are executed in the order they were discovered (no specific order).
@@ -36,8 +36,8 @@ impl ExecutionPlan {
     /// Tasks will be grouped by dependency level for concurrent execution.
     /// Example groups:
     /// - Group 1: [@test/core#build] (no dependencies)
-    /// - Group 2: [@test/utils#build[0]] (depends on Group 1)
-    /// - Group 3: [@test/utils#build[1], @test/other#build] (can run in parallel)
+    /// - Group 2: [@test/utils#build\[0\]] (depends on Group 1)
+    /// - Group 3: [@test/utils#build\[1\], @test/other#build] (can run in parallel)
     #[tracing::instrument(skip(task_graph))]
     pub fn plan(
         mut task_graph: StableDiGraph<ResolvedTask, ()>,

@@ -49,8 +49,10 @@ pub struct PathWrite;
 #[derive(Debug)]
 pub struct ExecutedTask {
     pub std_outputs: Arc<[StdOutput]>,
+    #[allow(dead_code)]
     pub exit_status: ExitStatus,
     pub path_reads: HashMap<Str, PathRead>,
+    #[allow(dead_code)]
     pub path_writes: HashMap<Str, PathWrite>,
 }
 
@@ -232,6 +234,7 @@ pub async fn execute_task(task: &ResolvedTask, base_dir: &Path) -> Result<Execut
     Ok(ExecutedTask { std_outputs: outputs.into(), exit_status, path_reads, path_writes })
 }
 
+#[allow(dead_code)]
 fn gather_inputs(task: &ResolvedTask, base_dir: &Path) -> Result<HashSet<Arc<OsStr>>, Error> {
     // Task inferring to be implemented here
     let inputs = &task.resolved_config.config.inputs;

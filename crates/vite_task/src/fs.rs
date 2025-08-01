@@ -105,6 +105,7 @@ impl FileSystem for RealFileSystem {
 #[derive(Debug, Default)]
 pub struct CachedFileSystem<FS = RealFileSystem> {
     underlying: FS,
+    #[allow(dead_code)]
     cache: DashMap<Arc<OsStr>, PathFingerprint>,
 }
 
@@ -135,6 +136,7 @@ impl<FS: FileSystem> FileSystem for CachedFileSystem<FS> {
 }
 
 impl<FS> CachedFileSystem<FS> {
+    #[allow(dead_code)]
     pub fn invalidate_path(&self, path: &OsStr) {
         self.cache.remove(path);
     }

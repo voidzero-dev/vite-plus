@@ -330,10 +330,10 @@ impl TaskGraphBuilder {
             }
         }
 
-        for (from_task, to_task) in edges {
+        for (task_name, dep_task_name) in edges {
             task_graph.add_edge(
-                node_indices_by_task_ids[&from_task],
-                node_indices_by_task_ids[&to_task],
+                node_indices_by_task_ids[&task_name],
+                node_indices_by_task_ids[&dep_task_name],
                 (),
             );
         }
@@ -382,11 +382,17 @@ impl Workspace {
             packages_with_task_jsons.push((package.clone(), vite_task_json, node_index));
         }
 
-        let cache_path = dir.join("node_modules/.vite/task-cache.db");
+        let cache_path = if let Ok(env_cache_path) = std::env::var("VITE_CACHE_PATH") {
+            PathBuf::from(env_cache_path)
+        } else {
+            dir.join("node_modules/.vite/task-cache.db")
+        };
+
         if !cache_path.exists() {
-            let cache_dir = dir.join("node_modules/.vite");
-            tracing::info!("Creating task cache directory at {}", cache_dir.display());
-            std::fs::create_dir_all(cache_dir)?;
+            if let Some(cache_dir) = cache_path.parent() {
+                tracing::info!("Creating task cache directory at {}", cache_dir.display());
+                std::fs::create_dir_all(cache_dir)?;
+            }
         }
         let task_cache = TaskCache::load_from_file(&cache_path)?;
 
@@ -568,188 +574,238 @@ impl Workspace {
 mod tests {
     use super::*;
     use std::path::Path;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    fn with_unique_cache_path<F, R>(test_name: &str, f: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let thread_id = std::thread::current().id();
+        let cache_path = std::env::temp_dir()
+            .join(format!("vite-test-{}-{}-{:?}.db", test_name, test_id, thread_id));
+
+        // Clean up any existing file first
+        let _ = std::fs::remove_file(&cache_path);
+
+        unsafe {
+            std::env::set_var("VITE_CACHE_PATH", &cache_path);
+        }
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+
+        // Clean up
+        unsafe {
+            std::env::remove_var("VITE_CACHE_PATH");
+        }
+        let _ = std::fs::remove_file(cache_path);
+
+        match result {
+            Ok(r) => r,
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
+    }
 
     #[test]
     fn test_recursive_topological_build() {
-        let fixture_path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/recursive-topological-workspace");
+        with_unique_cache_path("recursive_topological_build", || {
+            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("fixtures/recursive-topological-workspace");
 
-        let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+            let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
 
-        // Test recursive topological build
-        let task_graph = workspace
-            .resolve_tasks(&vec!["build".into()], Arc::default(), true, true)
-            .expect("Failed to resolve tasks");
+            // Test recursive topological build
+            let task_graph = workspace
+                .resolve_tasks(&vec!["build".into()], Arc::default(), true, true)
+                .expect("Failed to resolve tasks");
 
-        // Verify that all build tasks are included
-        let task_names: Vec<_> =
-            task_graph.node_weights().map(|task| task.id.name.as_str()).collect();
+            // Verify that all build tasks are included
+            let task_names: Vec<_> =
+                task_graph.node_weights().map(|task| task.id.name.as_str()).collect();
 
-        assert!(task_names.contains(&"@test/core#build"));
-        assert!(task_names.contains(&"@test/utils#build"));
-        assert!(task_names.contains(&"@test/app#build"));
-        assert!(task_names.contains(&"@test/web#build"));
+            assert!(task_names.contains(&"@test/core#build"));
+            assert!(task_names.contains(&"@test/utils#build"));
+            assert!(task_names.contains(&"@test/app#build"));
+            assert!(task_names.contains(&"@test/web#build"));
 
-        // Verify dependencies exist in the correct direction
-        let has_edge = |from: &str, to: &str| -> bool {
-            task_graph.edge_indices().any(|edge_idx| {
-                let (source, target) = task_graph.edge_endpoints(edge_idx).unwrap();
-                task_graph[source].id.name.as_str() == from
-                    && task_graph[target].id.name.as_str() == to
-            })
-        };
+            // Verify dependencies exist in the correct direction
+            let has_edge = |from: &str, to: &str| -> bool {
+                task_graph.edge_indices().any(|edge_idx| {
+                    let (source, target) = task_graph.edge_endpoints(edge_idx).unwrap();
+                    task_graph[source].id.name.as_str() == from
+                        && task_graph[target].id.name.as_str() == to
+                })
+            };
 
-        // With topological mode, tasks should depend on the same task in their dependencies
-        assert!(has_edge("@test/utils#build", "@test/core#build"), "Utils should depend on Core");
-        assert!(has_edge("@test/app#build", "@test/utils#build"), "App should depend on Utils");
-        assert!(has_edge("@test/web#build", "@test/app#build"), "Web should depend on App");
-        assert!(has_edge("@test/web#build", "@test/core#build"), "Web should depend on Core");
+            // With topological mode, tasks should depend on the same task in their dependencies
+            assert!(
+                has_edge("@test/utils#build", "@test/core#build"),
+                "Utils should depend on Core"
+            );
+            assert!(has_edge("@test/app#build", "@test/utils#build"), "App should depend on Utils");
+            assert!(has_edge("@test/web#build", "@test/app#build"), "Web should depend on App");
+            assert!(has_edge("@test/web#build", "@test/core#build"), "Web should depend on Core");
+        })
     }
 
     #[test]
     fn test_recursive_without_topological() {
-        let fixture_path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/recursive-topological-workspace");
+        with_unique_cache_path("recursive_without_topological", || {
+            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("fixtures/recursive-topological-workspace");
 
-        let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+            let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
 
-        // Test recursive build without topological flag
-        let task_graph = workspace
-            .resolve_tasks(&vec!["build".into()], Arc::default(), true, false)
-            .expect("Failed to resolve tasks");
+            // Test recursive build without topological flag
+            let task_graph = workspace
+                .resolve_tasks(&vec!["build".into()], Arc::default(), true, false)
+                .expect("Failed to resolve tasks");
 
-        // Verify that all build tasks are included
-        let task_names: Vec<_> =
-            task_graph.node_weights().map(|task| task.id.name.as_str()).collect();
+            // Verify that all build tasks are included
+            let task_names: Vec<_> =
+                task_graph.node_weights().map(|task| task.id.name.as_str()).collect();
 
-        assert!(task_names.contains(&"@test/core#build"));
-        assert!(task_names.contains(&"@test/utils#build"));
-        assert!(task_names.contains(&"@test/app#build"));
-        assert!(task_names.contains(&"@test/web#build"));
+            assert!(task_names.contains(&"@test/core#build"));
+            assert!(task_names.contains(&"@test/utils#build"));
+            assert!(task_names.contains(&"@test/app#build"));
+            assert!(task_names.contains(&"@test/web#build"));
 
-        // Without topological flag, there should only be within-package dependencies
-        // (for compound commands like @test/utils which has 3 parts)
-        for edge_idx in task_graph.edge_indices() {
-            let (source, target) = task_graph.edge_endpoints(edge_idx).unwrap();
-            let source_name = &task_graph[source].id.name;
-            let target_name = &task_graph[target].id.name;
+            // Without topological flag, there should only be within-package dependencies
+            // (for compound commands like @test/utils which has 3 parts)
+            for edge_idx in task_graph.edge_indices() {
+                let (source, target) = task_graph.edge_endpoints(edge_idx).unwrap();
+                let source_name = &task_graph[source].id.name;
+                let target_name = &task_graph[target].id.name;
 
-            // Extract package names
-            let source_pkg = source_name.split('#').next().unwrap();
-            let target_pkg = target_name.split('#').next().unwrap();
+                // Extract package names
+                let source_pkg = source_name.split('#').next().unwrap();
+                let target_pkg = target_name.split('#').next().unwrap();
 
-            assert_eq!(
-                source_pkg, target_pkg,
-                "Without topological flag, dependencies should only exist within the same package"
-            );
-        }
+                assert_eq!(
+                    source_pkg, target_pkg,
+                    "Without topological flag, dependencies should only exist within the same package"
+                );
+            }
+        })
     }
 
     #[test]
     fn test_recursive_run_with_scope_error() {
-        let fixture_path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/recursive-topological-workspace");
+        with_unique_cache_path("recursive_run_with_scope_error", || {
+            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("fixtures/recursive-topological-workspace");
 
-        let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+            let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
 
-        // Test that specifying a scoped task with recursive flag returns an error
-        let result =
-            workspace.resolve_tasks(&vec!["@test/core#build".into()], Arc::default(), true, false);
+            // Test that specifying a scoped task with recursive flag returns an error
+            let result = workspace.resolve_tasks(
+                &vec!["@test/core#build".into()],
+                Arc::default(),
+                true,
+                false,
+            );
 
-        assert!(result.is_err());
-        match result {
-            Err(Error::RecursiveRunWithScope(task)) => {
-                assert_eq!(task, "@test/core#build");
+            assert!(result.is_err());
+            match result {
+                Err(Error::RecursiveRunWithScope(task)) => {
+                    assert_eq!(task, "@test/core#build");
+                }
+                _ => panic!("Expected RecursiveRunWithScope error"),
             }
-            _ => panic!("Expected RecursiveRunWithScope error"),
-        }
+        })
     }
 
     #[test]
     fn test_non_recursive_single_package() {
-        let fixture_path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/recursive-topological-workspace");
+        with_unique_cache_path("non_recursive_single_package", || {
+            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("fixtures/recursive-topological-workspace");
 
-        let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+            let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
 
-        // Test non-recursive build of a single package
-        let task_graph = workspace
-            .resolve_tasks(&vec!["@test/utils#build".into()], Arc::default(), false, false)
-            .expect("Failed to resolve tasks");
+            // Test non-recursive build of a single package
+            let task_graph = workspace
+                .resolve_tasks(&vec!["@test/utils#build".into()], Arc::default(), false, false)
+                .expect("Failed to resolve tasks");
 
-        // @test/utils has compound commands, so it should include 3 tasks
-        let all_tasks: Vec<_> = task_graph
-            .node_weights()
-            .map(|task| (task.id.name.as_str(), task.id.subcommand_index))
-            .collect();
+            // @test/utils has compound commands, so it should include 3 tasks
+            let all_tasks: Vec<_> = task_graph
+                .node_weights()
+                .map(|task| (task.id.name.as_str(), task.id.subcommand_index))
+                .collect();
 
-        assert_eq!(all_tasks.len(), 3, "Utils package has 3 subtasks");
-        assert!(all_tasks.contains(&("@test/utils#build", Some(0))));
-        assert!(all_tasks.contains(&("@test/utils#build", Some(1))));
-        assert!(all_tasks.contains(&("@test/utils#build", None)));
+            assert_eq!(all_tasks.len(), 3, "Utils package has 3 subtasks");
+            assert!(all_tasks.contains(&("@test/utils#build", Some(0))));
+            assert!(all_tasks.contains(&("@test/utils#build", Some(1))));
+            assert!(all_tasks.contains(&("@test/utils#build", None)));
+        })
     }
 
     #[test]
     fn test_recursive_topological_with_compound_commands() {
-        let fixture_path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/recursive-topological-workspace");
+        with_unique_cache_path("recursive_topological_with_compound_commands", || {
+            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("fixtures/recursive-topological-workspace");
 
-        let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+            let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
 
-        // Test recursive topological build with compound commands
-        let task_graph = workspace
-            .resolve_tasks(&vec!["build".into()], Arc::default(), true, true)
-            .expect("Failed to resolve tasks");
+            // Test recursive topological build with compound commands
+            let task_graph = workspace
+                .resolve_tasks(&vec!["build".into()], Arc::default(), true, true)
+                .expect("Failed to resolve tasks");
 
-        // Check all tasks including subcommands
-        let all_tasks: Vec<_> = task_graph
-            .node_weights()
-            .map(|task| (task.id.name.as_str(), task.id.subcommand_index))
-            .collect();
+            // Check all tasks including subcommands
+            let all_tasks: Vec<_> = task_graph
+                .node_weights()
+                .map(|task| (task.id.name.as_str(), task.id.subcommand_index))
+                .collect();
 
-        // Utils should have 3 subtasks (indices 0, 1, and None)
-        assert!(all_tasks.contains(&("@test/utils#build", Some(0))));
-        assert!(all_tasks.contains(&("@test/utils#build", Some(1))));
-        assert!(all_tasks.contains(&("@test/utils#build", None)));
+            // Utils should have 3 subtasks (indices 0, 1, and None)
+            assert!(all_tasks.contains(&("@test/utils#build", Some(0))));
+            assert!(all_tasks.contains(&("@test/utils#build", Some(1))));
+            assert!(all_tasks.contains(&("@test/utils#build", None)));
 
-        // Verify dependencies
-        let has_edge = |from_name: &str,
-                        from_idx: Option<usize>,
-                        to_name: &str,
-                        to_idx: Option<usize>|
-         -> bool {
-            task_graph.edge_indices().any(|edge_idx| {
-                let (source, target) = task_graph.edge_endpoints(edge_idx).unwrap();
-                let source_task = &task_graph[source].id;
-                let target_task = &task_graph[target].id;
-                source_task.name.as_str() == from_name
-                    && source_task.subcommand_index == from_idx
-                    && target_task.name.as_str() == to_name
-                    && target_task.subcommand_index == to_idx
-            })
-        };
+            // Verify dependencies
+            let has_edge = |from_name: &str,
+                            from_idx: Option<usize>,
+                            to_name: &str,
+                            to_idx: Option<usize>|
+             -> bool {
+                task_graph.edge_indices().any(|edge_idx| {
+                    let (source, target) = task_graph.edge_endpoints(edge_idx).unwrap();
+                    let source_task = &task_graph[source].id;
+                    let target_task = &task_graph[target].id;
+                    source_task.name.as_str() == from_name
+                        && source_task.subcommand_index == from_idx
+                        && target_task.name.as_str() == to_name
+                        && target_task.subcommand_index == to_idx
+                })
+            };
 
-        // Within-package dependencies for @test/utils compound command
-        assert!(
-            has_edge("@test/utils#build", Some(1), "@test/utils#build", Some(0)),
-            "Second subtask should depend on first"
-        );
-        assert!(
-            has_edge("@test/utils#build", None, "@test/utils#build", Some(1)),
-            "Last subtask should depend on second"
-        );
+            // Within-package dependencies for @test/utils compound command
+            assert!(
+                has_edge("@test/utils#build", Some(1), "@test/utils#build", Some(0)),
+                "Second subtask should depend on first"
+            );
+            assert!(
+                has_edge("@test/utils#build", None, "@test/utils#build", Some(1)),
+                "Last subtask should depend on second"
+            );
 
-        // Cross-package dependencies
-        // The FIRST subtask of utils should depend on core's LAST subtask (None)
-        assert!(
-            has_edge("@test/utils#build", Some(0), "@test/core#build", None),
-            "First utils subtask should depend on last core subtask"
-        );
+            // Cross-package dependencies
+            // The FIRST subtask of utils should depend on core's LAST subtask (None)
+            assert!(
+                has_edge("@test/utils#build", Some(0), "@test/core#build", None),
+                "First utils subtask should depend on last core subtask"
+            );
 
-        // App should depend on utils' LAST subtask
-        assert!(
-            has_edge("@test/app#build", None, "@test/utils#build", None),
-            "App should depend on last utils subtask"
-        );
+            // App should depend on utils' LAST subtask
+            assert!(
+                has_edge("@test/app#build", None, "@test/utils#build", None),
+                "App should depend on last utils subtask"
+            );
+        })
     }
 }
