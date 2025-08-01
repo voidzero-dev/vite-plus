@@ -65,12 +65,18 @@ pub enum Commands {
 /// vite-plus run build --recursive --topological
 ///      │
 ///      ▼
-/// 1. Load workspace (scan for packages and their dependencies)
+/// 1. Load workspace
+///    - Scan for packages and their dependencies
+///    - Build complete task graph with all tasks and dependencies
+///    - Parse compound commands (&&) into subtasks
+///    - Add cross-package dependencies (same-name tasks)
+///    - Resolve transitive dependencies (A→B→C even if B lacks task)
 ///      │
 ///      ▼
-/// 2. Resolve tasks (build dependency graph)
-///    - Find all packages with "build" task (recursive)
-///    - Add cross-package dependencies (topological)
+/// 2. Resolve tasks (filter pre-built graph)
+///    - With --recursive: find all packages with requested task
+///    - Without --recursive: use specific package task
+///    - Extract subgraph including all dependencies
 ///      │
 ///      ▼
 /// 3. Create execution plan
@@ -90,6 +96,8 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
         Some(Commands::Run { tasks, recursive, parallel, topological, task_args, .. }) => {
             recursive_run = *recursive;
             parallel_run = *parallel;
+            // Note: topological dependencies are always included in the pre-built task graph
+            // This flag now mainly affects execution order in the execution plan
             if recursive_run {
                 topological_run = topological.unwrap_or(true);
             } else {
