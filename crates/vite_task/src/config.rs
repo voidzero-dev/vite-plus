@@ -355,6 +355,10 @@ pub struct Workspace {
 impl Workspace {
     #[tracing::instrument]
     pub fn load(dir: PathBuf) -> Result<Self, Error> {
+        Self::load_with_cache_path(dir, None)
+    }
+
+    pub fn load_with_cache_path(dir: PathBuf, cache_path: Option<PathBuf>) -> Result<Self, Error> {
         let package_graph = vite_package_manager::get_package_graph(&dir)?;
 
         let mut packages_with_task_jsons: Vec<(PackageInfo, Option<ViteTaskJson>, NodeIndex)> =
@@ -382,11 +386,13 @@ impl Workspace {
             packages_with_task_jsons.push((package.clone(), vite_task_json, node_index));
         }
 
-        let cache_path = if let Ok(env_cache_path) = std::env::var("VITE_CACHE_PATH") {
-            PathBuf::from(env_cache_path)
-        } else {
-            dir.join("node_modules/.vite/task-cache.db")
-        };
+        let cache_path = cache_path.unwrap_or_else(|| {
+            if let Ok(env_cache_path) = std::env::var("VITE_CACHE_PATH") {
+                PathBuf::from(env_cache_path)
+            } else {
+                dir.join("node_modules/.vite/task-cache.db")
+            }
+        });
 
         if !cache_path.exists() {
             if let Some(cache_dir) = cache_path.parent() {
@@ -580,27 +586,24 @@ mod tests {
 
     fn with_unique_cache_path<F, R>(test_name: &str, f: F) -> R
     where
-        F: FnOnce() -> R,
+        F: FnOnce(&std::path::Path) -> R,
     {
         let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
         let thread_id = std::thread::current().id();
         let cache_path = std::env::temp_dir()
             .join(format!("vite-test-{}-{}-{:?}.db", test_name, test_id, thread_id));
 
-        // Clean up any existing file first
+        // Clean up any existing files first (including WAL files)
         let _ = std::fs::remove_file(&cache_path);
+        let _ = std::fs::remove_file(cache_path.with_extension("db-wal"));
+        let _ = std::fs::remove_file(cache_path.with_extension("db-shm"));
 
-        unsafe {
-            std::env::set_var("VITE_CACHE_PATH", &cache_path);
-        }
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&cache_path)));
 
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
-
-        // Clean up
-        unsafe {
-            std::env::remove_var("VITE_CACHE_PATH");
-        }
-        let _ = std::fs::remove_file(cache_path);
+        // Clean up all SQLite files
+        let _ = std::fs::remove_file(&cache_path);
+        let _ = std::fs::remove_file(cache_path.with_extension("db-wal"));
+        let _ = std::fs::remove_file(cache_path.with_extension("db-shm"));
 
         match result {
             Ok(r) => r,
@@ -610,11 +613,13 @@ mod tests {
 
     #[test]
     fn test_recursive_topological_build() {
-        with_unique_cache_path("recursive_topological_build", || {
+        with_unique_cache_path("recursive_topological_build", |cache_path| {
             let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("fixtures/recursive-topological-workspace");
 
-            let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+            let workspace =
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()))
+                    .expect("Failed to load workspace");
 
             // Test recursive topological build
             let task_graph = workspace
@@ -652,11 +657,13 @@ mod tests {
 
     #[test]
     fn test_recursive_without_topological() {
-        with_unique_cache_path("recursive_without_topological", || {
+        with_unique_cache_path("recursive_without_topological", |cache_path| {
             let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("fixtures/recursive-topological-workspace");
 
-            let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+            let workspace =
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()))
+                    .expect("Failed to load workspace");
 
             // Test recursive build without topological flag
             let task_graph = workspace
@@ -693,11 +700,13 @@ mod tests {
 
     #[test]
     fn test_recursive_run_with_scope_error() {
-        with_unique_cache_path("recursive_run_with_scope_error", || {
+        with_unique_cache_path("recursive_run_with_scope_error", |cache_path| {
             let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("fixtures/recursive-topological-workspace");
 
-            let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+            let workspace =
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()))
+                    .expect("Failed to load workspace");
 
             // Test that specifying a scoped task with recursive flag returns an error
             let result = workspace.resolve_tasks(
@@ -719,11 +728,13 @@ mod tests {
 
     #[test]
     fn test_non_recursive_single_package() {
-        with_unique_cache_path("non_recursive_single_package", || {
+        with_unique_cache_path("non_recursive_single_package", |cache_path| {
             let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("fixtures/recursive-topological-workspace");
 
-            let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+            let workspace =
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()))
+                    .expect("Failed to load workspace");
 
             // Test non-recursive build of a single package
             let task_graph = workspace
@@ -745,11 +756,13 @@ mod tests {
 
     #[test]
     fn test_recursive_topological_with_compound_commands() {
-        with_unique_cache_path("recursive_topological_with_compound_commands", || {
+        with_unique_cache_path("recursive_topological_with_compound_commands", |cache_path| {
             let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("fixtures/recursive-topological-workspace");
 
-            let workspace = Workspace::load(fixture_path).expect("Failed to load workspace");
+            let workspace =
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()))
+                    .expect("Failed to load workspace");
 
             // Test recursive topological build with compound commands
             let task_graph = workspace
