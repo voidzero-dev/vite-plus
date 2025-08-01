@@ -72,8 +72,6 @@ jobs:
         with:
           components: clippy,rust-docs,rustfmt
 
-      - run: rustup target add x86_64-unknown-linux-musl
-
       - run: |
           cargo fmt --check
           # cargo clippy --all-targets --all-features -- -D warnings
