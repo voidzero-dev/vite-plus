@@ -473,8 +473,8 @@ impl Workspace {
     ///
     /// #### With --recursive --topological:
     /// ```no_compile
-    /// @test/core#build ─────────┐
-    ///                           ▼
+    /// @test/core#build ───┐
+    ///                     ▼
     /// @test/utils#build: [0] ──► [1] ──► [None]
     ///                                      │
     ///                                      ▼
