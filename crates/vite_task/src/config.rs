@@ -316,8 +316,8 @@ impl TaskGraphBuilder {
             processed_tasks.insert(task_id.clone(), (resolved_task, deps.clone()));
 
             for dep in deps {
-                // task_id depends on dep, so edge goes from task_id to dep
-                edges.push((task_id.clone(), dep.clone()));
+                // task_id depends on dep, so edge goes from dep to task_id
+                edges.push((dep.clone(), task_id.clone()));
                 remaining_task_ids.insert(dep);
             }
         }
@@ -644,14 +644,23 @@ mod tests {
                 })
             };
 
-            // With topological mode, tasks should depend on the same task in their dependencies
+            // With topological mode, edges go from dependencies to dependents
             assert!(
-                has_edge("@test/utils#build", "@test/core#build"),
-                "Utils should depend on Core"
+                has_edge("@test/core#build", "@test/utils#build"),
+                "Core should have edge to Utils (Utils depends on Core)"
             );
-            assert!(has_edge("@test/app#build", "@test/utils#build"), "App should depend on Utils");
-            assert!(has_edge("@test/web#build", "@test/app#build"), "Web should depend on App");
-            assert!(has_edge("@test/web#build", "@test/core#build"), "Web should depend on Core");
+            assert!(
+                has_edge("@test/utils#build", "@test/app#build"),
+                "Utils should have edge to App (App depends on Utils)"
+            );
+            assert!(
+                has_edge("@test/app#build", "@test/web#build"),
+                "App should have edge to Web (Web depends on App)"
+            );
+            assert!(
+                has_edge("@test/core#build", "@test/web#build"),
+                "Core should have edge to Web (Web depends on Core)"
+            );
         })
     }
 
@@ -799,25 +808,25 @@ mod tests {
 
             // Within-package dependencies for @test/utils compound command
             assert!(
-                has_edge("@test/utils#build", Some(1), "@test/utils#build", Some(0)),
-                "Second subtask should depend on first"
+                has_edge("@test/utils#build", Some(0), "@test/utils#build", Some(1)),
+                "First subtask should have edge to second (second depends on first)"
             );
             assert!(
-                has_edge("@test/utils#build", None, "@test/utils#build", Some(1)),
-                "Last subtask should depend on second"
+                has_edge("@test/utils#build", Some(1), "@test/utils#build", None),
+                "Second subtask should have edge to last (last depends on second)"
             );
 
             // Cross-package dependencies
-            // The FIRST subtask of utils should depend on core's LAST subtask (None)
+            // Core's LAST subtask should have edge to utils' FIRST subtask
             assert!(
-                has_edge("@test/utils#build", Some(0), "@test/core#build", None),
-                "First utils subtask should depend on last core subtask"
+                has_edge("@test/core#build", None, "@test/utils#build", Some(0)),
+                "Core's last subtask should have edge to utils' first subtask (utils depends on core)"
             );
 
-            // App should depend on utils' LAST subtask
+            // Utils' LAST subtask should have edge to app
             assert!(
-                has_edge("@test/app#build", None, "@test/utils#build", None),
-                "App should depend on last utils subtask"
+                has_edge("@test/utils#build", None, "@test/app#build", None),
+                "Utils' last subtask should have edge to app (app depends on utils)"
             );
         })
     }
