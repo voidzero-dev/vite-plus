@@ -45,15 +45,9 @@ impl ExecutionPlan {
         topological_run: bool,
     ) -> Result<Self, Error> {
         // TODO: implement parallel execution grouping
-        let node_indices = if topological_run {
-            // Sort tasks so dependencies are executed before dependents
-            match toposort(&task_graph, None) {
-                Ok(ok) => ok,
-                Err(err) => return Err(Error::CycleDependenciesError(err)),
-            }
-        } else {
-            // Use discovery order (no sorting)
-            task_graph.node_indices().collect::<Vec<_>>()
+        let node_indices = match toposort(&task_graph, None) {
+            Ok(ok) => ok,
+            Err(err) => return Err(Error::CycleDependenciesError(err)),
         };
 
         // Extract tasks from the graph in the determined order

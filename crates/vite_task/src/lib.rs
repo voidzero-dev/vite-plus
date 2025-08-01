@@ -83,12 +83,11 @@ pub enum Commands {
 #[tracing::instrument]
 pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
     let mut workspace = Workspace::load(cwd)?;
-    let task_args = Arc::<[Str]>::from(args.task_args);
     let mut recursive_run = false;
     let mut parallel_run = false;
     let mut topological_run = false;
-    let tasks = match &args.commands {
-        Some(Commands::Run { tasks, recursive, parallel, topological, .. }) => {
+    let (tasks, task_args) = match &args.commands {
+        Some(Commands::Run { tasks, recursive, parallel, topological, task_args, .. }) => {
             recursive_run = *recursive;
             parallel_run = *parallel;
             if recursive_run {
@@ -96,7 +95,7 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
             } else {
                 topological_run = topological.unwrap_or(false);
             }
-            tasks
+            (tasks, Arc::<[Str]>::from(task_args.clone()))
         }
         None => {
             // in implicit mode, vite-plus will run the task in the current package, replace the `pnpm/yarn/npm run` command.
@@ -107,7 +106,10 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
             if name.is_empty() {
                 return Err(Error::EmptyPackageName(workspace.dir));
             }
-            &vec![if task.contains('#') { task } else { format!("{name}#{}", task).into() }]
+            (
+                &vec![if task.contains('#') { task } else { format!("{name}#{}", task).into() }],
+                Arc::<[Str]>::from(args.task_args),
+            )
         }
     };
 
@@ -424,5 +426,39 @@ mod tests {
         } else {
             panic!("Expected Run command");
         }
+    }
+
+    #[test]
+    fn test_run_command_uses_subcommand_task_args() {
+        // This test verifies that the main function uses task_args from Commands::Run,
+        // not from the top-level Args struct
+        let args1 = Args::try_parse_from(&[
+            "vite-plus",
+            "run",
+            "build",
+            "--",
+            "--watch",
+            "--mode=production",
+        ])
+        .unwrap();
+
+        let args2 =
+            Args::try_parse_from(&["vite-plus", "build", "--", "--watch", "--mode=development"])
+                .unwrap();
+
+        // Verify args1: explicit mode with run subcommand
+        assert!(args1.task.is_none());
+        assert!(args1.task_args.is_empty()); // Top-level task_args should be empty
+        if let Some(Commands::Run { tasks, task_args, .. }) = &args1.commands {
+            assert_eq!(tasks, &vec!["build".into()]);
+            assert_eq!(task_args, &vec!["--watch".into(), "--mode=production".into()]);
+        } else {
+            panic!("Expected Run command");
+        }
+
+        // Verify args2: implicit mode
+        assert_eq!(args2.task, Some("build".into()));
+        assert_eq!(args2.task_args, vec!["--watch".into(), "--mode=development".into()]);
+        assert!(args2.commands.is_none());
     }
 }
