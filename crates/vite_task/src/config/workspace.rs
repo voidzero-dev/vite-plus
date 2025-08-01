@@ -43,8 +43,7 @@ impl Workspace {
     pub fn load_with_cache_path(dir: PathBuf, cache_path: Option<PathBuf>) -> Result<Self, Error> {
         let package_graph = vite_package_manager::get_package_graph(&dir)?;
 
-        let mut packages_with_task_jsons: Vec<(PackageInfo, Option<ViteTaskJson>, NodeIndex)> =
-            Vec::new();
+        let mut packages_with_task_jsons: Vec<(NodeIndex, Option<ViteTaskJson>)> = Vec::new();
 
         let mut package_json = None;
         for node_index in package_graph.node_indices() {
@@ -65,7 +64,7 @@ impl Workspace {
                     None
                 }
             };
-            packages_with_task_jsons.push((package.clone(), vite_task_json, node_index));
+            packages_with_task_jsons.push((node_index, vite_task_json));
         }
 
         let cache_path = cache_path.unwrap_or_else(|| {
@@ -87,8 +86,15 @@ impl Workspace {
         // Build the complete task graph
         let mut task_graph_builder = TaskGraphBuilder::default();
 
+        // Create a map from package name to node index for efficient lookups
+        let package_name_to_node: HashMap<String, NodeIndex> = package_graph
+            .node_indices()
+            .map(|idx| (package_graph[idx].package_json.name.to_string(), idx))
+            .collect();
+
         // First pass: collect all tasks from all packages
-        for (package_info, task_json, _) in &packages_with_task_jsons {
+        for (node_index, task_json) in &packages_with_task_jsons {
+            let package_info = &package_graph[*node_index];
             let task_prefix = format!("{}#", &package_info.package_json.name);
 
             // Load tasks from vite-task.json
@@ -156,7 +162,8 @@ impl Workspace {
         }
 
         // Build the complete task graph with all dependencies
-        let task_graph = task_graph_builder.clone().build_complete_graph(&package_graph)?;
+        let task_graph =
+            task_graph_builder.build_complete_graph(&package_graph, &package_name_to_node)?;
 
         Ok(Self {
             package_graph,
@@ -250,7 +257,6 @@ impl Workspace {
         task_names: &[Str],
         task_args: Arc<[Str]>,
         recursive_run: bool,
-        topological_run: bool,
     ) -> Result<StableDiGraph<ResolvedTask, ()>, Error> {
         if recursive_run {
             for task in task_names {

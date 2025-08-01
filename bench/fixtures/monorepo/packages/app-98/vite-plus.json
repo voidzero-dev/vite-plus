@@ -1,0 +1,23 @@
+{
+  "extends": "../../vite-plus.json",
+  "tasks": {
+    "build": {
+      "dependsOn": [
+        "^build",
+        "prebuild",
+        "compile"
+      ],
+      "outputs": [
+        "dist/**",
+        "build/**",
+        ".next/**"
+      ]
+    },
+    "compile": {
+      "dependsOn": [
+        "^build"
+      ],
+      "cache": true
+    }
+  }
+}

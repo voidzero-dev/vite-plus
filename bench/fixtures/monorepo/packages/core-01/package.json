@@ -1,0 +1,29 @@
+{
+  "name": "@benchmark/core-01",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "build": "echo 'Building @benchmark/core-01'",
+    "test": "echo 'Testing @benchmark/core-01'",
+    "lint": "echo 'Linting @benchmark/core-01'",
+    "typecheck": "echo 'Type checking @benchmark/core-01'",
+    "prepare": "echo 'Preparing @benchmark/core-01'",
+    "prebuild": "echo 'Pre-building @benchmark/core-01'",
+    "postbuild": "echo 'Post-building @benchmark/core-01'",
+    "dev": "echo 'Starting dev server for @benchmark/core-01'",
+    "start": "echo 'Starting @benchmark/core-01'",
+    "compile": "echo 'Compiling core library'",
+    "validate": "echo 'Validating core'"
+  },
+  "dependencies": {
+    "@benchmark/core-00": "1.0.0",
+    "express": "^4.18.0",
+    "lodash": "^4.17.21",
+    "react": "^18.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "eslint": "^8.0.0"
+  }
+}

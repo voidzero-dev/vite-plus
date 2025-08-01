@@ -1,0 +1,36 @@
+{
+  "name": "@benchmark/feature-59",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "build": "echo 'Building @benchmark/feature-59'",
+    "test": "echo 'Testing @benchmark/feature-59'",
+    "lint": "echo 'Linting @benchmark/feature-59'",
+    "typecheck": "echo 'Type checking @benchmark/feature-59'",
+    "prepare": "echo 'Preparing @benchmark/feature-59'",
+    "prebuild": "echo 'Pre-building @benchmark/feature-59'",
+    "postbuild": "echo 'Post-building @benchmark/feature-59'",
+    "dev": "echo 'Starting dev server for @benchmark/feature-59'",
+    "start": "echo 'Starting @benchmark/feature-59'",
+    "bundle": "echo 'Bundling feature'",
+    "analyze": "echo 'Analyzing feature'"
+  },
+  "dependencies": {
+    "@benchmark/core-02": "1.0.0",
+    "@benchmark/core-04": "1.0.0",
+    "@benchmark/util-28": "1.0.0",
+    "@benchmark/util-39": "1.0.0",
+    "@benchmark/util-21": "1.0.0",
+    "@benchmark/util-30": "1.0.0",
+    "@benchmark/util-35": "1.0.0",
+    "@benchmark/feature-53": "1.0.0",
+    "@benchmark/feature-46": "1.0.0",
+    "lodash": "^4.17.21",
+    "react": "^18.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "eslint": "^8.0.0"
+  }
+}

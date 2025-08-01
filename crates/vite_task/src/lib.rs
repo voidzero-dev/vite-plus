@@ -18,9 +18,11 @@ use serde::Serialize;
 use crate::cache::{CachedTask, TaskCacheKey};
 use crate::str::Str;
 
-use crate::{config::Workspace, schedule::ExecutionPlan};
+use crate::schedule::ExecutionPlan;
 
 pub(crate) use vite_error::Error;
+
+pub use crate::config::Workspace;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -121,8 +123,7 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
         }
     };
 
-    let task_graph =
-        workspace.resolve_tasks(&tasks, task_args.clone(), recursive_run, topological_run)?;
+    let task_graph = workspace.resolve_tasks(&tasks, task_args.clone(), recursive_run)?;
 
     if args.debug {
         #[derive(Serialize)]

@@ -1,0 +1,16 @@
+[package]
+name = "vite-plus-benches"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+vite_task = { path = "../crates/vite_task" }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "workspace_load"
+harness = false

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "packages/cli/binding"]
+members = ["bench", "crates/*", "packages/cli/binding"]
 
 [workspace.package]
 authors = ["Vite+ Authors"]
@@ -39,6 +39,7 @@ bstr = "1.12.0"
 clap = "4.5.40"
 color-eyre = "0.6.5"
 compact_str = "0.9.0"
+criterion = { version = "0.7", features = ["html_reports"] }
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 dashmap = "6.1.0"
 diff-struct = "0.5.3"

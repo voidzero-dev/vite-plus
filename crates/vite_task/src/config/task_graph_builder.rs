@@ -31,6 +31,7 @@ impl TaskGraphBuilder {
     pub(crate) fn build_complete_graph(
         self,
         package_graph: &Graph<PackageInfo, DependencyType>,
+        package_name_to_node: &HashMap<String, NodeIndex>,
     ) -> Result<StableDiGraph<ResolvedTask, ()>, Error> {
         let mut task_graph = StableDiGraph::<ResolvedTask, ()>::new();
         let mut node_indices_by_task_ids = HashMap::<TaskId, NodeIndex>::new();
@@ -62,16 +63,13 @@ impl TaskGraphBuilder {
 
                 if is_first_subtask {
                     // Find the current package's node
-                    let current_package_node = package_graph
-                        .node_indices()
-                        .find(|&idx| package_graph[idx].package_json.name == package_name);
-
-                    if let Some(current_node) = current_package_node {
+                    if let Some(&current_node) = package_name_to_node.get(package_name) {
                         // Find all transitive dependencies that have this task
                         let transitive_deps = self.find_transitive_task_dependencies(
                             current_node,
                             task_name,
                             package_graph,
+                            package_name_to_node,
                         );
 
                         // Add edges from each transitive dependency to this task
@@ -96,6 +94,7 @@ impl TaskGraphBuilder {
         package_node: NodeIndex,
         task_name: &str,
         package_graph: &Graph<PackageInfo, DependencyType>,
+        package_name_to_node: &HashMap<String, NodeIndex>,
     ) -> Vec<TaskId> {
         let mut result = Vec::new();
         let mut visited = HashSet::new();
@@ -104,6 +103,7 @@ impl TaskGraphBuilder {
             &package_graph[package_node].package_json.name,
             task_name,
             package_graph,
+            package_name_to_node,
             &mut visited,
             &mut result,
         );
@@ -116,6 +116,7 @@ impl TaskGraphBuilder {
         package_name: &str,
         task_name: &str,
         package_graph: &Graph<PackageInfo, DependencyType>,
+        package_name_to_node: &HashMap<String, NodeIndex>,
         visited: &mut HashSet<String>,
         result: &mut Vec<TaskId>,
     ) {
@@ -124,12 +125,8 @@ impl TaskGraphBuilder {
         }
         visited.insert(package_name.to_string());
 
-        // Find the package in the graph
-        let package_node = package_graph
-            .node_indices()
-            .find(|&idx| package_graph[idx].package_json.name == package_name);
-
-        if let Some(node_idx) = package_node {
+        // Find the package in the graph using the pre-built map
+        if let Some(&node_idx) = package_name_to_node.get(package_name) {
             let package = &package_graph[node_idx];
 
             // Check all dependencies from package.json
@@ -149,6 +146,7 @@ impl TaskGraphBuilder {
                     dep_name,
                     task_name,
                     package_graph,
+                    package_name_to_node,
                     visited,
                     result,
                 );

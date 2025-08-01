@@ -154,7 +154,7 @@ mod tests {
 
             // Test recursive topological build
             let task_graph = workspace
-                .resolve_tasks(&vec!["build".into()], Arc::default(), true, true)
+                .resolve_tasks(&vec!["build".into()], Arc::default(), true)
                 .expect("Failed to resolve tasks");
 
             // Verify that all build tasks are included
@@ -208,7 +208,7 @@ mod tests {
             // Test recursive build without topological flag
             // Note: Even without topological flag, cross-package dependencies are now always included
             let task_graph = workspace
-                .resolve_tasks(&vec!["build".into()], Arc::default(), true, false)
+                .resolve_tasks(&vec!["build".into()], Arc::default(), true)
                 .expect("Failed to resolve tasks");
 
             // Verify that all build tasks are included
@@ -248,12 +248,8 @@ mod tests {
                     .expect("Failed to load workspace");
 
             // Test that specifying a scoped task with recursive flag returns an error
-            let result = workspace.resolve_tasks(
-                &vec!["@test/core#build".into()],
-                Arc::default(),
-                true,
-                false,
-            );
+            let result =
+                workspace.resolve_tasks(&vec!["@test/core#build".into()], Arc::default(), true);
 
             assert!(result.is_err());
             match result {
@@ -277,7 +273,7 @@ mod tests {
 
             // Test non-recursive build of a single package
             let task_graph = workspace
-                .resolve_tasks(&vec!["@test/utils#build".into()], Arc::default(), false, false)
+                .resolve_tasks(&vec!["@test/utils#build".into()], Arc::default(), false)
                 .expect("Failed to resolve tasks");
 
             // @test/utils has compound commands (3 subtasks) plus dependencies on @test/core#build
@@ -308,7 +304,7 @@ mod tests {
 
             // Test recursive topological build with compound commands
             let task_graph = workspace
-                .resolve_tasks(&vec!["build".into()], Arc::default(), true, true)
+                .resolve_tasks(&vec!["build".into()], Arc::default(), true)
                 .expect("Failed to resolve tasks");
 
             // Check all tasks including subcommands
@@ -376,7 +372,7 @@ mod tests {
 
             // Test recursive topological build with transitive dependencies
             let task_graph = workspace
-                .resolve_tasks(&vec!["build".into()], Arc::default(), true, true)
+                .resolve_tasks(&vec!["build".into()], Arc::default(), true)
                 .expect("Failed to resolve tasks");
 
             // Verify that all build tasks are included
@@ -422,7 +418,7 @@ mod tests {
 
             // Test build task graph
             let build_graph = workspace
-                .resolve_tasks(&vec!["build".into()], Arc::default(), true, false)
+                .resolve_tasks(&vec!["build".into()], Arc::default(), true)
                 .expect("Failed to resolve build tasks");
 
             let build_tasks: Vec<_> =
@@ -548,7 +544,7 @@ mod tests {
 
             // Test test task graph
             let test_graph = workspace
-                .resolve_tasks(&vec!["test".into()], Arc::default(), true, false)
+                .resolve_tasks(&vec!["test".into()], Arc::default(), true)
                 .expect("Failed to resolve test tasks");
 
             let test_tasks: Vec<_> =
@@ -573,7 +569,7 @@ mod tests {
 
             // Test specific package task
             let api_build_graph = workspace
-                .resolve_tasks(&vec!["@test/api#build".into()], Arc::default(), false, false)
+                .resolve_tasks(&vec!["@test/api#build".into()], Arc::default(), false)
                 .expect("Failed to resolve api build task");
 
             let api_deps: Vec<_> =
@@ -601,7 +597,7 @@ mod tests {
 
             // Test app build task graph - this should show the full dependency tree
             let app_build_graph = workspace
-                .resolve_tasks(&vec!["@test/app#build".into()], Arc::default(), false, false)
+                .resolve_tasks(&vec!["@test/app#build".into()], Arc::default(), false)
                 .expect("Failed to resolve app build task");
 
             // Expected task graph structure:

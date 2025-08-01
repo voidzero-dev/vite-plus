@@ -1,0 +1,33 @@
+{
+  "name": "@benchmark/util-31",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "build": "echo 'Building @benchmark/util-31'",
+    "test": "echo 'Testing @benchmark/util-31'",
+    "lint": "echo 'Linting @benchmark/util-31'",
+    "typecheck": "echo 'Type checking @benchmark/util-31'",
+    "prepare": "echo 'Preparing @benchmark/util-31'",
+    "prebuild": "echo 'Pre-building @benchmark/util-31'",
+    "postbuild": "echo 'Post-building @benchmark/util-31'",
+    "dev": "echo 'Starting dev server for @benchmark/util-31'",
+    "start": "echo 'Starting @benchmark/util-31'",
+    "generate": "echo 'Generating utilities'",
+    "optimize": "echo 'Optimizing utils'"
+  },
+  "dependencies": {
+    "@benchmark/core-02": "1.0.0",
+    "@benchmark/core-16": "1.0.0",
+    "@benchmark/core-08": "1.0.0",
+    "@benchmark/util-24": "1.0.0",
+    "@benchmark/util-29": "1.0.0",
+    "lodash": "^4.17.21",
+    "axios": "^1.0.0",
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "eslint": "^8.0.0"
+  }
+}

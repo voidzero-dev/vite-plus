@@ -1,0 +1,13 @@
+{
+  "extends": "../../vite-plus.json",
+  "tasks": {
+    "bundle": {
+      "dependsOn": [
+        "build"
+      ],
+      "outputs": [
+        "bundle/**"
+      ]
+    }
+  }
+}

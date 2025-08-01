@@ -1,0 +1,34 @@
+{
+  "name": "@benchmark/service-66",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "build": "echo 'Building @benchmark/service-66'",
+    "test": "echo 'Testing @benchmark/service-66'",
+    "lint": "echo 'Linting @benchmark/service-66'",
+    "typecheck": "echo 'Type checking @benchmark/service-66'",
+    "prepare": "echo 'Preparing @benchmark/service-66'",
+    "prebuild": "echo 'Pre-building @benchmark/service-66'",
+    "postbuild": "echo 'Post-building @benchmark/service-66'",
+    "dev": "echo 'Starting dev server for @benchmark/service-66'",
+    "start": "echo 'Starting @benchmark/service-66'",
+    "deploy": "echo 'Deploying service'",
+    "migrate": "echo 'Running migrations'"
+  },
+  "dependencies": {
+    "@benchmark/feature-55": "1.0.0",
+    "@benchmark/feature-41": "1.0.0",
+    "@benchmark/feature-43": "1.0.0",
+    "@benchmark/util-38": "1.0.0",
+    "@benchmark/util-27": "1.0.0",
+    "@benchmark/util-25": "1.0.0",
+    "@benchmark/core-12": "1.0.0",
+    "@benchmark/core-18": "1.0.0",
+    "lodash": "^4.17.21"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "eslint": "^8.0.0"
+  }
+}
