@@ -1,0 +1,10 @@
+{
+  "name": "@test/shared",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo Cleaning && echo Compiling shared && echo Generating types",
+    "test": "echo Setting up test env && echo Running tests && echo Cleanup",
+    "lint": "echo Linting shared",
+    "typecheck": "echo Type checking shared"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "@test/c",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo Building C"
+  }
+}

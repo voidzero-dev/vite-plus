@@ -1,0 +1,11 @@
+{
+  "name": "@test/tools",
+  "version": "1.0.0",
+  "scripts": {
+    "generate": "echo Generating tools",
+    "validate": "echo Validating"
+  },
+  "dependencies": {
+    "@test/config": "*"
+  }
+}
