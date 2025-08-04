@@ -9,8 +9,8 @@ fn bench_workspace_load(c: &mut Criterion) {
     // Basic workspace load benchmark
     c.bench_function("workspace_load_1000_packages", |b| {
         b.iter(|| {
-            let workspace =
-                Workspace::load(black_box(fixture_path.clone())).expect("Failed to load workspace");
+            let workspace = black_box(Workspace::load(fixture_path.clone(), true))
+                .expect("Failed to load workspace");
             black_box(workspace);
         });
     });
@@ -23,8 +23,8 @@ fn bench_workspace_load(c: &mut Criterion) {
     // Benchmark just the load operation
     group.bench_function("basic_load", |b| {
         b.iter(|| {
-            let workspace =
-                Workspace::load(black_box(fixture_path.clone())).expect("Failed to load workspace");
+            let workspace = Workspace::load(black_box(fixture_path.clone()), true)
+                .expect("Failed to load workspace");
             black_box(workspace);
         });
     });
@@ -33,11 +33,14 @@ fn bench_workspace_load(c: &mut Criterion) {
     group.bench_function("load_with_cache_path", |b| {
         let cache_path = fixture_path.join("node_modules/.vite/task-cache.db");
         b.iter(|| {
-            let workspace = Workspace::load_with_cache_path(
-                black_box(fixture_path.clone()),
-                Some(black_box(cache_path.clone())),
-            )
-            .expect("Failed to load workspace");
+            let workspace = black_box(
+                Workspace::load_with_cache_path(
+                    fixture_path.clone(),
+                    Some(cache_path.clone()),
+                    true,
+                )
+                .expect("Failed to load workspace"),
+            );
             black_box(workspace);
         });
     });
@@ -52,7 +55,7 @@ fn bench_workspace_load(c: &mut Criterion) {
     size_group.bench_with_input(BenchmarkId::new("packages", 100), &fixture_path, |b, path| {
         b.iter(|| {
             let workspace =
-                Workspace::load(black_box(path.clone())).expect("Failed to load workspace");
+                Workspace::load(black_box(path.clone()), true).expect("Failed to load workspace");
             black_box(workspace);
         });
     });

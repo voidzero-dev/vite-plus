@@ -1,0 +1,9 @@
+{
+  "tasks": {
+    "lint": {
+      "command": "eslint src",
+      "cacheable": true,
+      "dependsOn": ["@test/core#build", "@test/utils#build"]
+    }
+  }
+}

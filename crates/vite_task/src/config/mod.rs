@@ -149,7 +149,7 @@ mod tests {
                 .join("fixtures/recursive-topological-workspace");
 
             let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()))
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
                     .expect("Failed to load workspace");
 
             // Test recursive topological build
@@ -196,13 +196,309 @@ mod tests {
     }
 
     #[test]
+    fn test_set_topological() {
+        with_unique_cache_path("set_topological", |cache_path| {
+            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("fixtures/recursive-topological-workspace");
+
+            let mut workspace =
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
+                    .expect("Failed to load workspace");
+
+            // Initially loaded with topological=true
+            assert_eq!(workspace.topological_run, true);
+
+            // Check that implicit dependencies exist
+            let has_edge_in_workspace = |workspace: &Workspace, from: &str, to: &str| -> bool {
+                workspace.task_graph.edge_indices().any(|edge_idx| {
+                    let (source, target) = workspace.task_graph.edge_endpoints(edge_idx).unwrap();
+                    workspace.task_graph[source].id.name.as_str() == from
+                        && workspace.task_graph[target].id.name.as_str() == to
+                })
+            };
+
+            assert!(
+                has_edge_in_workspace(&workspace, "@test/core#build", "@test/utils#build"),
+                "Initially, implicit edge should exist"
+            );
+
+            // Toggle to false
+            workspace.set_topological(false).expect("Failed to set topological to false");
+            assert_eq!(workspace.topological_run, false);
+
+            // Verify the task graph was rebuilt without implicit dependencies
+            assert!(
+                !has_edge_in_workspace(&workspace, "@test/core#build", "@test/utils#build"),
+                "After setting topological=false, implicit edge should be removed"
+            );
+
+            // Toggle back to true
+            workspace.set_topological(true).expect("Failed to set topological to true");
+            assert_eq!(workspace.topological_run, true);
+
+            // Verify implicit dependencies are restored
+            assert!(
+                has_edge_in_workspace(&workspace, "@test/core#build", "@test/utils#build"),
+                "After setting topological=true again, implicit edge should be restored"
+            );
+
+            // Test no-op case
+            workspace.set_topological(true).expect("Setting same value should succeed");
+            assert_eq!(workspace.topological_run, true);
+        });
+    }
+
+    #[test]
+    fn test_topological_run_false_no_implicit_deps() {
+        with_unique_cache_path("topological_run_false", |cache_path| {
+            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("fixtures/recursive-topological-workspace");
+
+            // Load with topological_run = false
+            let workspace = Workspace::load_with_cache_path(
+                fixture_path,
+                Some(cache_path.to_path_buf()),
+                false,
+            )
+            .expect("Failed to load workspace");
+
+            let task_graph = workspace
+                .resolve_tasks(&vec!["@test/web#build".into()], Arc::default(), false)
+                .expect("Failed to resolve tasks");
+
+            let has_edge = |from: &str, to: &str| -> bool {
+                task_graph.edge_indices().any(|edge_idx| {
+                    let (source, target) = task_graph.edge_endpoints(edge_idx).unwrap();
+                    task_graph[source].id.name.as_str() == from
+                        && task_graph[target].id.name.as_str() == to
+                })
+            };
+
+            // When topological_run is false, @test/web#build should NOT depend on @test/core#build
+            // even though @test/web depends on @test/core as a package dependency
+            assert!(
+                !has_edge("@test/core#build", "@test/web#build"),
+                "With topological_run=false, Core#build should NOT have edge to Web#build"
+            );
+        });
+    }
+
+    #[test]
+    fn test_explicit_deps_with_topological_false() {
+        with_unique_cache_path("explicit_deps_topological_false", |cache_path| {
+            let fixture_path =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/explicit-deps-workspace");
+
+            // Load with topological_run = false
+            let workspace = Workspace::load_with_cache_path(
+                fixture_path,
+                Some(cache_path.to_path_buf()),
+                false,
+            )
+            .expect("Failed to load workspace");
+
+            // Test @test/utils#lint which has explicit dependencies
+            let task_graph = workspace
+                .resolve_tasks(&vec!["@test/utils#lint".into()], Arc::default(), false)
+                .expect("Failed to resolve tasks");
+
+            let has_edge = |from: &str, to: &str| -> bool {
+                task_graph.edge_indices().any(|edge_idx| {
+                    let (source, target) = task_graph.edge_endpoints(edge_idx).unwrap();
+                    task_graph[source].id.name.as_str() == from
+                        && task_graph[target].id.name.as_str() == to
+                })
+            };
+
+            // Verify explicit dependencies are honored
+            assert!(
+                has_edge("@test/core#build", "@test/utils#lint"),
+                "Explicit dependency from core#build to utils#lint should exist"
+            );
+            assert!(
+                has_edge("@test/utils#build", "@test/utils#lint"),
+                "Explicit dependency from utils#build to utils#lint should exist"
+            );
+
+            // Verify NO implicit dependencies from package dependencies
+            // Even though @test/utils depends on @test/core, utils#build should NOT depend on core#build
+            assert!(
+                !has_edge("@test/core#build", "@test/utils#build"),
+                "With topological_run=false, no implicit dependency should exist"
+            );
+        });
+    }
+
+    #[test]
+    fn test_explicit_deps_with_topological_true() {
+        with_unique_cache_path("explicit_deps_topological_true", |cache_path| {
+            let fixture_path =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/explicit-deps-workspace");
+
+            // Load with topological_run = true
+            let workspace =
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
+                    .expect("Failed to load workspace");
+
+            // Test @test/utils#lint which has explicit dependencies
+            let task_graph = workspace
+                .resolve_tasks(&vec!["@test/utils#lint".into()], Arc::default(), false)
+                .expect("Failed to resolve tasks");
+
+            let has_edge = |from: &str, to: &str| -> bool {
+                task_graph.edge_indices().any(|edge_idx| {
+                    let (source, target) = task_graph.edge_endpoints(edge_idx).unwrap();
+                    task_graph[source].id.name.as_str() == from
+                        && task_graph[target].id.name.as_str() == to
+                })
+            };
+
+            // Verify explicit dependencies are still honored
+            assert!(
+                has_edge("@test/core#build", "@test/utils#lint"),
+                "Explicit dependency from core#build to utils#lint should exist"
+            );
+            assert!(
+                has_edge("@test/utils#build", "@test/utils#lint"),
+                "Explicit dependency from utils#build to utils#lint should exist"
+            );
+
+            // Verify implicit dependencies ARE added
+            assert!(
+                has_edge("@test/core#build", "@test/utils#build"),
+                "With topological_run=true, implicit dependency should exist"
+            );
+        });
+    }
+
+    #[test]
+    fn test_recursive_with_topological_false() {
+        with_unique_cache_path("recursive_topological_false", |cache_path| {
+            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("fixtures/recursive-topological-workspace");
+
+            // Load with topological_run = false
+            let workspace = Workspace::load_with_cache_path(
+                fixture_path,
+                Some(cache_path.to_path_buf()),
+                false,
+            )
+            .expect("Failed to load workspace");
+
+            // Test recursive build with topological_run=false
+            let task_graph = workspace
+                .resolve_tasks(&vec!["build".into()], Arc::default(), true)
+                .expect("Failed to resolve tasks");
+
+            // Verify that all build tasks are included (recursive flag works)
+            let task_names: Vec<_> =
+                task_graph.node_weights().map(|task| task.id.name.as_str()).collect();
+
+            assert!(task_names.contains(&"@test/core#build"));
+            assert!(task_names.contains(&"@test/utils#build"));
+            assert!(task_names.contains(&"@test/app#build"));
+            assert!(task_names.contains(&"@test/web#build"));
+
+            // But verify NO implicit dependencies exist
+            let has_edge = |from: &str, to: &str| -> bool {
+                task_graph.edge_indices().any(|edge_idx| {
+                    let (source, target) = task_graph.edge_endpoints(edge_idx).unwrap();
+                    task_graph[source].id.name.as_str() == from
+                        && task_graph[target].id.name.as_str() == to
+                })
+            };
+
+            // With topological_run=false, these implicit dependencies should NOT exist
+            assert!(
+                !has_edge("@test/core#build", "@test/utils#build"),
+                "No implicit edge from core to utils"
+            );
+            assert!(
+                !has_edge("@test/utils#build", "@test/app#build"),
+                "No implicit edge from utils to app"
+            );
+            assert!(
+                !has_edge("@test/app#build", "@test/web#build"),
+                "No implicit edge from app to web"
+            );
+        });
+    }
+
+    #[test]
+    fn test_topological_true_vs_false_comparison() {
+        let fixture_path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/recursive-topological-workspace");
+
+        // Use separate cache paths to avoid database locking
+        with_unique_cache_path("topological_comparison_true", |cache_path_true| {
+            // Load with topological_run = true
+            let workspace_true = Workspace::load_with_cache_path(
+                fixture_path.clone(),
+                Some(cache_path_true.to_path_buf()),
+                true,
+            )
+            .expect("Failed to load workspace with topological=true");
+
+            let graph_true = workspace_true
+                .resolve_tasks(&vec!["@test/app#build".into()], Arc::default(), false)
+                .expect("Failed to resolve tasks");
+
+            with_unique_cache_path("topological_comparison_false", |cache_path_false| {
+                // Load with topological_run = false
+                let workspace_false = Workspace::load_with_cache_path(
+                    fixture_path,
+                    Some(cache_path_false.to_path_buf()),
+                    false,
+                )
+                .expect("Failed to load workspace with topological=false");
+
+                let graph_false = workspace_false
+                    .resolve_tasks(&vec!["@test/app#build".into()], Arc::default(), false)
+                    .expect("Failed to resolve tasks");
+
+                // Count edges in each graph
+                let edge_count_true = graph_true.edge_count();
+                let edge_count_false = graph_false.edge_count();
+
+                // With topological=true, there should be more edges due to implicit dependencies
+                assert!(
+                    edge_count_true > edge_count_false,
+                    "Graph with topological=true ({}) should have more edges than topological=false ({})",
+                    edge_count_true,
+                    edge_count_false
+                );
+
+                // Verify specific edge differences
+                let has_edge =
+                    |graph: &StableDiGraph<ResolvedTask, ()>, from: &str, to: &str| -> bool {
+                        graph.edge_indices().any(|edge_idx| {
+                            let (source, target) = graph.edge_endpoints(edge_idx).unwrap();
+                            graph[source].id.name.as_str() == from
+                                && graph[target].id.name.as_str() == to
+                        })
+                    };
+
+                // This edge should exist with topological=true but not with topological=false
+                assert!(
+                    has_edge(&graph_true, "@test/utils#build", "@test/app#build"),
+                    "Implicit edge should exist with topological=true"
+                );
+                assert!(
+                    !has_edge(&graph_false, "@test/utils#build", "@test/app#build"),
+                    "Implicit edge should NOT exist with topological=false"
+                );
+            });
+        });
+    }
+
+    #[test]
     fn test_recursive_without_topological() {
         with_unique_cache_path("recursive_without_topological", |cache_path| {
             let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("fixtures/recursive-topological-workspace");
 
             let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()))
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
                     .expect("Failed to load workspace");
 
             // Test recursive build without topological flag
@@ -244,7 +540,7 @@ mod tests {
                 .join("fixtures/recursive-topological-workspace");
 
             let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()))
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
                     .expect("Failed to load workspace");
 
             // Test that specifying a scoped task with recursive flag returns an error
@@ -268,7 +564,7 @@ mod tests {
                 .join("fixtures/recursive-topological-workspace");
 
             let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()))
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
                     .expect("Failed to load workspace");
 
             // Test non-recursive build of a single package
@@ -299,7 +595,7 @@ mod tests {
                 .join("fixtures/recursive-topological-workspace");
 
             let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()))
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
                     .expect("Failed to load workspace");
 
             // Test recursive topological build with compound commands
@@ -367,7 +663,7 @@ mod tests {
                 .join("fixtures/transitive-dependency-workspace");
 
             let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()))
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
                     .expect("Failed to load workspace");
 
             // Test recursive topological build with transitive dependencies
@@ -413,7 +709,7 @@ mod tests {
                 Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
 
             let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()))
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
                     .expect("Failed to load workspace");
 
             // Test build task graph
@@ -592,7 +888,7 @@ mod tests {
                 Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
 
             let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()))
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
                     .expect("Failed to load workspace");
 
             // Test app build task graph - this should show the full dependency tree

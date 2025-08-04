@@ -42,13 +42,15 @@ impl ExecutionPlan {
     pub fn plan(
         mut task_graph: StableDiGraph<ResolvedTask, ()>,
         parallel_run: bool,
-        topological_run: bool,
     ) -> Result<Self, Error> {
-        // TODO: implement parallel execution grouping
+        // Always use topological sort to ensure the correct order of execution
+        // or the task dependencies declaration is meaningless
         let node_indices = match toposort(&task_graph, None) {
             Ok(ok) => ok,
             Err(err) => return Err(Error::CycleDependenciesError(err)),
         };
+
+        // TODO: implement parallel execution grouping
 
         // Extract tasks from the graph in the determined order
         let steps = node_indices.into_iter().map(|id| task_graph.remove_node(id).unwrap());

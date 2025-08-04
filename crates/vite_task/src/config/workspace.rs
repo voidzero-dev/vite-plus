@@ -32,15 +32,20 @@ pub struct Workspace {
     pub(crate) package_graph: Graph<PackageInfo, DependencyType>,
     pub(crate) package_json: PackageJson,
     pub(crate) task_graph: StableDiGraph<ResolvedTask, ()>,
+    pub(crate) topological_run: bool,
 }
 
 impl Workspace {
     #[tracing::instrument]
-    pub fn load(dir: PathBuf) -> Result<Self, Error> {
-        Self::load_with_cache_path(dir, None)
+    pub fn load(dir: PathBuf, topological_run: bool) -> Result<Self, Error> {
+        Self::load_with_cache_path(dir, None, topological_run)
     }
 
-    pub fn load_with_cache_path(dir: PathBuf, cache_path: Option<PathBuf>) -> Result<Self, Error> {
+    pub fn load_with_cache_path(
+        dir: PathBuf,
+        cache_path: Option<PathBuf>,
+        topological_run: bool,
+    ) -> Result<Self, Error> {
         let package_graph = vite_package_manager::get_package_graph(&dir)?;
 
         let mut packages_with_task_jsons: Vec<(NodeIndex, Option<ViteTaskJson>)> = Vec::new();
@@ -162,8 +167,11 @@ impl Workspace {
         }
 
         // Build the complete task graph with all dependencies
-        let task_graph =
-            task_graph_builder.build_complete_graph(&package_graph, &package_name_to_node)?;
+        let task_graph = task_graph_builder.build_complete_graph(
+            &package_graph,
+            &package_name_to_node,
+            topological_run,
+        )?;
 
         Ok(Self {
             package_graph,
@@ -172,11 +180,126 @@ impl Workspace {
             fs: CachedFileSystem::default(),
             package_json: package_json.unwrap_or_default(),
             task_graph,
+            topological_run,
         })
     }
 
     pub const fn cache(&self) -> &TaskCache {
         &self.task_cache
+    }
+
+    /// Set the topological_run flag and rebuild the task graph if necessary
+    pub fn set_topological(&mut self, topological_run: bool) -> Result<(), Error> {
+        if self.topological_run == topological_run {
+            // No change needed
+            return Ok(());
+        }
+
+        self.topological_run = topological_run;
+
+        // Rebuild the task graph with the new topological setting
+        let mut task_graph_builder = TaskGraphBuilder::default();
+        let package_name_to_node: HashMap<String, NodeIndex> = self
+            .package_graph
+            .node_indices()
+            .map(|idx| (self.package_graph[idx].package_json.name.to_string(), idx))
+            .collect();
+
+        // Re-add all tasks to the builder (replicate logic from load_with_cache_path)
+        let mut packages_with_task_jsons: Vec<(NodeIndex, Option<ViteTaskJson>)> = Vec::new();
+        for node_idx in self.package_graph.node_indices() {
+            let package = &self.package_graph[node_idx];
+            let vite_task_json_path =
+                self.dir.join(Path::new(&package.path)).join("vite-task.json");
+            let vite_task_json: Option<ViteTaskJson> = match File::open(vite_task_json_path) {
+                Ok(vite_task_json_file) => {
+                    Some(serde_json::from_reader(BufReader::new(vite_task_json_file))?)
+                }
+                Err(err) => {
+                    if err.kind() != std::io::ErrorKind::NotFound {
+                        return Err(err.into());
+                    }
+                    None
+                }
+            };
+            packages_with_task_jsons.push((node_idx, vite_task_json));
+        }
+
+        // First pass: collect all tasks from all packages
+        for (node_index, task_json) in &packages_with_task_jsons {
+            let package_info = &self.package_graph[*node_index];
+            let task_prefix = format!("{}#", &package_info.package_json.name);
+
+            // Load tasks from vite-task.json
+            if let Some(task_json) = task_json {
+                for (task_name, task_config_json) in &task_json.tasks {
+                    let id = TaskId {
+                        name: format!("{}{}", &task_prefix, task_name).into(),
+                        subcommand_index: None,
+                    };
+                    let resolved_task = Self::resolve_task(
+                        task_config_json.config.clone(),
+                        package_info,
+                        id.clone(),
+                        Arc::default(),
+                        &self.dir,
+                    )?;
+                    let deps: Vec<TaskId> = task_config_json
+                        .depends_on
+                        .iter()
+                        .cloned()
+                        .map(|name| TaskId { name, subcommand_index: None })
+                        .collect();
+                    task_graph_builder.add_task_with_deps(resolved_task, deps)?;
+                }
+            }
+
+            // Load tasks from package.json scripts
+            for (script_name, script) in &package_info.package_json.scripts {
+                let name: Str = format!("{task_prefix}{script_name}").into();
+                if let Some(and_list) = try_parse_as_and_list(script) {
+                    let and_list_len = and_list.len();
+                    for (index, command) in and_list.into_iter().enumerate() {
+                        let is_last = index + 1 == and_list_len;
+                        let task_id = TaskId {
+                            name: name.clone(),
+                            subcommand_index: if is_last { None } else { Some(index) },
+                        };
+                        let resolved_task = Self::resolve_task(
+                            TaskCommand::Parsed(command),
+                            package_info,
+                            task_id.clone(),
+                            Arc::default(),
+                            &self.dir,
+                        )?;
+                        let deps = if let Some(dep_index) = index.checked_sub(1) {
+                            vec![TaskId { name: name.clone(), subcommand_index: Some(dep_index) }]
+                        } else {
+                            vec![]
+                        };
+                        task_graph_builder.add_task_with_deps(resolved_task, deps)?;
+                    }
+                } else {
+                    let resolved_task = Self::resolve_task(
+                        TaskCommand::ShellScript(script.as_str().into()),
+                        package_info,
+                        TaskId { name: name.clone(), subcommand_index: None },
+                        Arc::default(),
+                        &self.dir,
+                    )?;
+                    task_graph_builder.add_task_with_deps(resolved_task, vec![])?;
+                }
+            }
+        }
+
+        // Rebuild the complete task graph with the new topological setting
+        self.task_graph = task_graph_builder.build_complete_graph(
+            &self.package_graph,
+            &package_name_to_node,
+            topological_run,
+        )?;
+
+        Ok(())
     }
 
     pub async fn unload(self) -> Result<(), Error> {

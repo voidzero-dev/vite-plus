@@ -32,6 +32,7 @@ impl TaskGraphBuilder {
         self,
         package_graph: &Graph<PackageInfo, DependencyType>,
         package_name_to_node: &HashMap<String, NodeIndex>,
+        topological_run: bool,
     ) -> Result<StableDiGraph<ResolvedTask, ()>, Error> {
         let mut task_graph = StableDiGraph::<ResolvedTask, ()>::new();
         let mut node_indices_by_task_ids = HashMap::<TaskId, NodeIndex>::new();
@@ -53,30 +54,35 @@ impl TaskGraphBuilder {
             }
         }
 
-        // Always add topological dependencies based on package dependencies
+        // Add topological dependencies based on package dependencies when `topological_run` is true
         // When package A depends on package B, and both have the same task name,
         // A#task depends on B#task
-        for (task_id, _) in &self.resolved_tasks_and_dep_ids_by_id {
-            if let Some((package_name, task_name)) = task_id.name.split_once('#') {
-                // Only add cross-package dependencies for the FIRST subtask
-                let is_first_subtask = task_id.subcommand_index.map_or(true, |idx| idx == 0);
+        if topological_run {
+            for (task_id, _) in &self.resolved_tasks_and_dep_ids_by_id {
+                if let Some((package_name, task_name)) = task_id.name.split_once('#') {
+                    // Only add cross-package dependencies for the FIRST subtask
+                    let is_first_subtask = task_id.subcommand_index.map_or(true, |idx| idx == 0);
 
-                if is_first_subtask {
-                    // Find the current package's node
-                    if let Some(&current_node) = package_name_to_node.get(package_name) {
-                        // Find all transitive dependencies that have this task
-                        let transitive_deps = self.find_transitive_task_dependencies(
-                            current_node,
-                            task_name,
-                            package_graph,
-                            package_name_to_node,
-                        );
+                    if is_first_subtask {
+                        // Find the current package's node
+                        if let Some(&current_node) = package_name_to_node.get(package_name) {
+                            // Find all transitive dependencies that have this task
+                            let transitive_deps = self.find_transitive_task_dependencies(
+                                current_node,
+                                task_name,
+                                package_graph,
+                                package_name_to_node,
+                            );
 
-                        // Add edges from each transitive dependency to this task
-                        for dep_task_id in transitive_deps {
-                            if let Some(&source_idx) = node_indices_by_task_ids.get(&dep_task_id) {
-                                if let Some(&target_idx) = node_indices_by_task_ids.get(task_id) {
-                                    task_graph.add_edge(source_idx, target_idx, ());
+                            // Add edges from each transitive dependency to this task
+                            for dep_task_id in transitive_deps {
+                                if let Some(&source_idx) =
+                                    node_indices_by_task_ids.get(&dep_task_id)
+                                {
+                                    if let Some(&target_idx) = node_indices_by_task_ids.get(task_id)
+                                    {
+                                        task_graph.add_edge(source_idx, target_idx, ());
+                                    }
                                 }
                             }
                         }

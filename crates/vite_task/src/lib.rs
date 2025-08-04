@@ -90,24 +90,24 @@ pub enum Commands {
 /// ```
 #[tracing::instrument]
 pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
-    let mut workspace = Workspace::load(cwd)?;
     let mut recursive_run = false;
     let mut parallel_run = false;
-    let mut topological_run = false;
-    let (tasks, task_args) = match &args.commands {
+    let (tasks, mut workspace, task_args) = match &args.commands {
         Some(Commands::Run { tasks, recursive, parallel, topological, task_args, .. }) => {
             recursive_run = *recursive;
             parallel_run = *parallel;
             // Note: topological dependencies are always included in the pre-built task graph
             // This flag now mainly affects execution order in the execution plan
-            if recursive_run {
-                topological_run = topological.unwrap_or(true);
+            let topological_run = if recursive_run {
+                topological.unwrap_or(true)
             } else {
-                topological_run = topological.unwrap_or(false);
-            }
-            (tasks, Arc::<[Str]>::from(task_args.clone()))
+                topological.unwrap_or(false)
+            };
+            let workspace = Workspace::load(cwd, topological_run)?;
+            (tasks, workspace, Arc::<[Str]>::from(task_args.clone()))
         }
         None => {
+            let workspace = Workspace::load(cwd, false)?;
             // in implicit mode, vite-plus will run the task in the current package, replace the `pnpm/yarn/npm run` command.
             let Some(task) = args.task else {
                 return Ok(());
@@ -118,6 +118,7 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
             }
             (
                 &vec![if task.contains('#') { task } else { format!("{name}#{}", task).into() }],
+                workspace,
                 Arc::<[Str]>::from(args.task_args),
             )
         }
@@ -156,7 +157,7 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
         let cache_debug_json = serde_json::to_string_pretty(&task_cache_map)?;
         let _ = edit::edit(&cache_debug_json)?;
     } else {
-        let plan = ExecutionPlan::plan(task_graph, parallel_run, topological_run)?;
+        let plan = ExecutionPlan::plan(task_graph, parallel_run)?;
         plan.execute(&mut workspace).await?;
 
         workspace.unload().await?;
