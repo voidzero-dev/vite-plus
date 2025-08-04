@@ -39,6 +39,8 @@ pub struct Args {
     /// Display cache for debugging.
     #[clap(short, long)]
     pub debug: bool,
+    #[clap(long, conflicts_with = "debug")]
+    pub no_debug: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -50,13 +52,28 @@ pub enum Commands {
         task_args: Vec<Str>,
         #[clap(short, long)]
         recursive: bool,
+        #[clap(long, conflicts_with = "recursive")]
+        no_recursive: bool,
         #[clap(short, long)]
         sequential: bool,
+        #[clap(long, conflicts_with = "sequential")]
+        no_sequential: bool,
         #[clap(short, long)]
         parallel: bool,
+        #[clap(long, conflicts_with = "parallel")]
+        no_parallel: bool,
         #[clap(short, long)]
         topological: Option<bool>,
+        #[clap(long, conflicts_with = "topological")]
+        no_topological: bool,
     },
+}
+
+/// Resolve boolean flag value considering both positive and negative forms.
+/// If the negative form (--no-*) is present, it takes precedence and returns false.
+/// Otherwise, returns the value of the positive form.
+fn resolve_bool_flag(positive: bool, negative: bool) -> bool {
+    if negative { false } else { positive }
 }
 
 /// Main entry point for vite-plus task execution.
@@ -93,15 +110,29 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
     let mut recursive_run = false;
     let mut parallel_run = false;
     let (tasks, mut workspace, task_args) = match &args.commands {
-        Some(Commands::Run { tasks, recursive, parallel, topological, task_args, .. }) => {
-            recursive_run = *recursive;
-            parallel_run = *parallel;
+        Some(Commands::Run {
+            tasks,
+            recursive,
+            no_recursive,
+            parallel,
+            no_parallel,
+            topological,
+            no_topological,
+            task_args,
+            ..
+        }) => {
+            recursive_run = resolve_bool_flag(*recursive, *no_recursive);
+            parallel_run = resolve_bool_flag(*parallel, *no_parallel);
             // Note: topological dependencies are always included in the pre-built task graph
             // This flag now mainly affects execution order in the execution plan
-            let topological_run = if recursive_run {
-                topological.unwrap_or(true)
+            let topological_run = if *no_topological {
+                false
+            } else if let Some(t) = topological {
+                *t
+            } else if recursive_run {
+                true
             } else {
-                topological.unwrap_or(false)
+                false
             };
             let workspace = Workspace::load(cwd, topological_run)?;
             (tasks, workspace, Arc::<[Str]>::from(task_args.clone()))
@@ -126,7 +157,8 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
 
     let task_graph = workspace.resolve_tasks(&tasks, task_args.clone(), recursive_run)?;
 
-    if args.debug {
+    let debug = resolve_bool_flag(args.debug, args.no_debug);
+    if debug {
         #[derive(Serialize)]
         struct CacheEntry {
             cache_key: TaskCacheKey,
@@ -235,6 +267,83 @@ mod tests {
     }
 
     #[test]
+    fn test_boolean_flag_negation() {
+        // Test --no-debug alone
+        let args = Args::try_parse_from(&["vite-plus", "--no-debug", "build"]).unwrap();
+        assert!(!args.debug);
+        assert!(args.no_debug);
+        assert_eq!(resolve_bool_flag(args.debug, args.no_debug), false);
+
+        // Test run command with --no-recursive
+        let args = Args::try_parse_from(&["vite-plus", "run", "--no-recursive", "build"]).unwrap();
+        if let Some(Commands::Run { recursive, no_recursive, .. }) = args.commands {
+            assert!(!recursive);
+            assert!(no_recursive);
+            assert_eq!(resolve_bool_flag(recursive, no_recursive), false);
+        } else {
+            panic!("Expected Run command");
+        }
+
+        // Test run command with --no-parallel
+        let args = Args::try_parse_from(&["vite-plus", "run", "--no-parallel", "build"]).unwrap();
+        if let Some(Commands::Run { parallel, no_parallel, .. }) = args.commands {
+            assert!(!parallel);
+            assert!(no_parallel);
+            assert_eq!(resolve_bool_flag(parallel, no_parallel), false);
+        } else {
+            panic!("Expected Run command");
+        }
+
+        // Test run command with --no-topological
+        let args =
+            Args::try_parse_from(&["vite-plus", "run", "--no-topological", "build"]).unwrap();
+        if let Some(Commands::Run { topological, no_topological, .. }) = args.commands {
+            assert_eq!(topological, None);
+            assert!(no_topological);
+            // no_topological takes precedence
+            assert_eq!(no_topological, true);
+        } else {
+            panic!("Expected Run command");
+        }
+
+        // Test --debug vs --no-debug conflict (should fail)
+        let result = Args::try_parse_from(&["vite-plus", "--debug", "--no-debug", "build"]);
+        assert!(result.is_err());
+
+        // Test recursive with topological default behavior
+        let args = Args::try_parse_from(&["vite-plus", "run", "--recursive", "build"]).unwrap();
+        if let Some(Commands::Run {
+            recursive, no_recursive, topological, no_topological, ..
+        }) = args.commands
+        {
+            assert!(recursive);
+            assert!(!no_recursive);
+            assert_eq!(topological, None); // Not explicitly set
+            assert!(!no_topological);
+            // In the main function, this would default to true for recursive
+        } else {
+            panic!("Expected Run command");
+        }
+
+        // Test recursive with --no-topological
+        let args =
+            Args::try_parse_from(&["vite-plus", "run", "--recursive", "--no-topological", "build"])
+                .unwrap();
+        if let Some(Commands::Run {
+            recursive, no_recursive, topological, no_topological, ..
+        }) = args.commands
+        {
+            assert!(recursive);
+            assert!(!no_recursive);
+            assert_eq!(topological, None);
+            assert!(no_topological);
+            // no_topological should force topological to be false
+        } else {
+            panic!("Expected Run command");
+        }
+    }
+
+    #[test]
     fn test_args_no_task() {
         let args = Args::try_parse_from(&["vite-plus"]).unwrap();
         assert!(args.task.is_none());
@@ -255,6 +364,7 @@ mod tests {
             sequential,
             parallel,
             topological,
+            ..
         }) = args.commands
         {
             assert_eq!(tasks, vec!["build".into(), "test".into()]);
