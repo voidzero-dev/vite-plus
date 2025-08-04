@@ -1,4 +1,0 @@
-{
-  "extends": "../../vite-plus.json",
-  "tasks": {}
-}

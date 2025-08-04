@@ -7,6 +7,8 @@ packages:
 
 catalog:
   "@napi-rs/cli": ^3.0.3
+  "@oxc-node/core": ^0.0.30
+  "@oxc-node/cli": ^0.0.30
   "@types/node": ^22.16.4
   "@types/react": "^19.1.8"
   "@types/react-dom": "^19.1.6"

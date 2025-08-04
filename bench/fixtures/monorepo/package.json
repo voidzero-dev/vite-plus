@@ -1,15 +1,16 @@
 {
-  "name": "benchmark-monorepo",
+  "name": "monorepo-benchmark",
   "version": "1.0.0",
   "private": true,
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
-    "prepare": "vite-plus run prepare",
     "build:all": "vite-plus run build",
     "test:all": "vite-plus run test",
-    "lint:all": "vite-plus run lint",
-    "typecheck:all": "vite-plus run typecheck"
+    "lint:all": "vite-plus run lint"
+  },
+  "devDependencies": {
+    "vite-plus": "*"
   }
 }

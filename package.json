@@ -11,12 +11,14 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@oxc-node/cli": "catalog:",
+    "@oxc-node/core": "catalog:",
     "@types/node": "catalog:",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.2",
     "oxlint": "^1.8.0",
-    "vite-plus": "workspace:*",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite-plus": "workspace:*"
   },
   "lint-staged": {
     "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [

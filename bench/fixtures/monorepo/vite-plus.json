@@ -1,48 +1,16 @@
 {
-  "version": "1.0.0",
   "tasks": {
     "build": {
-      "dependsOn": [
-        "^build",
-        "prebuild"
-      ],
-      "outputs": [
-        "dist/**",
-        "build/**"
-      ]
-    },
-    "prebuild": {
-      "dependsOn": [
-        "typecheck",
-        "lint"
-      ]
+      "cache": true,
+      "parallel": true
     },
     "test": {
-      "dependsOn": [
-        "build"
-      ],
-      "outputs": [
-        "coverage/**"
-      ]
+      "cache": true,
+      "parallel": true
     },
     "lint": {
-      "cache": true
-    },
-    "typecheck": {
-      "cache": true
-    },
-    "prepare": {
-      "cache": false
-    },
-    "dev": {
-      "persistent": true,
-      "cache": false
-    },
-    "start": {
-      "persistent": true,
-      "dependsOn": [
-        "build"
-      ]
+      "cache": false,
+      "parallel": true
     }
   }
 }

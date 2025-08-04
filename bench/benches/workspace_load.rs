@@ -7,7 +7,7 @@ fn bench_workspace_load(c: &mut Criterion) {
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures").join("monorepo");
 
     // Basic workspace load benchmark
-    c.bench_function("workspace_load_100_packages", |b| {
+    c.bench_function("workspace_load_1000_packages", |b| {
         b.iter(|| {
             let workspace =
                 Workspace::load(black_box(fixture_path.clone())).expect("Failed to load workspace");
@@ -18,8 +18,6 @@ fn bench_workspace_load(c: &mut Criterion) {
     // Benchmark group for more detailed analysis
     let mut group = c.benchmark_group("workspace_load_detailed");
 
-    // Configure the group
-    group.sample_size(50); // Reduce sample size for faster benchmarking
     group.measurement_time(std::time::Duration::from_secs(10));
 
     // Benchmark just the load operation
