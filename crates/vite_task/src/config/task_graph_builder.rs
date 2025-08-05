@@ -9,7 +9,7 @@ use super::{ResolvedTask, TaskId};
 
 #[derive(Default, Debug, Clone)]
 pub struct TaskGraphBuilder {
-    pub(crate) resolved_tasks_and_dep_ids_by_id: HashMap<TaskId, (ResolvedTask, Vec<TaskId>)>,
+    resolved_tasks_and_dep_ids_by_id: HashMap<TaskId, (ResolvedTask, Vec<TaskId>)>,
 }
 
 impl TaskGraphBuilder {
