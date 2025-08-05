@@ -3091,6 +3091,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shell-escape",
+ "tempfile",
  "thiserror 2.0.12",
  "tokio",
  "tracing",

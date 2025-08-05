@@ -192,7 +192,7 @@ pub async fn execute_task(task: &ResolvedTask, base_dir: &Path) -> Result<Execut
                 continue;
             };
             let relative_path = relative_path.to_str().with_context(|| {
-                format!("Non-utf8 relative path in the workspace: {:?}", relative_path)
+                format!("Non-utf8 relative path in the workspace: {relative_path:?}")
             })?;
             let relative_path = Str::from(relative_path);
             match access.mode {
@@ -234,7 +234,7 @@ pub async fn execute_task(task: &ResolvedTask, base_dir: &Path) -> Result<Execut
     Ok(ExecutedTask { std_outputs: outputs.into(), exit_status, path_reads, path_writes })
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 fn gather_inputs(task: &ResolvedTask, base_dir: &Path) -> Result<HashSet<Arc<OsStr>>, Error> {
     // Task inferring to be implemented here
     let inputs = &task.resolved_config.config.inputs;

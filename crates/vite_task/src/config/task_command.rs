@@ -21,15 +21,15 @@ pub enum TaskCommand {
 impl Display for TaskCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TaskCommand::ShellScript(command) => Display::fmt(&command, f),
-            TaskCommand::Parsed(parsed_command) => Display::fmt(&parsed_command, f),
+            Self::ShellScript(command) => Display::fmt(&command, f),
+            Self::Parsed(parsed_command) => Display::fmt(&parsed_command, f),
         }
     }
 }
 
 impl From<TaskCommand> for TaskConfig {
     fn from(command: TaskCommand) -> Self {
-        TaskConfig {
+        Self {
             command,
             cwd: "".into(),
             cacheable: true,
@@ -76,7 +76,7 @@ impl ResolvedTaskConfig {
                 }
             }
         };
-        let task_envs = TaskEnvs::resolve(base_dir, &self)?;
+        let task_envs = TaskEnvs::resolve(base_dir, self)?;
         Ok(ResolvedTaskCommand {
             fingerprint: CommandFingerprint {
                 cwd: cwd.as_str().into(),

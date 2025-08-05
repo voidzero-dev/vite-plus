@@ -25,14 +25,14 @@ impl ExecutionPlan {
     ///
     /// # Execution Order
     ///
-    /// ## With topological_run = true:
+    /// ## With `topological_run` = true:
     /// Tasks are sorted in dependency order using topological sort.
     /// Example order: [@test/core#build, @test/utils#build\[0\], @test/utils#build\[1\], ...]
     ///
-    /// ## With topological_run = false:
+    /// ## With `topological_run` = false:
     /// Tasks are executed in the order they were discovered (no specific order).
     ///
-    /// ## With parallel_run = true (TODO):
+    /// ## With `parallel_run` = true (TODO):
     /// Tasks will be grouped by dependency level for concurrent execution.
     /// Example groups:
     /// - Group 1: [@test/core#build] (no dependencies)

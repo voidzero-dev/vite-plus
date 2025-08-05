@@ -72,7 +72,7 @@ pub enum Commands {
 /// Resolve boolean flag value considering both positive and negative forms.
 /// If the negative form (--no-*) is present, it takes precedence and returns false.
 /// Otherwise, returns the value of the positive form.
-fn resolve_bool_flag(positive: bool, negative: bool) -> bool {
+const fn resolve_bool_flag(positive: bool, negative: bool) -> bool {
     if negative { false } else { positive }
 }
 
@@ -129,10 +129,8 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
                 false
             } else if let Some(t) = topological {
                 *t
-            } else if recursive_run {
-                true
             } else {
-                false
+                recursive_run
             };
             let workspace = Workspace::load(cwd, topological_run)?;
             (tasks, workspace, Arc::<[Str]>::from(task_args.clone()))
@@ -148,14 +146,14 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
                 return Err(Error::EmptyPackageName(workspace.dir));
             }
             (
-                &vec![if task.contains('#') { task } else { format!("{name}#{}", task).into() }],
+                &vec![if task.contains('#') { task } else { format!("{name}#{task}").into() }],
                 workspace,
                 Arc::<[Str]>::from(args.task_args),
             )
         }
     };
 
-    let task_graph = workspace.resolve_tasks(&tasks, task_args.clone(), recursive_run)?;
+    let task_graph = workspace.resolve_tasks(tasks, task_args.clone(), recursive_run)?;
 
     let debug = resolve_bool_flag(args.debug, args.no_debug);
     if debug {

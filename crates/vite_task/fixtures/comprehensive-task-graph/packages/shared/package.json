@@ -5,6 +5,8 @@
     "build": "echo Cleaning && echo Compiling shared && echo Generating types",
     "test": "echo Setting up test env && echo Running tests && echo Cleanup",
     "lint": "echo Linting shared",
-    "typecheck": "echo Type checking shared"
+    "typecheck": "echo Type checking shared",
+    "test#integration": "echo Running integration tests",
+    "build#special": "echo Special build process"
   }
 }

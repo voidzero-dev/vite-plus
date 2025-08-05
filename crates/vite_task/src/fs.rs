@@ -66,7 +66,7 @@ impl FileSystem for RealFileSystem {
         if let Err(io_err) = reader.fill_buf() {
             if io_err.kind() != io::ErrorKind::IsADirectory {
                 return Err(io_err.into());
-            };
+            }
             // Is a directory
             let dir_entries: Option<std::collections::HashMap<Str, DirEntryKind>> =
                 if path_read.read_dir_entries {
@@ -97,7 +97,7 @@ impl FileSystem for RealFileSystem {
                     None
                 };
             return Ok(PathFingerprint::Folder(dir_entries));
-        };
+        }
         Ok(PathFingerprint::FileContentHash(hash_content(reader)?))
     }
 }
@@ -136,7 +136,7 @@ impl<FS: FileSystem> FileSystem for CachedFileSystem<FS> {
 }
 
 impl<FS> CachedFileSystem<FS> {
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn invalidate_path(&self, path: &OsStr) {
         self.cache.remove(path);
     }

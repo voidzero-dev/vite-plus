@@ -106,35 +106,23 @@ impl Display for TaskId {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use petgraph::stable_graph::StableDiGraph;
 
     use super::*;
     use crate::Error;
 
-    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
     fn with_unique_cache_path<F, R>(test_name: &str, f: F) -> R
     where
         F: FnOnce(&std::path::Path) -> R,
     {
-        let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let thread_id = std::thread::current().id();
-        let cache_path = std::env::temp_dir()
-            .join(format!("vite-test-{}-{}-{:?}.db", test_name, test_id, thread_id));
-
-        // Clean up any existing files first (including WAL files)
-        let _ = std::fs::remove_file(&cache_path);
-        let _ = std::fs::remove_file(cache_path.with_extension("db-wal"));
-        let _ = std::fs::remove_file(cache_path.with_extension("db-shm"));
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+        let cache_path = temp_dir.path().join(format!("vite-test-{}.db", test_name));
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&cache_path)));
 
-        // Clean up all SQLite files
-        let _ = std::fs::remove_file(&cache_path);
-        let _ = std::fs::remove_file(cache_path.with_extension("db-wal"));
-        let _ = std::fs::remove_file(cache_path.with_extension("db-shm"));
+        // The temp directory and all its contents will be automatically cleaned up
+        // when temp_dir goes out of scope
 
         match result {
             Ok(r) => r,
@@ -838,6 +826,42 @@ mod tests {
                 Some(0)
             ));
 
+            // Test package with # in name
+            assert!(
+                build_graph
+                    .node_weights()
+                    .any(|task| task.id.name.as_str() == "@test/pkg#special#build"),
+                "Package with # in name should have build task"
+            );
+
+            // Verify that the package with # in name has correct dependencies
+            assert!(
+                has_edge_with_indices(
+                    &build_graph,
+                    "@test/shared#build",
+                    None,
+                    "@test/pkg#special#build",
+                    None
+                ),
+                "@test/pkg#special depends on @test/shared"
+            );
+
+            // Verify that app depends on pkg#special
+            assert!(
+                has_edge_with_indices(
+                    &build_graph,
+                    "@test/pkg#special#build",
+                    None,
+                    "@test/app#build",
+                    Some(0)
+                ),
+                "@test/app depends on @test/pkg#special"
+            );
+
+            // Note: Scripts with # in their names (like build#special) won't appear in
+            // the "build" recursive graph because we're only looking for tasks named "build"
+            // They need to be resolved separately
+
             // Test test task graph
             let test_graph = workspace
                 .resolve_tasks(&vec!["test".into()], Arc::default(), true)
@@ -878,6 +902,72 @@ mod tests {
             // Should not include app or ui
             assert!(!api_deps.contains(&"@test/app#build"));
             assert!(!api_deps.contains(&"@test/ui#build"));
+        })
+    }
+
+    #[test]
+    fn test_scripts_with_hash_in_names() {
+        with_unique_cache_path("scripts_with_hash_in_names", |cache_path| {
+            let fixture_path =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
+
+            let workspace =
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
+                    .expect("Failed to load workspace");
+
+            // Test resolving single task with # in script name
+            let special_build_graph = workspace
+                .resolve_tasks(&vec!["@test/shared#build#special".into()], Arc::default(), false)
+                .expect("Failed to resolve build#special task");
+            assert_eq!(
+                special_build_graph.node_count(),
+                1,
+                "Should resolve single task with # in name"
+            );
+            let task = special_build_graph.node_weights().next().unwrap();
+            assert_eq!(task.id.name.as_str(), "@test/shared#build#special");
+
+            // Test resolving task with # in both package and script names
+            let deploy_prod_graph = workspace
+                .resolve_tasks(&vec!["@test/pkg#special#deploy#prod".into()], Arc::default(), false)
+                .expect("Failed to resolve deploy#prod task");
+            assert_eq!(
+                deploy_prod_graph.node_count(),
+                1,
+                "Should resolve task with # in both package and script names"
+            );
+            let task = deploy_prod_graph.node_weights().next().unwrap();
+            assert_eq!(task.id.name.as_str(), "@test/pkg#special#deploy#prod");
+
+            // Test that we can't use recursive with task names containing # (would be interpreted as scope)
+            let result =
+                workspace.resolve_tasks(&vec!["test#integration".into()], Arc::default(), true);
+            assert!(result.is_err(), "Recursive run with # in task name should fail");
+
+            // But we can resolve specific scoped tasks with # in names
+            let shared_test_integration = workspace
+                .resolve_tasks(&vec!["@test/shared#test#integration".into()], Arc::default(), false)
+                .expect("Should resolve specific task with # in script name");
+            assert_eq!(shared_test_integration.node_count(), 1);
+
+            // Test multiple tasks with # in names
+            let multi_special_tasks = workspace
+                .resolve_tasks(
+                    &vec!["@test/shared#build#special".into(), "@test/pkg#special#test#e2e".into()],
+                    Arc::default(),
+                    false,
+                )
+                .expect("Should resolve multiple tasks with # in names");
+            assert_eq!(multi_special_tasks.node_count(), 2, "Should resolve both tasks");
+
+            let task_names: Vec<_> =
+                multi_special_tasks.node_weights().map(|task| task.id.name.as_str()).collect();
+            assert!(task_names.contains(&"@test/shared#build#special"));
+            assert!(task_names.contains(&"@test/pkg#special#test#e2e"));
+
+            // If there are dependencies, verify they work correctly
+            // Since @test/pkg#special depends on @test/shared, if shared had test#e2e,
+            // it would be a dependency
         })
     }
 

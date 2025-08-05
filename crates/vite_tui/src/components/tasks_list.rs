@@ -18,7 +18,7 @@ pub struct TasksList {
 }
 
 impl TasksList {
-    pub fn new(tasks: Vec<String>) -> Self {
+    pub const fn new(tasks: Vec<String>) -> Self {
         Self { state: TableState::new(), selection: 0, tasks }
     }
 
@@ -26,7 +26,7 @@ impl TasksList {
         &self.tasks[self.selection]
     }
 
-    pub fn task_count(&self) -> usize {
+    pub const fn task_count(&self) -> usize {
         self.tasks.len()
     }
 
@@ -36,7 +36,7 @@ impl TasksList {
     }
 
     fn up(&mut self) {
-        self.select(if self.selection == 0 { self.tasks.len() - 1 } else { self.selection - 1 })
+        self.select(if self.selection == 0 { self.tasks.len() - 1 } else { self.selection - 1 });
     }
 
     fn down(&mut self) {

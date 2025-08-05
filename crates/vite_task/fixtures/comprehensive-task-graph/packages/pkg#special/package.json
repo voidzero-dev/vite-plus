@@ -1,0 +1,13 @@
+{
+  "name": "@test/pkg#special",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo Building package with hash",
+    "test": "echo Testing package with hash",
+    "deploy#prod": "echo Deploying to production",
+    "test#e2e": "echo Running e2e tests"
+  },
+  "dependencies": {
+    "@test/shared": "workspace:*"
+  }
+}

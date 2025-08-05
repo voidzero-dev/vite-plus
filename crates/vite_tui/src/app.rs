@@ -57,12 +57,12 @@ impl App {
         // component.register_config_handler(self.config.clone())?;
         // }
         let size = tui.size()?;
-        for (_, pane) in &mut self.tasks_pane {
+        for pane in self.tasks_pane.values_mut() {
             pane.init(size)?;
         }
         self.tasks_list.init(size)?;
 
-        for (task, _) in &self.tasks_pane {
+        for task in self.tasks_pane.keys() {
             let pty_system = portable_pty::native_pty_system();
             let cmd = portable_pty::CommandBuilder::new(task);
             let pair = pty_system
@@ -181,7 +181,7 @@ impl App {
     fn handle_mouse_event(&self, mouse: MouseEvent) -> Result<()> {
         let action_tx = self.action_tx.clone();
 
-        if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
+        if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
             // Check if click is within the left panel area
             if mouse.column >= self.left_panel_area.x
                 && mouse.column < self.left_panel_area.x + self.left_panel_area.width
