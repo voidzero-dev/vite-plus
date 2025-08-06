@@ -7,7 +7,6 @@ use std::{ffi::OsStr, fmt::Display, sync::Arc};
 use bincode::{Decode, Encode};
 use diff::Diff;
 use serde::{Deserialize, Serialize};
-use vite_error::Error;
 
 use crate::{
     collections::{HashMap, HashSet},
@@ -104,18 +103,6 @@ impl TaskId {
             task_name,
             subcommand_index,
         }
-    }
-
-    pub(crate) fn parse(name: Str, subcommand_index: Option<usize>) -> Result<Self, Error> {
-        // Find the first '#' to separate package name from task name
-        // This allows task names to contain '#' (like "build#special")
-        let (package_name, task_name) = if let Some(pos) = name.find('#') {
-            (name[..pos].into(), name[pos + 1..].into())
-        } else {
-            return Err(Error::InvalidTaskName(name.to_string()));
-        };
-
-        Ok(Self { name, package_name, task_name, subcommand_index })
     }
 
     pub fn full_name(&self) -> &Str {
