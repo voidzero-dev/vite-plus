@@ -64,6 +64,12 @@ pub enum Error {
     #[error("Package not found in graph, index at: {0:?}")]
     PackageNotFound(NodeIndex),
 
+    #[error("Task not found in workspace: {0}")]
+    TaskNotFound(String),
+
+    #[error("Invalid task name: {0}, expected format: 'package#task'")]
+    InvalidTaskName(String),
+
     #[error("Recursive run is not allowed when task name contains '#': {0}")]
     RecursiveRunWithScope(String),
 

@@ -133,10 +133,8 @@ async fn get_cached_or_execute<'a>(
             Some(cache_miss),
             async move {
                 let executed_task = execute_task(&task, base_dir).await?;
-                let task_name = task.id.clone();
-                let task_args = task.args.clone();
-                let cached_task = CachedTask::create(task, executed_task, fs, base_dir)?;
-                cache.update(task_name, task_args, cached_task).await?;
+                let cached_task = CachedTask::create(task.clone(), executed_task, fs, base_dir)?;
+                cache.update(&task, cached_task).await?;
                 Ok(())
             }
             .boxed(),

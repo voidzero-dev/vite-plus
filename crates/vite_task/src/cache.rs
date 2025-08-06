@@ -8,7 +8,7 @@ use serde::Serialize;
 use tokio::sync::Mutex;
 
 use crate::Error;
-use crate::config::{ResolvedTask, TaskId};
+use crate::config::{CommandFingerprint, ResolvedTask};
 use crate::execute::{ExecutedTask, StdOutput};
 use crate::fingerprint::{FingerprintMismatch, TaskFingerprint};
 use crate::fs::FileSystem;
@@ -37,9 +37,11 @@ pub struct TaskCache {
     conn: Mutex<Connection>,
 }
 
-#[derive(Debug, Hash, Encode, Decode, Serialize)]
+#[derive(Debug, Encode, Decode, Serialize)]
 pub struct TaskCacheKey {
-    pub task_id: TaskId,
+    // Package and command fingerprint for cache sharing between subtasks
+    pub package_name: Str,
+    pub command_fingerprint: CommandFingerprint,
     pub args: Arc<[Str]>,
 }
 
@@ -82,11 +84,15 @@ impl TaskCache {
 
     pub async fn update(
         &mut self,
-        task_id: TaskId,
-        args: Arc<[Str]>,
+        resolved_task: &ResolvedTask,
         cached_task: CachedTask,
     ) -> Result<(), Error> {
-        let key = TaskCacheKey { task_id, args };
+        let package_name = resolved_task.id.package_name().into();
+        let key = TaskCacheKey {
+            package_name,
+            command_fingerprint: resolved_task.resolved_command.fingerprint.clone(),
+            args: resolved_task.args.clone(),
+        };
         let conn = self.conn.lock().await;
         let key_blob = encode_to_vec(&key, BINCODE_CONFIG)?;
         let value_blob = encode_to_vec(&cached_task, BINCODE_CONFIG)?;
@@ -99,12 +105,17 @@ impl TaskCache {
 
     pub async fn get_cache(
         &self,
-        task_id: TaskId,
-        args: Arc<[Str]>,
+        resolved_task: &ResolvedTask,
     ) -> Result<Option<CachedTask>, Error> {
+        let package_name = resolved_task.id.package_name().into();
+        let key = TaskCacheKey {
+            package_name,
+            command_fingerprint: resolved_task.resolved_command.fingerprint.clone(),
+            args: resolved_task.args.clone(),
+        };
         let conn = self.conn.lock().await;
         let mut select_stmt = conn.prepare_cached("SELECT value FROM tasks WHERE key=?")?;
-        let key_blob = encode_to_vec(&TaskCacheKey { task_id, args }, BINCODE_CONFIG)?;
+        let key_blob = encode_to_vec(&key, BINCODE_CONFIG)?;
         let Some(value_blob) =
             select_stmt.query_row::<Vec<u8>, _, _>([key_blob], |row| row.get(0)).optional()?
         else {
@@ -141,7 +152,7 @@ impl TaskCache {
         fs: &impl FileSystem,
         base_dir: &Path,
     ) -> Result<Result<CachedTask, CacheMiss>, Error> {
-        let Some(cached_task) = self.get_cache(task.id.clone(), task.args.clone()).await? else {
+        let Some(cached_task) = self.get_cache(task).await? else {
             return Ok(Err(CacheMiss::NotFound));
         };
         if let Some(fingerprint_mismatch) = cached_task.fingerprint.validate(task, fs, base_dir)? {

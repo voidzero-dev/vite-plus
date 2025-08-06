@@ -1,0 +1,9 @@
+{
+  "name": "@test/cache-sharing",
+  "version": "1.0.0",
+  "scripts": {
+    "a": "echo a",
+    "b": "echo a && echo b",
+    "c": "echo a && echo b && echo c"
+  }
+}

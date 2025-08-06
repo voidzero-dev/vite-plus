@@ -19,7 +19,7 @@ impl TaskGraphBuilder {
             .resolved_tasks_and_dep_ids_by_id
             .insert(resolved_task.id.clone(), (resolved_task, dep_ids))
         {
-            return Err(Error::DuplicatedTask(old_task.id.name.to_string()));
+            return Err(Error::DuplicatedTask(old_task.id.full_name().to_string()));
         }
         Ok(())
     }

@@ -251,21 +251,18 @@ impl Workspace {
             }
         }
 
-        // Start with requested task IDs
-        let starting_ids =
-            task_names.iter().cloned().map(|name| TaskId { name, subcommand_index: None });
-
         let mut remaining_task_ids: BTreeSet<TaskId> = BTreeSet::new();
 
         if recursive_run {
             // When recursive, find all packages that have the requested tasks
-            for task_id in starting_ids {
+            for task_name in task_names {
                 for node_index in self.package_graph.node_indices() {
                     let package = &self.package_graph[node_index];
-                    let task_to_resolve =
-                        format!("{}#{}", &package.package_json.name, task_id.name);
-                    let task_id_to_resolve =
-                        TaskId { name: task_to_resolve.into(), subcommand_index: None };
+                    let task_id_to_resolve = TaskId::new(
+                        (package.package_json.name.as_str()).into(),
+                        task_name.clone(),
+                        None,
+                    );
 
                     // Check if this task exists in the pre-built graph
                     if self.task_graph.node_weights().any(|task| task.id == task_id_to_resolve) {
@@ -274,7 +271,25 @@ impl Workspace {
                 }
             }
         } else {
-            remaining_task_ids = starting_ids.collect();
+            // For non-recursive mode, try to find tasks by their full name in the pre-built graph
+            // This handles cases where package or task names contain '#'
+            for name in task_names {
+                // Try to find all tasks with this exact full name (including subtasks)
+                let matching_tasks: Vec<_> = self
+                    .task_graph
+                    .node_weights()
+                    .filter(|t| t.id.full_name() == name)
+                    .map(|t| t.id.clone())
+                    .collect();
+
+                if matching_tasks.is_empty() {
+                    return Err(Error::TaskNotFound(name.to_string()));
+                }
+                // Found exact matches - add all of them (handles subtasks)
+                for task_id in matching_tasks {
+                    remaining_task_ids.insert(task_id);
+                }
+            }
         }
 
         // Build a filtered graph from the pre-built task graph
@@ -297,7 +312,7 @@ impl Workspace {
                 .node_indices()
                 .find(|&idx| self.task_graph[idx].id == task_id)
                 .with_context(|| {
-                    format!("Task '{}' not found in pre-built graph", &task_id.name)
+                    format!("Task '{}' not found in pre-built graph", task_id.full_name())
                 })?;
 
             let task = &self.task_graph[original_node_idx];
@@ -351,15 +366,11 @@ impl Workspace {
     ) -> Result<(), Error> {
         for (node_index, task_json) in packages_with_task_jsons {
             let package_info = &package_graph[*node_index];
-            let task_prefix = format!("{}#", &package_info.package_json.name);
-
+            let package_name = package_info.package_json.name.as_str();
             // Load tasks from vite-task.json
             if let Some(task_json) = task_json {
                 for (task_name, task_config_json) in &task_json.tasks {
-                    let id = TaskId {
-                        name: format!("{}{}", &task_prefix, task_name).into(),
-                        subcommand_index: None,
-                    };
+                    let id = TaskId::new(package_name.into(), task_name.clone(), None);
                     let resolved_task = Self::resolve_task(
                         task_config_json.config.clone(),
                         package_info,
@@ -371,8 +382,8 @@ impl Workspace {
                         .depends_on
                         .iter()
                         .cloned()
-                        .map(|name| TaskId { name, subcommand_index: None })
-                        .collect();
+                        .map(|name| TaskId::parse(name, None))
+                        .collect::<Result<Vec<_>, Error>>()?;
 
                     task_graph_builder.add_task_with_deps(resolved_task, deps)?;
                 }
@@ -380,16 +391,17 @@ impl Workspace {
 
             // Load tasks from package.json scripts
             for (script_name, script) in &package_info.package_json.scripts {
-                let name: Str = format!("{task_prefix}{script_name}").into();
+                let script_name = script_name.as_str();
 
                 if let Some(and_list) = try_parse_as_and_list(script) {
                     let and_list_len = and_list.len();
                     for (index, command) in and_list.into_iter().enumerate() {
                         let is_last = index + 1 == and_list_len;
-                        let task_id = TaskId {
-                            name: name.clone(),
-                            subcommand_index: if is_last { None } else { Some(index) },
-                        };
+                        let task_id = TaskId::new(
+                            package_name.into(),
+                            script_name.into(),
+                            if is_last { None } else { Some(index) },
+                        );
                         let resolved_task = Self::resolve_task(
                             TaskCommand::Parsed(command),
                             package_info,
@@ -398,7 +410,11 @@ impl Workspace {
                             base_dir,
                         )?;
                         let deps = if let Some(dep_index) = index.checked_sub(1) {
-                            vec![TaskId { name: name.clone(), subcommand_index: Some(dep_index) }]
+                            vec![TaskId::new(
+                                package_name.into(),
+                                script_name.into(),
+                                Some(dep_index),
+                            )]
                         } else {
                             vec![]
                         };
@@ -408,7 +424,7 @@ impl Workspace {
                     let resolved_task = Self::resolve_task(
                         TaskCommand::ShellScript(script.as_str().into()),
                         package_info,
-                        TaskId { name: name.clone(), subcommand_index: None },
+                        TaskId::new(package_name.into(), script_name.into(), None),
                         Arc::default(),
                         base_dir,
                     )?;
@@ -432,22 +448,19 @@ impl Workspace {
         // Iterate through all tasks in the graph builder to collect them
         for task_id in task_graph_builder.resolved_tasks_and_dep_ids_by_id.keys() {
             // Extract package name and task name from the task_id
-            let task_full_name = &task_id.name;
-            if let Some(hash_pos) = task_full_name.rfind('#') {
-                let package_name = &task_full_name[..hash_pos];
-                let task_name = &task_full_name[hash_pos + 1..];
+            let package_name = task_id.package_name();
+            let task_name = task_id.task_name();
 
-                // Determine the order/index for subtasks
-                let order = match task_id.subcommand_index {
-                    None => usize::MAX, // Use MAX for the last/main task
-                    Some(idx) => idx,
-                };
+            // Determine the order/index for subtasks
+            let order = match task_id.subcommand_index() {
+                None => usize::MAX, // Use MAX for the last/main task
+                Some(idx) => idx,
+            };
 
-                tasks_by_package_and_name
-                    .entry((package_name.to_string(), task_name.to_string()))
-                    .or_default()
-                    .push((task_id.clone(), order));
-            }
+            tasks_by_package_and_name
+                .entry((package_name.to_string(), task_name.to_string()))
+                .or_default()
+                .push((task_id.clone(), order));
         }
 
         // Sort tasks within each group by their order
@@ -462,7 +475,9 @@ impl Workspace {
 
             if let Some(first_task) = first_current_task {
                 // Only add dependencies to the FIRST subtask
-                if first_task.subcommand_index.is_none() || first_task.subcommand_index == Some(0) {
+                if first_task.subcommand_index().is_none()
+                    || first_task.subcommand_index() == Some(0)
+                {
                     // Find all transitive dependencies of this package
                     let transitive_deps = find_transitive_dependencies(
                         package_name,
