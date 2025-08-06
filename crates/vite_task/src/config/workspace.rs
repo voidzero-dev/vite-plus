@@ -382,7 +382,38 @@ impl Workspace {
                         .depends_on
                         .iter()
                         .cloned()
-                        .map(|name| TaskId::parse(name, None))
+                        .map(|name| {
+                            // contains multiple '#'
+                            if name.rfind('#') != name.find('#') {
+                                let mut task_id: Option<TaskId> = None;
+                                for (node_index, _) in packages_with_task_jsons {
+                                    let package_info = &package_graph[*node_index];
+                                    let package_name = package_info.package_json.name.as_str();
+                                    if name.starts_with(package_name) {
+                                        // @scope/a#b has a c task conflict with @scope/a has a 'b#c' task
+                                        if let Some(resolved_task_id) = task_id {
+                                            return Err(Error::TaskNameConflict {
+                                                package_name_a: package_name.to_string(),
+                                                task_name_a: resolved_task_id
+                                                    .task_name()
+                                                    .to_string(),
+                                                package_name_b: package_name.to_string(),
+                                                task_name_b: name[package_name.len() + 1..]
+                                                    .to_string(),
+                                            });
+                                        }
+                                        task_id = Some(TaskId::new(
+                                            package_name.into(),
+                                            name[package_name.len() + 1..].into(),
+                                            None,
+                                        ));
+                                    }
+                                }
+                                task_id.ok_or_else(|| Error::TaskNotFound(name.to_string()))
+                            } else {
+                                TaskId::parse(name, None)
+                            }
+                        })
                         .collect::<Result<Vec<_>, Error>>()?;
 
                     task_graph_builder.add_task_with_deps(resolved_task, deps)?;

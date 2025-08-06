@@ -67,6 +67,16 @@ pub enum Error {
     #[error("Task not found in workspace: {0}")]
     TaskNotFound(String),
 
+    #[error(
+        "Task name conflict: {task_name_a} in {package_name_a} and {task_name_b} in {package_name_b}"
+    )]
+    TaskNameConflict {
+        package_name_a: String,
+        task_name_a: String,
+        package_name_b: String,
+        task_name_b: String,
+    },
+
     #[error("Invalid task name: {0}, expected format: 'package#task'")]
     InvalidTaskName(String),
 

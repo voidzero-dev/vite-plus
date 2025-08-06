@@ -1,0 +1,14 @@
+{
+  "tasks": {
+    "deploy": {
+      "command": "echo Deploying shared",
+      "cacheable": true,
+      "dependsOn": ["@test/pkg#special#build", "@test/shared#build#special"]
+    },
+    "complex": {
+      "command": "echo Running complex task",
+      "cacheable": true,
+      "dependsOn": ["@test/pkg#special#deploy#prod"]
+    }
+  }
+}

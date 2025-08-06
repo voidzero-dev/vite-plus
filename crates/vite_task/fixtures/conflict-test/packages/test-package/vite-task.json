@@ -1,0 +1,9 @@
+{
+  "tasks": {
+    "test": {
+      "command": "echo Testing",
+      "cacheable": true,
+      "dependsOn": ["@test/scope-a#b#c"]
+    }
+  }
+}
