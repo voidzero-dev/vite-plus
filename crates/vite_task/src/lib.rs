@@ -174,10 +174,8 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
         } else {
             for resolved_task in task_graph.node_weights() {
                 let cached_task = cache.get_cache(resolved_task).await?;
-                let package_name = resolved_task.id.package_name().unwrap_or_default().into();
                 task_cache_map.push(CacheEntry {
                     cache_key: TaskCacheKey {
-                        package_name,
                         command_fingerprint: resolved_task.resolved_command.fingerprint.clone(),
                         args: resolved_task.args.clone(),
                     },

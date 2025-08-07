@@ -25,7 +25,7 @@ The task cache system enables:
 │         ▼                                                    │
 │  2. Cache Key Generation                                     │
 │  ──────────────────────                                      │
-│    • Package name                                            │
+│    • Command fingerprint (includes cwd)                      │
 │    • Command fingerprint                                     │
 │    • Task arguments                                          │
 │         │                                                    │
@@ -61,14 +61,12 @@ The cache key uniquely identifies a task execution context:
 
 ```rust
 pub struct TaskCacheKey {
-    pub package_name: Str,                          // Package identifier
     pub command_fingerprint: CommandFingerprint,    // Execution context
     pub args: Arc<[Str]>,                          // CLI arguments
 }
 ```
 
-- **Package name**: Extracted from TaskId, empty string for nameless packages
-- **Command fingerprint**: Complete execution environment
+- **Command fingerprint**: Complete execution environment (includes cwd which distinguishes packages)
 - **Arguments**: Task-specific arguments passed via CLI
 
 ### 2. Command Fingerprint
@@ -213,7 +211,6 @@ pub struct StdOutput {
 │  1. Generate Cache Key                                       │
 │  ─────────────────────                                       │
 │    TaskCacheKey {                                            │
-│        package_name: "app",                                  │
 │        command_fingerprint: {...},                           │
 │        args: ["--production"]                                │
 │    }                                                         │
@@ -293,8 +290,8 @@ pub struct StdOutput {
 
 Cache entries are automatically invalidated when:
 
-1. **Package name changes**: Package rename invalidates all its tasks
-2. **Command changes**: Different command, arguments, or working directory
+1. **Command changes**: Different command, arguments, or working directory (includes package path)
+2. **Package location changes**: Working directory in command fingerprint changes
 3. **Environment changes**: Modified environment variables
 4. **Input files change**: Content hash differs (detected via xxHash3)
 5. **Configuration changes**: Task configuration in vite-task.json modified
@@ -496,9 +493,8 @@ When a task hits cache, outputs are replayed exactly:
 ```rust
 // Task: app#build --production
 TaskCacheKey {
-    package_name: "app".into(),
     command_fingerprint: CommandFingerprint {
-        cwd: "/monorepo/packages/app".into(),
+        cwd: "/monorepo/packages/app".into(),  // Package identified by cwd
         command: TaskCommand::Shell("tsc && rollup -c".into()),
         envs_without_pass_through: hashmap! {
             "NODE_ENV" => "production"
@@ -513,9 +509,8 @@ TaskCacheKey {
 ```rust
 // Task in packages/frontend (no name in package.json)
 TaskCacheKey {
-    package_name: "".into(),  // Empty for nameless packages
     command_fingerprint: CommandFingerprint {
-        cwd: "/monorepo/packages/frontend".into(),
+        cwd: "/monorepo/packages/frontend".into(),  // Package identified by cwd
         command: TaskCommand::Parsed {
             bin: "webpack".into(),
             args: vec!["--mode", "production"].into(),
@@ -542,7 +537,7 @@ VITE_LOG=trace vite-plus run build
 
 ```
 [DEBUG] Cache lookup for app#build
-[DEBUG] Cache key: TaskCacheKey { package_name: "app", ... }
+[DEBUG] Cache key: TaskCacheKey { command_fingerprint: ..., args: ... }
 [DEBUG] Cache hit! Validating fingerprint...
 [DEBUG] Fingerprint mismatch: InputsChanged
 [DEBUG] File src/index.ts changed (hash: 0x1234... → 0x5678...)
@@ -672,9 +667,8 @@ No need to manually specify inputs - fspy captures actual dependencies.
 ```rust
 // Simplified from actual implementation
 impl TaskCacheKey {
-    pub fn new(task_id: &TaskId, resolved: &ResolvedTask) -> Self {
+    pub fn new(resolved: &ResolvedTask) -> Self {
         Self {
-            package_name: task_id.package_name().unwrap_or_default(),
             command_fingerprint: resolved.command_fingerprint.clone(),
             args: resolved.args.clone(),
         }
