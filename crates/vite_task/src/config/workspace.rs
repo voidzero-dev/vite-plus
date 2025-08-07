@@ -261,6 +261,7 @@ impl Workspace {
                     let task_id_to_resolve = TaskId::new(
                         (package.package_json.name.as_str()).into(),
                         task_name.clone(),
+                        (package.path.as_str()).into(),
                         None,
                     );
 
@@ -367,10 +368,16 @@ impl Workspace {
         for (node_index, task_json) in packages_with_task_jsons {
             let package_info = &package_graph[*node_index];
             let package_name = package_info.package_json.name.as_str();
+            let package_path = package_info.path.as_str();
             // Load tasks from vite-task.json
             if let Some(task_json) = task_json {
                 for (task_name, task_config_json) in &task_json.tasks {
-                    let id = TaskId::new(package_name.into(), task_name.clone(), None);
+                    let id = TaskId::new(
+                        package_name.into(),
+                        task_name.clone(),
+                        package_path.into(),
+                        None,
+                    );
                     let resolved_task = Self::resolve_task(
                         task_config_json.config.clone(),
                         package_info,
@@ -408,6 +415,7 @@ impl Workspace {
                                         current_task_id = Some(TaskId::new(
                                             package_name.into(),
                                             name[package_name.len() + 1..].into(),
+                                            package_info.path.as_str().into(),
                                             None,
                                         ));
                                     }
@@ -434,7 +442,7 @@ impl Workspace {
                                     )));
                                 }
 
-                                Ok(TaskId::new(package_name, task_name, None))
+                                Ok(TaskId::new(package_name, task_name, package_path.into(), None))
                             }
                         })
                         .collect::<Result<Vec<_>, Error>>()?;
@@ -454,6 +462,7 @@ impl Workspace {
                         let task_id = TaskId::new(
                             package_name.into(),
                             script_name.into(),
+                            package_path.into(),
                             if is_last { None } else { Some(index) },
                         );
                         let resolved_task = Self::resolve_task(
@@ -467,6 +476,7 @@ impl Workspace {
                             vec![TaskId::new(
                                 package_name.into(),
                                 script_name.into(),
+                                package_path.into(),
                                 Some(dep_index),
                             )]
                         } else {
@@ -478,7 +488,12 @@ impl Workspace {
                     let resolved_task = Self::resolve_task(
                         TaskCommand::ShellScript(script.as_str().into()),
                         package_info,
-                        TaskId::new(package_name.into(), script_name.into(), None),
+                        TaskId::new(
+                            package_name.into(),
+                            script_name.into(),
+                            package_path.into(),
+                            None,
+                        ),
                         Arc::default(),
                         base_dir,
                     )?;

@@ -159,14 +159,25 @@ impl PackageGraphBuilder {
     ) -> Result<(), Error> {
         let deps = package_json.get_workspace_dependencies().collect::<Vec<_>>();
         let package_name = package_json.name.clone();
-        let id = self.graph.add_node(PackageInfo { package_json, path: package_path });
-        if let Some((existing_id, _)) = self.id_and_deps_by_name.insert(package_name, (id, deps)) {
-            let existing_package_info = &self.graph[existing_id];
-            return Err(Error::DuplicatedPackageName {
-                name: existing_package_info.package_json.name.to_string(),
-                path1: existing_package_info.path.clone(),
-                path2: self.graph[id].path.clone(),
-            });
+        let id = self.graph.add_node(PackageInfo { package_json, path: package_path.clone() });
+
+        // Allow multiple packages with empty names - they're identified by path instead
+        if !package_name.is_empty() {
+            if let Some((existing_id, _)) =
+                self.id_and_deps_by_name.insert(package_name, (id, deps))
+            {
+                let existing_package_info = &self.graph[existing_id];
+                return Err(Error::DuplicatedPackageName {
+                    name: existing_package_info.package_json.name.to_string(),
+                    path1: existing_package_info.path.clone(),
+                    path2: self.graph[id].path.clone(),
+                });
+            }
+        } else {
+            // For nameless packages, use path as a unique identifier
+            // Store with a synthetic key that won't collide with real package names
+            let synthetic_key = format!("__nameless__{}", package_path).into();
+            self.id_and_deps_by_name.insert(synthetic_key, (id, deps));
         }
         Ok(())
     }
@@ -174,8 +185,16 @@ impl PackageGraphBuilder {
     fn build(mut self) -> Graph<PackageInfo, DependencyType> {
         for (id, deps) in self.id_and_deps_by_name.values() {
             for (dep_name, dep_type) in deps {
-                let dep_id = self.id_and_deps_by_name[dep_name].0;
-                self.graph.add_edge(*id, dep_id, *dep_type);
+                // Skip dependencies on nameless packages (empty string)
+                // These can't be referenced anyway due to our restriction
+                if dep_name.is_empty() {
+                    continue;
+                }
+
+                if let Some((dep_id, _)) = self.id_and_deps_by_name.get(dep_name) {
+                    self.graph.add_edge(*id, *dep_id, *dep_type);
+                }
+                // Silently skip if dependency not found - it might be an external package
             }
         }
         self.graph

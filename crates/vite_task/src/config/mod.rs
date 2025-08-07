@@ -90,7 +90,7 @@ pub struct CommandFingerprint {
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Encode, Decode, Serialize)]
 pub enum TaskName {
     Named { package_name: Str, task_name: Str },
-    Empty(Str),
+    Empty { task_name: Str, package_path: Str },
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Encode, Decode, Serialize)]
@@ -100,10 +100,15 @@ pub struct TaskId {
 }
 
 impl TaskId {
-    pub(crate) fn new(package_name: Str, task_name: Str, subcommand_index: Option<usize>) -> Self {
+    pub(crate) fn new(
+        package_name: Str,
+        task_name: Str,
+        package_path: Str,
+        subcommand_index: Option<usize>,
+    ) -> Self {
         Self {
             name: if package_name.is_empty() {
-                TaskName::Empty(task_name.clone())
+                TaskName::Empty { task_name: task_name.clone(), package_path }
             } else {
                 TaskName::Named { package_name: package_name.clone(), task_name: task_name.clone() }
             },
@@ -116,21 +121,21 @@ impl TaskId {
             TaskName::Named { package_name, task_name } => {
                 Cow::Owned(format!("{}#{}", package_name, task_name))
             }
-            TaskName::Empty(task_name) => Cow::Borrowed(task_name.as_str()),
+            TaskName::Empty { task_name, .. } => Cow::Borrowed(task_name.as_str()),
         }
     }
 
     pub fn package_name(&self) -> Option<&str> {
         match &self.name {
             TaskName::Named { package_name, .. } => Some(package_name),
-            TaskName::Empty(_) => None,
+            TaskName::Empty { .. } => None,
         }
     }
 
     pub fn task_name(&self) -> &Str {
         match &self.name {
             TaskName::Named { task_name, .. } => task_name,
-            TaskName::Empty(task_name) => task_name,
+            TaskName::Empty { task_name, .. } => task_name,
         }
     }
 
@@ -164,7 +169,7 @@ mod tests {
                 TaskName::Named { package_name, task_name } => {
                     Cow::Owned(format!("{}#{}", package_name, task_name))
                 }
-                TaskName::Empty(task_name) => Cow::Borrowed(task_name.as_str()),
+                TaskName::Empty { task_name, .. } => Cow::Borrowed(task_name.as_str()),
             }
         }
     }
@@ -1449,6 +1454,120 @@ mod tests {
             assert!(
                 has_edge(&empty_build, "test", "build"),
                 "Empty-name build should depend on empty-name test (internal dependency)"
+            );
+        })
+    }
+
+    #[test]
+    fn test_multiple_nameless_packages() {
+        with_unique_cache_path("multiple_nameless_packages", |cache_path| {
+            let fixture_path =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/empty-package-test");
+
+            let workspace =
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
+                    .expect("Failed to load workspace with multiple nameless packages");
+
+            // Verify both nameless packages are loaded
+            let nameless_packages: Vec<_> = workspace
+                .package_graph
+                .node_weights()
+                .filter(|p| p.package_json.name.is_empty())
+                .collect();
+
+            assert_eq!(nameless_packages.len(), 2, "Should find exactly 2 nameless packages");
+
+            // Test recursive build includes both nameless packages
+            let build_tasks = workspace
+                .resolve_tasks(&vec!["build".into()], Arc::default(), true)
+                .expect("Failed to resolve build tasks recursively");
+
+            let task_names: Vec<_> =
+                build_tasks.node_weights().map(|task| task.id.full_name()).collect();
+
+            // Count build tasks from nameless packages (they appear as just "build")
+            let nameless_build_count = task_names.iter().filter(|name| *name == "build").count();
+
+            assert_eq!(
+                nameless_build_count, 2,
+                "Should find 2 'build' tasks from nameless packages, found tasks: {:?}",
+                task_names
+            );
+
+            // Verify normal package build is also included
+            assert!(
+                task_names.contains(&"normal-package#build".into()),
+                "Should also include normal-package#build"
+            );
+
+            // Test that nameless packages can have different internal dependencies
+            // The second nameless package has more complex dependencies
+            let deploy_tasks = workspace
+                .resolve_tasks(&vec!["deploy".into()], Arc::default(), true)
+                .expect("Failed to resolve deploy tasks");
+
+            let deploy_task_names: Vec<_> =
+                deploy_tasks.node_weights().map(|task| task.id.full_name()).collect();
+
+            // Check that deploy task and its dependencies are resolved
+            assert!(
+                deploy_task_names.contains(&"deploy".into()),
+                "Should find deploy task from second nameless package"
+            );
+            assert!(
+                deploy_task_names.contains(&"lint".into()),
+                "Should include lint as dependency of build in second nameless package"
+            );
+            assert!(
+                deploy_task_names.contains(&"normal-package#test".into()),
+                "Should include normal-package#test as dependency"
+            );
+
+            // Verify that dependencies between nameless packages don't interfere
+            let test_tasks = workspace
+                .resolve_tasks(&vec!["test".into()], Arc::default(), true)
+                .expect("Failed to resolve test tasks");
+
+            let test_task_names: Vec<_> =
+                test_tasks.node_weights().map(|task| task.id.full_name()).collect();
+
+            // Should have test tasks from both nameless packages and normal-package
+            let nameless_test_count = test_task_names.iter().filter(|name| *name == "test").count();
+
+            assert_eq!(nameless_test_count, 2, "Should find 2 'test' tasks from nameless packages");
+
+            // Test topological ordering with nameless packages
+            // The second nameless package depends on normal-package
+            // With topological ordering, build tasks should respect package dependencies
+            let build_graph = workspace
+                .resolve_tasks(&vec!["build".into()], Arc::default(), true)
+                .expect("Failed to resolve build with topological");
+
+            // Helper to check edges
+            let has_edge = |graph: &StableDiGraph<ResolvedTask, ()>,
+                            from_pattern: &str,
+                            to_pattern: &str|
+             -> bool {
+                graph.edge_indices().any(|edge_idx| {
+                    let (source, target) = graph.edge_endpoints(edge_idx).unwrap();
+                    let source_name = graph[source].id.full_name();
+                    let target_name = graph[target].id.full_name();
+
+                    // For nameless packages, we need to check the package path
+                    // Since both show as "build", we need another way to distinguish them
+                    let source_matches = source_name == from_pattern;
+                    let target_matches = target_name == to_pattern;
+
+                    source_matches && target_matches
+                })
+            };
+
+            // The second nameless package depends on normal-package
+            // So with topological ordering, normal-package#build should run before the second nameless build
+            assert!(
+                has_edge(&build_graph, "normal-package#build", "build")
+                    || has_edge(&build_graph, "normal-package#test", "build"),
+                "Should have dependency from normal-package to second nameless package due to topological ordering"
             );
         })
     }

@@ -136,6 +136,79 @@ Tasks are executed in topological order based on their dependencies:
 2. Tasks only run after all their dependencies have completed successfully
 3. Independent tasks may run in parallel when `--parallel` is used
 
+### Example Execution Flow
+
+Given the following monorepo structure with topological ordering enabled:
+
+```
+Package Dependencies:
+  app    → utils, ui
+  ui     → utils
+  utils  → (none)
+
+Task Dependencies (explicit):
+  app#build    → app#lint
+  utils#build  → utils#test
+```
+
+The execution flow for `vite-plus run build -r --topological`:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Task Resolution                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Step 1: Collect all build tasks                            │
+│  ────────────────────────────────────────                   │
+│    • app#build                                              │
+│    • ui#build                                               │
+│    • utils#build                                            │
+│                                                             │
+│  Step 2: Add explicit dependencies                          │
+│  ─────────────────────────────────────                      │
+│    • app#build depends on app#lint                          │
+│    • utils#build depends on utils#test                      │
+│                                                             │
+│  Step 3: Add implicit dependencies (--topological)          │
+│  ──────────────────────────────────────────────────         │
+│    • app#build depends on utils#build (app→utils)           │
+│    • app#build depends on ui#build (app→ui)                 │
+│    • ui#build depends on utils#build (ui→utils)             │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Execution Order                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Wave 1: No dependencies                                    │
+│  ┌──────────────┐                                           │
+│  │ utils#test   │                                           │
+│  │ app#lint     │ (can run in parallel with --parallel)     │
+│  └──────────────┘                                           │
+│         │                                                   │
+│         ▼                                                   │
+│  Wave 2: Dependencies from Wave 1                           │
+│  ┌──────────────┐                                           │
+│  │ utils#build  │                                           │
+│  └──────────────┘                                           │
+│         │                                                   │
+│         ▼                                                   │
+│  Wave 3: Dependencies from Wave 2                           │
+│  ┌──────────────┐                                           │
+│  │ ui#build     │                                           │
+│  └──────────────┘                                           │
+│         │                                                   │
+│         ▼                                                   │
+│  Wave 4: Final dependencies                                 │
+│  ┌──────────────┐                                           │
+│  │ app#build    │                                           │
+│  └──────────────┘                                           │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ## Compound Commands
 
 When a script contains `&&` operators, it's split into subtasks that execute sequentially:
@@ -155,3 +228,191 @@ This creates three subtasks:
 - `package#build`: `echo 'Build complete'`
 
 Cross-package dependencies connect to the first subtask, and the last subtask is considered the completion of the task.
+
+## Package Graph Construction
+
+Vite-plus builds a package graph to understand the relationships between packages in your monorepo:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     Workspace Root                                      │
+│                  (pnpm-workspace.yaml)                                  │
+└─────────────────┬───────────────────────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│              1. Package Discovery                                       │
+│                                                                         │
+│  packages/            packages/          packages/                      │
+│  ├── app/             ├── utils/         └── nameless/                  │
+│  │   └── package.json │   └── package.json       └── package.json       │
+│  │       name:        │       name:                  (no name)          │
+│  │       "app"        │       "utils"                                   │
+└─────────────────┬───────────────────────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│              2. Dependency Resolution                       │
+│                                                             │
+│    app ─────depends─on────▶ utils                           │
+│     ↓                         ↑                             │
+│     └──────depends─on────▶ nameless ✗ (not allowed)         │
+│                                                             │
+│  Note: Nameless packages cannot be referenced               │
+└─────────────────┬───────────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│              3. Task Graph Construction                     │
+│                                                             │
+│  app#build ──────────▶ utils#build                          │
+│      ↓                      ↓                               │
+│  app#test               utils#test                          │
+│                                                             │
+│  build ◀──── test  (nameless package internal deps)         │
+└─────────────────┬───────────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│              4. Execution Planning                          │
+│                                                             │
+│  Execution Order: utils#build → app#build → parallel(tests) │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 1. Package Discovery
+
+The package graph builder starts by discovering all packages in the workspace:
+
+- Reads the workspace configuration (`pnpm-workspace.yaml`, `yarn workspaces`, or `npm workspaces`)
+- Resolves glob patterns to find all package directories
+- Loads `package.json` from each package directory
+- Creates a node in the graph for each package
+
+### 2. Dependency Resolution
+
+For each package, the builder analyzes its dependencies:
+
+- Examines `dependencies`, `devDependencies`, and `peerDependencies` in `package.json`
+- Identifies workspace dependencies (marked with `workspace:*` protocol)
+- Creates edges in the graph between packages based on these dependencies
+- Validates that all referenced workspace packages exist
+
+### 3. Task Graph Construction
+
+Once the package graph is built, vite-plus constructs a task graph:
+
+- Loads tasks from `vite-task.json` files in each package
+- Loads scripts from `package.json` files
+- Resolves explicit task dependencies (from `dependsOn` fields)
+- When `--topological` is enabled, adds implicit dependencies based on package relationships
+- Validates that all task dependencies can be resolved
+
+### 4. Execution Planning
+
+The final step creates an execution plan:
+
+- Performs topological sorting of the task graph
+- Identifies tasks that can run in parallel
+- Detects circular dependencies and reports errors
+- Determines the optimal execution order
+
+## Packages Without Names
+
+Vite-plus supports packages that have no `name` field in their `package.json`. These anonymous packages have special constraints and behaviors:
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                 Multiple Nameless Packages                 │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  packages/                                                 │
+│  ├── frontend/        (no name field)                      │
+│  │   ├── package.json                                      │
+│  │   └── vite-task.json                                    │
+│  │                                                         │
+│  ├── backend/         (no name field)                      │
+│  │   ├── package.json                                      │
+│  │   └── vite-task.json                                    │
+│  │                                                         │
+│  └── shared/          name: "@company/shared"              │
+│      ├── package.json                                      │
+│      └── vite-task.json                                    │
+│                                                            │
+├────────────────────────────────────────────────────────────┤
+│                     Task Resolution                        │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  Recursive mode (-r):                                      │
+│  ┌───────────────────────────────────────────┐             │
+│  │ vite-plus run build -r                    │             │
+│  └─────────────┬─────────────────────────────┘             │
+│                ▼                                           │
+│    ✓ build (frontend)                                      │
+│    ✓ build (backend)                                       │
+│    ✓ @company/shared#build                                 │
+│                                                            │
+│  Explicit mode:                                            │
+│  ┌───────────────────────────────────────────┐             │
+│  │ vite-plus run #build                      │             │
+│  └─────────────┬─────────────────────────────┘             │
+│                ▼                                           │
+│    ✗ Error: Cannot reference nameless package              │
+│                                                            │
+│  Implicit mode (from package dir):                         │
+│  ┌───────────────────────────────────────────┐             │
+│  │ cd packages/frontend && vite-plus build   │             │
+│  └─────────────┬─────────────────────────────┘             │
+│                ▼                                           │
+│    ✓ Runs build in current nameless package                │
+│                                                            │
+├────────────────────────────────────────────────────────────┤
+│                   Dependency Rules                         │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  Allowed:                                                  │
+│  ┌──────────────────────────────────────────┐              │
+│  │ nameless ──depends─on──▶ @company/shared │              │
+│  └──────────────────────────────────────────┘              │
+│                                                            │
+│  Not Allowed:                                              │
+│  ┌──────────────────────────────────────────┐              │
+│  │ @company/shared ──depends─on──▶ nameless │ ✗            │
+│  └──────────────────────────────────────────┘              │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+```
+
+### Constraints
+
+1. **Tasks cannot be depended upon**: Other packages cannot declare dependencies on tasks from packages without names. This prevents ambiguity since there's no way to uniquely reference these tasks from external packages.
+
+2. **Cannot be specified with `vite run` command**: You cannot directly target tasks from nameless packages using explicit mode (e.g., `vite-plus run #build` won't work). The lack of a package name makes it impossible to construct the `package#task` identifier.
+
+3. **Can run via implicit mode**: When you're in the directory of a nameless package, you can use implicit mode to run its tasks:
+
+   ```bash
+   cd packages/anonymous-package
+   vite-plus build  # Runs the build task in the current nameless package
+   ```
+
+4. **Included in recursive runs**: Tasks from nameless packages are included when using the `-r` flag:
+
+   ```bash
+   vite-plus run build -r  # Includes build tasks from all packages, including nameless ones
+   ```
+
+5. **Can depend on other packages**: Tasks within nameless packages can declare dependencies on tasks from named packages:
+
+   ```json
+   {
+     "tasks": {
+       "build": {
+         "command": "tsc",
+         "dependsOn": ["core#build", "utils#build"]
+       }
+     }
+   }
+   ```
+
+6. **Multiple nameless packages allowed**: A monorepo can contain multiple packages without names. Each operates independently with the same constraints.
