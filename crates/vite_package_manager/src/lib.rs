@@ -147,7 +147,9 @@ pub struct PackageInfo {
 
 #[derive(Default)]
 struct PackageGraphBuilder {
-    id_and_deps_by_name: HashMap<CompactString, (NodeIndex, Vec<(CompactString, DependencyType)>)>,
+    id_and_deps_by_path: HashMap<CompactString, (NodeIndex, Vec<(CompactString, DependencyType)>)>,
+    // Only for packages with a name
+    name_to_path: HashMap<CompactString, CompactString>,
     graph: Graph<PackageInfo, DependencyType>,
 }
 
@@ -161,11 +163,16 @@ impl PackageGraphBuilder {
         let package_name = package_json.name.clone();
         let id = self.graph.add_node(PackageInfo { package_json, path: package_path.clone() });
 
-        // Allow multiple packages with empty names - they're identified by path instead
+        // Always store by path
+        self.id_and_deps_by_path.insert(package_path.clone(), (id, deps));
+
+        // Also maintain name to path mapping for dependency resolution
         if !package_name.is_empty() {
-            if let Some((existing_id, _)) =
-                self.id_and_deps_by_name.insert(package_name, (id, deps))
+            if let Some(existing_path) =
+                self.name_to_path.insert(package_name.clone(), package_path.clone())
             {
+                // Duplicate package name found
+                let existing_id = self.id_and_deps_by_path.get(&existing_path).unwrap().0;
                 let existing_package_info = &self.graph[existing_id];
                 return Err(Error::DuplicatedPackageName {
                     name: existing_package_info.package_json.name.to_string(),
@@ -173,26 +180,24 @@ impl PackageGraphBuilder {
                     path2: self.graph[id].path.clone(),
                 });
             }
-        } else {
-            // For nameless packages, use path as a unique identifier
-            // Store with a synthetic key that won't collide with real package names
-            let synthetic_key = format!("__nameless__{}", package_path).into();
-            self.id_and_deps_by_name.insert(synthetic_key, (id, deps));
         }
         Ok(())
     }
 
     fn build(mut self) -> Graph<PackageInfo, DependencyType> {
-        for (id, deps) in self.id_and_deps_by_name.values() {
+        for (id, deps) in self.id_and_deps_by_path.values() {
             for (dep_name, dep_type) in deps {
                 // Skip dependencies on nameless packages (empty string)
-                // These can't be referenced anyway due to our restriction
+                // These can't be referenced anyway
                 if dep_name.is_empty() {
                     continue;
                 }
 
-                if let Some((dep_id, _)) = self.id_and_deps_by_name.get(dep_name) {
-                    self.graph.add_edge(*id, *dep_id, *dep_type);
+                // Resolve dependency name to path, then find the node
+                if let Some(dep_path) = self.name_to_path.get(dep_name) {
+                    if let Some((dep_id, _)) = self.id_and_deps_by_path.get(dep_path) {
+                        self.graph.add_edge(*id, *dep_id, *dep_type);
+                    }
                 }
                 // Silently skip if dependency not found - it might be an external package
             }
