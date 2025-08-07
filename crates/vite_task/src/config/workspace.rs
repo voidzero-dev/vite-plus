@@ -278,7 +278,7 @@ impl Workspace {
                 let matching_tasks: Vec<_> = self
                     .task_graph
                     .node_weights()
-                    .filter(|t| t.id.full_name() == name)
+                    .filter(|t| t.id.full_name() == name.as_str())
                     .map(|t| t.id.clone())
                     .collect();
 
@@ -395,6 +395,7 @@ impl Workspace {
                                             return Err(Error::TaskNameConflict {
                                                 package_name_a: existing_task_id
                                                     .package_name()
+                                                    .unwrap_or_default()
                                                     .to_string(),
                                                 task_name_a: existing_task_id
                                                     .task_name()
@@ -413,11 +414,25 @@ impl Workspace {
                                 }
                                 current_task_id.ok_or_else(|| Error::TaskNotFound(name.to_string()))
                             } else {
-                                let (package_name, task_name) = if let Some(pos) = name.find('#') {
-                                    (name[..pos].into(), name[pos + 1..].into())
-                                } else {
-                                    return Err(Error::InvalidTaskName(name.to_string()));
-                                };
+                                let (package_name, task_name): (Str, Str) =
+                                    if let Some(pos) = name.find('#') {
+                                        (name[..pos].into(), name[pos + 1..].into())
+                                    } else {
+                                        // No '#' means it's a local task reference within the same package
+                                        (package_name.into(), name.clone())
+                                    };
+
+                                // Restrict: Empty package tasks cannot be depended on by other packages
+                                // But allow self-references within the empty package itself
+                                // package_info is the current package, package_name is the target package being referenced
+                                if package_name.is_empty()
+                                    && !package_info.package_json.name.is_empty()
+                                {
+                                    return Err(Error::InvalidTaskName(format!(
+                                        "Cannot depend on tasks from packages with empty names: {}",
+                                        name
+                                    )));
+                                }
 
                                 Ok(TaskId::new(package_name, task_name, None))
                             }
@@ -497,7 +512,7 @@ impl Workspace {
             };
 
             tasks_by_package_and_name
-                .entry((package_name.to_string(), task_name.to_string()))
+                .entry((package_name.unwrap_or_default().to_string(), task_name.to_string()))
                 .or_default()
                 .push((task_id.clone(), order));
         }

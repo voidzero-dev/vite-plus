@@ -39,7 +39,7 @@ pub struct TaskCache {
 
 #[derive(Debug, Encode, Decode, Serialize)]
 pub struct TaskCacheKey {
-    // Package and command fingerprint for cache sharing between subtasks
+    // When package name changes, all the related tasks are invalidated.
     pub package_name: Str,
     pub command_fingerprint: CommandFingerprint,
     pub args: Arc<[Str]>,
@@ -87,7 +87,7 @@ impl TaskCache {
         resolved_task: &ResolvedTask,
         cached_task: CachedTask,
     ) -> Result<(), Error> {
-        let package_name = resolved_task.id.package_name().into();
+        let package_name = resolved_task.id.package_name().unwrap_or_default().into();
         let key = TaskCacheKey {
             package_name,
             command_fingerprint: resolved_task.resolved_command.fingerprint.clone(),
@@ -107,7 +107,7 @@ impl TaskCache {
         &self,
         resolved_task: &ResolvedTask,
     ) -> Result<Option<CachedTask>, Error> {
-        let package_name = resolved_task.id.package_name().into();
+        let package_name = resolved_task.id.package_name().unwrap_or_default().into();
         let key = TaskCacheKey {
             package_name,
             command_fingerprint: resolved_task.resolved_command.fingerprint.clone(),

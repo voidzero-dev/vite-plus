@@ -2,7 +2,7 @@ mod task_command;
 mod task_graph_builder;
 mod workspace;
 
-use std::{ffi::OsStr, fmt::Display, sync::Arc};
+use std::{borrow::Cow, ffi::OsStr, fmt::Display, sync::Arc};
 
 use bincode::{Decode, Encode};
 use diff::Diff;
@@ -88,33 +88,50 @@ pub struct CommandFingerprint {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Encode, Decode, Serialize)]
+pub enum TaskName {
+    Named { package_name: Str, task_name: Str },
+    Empty(Str),
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Encode, Decode, Serialize)]
 pub struct TaskId {
-    name: Str,
-    package_name: Str,
-    task_name: Str,
+    name: TaskName,
     subcommand_index: Option<usize>,
 }
 
 impl TaskId {
     pub(crate) fn new(package_name: Str, task_name: Str, subcommand_index: Option<usize>) -> Self {
         Self {
-            name: format!("{}#{}", package_name, task_name).into(),
-            package_name,
-            task_name,
+            name: if package_name.is_empty() {
+                TaskName::Empty(task_name.clone())
+            } else {
+                TaskName::Named { package_name: package_name.clone(), task_name: task_name.clone() }
+            },
             subcommand_index,
         }
     }
 
-    pub fn full_name(&self) -> &Str {
-        &self.name
+    pub fn full_name<'a>(&'a self) -> Cow<'a, str> {
+        match &self.name {
+            TaskName::Named { package_name, task_name } => {
+                Cow::Owned(format!("{}#{}", package_name, task_name))
+            }
+            TaskName::Empty(task_name) => Cow::Borrowed(task_name.as_str()),
+        }
     }
 
-    pub fn package_name(&self) -> &str {
-        &self.package_name
+    pub fn package_name(&self) -> Option<&str> {
+        match &self.name {
+            TaskName::Named { package_name, .. } => Some(package_name),
+            TaskName::Empty(_) => None,
+        }
     }
 
-    pub fn task_name(&self) -> &str {
-        &self.task_name
+    pub fn task_name(&self) -> &Str {
+        match &self.name {
+            TaskName::Named { task_name, .. } => task_name,
+            TaskName::Empty(task_name) => task_name,
+        }
     }
 
     pub fn subcommand_index(&self) -> Option<usize> {
@@ -124,7 +141,7 @@ impl TaskId {
 
 impl Display for TaskId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.name, f)?;
+        Display::fmt(&self.full_name(), f)?;
         if let Some(subcommand_index) = self.subcommand_index {
             Display::fmt(&format_args!(" (subcommand {subcommand_index})",), f)?;
         }
@@ -140,6 +157,17 @@ mod tests {
 
     use super::*;
     use crate::Error;
+
+    impl TaskName {
+        pub fn as_str<'a>(&'a self) -> Cow<'a, str> {
+            match self {
+                TaskName::Named { package_name, task_name } => {
+                    Cow::Owned(format!("{}#{}", package_name, task_name))
+                }
+                TaskName::Empty(task_name) => Cow::Borrowed(task_name.as_str()),
+            }
+        }
+    }
 
     fn with_unique_cache_path<F, R>(test_name: &str, f: F) -> R
     where
@@ -176,12 +204,12 @@ mod tests {
 
             // Verify that all build tasks are included
             let task_names: Vec<_> =
-                task_graph.node_weights().map(|task| task.id.full_name().as_str()).collect();
+                task_graph.node_weights().map(|task| task.id.full_name()).collect();
 
-            assert!(task_names.contains(&"@test/core#build"));
-            assert!(task_names.contains(&"@test/utils#build"));
-            assert!(task_names.contains(&"@test/app#build"));
-            assert!(task_names.contains(&"@test/web#build"));
+            assert!(task_names.contains(&"@test/core#build".into()));
+            assert!(task_names.contains(&"@test/utils#build".into()));
+            assert!(task_names.contains(&"@test/app#build".into()));
+            assert!(task_names.contains(&"@test/web#build".into()));
 
             // Verify dependencies exist in the correct direction
             let has_edge = |from: &str, to: &str| -> bool {
@@ -409,12 +437,12 @@ mod tests {
 
             // Verify that all build tasks are included (recursive flag works)
             let task_names: Vec<_> =
-                task_graph.node_weights().map(|task| task.id.full_name().as_str()).collect();
+                task_graph.node_weights().map(|task| task.id.full_name()).collect();
 
-            assert!(task_names.contains(&"@test/core#build"));
-            assert!(task_names.contains(&"@test/utils#build"));
-            assert!(task_names.contains(&"@test/app#build"));
-            assert!(task_names.contains(&"@test/web#build"));
+            assert!(task_names.contains(&"@test/core#build".into()));
+            assert!(task_names.contains(&"@test/utils#build".into()));
+            assert!(task_names.contains(&"@test/app#build".into()));
+            assert!(task_names.contains(&"@test/web#build".into()));
 
             // But verify NO implicit dependencies exist
             let has_edge = |from: &str, to: &str| -> bool {
@@ -526,12 +554,12 @@ mod tests {
 
             // Verify that all build tasks are included
             let task_names: Vec<_> =
-                task_graph.node_weights().map(|task| task.id.full_name().as_str()).collect();
+                task_graph.node_weights().map(|task| task.id.full_name()).collect();
 
-            assert!(task_names.contains(&"@test/core#build"));
-            assert!(task_names.contains(&"@test/utils#build"));
-            assert!(task_names.contains(&"@test/app#build"));
-            assert!(task_names.contains(&"@test/web#build"));
+            assert!(task_names.contains(&"@test/core#build".into()));
+            assert!(task_names.contains(&"@test/utils#build".into()));
+            assert!(task_names.contains(&"@test/app#build".into()));
+            assert!(task_names.contains(&"@test/web#build".into()));
 
             // Cross-package dependencies should exist even without topological flag
             let has_edge = |from: &str, to: &str| -> bool {
@@ -592,16 +620,16 @@ mod tests {
             // @test/utils has compound commands (3 subtasks) plus dependencies on @test/core#build
             let all_tasks: Vec<_> = task_graph
                 .node_weights()
-                .map(|task| (task.id.full_name().as_str(), task.id.subcommand_index()))
+                .map(|task| (task.id.full_name(), task.id.subcommand_index()))
                 .collect();
 
             // Should include utils subtasks
-            assert!(all_tasks.contains(&("@test/utils#build", Some(0))));
-            assert!(all_tasks.contains(&("@test/utils#build", Some(1))));
-            assert!(all_tasks.contains(&("@test/utils#build", None)));
+            assert!(all_tasks.contains(&("@test/utils#build".into(), Some(0))));
+            assert!(all_tasks.contains(&("@test/utils#build".into(), Some(1))));
+            assert!(all_tasks.contains(&("@test/utils#build".into(), None)));
 
             // Should also include dependency on core
-            assert!(all_tasks.contains(&("@test/core#build", None)));
+            assert!(all_tasks.contains(&("@test/core#build".into(), None)));
         })
     }
 
@@ -623,13 +651,13 @@ mod tests {
             // Check all tasks including subcommands
             let all_tasks: Vec<_> = task_graph
                 .node_weights()
-                .map(|task| (task.id.full_name().as_str(), task.id.subcommand_index()))
+                .map(|task| (task.id.full_name(), task.id.subcommand_index()))
                 .collect();
 
             // Utils should have 3 subtasks (indices 0, 1, and None)
-            assert!(all_tasks.contains(&("@test/utils#build", Some(0))));
-            assert!(all_tasks.contains(&("@test/utils#build", Some(1))));
-            assert!(all_tasks.contains(&("@test/utils#build", None)));
+            assert!(all_tasks.contains(&("@test/utils#build".into(), Some(0))));
+            assert!(all_tasks.contains(&("@test/utils#build".into(), Some(1))));
+            assert!(all_tasks.contains(&("@test/utils#build".into(), None)));
 
             // Verify dependencies
             let has_edge = |from_name: &str,
@@ -641,9 +669,9 @@ mod tests {
                     let (source, target) = task_graph.edge_endpoints(edge_idx).unwrap();
                     let source_task = &task_graph[source].id;
                     let target_task = &task_graph[target].id;
-                    source_task.full_name().as_str() == from_name
+                    source_task.full_name() == from_name
                         && source_task.subcommand_index() == from_idx
-                        && target_task.full_name().as_str() == to_name
+                        && target_task.full_name() == to_name
                         && target_task.subcommand_index() == to_idx
                 })
             };
@@ -690,14 +718,14 @@ mod tests {
 
             // Verify that all build tasks are included
             let task_names: Vec<_> =
-                task_graph.node_weights().map(|task| task.id.full_name().as_str()).collect();
+                task_graph.node_weights().map(|task| task.id.full_name()).collect();
 
             assert!(
-                task_names.contains(&"@test/a#build"),
+                task_names.contains(&"@test/a#build".into()),
                 "Package A build task should be included"
             );
             assert!(
-                task_names.contains(&"@test/c#build"),
+                task_names.contains(&"@test/c#build".into()),
                 "Package C build task should be included"
             );
             assert_eq!(task_names.len(), 2, "Only A and C should have build tasks");
@@ -735,17 +763,17 @@ mod tests {
                 .expect("Failed to resolve build tasks");
 
             let build_tasks: Vec<_> =
-                build_graph.node_weights().map(|task| task.id.full_name().as_str()).collect();
+                build_graph.node_weights().map(|task| task.id.full_name()).collect();
 
             // Verify all packages with build scripts are included
-            assert!(build_tasks.contains(&"@test/shared#build"));
-            assert!(build_tasks.contains(&"@test/ui#build"));
-            assert!(build_tasks.contains(&"@test/api#build"));
-            assert!(build_tasks.contains(&"@test/app#build"));
-            assert!(build_tasks.contains(&"@test/config#build"));
+            assert!(build_tasks.contains(&"@test/shared#build".into()));
+            assert!(build_tasks.contains(&"@test/ui#build".into()));
+            assert!(build_tasks.contains(&"@test/api#build".into()));
+            assert!(build_tasks.contains(&"@test/app#build".into()));
+            assert!(build_tasks.contains(&"@test/config#build".into()));
 
             // Tools doesn't have a build script
-            assert!(!build_tasks.iter().any(|&task| task.starts_with("@test/tools#")));
+            assert!(!build_tasks.iter().any(|task| task.starts_with("@test/tools#")));
 
             let has_edge =
                 |graph: &StableDiGraph<ResolvedTask, ()>, from: &str, to: &str| -> bool {
@@ -766,9 +794,9 @@ mod tests {
                     let (source, target) = graph.edge_endpoints(edge_idx).unwrap();
                     let source_task = &graph[source].id;
                     let target_task = &graph[target].id;
-                    source_task.full_name().as_str() == from_name
+                    source_task.full_name() == from_name
                         && source_task.subcommand_index() == from_idx
-                        && target_task.full_name().as_str() == to_name
+                        && target_task.full_name() == to_name
                         && target_task.subcommand_index() == to_idx
                 })
             };
@@ -784,7 +812,7 @@ mod tests {
             // Test that UI has compound commands (3 subtasks)
             let ui_tasks: Vec<_> = build_graph
                 .node_weights()
-                .filter(|task| task.id.full_name().as_str() == "@test/ui#build")
+                .filter(|task| task.id.full_name() == "@test/ui#build")
                 .map(|task| task.id.subcommand_index())
                 .collect();
             assert_eq!(ui_tasks.len(), 3);
@@ -811,7 +839,7 @@ mod tests {
             // Test that shared has compound commands (3 subtasks for build)
             let shared_build_tasks: Vec<_> = build_graph
                 .node_weights()
-                .filter(|task| task.id.full_name().as_str() == "@test/shared#build")
+                .filter(|task| task.id.full_name() == "@test/shared#build")
                 .map(|task| task.id.subcommand_index())
                 .collect();
             assert_eq!(shared_build_tasks.len(), 3);
@@ -819,7 +847,7 @@ mod tests {
             // Test that API has compound commands (4 subtasks for build)
             let api_build_tasks: Vec<_> = build_graph
                 .node_weights()
-                .filter(|task| task.id.full_name().as_str() == "@test/api#build")
+                .filter(|task| task.id.full_name() == "@test/api#build")
                 .map(|task| task.id.subcommand_index())
                 .collect();
             assert_eq!(api_build_tasks.len(), 4);
@@ -827,7 +855,7 @@ mod tests {
             // Test that app has compound commands (5 subtasks for build)
             let app_build_tasks: Vec<_> = build_graph
                 .node_weights()
-                .filter(|task| task.id.full_name().as_str() == "@test/app#build")
+                .filter(|task| task.id.full_name() == "@test/app#build")
                 .map(|task| task.id.subcommand_index())
                 .collect();
             assert_eq!(app_build_tasks.len(), 5);
@@ -859,7 +887,7 @@ mod tests {
             assert!(
                 build_graph
                     .node_weights()
-                    .any(|task| task.id.full_name().as_str() == "@test/pkg#special#build"),
+                    .any(|task| task.id.full_name() == "@test/pkg#special#build"),
                 "Package with # in name should have build task"
             );
 
@@ -897,21 +925,21 @@ mod tests {
                 .expect("Failed to resolve test tasks");
 
             let test_tasks: Vec<_> =
-                test_graph.node_weights().map(|task| task.id.full_name().as_str()).collect();
+                test_graph.node_weights().map(|task| task.id.full_name()).collect();
 
-            assert!(test_tasks.contains(&"@test/shared#test"));
-            assert!(test_tasks.contains(&"@test/ui#test"));
-            assert!(test_tasks.contains(&"@test/api#test"));
-            assert!(test_tasks.contains(&"@test/app#test"));
+            assert!(test_tasks.contains(&"@test/shared#test".into()));
+            assert!(test_tasks.contains(&"@test/ui#test".into()));
+            assert!(test_tasks.contains(&"@test/api#test".into()));
+            assert!(test_tasks.contains(&"@test/app#test".into()));
 
             // Config and tools don't have test scripts
-            assert!(!test_tasks.iter().any(|&task| task == "@test/config#test"));
-            assert!(!test_tasks.iter().any(|&task| task == "@test/tools#test"));
+            assert!(!test_tasks.iter().any(|task| task == "@test/config#test"));
+            assert!(!test_tasks.iter().any(|task| task == "@test/tools#test"));
 
             // Verify shared#test has compound commands (3 subtasks)
             let shared_test_tasks: Vec<_> = test_graph
                 .node_weights()
-                .filter(|task| task.id.full_name().as_str() == "@test/shared#test")
+                .filter(|task| task.id.full_name() == "@test/shared#test")
                 .map(|task| task.id.subcommand_index())
                 .collect();
             assert_eq!(shared_test_tasks.len(), 3);
@@ -922,15 +950,15 @@ mod tests {
                 .expect("Failed to resolve api build task");
 
             let api_deps: Vec<_> =
-                api_build_graph.node_weights().map(|task| task.id.full_name().as_str()).collect();
+                api_build_graph.node_weights().map(|task| task.id.full_name()).collect();
 
             // Should include api and its dependencies
-            assert!(api_deps.contains(&"@test/api#build"));
-            assert!(api_deps.contains(&"@test/shared#build"));
-            assert!(api_deps.contains(&"@test/config#build"));
+            assert!(api_deps.contains(&"@test/api#build".into()));
+            assert!(api_deps.contains(&"@test/shared#build".into()));
+            assert!(api_deps.contains(&"@test/config#build".into()));
             // Should not include app or ui
-            assert!(!api_deps.contains(&"@test/app#build"));
-            assert!(!api_deps.contains(&"@test/ui#build"));
+            assert!(!api_deps.contains(&"@test/app#build".into()));
+            assert!(!api_deps.contains(&"@test/ui#build".into()));
         })
     }
 
@@ -954,7 +982,7 @@ mod tests {
                 "Should resolve single task with # in name"
             );
             let task = special_build_graph.node_weights().next().unwrap();
-            assert_eq!(task.id.full_name().as_str(), "@test/shared#build#special");
+            assert_eq!(task.id.full_name(), "@test/shared#build#special");
 
             // Test resolving task with # in both package and script names
             let deploy_prod_graph = workspace
@@ -966,7 +994,7 @@ mod tests {
                 "Should resolve task with # in both package and script names"
             );
             let task = deploy_prod_graph.node_weights().next().unwrap();
-            assert_eq!(task.id.full_name().as_str(), "@test/pkg#special#deploy#prod");
+            assert_eq!(task.id.full_name(), "@test/pkg#special#deploy#prod");
 
             // Test that we can't use recursive with task names containing # (would be interpreted as scope)
             let result =
@@ -989,12 +1017,10 @@ mod tests {
                 .expect("Should resolve multiple tasks with # in names");
             assert_eq!(multi_special_tasks.node_count(), 2, "Should resolve both tasks");
 
-            let task_names: Vec<_> = multi_special_tasks
-                .node_weights()
-                .map(|task| task.id.full_name().as_str())
-                .collect();
-            assert!(task_names.contains(&"@test/shared#build#special"));
-            assert!(task_names.contains(&"@test/pkg#special#test#e2e"));
+            let task_names: Vec<_> =
+                multi_special_tasks.node_weights().map(|task| task.id.full_name()).collect();
+            assert!(task_names.contains(&"@test/shared#build#special".into()));
+            assert!(task_names.contains(&"@test/pkg#special#test#e2e".into()));
 
             // If there are dependencies, verify they work correctly
             // Since @test/pkg#special depends on @test/shared, if shared had test#e2e,
@@ -1040,9 +1066,9 @@ mod tests {
                     let (source, target) = graph.edge_endpoints(edge_idx).unwrap();
                     let source_task = &graph[source].id;
                     let target_task = &graph[target].id;
-                    source_task.full_name().as_str() == from_name
+                    source_task.full_name() == from_name
                         && source_task.subcommand_index() == from_idx
-                        && target_task.full_name().as_str() == to_name
+                        && target_task.full_name() == to_name
                         && target_task.subcommand_index() == to_idx
                 })
             };
@@ -1050,7 +1076,7 @@ mod tests {
             // Verify all tasks are present
             let all_tasks: Vec<_> = app_build_graph
                 .node_weights()
-                .map(|task| (task.id.full_name().as_str(), task.id.subcommand_index()))
+                .map(|task| (task.id.full_name(), task.id.subcommand_index()))
                 .collect();
 
             // App should have 5 subtasks (indices: 0, 1, 2, 3, None)
@@ -1197,7 +1223,7 @@ mod tests {
             // Get all tasks from the graph
             let tasks: Vec<_> = task_graph
                 .node_weights()
-                .map(|task| (task.id.full_name().as_str(), task.id.subcommand_index()))
+                .map(|task| (task.id.full_name(), task.id.subcommand_index()))
                 .collect();
 
             // Task 'a' should have only one task (no &&)
@@ -1222,15 +1248,14 @@ mod tests {
             let task_a = task_graph
                 .node_weights()
                 .find(|t| {
-                    t.id.full_name().as_str() == "@test/cache-sharing#a"
-                        && t.id.subcommand_index().is_none()
+                    t.id.full_name() == "@test/cache-sharing#a" && t.id.subcommand_index().is_none()
                 })
                 .unwrap();
 
             let task_b_subtask_0 = task_graph
                 .node_weights()
                 .find(|t| {
-                    t.id.full_name().as_str() == "@test/cache-sharing#b"
+                    t.id.full_name() == "@test/cache-sharing#b"
                         && t.id.subcommand_index() == Some(0)
                 })
                 .unwrap();
@@ -1238,7 +1263,7 @@ mod tests {
             let task_c_subtask_0 = task_graph
                 .node_weights()
                 .find(|t| {
-                    t.id.full_name().as_str() == "@test/cache-sharing#c"
+                    t.id.full_name() == "@test/cache-sharing#c"
                         && t.id.subcommand_index() == Some(0)
                 })
                 .unwrap();
@@ -1295,21 +1320,21 @@ mod tests {
                 .expect("Failed to resolve shared#deploy task");
 
             let task_names: Vec<_> =
-                deploy_graph.node_weights().map(|task| task.id.full_name().as_str()).collect();
+                deploy_graph.node_weights().map(|task| task.id.full_name()).collect();
 
             // Should include the deploy task itself
             assert!(
-                task_names.contains(&"@test/shared#deploy"),
+                task_names.contains(&"@test/shared#deploy".into()),
                 "Should contain @test/shared#deploy"
             );
 
             // Should include its dependencies
             assert!(
-                task_names.contains(&"@test/pkg#special#build"),
+                task_names.contains(&"@test/pkg#special#build".into()),
                 "Should contain dependency @test/pkg#special#build"
             );
             assert!(
-                task_names.contains(&"@test/shared#build#special"),
+                task_names.contains(&"@test/shared#build#special".into()),
                 "Should contain dependency @test/shared#build#special"
             );
 
@@ -1319,17 +1344,17 @@ mod tests {
                 .expect("Failed to resolve shared#complex task");
 
             let complex_task_names: Vec<_> =
-                complex_graph.node_weights().map(|task| task.id.full_name().as_str()).collect();
+                complex_graph.node_weights().map(|task| task.id.full_name()).collect();
 
             // Should include the complex task itself
             assert!(
-                complex_task_names.contains(&"@test/shared#complex"),
+                complex_task_names.contains(&"@test/shared#complex".into()),
                 "Should contain @test/shared#complex"
             );
 
             // Should include its dependency with multiple '#' in both package and task name
             assert!(
-                complex_task_names.contains(&"@test/pkg#special#deploy#prod"),
+                complex_task_names.contains(&"@test/pkg#special#deploy#prod".into()),
                 "Should contain dependency @test/pkg#special#deploy#prod"
             );
 
@@ -1339,8 +1364,7 @@ mod tests {
                     let (source, target) = graph.edge_endpoints(edge_idx).unwrap();
                     let source_task = &graph[source].id;
                     let target_task = &graph[target].id;
-                    source_task.full_name().as_str() == from
-                        && target_task.full_name().as_str() == to
+                    source_task.full_name() == from && target_task.full_name() == to
                 })
             };
 
@@ -1359,6 +1383,145 @@ mod tests {
                 has_edge(&complex_graph, "@test/pkg#special#deploy#prod", "@test/shared#complex"),
                 "@test/shared#complex should depend on @test/pkg#special#deploy#prod"
             );
+        })
+    }
+
+    #[test]
+    fn test_empty_package_name_handling() {
+        with_unique_cache_path("empty_package_name", |cache_path| {
+            // Create a separate fixture directory for testing empty package names
+            // to avoid conflicts with the comprehensive-task-graph test
+            let fixture_path =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/empty-package-test");
+
+            let workspace =
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
+                    .expect("Failed to load workspace with empty package name");
+
+            // Test that empty-name package is loaded correctly
+            let empty_name_package =
+                workspace.package_graph.node_weights().find(|p| p.package_json.name.is_empty());
+            assert!(empty_name_package.is_some(), "Should find package with empty name");
+
+            // Test resolving build task recursively - should find both packages
+            let build_tasks = workspace
+                .resolve_tasks(&vec!["build".into()], Arc::default(), true)
+                .expect("Failed to resolve build tasks recursively");
+
+            let task_names: Vec<_> =
+                build_tasks.node_weights().map(|task| task.id.full_name()).collect();
+
+            assert!(
+                task_names.contains(&"build".into()),
+                "Should find empty-name package build task, found: {:?}",
+                task_names
+            );
+            assert!(
+                task_names.contains(&"normal-package#build".into()),
+                "Should find normal-package build task"
+            );
+
+            // Test that empty-name package internal dependencies work
+            let empty_build = workspace
+                .resolve_tasks(&vec!["build".into()], Arc::default(), false)
+                .expect("Failed to resolve empty-name build");
+
+            let empty_build_tasks: Vec<_> =
+                empty_build.node_weights().map(|task| task.id.full_name()).collect();
+
+            assert!(empty_build_tasks.contains(&"build".into()), "Should have build task");
+            assert!(
+                empty_build_tasks.contains(&"test".into()),
+                "Should have test task as dependency"
+            );
+
+            // Verify internal dependencies work correctly
+            let has_edge =
+                |graph: &StableDiGraph<ResolvedTask, ()>, from: &str, to: &str| -> bool {
+                    graph.edge_indices().any(|edge_idx| {
+                        let (source, target) = graph.edge_endpoints(edge_idx).unwrap();
+                        let source_task = &graph[source];
+                        let target_task = &graph[target];
+                        source_task.id.full_name() == from && target_task.id.full_name() == to
+                    })
+                };
+
+            assert!(
+                has_edge(&empty_build, "test", "build"),
+                "Empty-name build should depend on empty-name test (internal dependency)"
+            );
+        })
+    }
+
+    #[test]
+    fn test_empty_package_restriction() {
+        with_unique_cache_path("empty_package_restriction", |cache_path| {
+            // Create a temporary test directory
+            let temp_dir = std::env::temp_dir().join(format!("vite-test-{}", std::process::id()));
+            std::fs::create_dir_all(&temp_dir).unwrap();
+
+            // Copy the fixture to temp directory
+            let fixture_path =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/empty-package-test");
+            let test_path = temp_dir.join("empty-package-test");
+
+            // Simple recursive copy
+            fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+                std::fs::create_dir_all(dst)?;
+                for entry in std::fs::read_dir(src)? {
+                    let entry = entry?;
+                    let src_path = entry.path();
+                    let dst_path = dst.join(entry.file_name());
+                    if src_path.is_dir() {
+                        copy_dir_all(&src_path, &dst_path)?;
+                    } else {
+                        std::fs::copy(&src_path, &dst_path)?;
+                    }
+                }
+                Ok(())
+            }
+
+            copy_dir_all(&fixture_path, &test_path).unwrap();
+
+            // Modify the copied fixture
+            let normal_vite_task_path = test_path.join("packages/normal-package/vite-task.json");
+            let test_content = r##"{
+  "tasks": {
+    "build": {
+      "command": "echo 'Building normal-package'",
+      "cacheable": true,
+      "dependsOn": ["#test"]
+    },
+    "test": {
+      "command": "echo 'Testing normal-package'",
+      "cacheable": true
+    }
+  }
+}"##;
+            std::fs::write(&normal_vite_task_path, test_content).unwrap();
+
+            let workspace_result = Workspace::load_with_cache_path(
+                test_path.clone(),
+                Some(cache_path.to_path_buf()),
+                true,
+            );
+
+            // Clean up temp directory
+            std::fs::remove_dir_all(&temp_dir).ok();
+
+            assert!(
+                workspace_result.is_err(),
+                "Should fail when normal package depends on empty-name package task"
+            );
+
+            if let Err(e) = workspace_result {
+                let error_msg = format!("{:?}", e);
+                assert!(
+                    error_msg.contains("Cannot depend on tasks from packages with empty names"),
+                    "Error should mention restriction on empty package dependencies: {}",
+                    error_msg
+                );
+            }
         })
     }
 
