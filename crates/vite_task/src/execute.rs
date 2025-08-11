@@ -20,7 +20,7 @@ use wax::Glob;
 use crate::{
     Error,
     collections::{HashMap, HashSet},
-    config::{ResolvedTask, ResolvedTaskConfig, TaskCommand},
+    config::{ResolvedTask, ResolvedTaskCommand, ResolvedTaskConfig, TaskCommand},
     maybe_str::MaybeString,
     str::Str,
 };
@@ -85,9 +85,38 @@ async fn collect_std_outputs(
     }
 }
 
+/// Environment variables for task execution.
+///
+/// # How Environment Variables Affect Caching
+///
+/// Vite-plus distinguishes between two types of environment variables:
+///
+/// 1. **Declared envs** (in task config's `envs` array):
+///    - Explicitly declared as dependencies of the task
+///    - Included in `envs_without_pass_through`
+///    - Changes to these invalidate the cache
+///    - Example: NODE_ENV, API_URL, BUILD_MODE
+///
+/// 2. **Pass-through envs** (in task config's `pass_through_envs` or defaults like PATH):
+///    - Available to the task but don't affect caching
+///    - Only in `all_envs`, NOT in `envs_without_pass_through`
+///    - Changes to these don't invalidate cache
+///    - Example: PATH, HOME, USER, CI
+///
+/// ## Cache Key Generation
+/// - Only `envs_without_pass_through` is included in the cache key
+/// - This ensures tasks are re-run when important envs change
+/// - But allows cache reuse when only incidental envs change
+///
+/// ## Common Issues
+/// - If a built-in resolver provides different envs, cache will be polluted
+/// - Missing important envs from `envs` array = stale cache on env changes
+/// - Including volatile envs in `envs` array = unnecessary cache misses
 #[derive(Debug)]
 pub struct TaskEnvs {
+    /// All environment variables available to the task (declared + pass-through)
     pub all_envs: HashMap<Str, Arc<OsStr>>,
+    /// Only declared envs that affect the cache key (excludes pass-through)
     pub envs_without_pass_through: HashMap<Str, Str>,
 }
 
@@ -141,8 +170,10 @@ impl TaskEnvs {
     }
 }
 
-pub async fn execute_task(task: &ResolvedTask, base_dir: &Path) -> Result<ExecutedTask, Error> {
-    let resolved_command = &task.resolved_command;
+pub async fn execute_task(
+    resolved_command: &ResolvedTaskCommand,
+    base_dir: &Path,
+) -> Result<ExecutedTask, Error> {
     let spy = Spy::global()?;
 
     let mut cmd = match &resolved_command.fingerprint.command {

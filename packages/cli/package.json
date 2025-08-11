@@ -17,7 +17,7 @@
   "scripts": {
     "build": "pnpm run build:binding && pnpm run build:ts",
     "build:binding": "napi build --package-json-path ../package.json --cwd binding --platform --release --esm",
-    "build:ts": "tsdown --outDir dist src/index.ts"
+    "build:ts": "tsc -p ./tsconfig.json"
   },
   "files": [
     "bin",
@@ -25,6 +25,7 @@
     "index.d.ts"
   ],
   "dependencies": {
+    "oxlint": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"
   },

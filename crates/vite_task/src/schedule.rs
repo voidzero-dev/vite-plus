@@ -66,37 +66,41 @@ impl ExecutionPlan {
     #[tracing::instrument(skip(self, workspace))]
     pub async fn execute(self, workspace: &mut Workspace) -> anyhow::Result<()> {
         for step in self.steps {
-            tracing::debug!("Executing task {}", &step.id);
-
-            let command = step.resolved_command.fingerprint.command.clone();
-
-            // Check cache and prepare execution
-            let (cache_miss, execute_or_replay) = get_cached_or_execute(
-                step,
-                &mut workspace.task_cache,
-                &workspace.fs,
-                &workspace.dir,
-            )
-            .await?;
-
-            // Print cache status
-            match cache_miss {
-                Some(CacheMiss::NotFound) => {
-                    println!("Cache Not Found, executing task");
-                    println!("> {command}");
-                }
-                Some(CacheMiss::FingerprintMismatch(mismatch)) => {
-                    println!("{mismatch}, executing task");
-                    println!("> {command}");
-                }
-                None => {
-                    println!("Cache hit, replaying previously executed task");
-                }
-            }
-
-            // Execute or replay the task
-            execute_or_replay.await?;
+            Self::execute_resolved_task(step, workspace).await?;
         }
+        Ok(())
+    }
+
+    pub async fn execute_resolved_task(
+        step: ResolvedTask,
+        workspace: &mut Workspace,
+    ) -> anyhow::Result<()> {
+        tracing::debug!("Executing task {}", &step.id);
+
+        let command = step.resolved_command.fingerprint.command.clone();
+
+        // Check cache and prepare execution
+        let (cache_miss, execute_or_replay) =
+            get_cached_or_execute(step, &mut workspace.task_cache, &workspace.fs, &workspace.dir)
+                .await?;
+
+        // Print cache status
+        match cache_miss {
+            Some(CacheMiss::NotFound) => {
+                println!("Cache Not Found, executing task");
+                println!("> {command}");
+            }
+            Some(CacheMiss::FingerprintMismatch(mismatch)) => {
+                println!("{mismatch}, executing task");
+                println!("> {command}");
+            }
+            None => {
+                println!("Cache hit, replaying previously executed task");
+            }
+        }
+
+        // Execute or replay the task
+        execute_or_replay.await?;
         Ok(())
     }
 }
@@ -132,7 +136,7 @@ async fn get_cached_or_execute<'a>(
         Err(cache_miss) => (
             Some(cache_miss),
             async move {
-                let executed_task = execute_task(&task, base_dir).await?;
+                let executed_task = execute_task(&task.resolved_command, base_dir).await?;
                 let cached_task = CachedTask::create(task.clone(), executed_task, fs, base_dir)?;
                 cache.update(&task, cached_task).await?;
                 Ok(())

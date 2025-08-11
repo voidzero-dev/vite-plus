@@ -1,13 +1,12 @@
 {
   "name": "vite-plus-monorepo",
   "private": true,
-  "packageManager": "pnpm@10.13.1",
+  "packageManager": "pnpm@10.14.0",
   "volta": {
     "node": "22.17.0"
   },
   "scripts": {
     "bootstrap-cli": "cargo build -p vite_task && ./target/debug/vt run @vite-plus/global#prepack && npm install -g ./packages/global",
-    "lint": "oxlint",
     "typecheck": "tsc -b tsconfig.json",
     "prepare": "husky"
   },
@@ -17,7 +16,7 @@
     "@types/node": "catalog:",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.2",
-    "oxlint": "^1.8.0",
+    "oxlint": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "workspace:*"
   },

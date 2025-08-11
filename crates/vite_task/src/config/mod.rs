@@ -7,9 +7,13 @@ use std::{borrow::Cow, ffi::OsStr, fmt::Display, sync::Arc};
 use bincode::{Decode, Encode};
 use diff::Diff;
 use serde::{Deserialize, Serialize};
+use vite_error::Error;
 
 use crate::{
+    ResolveCommandResult,
+    cmd::TaskParsedCommand,
     collections::{HashMap, HashSet},
+    execute::TaskEnvs,
     str::Str,
 };
 
@@ -59,6 +63,50 @@ pub struct ResolvedTask {
     pub resolved_command: ResolvedTaskCommand,
 }
 
+impl ResolvedTask {
+    #[tracing::instrument(skip(workspace, resolve_command, args))]
+    /// Resolve a built-in task, like `vite lint`, `vite build`
+    pub(crate) async fn resolve_from_built_in<
+        Resolved: Future<Output = Result<ResolveCommandResult, Error>>,
+        ResolveFn: Fn() -> Resolved,
+    >(
+        workspace: &Workspace,
+        resolve_command: ResolveFn,
+        task_name: &str,
+        args: &Vec<String>,
+    ) -> Result<Self, Error> {
+        let ResolveCommandResult { bin_path, envs } = resolve_command().await?;
+        let link_task = TaskCommand::Parsed(TaskParsedCommand {
+            args: args.iter().map(|arg| arg.as_str().into()).collect(),
+            envs: envs.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
+            program: bin_path.into(),
+        });
+        let task_config: TaskConfig = link_task.clone().into();
+        let resolved_task_config = ResolvedTaskConfig {
+            config_dir: workspace.dir.as_path().to_string_lossy().as_ref().into(),
+            config: task_config,
+        };
+        let resolved_envs = TaskEnvs::resolve(workspace.dir.as_path(), &resolved_task_config)?;
+        let resolved_command = ResolvedTaskCommand {
+            fingerprint: CommandFingerprint {
+                cwd: workspace.dir.as_path().to_string_lossy().as_ref().into(),
+                command: link_task.clone().into(),
+                envs_without_pass_through: resolved_envs.envs_without_pass_through,
+            },
+            all_envs: resolved_envs.all_envs,
+        };
+        Ok(ResolvedTask {
+            id: TaskId::create_build_in(
+                workspace.package_json.name.as_str().into(),
+                task_name.into(),
+            ),
+            args: args.iter().map(|arg| arg.as_str().into()).collect(),
+            resolved_config: resolved_task_config,
+            resolved_command,
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct ResolvedTaskCommand {
     pub fingerprint: CommandFingerprint,
@@ -79,11 +127,31 @@ impl std::fmt::Debug for ResolvedTaskCommand {
     }
 }
 
+/// Fingerprint for command execution that affects caching.
+///
+/// # Environment Variable Impact on Cache
+///
+/// The `envs_without_pass_through` field is crucial for cache correctness:
+/// - Only includes envs explicitly declared in the task's `envs` array
+/// - Does NOT include pass-through envs (PATH, CI, etc.)
+/// - These envs become part of the cache key
+///
+/// When a task runs:
+/// 1. All envs (including pass-through) are available to the process
+/// 2. Only declared envs affect the cache key
+/// 3. If a declared env changes value, cache will miss
+/// 4. If a pass-through env changes, cache will still hit
+///
+/// For built-in tasks (lint, build, etc):
+/// - The resolver provides envs which become part of the fingerprint
+/// - If resolver provides different envs between runs, cache breaks
+/// - Each built-in task type must have unique task name to avoid cache collision
 #[derive(Encode, Decode, Debug, Serialize, PartialEq, Eq, Diff, Clone)]
 #[diff(attr(#[derive(Debug)]))]
 pub struct CommandFingerprint {
     pub cwd: Str,
     pub command: TaskCommand,
+    /// Environment variables that affect caching (excludes pass-through envs)
     pub envs_without_pass_through: HashMap<Str, Str>,
 }
 
@@ -114,6 +182,10 @@ impl TaskId {
             },
             subcommand_index,
         }
+    }
+
+    pub(crate) fn create_build_in(package_name: Str, name: Str) -> Self {
+        Self { name: TaskName::Named { package_name, task_name: name }, subcommand_index: None }
     }
 
     pub fn full_name<'a>(&'a self) -> Cow<'a, str> {

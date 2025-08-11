@@ -5,11 +5,14 @@ mod config;
 mod execute;
 mod fingerprint;
 mod fs;
+mod lint;
 mod maybe_str;
 mod schedule;
 mod str;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
@@ -67,6 +70,11 @@ pub enum Commands {
         #[clap(long, conflicts_with = "topological")]
         no_topological: bool,
     },
+    Lint {
+        #[clap(last = true)]
+        /// Arguments to pass to oxlint
+        args: Vec<String>,
+    },
 }
 
 /// Resolve boolean flag value considering both positive and negative forms.
@@ -74,6 +82,20 @@ pub enum Commands {
 /// Otherwise, returns the value of the positive form.
 const fn resolve_bool_flag(positive: bool, negative: bool) -> bool {
     if negative { false } else { positive }
+}
+
+pub struct CliOptions<
+    Lint: Future<Output = Result<ResolveCommandResult, Error>> = Pin<
+        Box<dyn Future<Output = Result<ResolveCommandResult, Error>>>,
+    >,
+    LintFn: Fn() -> Lint = Box<dyn Fn() -> Lint>,
+> {
+    pub lint: LintFn,
+}
+
+pub struct ResolveCommandResult {
+    pub bin_path: String,
+    pub envs: HashMap<String, String>,
 }
 
 /// Main entry point for vite-plus task execution.
@@ -105,8 +127,15 @@ const fn resolve_bool_flag(positive: bool, negative: bool) -> bool {
 /// 4. Execute plan
 ///    - For each task: check cache → execute/replay → update cache
 /// ```
-#[tracing::instrument]
-pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
+#[tracing::instrument(skip(options))]
+pub async fn main<
+    Lint: Future<Output = Result<ResolveCommandResult, Error>>,
+    LintFn: Fn() -> Lint,
+>(
+    cwd: PathBuf,
+    args: Args,
+    options: Option<CliOptions<Lint, LintFn>>,
+) -> Result<(), Error> {
     let mut recursive_run = false;
     let mut parallel_run = false;
     let (tasks, mut workspace, task_args) = match &args.commands {
@@ -134,6 +163,14 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
             };
             let workspace = Workspace::load(cwd, topological_run)?;
             (tasks, workspace, Arc::<[Str]>::from(task_args.clone()))
+        }
+        Some(Commands::Lint { args }) => {
+            let mut workspace = Workspace::partial_load(cwd)?;
+            if let Some(lint_fn) = options.map(|o| o.lint) {
+                lint::lint(lint_fn, &mut workspace, args).await?;
+                workspace.unload().await?;
+            }
+            return Ok(());
         }
         None => {
             let workspace = Workspace::load(cwd, false)?;

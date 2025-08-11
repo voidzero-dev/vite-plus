@@ -79,7 +79,12 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@vite-plus-android-arm64')
+        const binding = require('@vite-plus-android-arm64')
+        const bindingPackageVersion = require('@vite-plus-android-arm64/package.json').version
+        if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+          throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        }
+        return binding
       } catch (e) {
         loadErrors.push(e)
       }
@@ -90,7 +95,12 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@vite-plus-android-arm-eabi')
+        const binding = require('@vite-plus-android-arm-eabi')
+        const bindingPackageVersion = require('@vite-plus-android-arm-eabi/package.json').version
+        if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+          throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        }
+        return binding
       } catch (e) {
         loadErrors.push(e)
       }
@@ -105,7 +115,12 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@vite-plus-win32-x64-msvc')
+        const binding = require('@vite-plus-win32-x64-msvc')
+        const bindingPackageVersion = require('@vite-plus-win32-x64-msvc/package.json').version
+        if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+          throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        }
+        return binding
       } catch (e) {
         loadErrors.push(e)
       }
@@ -116,7 +131,12 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@vite-plus-win32-ia32-msvc')
+        const binding = require('@vite-plus-win32-ia32-msvc')
+        const bindingPackageVersion = require('@vite-plus-win32-ia32-msvc/package.json').version
+        if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+          throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        }
+        return binding
       } catch (e) {
         loadErrors.push(e)
       }
@@ -127,7 +147,12 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@vite-plus-win32-arm64-msvc')
+        const binding = require('@vite-plus-win32-arm64-msvc')
+        const bindingPackageVersion = require('@vite-plus-win32-arm64-msvc/package.json').version
+        if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+          throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        }
+        return binding
       } catch (e) {
         loadErrors.push(e)
       }
@@ -141,7 +166,12 @@ function requireNative() {
       loadErrors.push(e)
     }
     try {
-      return require('@vite-plus-darwin-universal')
+      const binding = require('@vite-plus-darwin-universal')
+      const bindingPackageVersion = require('@vite-plus-darwin-universal/package.json').version
+      if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+        throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+      }
+      return binding
     } catch (e) {
       loadErrors.push(e)
     }
@@ -152,7 +182,12 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@vite-plus-darwin-x64')
+        const binding = require('@vite-plus-darwin-x64')
+        const bindingPackageVersion = require('@vite-plus-darwin-x64/package.json').version
+        if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+          throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        }
+        return binding
       } catch (e) {
         loadErrors.push(e)
       }
@@ -163,7 +198,12 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@vite-plus-darwin-arm64')
+        const binding = require('@vite-plus-darwin-arm64')
+        const bindingPackageVersion = require('@vite-plus-darwin-arm64/package.json').version
+        if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+          throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        }
+        return binding
       } catch (e) {
         loadErrors.push(e)
       }
@@ -178,7 +218,12 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@vite-plus-freebsd-x64')
+        const binding = require('@vite-plus-freebsd-x64')
+        const bindingPackageVersion = require('@vite-plus-freebsd-x64/package.json').version
+        if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+          throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        }
+        return binding
       } catch (e) {
         loadErrors.push(e)
       }
@@ -189,7 +234,12 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@vite-plus-freebsd-arm64')
+        const binding = require('@vite-plus-freebsd-arm64')
+        const bindingPackageVersion = require('@vite-plus-freebsd-arm64/package.json').version
+        if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+          throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        }
+        return binding
       } catch (e) {
         loadErrors.push(e)
       }
@@ -205,7 +255,12 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@vite-plus-linux-x64-musl')
+          const binding = require('@vite-plus-linux-x64-musl')
+          const bindingPackageVersion = require('@vite-plus-linux-x64-musl/package.json').version
+          if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+            throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          }
+          return binding
         } catch (e) {
           loadErrors.push(e)
         }
@@ -216,7 +271,12 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@vite-plus-linux-x64-gnu')
+          const binding = require('@vite-plus-linux-x64-gnu')
+          const bindingPackageVersion = require('@vite-plus-linux-x64-gnu/package.json').version
+          if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+            throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          }
+          return binding
         } catch (e) {
           loadErrors.push(e)
         }
@@ -229,7 +289,12 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@vite-plus-linux-arm64-musl')
+          const binding = require('@vite-plus-linux-arm64-musl')
+          const bindingPackageVersion = require('@vite-plus-linux-arm64-musl/package.json').version
+          if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+            throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          }
+          return binding
         } catch (e) {
           loadErrors.push(e)
         }
@@ -240,7 +305,12 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@vite-plus-linux-arm64-gnu')
+          const binding = require('@vite-plus-linux-arm64-gnu')
+          const bindingPackageVersion = require('@vite-plus-linux-arm64-gnu/package.json').version
+          if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+            throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          }
+          return binding
         } catch (e) {
           loadErrors.push(e)
         }
@@ -253,7 +323,12 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@vite-plus-linux-arm-musleabihf')
+          const binding = require('@vite-plus-linux-arm-musleabihf')
+          const bindingPackageVersion = require('@vite-plus-linux-arm-musleabihf/package.json').version
+          if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+            throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          }
+          return binding
         } catch (e) {
           loadErrors.push(e)
         }
@@ -264,7 +339,12 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@vite-plus-linux-arm-gnueabihf')
+          const binding = require('@vite-plus-linux-arm-gnueabihf')
+          const bindingPackageVersion = require('@vite-plus-linux-arm-gnueabihf/package.json').version
+          if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+            throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          }
+          return binding
         } catch (e) {
           loadErrors.push(e)
         }
@@ -277,7 +357,12 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@vite-plus-linux-riscv64-musl')
+          const binding = require('@vite-plus-linux-riscv64-musl')
+          const bindingPackageVersion = require('@vite-plus-linux-riscv64-musl/package.json').version
+          if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+            throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          }
+          return binding
         } catch (e) {
           loadErrors.push(e)
         }
@@ -288,7 +373,12 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@vite-plus-linux-riscv64-gnu')
+          const binding = require('@vite-plus-linux-riscv64-gnu')
+          const bindingPackageVersion = require('@vite-plus-linux-riscv64-gnu/package.json').version
+          if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+            throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          }
+          return binding
         } catch (e) {
           loadErrors.push(e)
         }
@@ -300,7 +390,12 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@vite-plus-linux-ppc64-gnu')
+        const binding = require('@vite-plus-linux-ppc64-gnu')
+        const bindingPackageVersion = require('@vite-plus-linux-ppc64-gnu/package.json').version
+        if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+          throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        }
+        return binding
       } catch (e) {
         loadErrors.push(e)
       }
@@ -311,7 +406,12 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@vite-plus-linux-s390x-gnu')
+        const binding = require('@vite-plus-linux-s390x-gnu')
+        const bindingPackageVersion = require('@vite-plus-linux-s390x-gnu/package.json').version
+        if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+          throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        }
+        return binding
       } catch (e) {
         loadErrors.push(e)
       }
@@ -321,34 +421,49 @@ function requireNative() {
   } else if (process.platform === 'openharmony') {
     if (process.arch === 'arm64') {
       try {
-        return require('./vite-plus.linux-arm64-ohos.node')
+        return require('./vite-plus.openharmony-arm64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        return require('@vite-plus-linux-arm64-ohos')
+        const binding = require('@vite-plus-openharmony-arm64')
+        const bindingPackageVersion = require('@vite-plus-openharmony-arm64/package.json').version
+        if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+          throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        }
+        return binding
       } catch (e) {
         loadErrors.push(e)
       }
     } else if (process.arch === 'x64') {
       try {
-        return require('./vite-plus.linux-x64-ohos.node')
+        return require('./vite-plus.openharmony-x64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        return require('@vite-plus-linux-x64-ohos')
+        const binding = require('@vite-plus-openharmony-x64')
+        const bindingPackageVersion = require('@vite-plus-openharmony-x64/package.json').version
+        if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+          throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        }
+        return binding
       } catch (e) {
         loadErrors.push(e)
       }
     } else if (process.arch === 'arm') {
       try {
-        return require('./vite-plus.linux-arm-ohos.node')
+        return require('./vite-plus.openharmony-arm.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        return require('@vite-plus-linux-arm-ohos')
+        const binding = require('@vite-plus-openharmony-arm')
+        const bindingPackageVersion = require('@vite-plus-openharmony-arm/package.json').version
+        if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
+          throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        }
+        return binding
       } catch (e) {
         loadErrors.push(e)
       }
