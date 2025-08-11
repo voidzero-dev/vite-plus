@@ -5,8 +5,10 @@ edition = "2024"
 
 [dependencies]
 clap = { workspace = true }
+futures = { workspace = true }
 napi = { workspace = true }
 napi-derive = { workspace = true }
+vite_error = { workspace = true }
 vite_task = { workspace = true }
 
 [build-dependencies]

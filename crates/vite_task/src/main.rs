@@ -1,7 +1,7 @@
 use std::env::current_dir;
 
 use clap::Parser as _;
-use vite_task::{Args, init_tracing};
+use vite_task::{Args, CliOptions, init_tracing};
 
 use vite_error::Error;
 
@@ -10,5 +10,5 @@ async fn main() -> Result<(), Error> {
     init_tracing();
 
     let args = Args::parse();
-    vite_task::main(current_dir()?, args).await
+    vite_task::main(current_dir()?, args, None::<CliOptions>).await
 }

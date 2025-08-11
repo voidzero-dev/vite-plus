@@ -40,6 +40,50 @@ impl Workspace {
         Self::load_with_cache_path(dir, None, topological_run)
     }
 
+    pub fn partial_load(dir: PathBuf) -> Result<Self, Error> {
+        Self::partial_load_with_cache_path(dir, None)
+    }
+
+    pub fn partial_load_with_cache_path(
+        dir: PathBuf,
+        cache_path: Option<PathBuf>,
+    ) -> Result<Self, Error> {
+        let cache_path = cache_path.unwrap_or_else(|| {
+            if let Ok(env_cache_path) = std::env::var("VITE_CACHE_PATH") {
+                PathBuf::from(env_cache_path)
+            } else {
+                dir.join("node_modules/.vite/task-cache.db")
+            }
+        });
+
+        if !cache_path.exists()
+            && let Some(cache_dir) = cache_path.parent()
+        {
+            tracing::info!("Creating task cache directory at {}", cache_dir.display());
+            std::fs::create_dir_all(cache_dir)?;
+        }
+        let task_cache = TaskCache::load_from_file(&cache_path)?;
+
+        let package_json_path = dir.join("package.json");
+        let package_json = if package_json_path.exists() {
+            let file = File::open(&package_json_path)?;
+            let reader = BufReader::new(file);
+            serde_json::from_reader(reader)?
+        } else {
+            PackageJson::default()
+        };
+
+        Ok(Self {
+            package_graph: Graph::new(),
+            dir,
+            task_cache,
+            fs: CachedFileSystem::default(),
+            package_json,
+            task_graph: StableDiGraph::new(),
+            topological_run: false,
+        })
+    }
+
     pub fn load_with_cache_path(
         dir: PathBuf,
         cache_path: Option<PathBuf>,
