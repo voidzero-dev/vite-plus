@@ -17,7 +17,8 @@ pub fn init() {
 #[napi(object, object_to_js = false)]
 pub struct CliOptions {
     pub lint: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub build: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    pub vite: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    pub test: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     pub cwd: Option<String>,
 }
 
@@ -38,7 +39,8 @@ pub async fn run(options: CliOptions) -> Result<()> {
     let args = Args::parse_from(std::env::args_os().skip(1));
     let cwd = if let Some(cwd) = options.cwd { PathBuf::from(cwd) } else { current_dir()? };
     let lint = options.lint;
-    let build = options.build;
+    let vite = options.vite;
+    let test = options.test;
     if let Err(e) = vite_task::main(
         cwd,
         args,
@@ -53,13 +55,23 @@ pub async fn run(options: CliOptions) -> Result<()> {
 
                 Ok(resolved.into())
             },
-            build: || async {
-                let resolved = build
+            vite: || async {
+                let resolved = vite
                     .call_async(Ok(()))
                     .await
-                    .map_err(js_error_to_build_error)?
+                    .map_err(js_error_to_vite_error)?
                     .await
-                    .map_err(js_error_to_build_error)?;
+                    .map_err(js_error_to_vite_error)?;
+
+                Ok(resolved.into())
+            },
+            test: || async {
+                let resolved = test
+                    .call_async(Ok(()))
+                    .await
+                    .map_err(js_error_to_test_error)?
+                    .await
+                    .map_err(js_error_to_test_error)?;
 
                 Ok(resolved.into())
             },
@@ -76,6 +88,10 @@ fn js_error_to_lint_error(err: napi::Error) -> Error {
     Error::LintFailed { status: err.status.to_string(), reason: err.to_string() }
 }
 
-fn js_error_to_build_error(err: napi::Error) -> Error {
-    Error::BuildFailed { status: err.status.to_string(), reason: err.to_string() }
+fn js_error_to_vite_error(err: napi::Error) -> Error {
+    Error::ViteError { status: err.status.to_string(), reason: err.to_string() }
+}
+
+fn js_error_to_test_error(err: napi::Error) -> Error {
+    Error::TestFailed { status: err.status.to_string(), reason: err.to_string() }
 }

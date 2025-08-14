@@ -7,19 +7,19 @@ use crate::config::ResolvedTask;
 use crate::schedule::ExecutionPlan;
 use crate::{Error, ResolveCommandResult, Workspace};
 
-pub async fn build<
-    Build: Future<Output = Result<ResolveCommandResult, Error>>,
-    BuildFn: Fn() -> Build,
+pub async fn test<
+    Test: Future<Output = Result<ResolveCommandResult, Error>>,
+    TestFn: Fn() -> Test,
 >(
-    resolve_build_command: BuildFn,
+    resolve_test_command: TestFn,
     workspace: &mut Workspace,
     args: &Vec<String>,
 ) -> Result<(), Error> {
     let resolved_task = ResolvedTask::resolve_from_built_in(
         workspace,
-        resolve_build_command,
-        "build",
-        iter::once("build").chain(args.iter().map(|arg| arg.as_str())),
+        resolve_test_command,
+        "test",
+        iter::once("test").chain(args.iter().map(|arg| arg.as_str())),
     )
     .await?;
     let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
