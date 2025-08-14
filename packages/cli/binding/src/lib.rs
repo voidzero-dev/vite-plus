@@ -57,9 +57,9 @@ pub async fn run(options: CliOptions) -> Result<()> {
                 let resolved = build
                     .call_async(Ok(()))
                     .await
-                    .map_err(js_error_to_lint_error)?
+                    .map_err(js_error_to_build_error)?
                     .await
-                    .map_err(js_error_to_lint_error)?;
+                    .map_err(js_error_to_build_error)?;
 
                 Ok(resolved.into())
             },
@@ -74,4 +74,8 @@ pub async fn run(options: CliOptions) -> Result<()> {
 
 fn js_error_to_lint_error(err: napi::Error) -> Error {
     Error::LintFailed { status: err.status.to_string(), reason: err.to_string() }
+}
+
+fn js_error_to_build_error(err: napi::Error) -> Error {
+    Error::BuildFailed { status: err.status.to_string(), reason: err.to_string() }
 }
