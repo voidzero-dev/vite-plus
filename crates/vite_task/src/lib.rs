@@ -1,3 +1,4 @@
+mod build;
 mod cache;
 mod cmd;
 mod collections;
@@ -78,6 +79,11 @@ pub enum Commands {
         /// Arguments to pass to oxlint
         args: Vec<String>,
     },
+    Build {
+        #[clap(last = true)]
+        /// Arguments to pass to vite build
+        args: Vec<String>,
+    },
 }
 
 /// Resolve boolean flag value considering both positive and negative forms.
@@ -92,8 +98,13 @@ pub struct CliOptions<
         Box<dyn Future<Output = Result<ResolveCommandResult, Error>>>,
     >,
     LintFn: Fn() -> Lint = Box<dyn Fn() -> Lint>,
+    Build: Future<Output = Result<ResolveCommandResult, Error>> = Pin<
+        Box<dyn Future<Output = Result<ResolveCommandResult, Error>>>,
+    >,
+    BuildFn: Fn() -> Build = Box<dyn Fn() -> Build>,
 > {
     pub lint: LintFn,
+    pub build: BuildFn,
 }
 
 pub struct ResolveCommandResult {
@@ -134,10 +145,12 @@ pub struct ResolveCommandResult {
 pub async fn main<
     Lint: Future<Output = Result<ResolveCommandResult, Error>>,
     LintFn: Fn() -> Lint,
+    Build: Future<Output = Result<ResolveCommandResult, Error>>,
+    BuildFn: Fn() -> Build,
 >(
     cwd: PathBuf,
     args: Args,
-    options: Option<CliOptions<Lint, LintFn>>,
+    options: Option<CliOptions<Lint, LintFn, Build, BuildFn>>,
 ) -> Result<(), Error> {
     let mut recursive_run = false;
     let mut parallel_run = false;
@@ -171,6 +184,14 @@ pub async fn main<
             let mut workspace = Workspace::partial_load(cwd)?;
             if let Some(lint_fn) = options.map(|o| o.lint) {
                 lint::lint(lint_fn, &mut workspace, args).await?;
+                workspace.unload().await?;
+            }
+            return Ok(());
+        }
+        Some(Commands::Build { args }) => {
+            let mut workspace = Workspace::partial_load(cwd)?;
+            if let Some(build_fn) = options.map(|o| o.build) {
+                build::build(build_fn, &mut workspace, args).await?;
                 workspace.unload().await?;
             }
             return Ok(());

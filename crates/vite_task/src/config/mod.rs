@@ -104,11 +104,11 @@ impl ResolvedTask {
         workspace: &Workspace,
         resolve_command: ResolveFn,
         task_name: &str,
-        args: &Vec<String>,
+        args: impl Iterator<Item = impl AsRef<str>> + Clone,
     ) -> Result<Self, Error> {
         let ResolveCommandResult { bin_path, envs } = resolve_command().await?;
         let link_task = TaskCommand::Parsed(TaskParsedCommand {
-            args: args.iter().map(|arg| arg.as_str().into()).collect(),
+            args: args.clone().map(|arg| arg.as_ref().into()).collect(),
             envs: envs.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
             program: bin_path.into(),
         });
@@ -132,7 +132,7 @@ impl ResolvedTask {
                 task_group_name: task_name.into(),
                 subcommand_index: None,
             },
-            args: args.iter().map(|arg| arg.as_str().into()).collect(),
+            args: args.map(|arg| arg.as_ref().into()).collect(),
             resolved_config: resolved_task_config,
             resolved_command,
         })

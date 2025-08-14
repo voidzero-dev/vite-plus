@@ -17,6 +17,7 @@ pub fn init() {
 #[napi(object, object_to_js = false)]
 pub struct CliOptions {
     pub lint: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    pub build: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     pub cwd: Option<String>,
 }
 
@@ -37,13 +38,23 @@ pub async fn run(options: CliOptions) -> Result<()> {
     let args = Args::parse_from(std::env::args_os().skip(1));
     let cwd = if let Some(cwd) = options.cwd { PathBuf::from(cwd) } else { current_dir()? };
     let lint = options.lint;
-
+    let build = options.build;
     if let Err(e) = vite_task::main(
         cwd,
         args,
         Some(ViteTaskCliOptions {
             lint: || async {
                 let resolved = lint
+                    .call_async(Ok(()))
+                    .await
+                    .map_err(js_error_to_lint_error)?
+                    .await
+                    .map_err(js_error_to_lint_error)?;
+
+                Ok(resolved.into())
+            },
+            build: || async {
+                let resolved = build
                     .call_async(Ok(()))
                     .await
                     .map_err(js_error_to_lint_error)?

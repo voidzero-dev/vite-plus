@@ -2,6 +2,7 @@
 /* eslint-disable */
 export interface CliOptions {
   lint: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
+  build: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
   cwd?: string
 }
 

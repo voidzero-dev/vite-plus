@@ -25,7 +25,7 @@
       "dprint fmt --staged"
     ],
     "*.@(js|ts|tsx)": [
-      "pnpm lint -- --fix"
+      "oxlint -- --fix"
     ],
     "*.rs": [
       "cargo fmt --"
