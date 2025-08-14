@@ -7,13 +7,18 @@ A monorepo task runner (like nx/turbo) with intelligent caching and dependency r
 **Task Execution**: Run tasks across monorepo packages with automatic dependency ordering.
 
 ```bash
-# Run task in current package (implicit mode)
-vite-plus build
+# Built-in commands
+vite-plus build                           # Run Vite build (dedicated command)
+vite-plus test                            # Run Vite test (dedicated command)
+vite-plus lint                            # Run oxlint (dedicated command)
 
 # Run tasks across packages (explicit mode)
 vite-plus run build -r                    # recursive with topological ordering
 vite-plus run app#build web#build         # specific packages
 vite-plus run build -r --no-topological   # recursive without implicit deps
+
+# Run task in current package (implicit mode - for non-built-in tasks)
+vite-plus dev                             # runs dev script from package.json
 ```
 
 ## Key Architecture

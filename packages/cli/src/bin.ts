@@ -1,8 +1,10 @@
 import { run } from '../binding/index.js';
-import { build } from './build.js';
 import { lint } from './lint.js';
+import { test } from './test.js';
+import { vite } from './vite.js';
 
 run({
   lint,
-  build,
+  vite,
+  test,
 });

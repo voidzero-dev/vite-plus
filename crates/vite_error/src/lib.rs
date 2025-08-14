@@ -89,8 +89,11 @@ pub enum Error {
     #[error("Lint failed")]
     LintFailed { status: String, reason: String },
 
-    #[error("Build failed")]
-    BuildFailed { status: String, reason: String },
+    #[error("Vite failed")]
+    ViteError { status: String, reason: String },
+
+    #[error("Test failed")]
+    TestFailed { status: String, reason: String },
 
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),
