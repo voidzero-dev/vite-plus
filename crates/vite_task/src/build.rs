@@ -19,7 +19,7 @@ pub async fn build<
         workspace,
         resolve_build_command,
         "build",
-        iter::once(&"build".to_string()).chain(args.iter()),
+        iter::once("build").chain(args.iter().map(|arg| arg.as_str())),
     )
     .await?;
     let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
