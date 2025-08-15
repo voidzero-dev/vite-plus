@@ -256,9 +256,9 @@ Vite-plus builds a package graph to understand the relationships between package
 │                                                             │
 │    app ─────depends─on────▶ utils                           │
 │     ↓                         ↑                             │
-│     └──────depends─on────▶ nameless ✗ (not allowed)         │
+│     └──────depends─on────▶ nameless                         │
 │                                                             │
-│  Note: Nameless packages cannot be referenced               │
+│  Note: Nameless packages can be referenced via paths        │
 └─────────────────┬───────────────────────────────────────────┘
                   │
                   ▼
@@ -317,102 +317,22 @@ The final step creates an execution plan:
 - Detects circular dependencies and reports errors
 - Determines the optimal execution order
 
-## Packages Without Names
+## Task Request Matching Rules
 
-Vite-plus supports packages that have no `name` field in their `package.json`. These anonymous packages have special constraints and behaviors:
+Task requests are in form of `task_name` or `pkg#task_name`. They occur in two places:
 
-```
-┌────────────────────────────────────────────────────────────┐
-│                 Multiple Nameless Packages                 │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│  packages/                                                 │
-│  ├── frontend/        (no name field)                      │
-│  │   ├── package.json                                      │
-│  │   └── vite-task.json                                    │
-│  │                                                         │
-│  ├── backend/         (no name field)                      │
-│  │   ├── package.json                                      │
-│  │   └── vite-task.json                                    │
-│  │                                                         │
-│  └── shared/          name: "@company/shared"              │
-│      ├── package.json                                      │
-│      └── vite-task.json                                    │
-│                                                            │
-├────────────────────────────────────────────────────────────┤
-│                     Task Resolution                        │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│  Recursive mode (-r):                                      │
-│  ┌───────────────────────────────────────────┐             │
-│  │ vite-plus run build -r                    │             │
-│  └─────────────┬─────────────────────────────┘             │
-│                ▼                                           │
-│    ✓ build (frontend)                                      │
-│    ✓ build (backend)                                       │
-│    ✓ @company/shared#build                                 │
-│                                                            │
-│  Explicit mode:                                            │
-│  ┌───────────────────────────────────────────┐             │
-│  │ vite-plus run #build                      │             │
-│  └─────────────┬─────────────────────────────┘             │
-│                ▼                                           │
-│    ✗ Error: Cannot reference nameless package              │
-│                                                            │
-│  Implicit mode (from package dir):                         │
-│  ┌───────────────────────────────────────────┐             │
-│  │ cd packages/frontend && vite-plus build   │             │
-│  └─────────────┬─────────────────────────────┘             │
-│                ▼                                           │
-│    ✓ Runs build in current nameless package                │
-│                                                            │
-├────────────────────────────────────────────────────────────┤
-│                   Dependency Rules                         │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│  Allowed:                                                  │
-│  ┌──────────────────────────────────────────┐              │
-│  │ nameless ──depends─on──▶ @company/shared │              │
-│  └──────────────────────────────────────────┘              │
-│                                                            │
-│  Not Allowed:                                              │
-│  ┌──────────────────────────────────────────┐              │
-│  │ @company/shared ──depends─on──▶ nameless │ ✗            │
-│  └──────────────────────────────────────────┘              │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
-```
+- one or mulitple parameters following after `vite run`.
+- items in `dependsOn`.
 
-### Constraints
+How task requests work:
 
-1. **Tasks cannot be depended upon**: Other packages cannot declare dependencies on tasks from packages without names. This prevents ambiguity since there's no way to uniquely reference these tasks from external packages.
+- `build` in `vite run build` matches task `build` in the current package determined by cwd.
+- `build` in `dependsOn: ["build"]` matches task `build` in the package where the config file is.
+- `app#build` matches task `build` in package `app`.
+- `app#build` raises an error if there are multiple packages named `app`.
+- Task requests with multiple `#` are invalid.
+- Nameless packages are handled consistently with the rules above. They are not special cases. This means:
+  - `#build` is valid and matches task `build` in the nameless package.
+  - `#build` raises an error if there are multiple nameless packages.
+  - `build` does not match task `build` in the nameless package.
 
-2. **Cannot be specified with `vite run` command**: You cannot directly target tasks from nameless packages using explicit mode (e.g., `vite-plus run #build` won't work). The lack of a package name makes it impossible to construct the `package#task` identifier.
-
-3. **Can run via implicit mode**: When you're in the directory of a nameless package, you can use implicit mode to run its tasks:
-
-   ```bash
-   cd packages/anonymous-package
-   vite-plus build  # Runs the build task in the current nameless package
-   ```
-
-4. **Included in recursive runs**: Tasks from nameless packages are included when using the `-r` flag:
-
-   ```bash
-   vite-plus run build -r  # Includes build tasks from all packages, including nameless ones
-   ```
-
-5. **Can depend on other packages**: Tasks within nameless packages can declare dependencies on tasks from named packages:
-
-   ```json
-   {
-     "tasks": {
-       "build": {
-         "command": "tsc",
-         "dependsOn": ["core#build", "utils#build"]
-       }
-     }
-   }
-   ```
-
-6. **Multiple nameless packages allowed**: A monorepo can contain multiple packages without names. Each operates independently with the same constraints.
