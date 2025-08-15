@@ -11,65 +11,87 @@ The task cache system enables:
 - **Content-based hashing**: Cache keys based on actual content, not timestamps
 - **Output replay**: Cached stdout/stderr are replayed exactly as originally produced
 
+### Shared caching
+For tasks defined as below:
+```jsonc
+// package.json
+{
+  "scripts": {
+    "build": "echo $foo",
+    "test": "echo $foo && echo $bar"
+  }
+}
+```
+
+the task cache system is able to hit the same cache for `test` task and for the first subcommand in `build` task:
+
+1. user runs `vite run build` -> no cache hit. run `echo $foo` and create cache
+2. user runs `vite run test`
+  1. `echo $foo` -> **hit cache created in step 1 and replay**
+  2. `echo $bar` -> no cache hit. run `echo test` and create cache
+3. user changes env `$foo`
+4. user runs `vite run test`
+  1. `echo $foo`
+    1. the cache system should be able to **locate the cache that was created in step 1 and hit in step 2.1**
+    2. compare the command fingerprint and report cache miss because `$foo` is changed.
+    3. re-run and replace the cache with a new one.
+  2.  `echo $bar` -> hit cache created in step 2.2 and replay
+5. user runs `vite run build`: **hit the cache created in step 4.1.3 and replay**.
+
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                     Task Execution Flow                      │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  1. Task Request                                             │
-│  ────────────────                                            │
-│    app#build                                                 │
-│         │                                                    │
-│         ▼                                                    │
-│  2. Cache Key Generation                                     │
-│  ──────────────────────                                      │
-│    • Command fingerprint (includes cwd)                      │
-│    • Command fingerprint                                     │
-│    • Task arguments                                          │
-│         │                                                    │
-│         ▼                                                    │
-│  3. Cache Lookup (SQLite)                                    │
-│  ────────────────────────                                    │
-│    ┌─────────────────────┬──────────────┐                    │
-│    │   Cache Hit     │   Cache Miss     │                    │
-│    └────────┬────────┴─────────┬────────┘                    │
-│             │                  │                             │
-│             ▼                  ▼                             │
-│  4a. Validate Fingerprint   4b. Execute Task                 │
-│  ────────────────────────   ────────────────                 │
-│    • Config match?             • Run command                 │
-│    • Inputs unchanged?         • Monitor files (fspy)        │
-│    • Command same?             • Capture stdout/stderr       │
-│             │                         │                      │
-│             ▼                         ▼                      │
-│  5a. Replay Outputs        5b. Store in Cache                │
-│  ──────────────────        ──────────────────                │
-│    • Write to stdout           • Save fingerprint            │
-│    • Write to stderr           • Save outputs                │
-│                                • Update database             │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│                     Task Execution Flow                                              │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                      │
+│  1. Task Request                                                                     │
+│  ────────────────                                                                    │
+│    app#build                                                                         │
+│         │                                                                            │
+│         ▼                                                                            │
+│  2. Cache Key Generation                                                             │
+│  ──────────────────────                                                              │
+│    • Command fingerprint (includes cwd)                                              │
+│    • Command fingerprint                                                             │
+│    • Task arguments                                                                  │
+│         │                                                                            │
+│         ▼                                                                            │
+│  3. Cache Lookup (SQLite)                                                            │
+│  ────────────────────────                                                            │
+│    ┌─────────────────┬──────────────────────┐──────────────────────────┐             │
+│    │   Cache Hit     │   Cache Not Found    │  Cache Found but Miss    │             │
+│    └────────┬────────┴─────────┬────────────┘──────────────────┬───────┘             │
+│             │                  │                               │                     │
+│             ▼                  ▼                               ▼                     │
+│  4a. Validate Fingerprint   4b. Execute Task   ◀───── 4c. Report what change         |
+│  ────────────────────────   ────────────────              causes the miss            │
+│    • Config match?             • Run command                                         │
+│    • Inputs unchanged?         • Monitor files (fspy)                                │
+│    • Command same?             • Capture stdout/stderr                               │
+│             │                         │                                              │
+│             ▼                         ▼                                              │
+│  5a. Replay Outputs        5b. Store in Cache                                        │
+│  ──────────────────        ──────────────────                                        │
+│    • Write to stdout           • Save fingerprint                                    │
+│    • Write to stderr           • Save outputs                                        │
+│                                • Update database                                     │
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Cache Key Components
 
-### 1. Task Cache Key Structure
+### 1. Command Cache Key Structure
 
-The cache key uniquely identifies a task execution context:
+The command cache key uniquely identifies a command execution context:
 
 ```rust
-pub struct TaskCacheKey {
+pub struct CommandCacheKey {
     pub command_fingerprint: CommandFingerprint,    // Execution context
     pub args: Arc<[Str]>,                          // CLI arguments
 }
 ```
-
-- **Command fingerprint**: Complete execution environment (includes cwd which distinguishes packages)
-- **Arguments**: Task-specific arguments passed via CLI
-
-### 2. Command Fingerprint
 
 The command fingerprint captures the complete execution context:
 
@@ -92,17 +114,40 @@ This ensures cache invalidation when:
 - Command or arguments change
 - Environment variables differ
 
-### 3. Task Fingerprinting
 
-The complete task fingerprint includes configuration, command, and input files:
+### 4. Command Fingerprinting
+
+The complete task fingerprint includes input files:
 
 ```rust
-pub struct TaskFingerprint {
-    pub resolved_config: ResolvedTaskConfig,         // Task configuration
-    pub command_fingerprint: CommandFingerprint,     // Execution context
+pub struct CommandFingerprint {
     pub inputs: HashMap<Str, PathFingerprint>,      // Input file states
 }
 ```
+
+### 5. Task Cache Key Structure
+
+The task id uniquely identifies a task:
+
+```rust
+pub struct TaskId {
+    /// The name in `task.json`, or the name of the `package.json` script containing this task.
+    /// See [`terminologies.md`](./terminologies.md) for details
+    pub task_group_name: Str,
+
+    /// the path of the package containing this task, relative to the monorepo root.
+    /// We don't use package names as they can be the same for different packages.
+    pub package_dir: Str,
+    /// The index of the subcommand in a parsed command (`echo A && echo B`).
+    /// None if the task is the last command.
+    pub subcommand_index: Option<usize>,
+}
+```
+
+### 6. (`CommandCacheKey`, `TaskId`) Relationship
+
+The cache system maintains (`CommandCacheKey`, `TaskId`) relationship in order to locate the previous cache of the same task. This is a one-to-many relationship.
+
 
 #### Input File Tracking
 
@@ -135,8 +180,16 @@ Vite-plus uses `fspy` to monitor file system access during task execution:
 │    enum PathFingerprint {                                    │
 │        NotFound,                   // File doesn't exist     │
 │        FileContentHash(u64),       // xxHash3 of content     │
-│        Folder(Option<HashMap>),    // Directory listing      │
-│    }                                                         │
+│        Folder(Option<HashMap>),    // Directory listing      │ 
+|    }             ▲                                           │
+│                  │                                           |  
+|  This value is `None` when fspy reports that the task is     |  
+|  opening a folder but not reading its entries. This can      |  
+|  happen when the opened folder is used as a dirfd for        |  
+|  `openat(2)`. In such case, the folder's entries don't need  |  
+|  to be fingerprinted.                                        |  
+|  Folders with empty entries fingerprinted are represented as |  
+|  `Folder(Some(empty hashmap))`.                              |  
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -176,10 +229,16 @@ conn.pragma_update(None, "synchronous", "NORMAL")?; // Balance speed/safety
 ### Database Schema
 
 ```sql
--- Simple key-value store for task cache
-CREATE TABLE tasks (
-    key BLOB PRIMARY KEY,    -- Serialized TaskCacheKey
+-- Simple key-value store for commands cache
+CREATE TABLE commands (
+    key BLOB PRIMARY KEY,    -- Serialized CommandsCacheKey
     value BLOB               -- Serialized CachedTask
+);
+
+-- One-to-many relationships between commands and tasks
+CREATE TABLE commands_tasks (
+    command_key BLOB,    -- Serialized CommandsCacheKey
+    task_id BLOB           -- Serialized TaskId
 );
 ```
 
@@ -208,11 +267,16 @@ pub struct StdOutput {
 │                      Cache Hit Process                       │
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
-│  1. Generate Cache Key                                       │
+│  1. Generate Cache Key and task Id                           │
 │  ─────────────────────                                       │
 │    TaskCacheKey {                                            │
 │        command_fingerprint: {...},                           │
 │        args: ["--production"]                                │
+│    }                                                         │
+│    TaskId {                                                  │
+│        task_group_name: "build",                             │
+│        package_path: "./packages/app",                       │
+|        subcommand_index: None,                               │
 │    }                                                         │
 │         │                                                    │
 │         ▼                                                    │
