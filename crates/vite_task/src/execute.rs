@@ -131,6 +131,7 @@ impl TaskEnvs {
                 // TODO: glob
                 // TODO: more default passthrough envs: https://github.com/vercel/turborepo/blob/26d309f073ca3ac054109ba0c29c7e230e7caac3/crates/turborepo-lib/src/task_hash.rs#L439
                 if name == "PATH"
+                    || name == "CI"
                     || task.config.envs.contains(name)
                     || task.config.pass_through_envs.contains(name)
                 {
@@ -260,7 +261,12 @@ pub async fn execute_task(
 
     let outputs = outputs.into_inner().unwrap();
 
-    // let input_paths = gather_inputs(task, base_dir)?;
+    tracing::debug!(
+        "read {} paths, wrote {} paths, {}",
+        path_reads.len(),
+        path_writes.len(),
+        exit_status
+    );
 
     Ok(ExecutedTask { std_outputs: outputs.into(), exit_status, path_reads, path_writes })
 }

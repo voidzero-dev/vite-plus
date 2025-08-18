@@ -61,6 +61,10 @@ pub struct ResolvedTask {
     pub args: Arc<[Str]>,
     pub resolved_config: ResolvedTaskConfig,
     pub resolved_command: ResolvedTaskCommand,
+    /// Force run the task even if cache is valid, still cache the outputs.
+    pub force_run: bool,
+    /// Replay the cache outputs if cache is valid
+    pub replay_cache_outputs: bool,
 }
 
 impl ResolvedTask {
@@ -103,6 +107,50 @@ impl ResolvedTask {
             args: args.map(|arg| arg.as_ref().into()).collect(),
             resolved_config: resolved_task_config,
             resolved_command,
+            force_run: false,
+            replay_cache_outputs: true,
+        })
+    }
+
+    pub(crate) fn resolve_from_built_in_with_comment_result(
+        workspace: &Workspace,
+        task_name: &str,
+        args: impl Iterator<Item = impl AsRef<str>> + Clone,
+        comment_result: ResolveCommandResult,
+        force_run: bool,
+        replay_cache_outputs: bool,
+    ) -> Result<Self, Error> {
+        // TODO(@fengmk2): refactor this to use the same code as resolve_from_built_in
+        let ResolveCommandResult { bin_path, envs } = comment_result;
+        let link_task = TaskCommand::Parsed(TaskParsedCommand {
+            args: args.clone().map(|arg| arg.as_ref().into()).collect(),
+            envs: envs.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
+            program: bin_path.into(),
+        });
+        let task_config: TaskConfig = link_task.clone().into();
+        let resolved_task_config = ResolvedTaskConfig {
+            config_dir: workspace.dir.as_path().to_string_lossy().as_ref().into(),
+            config: task_config,
+        };
+        let resolved_envs = TaskEnvs::resolve(workspace.dir.as_path(), &resolved_task_config)?;
+        let resolved_command = ResolvedTaskCommand {
+            fingerprint: CommandFingerprint {
+                cwd: workspace.dir.as_path().to_string_lossy().as_ref().into(),
+                command: link_task.clone().into(),
+                envs_without_pass_through: resolved_envs.envs_without_pass_through,
+            },
+            all_envs: resolved_envs.all_envs,
+        };
+        Ok(ResolvedTask {
+            id: TaskId::create_build_in(
+                workspace.package_json.name.as_str().into(),
+                task_name.into(),
+            ),
+            args: args.map(|arg| arg.as_ref().into()).collect(),
+            resolved_config: resolved_task_config,
+            resolved_command,
+            force_run,
+            replay_cache_outputs,
         })
     }
 }

@@ -3,20 +3,39 @@ name = "vite_package_manager"
 version = "0.0.0"
 authors.workspace = true
 edition.workspace = true
+include = ["/src"]
 license.workspace = true
 publish = false
 rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+chrono = { workspace = true }
 compact_str = { workspace = true, features = ["serde"] }
+directories = { workspace = true }
+flate2 = { workspace = true }
+futures-util = { workspace = true }
+indoc = { workspace = true }
 petgraph = { workspace = true, features = ["serde-1"] }
+rand = { workspace = true }
+reqwest = { workspace = true }
 rustc-hash = { workspace = true }
+semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
+# use `preserve_order` feature to preserve the order of the fields in `package.json`
+serde_json = { workspace = true, features = ["preserve_order"] }
 serde_yml = { workspace = true }
+tar = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 vite_error = { workspace = true }
 wax = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+test-log = { workspace = true }
+tokio-test = { workspace = true }
 
 [lints]
 workspace = true

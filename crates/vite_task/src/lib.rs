@@ -5,6 +5,7 @@ mod config;
 mod execute;
 mod fingerprint;
 mod fs;
+mod install;
 mod lint;
 mod maybe_str;
 mod schedule;
@@ -21,13 +22,10 @@ use clap::{Parser, Subcommand};
 use serde::Serialize;
 
 use crate::cache::{CachedTask, TaskCacheKey};
-use crate::str::Str;
-
-use crate::schedule::ExecutionPlan;
-
-pub(crate) use vite_error::Error;
-
 pub use crate::config::Workspace;
+use crate::schedule::ExecutionPlan;
+use crate::str::Str;
+pub(crate) use vite_error::Error;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -85,6 +83,11 @@ pub enum Commands {
     Test {
         #[clap(last = true)]
         /// Arguments to pass to vite test
+        args: Vec<String>,
+    },
+    Install {
+        #[clap(last = true)]
+        /// Arguments to pass to vite install
         args: Vec<String>,
     },
 }
@@ -162,6 +165,15 @@ pub async fn main<
     args: Args,
     options: Option<CliOptions<Lint, LintFn, Vite, ViteFn, Test, TestFn>>,
 ) -> Result<(), Error> {
+    // Auto-run install if needed (except for install command itself)
+    if !matches!(&args.commands, Some(Commands::Install { .. })) {
+        install::InstallCommandBuilder::new(&cwd)
+            .set_replay_cache_outputs(true)
+            .build()
+            .execute(&vec![])
+            .await?;
+    }
+
     let mut recursive_run = false;
     let mut parallel_run = false;
     let (tasks, mut workspace, task_args) = match &args.commands {
@@ -212,6 +224,14 @@ pub async fn main<
                 test::test(test_fn, &mut workspace, args).await?;
                 workspace.unload().await?;
             }
+            return Ok(());
+        }
+        Some(Commands::Install { args }) => {
+            install::InstallCommandBuilder::new(&cwd)
+                .set_force_run(true)
+                .build()
+                .execute(&args)
+                .await?;
             return Ok(());
         }
         None => {

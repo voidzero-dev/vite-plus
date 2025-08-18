@@ -1,20 +1,35 @@
+mod config;
+mod download;
+pub mod package_manager;
+mod shim;
+
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
+
 use anyhow::Context;
 use compact_str::CompactString;
 use petgraph::Graph;
 use petgraph::graph::NodeIndex;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
-use vite_error::Error;
 use wax::Glob;
 
-pub use petgraph;
+use vite_error::Error;
 
+/// The workspace configuration for pnpm.
+///
+/// <https://pnpm.io/pnpm-workspace_yaml>
 #[derive(Debug, Deserialize)]
 struct PnpmWorkspace {
+    /// The packages to include in the workspace.
+    ///
+    /// The package name can be prefixed with `!` to exclude it from the workspace.
+    ///
+    /// The package name can be a glob pattern to include all packages that match the pattern.
+    ///
+    /// The package name can be a path to a package.
     packages: Vec<CompactString>,
 }
 impl PnpmWorkspace {

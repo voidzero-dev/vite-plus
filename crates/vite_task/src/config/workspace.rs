@@ -227,7 +227,14 @@ impl Workspace {
         };
 
         let resolved_command = resolved_config.resolve_command(base_dir, &task_args)?;
-        Ok(ResolvedTask { id, args: task_args, resolved_command, resolved_config })
+        Ok(ResolvedTask {
+            id,
+            args: task_args,
+            resolved_command,
+            resolved_config,
+            force_run: false,
+            replay_cache_outputs: true,
+        })
     }
 
     /// Resolves tasks and constructs a dependency graph of subtasks from the tasks that need to be executed.

@@ -1,9 +1,9 @@
 use std::env::current_dir;
 
 use clap::Parser as _;
-use vite_task::{Args, CliOptions, init_tracing};
 
 use vite_error::Error;
+use vite_task::{Args, CliOptions, init_tracing};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
