@@ -25,6 +25,9 @@ pub enum Error {
     #[error("IO error: {err} at {path:?}")]
     IoWithPath { err: std::io::Error, path: PathBuf },
 
+    #[error("IO error: {err} at {path:?}, operation: {operation}")]
+    IoWithPathAndOperation { err: std::io::Error, path: PathBuf, operation: String },
+
     #[error(transparent)]
     JoinPathsError(#[from] std::env::JoinPathsError),
 
@@ -87,6 +90,26 @@ pub enum Error {
 
     #[error("Test failed")]
     TestFailed { status: String, reason: String },
+
+    #[error("Unsupported package manager: {0}")]
+    UnsupportedPackageManager(String),
+
+    #[error("Unrecognized any package manager, please specify the package manager")]
+    UnrecognizedPackageManager,
+
+    #[error(
+        "Invalid version: {0} on {1}#packageManager, expected format: 'package-manager-name@major.minor.patch'"
+    )]
+    InvalidPackageManagerVersion(String, PathBuf),
+
+    #[error(transparent)]
+    SemverError(#[from] semver::Error),
+
+    #[error(transparent)]
+    ReqwestError(#[from] reqwest::Error),
+
+    #[error(transparent)]
+    JoinError(#[from] tokio::task::JoinError),
 
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),

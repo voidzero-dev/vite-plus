@@ -146,6 +146,9 @@ impl TaskCache {
         fs: &impl FileSystem,
         base_dir: &Path,
     ) -> Result<Result<CachedTask, CacheMiss>, Error> {
+        if task.force_refresh_cached.unwrap_or(false) {
+            return Ok(Err(CacheMiss::NotFound));
+        }
         let Some(cached_task) = self.get_cache(task).await? else {
             return Ok(Err(CacheMiss::NotFound));
         };

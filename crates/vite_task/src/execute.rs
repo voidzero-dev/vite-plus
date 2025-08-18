@@ -339,7 +339,12 @@ pub async fn execute_task(
 
     let outputs = outputs.into_inner().unwrap();
 
-    // let input_paths = gather_inputs(task, base_dir)?;
+    tracing::debug!(
+        "read {} paths, wrote {} paths, {}",
+        path_reads.len(),
+        path_writes.len(),
+        exit_status
+    );
 
     Ok(ExecutedTask { std_outputs: outputs.into(), exit_status, path_reads, path_writes })
 }

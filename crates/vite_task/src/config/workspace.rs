@@ -194,6 +194,8 @@ impl Workspace {
             args: task_args,
             resolved_command,
             resolved_config,
+            force_refresh_cached: None,
+            replay_cached_outputs: None,
         })
     }
 
