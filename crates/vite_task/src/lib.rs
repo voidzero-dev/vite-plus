@@ -9,6 +9,9 @@ mod maybe_str;
 mod schedule;
 mod str;
 
+#[cfg(test)]
+mod test_utils;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 

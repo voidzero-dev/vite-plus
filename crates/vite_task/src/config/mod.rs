@@ -123,29 +123,12 @@ pub struct CommandFingerprint {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+    use crate::test_utils::with_unique_cache_path;
 
     use petgraph::stable_graph::StableDiGraph;
 
     use super::*;
-    use crate::Error;
-
-    fn with_unique_cache_path<F, R>(test_name: &str, f: F) -> R
-    where
-        F: FnOnce(&std::path::Path) -> R,
-    {
-        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
-        let cache_path = temp_dir.path().join(format!("vite-test-{}.db", test_name));
-
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&cache_path)));
-
-        // The temp directory and all its contents will be automatically cleaned up
-        // when temp_dir goes out of scope
-
-        match result {
-            Ok(r) => r,
-            Err(panic) => std::panic::resume_unwind(panic),
-        }
-    }
+    use crate::{schedule::ExecutionPlan, Error};
 
     #[test]
     fn test_recursive_topological_build() {
@@ -643,10 +626,10 @@ mod tests {
                 })
             };
 
-            // With transitive dependency resolution, C should have edge to A (A depends on C transitively)
+            // With transitive dependency resolution, A should have edge to C (A depends on C transitively)
             assert!(
-                has_edge("@test/c#build", "@test/a#build"),
-                "C should have edge to A (A depends on C transitively through B)"
+                has_edge("@test/a#build", "@test/c#build"),
+                "A should have edge to C (A depends on C transitively through B)"
             );
         })
     }
@@ -1255,4 +1238,4 @@ mod tests {
             }
         })
     }
-}
+   }

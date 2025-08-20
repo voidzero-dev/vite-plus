@@ -25,13 +25,6 @@ impl ExecutionPlan {
     ///
     /// # Execution Order
     ///
-    /// ## With `topological_run` = true:
-    /// Tasks are sorted in dependency order using topological sort.
-    /// Example order: [@test/core#build, @test/utils#build\[0\], @test/utils#build\[1\], ...]
-    ///
-    /// ## With `topological_run` = false:
-    /// Tasks are executed in the order they were discovered (no specific order).
-    ///
     /// ## With `parallel_run` = true (TODO):
     /// Tasks will be grouped by dependency level for concurrent execution.
     /// Example groups:
@@ -43,6 +36,7 @@ impl ExecutionPlan {
         mut task_graph: StableDiGraph<ResolvedTask, ()>,
         parallel_run: bool,
     ) -> Result<Self, Error> {
+        task_graph.reverse(); // Run tasks without dependencies first
         // Always use topological sort to ensure the correct order of execution
         // or the task dependencies declaration is meaningless
         let node_indices = match toposort(&task_graph, None) {
@@ -140,4 +134,48 @@ async fn get_cached_or_execute<'a>(
             .boxed(),
         ),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    use crate::{Workspace, test_utils::with_unique_cache_path};
+
+    #[track_caller]
+    fn assert_order(plan: &ExecutionPlan, before: &str, after: &str) {
+        let before_index = plan.steps.iter().position(|t| t.display_name() == before);
+        let after_index = plan.steps.iter().position(|t| t.display_name() == after);
+        assert!(before_index.is_some(), "Task {before} not found in plan");
+        assert!(after_index.is_some(), "Task {after} not found in plan");
+        assert!(before_index < after_index, "Task {before} should be before {after}");
+    }
+
+    #[test]
+    fn test_execution_non_parallel() {
+        with_unique_cache_path("comprehensive_task_graph", |cache_path| {
+            let fixture_path =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
+
+            let workspace =
+                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
+                    .expect("Failed to load workspace");
+
+            // Test build task graph
+            let build_graph = workspace
+                .build_task_subgraph(&vec!["build".into()], Arc::default(), true)
+                .expect("Failed to resolve build tasks");
+
+            let plan =
+                ExecutionPlan::plan(build_graph, false).expect("Circular dependency detected");
+
+            assert_order(&plan, "@test/shared#build", "@test/ui#build(subcommand 0)");
+            assert_order(&plan, "@test/shared#build", "@test/api#build(subcommand 0)");
+            assert_order(&plan, "@test/config#build", "@test/api#build(subcommand 0)");
+            assert_order(&plan, "@test/ui#build", "@test/app#build(subcommand 0)");
+            assert_order(&plan, "@test/api#build", "@test/app#build(subcommand 0)");
+            assert_order(&plan, "@test/shared#build", "@test/app#build(subcommand 0)");
+        })
+    }
 }
