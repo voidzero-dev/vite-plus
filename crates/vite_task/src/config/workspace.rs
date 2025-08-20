@@ -344,8 +344,8 @@ impl Workspace {
                                 });
                             } else {
                                 let (dep_package_node_index, dep_task_name): (NodeIndex, Str) =
-                                    if let Some(shared_pos) = sharp_pos {
-                                        let package_name = &task_request[..shared_pos];
+                                    if let Some(sharp_pos) = sharp_pos {
+                                        let package_name = &task_request[..sharp_pos];
                                         let package_node_indexes =
                                             package_name_to_node.get(package_name).ok_or_else(
                                                 || Error::TaskNotFound(task_request.to_string()),
@@ -358,7 +358,7 @@ impl Workspace {
                                             }
                                             [package_node_index] => (
                                                 *package_node_index,
-                                                task_request[shared_pos + 1..].into(),
+                                                task_request[sharp_pos + 1..].into(),
                                             ),
                                             // Found more than one package with the same name
                                             [package_node_index1, package_node_index2, ..] => {
@@ -492,10 +492,10 @@ impl Workspace {
                     // For each dependency package, find its tasks with the same name
                     let mut additional_deps = Vec::new();
                     for dep_package_path in transitive_deps {
-                        if let Some(dep_tasks) = task_ids_by_task_group_id.get(&TaskGroupId {
+                        if let Some(dep_tasks) = task_ids_by_task_group_id.get(&dbg!(TaskGroupId {
                             task_group_name: task_group_name.clone(),
                             package_path: dep_package_path,
-                        }) {
+                        })) {
                             // Find the LAST subtask of the dependency (highest order)
                             if let Some((last_dep_task, _)) = dep_tasks.last() {
                                 additional_deps.push(last_dep_task.clone());
@@ -578,15 +578,14 @@ fn find_transitive_dependencies_recursive<'a>(
 
     // Find the package in the graph
     if let Some(&node_idx) = package_name_to_node.get(package_path) {
-        let package = &package_graph[node_idx];
-
-        // Check all dependencies from package.json
-        for dep_name in package.package_json.dependencies.keys() {
-            result.push(dep_name.as_str().into());
+        // Check all dependencies from the package from
+        for dep_index in package_graph.neighbors(node_idx) {
+            let dep_path = package_graph[dep_index].path.as_str();
+            result.push(dep_path.into());
 
             // Continue searching transitively
             find_transitive_dependencies_recursive(
-                dep_name,
+                dep_path,
                 package_graph,
                 package_name_to_node,
                 visited,
