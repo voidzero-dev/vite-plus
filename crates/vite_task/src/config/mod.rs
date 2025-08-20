@@ -74,8 +74,8 @@ impl ResolvedTask {
     }
 
     pub fn matches(&self, task_request: &str) -> bool {
-        if self.name.subcommand_index.is_none() {
-            // never matches non-main task
+        if !self.name.subcommand_index.is_none() {
+            // never match non-last subcommand
             return false;
         }
         let package_name = self.name.package_name.as_str();
@@ -85,6 +85,8 @@ impl ResolvedTask {
             && task_request.get(package_name.len() + 1..) == Some(&self.name.task_group_name)
     }
 
+    /// For displaying in the UI.
+    /// Not necessarily a unique identifier as the package name can be duplicated.
     pub fn display_name(&self) -> Str {
         self.name.to_compact_string().into()
     }
@@ -579,18 +581,16 @@ mod tests {
                 .expect("Failed to resolve tasks");
 
             // @test/utils has compound commands (3 subtasks) plus dependencies on @test/core#build
-            let all_tasks: Vec<_> = task_graph
-                .node_weights()
-                .map(|task| (task.display_name(), task.name.subcommand_index))
-                .collect();
+            let all_tasks: Vec<_> =
+                task_graph.node_weights().map(|task| task.display_name()).collect();
 
             // Should include utils subtasks
-            assert!(all_tasks.contains(&("@test/utils#build".into(), Some(0))));
-            assert!(all_tasks.contains(&("@test/utils#build".into(), Some(1))));
-            assert!(all_tasks.contains(&("@test/utils#build".into(), None)));
+            assert!(all_tasks.contains(&"@test/utils#build(subcommand 0)".into()));
+            assert!(all_tasks.contains(&"@test/utils#build(subcommand 1)".into()));
+            assert!(all_tasks.contains(&"@test/utils#build".into()));
 
             // Should also include dependency on core
-            assert!(all_tasks.contains(&("@test/core#build".into(), None)));
+            assert!(all_tasks.contains(&"@test/core#build".into()));
         })
     }
 
@@ -610,15 +610,13 @@ mod tests {
                 .expect("Failed to resolve tasks");
 
             // Check all tasks including subcommands
-            let all_tasks: Vec<_> = task_graph
-                .node_weights()
-                .map(|task| (task.display_name(), task.name.subcommand_index))
-                .collect();
+            let all_tasks: Vec<_> =
+                task_graph.node_weights().map(|task| task.display_name()).collect();
 
             // Utils should have 3 subtasks (indices 0, 1, and None)
-            assert!(all_tasks.contains(&("@test/utils#build".into(), Some(0))));
-            assert!(all_tasks.contains(&("@test/utils#build".into(), Some(1))));
-            assert!(all_tasks.contains(&("@test/utils#build".into(), None)));
+            assert!(all_tasks.contains(&"@test/utils#build(subcommand 0)".into()));
+            assert!(all_tasks.contains(&"@test/utils#build(subcommand 1)".into()));
+            assert!(all_tasks.contains(&"@test/utils#build".into()));
 
             // Verify dependencies
             let has_edge = |from_name: &str, to_name: &str| -> bool {
@@ -757,7 +755,7 @@ mod tests {
             // Test that UI has compound commands (3 subtasks)
             let ui_tasks: Vec<_> = build_graph
                 .node_weights()
-                .filter(|task| task.display_name() == "@test/ui#build")
+                .filter(|task| task.display_name().starts_with("@test/ui#build"))
                 .map(|task| task.name.subcommand_index)
                 .collect();
             assert_eq!(ui_tasks.len(), 3);
@@ -780,24 +778,21 @@ mod tests {
             // Test that shared has compound commands (3 subtasks for build)
             let shared_build_tasks: Vec<_> = build_graph
                 .node_weights()
-                .filter(|task| task.display_name() == "@test/shared#build")
-                .map(|task| task.name.subcommand_index)
+                .filter(|task| task.display_name().starts_with("@test/shared#build"))
                 .collect();
             assert_eq!(shared_build_tasks.len(), 3);
 
             // Test that API has compound commands (4 subtasks for build)
             let api_build_tasks: Vec<_> = build_graph
                 .node_weights()
-                .filter(|task| task.display_name() == "@test/api#build")
-                .map(|task| task.name.subcommand_index)
+                .filter(|task| task.display_name().starts_with("@test/api#build"))
                 .collect();
             assert_eq!(api_build_tasks.len(), 4);
 
             // Test that app has compound commands (5 subtasks for build)
             let app_build_tasks: Vec<_> = build_graph
                 .node_weights()
-                .filter(|task| task.display_name() == "@test/app#build")
-                .map(|task| task.name.subcommand_index)
+                .filter(|task| task.display_name().starts_with("@test/app#build"))
                 .collect();
             assert_eq!(app_build_tasks.len(), 5);
 
@@ -870,8 +865,7 @@ mod tests {
             // Verify shared#test has compound commands (3 subtasks)
             let shared_test_tasks: Vec<_> = test_graph
                 .node_weights()
-                .filter(|task| task.display_name() == "@test/shared#test")
-                .map(|task| task.name.subcommand_index)
+                .filter(|task| task.display_name().starts_with("@test/shared#test"))
                 .collect();
             assert_eq!(shared_test_tasks.len(), 3);
 
@@ -1002,37 +996,42 @@ mod tests {
             //      ▲
             //      └─────────────────────────────────────┘
 
-            let has_full_edge = |graph: &StableDiGraph<ResolvedTask, ()>,
-                                 from_name: &str,
-                                 to_name: &str|
-             -> bool {
-                graph.edge_indices().any(|edge_idx| {
-                    let (source, target) = graph.edge_endpoints(edge_idx).unwrap();
-                    graph[source].display_name() == from_name
-                        && graph[target].display_name() == to_name
-                })
-            };
+            let has_full_edge =
+                |graph: &StableDiGraph<ResolvedTask, ()>, from_name: &str, to_name: &str| -> bool {
+                    graph.edge_indices().any(|edge_idx| {
+                        let (source, target) = graph.edge_endpoints(edge_idx).unwrap();
+                        graph[source].display_name() == from_name
+                            && graph[target].display_name() == to_name
+                    })
+                };
 
             // Verify all tasks are present
-            let all_tasks: Vec<_> = app_build_graph
-                .node_weights()
-                .map(|task| (task.display_name(), task.name.subcommand_index))
-                .collect();
+            let all_tasks: Vec<_> =
+                app_build_graph.node_weights().map(|task| task.display_name()).collect();
 
             // App should have 5 subtasks (indices: 0, 1, 2, 3, None)
-            assert_eq!(all_tasks.iter().filter(|(name, _)| *name == "@test/app#build").count(), 5);
+            assert_eq!(
+                all_tasks.iter().filter(|name| name.starts_with("@test/app#build")).count(),
+                5
+            );
             // API should have 4 subtasks (indices: 0, 1, 2, None)
-            assert_eq!(all_tasks.iter().filter(|(name, _)| *name == "@test/api#build").count(), 4);
+            assert_eq!(
+                all_tasks.iter().filter(|name| name.starts_with("@test/api#build")).count(),
+                4
+            );
             // Shared should have 3 subtasks (indices: 0, 1, None)
             assert_eq!(
-                all_tasks.iter().filter(|(name, _)| *name == "@test/shared#build").count(),
+                all_tasks.iter().filter(|name| name.starts_with("@test/shared#build")).count(),
                 3
             );
             // UI should have 3 subtasks (indices: 0, 1, None)
-            assert_eq!(all_tasks.iter().filter(|(name, _)| *name == "@test/ui#build").count(), 3);
+            assert_eq!(
+                all_tasks.iter().filter(|name| name.starts_with("@test/ui#build")).count(),
+                3
+            );
             // Config should have 1 task (no &&)
             assert_eq!(
-                all_tasks.iter().filter(|(name, _)| *name == "@test/config#build").count(),
+                all_tasks.iter().filter(|name| name.starts_with("@test/config#build")).count(),
                 1
             );
 
@@ -1146,14 +1145,16 @@ mod tests {
                 1
             );
 
-            // Task 'b' should have 2 subtasks: 'echo a' (index 0) and main (None)
-            let b_tasks: Vec<_> =
-                tasks.iter().filter(|(name, _)| *name == "@test/cache-sharing#b").collect();
+            // Task 'b' should have 2 subtasks: 'echo a' (index 0) and main (None).
+            let b_tasks: Vec<_> = tasks
+                .iter()
+                .filter(|(name, _)| name.starts_with("@test/cache-sharing#b"))
+                .collect();
             assert_eq!(b_tasks.len(), 2, "Expected 2 subtasks for task 'b', got {}", b_tasks.len());
 
             // Task 'c' should have 3 subtasks: 'echo a' (index 0), 'echo b' (index 1), and main (None)
             assert_eq!(
-                tasks.iter().filter(|(name, _)| *name == "@test/cache-sharing#c").count(),
+                tasks.iter().filter(|(name, _)| name.starts_with("@test/cache-sharing#c")).count(),
                 3
             );
 
@@ -1168,18 +1169,12 @@ mod tests {
 
             let task_b_subtask_0 = task_graph
                 .node_weights()
-                .find(|t| {
-                    t.display_name() == "@test/cache-sharing#b"
-                        && t.name.subcommand_index == Some(0)
-                })
+                .find(|t| t.display_name() == "@test/cache-sharing#b(subcommand 0)")
                 .unwrap();
 
             let task_c_subtask_0 = task_graph
                 .node_weights()
-                .find(|t| {
-                    t.display_name() == "@test/cache-sharing#c"
-                        && t.name.subcommand_index == Some(0)
-                })
+                .find(|t| t.display_name() == "@test/cache-sharing#c(subcommand 0)")
                 .unwrap();
 
             // All three should have command "echo a"
