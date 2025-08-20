@@ -14,13 +14,12 @@ use crate::{
     fs::CachedFileSystem,
     str::Str,
 };
-use anyhow::Context;
 
 use petgraph::{
-    Direction, Graph,
+    Graph,
     graph::NodeIndex,
     stable_graph::StableDiGraph,
-    visit::{EdgeRef, IntoNodeReferences},
+    visit::IntoNodeReferences,
 };
 use vite_package_manager::{DependencyType, PackageInfo, PackageJson};
 
@@ -298,7 +297,7 @@ impl Workspace {
         // The consistency of node indexes between the full graph and the subgraph will make it easier to render the subgraph in UI.
         let filtered_graph = self.task_graph.filter_map(
             |node_index, _| filtered_tasks_by_node_index.remove(&node_index),
-            |_, _| Some(()), // All edges between filtered tasks are preserved.
+            |_, ()| Some(()), // All edges between filtered tasks are preserved.
         );
         Ok(filtered_graph)
     }
@@ -333,11 +332,7 @@ impl Workspace {
                         .map(|task_request| {
                             let sharp_pos = task_request.find('#');
                             // contains multiple '#'
-                            if sharp_pos != task_request.rfind('#') {
-                                return Err(Error::AmbiguousTaskRequest {
-                                    task_request: task_request.to_string(),
-                                });
-                            } else {
+                            if sharp_pos == task_request.rfind('#') {
                                 let (dep_package_node_index, dep_task_name): (NodeIndex, Str) =
                                     if let Some(sharp_pos) = sharp_pos {
                                         let package_name = &task_request[..sharp_pos];
@@ -370,7 +365,7 @@ impl Workspace {
                                         }
                                     } else {
                                         // No '#' means it's a local task reference within the same package
-                                        (*package_node_index, task_request.clone())
+                                        (*package_node_index, task_request)
                                     };
 
                                 Ok(TaskId {
@@ -382,6 +377,10 @@ impl Workspace {
                                             .into(),
                                     },
                                     subcommand_index: None, // Always points to the main task
+                                })
+                            } else {
+                                Err(Error::AmbiguousTaskRequest {
+                                    task_request: task_request.to_string(),
                                 })
                             }
                         })

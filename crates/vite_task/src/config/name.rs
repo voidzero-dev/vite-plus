@@ -1,12 +1,11 @@
 use std::fmt::Display;
 
-use bincode::enc::write;
 
 use crate::str::Str;
 
 /// For displaying and filtering tasks.
 ///
-/// Not suitable for uniquely identifying tasks as package_name isn't unique (may be duplicated and empty).
+/// Not suitable for uniquely identifying tasks as `package_name` isn't unique (may be duplicated and empty).
 /// See `TaskId` for the unique identifier of a task.
 #[derive(Debug, Clone)]
 pub struct TaskName {
@@ -32,7 +31,7 @@ impl Display for TaskName {
         }
         write!(f, "{}", self.task_group_name)?;
         if let Some(subcommand_index) = self.subcommand_index {
-            write!(f, "(subcommand {})", subcommand_index)?;
+            write!(f, "(subcommand {subcommand_index})")?;
         }
         Ok(())
     }

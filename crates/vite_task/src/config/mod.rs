@@ -74,14 +74,14 @@ impl ResolvedTask {
     }
 
     pub fn matches(&self, task_request: &str) -> bool {
-        if !self.name.subcommand_index.is_none() {
+        if self.name.subcommand_index.is_some() {
             // never match non-last subcommand
             return false;
         }
         let package_name = self.name.package_name.as_str();
         // TODO: match tasks in current package if the task_request doesn't contain '#'
         task_request.get(..package_name.len()) == Some(package_name)
-            && task_request.get(package_name.len()..package_name.len() + 1) == Some("#")
+            && task_request.get(package_name.len()..=package_name.len()) == Some("#")
             && task_request.get(package_name.len() + 1..) == Some(&self.name.task_group_name)
     }
 
@@ -128,7 +128,7 @@ mod tests {
     use petgraph::stable_graph::StableDiGraph;
 
     use super::*;
-    use crate::{schedule::ExecutionPlan, Error};
+    use crate::Error;
 
     #[test]
     fn test_recursive_topological_build() {

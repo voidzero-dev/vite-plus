@@ -105,7 +105,7 @@ impl FileSystem for RealFileSystem {
 #[derive(Debug, Default)]
 pub struct CachedFileSystem<FS = RealFileSystem> {
     underlying: FS,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     cache: DashMap<Arc<OsStr>, PathFingerprint>,
 }
 

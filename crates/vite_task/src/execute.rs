@@ -49,10 +49,10 @@ pub struct PathWrite;
 #[derive(Debug)]
 pub struct ExecutedTask {
     pub std_outputs: Arc<[StdOutput]>,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub exit_status: ExitStatus,
     pub path_reads: HashMap<Str, PathRead>,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub path_writes: HashMap<Str, PathWrite>,
 }
 

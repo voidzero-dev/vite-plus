@@ -1,7 +1,6 @@
 use crate::{
     Error,
     collections::{HashMap, HashSet},
-    config::task_command,
     str::Str,
 };
 

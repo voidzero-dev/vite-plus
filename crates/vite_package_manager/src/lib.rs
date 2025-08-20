@@ -167,9 +167,9 @@ impl PackageGraphBuilder {
         self.id_and_deps_by_path.insert(package_path.clone(), (id, deps));
 
         // Also maintain name to path mapping for dependency resolution
-        if !package_name.is_empty() {
-            if let Some(existing_path) =
-                self.name_to_path.insert(package_name.clone(), package_path.clone())
+        if !package_name.is_empty()
+            && let Some(existing_path) =
+                self.name_to_path.insert(package_name, package_path)
             {
                 // Duplicate package name found
                 let existing_id = self.id_and_deps_by_path.get(&existing_path).unwrap().0;
@@ -180,7 +180,6 @@ impl PackageGraphBuilder {
                     path2: self.graph[id].path.clone(),
                 });
             }
-        }
         Ok(())
     }
 
@@ -194,11 +193,10 @@ impl PackageGraphBuilder {
                 }
 
                 // Resolve dependency name to path, then find the node
-                if let Some(dep_path) = self.name_to_path.get(dep_name) {
-                    if let Some((dep_id, _)) = self.id_and_deps_by_path.get(dep_path) {
+                if let Some(dep_path) = self.name_to_path.get(dep_name)
+                    && let Some((dep_id, _)) = self.id_and_deps_by_path.get(dep_path) {
                         self.graph.add_edge(*id, *dep_id, *dep_type);
                     }
-                }
                 // Silently skip if dependency not found - it might be an external package
             }
         }
