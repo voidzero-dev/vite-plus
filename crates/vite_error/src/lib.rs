@@ -73,9 +73,6 @@ pub enum Error {
     #[error("{task_request} should not contain multiple '#'")]
     AmbiguousTaskRequest { task_request: String },
 
-    #[error("Invalid task name: {0}, expected format: 'package#task'")]
-    InvalidTaskName(String),
-
     #[error("Recursive run is not allowed when task name contains '#': {0}")]
     RecursiveRunWithScope(String),
 

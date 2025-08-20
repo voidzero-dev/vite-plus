@@ -36,7 +36,14 @@ impl ExecutionPlan {
         mut task_graph: StableDiGraph<ResolvedTask, ()>,
         parallel_run: bool,
     ) -> Result<Self, Error> {
+        // To be consistent with the package graph in vite_package_manager and the dependency graph definition in Wikipedia
+        // https://en.wikipedia.org/wiki/Dependency_graph, we construct the graph with edges from dependents to dependencies
+        // e.g. A -> B means A depends on B
+        //
+        // For execution we need to reverse the edges first before topological sorting,
+        // so that tasks without dependencies are executed first
         task_graph.reverse(); // Run tasks without dependencies first
+
         // Always use topological sort to ensure the correct order of execution
         // or the task dependencies declaration is meaningless
         let node_indices = match toposort(&task_graph, None) {

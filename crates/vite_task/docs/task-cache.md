@@ -508,10 +508,7 @@ pub struct StdOutput {
     pub content: MaybeString,    // Binary-safe content
 }
 
-pub enum MaybeString {
-    String(String),              // UTF-8 text
-    Binary(Vec<u8>),            // Non-UTF-8 binary data
-}
+pub struct MaybeString(Vec<u8>);
 ```
 
 Outputs are captured exactly as produced:
