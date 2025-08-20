@@ -321,7 +321,7 @@ The final step creates an execution plan:
 
 Task requests are in form of `task_name` or `pkg#task_name`. They occur in two places:
 
-- one or mulitple parameters following after `vite run`.
+- one or multiple parameters following after `vite run`.
 - items in `dependsOn`.
 
 How task requests work:

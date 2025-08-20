@@ -18,7 +18,7 @@ pub struct TaskName {
 
     /// The index of the subcommand in a parsed command (`echo A && echo B`).
     /// `None` if the task is a main task, which is the last subcommand or the only subcommand in a script.
-    /// Only the main command can be matched agaist a user task request.
+    /// Only the main command can be matched against a user task request.
     /// Non-main commands can only be included in the execution graph as main command's (in)direct dependencies.
     pub subcommand_index: Option<usize>,
 }

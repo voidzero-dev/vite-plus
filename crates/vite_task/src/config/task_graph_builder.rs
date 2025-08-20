@@ -10,7 +10,7 @@ use super::ResolvedTask;
 
 /// Uniquely identifies a task group, which is a script in `package.json`, or an entry in `vite-task.json`.
 ///
-/// A task group can be parsed into one task or multiple tasks splitted by `&&`
+/// A task group can be parsed into one task or multiple tasks split by `&&`
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
 pub struct TaskGroupId {
     pub task_group_name: Str,
