@@ -182,21 +182,27 @@ mod tests {
 
             // With topological mode, edges go from dependencies to dependents
             assert!(
-                has_edge("@test/core#build", "@test/utils#build"),
+                has_edge("@test/utils#build(subcommand 0)", "@test/core#build"),
                 "Core should have edge to Utils (Utils depends on Core)"
             );
             assert!(
-                has_edge("@test/utils#build", "@test/app#build"),
+                has_edge("@test/app#build", "@test/utils#build"),
                 "Utils should have edge to App (App depends on Utils)"
             );
             assert!(
-                has_edge("@test/app#build", "@test/web#build"),
+                has_edge("@test/web#build", "@test/app#build"),
                 "App should have edge to Web (Web depends on App)"
             );
             assert!(
-                has_edge("@test/core#build", "@test/web#build"),
+                has_edge("@test/web#build", "@test/core#build"),
                 "Core should have edge to Web (Web depends on Core)"
             );
+
+            // TODO: fix indirect dependencies
+            // assert!(
+            //     !has_edge("@test/web#build", "@test/utils#build"),
+            //     "Web should have edge to utils (It should be indirect via App)"
+            // );
         })
     }
 
@@ -360,17 +366,17 @@ mod tests {
 
             // Verify explicit dependencies are still honored
             assert!(
-                has_edge("@test/core#build", "@test/utils#lint"),
+                has_edge("@test/utils#lint", "@test/core#build"),
                 "Explicit dependency from core#build to utils#lint should exist"
             );
             assert!(
-                has_edge("@test/utils#build", "@test/utils#lint"),
+                has_edge("@test/utils#lint", "@test/utils#build"),
                 "Explicit dependency from utils#build to utils#lint should exist"
             );
 
             // Verify implicit dependencies ARE added
             assert!(
-                has_edge("@test/core#build", "@test/utils#build"),
+                has_edge("@test/utils#build", "@test/core#build"),
                 "With topological_run=true, implicit dependency should exist"
             );
         });
@@ -629,25 +635,25 @@ mod tests {
 
             // Within-package dependencies for @test/utils compound command
             assert!(
-                has_edge("@test/utils#build(subcommand 0)", "@test/utils#build(subcommand 1)"),
-                "First subtask should have edge to second (second depends on first)"
+                has_edge("@test/utils#build(subcommand 1)", "@test/utils#build(subcommand 0)"),
+                "Second subtask should have edge to first"
             );
             assert!(
-                has_edge("@test/utils#build(subcommand 1)", "@test/utils#build"),
-                "Second subtask should have edge to last (last depends on second)"
+                has_edge("@test/utils#build", "@test/utils#build(subcommand 1)"),
+                "Last subtask should have edge to second"
             );
 
             // Cross-package dependencies
             // Core's LAST subtask should have edge to utils' FIRST subtask
             assert!(
-                has_edge("@test/core#build", "@test/utils#build (subcommand 0)"),
-                "Core's last subtask should have edge to utils' first subtask (utils depends on core)"
+                has_edge("@test/utils#build(subcommand 0)", "@test/core#build"),
+                "Utils' first subtask should have edge to core's last subtask"
             );
 
             // Utils' LAST subtask should have edge to app
             assert!(
-                has_edge("@test/utils#build", "@test/app#build"),
-                "Utils' last subtask should have edge to app (app depends on utils)"
+                has_edge("@test/app#build", "@test/utils#build"),
+                "app should have edge to Utils' last subtask"
             );
         })
     }
@@ -1265,8 +1271,8 @@ mod tests {
             // The second nameless package depends on normal-package
             // So with topological ordering, normal-package#build should run before the second nameless build
             assert!(
-                has_edge(&build_graph, "normal-package#build", "build")
-                    || has_edge(&build_graph, "normal-package#test", "build"),
+                has_edge(&build_graph, "build", "normal-package#build")
+                    && has_edge(&build_graph, "build", "normal-package#test"),
                 "Should have dependency from normal-package to second nameless package due to topological ordering"
             );
         })
