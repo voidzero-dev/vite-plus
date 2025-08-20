@@ -19,7 +19,7 @@ pub struct TaskGroupId {
 
 /// Uniquely identifies a task.
 ///
-/// Similar to `TaskName` but replaces `package_name` with `package_dir` to ensure uniqueness.
+/// Similar to `TaskName` but replaces `package_name` with `package_path` to ensure uniqueness.
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
 pub struct TaskId {
     pub task_group_id: TaskGroupId,
@@ -66,7 +66,7 @@ impl TaskGraphBuilder {
                 let Some(&dep_index) = node_indices_by_task_ids.get(dep) else {
                     return Err(Error::TaskDependencyNotFound {
                         name: dep.task_group_id.task_group_name.to_string(),
-                        package_dir: dep.task_group_id.package_path.to_string(),
+                        package_path: dep.task_group_id.package_path.to_string(),
                     });
                 };
                 task_graph.add_edge(current_task_index, dep_index, ());
