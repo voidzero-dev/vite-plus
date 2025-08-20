@@ -472,6 +472,8 @@ impl Workspace {
             tasks.sort_by_key(|(_, order)| *order);
         }
 
+        dbg!(&package_graph);
+
         // Add topological dependencies
         for (task_group_id, current_tasks) in &task_ids_by_task_group_id {
             let package_path = task_group_id.package_path.as_str();
@@ -489,13 +491,20 @@ impl Workspace {
                         &package_path_to_node_index,
                     );
 
+                    if first_task.subcommand_index == Some(0)
+                        && first_task.task_group_id.package_path == "packages/ui"
+                        && first_task.task_group_id.task_group_name == "build"
+                    {
+                        dbg!(&transitive_deps);
+                    }
+
                     // For each dependency package, find its tasks with the same name
                     let mut additional_deps = Vec::new();
                     for dep_package_path in transitive_deps {
-                        if let Some(dep_tasks) = task_ids_by_task_group_id.get(&dbg!(TaskGroupId {
+                        if let Some(dep_tasks) = task_ids_by_task_group_id.get(&TaskGroupId {
                             task_group_name: task_group_name.clone(),
                             package_path: dep_package_path,
-                        })) {
+                        }) {
                             // Find the LAST subtask of the dependency (highest order)
                             if let Some((last_dep_task, _)) = dep_tasks.last() {
                                 additional_deps.push(last_dep_task.clone());
@@ -578,6 +587,10 @@ fn find_transitive_dependencies_recursive<'a>(
 
     // Find the package in the graph
     if let Some(&node_idx) = package_name_to_node.get(package_path) {
+        let is_shared = package_path == "packages/ui";
+        if is_shared {
+            dbg!(package_graph.neighbors(node_idx).count());
+        }
         // Check all dependencies from the package from
         for dep_index in package_graph.neighbors(node_idx) {
             let dep_path = package_graph[dep_index].path.as_str();

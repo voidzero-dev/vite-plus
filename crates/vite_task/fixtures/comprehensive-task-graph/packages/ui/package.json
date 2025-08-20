@@ -8,6 +8,6 @@
     "storybook": "echo Running storybook"
   },
   "dependencies": {
-    "@test/shared": "*"
+    "@test/shared": "workspace:*"
   }
 }

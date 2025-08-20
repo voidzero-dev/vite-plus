@@ -336,3 +336,4 @@ How task requests work:
   - `#build` raises an error if there are multiple nameless packages.
   - `build` does not match task `build` in the nameless package.
 
+While task requests with multiple `#` are invalid, packages with `#` in their names are valid. For example, a package named `pkg#special` can have a task named `build`. It can be referenced by executing `vite run build` under the folder of package `pkg#special`.

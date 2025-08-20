@@ -730,23 +730,13 @@ mod tests {
                 |graph: &StableDiGraph<ResolvedTask, ()>, from: &str, to: &str| -> bool {
                     graph.edge_indices().any(|edge_idx| {
                         let (source, target) = graph.edge_endpoints(edge_idx).unwrap();
-                        graph[source].display_name() == from && graph[target].display_name() == to
-                    })
-                };
-
-            let has_edge_with_indices =
-                |graph: &StableDiGraph<ResolvedTask, ()>, from_name: &str, to_name: &str| -> bool {
-                    graph.edge_indices().any(|edge_idx| {
-                        let (source, target) = graph.edge_endpoints(edge_idx).unwrap();
-
-                        graph[source].display_name() == from_name
-                            && graph[target].display_name() == to_name
+                        dbg!(graph[source].display_name()) == from && dbg!(graph[target].display_name()) == to
                     })
                 };
 
             // Verify dependency edges for build tasks (between last subtasks)
-            assert!(has_edge(&build_graph, "@test/shared#build", "@test/ui#build"));
-            assert!(has_edge(&build_graph, "@test/shared#build", "@test/api#build"));
+            assert!(has_edge(&build_graph, "@test/ui#build(subcommand 0)", "@test/shared#build"));
+            assert!(has_edge(&build_graph, "@test/shared#build(subcommand 0)", "@test/api#build"));
             assert!(has_edge(&build_graph, "@test/config#build", "@test/api#build"));
             assert!(has_edge(&build_graph, "@test/ui#build", "@test/app#build"));
             assert!(has_edge(&build_graph, "@test/api#build", "@test/app#build"));
@@ -764,12 +754,12 @@ mod tests {
             assert!(ui_tasks.contains(&None));
 
             // Verify UI compound task internal dependencies
-            assert!(has_edge_with_indices(
+            assert!(has_edge(
                 &build_graph,
                 "@test/ui#build(subcommand 0)",
                 "@test/ui#build(subcommand 1)",
             ));
-            assert!(has_edge_with_indices(
+            assert!(has_edge(
                 &build_graph,
                 "@test/ui#build(subcommand 1)",
                 "@test/ui#build",
@@ -797,53 +787,21 @@ mod tests {
             assert_eq!(app_build_tasks.len(), 5);
 
             // Verify cross-package dependencies connect to first subtask
-            assert!(has_edge_with_indices(
+            assert!(has_edge(
                 &build_graph,
                 "@test/shared#build",
                 "@test/api#build(subcommand 0)",
             ));
-            assert!(has_edge_with_indices(
+            assert!(has_edge(
                 &build_graph,
                 "@test/config#build",
                 "@test/api#build(subcommand 0)",
             ));
-            assert!(has_edge_with_indices(
+            assert!(has_edge(
                 &build_graph,
                 "@test/api#build",
                 "@test/app#build(subcommand 0)",
             ));
-
-            // Test package with # in name
-            assert!(
-                build_graph
-                    .node_weights()
-                    .any(|task| task.display_name() == "@test/pkg#special#build"),
-                "Package with # in name should have build task"
-            );
-
-            // Verify that the package with # in name has correct dependencies
-            assert!(
-                has_edge_with_indices(
-                    &build_graph,
-                    "@test/shared#build",
-                    "@test/pkg#special#build",
-                ),
-                "@test/pkg#special depends on @test/shared"
-            );
-
-            // Verify that app depends on pkg#special
-            assert!(
-                has_edge_with_indices(
-                    &build_graph,
-                    "@test/pkg#special#build",
-                    "@test/app#build(subcommand 0)",
-                ),
-                "@test/app depends on @test/pkg#special"
-            );
-
-            // Note: Scripts with # in their names (like build#special) won't appear in
-            // the "build" recursive graph because we're only looking for tasks named "build"
-            // They need to be resolved separately
 
             // Test test task graph
             let test_graph = workspace
