@@ -11,10 +11,10 @@ use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+use crate::Error;
 use crate::config::{get_cache_dir, get_npm_package_tgz_url, get_npm_package_version_url};
 use crate::download::download_and_extract_tgz;
 use crate::shim;
-use vite_error::Error;
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
@@ -119,7 +119,9 @@ fn get_package_manager_type_and_version(
         if !package_json.package_manager.is_empty() {
             if let Some((name, version)) = package_json.package_manager.split_once('@') {
                 // check if the version is a valid semver
-                semver::Version::parse(version)?;
+                semver::Version::parse(version).map_err(|_| {
+                    Error::InvalidPackageManagerVersion(version.into(), package_json_path.into())
+                })?;
                 match name {
                     "pnpm" => return Ok((PackageManagerType::Pnpm, version.into())),
                     "yarn" => return Ok((PackageManagerType::Yarn, version.into())),
@@ -205,16 +207,8 @@ pub async fn detect_package_manager_with_default(
     if fix_package_manager_field {
         // auto set `packageManager` field in package.json
         let package_json_path = workspace_root.join("package.json");
-        println!("start set_package_manager_field: {:?}", package_json_path);
         set_package_manager_field(&package_json_path, package_manager_type.clone(), &version)
-            .map_err(|e| match e {
-                Error::Io(e) => Error::IoWithPathAndOperation {
-                    err: e,
-                    path: package_json_path.into(),
-                    operation: "set_package_manager_field".into(),
-                },
-                _ => e,
-            })?;
+            .await?;
     }
 
     Ok(PackageManager {
@@ -281,7 +275,7 @@ async fn download_package_manager(
 
     // create shim file
     tracing::debug!("Create shim files for {}", bin_name);
-    create_shim_file(package_manager_type, &bin_prefix).await?;
+    create_shim_files(package_manager_type, &bin_prefix).await?;
 
     Ok(target_dir)
 }
@@ -296,7 +290,7 @@ async fn download_package_manager(
 /// - $bin_prefix/pnpx -> $bin_prefix/pnpx.cjs
 /// - $bin_prefix/pnpx.cmd -> $bin_prefix/pnpx.cjs
 /// - $bin_prefix/pnpx.ps1 -> $bin_prefix/pnpx.cjs
-async fn create_shim_file(
+async fn create_shim_files(
     package_manager_type: PackageManagerType,
     bin_prefix: impl AsRef<Path>,
 ) -> Result<(), Error> {
@@ -332,31 +326,14 @@ async fn create_shim_file(
             }
         }
 
-        // $bin_prefix/pnpm -> $bin_prefix/pnpm.cjs
-        let shim = shim::unix_shim(&js_bin_name);
-        tokio::fs::write(bin_prefix.join(&bin_name), shim).await?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            tokio::fs::set_permissions(
-                bin_prefix.join(bin_name),
-                fs::Permissions::from_mode(0o755),
-            )
-            .await?;
-        }
-
-        // $bin_prefix/pnpm.cmd -> $bin_prefix/pnpm.cjs
-        let shim = shim::win_shim(&js_bin_name);
-        tokio::fs::write(bin_prefix.join(format!("{}.cmd", bin_name)), shim).await?;
-
-        // $bin_prefix/pnpm.ps1 -> $bin_prefix/pnpm.cjs
-        let shim = shim::power_shell_shim(&js_bin_name);
-        tokio::fs::write(bin_prefix.join(format!("{}.ps1", bin_name)), shim).await?;
+        let source_file = bin_prefix.join(js_bin_name);
+        let to_bin = bin_prefix.join(bin_name);
+        shim::write_shims(&source_file, &to_bin).await?;
     }
     Ok(())
 }
 
-fn set_package_manager_field(
+async fn set_package_manager_field(
     package_json_path: impl AsRef<Path>,
     package_manager_type: PackageManagerType,
     version: &str,
@@ -364,7 +341,8 @@ fn set_package_manager_field(
     let package_json_path = package_json_path.as_ref();
     let package_manager_value = format!("{}@{}", package_manager_type, version);
     let mut package_json = if package_json_path.exists() {
-        serde_json::from_slice(&fs::read(&package_json_path)?)?
+        let content = tokio::fs::read(&package_json_path).await?;
+        serde_json::from_slice(&content)?
     } else {
         serde_json::json!({})
     };
@@ -372,8 +350,13 @@ fn set_package_manager_field(
     if let Some(package_json) = package_json.as_object_mut() {
         package_json.insert("packageManager".into(), serde_json::json!(package_manager_value));
     }
-    serde_json::to_writer_pretty(fs::File::create(&package_json_path)?, &package_json)?;
-    println!("set_package_manager_field: {:?} to {:?}", package_json_path, package_manager_value);
+    let json_string = serde_json::to_string_pretty(&package_json)?;
+    tokio::fs::write(&package_json_path, json_string).await?;
+    tracing::debug!(
+        "set_package_manager_field: {:?} to {:?}",
+        package_json_path,
+        package_manager_value
+    );
     Ok(())
 }
 

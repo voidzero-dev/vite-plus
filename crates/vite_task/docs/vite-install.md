@@ -1,5 +1,7 @@
 # `vite-plus install`
 
+## Overview
+
 `vite install` will automatically select the most suitable packageManager based on the current directory configuration, then run its install command, and generate a new fingerprint.
 
 Currently only pnpm, yarn, and npm are supported. More package managers like bun, [vlt](https://docs.vlt.sh/cli/commands/install), lerna*,* etc. will be considered in the future.
@@ -87,8 +89,142 @@ If the user want their modifications to be cleaned up by a fresh install, they s
 
 The `vite install` task will be auto-executed or quickly skipped at the beginning of any other vite+ command, eliminating the need for the user to run it manually in most cases.
 
-See [Fingerprinting `vite install` with vite task](https://www.notion.so/Fingerprinting-vite-install-with-vite-task-24aec1a0aef480f0ab99d5ccb7b9cd3e?pvs=21)
-
 ### No replay when cache hit
 
 The auto-executed `vite install` task will not replay stdout after hitting the cache, to avoid interfering with the real execution of the command.
+
+## Architecture
+
+### Install Command Execution Flow
+
+```
+vite install
+    │
+    ├─► Detect Workspace Root
+    │   ├─► pnpm-workspace.yaml?  ────► Use as root
+    │   ├─► package.json/workspaces? ──► Use as root  
+    │   └─► Search upward for package.json
+    │       └─► Not found? ────────────► Use current dir
+    │
+    ├─► Detect Package Manager
+    │   ├─► package.json#packageManager? ──► Parse pm@version
+    │   ├─► pnpm-lock.yaml exists? ────────► pnpm@latest
+    │   ├─► yarn.lock exists? ─────────────► yarn@latest
+    │   ├─► package-lock.json exists? ─────► npm@latest
+    │   └─► No PM detected?
+    │       ├─► CI environment? ───────────► Auto-select pnpm
+    │       ├─► Non-TTY? ──────────────────► Auto-select pnpm
+    │       └─► Interactive menu ──────────► User selects
+    │
+    ├─► Install Package Manager (if needed)
+    │   ├─► Check shim binary files exists
+    │   └─► Not exists?
+    │       ├─► Download with retry (exponential backoff)
+    │       ├─► Extract tgz archive
+    │       ├─► Create shims (sh/cmd/ps1)
+    │       └─► Update PATH
+    │
+    ├─► Execute Install
+    │   ├─► Run: {pm} install
+    │   ├─► Collect fingerprint
+    │   │   ├─► Hash package.json
+    │   │   ├─► Hash lock file
+    │   │   └─► List node_modules/* (names only)
+    │   └─► Save fingerprint to cache
+    │
+    └─► Post-Install
+        ├─► Update package.json (add packageManager if missing)
+        └─► Complete
+```
+
+### Simplified Component Flow
+
+```
+┌─────────┐     ┌──────────┐     ┌───────────┐     ┌─────────┐
+│  User   │────►│  CLI     │────►│ Detector  │────►│ Cache   │
+└─────────┘     └──────────┘     └───────────┘     └─────────┘
+                      │                 │                 │
+                      ▼                 ▼                 ▼
+                ┌────────────┐     ┌───────────┐    ┌──────────────┐
+                │ Downloader │     │ Installer │    │ Fingerprint  │
+                └────────────┘     └───────────┘    └──────────────┘
+```
+
+### Decision Tree
+
+```
+   [Start]
+      │
+┌─────▼───────┐
+│  Find Root? │
+└─────┬───────┘
+  Yes │ No → Use CWD
+      │
+┌─────▼─────┐
+│  Find PM? │
+└─────┬─────┘
+  Yes │ No → Select PM
+      │      │
+      │   ┌──▼──┐
+      │   │ CI? │→ Yes → pnpm
+      │   └──┬──┘
+      │      │ No
+      │   ┌──▼──┐
+      │   │TTY? │→ No → pnpm
+      │   └──┬──┘
+      │      │ Yes → Menu
+      │      │
+┌─────▼──────▼─────┐
+│  PM Installed?   │
+└─────┬────────────┘
+  Yes │ No → Download
+      │      │
+      │   ┌──▼────────┐
+      │   │  Extract  │
+      │   │  & Shims  │
+      │   └──┬────────┘
+      │      │
+┌─────▼──────▼─────┐
+│   Run Install    │
+└─────┬────────────┘
+      │
+┌─────▼───────┐
+│ Fingerprint │
+└─────┬───────┘
+      │
+   [Done]
+```
+
+### Key Components
+
+#### 1. Workspace Root Detector
+
+- Searches for monorepo markers (`pnpm-workspace.yaml`, `workspaces` in package.json)
+- Falls back to searching for nearest `package.json`
+- Uses current directory if no package.json found
+
+#### 2. Package Manager Detector
+
+- Priority order:
+  1. `packageManager` field in package.json
+  2. Lock file detection (pnpm-lock.yaml, yarn.lock, package-lock.json)
+  3. Interactive user selection with pnpm as default
+
+#### 3. Package Manager Installer
+
+- Downloads package manager if not present
+- Creates platform-specific shims (sh, cmd, ps1)
+- Sets up local installation without global pollution
+- Implements retry logic with exponential backoff
+
+#### 4. Fingerprint Collector
+
+- Captures installation state for caching
+- Special handling for node_modules (only first-level names)
+- Ignores paths outside working directory
+
+#### 5. Auto-execution Handler
+
+- Runs automatically before other vite+ commands
+- Skips replay output when cache hit
+- Manual execution available with `--force` flag

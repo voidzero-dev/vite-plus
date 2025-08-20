@@ -16,6 +16,7 @@ directories = { workspace = true }
 flate2 = { workspace = true }
 futures-util = { workspace = true }
 indoc = { workspace = true }
+pathdiff = { workspace = true }
 petgraph = { workspace = true, features = ["serde-1"] }
 rand = { workspace = true }
 reqwest = { workspace = true }

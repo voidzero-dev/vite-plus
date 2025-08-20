@@ -104,6 +104,11 @@ pub enum Error {
     #[error("Unrecognized any package manager, please specify the package manager")]
     UnrecognizedPackageManager,
 
+    #[error(
+        "Invalid version: {0} on {1}#packageManager, expected format: 'package-manager-name@major.minor.patch'"
+    )]
+    InvalidPackageManagerVersion(String, PathBuf),
+
     #[error(transparent)]
     SemverError(#[from] semver::Error),
 

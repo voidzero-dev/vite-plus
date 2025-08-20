@@ -1,12 +1,12 @@
+use std::env;
 use std::{path::PathBuf, sync::LazyLock};
 
 use directories::BaseDirs;
 
 pub static NPM_REGISTRY: LazyLock<String> = LazyLock::new(|| {
-    option_env!("npm_config_registry")
-        .or_else(|| option_env!("NPM_CONFIG_REGISTRY"))
-        .unwrap_or("https://registry.npmjs.org")
-        .to_string()
+    env::var("npm_config_registry")
+        .or_else(|_| env::var("NPM_CONFIG_REGISTRY"))
+        .unwrap_or_else(|_| "https://registry.npmjs.org".into())
 });
 
 /// Get the tgz url of a npm package

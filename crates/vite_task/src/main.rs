@@ -10,5 +10,8 @@ async fn main() -> Result<(), Error> {
     init_tracing();
 
     let args = Args::parse();
-    vite_task::main(current_dir()?, args, None::<CliOptions>).await
+    vite_task::main(current_dir()?, args, None::<CliOptions>).await.map_err(|e| {
+        tracing::error!("Error: {}", e);
+        e
+    })
 }
