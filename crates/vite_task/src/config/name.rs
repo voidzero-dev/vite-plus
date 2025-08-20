@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-
 use crate::str::Str;
 
 /// For displaying and filtering tasks.

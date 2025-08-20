@@ -67,19 +67,11 @@ pub enum Error {
     #[error("Task not found in workspace: {0}")]
     TaskNotFound(String),
 
-
     #[error("Dependency Task '{name}' not found in package located at {package_dir}")]
-    TaskDependencyNotFound {
-        name: String,
-        package_dir: String,
-    },
+    TaskDependencyNotFound { name: String, package_dir: String },
 
-    #[error(
-        "{task_request} should not contain multiple '#'"
-    )]
-    AmbiguousTaskRequest {
-        task_request: String,
-    },
+    #[error("{task_request} should not contain multiple '#'")]
+    AmbiguousTaskRequest { task_request: String },
 
     #[error("Invalid task name: {0}, expected format: 'package#task'")]
     InvalidTaskName(String),

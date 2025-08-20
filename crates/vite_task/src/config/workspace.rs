@@ -15,12 +15,7 @@ use crate::{
     str::Str,
 };
 
-use petgraph::{
-    Graph,
-    graph::NodeIndex,
-    stable_graph::StableDiGraph,
-    visit::IntoNodeReferences,
-};
+use petgraph::{Graph, graph::NodeIndex, stable_graph::StableDiGraph, visit::IntoNodeReferences};
 use vite_package_manager::{DependencyType, PackageInfo, PackageJson};
 
 use super::{

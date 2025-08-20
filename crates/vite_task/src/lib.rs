@@ -514,10 +514,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(args.task, Some("test".into()));
-        assert_eq!(
-            args.task_args,
-            vec!["--config", "jest.config.js", "--coverage", "--watch"]
-        );
+        assert_eq!(args.task_args, vec!["--config", "jest.config.js", "--coverage", "--watch"]);
     }
 
     #[test]
@@ -538,10 +535,7 @@ mod tests {
 
         if let Some(Commands::Run { tasks, task_args, recursive, .. }) = args.commands {
             assert_eq!(tasks, vec!["build", "test"]);
-            assert_eq!(
-                task_args,
-                vec!["--env", "production", "--output-dir", "dist"]
-            );
+            assert_eq!(task_args, vec!["--env", "production", "--output-dir", "dist"]);
             assert!(recursive);
         } else {
             panic!("Expected Run command");

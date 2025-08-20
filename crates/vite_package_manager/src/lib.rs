@@ -168,18 +168,17 @@ impl PackageGraphBuilder {
 
         // Also maintain name to path mapping for dependency resolution
         if !package_name.is_empty()
-            && let Some(existing_path) =
-                self.name_to_path.insert(package_name, package_path)
-            {
-                // Duplicate package name found
-                let existing_id = self.id_and_deps_by_path.get(&existing_path).unwrap().0;
-                let existing_package_info = &self.graph[existing_id];
-                return Err(Error::DuplicatedPackageName {
-                    name: existing_package_info.package_json.name.to_string(),
-                    path1: existing_package_info.path.clone(),
-                    path2: self.graph[id].path.clone(),
-                });
-            }
+            && let Some(existing_path) = self.name_to_path.insert(package_name, package_path)
+        {
+            // Duplicate package name found
+            let existing_id = self.id_and_deps_by_path.get(&existing_path).unwrap().0;
+            let existing_package_info = &self.graph[existing_id];
+            return Err(Error::DuplicatedPackageName {
+                name: existing_package_info.package_json.name.to_string(),
+                path1: existing_package_info.path.clone(),
+                path2: self.graph[id].path.clone(),
+            });
+        }
         Ok(())
     }
 
@@ -194,9 +193,10 @@ impl PackageGraphBuilder {
 
                 // Resolve dependency name to path, then find the node
                 if let Some(dep_path) = self.name_to_path.get(dep_name)
-                    && let Some((dep_id, _)) = self.id_and_deps_by_path.get(dep_path) {
-                        self.graph.add_edge(*id, *dep_id, *dep_type);
-                    }
+                    && let Some((dep_id, _)) = self.id_and_deps_by_path.get(dep_path)
+                {
+                    self.graph.add_edge(*id, *dep_id, *dep_type);
+                }
                 // Silently skip if dependency not found - it might be an external package
             }
         }

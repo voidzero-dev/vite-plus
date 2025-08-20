@@ -122,8 +122,8 @@ pub struct CommandFingerprint {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
     use crate::test_utils::with_unique_cache_path;
+    use std::path::Path;
 
     use petgraph::stable_graph::StableDiGraph;
 
@@ -1238,4 +1238,4 @@ mod tests {
             }
         })
     }
-   }
+}
