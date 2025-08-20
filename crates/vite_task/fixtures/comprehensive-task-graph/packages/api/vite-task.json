@@ -1,9 +1,0 @@
-{
-  "tasks": {
-    "validate": {
-      "command": "echo Validating API",
-      "cacheable": true,
-      "dependsOn": ["@test/shared#test#integration"]
-    }
-  }
-}

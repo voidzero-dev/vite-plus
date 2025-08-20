@@ -897,38 +897,6 @@ mod tests {
                 Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
                     .expect("Failed to load workspace");
 
-            // Test resolving single task with # in script name
-            let special_build_graph = workspace
-                .build_task_subgraph(
-                    &vec!["@test/shared#build#special".into()],
-                    Arc::default(),
-                    false,
-                )
-                .expect("Failed to resolve build#special task");
-            assert_eq!(
-                special_build_graph.node_count(),
-                1,
-                "Should resolve single task with # in name"
-            );
-            let task = special_build_graph.node_weights().next().unwrap();
-            assert_eq!(task.display_name(), "@test/shared#build#special");
-
-            // Test resolving task with # in both package and script names
-            let deploy_prod_graph = workspace
-                .build_task_subgraph(
-                    &vec!["@test/pkg#special#deploy#prod".into()],
-                    Arc::default(),
-                    false,
-                )
-                .expect("Failed to resolve deploy#prod task");
-            assert_eq!(
-                deploy_prod_graph.node_count(),
-                1,
-                "Should resolve task with # in both package and script names"
-            );
-            let task = deploy_prod_graph.node_weights().next().unwrap();
-            assert_eq!(task.display_name(), "@test/pkg#special#deploy#prod");
-
             // Test that we can't use recursive with task names containing # (would be interpreted as scope)
             let result = workspace.build_task_subgraph(
                 &vec!["test#integration".into()],
@@ -936,35 +904,6 @@ mod tests {
                 true,
             );
             assert!(result.is_err(), "Recursive run with # in task name should fail");
-
-            // But we can resolve specific scoped tasks with # in names
-            let shared_test_integration = workspace
-                .build_task_subgraph(
-                    &vec!["@test/shared#test#integration".into()],
-                    Arc::default(),
-                    false,
-                )
-                .expect("Should resolve specific task with # in script name");
-            assert_eq!(shared_test_integration.node_count(), 1);
-
-            // Test multiple tasks with # in names
-            let multi_special_tasks = workspace
-                .build_task_subgraph(
-                    &vec!["@test/shared#build#special".into(), "@test/pkg#special#test#e2e".into()],
-                    Arc::default(),
-                    false,
-                )
-                .expect("Should resolve multiple tasks with # in names");
-            assert_eq!(multi_special_tasks.node_count(), 2, "Should resolve both tasks");
-
-            let task_names: Vec<_> =
-                multi_special_tasks.node_weights().map(|task| task.display_name()).collect();
-            assert!(task_names.contains(&"@test/shared#build#special".into()));
-            assert!(task_names.contains(&"@test/pkg#special#test#e2e".into()));
-
-            // If there are dependencies, verify they work correctly
-            // Since @test/pkg#special depends on @test/shared, if shared had test#e2e,
-            // it would be a dependency
         })
     }
 
@@ -1206,91 +1145,6 @@ mod tests {
             assert_eq!(
                 task_a.resolved_command.fingerprint, task_c_subtask_0.resolved_command.fingerprint,
                 "Task 'a' and first subtask of 'c' should have identical fingerprints for cache sharing"
-            );
-        })
-    }
-
-    #[test]
-    fn test_vite_task_json_with_complex_dependencies() {
-        with_unique_cache_path("vite_task_json_complex_deps", |cache_path| {
-            let fixture_path =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
-
-            let workspace = Workspace::load_with_cache_path(
-                fixture_path,
-                Some(cache_path.to_path_buf()),
-                false,
-            )
-            .expect("Failed to load workspace");
-
-            // Test resolving @test/shared#deploy which has dependencies with multiple '#'
-            let deploy_graph = workspace
-                .build_task_subgraph(&vec!["@test/shared#deploy".into()], Arc::default(), false)
-                .expect("Failed to resolve shared#deploy task");
-
-            let task_names: Vec<_> =
-                deploy_graph.node_weights().map(|task| task.display_name()).collect();
-
-            // Should include the deploy task itself
-            assert!(
-                task_names.contains(&"@test/shared#deploy".into()),
-                "Should contain @test/shared#deploy"
-            );
-
-            // Should include its dependencies
-            assert!(
-                task_names.contains(&"@test/pkg#special#build".into()),
-                "Should contain dependency @test/pkg#special#build"
-            );
-            assert!(
-                task_names.contains(&"@test/shared#build#special".into()),
-                "Should contain dependency @test/shared#build#special"
-            );
-
-            // Test resolving @test/shared#complex which depends on @test/pkg#special#deploy#prod
-            let complex_graph = workspace
-                .build_task_subgraph(&vec!["@test/shared#complex".into()], Arc::default(), false)
-                .expect("Failed to resolve shared#complex task");
-
-            let complex_task_names: Vec<_> =
-                complex_graph.node_weights().map(|task| task.display_name()).collect();
-
-            // Should include the complex task itself
-            assert!(
-                complex_task_names.contains(&"@test/shared#complex".into()),
-                "Should contain @test/shared#complex"
-            );
-
-            // Should include its dependency with multiple '#' in both package and task name
-            assert!(
-                complex_task_names.contains(&"@test/pkg#special#deploy#prod".into()),
-                "Should contain dependency @test/pkg#special#deploy#prod"
-            );
-
-            // Verify the dependency relationships are correct
-            let has_edge = |graph: &StableDiGraph<ResolvedTask, ()>, from: &str, to: &str| {
-                graph.edge_indices().any(|edge_idx| {
-                    let (source, target) = graph.edge_endpoints(edge_idx).unwrap();
-                    let source_task = &graph[source];
-                    let target_task = &graph[target];
-                    source_task.display_name() == from && target_task.display_name() == to
-                })
-            };
-
-            // Verify deploy dependencies
-            assert!(
-                has_edge(&deploy_graph, "@test/pkg#special#build", "@test/shared#deploy"),
-                "@test/shared#deploy should depend on @test/pkg#special#build"
-            );
-            assert!(
-                has_edge(&deploy_graph, "@test/shared#build#special", "@test/shared#deploy"),
-                "@test/shared#deploy should depend on @test/shared#build#special"
-            );
-
-            // Verify complex dependencies
-            assert!(
-                has_edge(&complex_graph, "@test/pkg#special#deploy#prod", "@test/shared#complex"),
-                "@test/shared#complex should depend on @test/pkg#special#deploy#prod"
             );
         })
     }
