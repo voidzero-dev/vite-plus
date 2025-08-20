@@ -327,7 +327,7 @@ mod tests {
         let args =
             Args::try_parse_from(&["vite-plus", "dev", "--", "--watch", "--verbose"]).unwrap();
         assert_eq!(args.task, Some("dev".into()));
-        assert_eq!(args.task_args, vec!["--watch".into(), "--verbose".into()]);
+        assert_eq!(args.task_args, vec!["--watch", "--verbose"]);
         assert!(args.commands.is_none());
         assert!(!args.debug);
     }
