@@ -17,11 +17,13 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+atty = { workspace = true }
 bincode = { workspace = true, features = ["derive"] }
 brush-parser = { workspace = true }
 bstr = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 compact_str = { workspace = true, features = ["serde"] }
+crossterm = { workspace = true }
 dashmap = { workspace = true }
 diff-struct = { workspace = true }
 edit = { workspace = true }

@@ -33,6 +33,7 @@ cargo_common_metadata = "allow"
 
 [workspace.dependencies]
 anyhow = "1.0.98"
+atty = "0.2.14"
 bincode = "2.0.1"
 brush-parser = "0.2.18"
 bstr = "1.12.0"
