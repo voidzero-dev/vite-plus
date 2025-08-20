@@ -438,11 +438,11 @@ mod tests {
 
                 // This edge should exist with topological=true but not with topological=false
                 assert!(
-                    has_edge(&graph_true, "@test/utils#build", "@test/app#build"),
+                    has_edge(&graph_true, "@test/app#build", "@test/utils#build"),
                     "Implicit edge should exist with topological=true"
                 );
                 assert!(
-                    !has_edge(&graph_false, "@test/utils#build", "@test/app#build"),
+                    !has_edge(&graph_false, "@test/app#build", "@test/utils#build"),
                     "Implicit edge should NOT exist with topological=false"
                 );
             });
