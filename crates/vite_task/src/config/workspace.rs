@@ -436,48 +436,8 @@ impl Workspace {
     fn add_topological_dependencies(
         task_graph_builder: &mut TaskGraphBuilder,
         package_graph: &Graph<PackageInfo, DependencyType>,
+        package_name_to_node: &HashMap<String, NodeIndex>,
     ) {
-        let package_path_to_node_index = package_graph
-            .node_references()
-            .map(|(node_index, package)| (package.path.as_str(), node_index))
-            .collect::<HashMap<&str, NodeIndex>>();
-
-        // Collect the first task for each task group
-        let mut task_group_id_to_first_subcommand_index =
-            HashMap::<TaskGroupId, Option<usize>>::new();
-        for task_id in task_graph_builder.resolved_tasks_and_dep_ids_by_id.keys() {
-            // subcommand_index of first task in a task group is either Some(0) or None
-            // `Some(0)` takes precedence over `None`
-            match task_id.subcommand_index {
-                Some(0) => {
-                    task_group_id_to_first_subcommand_index
-                        .insert(task_id.task_group_id.clone(), Some(0));
-                }
-                None => {
-                    task_group_id_to_first_subcommand_index
-                        .entry(task_id.task_group_id.clone())
-                        .or_insert(None);
-                },
-                _ => {},
-            }
-        }
-
-        // For each first task, find the nearest package dependencies with the same task name
-        for (task_group_id, first_subcommand_index) in task_group_id_to_first_subcommand_index {
-            let task_id = TaskId {
-                task_group_id: task_group_id,
-                subcommand_index: first_subcommand_index,
-            };
-
-            let package_node = package_path_to_node_index[task_id.task_group_id.package_path.as_str()];
-
-            // For each dependent, go up until a package with the same task name
-            for dependent_package_node_index in package_graph.neighbors_directed(package_node, Direction::Incoming) {
-                let mut current_ancestor_package_node_index = dependent_package_node_index;
-                
-            }
-        }
-
         // Collect all tasks grouped by package and task name
         let mut tasks_by_package_and_name: HashMap<(String, String), Vec<(TaskId, usize)>> =
             HashMap::new();
@@ -486,7 +446,7 @@ impl Workspace {
         for task_id in task_graph_builder.resolved_tasks_and_dep_ids_by_id.keys() {
             // Extract package name and task name from the task_id
             let package_name = task_id.package_name();
-            let task_name = task_id.task_group_name();
+            let task_name = task_id.task_name();
 
             // Determine the order/index for subtasks
             let order = match task_id.subcommand_index() {
