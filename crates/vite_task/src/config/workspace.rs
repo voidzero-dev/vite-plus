@@ -293,6 +293,11 @@ impl Workspace {
 
             // Add to filtered graph
             vacant_entry.insert(updated_task);
+
+            // Add dependencies to the queue
+            for dependency_task_node_index in self.task_graph.neighbors(task_node_index) {
+                remaining_task_node_indexes.insert(dependency_task_node_index);
+            }
         }
         // Map from the full task graph so that the node indexes are unchanged.
         // The consistency of node indexes between the full graph and the subgraph will make it easier to render the subgraph in UI.
@@ -313,15 +318,13 @@ impl Workspace {
     ) -> Result<(), Error> {
         for (package_node_index, task_json) in packages_with_task_jsons {
             let package_info = &package_graph[*package_node_index];
-            let package_name = package_info.package_json.name.as_str();
-            let package_path = package_info.path.as_str();
             // Load tasks from vite-task.json
             if let Some(task_json) = task_json {
-                for (task_name, task_config_json) in &task_json.tasks {
+                for (task_group_name, task_config_json) in &task_json.tasks {
                     let resolved_task = Self::resolve_task(
                         task_config_json.config.clone(),
                         package_info,
-                        task_name.clone(),
+                        task_group_name.clone(),
                         None,
                         Arc::default(),
                         base_dir,

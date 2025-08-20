@@ -62,15 +62,15 @@ impl TaskGraphBuilder {
 
         // Add edges from explicit dependencies
         for (task_id, (_, deps)) in &self.resolved_tasks_and_dep_ids_by_id {
+            let current_task_index = node_indices_by_task_ids[task_id];
             for dep in deps {
-                let Some(&source_idx) = node_indices_by_task_ids.get(dep) else {
+                let Some(&dep_index) = node_indices_by_task_ids.get(dep) else {
                     return Err(Error::TaskDependencyNotFound {
                         name: dep.task_group_id.task_group_name.to_string(),
                         package_dir: dep.task_group_id.package_path.to_string(),
                     });
                 };
-                let target_idx = node_indices_by_task_ids[task_id];
-                task_graph.add_edge(source_idx, target_idx, ());
+                task_graph.add_edge(current_task_index, dep_index, ());
             }
         }
 
