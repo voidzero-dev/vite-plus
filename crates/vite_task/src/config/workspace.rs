@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashMap, HashSet, hash_map::Entry},
     fs::File,
     io::BufReader,
     path::{Path, PathBuf},
@@ -11,12 +11,15 @@ use crate::{
     cache::TaskCache,
     cmd::try_parse_as_and_list,
     collections::{HashMap, HashSet},
+    config::{TaskGroupId, name::TaskName},
     fs::CachedFileSystem,
     str::Str,
 };
 use anyhow::Context;
 
-use petgraph::{Graph, graph::NodeIndex, stable_graph::StableDiGraph, visit::EdgeRef};
+use petgraph::{
+    graph::NodeIndex, stable_graph::StableDiGraph, visit::{EdgeRef, IntoNodeReferences}, Direction, Graph
+};
 use vite_package_manager::{DependencyType, PackageInfo, PackageJson};
 
 use super::{
@@ -47,7 +50,6 @@ impl Workspace {
         topological_run: bool,
     ) -> Result<Self, Error> {
         let package_graph = vite_package_manager::get_package_graph(&dir)?;
-
         // Load vite-task.json files for all packages
         let packages_with_task_jsons = Self::load_vite_task_jsons(&package_graph, &dir)?;
 
@@ -81,26 +83,28 @@ impl Workspace {
         let mut task_graph_builder = TaskGraphBuilder::default();
 
         // Create a map from package name to node index for efficient lookups
-        let package_name_to_node: HashMap<String, NodeIndex> = package_graph
-            .node_indices()
-            .map(|idx| (package_graph[idx].package_json.name.to_string(), idx))
-            .collect();
+        // The values are Vecs because multiple packages can have the same name.
+        let mut package_path_to_node =
+            HashMap::<String, Vec<NodeIndex>>::with_capacity(package_graph.node_count());
+        for (package_node_index, package) in package_graph.node_references() {
+            package_path_to_node
+                .entry(package.package_json.name.clone().into())
+                .or_default()
+                .push(package_node_index);
+        }
 
         // Load all tasks into the builder
         Self::load_tasks_into_builder(
             &packages_with_task_jsons,
             &package_graph,
+            &package_path_to_node,
             &mut task_graph_builder,
             &dir,
         )?;
 
         // Add topological dependencies if enabled
         if topological_run {
-            Self::add_topological_dependencies(
-                &mut task_graph_builder,
-                &package_graph,
-                &package_name_to_node,
-            );
+            Self::add_topological_dependencies(&mut task_graph_builder, &package_graph);
         }
 
         // Build the complete task graph with all dependencies
@@ -122,46 +126,8 @@ impl Workspace {
     }
 
     /// Set the `topological_run` flag and rebuild the task graph if necessary
-    pub fn set_topological(&mut self, topological_run: bool) -> Result<(), Error> {
-        if self.topological_run == topological_run {
-            // No change needed
-            return Ok(());
-        }
-
-        self.topological_run = topological_run;
-
-        // Rebuild the task graph with the new topological setting
-        let mut task_graph_builder = TaskGraphBuilder::default();
-        let package_name_to_node: HashMap<String, NodeIndex> = self
-            .package_graph
-            .node_indices()
-            .map(|idx| (self.package_graph[idx].package_json.name.to_string(), idx))
-            .collect();
-
-        // Load vite-task.json files for all packages
-        let packages_with_task_jsons = Self::load_vite_task_jsons(&self.package_graph, &self.dir)?;
-
-        // Load all tasks into the builder
-        Self::load_tasks_into_builder(
-            &packages_with_task_jsons,
-            &self.package_graph,
-            &mut task_graph_builder,
-            &self.dir,
-        )?;
-
-        // Add topological dependencies if enabled
-        if topological_run {
-            Self::add_topological_dependencies(
-                &mut task_graph_builder,
-                &self.package_graph,
-                &package_name_to_node,
-            );
-        }
-
-        // Rebuild the complete task graph with the new topological setting
-        self.task_graph = task_graph_builder.build_complete_graph()?;
-
-        Ok(())
+    pub fn set_topological(&mut self, _topological_run: bool) -> Result<(), Error> {
+        todo!()
     }
 
     pub async fn unload(self) -> Result<(), Error> {
@@ -173,7 +139,8 @@ impl Workspace {
     fn resolve_task(
         user_task_config: impl Into<TaskConfig>,
         package_info: &PackageInfo,
-        id: TaskId,
+        name: Str,
+        subcommand_index: Option<usize>,
         task_args: Arc<[Str]>,
         base_dir: &Path,
     ) -> Result<ResolvedTask, Error> {
@@ -183,10 +150,19 @@ impl Workspace {
         };
 
         let resolved_command = resolved_config.resolve_command(base_dir, &task_args)?;
-        Ok(ResolvedTask { id, args: task_args, resolved_command, resolved_config })
+        Ok(ResolvedTask {
+            name: TaskName {
+                task_group_name: name,
+                package_name: package_info.package_json.name.clone().into(),
+                subcommand_index,
+            },
+            args: task_args,
+            resolved_command,
+            resolved_config,
+        })
     }
 
-    /// Resolves tasks and constructs a dependency graph of subtasks from the tasks that need to be executed.
+    /// Constructs a dependency graph of subtasks from the tasks that need to be executed.
     ///
     /// ## Task Resolution Process
     ///
@@ -237,124 +213,91 @@ impl Workspace {
     /// - FIRST subtask (or None) depends on LAST subtask of dependencies
     /// - Dependent packages depend on THIS package's LAST subtask
     #[tracing::instrument(skip(self))]
-    pub fn resolve_tasks(
+    pub fn build_task_subgraph(
         &self,
-        task_names: &[Str],
+        task_requests: &[Str],
         task_args: Arc<[Str]>,
         recursive_run: bool,
     ) -> Result<StableDiGraph<ResolvedTask, ()>, Error> {
         if recursive_run {
-            for task in task_names {
+            for task in task_requests {
                 if task.contains('#') {
                     return Err(Error::RecursiveRunWithScope(task.to_string()));
                 }
             }
         }
 
-        let mut remaining_task_ids: BTreeSet<TaskId> = BTreeSet::new();
+        let mut remaining_task_node_indexes: BTreeSet<NodeIndex> = BTreeSet::new();
 
         if recursive_run {
             // When recursive, find all packages that have the requested tasks
-            for task_name in task_names {
+            // TODO(feat): only search the dependencies of the cwd package.
+            for task_request in task_requests {
                 for node_index in self.package_graph.node_indices() {
                     let package = &self.package_graph[node_index];
-                    let task_id_to_resolve = TaskId::new(
-                        (package.package_json.name.as_str()).into(),
-                        task_name.clone(),
-                        (package.path.as_str()).into(),
-                        None,
-                    );
-
-                    // Check if this task exists in the pre-built graph
-                    if self.task_graph.node_weights().any(|task| task.id == task_id_to_resolve) {
-                        remaining_task_ids.insert(task_id_to_resolve);
+                    let task_id_to_match = TaskId {
+                        task_group_id: TaskGroupId {
+                            task_group_name: task_request.clone(),
+                            package_path: package.path.clone().into(),
+                        },
+                        // Starts with the main command only. The subcommands before the main command will be included later as dependencies.
+                        subcommand_index: None,
+                    };
+                    for (task_node_index, task) in self.task_graph.node_references() {
+                        if task.id() == task_id_to_match {
+                            remaining_task_node_indexes.insert(task_node_index);
+                        }
                     }
                 }
             }
         } else {
-            // For non-recursive mode, try to find tasks by their full name in the pre-built graph
-            // This handles cases where package or task names contain '#'
-            for name in task_names {
-                // Try to find all tasks with this exact full name (including subtasks)
-                let matching_tasks: Vec<_> = self
-                    .task_graph
-                    .node_weights()
-                    .filter(|t| t.id.full_name() == name.as_str())
-                    .map(|t| t.id.clone())
-                    .collect();
-
-                if matching_tasks.is_empty() {
-                    return Err(Error::TaskNotFound(name.to_string()));
+            // For non-recursive mode, find the task in the full task graph
+            for task_request in task_requests {
+                let mut has_matched_task = false;
+                for (task_node_index, task) in self.task_graph.node_references() {
+                    if task.matches(task_request) {
+                        has_matched_task = true;
+                        remaining_task_node_indexes.insert(task_node_index);
+                    }
                 }
-                // Found exact matches - add all of them (handles subtasks)
-                for task_id in matching_tasks {
-                    remaining_task_ids.insert(task_id);
+                if !has_matched_task {
+                    return Err(Error::TaskNotFound(task_request.to_string()));
                 }
             }
         }
 
-        // Build a filtered graph from the pre-built task graph
-        let mut filtered_graph = StableDiGraph::<ResolvedTask, ()>::new();
-        let mut node_indices_map = HashMap::<TaskId, NodeIndex>::new();
-        let mut processed_tasks = HashSet::new();
+        // Build a filtered graph from the pre-built task graph.
 
-        // Map from original graph node indices to filtered graph node indices
-        let mut original_to_filtered = HashMap::<NodeIndex, NodeIndex>::new();
+        // Map from node indexes (in the full graph and will be used in the subgraph) to tasks updated with additional args
+        let mut filtered_tasks_by_node_index = HashMap::<NodeIndex, ResolvedTask>::new();
 
-        while let Some(task_id) = remaining_task_ids.pop_first() {
-            if processed_tasks.contains(&task_id) {
+        while let Some(task_node_index) = remaining_task_node_indexes.pop_first() {
+            let Entry::Vacant(vacant_entry) = filtered_tasks_by_node_index.entry(task_node_index)
+            else {
                 continue;
-            }
-            processed_tasks.insert(task_id.clone());
-
-            // Find the task in the pre-built graph
-            let original_node_idx = self
-                .task_graph
-                .node_indices()
-                .find(|&idx| self.task_graph[idx].id == task_id)
-                .with_context(|| {
-                    format!("Task '{}' not found in pre-built graph", task_id.full_name())
-                })?;
-
-            let task = &self.task_graph[original_node_idx];
-
-            // Update task args if provided
-            let updated_task = if !task_args.is_empty() && task.args.is_empty() {
-                let mut updated = task.clone();
-                updated.args = task_args.clone();
-                updated.resolved_command =
-                    updated.resolved_config.resolve_command(&self.dir, &task_args)?;
-                updated
-            } else {
-                task.clone()
             };
 
+            let mut updated_task = self.task_graph[task_node_index].clone();
+
+            // Update task args if provided
+            assert!(
+                updated_task.args.is_empty(),
+                "Pre-built tasks in the full task graph should not contain additional args"
+            );
+            if !task_args.is_empty() {
+                updated_task.resolved_command =
+                    updated_task.resolved_config.resolve_command(&self.dir, &task_args)?;
+            }
+
             // Add to filtered graph
-            let filtered_idx = filtered_graph.add_node(updated_task);
-            node_indices_map.insert(task_id.clone(), filtered_idx);
-            original_to_filtered.insert(original_node_idx, filtered_idx);
-
-            // Add dependencies from the pre-built graph
-            for edge in
-                self.task_graph.edges_directed(original_node_idx, petgraph::Direction::Incoming)
-            {
-                let dep_task = &self.task_graph[edge.source()];
-                remaining_task_ids.insert(dep_task.id.clone());
-            }
-
-            // The dependencies should already be in the pre-built graph,
-            // so we don't need to add them here anymore
+            vacant_entry.insert(updated_task);
         }
-
-        // Copy edges from the original graph to the filtered graph
-        for (&original_source, &filtered_source) in &original_to_filtered {
-            for edge in self.task_graph.edges(original_source) {
-                if let Some(&filtered_target) = original_to_filtered.get(&edge.target()) {
-                    filtered_graph.add_edge(filtered_source, filtered_target, ());
-                }
-            }
-        }
-
+        // Map from the full task graph so that the node indexes are unchanged.
+        // The consistency of node indexes between the full graph and the subgraph will make it easier to render the subgraph in UI.
+        let filtered_graph = self.task_graph.filter_map(
+            |node_index, _| filtered_tasks_by_node_index.remove(&node_index),
+            |_, _| Some(()), // All edges between filtered tasks are preserved.
+        );
         Ok(filtered_graph)
     }
 
@@ -362,90 +305,87 @@ impl Workspace {
     fn load_tasks_into_builder(
         packages_with_task_jsons: &[(NodeIndex, Option<ViteTaskJson>)],
         package_graph: &Graph<PackageInfo, DependencyType>,
+        package_name_to_node: &HashMap<String, Vec<NodeIndex>>,
         task_graph_builder: &mut TaskGraphBuilder,
         base_dir: &Path,
     ) -> Result<(), Error> {
-        for (node_index, task_json) in packages_with_task_jsons {
-            let package_info = &package_graph[*node_index];
+        for (package_node_index, task_json) in packages_with_task_jsons {
+            let package_info = &package_graph[*package_node_index];
             let package_name = package_info.package_json.name.as_str();
             let package_path = package_info.path.as_str();
             // Load tasks from vite-task.json
             if let Some(task_json) = task_json {
                 for (task_name, task_config_json) in &task_json.tasks {
-                    let id = TaskId::new(
-                        package_name.into(),
-                        task_name.clone(),
-                        package_path.into(),
-                        None,
-                    );
                     let resolved_task = Self::resolve_task(
                         task_config_json.config.clone(),
                         package_info,
-                        id.clone(),
+                        task_name.clone(),
+                        None,
                         Arc::default(),
                         base_dir,
                     )?;
-                    let deps: Vec<TaskId> = task_config_json
+
+                    // Parsing each dependency request (pkg#taskname or taskname) into TaskId.
+                    let deps: HashSet<TaskId> = task_config_json
                         .depends_on
                         .iter()
                         .cloned()
-                        .map(|name| {
+                        .map(|task_request| {
+                            let sharp_pos = task_request.find('#');
                             // contains multiple '#'
-                            if name.rfind('#') != name.find('#') {
-                                let mut current_task_id: Option<TaskId> = None;
-                                for (node_index, _) in packages_with_task_jsons {
-                                    let package_info = &package_graph[*node_index];
-                                    let package_name = package_info.package_json.name.as_str();
-                                    if name.starts_with(package_name) {
-                                        // @scope/a#b has a c task conflict with @scope/a has a 'b#c' task
-                                        if let Some(existing_task_id) = current_task_id {
-                                            return Err(Error::TaskNameConflict {
-                                                package_name_a: existing_task_id
-                                                    .package_name()
-                                                    .unwrap_or_default()
-                                                    .to_string(),
-                                                task_name_a: existing_task_id
-                                                    .task_name()
-                                                    .to_string(),
-                                                package_name_b: package_name.to_string(),
-                                                task_name_b: name[package_name.len() + 1..]
-                                                    .to_string(),
-                                            });
-                                        }
-                                        current_task_id = Some(TaskId::new(
-                                            package_name.into(),
-                                            name[package_name.len() + 1..].into(),
-                                            package_info.path.as_str().into(),
-                                            None,
-                                        ));
-                                    }
-                                }
-                                current_task_id.ok_or_else(|| Error::TaskNotFound(name.to_string()))
+                            if sharp_pos != task_request.rfind('#') {
+                                return Err(Error::AmbiguousTaskRequest {
+                                    task_request: task_request.to_string(),
+                                });
                             } else {
-                                let (package_name, task_name): (Str, Str) =
-                                    if let Some(pos) = name.find('#') {
-                                        (name[..pos].into(), name[pos + 1..].into())
+                                let (dep_package_node_index, dep_task_name): (NodeIndex, Str) =
+                                    if let Some(shared_pos) = sharp_pos {
+                                        let package_name = &task_request[..shared_pos];
+                                        let package_node_indexes =
+                                            package_name_to_node.get(package_name).ok_or_else(
+                                                || Error::TaskNotFound(task_request.to_string()),
+                                            )?;
+                                        match package_node_indexes.as_slice() {
+                                            [] => {
+                                                return Err(Error::PackageNotFound(
+                                                    package_name.to_string(),
+                                                ));
+                                            }
+                                            [package_node_index] => (
+                                                *package_node_index,
+                                                task_request[shared_pos + 1..].into(),
+                                            ),
+                                            // Found more than one package with the same name
+                                            [package_node_index1, package_node_index2, ..] => {
+                                                return Err(Error::DuplicatedPackageName {
+                                                    name: package_name.to_string(),
+                                                    path1: package_graph[*package_node_index1]
+                                                        .path
+                                                        .clone(),
+                                                    path2: package_graph[*package_node_index2]
+                                                        .path
+                                                        .clone(),
+                                                });
+                                            }
+                                        }
                                     } else {
                                         // No '#' means it's a local task reference within the same package
-                                        (package_name.into(), name.clone())
+                                        (*package_node_index, task_request.clone())
                                     };
 
-                                // Restrict: Empty package tasks cannot be depended on by other packages
-                                // But allow self-references within the empty package itself
-                                // package_info is the current package, package_name is the target package being referenced
-                                if package_name.is_empty()
-                                    && !package_info.package_json.name.is_empty()
-                                {
-                                    return Err(Error::InvalidTaskName(format!(
-                                        "Cannot depend on tasks from packages with empty names: {}",
-                                        name
-                                    )));
-                                }
-
-                                Ok(TaskId::new(package_name, task_name, package_path.into(), None))
+                                Ok(TaskId {
+                                    task_group_id: TaskGroupId {
+                                        task_group_name: dep_task_name,
+                                        package_path: package_graph[dep_package_node_index]
+                                            .path
+                                            .clone()
+                                            .into(),
+                                    },
+                                    subcommand_index: None, // Always points to the main task
+                                })
                             }
                         })
-                        .collect::<Result<Vec<_>, Error>>()?;
+                        .collect::<Result<HashSet<_>, Error>>()?;
 
                     task_graph_builder.add_task_with_deps(resolved_task, deps)?;
                 }
@@ -459,28 +399,20 @@ impl Workspace {
                     let and_list_len = and_list.len();
                     for (index, command) in and_list.into_iter().enumerate() {
                         let is_last = index + 1 == and_list_len;
-                        let task_id = TaskId::new(
-                            package_name.into(),
-                            script_name.into(),
-                            package_path.into(),
-                            if is_last { None } else { Some(index) },
-                        );
+
                         let resolved_task = Self::resolve_task(
                             TaskCommand::Parsed(command),
                             package_info,
-                            task_id.clone(),
+                            script_name.into(),
+                            if is_last { None } else { Some(index) },
                             Arc::default(),
                             base_dir,
                         )?;
+                        let task_id = resolved_task.id();
                         let deps = if let Some(dep_index) = index.checked_sub(1) {
-                            vec![TaskId::new(
-                                package_name.into(),
-                                script_name.into(),
-                                package_path.into(),
-                                Some(dep_index),
-                            )]
+                            HashSet::from([TaskId { subcommand_index: Some(dep_index), ..task_id }])
                         } else {
-                            vec![]
+                            HashSet::new()
                         };
                         task_graph_builder.add_task_with_deps(resolved_task, deps)?;
                     }
@@ -488,16 +420,12 @@ impl Workspace {
                     let resolved_task = Self::resolve_task(
                         TaskCommand::ShellScript(script.as_str().into()),
                         package_info,
-                        TaskId::new(
-                            package_name.into(),
-                            script_name.into(),
-                            package_path.into(),
-                            None,
-                        ),
+                        script_name.into(),
+                        None,
                         Arc::default(),
                         base_dir,
                     )?;
-                    task_graph_builder.add_task_with_deps(resolved_task, vec![])?;
+                    task_graph_builder.add_task_with_deps(resolved_task, HashSet::new())?;
                 }
             }
         }
@@ -551,7 +479,7 @@ impl Workspace {
                     let transitive_deps = find_transitive_dependencies(
                         package_name,
                         package_graph,
-                        package_name_to_node,
+                        package_path_to_node,
                     );
 
                     // For each dependency package, find its tasks with the same name

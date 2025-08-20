@@ -153,7 +153,7 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
         }
     };
 
-    let task_graph = workspace.resolve_tasks(tasks, task_args.clone(), recursive_run)?;
+    let task_graph = workspace.build_task_subgraph(tasks, task_args.clone(), recursive_run)?;
 
     let debug = resolve_bool_flag(args.debug, args.no_debug);
     if debug {

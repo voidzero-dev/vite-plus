@@ -61,20 +61,24 @@ pub enum Error {
     #[error("The package.json name is empty at {0:?}/package.json")]
     EmptyPackageName(PathBuf),
 
-    #[error("Package not found in graph, index at: {0:?}")]
-    PackageNotFound(NodeIndex),
+    #[error("Package {0} not found in workspace")]
+    PackageNotFound(String),
 
     #[error("Task not found in workspace: {0}")]
     TaskNotFound(String),
 
+
+    #[error("Dependency Task '{name}' not found in package located at {package_dir}")]
+    TaskDependencyNotFound {
+        name: String,
+        package_dir: String,
+    },
+
     #[error(
-        "Task name conflict: {task_name_a} in {package_name_a} and {task_name_b} in {package_name_b}"
+        "{task_request} should not contain multiple '#'"
     )]
-    TaskNameConflict {
-        package_name_a: String,
-        task_name_a: String,
-        package_name_b: String,
-        task_name_b: String,
+    AmbiguousTaskRequest {
+        task_request: String,
     },
 
     #[error("Invalid task name: {0}, expected format: 'package#task'")]

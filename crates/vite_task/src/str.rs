@@ -119,9 +119,15 @@ impl<'a> From<&'a str> for Str {
     }
 }
 
-impl<'a> From<String> for Str {
+impl From<String> for Str {
     fn from(value: String) -> Self {
         Self(value.into())
+    }
+}
+
+impl From<CompactString> for Str {
+    fn from(value: CompactString) -> Self {
+        Self(value)
     }
 }
 
