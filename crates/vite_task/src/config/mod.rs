@@ -538,8 +538,8 @@ mod tests {
 
             // Verify some cross-package dependencies exist
             assert!(
-                has_edge("@test/core#build", "@test/utils#build"),
-                "Core should have edge to Utils (Utils depends on Core)"
+                has_edge("@test/utils#build(subcommand 0)", "@test/core#build"),
+                "utils should have edge to core"
             );
         })
     }
