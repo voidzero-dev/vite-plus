@@ -66,7 +66,7 @@ impl ExecutionPlan {
     #[tracing::instrument(skip(self, workspace))]
     pub async fn execute(self, workspace: &mut Workspace) -> anyhow::Result<()> {
         for step in self.steps {
-            tracing::debug!("Executing task {}", &step.id);
+            tracing::debug!("Executing task {}", step.display_name());
 
             let command = step.resolved_command.fingerprint.command.clone();
 

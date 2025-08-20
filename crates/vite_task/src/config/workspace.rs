@@ -10,7 +10,6 @@ use crate::{
     Error,
     cache::TaskCache,
     cmd::try_parse_as_and_list,
-    collections::{HashMap, HashSet},
     config::{TaskGroupId, name::TaskName},
     fs::CachedFileSystem,
     str::Str,
@@ -18,7 +17,10 @@ use crate::{
 use anyhow::Context;
 
 use petgraph::{
-    graph::NodeIndex, stable_graph::StableDiGraph, visit::{EdgeRef, IntoNodeReferences}, Direction, Graph
+    Direction, Graph,
+    graph::NodeIndex,
+    stable_graph::StableDiGraph,
+    visit::{EdgeRef, IntoNodeReferences},
 };
 use vite_package_manager::{DependencyType, PackageInfo, PackageJson};
 
@@ -436,58 +438,61 @@ impl Workspace {
     fn add_topological_dependencies(
         task_graph_builder: &mut TaskGraphBuilder,
         package_graph: &Graph<PackageInfo, DependencyType>,
-        package_name_to_node: &HashMap<String, NodeIndex>,
     ) {
-        // Collect all tasks grouped by package and task name
-        let mut tasks_by_package_and_name: HashMap<(String, String), Vec<(TaskId, usize)>> =
+        let package_path_to_node_index = package_graph
+            .node_references()
+            .map(|(node_index, package)| (package.path.as_str(), node_index))
+            .collect::<HashMap<&str, NodeIndex>>();
+
+        // Collect all tasks grouped by task group id
+        let mut task_ids_by_task_group_id: HashMap<TaskGroupId, Vec<(TaskId, usize)>> =
             HashMap::new();
 
         // Iterate through all tasks in the graph builder to collect them
         for task_id in task_graph_builder.resolved_tasks_and_dep_ids_by_id.keys() {
             // Extract package name and task name from the task_id
-            let package_name = task_id.package_name();
-            let task_name = task_id.task_name();
 
             // Determine the order/index for subtasks
-            let order = match task_id.subcommand_index() {
+            let order = match task_id.subcommand_index {
                 None => usize::MAX, // Use MAX for the last/main task
                 Some(idx) => idx,
             };
 
-            tasks_by_package_and_name
-                .entry((package_name.unwrap_or_default().to_string(), task_name.to_string()))
+            task_ids_by_task_group_id
+                .entry(task_id.task_group_id.clone())
                 .or_default()
                 .push((task_id.clone(), order));
         }
 
         // Sort tasks within each group by their order
-        for tasks in tasks_by_package_and_name.values_mut() {
+        for tasks in task_ids_by_task_group_id.values_mut() {
             tasks.sort_by_key(|(_, order)| *order);
         }
 
         // Add topological dependencies
-        for ((package_name, task_name), current_tasks) in &tasks_by_package_and_name {
+        for (task_group_id, current_tasks) in &task_ids_by_task_group_id {
+            let package_path = task_group_id.package_path.as_str();
+            let task_group_name = &task_group_id.task_group_name;
             // Find the FIRST subtask of the current package (or the only task if no subtasks)
             let first_current_task = current_tasks.first().map(|(task_id, _)| task_id);
 
             if let Some(first_task) = first_current_task {
                 // Only add dependencies to the FIRST subtask
-                if first_task.subcommand_index().is_none()
-                    || first_task.subcommand_index() == Some(0)
-                {
+                if first_task.subcommand_index.is_none() || first_task.subcommand_index == Some(0) {
                     // Find all transitive dependencies of this package
                     let transitive_deps = find_transitive_dependencies(
-                        package_name,
+                        package_path,
                         package_graph,
-                        package_path_to_node,
+                        &package_path_to_node_index,
                     );
 
                     // For each dependency package, find its tasks with the same name
                     let mut additional_deps = Vec::new();
-                    for dep_pkg_name in transitive_deps {
-                        if let Some(dep_tasks) =
-                            tasks_by_package_and_name.get(&(dep_pkg_name, task_name.clone()))
-                        {
+                    for dep_package_path in transitive_deps {
+                        if let Some(dep_tasks) = task_ids_by_task_group_id.get(&TaskGroupId {
+                            task_group_name: task_group_name.clone(),
+                            package_path: dep_package_path,
+                        }) {
                             // Find the LAST subtask of the dependency (highest order)
                             if let Some((last_dep_task, _)) = dep_tasks.last() {
                                 additional_deps.push(last_dep_task.clone());
@@ -536,19 +541,19 @@ impl Workspace {
     }
 }
 
-/// Find all transitive dependencies of a package
+/// Find paths of all transitive dependencies of a package
 fn find_transitive_dependencies(
-    package_name: &str,
+    package_path: &str,
     package_graph: &Graph<PackageInfo, DependencyType>,
-    package_name_to_node: &HashMap<String, NodeIndex>,
-) -> Vec<String> {
+    package_path_to_node_index: &HashMap<&str, NodeIndex>,
+) -> Vec<Str> {
     let mut result = Vec::new();
     let mut visited = HashSet::new();
 
     find_transitive_dependencies_recursive(
-        package_name,
+        package_path,
         package_graph,
-        package_name_to_node,
+        package_path_to_node_index,
         &mut visited,
         &mut result,
     );
@@ -556,25 +561,25 @@ fn find_transitive_dependencies(
     result
 }
 
-fn find_transitive_dependencies_recursive(
-    package_name: &str,
-    package_graph: &Graph<PackageInfo, DependencyType>,
-    package_name_to_node: &HashMap<String, NodeIndex>,
-    visited: &mut HashSet<String>,
-    result: &mut Vec<String>,
+fn find_transitive_dependencies_recursive<'a>(
+    package_path: &'a str,
+    package_graph: &'a Graph<PackageInfo, DependencyType>,
+    package_name_to_node: &HashMap<&'a str, NodeIndex>,
+    visited: &mut HashSet<&'a str>,
+    result: &mut Vec<Str>,
 ) {
-    if visited.contains(package_name) {
+    if visited.contains(package_path) {
         return;
     }
-    visited.insert(package_name.to_string());
+    visited.insert(package_path);
 
     // Find the package in the graph
-    if let Some(&node_idx) = package_name_to_node.get(package_name) {
+    if let Some(&node_idx) = package_name_to_node.get(package_path) {
         let package = &package_graph[node_idx];
 
         // Check all dependencies from package.json
         for dep_name in package.package_json.dependencies.keys() {
-            result.push(dep_name.to_string());
+            result.push(dep_name.as_str().into());
 
             // Continue searching transitively
             find_transitive_dependencies_recursive(
