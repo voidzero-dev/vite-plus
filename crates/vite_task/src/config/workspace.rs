@@ -127,11 +127,6 @@ impl Workspace {
         &self.task_cache
     }
 
-    /// Set the `topological_run` flag and rebuild the task graph if necessary
-    pub fn set_topological(&mut self, _topological_run: bool) -> Result<(), Error> {
-        todo!()
-    }
-
     pub async fn unload(self) -> Result<(), Error> {
         tracing::debug!("Saving task cache {}", self.dir.display());
         self.task_cache.save().await?;

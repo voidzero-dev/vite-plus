@@ -207,59 +207,6 @@ mod tests {
     }
 
     #[test]
-    fn test_set_topological() {
-        with_unique_cache_path("set_topological", |cache_path| {
-            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("fixtures/recursive-topological-workspace");
-
-            let mut workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace");
-
-            // Initially loaded with topological=true
-            assert_eq!(workspace.topological_run, true);
-
-            // Check that implicit dependencies exist
-            let has_edge_in_workspace = |workspace: &Workspace, from: &str, to: &str| -> bool {
-                workspace.task_graph.edge_indices().any(|edge_idx| {
-                    let (source, target) = workspace.task_graph.edge_endpoints(edge_idx).unwrap();
-                    workspace.task_graph[source].display_name() == from
-                        && workspace.task_graph[target].display_name() == to
-                })
-            };
-
-            assert!(
-                has_edge_in_workspace(&workspace, "@test/core#build", "@test/utils#build"),
-                "Initially, implicit edge should exist"
-            );
-
-            // Toggle to false
-            workspace.set_topological(false).expect("Failed to set topological to false");
-            assert_eq!(workspace.topological_run, false);
-
-            // Verify the task graph was rebuilt without implicit dependencies
-            assert!(
-                !has_edge_in_workspace(&workspace, "@test/core#build", "@test/utils#build"),
-                "After setting topological=false, implicit edge should be removed"
-            );
-
-            // Toggle back to true
-            workspace.set_topological(true).expect("Failed to set topological to true");
-            assert_eq!(workspace.topological_run, true);
-
-            // Verify implicit dependencies are restored
-            assert!(
-                has_edge_in_workspace(&workspace, "@test/core#build", "@test/utils#build"),
-                "After setting topological=true again, implicit edge should be restored"
-            );
-
-            // Test no-op case
-            workspace.set_topological(true).expect("Setting same value should succeed");
-            assert_eq!(workspace.topological_run, true);
-        });
-    }
-
-    #[test]
     fn test_topological_run_false_no_implicit_deps() {
         with_unique_cache_path("topological_run_false", |cache_path| {
             let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -926,77 +873,77 @@ mod tests {
             // App internal deps (5 commands => indices 0, 1, 2, 3, None)
             assert!(has_full_edge(
                 &app_build_graph,
+                "@test/app#build(subcommand 1)",
                 "@test/app#build(subcommand 0)",
-                "@test/app#build(subcommand 1)",
-            ));
-            assert!(has_full_edge(
-                &app_build_graph,
-                "@test/app#build(subcommand 1)",
-                "@test/app#build(subcommand 2)",
             ));
             assert!(has_full_edge(
                 &app_build_graph,
                 "@test/app#build(subcommand 2)",
-                "@test/app#build(subcommand 3)",
+                "@test/app#build(subcommand 1)",
             ));
             assert!(has_full_edge(
                 &app_build_graph,
                 "@test/app#build(subcommand 3)",
+                "@test/app#build(subcommand 2)",
+            ));
+            assert!(has_full_edge(
+                &app_build_graph,
                 "@test/app#build",
+                "@test/app#build(subcommand 3)",
             ));
 
             // API internal deps (4 commands => indices 0, 1, 2, None)
             assert!(has_full_edge(
                 &app_build_graph,
+                "@test/api#build(subcommand 1)",
                 "@test/api#build(subcommand 0)",
-                "@test/api#build(subcommand 1)",
             ));
             assert!(has_full_edge(
                 &app_build_graph,
-                "@test/api#build(subcommand 1)",
                 "@test/api#build(subcommand 2)",
+                "@test/api#build(subcommand 1)",
             ));
             assert!(has_full_edge(
                 &app_build_graph,
-                "@test/api#build(sbcommand 2)",
                 "@test/api#build",
+                "@test/api#build(subcommand 2)",
             ));
 
             // Verify cross-package dependencies
             // Dependencies TO app#build[0] (first subtask)
             assert!(has_full_edge(
                 &app_build_graph,
+                "@test/app#build(subcommand 0)",
                 "@test/ui#build",
-                "@test/app#build(subcommand 0)",
             ));
             assert!(has_full_edge(
                 &app_build_graph,
+                "@test/app#build(subcommand 0)",
                 "@test/api#build",
-                "@test/app#build(subcommand 0)",
             ));
             assert!(has_full_edge(
                 &app_build_graph,
-                "@test/shared#build",
                 "@test/app#build(subcommand 0)",
+                "@test/shared#build",
             ));
 
             // Dependencies TO api#build[0]
             assert!(has_full_edge(
                 &app_build_graph,
-                "@test/shared#build",
                 "@test/api#build(subcommand 0)",
+                "@test/shared#build",
             ));
             assert!(has_full_edge(
                 &app_build_graph,
-                "@test/config#build",
                 "@test/api#build(subcommand 0)",
+                "@test/config#build",
             ));
 
             // Dependencies TO ui#build[0]
             assert!(has_full_edge(
                 &app_build_graph,
-                "@test/shared#build",
                 "@test/ui#build(subcommand 0)",
+                "@test/shared#build",
             ));
         })
     }
