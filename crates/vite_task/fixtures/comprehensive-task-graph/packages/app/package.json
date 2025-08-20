@@ -9,9 +9,9 @@
     "deploy": "echo Validate && echo Upload && echo Verify"
   },
   "dependencies": {
-    "@test/ui": "*",
-    "@test/api": "*",
-    "@test/shared": "*",
+    "@test/ui": "workspace:*",
+    "@test/api": "workspace:*",
+    "@test/shared": "workspace:*",
     "@test/pkg#special": "workspace:*"
   }
 }

@@ -8,7 +8,7 @@
     "dev": "echo Watch mode && echo Start dev server"
   },
   "dependencies": {
-    "@test/shared": "*",
-    "@test/config": "*"
+    "@test/shared": "workspace:*",
+    "@test/config": "workspace:*"
   }
 }

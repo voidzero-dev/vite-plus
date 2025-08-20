@@ -730,17 +730,17 @@ mod tests {
                 |graph: &StableDiGraph<ResolvedTask, ()>, from: &str, to: &str| -> bool {
                     graph.edge_indices().any(|edge_idx| {
                         let (source, target) = graph.edge_endpoints(edge_idx).unwrap();
-                        dbg!(graph[source].display_name()) == from && dbg!(graph[target].display_name()) == to
+                        graph[source].display_name() == from && graph[target].display_name() == to
                     })
                 };
 
             // Verify dependency edges for build tasks (between last subtasks)
             assert!(has_edge(&build_graph, "@test/ui#build(subcommand 0)", "@test/shared#build"));
-            assert!(has_edge(&build_graph, "@test/shared#build(subcommand 0)", "@test/api#build"));
-            assert!(has_edge(&build_graph, "@test/config#build", "@test/api#build"));
-            assert!(has_edge(&build_graph, "@test/ui#build", "@test/app#build"));
-            assert!(has_edge(&build_graph, "@test/api#build", "@test/app#build"));
-            assert!(has_edge(&build_graph, "@test/shared#build", "@test/app#build"));
+            assert!(has_edge(&build_graph, "@test/api#build(subcommand 0)", "@test/shared#build"));
+            assert!(has_edge(&build_graph, "@test/api#build(subcommand 0)", "@test/config#build"));
+            assert!(has_edge(&build_graph, "@test/app#build(subcommand 0)", "@test/ui#build"));
+            assert!(has_edge(&build_graph, "@test/app#build(subcommand 0)", "@test/api#build"));
+            assert!(has_edge(&build_graph, "@test/app#build(subcommand 0)", "@test/shared#build"));
 
             // Test that UI has compound commands (3 subtasks)
             let ui_tasks: Vec<_> = build_graph
@@ -756,14 +756,10 @@ mod tests {
             // Verify UI compound task internal dependencies
             assert!(has_edge(
                 &build_graph,
+                "@test/ui#build(subcommand 1)",
                 "@test/ui#build(subcommand 0)",
-                "@test/ui#build(subcommand 1)",
             ));
-            assert!(has_edge(
-                &build_graph,
-                "@test/ui#build(subcommand 1)",
-                "@test/ui#build",
-            ));
+            assert!(has_edge(&build_graph, "@test/ui#build", "@test/ui#build(subcommand 1)"));
 
             // Test that shared has compound commands (3 subtasks for build)
             let shared_build_tasks: Vec<_> = build_graph
@@ -787,21 +783,9 @@ mod tests {
             assert_eq!(app_build_tasks.len(), 5);
 
             // Verify cross-package dependencies connect to first subtask
-            assert!(has_edge(
-                &build_graph,
-                "@test/shared#build",
-                "@test/api#build(subcommand 0)",
-            ));
-            assert!(has_edge(
-                &build_graph,
-                "@test/config#build",
-                "@test/api#build(subcommand 0)",
-            ));
-            assert!(has_edge(
-                &build_graph,
-                "@test/api#build",
-                "@test/app#build(subcommand 0)",
-            ));
+            assert!(has_edge(&build_graph, "@test/api#build(subcommand 0)", "@test/shared#build"));
+            assert!(has_edge(&build_graph, "@test/api#build(subcommand 0)", "@test/config#build"));
+            assert!(has_edge(&build_graph, "@test/app#build(subcommand 0)", "@test/api#build"));
 
             // Test test task graph
             let test_graph = workspace

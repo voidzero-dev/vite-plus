@@ -6,6 +6,6 @@
     "validate": "echo Validating"
   },
   "dependencies": {
-    "@test/config": "*"
+    "@test/config": "workspace:*"
   }
 }

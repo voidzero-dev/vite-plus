@@ -5,6 +5,6 @@
     "build": "echo Building A"
   },
   "dependencies": {
-    "@test/b": "*"
+    "@test/b": "workspace:*"
   }
 }
