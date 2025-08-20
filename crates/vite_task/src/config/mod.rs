@@ -121,12 +121,12 @@ impl ResolvedTask {
         let resolved_command = ResolvedTaskCommand {
             fingerprint: CommandFingerprint {
                 cwd: workspace.dir.as_path().to_string_lossy().as_ref().into(),
-                command: link_task.clone().into(),
+                command: link_task,
                 envs_without_pass_through: resolved_envs.envs_without_pass_through,
             },
             all_envs: resolved_envs.all_envs,
         };
-        Ok(ResolvedTask {
+        Ok(Self {
             name: TaskName {
                 package_name: workspace.package_json.name.as_str().into(),
                 task_group_name: task_name.into(),

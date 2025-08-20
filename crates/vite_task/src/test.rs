@@ -19,7 +19,7 @@ pub async fn test<
         workspace,
         resolve_test_command,
         "test",
-        iter::once("test").chain(args.iter().map(|arg| arg.as_str())),
+        iter::once("test").chain(args.iter().map(std::string::String::as_str)),
     )
     .await?;
     let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();

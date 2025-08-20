@@ -95,7 +95,7 @@ async fn collect_std_outputs(
 ///    - Explicitly declared as dependencies of the task
 ///    - Included in `envs_without_pass_through`
 ///    - Changes to these invalidate the cache
-///    - Example: NODE_ENV, API_URL, BUILD_MODE
+///    - Example: `NODE_ENV`, `API_URL`, `BUILD_MODE`
 ///
 /// 2. **Pass-through envs** (in task config's `pass_through_envs` or defaults like PATH):
 ///    - Available to the task but don't affect caching

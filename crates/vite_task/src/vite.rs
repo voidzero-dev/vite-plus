@@ -20,7 +20,7 @@ pub async fn create_vite<
         workspace,
         resolve_vite_command,
         arg_forward,
-        iter::once(arg_forward).chain(args.iter().map(|arg| arg.as_str())),
+        iter::once(arg_forward).chain(args.iter().map(std::string::String::as_str)),
     )
     .await?;
     let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
