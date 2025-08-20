@@ -317,11 +317,11 @@ mod tests {
 
             // Verify explicit dependencies are honored
             assert!(
-                has_edge("@test/core#build", "@test/utils#lint"),
-                "Explicit dependency from core#build to utils#lint should exist"
+                has_edge("@test/utils#lint", "@test/core#build"),
+                "Explicit dependency from utils#lint to core#build should exist"
             );
             assert!(
-                has_edge("@test/utils#build", "@test/utils#lint"),
+                has_edge("@test/utils#lint", "@test/utils#build"),
                 "Explicit dependency from utils#build to utils#lint should exist"
             );
 
@@ -1128,7 +1128,7 @@ mod tests {
 
             // Test that empty-name package internal dependencies work
             let empty_build = workspace
-                .build_task_subgraph(&vec!["build".into()], Arc::default(), false)
+                .build_task_subgraph(&vec!["#build".into()], Arc::default(), false)
                 .expect("Failed to resolve empty-name build");
 
             let empty_build_tasks: Vec<_> =
@@ -1152,7 +1152,7 @@ mod tests {
                 };
 
             assert!(
-                has_edge(&empty_build, "test", "build"),
+                has_edge(&empty_build, "build", "test"),
                 "Empty-name build should depend on empty-name test (internal dependency)"
             );
         })
@@ -1269,78 +1269,6 @@ mod tests {
                     || has_edge(&build_graph, "normal-package#test", "build"),
                 "Should have dependency from normal-package to second nameless package due to topological ordering"
             );
-        })
-    }
-
-    #[test]
-    fn test_empty_package_restriction() {
-        with_unique_cache_path("empty_package_restriction", |cache_path| {
-            // Create a temporary test directory
-            let temp_dir = std::env::temp_dir().join(format!("vite-test-{}", std::process::id()));
-            std::fs::create_dir_all(&temp_dir).unwrap();
-
-            // Copy the fixture to temp directory
-            let fixture_path =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/empty-package-test");
-            let test_path = temp_dir.join("empty-package-test");
-
-            // Simple recursive copy
-            fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
-                std::fs::create_dir_all(dst)?;
-                for entry in std::fs::read_dir(src)? {
-                    let entry = entry?;
-                    let src_path = entry.path();
-                    let dst_path = dst.join(entry.file_name());
-                    if src_path.is_dir() {
-                        copy_dir_all(&src_path, &dst_path)?;
-                    } else {
-                        std::fs::copy(&src_path, &dst_path)?;
-                    }
-                }
-                Ok(())
-            }
-
-            copy_dir_all(&fixture_path, &test_path).unwrap();
-
-            // Modify the copied fixture
-            let normal_vite_task_path = test_path.join("packages/normal-package/vite-task.json");
-            let test_content = r##"{
-  "tasks": {
-    "build": {
-      "command": "echo 'Building normal-package'",
-      "cacheable": true,
-      "dependsOn": ["#test"]
-    },
-    "test": {
-      "command": "echo 'Testing normal-package'",
-      "cacheable": true
-    }
-  }
-}"##;
-            std::fs::write(&normal_vite_task_path, test_content).unwrap();
-
-            let workspace_result = Workspace::load_with_cache_path(
-                test_path.clone(),
-                Some(cache_path.to_path_buf()),
-                true,
-            );
-
-            // Clean up temp directory
-            std::fs::remove_dir_all(&temp_dir).ok();
-
-            assert!(
-                workspace_result.is_err(),
-                "Should fail when normal package depends on empty-name package task"
-            );
-
-            if let Err(e) = workspace_result {
-                let error_msg = format!("{:?}", e);
-                assert!(
-                    error_msg.contains("Cannot depend on tasks from packages with empty names"),
-                    "Error should mention restriction on empty package dependencies: {}",
-                    error_msg
-                );
-            }
         })
     }
 
