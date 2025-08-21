@@ -167,7 +167,78 @@ mod tests {
     use super::*;
     use std::fs;
 
+    use httpmock::prelude::*;
     use tempfile::TempDir;
+
+    /// Helper function to create a mock tar.gz file content
+    fn create_mock_tgz_content() -> Vec<u8> {
+        // Create a simple tar file with test content
+        let test_content = b"test file content";
+        let mut tar_builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_size(test_content.len() as u64);
+        header.set_mode(0o644);
+        tar_builder
+            .append_data(&mut header, "test.txt", std::io::Cursor::new(test_content))
+            .unwrap();
+        let tar_data = tar_builder.into_inner().unwrap();
+
+        // Compress with gzip
+        let mut gz_data = Vec::new();
+        {
+            let mut encoder =
+                flate2::write::GzEncoder::new(&mut gz_data, flate2::Compression::default());
+            std::io::copy(&mut std::io::Cursor::new(tar_data), &mut encoder).unwrap();
+        }
+        gz_data
+    }
+
+    /// Helper function to create a mock package tar.gz that mimics npm package structure
+    fn create_mock_package_tgz() -> Vec<u8> {
+        let mut tar_builder = tar::Builder::new(Vec::new());
+
+        // Add package.json
+        let package_json = br#"{"name":"test-package","version":"1.0.0"}"#;
+        let mut header = tar::Header::new_gnu();
+        header.set_size(package_json.len() as u64);
+        header.set_mode(0o644);
+        tar_builder
+            .append_data(&mut header, "package/package.json", std::io::Cursor::new(package_json))
+            .unwrap();
+
+        // Add bin/yarn mock file
+        let yarn_content = b"#!/usr/bin/env node\nconsole.log('mock yarn');";
+        let mut header = tar::Header::new_gnu();
+        header.set_size(yarn_content.len() as u64);
+        header.set_mode(0o755);
+        tar_builder
+            .append_data(&mut header, "package/bin/yarn", std::io::Cursor::new(yarn_content))
+            .unwrap();
+
+        // Add bin/yarn.cmd mock file
+        let yarn_cmd_content = b"@echo off\nnode yarn %*";
+        let mut header = tar::Header::new_gnu();
+        header.set_size(yarn_cmd_content.len() as u64);
+        header.set_mode(0o755);
+        tar_builder
+            .append_data(
+                &mut header,
+                "package/bin/yarn.cmd",
+                std::io::Cursor::new(yarn_cmd_content),
+            )
+            .unwrap();
+
+        let tar_data = tar_builder.into_inner().unwrap();
+
+        // Compress with gzip
+        let mut gz_data = Vec::new();
+        {
+            let mut encoder =
+                flate2::write::GzEncoder::new(&mut gz_data, flate2::Compression::default());
+            std::io::copy(&mut std::io::Cursor::new(tar_data), &mut encoder).unwrap();
+        }
+        gz_data
+    }
 
     #[tokio::test]
     #[test_log::test]
@@ -285,12 +356,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_and_extract_tgz() {
+        // Start a mock server
+        let server = MockServer::start();
         let temp_dir = TempDir::new().unwrap();
         let target_dir = temp_dir.path().join("extracted");
-        let url = "https://registry.npmjs.org/@yarnpkg/cli-dist/-/cli-dist-4.9.2.tgz";
 
-        let result = download_and_extract_tgz(url, &target_dir).await;
-        assert!(result.is_ok());
+        // Create mock response with package tar.gz
+        let mock_tgz = create_mock_package_tgz();
+        server.mock(|when, then| {
+            when.method(GET).path("/test-package.tgz");
+            then.status(200).header("content-type", "application/octet-stream").body(mock_tgz);
+        });
+
+        let url = format!("{}/test-package.tgz", server.base_url());
+        let result = download_and_extract_tgz(&url, &target_dir).await;
+        assert!(result.is_ok(), "Failed to download and extract: {:?}", result);
 
         assert!(target_dir.join("package/bin/yarn").exists());
         assert!(target_dir.join("package/bin/yarn.cmd").exists());
@@ -300,47 +380,95 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_with_retry_invalid_url() {
+        let server = MockServer::start();
         let temp_dir = TempDir::new().unwrap();
         let target_file = temp_dir.path().join("test.tgz");
 
-        // This URL should fail
-        let invalid_url =
-            "https://registry.npmjs.org/nonexistent-package-that-doesnt-exist/-/package-1.0.0.tgz";
+        // Mock a 404 response
+        server.mock(|when, then| {
+            when.method(GET).path("/nonexistent.tgz");
+            then.status(404).body("Not Found");
+        });
+
+        let invalid_url = format!("{}/nonexistent.tgz", server.base_url());
 
         // Should fail after retries
-        let result = download_file_with_retry(invalid_url, &target_file, Some(2)).await;
-        assert!(result.is_err());
+        let result = download_file_with_retry(&invalid_url, &target_file, Some(2)).await;
+        assert!(result.is_err(), "Expected download to fail with 404");
     }
 
     #[tokio::test]
     #[test_log::test]
     async fn test_download_with_retry_success() {
+        let server = MockServer::start();
         let temp_dir = TempDir::new().unwrap();
         let target_file = temp_dir.path().join("test.tgz");
 
-        // Use a small, reliable package for testing
-        let url = "https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz";
+        // Create mock successful response
+        let mock_tgz = create_mock_tgz_content();
+        server.mock(|when, then| {
+            when.method(GET).path("/test.tgz");
+            then.status(200)
+                .header("content-type", "application/octet-stream")
+                .body(mock_tgz.clone());
+        });
+
+        let url = format!("{}/test.tgz", server.base_url());
 
         // Should succeed
-        let result = download_file_with_retry(url, &target_file, Some(2)).await;
-        assert!(result.is_ok());
+        let result = download_file_with_retry(&url, &target_file, Some(2)).await;
+        assert!(result.is_ok(), "Failed to download: {:?}", result);
 
         // Verify file exists and has content
         assert!(target_file.exists());
         let metadata = fs::metadata(&target_file).unwrap();
-        assert!(metadata.len() > 0);
+        assert_eq!(metadata.len() as usize, mock_tgz.len());
     }
 
     #[tokio::test]
     async fn test_download_with_custom_retries() {
+        let server = MockServer::start();
         let temp_dir = TempDir::new().unwrap();
         let target_file = temp_dir.path().join("test.tgz");
 
-        // Invalid URL to force retries
-        let invalid_url = "https://httpstat.us/500"; // Returns 500 Internal Server Error
+        // Mock a 500 Internal Server Error response
+        server.mock(|when, then| {
+            when.method(GET).path("/error.tgz");
+            then.status(500).body("Internal Server Error");
+        });
 
-        // Should fail after custom number of retries
-        let result = download_file_with_retry(invalid_url, &target_file, Some(1)).await;
-        assert!(result.is_err());
+        let error_url = format!("{}/error.tgz", server.base_url());
+
+        // Should fail after custom number of retries (1 retry = 2 total attempts)
+        let result = download_file_with_retry(&error_url, &target_file, Some(1)).await;
+        assert!(result.is_err(), "Expected download to fail with 500");
+    }
+
+    #[tokio::test]
+    async fn test_download_with_retry_eventual_success() {
+        let server = MockServer::start();
+        let temp_dir = TempDir::new().unwrap();
+        let target_file = temp_dir.path().join("test.tgz");
+
+        // Mock a successful response after initial failures
+        let mock_tgz = create_mock_tgz_content();
+
+        server.mock(|when, then| {
+            when.method(GET).path("/flaky.tgz");
+            then.status(200)
+                .header("content-type", "application/octet-stream")
+                .body(mock_tgz.clone());
+        });
+
+        let url = format!("{}/flaky.tgz", server.base_url());
+
+        // Should succeed
+        let result = download_file_with_retry(&url, &target_file, Some(2)).await;
+        assert!(result.is_ok(), "Failed to download: {:?}", result);
+
+        // Verify file was downloaded correctly
+        assert!(target_file.exists());
+        let metadata = fs::metadata(&target_file).unwrap();
+        assert_eq!(metadata.len() as usize, mock_tgz.len());
     }
 }

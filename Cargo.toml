@@ -58,6 +58,7 @@ passfd = { git = "https://github.com/polachok/passfd", rev = "d55881752c16aced1a
 futures = "0.3.31"
 futures-core = "0.3.31"
 futures-util = "0.3.31"
+httpmock = "0.7"
 indoc = "2.0.5"
 itertools = "0.14.0"
 nix = { version = "0.30.1", features = ["dir"] }
