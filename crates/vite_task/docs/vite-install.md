@@ -55,11 +55,13 @@ Starting from the current directory, recursively search upwards to find the dire
 
 Package manager detection priority:
 
-- `packageManager` field in `package.json` , got `pm@version`
+- `packageManager` field in `package.json` , got `{pm}@{version}`
 - `devEngines.packageManager` field in `package.json` (WIP)
 - `pnpm-lock.yaml` or `pnpm-workspace.yaml` file exists ⇒ `pnpm@latest`
 - `yarn.lock` or `.yarnrc.yml` file exists ⇒ `yarn@latest`
 - `package-lock.json` exists ⇒ `npm@latest`
+- `pnpmfile.cjs` exists ⇒ `pnpm@latest`
+- `yarn.config.cjs` exists ⇒ `yarn@latest`, support in yarn 2.0+
 - List pnpm/yarn/npm to let user choice and recommend user to use `pnpm@latest` by default
 
 If `packageManager` filed not exists on package.json, it will auto filled correctly after install run.

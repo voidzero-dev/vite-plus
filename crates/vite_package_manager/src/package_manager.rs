@@ -17,15 +17,6 @@ use crate::config::{get_cache_dir, get_npm_package_tgz_url, get_npm_package_vers
 use crate::download::download_and_extract_tgz;
 use crate::shim;
 
-#[derive(Serialize, Deserialize, Clone, Default)]
-#[serde(rename_all = "camelCase")]
-struct PackageJson {
-    #[serde(default)]
-    pub version: CompactString,
-    #[serde(default)]
-    pub package_manager: CompactString,
-}
-
 /// The package manager type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackageManagerType {
@@ -68,6 +59,15 @@ pub struct PackageManager {
 pub struct PackageManagerBuilder {
     package_manager_type: Option<PackageManagerType>,
     workspace_root: PathBuf,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+struct PackageJson {
+    #[serde(default)]
+    pub version: CompactString,
+    #[serde(default)]
+    pub package_manager: CompactString,
 }
 
 impl PackageManagerBuilder {
@@ -232,9 +232,10 @@ fn get_package_manager_type_and_version(
         return Ok((PackageManagerType::Pnpm, version));
     }
 
-    // if yarn.lock exists, use yarn@latest
+    // if yarn.lock or .yarnrc.yml exists, use yarn@latest
     let yarn_lock_path = workspace_root.join("yarn.lock");
-    if yarn_lock_path.exists() {
+    let yarnrc_yml_path = workspace_root.join(".yarnrc.yml");
+    if yarn_lock_path.exists() || yarnrc_yml_path.exists() {
         return Ok((PackageManagerType::Yarn, version));
     }
 
@@ -242,6 +243,18 @@ fn get_package_manager_type_and_version(
     let package_lock_json_path = workspace_root.join("package-lock.json");
     if package_lock_json_path.exists() {
         return Ok((PackageManagerType::Npm, version));
+    }
+
+    // if pnpmfile.cjs exists, use pnpm@latest
+    let pnpmfile_cjs_path = workspace_root.join("pnpmfile.cjs");
+    if pnpmfile_cjs_path.exists() {
+        return Ok((PackageManagerType::Pnpm, version));
+    }
+
+    // if yarn.config.cjs exists, use yarn@latest (yarn 2.0+)
+    let yarn_config_cjs_path = workspace_root.join("yarn.config.cjs");
+    if yarn_config_cjs_path.exists() {
+        return Ok((PackageManagerType::Yarn, version));
     }
 
     // if default is specified, use it
@@ -977,5 +990,162 @@ mod tests {
         assert!(version_req.is_ok());
         let version_req = version_req.unwrap();
         assert!(version_req.matches(&Version::parse(&version).unwrap()));
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_with_yarnrc_yml() {
+        let temp_dir = create_temp_dir();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(temp_dir.path(), package_content);
+
+        // Create .yarnrc.yml
+        fs::write(
+            temp_dir.path().join(".yarnrc.yml"),
+            "nodeLinker: node-modules\nyarnPath: .yarn/releases/yarn-4.0.0.cjs",
+        )
+        .expect("Failed to write .yarnrc.yml");
+
+        let result = PackageManager::builder(temp_dir.path())
+            .build()
+            .await
+            .expect("Should detect yarn from .yarnrc.yml");
+        assert_eq!(result.bin_name, "yarn");
+        assert_eq!(result.workspace_root, temp_dir.path());
+        assert!(
+            result.get_bin_prefix().ends_with("yarn/bin"),
+            "bin_prefix should end with yarn/bin, but got {:?}",
+            result.get_bin_prefix()
+        );
+        // package.json should have the `packageManager` field
+        let package_json_path = temp_dir.path().join("package.json");
+        let package_json: serde_json::Value =
+            serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
+        assert!(package_json["packageManager"].as_str().unwrap().starts_with("yarn@"));
+        // keep other fields
+        assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_with_pnpmfile_cjs() {
+        let temp_dir = create_temp_dir();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(temp_dir.path(), package_content);
+
+        // Create pnpmfile.cjs
+        fs::write(temp_dir.path().join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
+            .expect("Failed to write pnpmfile.cjs");
+
+        let result = PackageManager::builder(temp_dir.path())
+            .build()
+            .await
+            .expect("Should detect pnpm from pnpmfile.cjs");
+        assert_eq!(result.bin_name, "pnpm");
+        assert_eq!(result.workspace_root, temp_dir.path());
+        assert!(
+            result.get_bin_prefix().ends_with("pnpm/bin"),
+            "bin_prefix should end with pnpm/bin, but got {:?}",
+            result.get_bin_prefix()
+        );
+        // package.json should have the `packageManager` field
+        let package_json_path = temp_dir.path().join("package.json");
+        let package_json: serde_json::Value =
+            serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
+        assert!(package_json["packageManager"].as_str().unwrap().starts_with("pnpm@"));
+        // keep other fields
+        assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_with_yarn_config_cjs() {
+        let temp_dir = create_temp_dir();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(temp_dir.path(), package_content);
+
+        // Create yarn.config.cjs
+        fs::write(
+            temp_dir.path().join("yarn.config.cjs"),
+            "module.exports = { nodeLinker: 'node-modules' }",
+        )
+        .expect("Failed to write yarn.config.cjs");
+
+        let result = PackageManager::builder(temp_dir.path())
+            .build()
+            .await
+            .expect("Should detect yarn from yarn.config.cjs");
+        assert_eq!(result.bin_name, "yarn");
+        assert_eq!(result.workspace_root, temp_dir.path());
+        assert!(
+            result.get_bin_prefix().ends_with("yarn/bin"),
+            "bin_prefix should end with yarn/bin, but got {:?}",
+            result.get_bin_prefix()
+        );
+        // package.json should have the `packageManager` field
+        let package_json_path = temp_dir.path().join("package.json");
+        let package_json: serde_json::Value =
+            serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
+        assert!(package_json["packageManager"].as_str().unwrap().starts_with("yarn@"));
+        // keep other fields
+        assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_priority_order_lock_over_config() {
+        let temp_dir = create_temp_dir();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(temp_dir.path(), package_content);
+
+        // Create multiple detection files to test priority order
+        // According to vite-install.md, pnpmfile.cjs and yarn.config.cjs are lower priority than lock files
+
+        // Create pnpmfile.cjs
+        fs::write(temp_dir.path().join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
+            .expect("Failed to write pnpmfile.cjs");
+
+        // Create yarn.config.cjs
+        fs::write(
+            temp_dir.path().join("yarn.config.cjs"),
+            "module.exports = { nodeLinker: 'node-modules' }",
+        )
+        .expect("Failed to write yarn.config.cjs");
+
+        // Create package-lock.json (should take precedence over pnpmfile.cjs and yarn.config.cjs)
+        fs::write(temp_dir.path().join("package-lock.json"), r#"{"lockfileVersion": 3}"#)
+            .expect("Failed to write package-lock.json");
+
+        let result = PackageManager::builder(temp_dir.path())
+            .build()
+            .await
+            .expect("Should detect npm from package-lock.json");
+        assert_eq!(
+            result.bin_name, "npm",
+            "package-lock.json should take precedence over pnpmfile.cjs and yarn.config.cjs"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_pnpmfile_over_yarn_config() {
+        let temp_dir = create_temp_dir();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(temp_dir.path(), package_content);
+
+        // Create both pnpmfile.cjs and yarn.config.cjs
+        fs::write(temp_dir.path().join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
+            .expect("Failed to write pnpmfile.cjs");
+
+        fs::write(
+            temp_dir.path().join("yarn.config.cjs"),
+            "module.exports = { nodeLinker: 'node-modules' }",
+        )
+        .expect("Failed to write yarn.config.cjs");
+
+        // pnpmfile.cjs should be detected first (before yarn.config.cjs)
+        let result = PackageManager::builder(temp_dir.path())
+            .build()
+            .await
+            .expect("Should detect pnpm from pnpmfile.cjs");
+        assert_eq!(
+            result.bin_name, "pnpm",
+            "pnpmfile.cjs should be detected before yarn.config.cjs"
+        );
     }
 }
