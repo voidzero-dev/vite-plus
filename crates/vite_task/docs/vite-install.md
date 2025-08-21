@@ -58,7 +58,7 @@ Package manager detection priority:
 - `packageManager` field in `package.json` , got `pm@version`
 - `devEngines.packageManager` field in `package.json` (WIP)
 - `pnpm-lock.yaml` or `pnpm-workspace.yaml` file exists ⇒ `pnpm@latest`
-- `yarn.lock` file exists ⇒ `yarn@latest`
+- `yarn.lock` or `.yarnrc.yml` file exists ⇒ `yarn@latest`
 - `package-lock.json` exists ⇒ `npm@latest`
 - List pnpm/yarn/npm to let user choice and recommend user to use `pnpm@latest` by default
 

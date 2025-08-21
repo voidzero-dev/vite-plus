@@ -19,6 +19,16 @@ use vite_package_manager::package_manager::{
     PackageManagerType, detect_package_manager, detect_package_manager_with_default,
 };
 
+/// Install command.
+///
+/// This is the command that will be executed by the `vite-plus install` command.
+///
+pub struct InstallCommand {
+    workspace_root: PathBuf,
+    force_refresh_cached: Option<bool>,
+    replay_cached_outputs: Option<bool>,
+}
+
 /// Install command builder.
 ///
 /// This is a builder pattern for the `vite-plus install` command.
@@ -26,52 +36,16 @@ use vite_package_manager::package_manager::{
 pub struct InstallCommandBuilder {
     workspace_root: PathBuf,
     /// Whether to force run the install command.
-    /// default to false.
-    force_run: bool,
+    force_refresh_cached: Option<bool>,
     /// Whether to replay cache outputs.
-    /// default to true.
-    replay_cache_outputs: bool,
-}
-
-impl InstallCommandBuilder {
-    pub fn new(workspace_root: impl AsRef<Path>) -> Self {
-        Self {
-            workspace_root: workspace_root.as_ref().into(),
-            force_run: false,
-            replay_cache_outputs: true,
-        }
-    }
-
-    pub fn set_force_run(mut self, force_run: bool) -> Self {
-        self.force_run = force_run;
-        self
-    }
-
-    pub fn set_replay_cache_outputs(mut self, replay_cache_outputs: bool) -> Self {
-        self.replay_cache_outputs = replay_cache_outputs;
-        self
-    }
-
-    pub fn build(self) -> InstallCommand {
-        InstallCommand {
-            workspace_root: self.workspace_root,
-            force_run: self.force_run,
-            replay_cache_outputs: self.replay_cache_outputs,
-        }
-    }
-}
-
-/// Install command.
-///
-/// This is the command that will be executed by the `vite-plus install` command.
-///
-pub struct InstallCommand {
-    workspace_root: PathBuf,
-    force_run: bool,
-    replay_cache_outputs: bool,
+    replay_cached_outputs: Option<bool>,
 }
 
 impl InstallCommand {
+    pub fn builder(workspace_root: impl AsRef<Path>) -> InstallCommandBuilder {
+        InstallCommandBuilder::new(workspace_root)
+    }
+
     pub async fn execute(self, args: &Vec<String>) -> Result<(), Error> {
         // Handle UnrecognizedPackageManager error and let user select a package manager
         let package_manager = match detect_package_manager(&self.workspace_root).await {
@@ -95,8 +69,8 @@ impl InstallCommand {
             "install",
             iter::once("install").chain(args.iter().map(|arg| arg.as_str())),
             ResolveCommandResult { bin_path, envs },
-            self.force_run,
-            self.replay_cache_outputs,
+            self.force_refresh_cached,
+            self.replay_cached_outputs,
         )?;
         let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
         task_graph.add_node(resolved_task);
@@ -104,6 +78,34 @@ impl InstallCommand {
         workspace.unload().await?;
 
         Ok(())
+    }
+}
+
+impl InstallCommandBuilder {
+    pub fn new(workspace_root: impl AsRef<Path>) -> Self {
+        Self {
+            workspace_root: workspace_root.as_ref().into(),
+            force_refresh_cached: None,
+            replay_cached_outputs: None,
+        }
+    }
+
+    pub fn force_run(mut self) -> Self {
+        self.force_refresh_cached = Some(true);
+        self
+    }
+
+    pub fn disable_replay_cached_outputs(mut self) -> Self {
+        self.replay_cached_outputs = Some(false);
+        self
+    }
+
+    pub fn build(self) -> InstallCommand {
+        InstallCommand {
+            workspace_root: self.workspace_root,
+            force_refresh_cached: self.force_refresh_cached,
+            replay_cached_outputs: self.replay_cached_outputs,
+        }
     }
 }
 
@@ -360,47 +362,47 @@ mod tests {
         let builder = InstallCommandBuilder::new(&workspace_root);
 
         assert_eq!(builder.workspace_root, workspace_root);
-        assert_eq!(builder.force_run, false);
-        assert_eq!(builder.replay_cache_outputs, true);
+        assert_eq!(builder.force_refresh_cached, None);
+        assert_eq!(builder.replay_cached_outputs, None);
     }
 
     #[test]
     fn test_install_command_builder_set_force_run() {
-        let builder = InstallCommandBuilder::new("/test/workspace").set_force_run(true);
+        let builder = InstallCommandBuilder::new("/test/workspace").force_run();
 
-        assert_eq!(builder.force_run, true);
+        assert_eq!(builder.force_refresh_cached, Some(true));
     }
 
     #[test]
     fn test_install_command_builder_set_replay_cache_outputs() {
-        let builder = InstallCommandBuilder::new("/test/workspace").set_replay_cache_outputs(false);
+        let builder = InstallCommandBuilder::new("/test/workspace").disable_replay_cached_outputs();
 
-        assert_eq!(builder.replay_cache_outputs, false);
+        assert_eq!(builder.replay_cached_outputs, Some(false));
     }
 
     #[test]
     fn test_install_command_builder_build() {
         let workspace_root = PathBuf::from("/test/workspace");
         let command = InstallCommandBuilder::new(&workspace_root)
-            .set_force_run(true)
-            .set_replay_cache_outputs(false)
+            .force_run()
+            .disable_replay_cached_outputs()
             .build();
 
         assert_eq!(command.workspace_root, workspace_root);
-        assert_eq!(command.force_run, true);
-        assert_eq!(command.replay_cache_outputs, false);
+        assert_eq!(command.force_refresh_cached, Some(true));
+        assert_eq!(command.replay_cached_outputs, Some(false));
     }
 
     #[test]
     fn test_install_command_builder_chain() {
         // Test that builder methods can be chained
         let command = InstallCommandBuilder::new("/test/workspace")
-            .set_force_run(true)
-            .set_replay_cache_outputs(true)
+            .force_run()
+            .disable_replay_cached_outputs()
             .build();
 
-        assert_eq!(command.force_run, true);
-        assert_eq!(command.replay_cache_outputs, true);
+        assert_eq!(command.force_refresh_cached, Some(true));
+        assert_eq!(command.replay_cached_outputs, Some(false));
     }
 
     // skip this test for auto run, should be run manually, because it will prompt for user selection

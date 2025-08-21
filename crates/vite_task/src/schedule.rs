@@ -78,7 +78,7 @@ impl ExecutionPlan {
         tracing::debug!("Executing task {}", &step.id);
 
         let command = step.resolved_command.fingerprint.command.clone();
-        let replay_cache_outputs = step.replay_cache_outputs;
+        let replay_cached_outputs = step.replay_cached_outputs.unwrap_or(true);
 
         // Check cache and prepare execution
         let (cache_miss, execute_or_replay) =
@@ -91,16 +91,12 @@ impl ExecutionPlan {
                 println!("Cache Not Found, executing task");
                 println!("> {command}");
             }
-            Some(CacheMiss::Skipped) => {
-                println!("Cache skipped, executing task");
-                println!("> {command}");
-            }
             Some(CacheMiss::FingerprintMismatch(mismatch)) => {
                 println!("{mismatch}, executing task");
                 println!("> {command}");
             }
             None => {
-                if replay_cache_outputs {
+                if replay_cached_outputs {
                     println!("Cache hit, replaying previously executed task");
                 } else {
                     println!("Cache hit, skipping cache replay");
@@ -127,7 +123,7 @@ async fn get_cached_or_execute<'a>(
             None,
             ({
                 async move {
-                    if !task.replay_cache_outputs {
+                    if !task.replay_cached_outputs.unwrap_or(true) {
                         return Ok(());
                     }
                     // replay

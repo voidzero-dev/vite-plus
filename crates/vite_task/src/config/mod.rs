@@ -61,10 +61,12 @@ pub struct ResolvedTask {
     pub args: Arc<[Str]>,
     pub resolved_config: ResolvedTaskConfig,
     pub resolved_command: ResolvedTaskCommand,
-    /// Force run the task even if cache is valid, still cache the outputs.
-    pub force_run: bool,
-    /// Replay the cache outputs if cache is valid
-    pub replay_cache_outputs: bool,
+    /// Force run the task even if cached outputs are valid, still cache the outputs.
+    /// Default is false
+    pub force_refresh_cached: Option<bool>,
+    /// Replay the cached outputs if cached outputs are valid
+    /// Default is true
+    pub replay_cached_outputs: Option<bool>,
 }
 
 impl ResolvedTask {
@@ -107,8 +109,8 @@ impl ResolvedTask {
             args: args.map(|arg| arg.as_ref().into()).collect(),
             resolved_config: resolved_task_config,
             resolved_command,
-            force_run: false,
-            replay_cache_outputs: true,
+            force_refresh_cached: None,
+            replay_cached_outputs: None,
         })
     }
 
@@ -117,8 +119,8 @@ impl ResolvedTask {
         task_name: &str,
         args: impl Iterator<Item = impl AsRef<str>> + Clone,
         comment_result: ResolveCommandResult,
-        force_run: bool,
-        replay_cache_outputs: bool,
+        force_refresh_cached: Option<bool>,
+        replay_cached_outputs: Option<bool>,
     ) -> Result<Self, Error> {
         // TODO(@fengmk2): refactor this to use the same code as resolve_from_built_in
         let ResolveCommandResult { bin_path, envs } = comment_result;
@@ -149,8 +151,8 @@ impl ResolvedTask {
             args: args.map(|arg| arg.as_ref().into()).collect(),
             resolved_config: resolved_task_config,
             resolved_command,
-            force_run,
-            replay_cache_outputs,
+            force_refresh_cached,
+            replay_cached_outputs,
         })
     }
 }

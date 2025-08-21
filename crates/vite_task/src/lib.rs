@@ -167,8 +167,8 @@ pub async fn main<
 ) -> Result<(), Error> {
     // Auto-run install if needed (except for install command itself)
     if !matches!(&args.commands, Some(Commands::Install { .. })) {
-        install::InstallCommandBuilder::new(&cwd)
-            .set_replay_cache_outputs(true)
+        install::InstallCommand::builder(&cwd)
+            .disable_replay_cached_outputs()
             .build()
             .execute(&vec![])
             .await?;
@@ -227,11 +227,7 @@ pub async fn main<
             return Ok(());
         }
         Some(Commands::Install { args }) => {
-            install::InstallCommandBuilder::new(&cwd)
-                .set_force_run(true)
-                .build()
-                .execute(&args)
-                .await?;
+            install::InstallCommand::builder(&cwd).force_run().build().execute(&args).await?;
             return Ok(());
         }
         None => {
