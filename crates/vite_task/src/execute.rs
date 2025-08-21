@@ -16,6 +16,7 @@ use futures_util::future::try_join4;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _};
 use wax::Glob;
+use wildmatch::WildMatch;
 
 use crate::{
     Error,
@@ -120,49 +121,11 @@ pub struct TaskEnvs {
     pub envs_without_pass_through: HashMap<Str, Str>,
 }
 
-/// Checks if a string matches a wildcard pattern.
+/// Checks if a string matches a wildcard pattern using the wildmatch crate.
 /// Supports * as a wildcard that matches any number of characters.
 fn matches_wildcard_pattern(text: &str, pattern: &str) -> bool {
-    let pattern_parts: Vec<&str> = pattern.split('*').collect();
-
-    // If no wildcards, it's just an exact match
-    if pattern_parts.len() == 1 {
-        return text == pattern;
-    }
-
-    let mut text_pos = 0;
-    let text_bytes = text.as_bytes();
-
-    for (i, part) in pattern_parts.iter().enumerate() {
-        if part.is_empty() {
-            // Empty part means there was a * at this position
-            continue;
-        }
-
-        let part_bytes = part.as_bytes();
-
-        if i == 0 {
-            // First part - must match at the beginning
-            if !text_bytes.starts_with(part_bytes) {
-                return false;
-            }
-            text_pos = part.len();
-        } else if i == pattern_parts.len() - 1 {
-            // Last part - must match at the end
-            if !text_bytes[text_pos..].ends_with(part_bytes) {
-                return false;
-            }
-        } else {
-            // Middle part - find it somewhere after current position
-            if let Some(pos) = text[text_pos..].find(part) {
-                text_pos += pos + part.len();
-            } else {
-                return false;
-            }
-        }
-    }
-
-    true
+    // Use WildMatch for pattern matching which supports glob-like patterns
+    WildMatch::new(pattern).matches(text)
 }
 
 /// Checks if an environment variable should be passed through by default.
