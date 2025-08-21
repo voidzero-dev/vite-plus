@@ -124,23 +124,23 @@ pub struct TaskEnvs {
 /// Supports * as a wildcard that matches any number of characters.
 fn matches_wildcard_pattern(text: &str, pattern: &str) -> bool {
     let pattern_parts: Vec<&str> = pattern.split('*').collect();
-    
+
     // If no wildcards, it's just an exact match
     if pattern_parts.len() == 1 {
         return text == pattern;
     }
-    
+
     let mut text_pos = 0;
     let text_bytes = text.as_bytes();
-    
+
     for (i, part) in pattern_parts.iter().enumerate() {
         if part.is_empty() {
             // Empty part means there was a * at this position
             continue;
         }
-        
+
         let part_bytes = part.as_bytes();
-        
+
         if i == 0 {
             // First part - must match at the beginning
             if !text_bytes.starts_with(part_bytes) {
@@ -161,7 +161,7 @@ fn matches_wildcard_pattern(text: &str, pattern: &str) -> bool {
             }
         }
     }
-    
+
     true
 }
 
@@ -172,7 +172,7 @@ fn is_default_passthrough_env(name: &str) -> bool {
     const DEFAULT_PASSTHROUGH_ENVS: &[&str] = &[
         // System and shell
         "HOME",
-        "USER", 
+        "USER",
         "TZ",
         "LANG",
         "SHELL",
@@ -214,12 +214,12 @@ fn is_default_passthrough_env(name: &str) -> bool {
         "JB_INTERPRETER",
         "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE",
     ];
-    
+
     // Check exact matches first
     if DEFAULT_PASSTHROUGH_ENVS.contains(&name) {
         return true;
     }
-    
+
     // Wildcard patterns that support full glob matching (including *_FOO_* patterns)
     const WILDCARD_PATTERNS: &[&str] = &[
         "VSCODE_*",
@@ -234,14 +234,14 @@ fn is_default_passthrough_env(name: &str) -> bool {
         "*_CONFIG_*",
         "*_DEBUG_*",
     ];
-    
+
     // Check wildcard patterns
     for pattern in WILDCARD_PATTERNS {
         if matches_wildcard_pattern(name, pattern) {
             return true;
         }
     }
-    
+
     false
 }
 
@@ -253,7 +253,7 @@ impl TaskEnvs {
                 let Some(name) = name.to_str() else {
                     return None;
                 };
-                
+
                 // Check if this env var should be passed through
                 if is_default_passthrough_env(name)
                     || task.config.envs.contains(name)
@@ -417,29 +417,29 @@ mod tests {
         // Test exact matches (no wildcards)
         assert!(matches_wildcard_pattern("PATH", "PATH"));
         assert!(!matches_wildcard_pattern("PATH", "HOME"));
-        
+
         // Test prefix wildcards (existing behavior)
         assert!(matches_wildcard_pattern("VSCODE_PID", "VSCODE_*"));
         assert!(matches_wildcard_pattern("DOCKER_HOST", "DOCKER_*"));
         assert!(!matches_wildcard_pattern("VSCODE", "VSCODE_*"));
-        
+
         // Test suffix wildcards
         assert!(matches_wildcard_pattern("MY_CONFIG", "*_CONFIG"));
         assert!(matches_wildcard_pattern("APP_CONFIG", "*_CONFIG"));
         assert!(!matches_wildcard_pattern("CONFIG", "*_CONFIG"));
-        
+
         // Test middle wildcards (the key new feature)
         assert!(matches_wildcard_pattern("MY_TEST_VAR", "*_TEST_*"));
         assert!(matches_wildcard_pattern("APP_TEST_CONFIG", "*_TEST_*"));
         assert!(matches_wildcard_pattern("SOME_CONFIG_VALUE", "*_CONFIG_*"));
         assert!(!matches_wildcard_pattern("MY_TEST", "*_TEST_*"));
         assert!(!matches_wildcard_pattern("TEST_VAR", "*_TEST_*"));
-        
+
         // Test multiple wildcards
         assert!(matches_wildcard_pattern("A_B_C_D", "*_B_*_D"));
         assert!(matches_wildcard_pattern("X_B_Y_D", "*_B_*_D"));
         assert!(!matches_wildcard_pattern("A_B_C", "*_B_*_D"));
-        
+
         // Test edge cases
         assert!(matches_wildcard_pattern("", "*"));
         assert!(matches_wildcard_pattern("anything", "*"));
@@ -458,7 +458,7 @@ mod tests {
         assert!(is_default_passthrough_env("SHELL"));
         assert!(is_default_passthrough_env("LANG"));
         assert!(is_default_passthrough_env("TZ"));
-        
+
         // Test existing prefix patterns
         assert!(is_default_passthrough_env("VSCODE_PID"));
         assert!(is_default_passthrough_env("VSCODE_GIT_ASKPASS_MAIN"));
@@ -469,19 +469,19 @@ mod tests {
         assert!(is_default_passthrough_env("JB_IDE_PROJECT_DIR"));
         assert!(is_default_passthrough_env("VERCEL_URL"));
         assert!(is_default_passthrough_env("NEXT_PUBLIC_API_URL"));
-        
+
         // Test new wildcard patterns (middle wildcards)
         assert!(is_default_passthrough_env("MY_TEST_VARIABLE"));
         assert!(is_default_passthrough_env("APP_CONFIG_FILE"));
         assert!(is_default_passthrough_env("SOME_DEBUG_FLAG"));
-        
+
         // Test variables that should NOT be passed through
         assert!(!is_default_passthrough_env("SECRET_KEY"));
         assert!(!is_default_passthrough_env("API_TOKEN"));
         assert!(!is_default_passthrough_env("CUSTOM_VAR"));
         assert!(!is_default_passthrough_env("RANDOM_ENV"));
         assert!(!is_default_passthrough_env("MY_SECRET"));
-        
+
         // Test edge cases
         assert!(!is_default_passthrough_env("VSCODE")); // Should not match without underscore
         assert!(!is_default_passthrough_env("DOCKER")); // Should not match without underscore
