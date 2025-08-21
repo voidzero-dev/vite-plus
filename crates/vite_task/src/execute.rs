@@ -120,6 +120,76 @@ pub struct TaskEnvs {
     pub envs_without_pass_through: HashMap<Str, Str>,
 }
 
+/// Checks if an environment variable should be passed through by default.
+/// Based on Turborepo's implementation for commonly needed environment variables.
+fn is_default_passthrough_env(name: &str) -> bool {
+    // Exact matches for common environment variables
+    const DEFAULT_PASSTHROUGH_ENVS: &[&str] = &[
+        // System and shell
+        "HOME",
+        "USER", 
+        "TZ",
+        "LANG",
+        "SHELL",
+        "PWD",
+        "PATH",
+        // CI/CD environments
+        "CI",
+        // Node.js specific
+        "NODE_OPTIONS",
+        "COREPACK_HOME",
+        "NPM_CONFIG_STORE_DIR",
+        "PNPM_HOME",
+        // Library paths
+        "LD_LIBRARY_PATH",
+        "DYLD_FALLBACK_LIBRARY_PATH",
+        "LIBPATH",
+        // Terminal/display
+        "COLORTERM",
+        "TERM",
+        "TERM_PROGRAM",
+        "DISPLAY",
+        // Temporary directories
+        "TMP",
+        "TEMP",
+        // Vercel specific
+        "VERCEL",
+        "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
+        "NOW_BUILDER",
+        // Windows specific
+        "APPDATA",
+        "PROGRAMDATA",
+        "SYSTEMROOT",
+        "SYSTEMDRIVE",
+        "USERPROFILE",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        // IDE specific (exact matches)
+        "ELECTRON_RUN_AS_NODE",
+        "JB_INTERPRETER",
+        "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE",
+    ];
+    
+    // Check exact matches first
+    if DEFAULT_PASSTHROUGH_ENVS.contains(&name) {
+        return true;
+    }
+    
+    // Check glob patterns
+    if name.starts_with("VSCODE_") 
+        || name.starts_with("DOCKER_")
+        || name.starts_with("BUILDKIT_")
+        || name.starts_with("COMPOSE_")
+        || name.starts_with("JB_IDE_")
+        || name.starts_with("VERCEL_")
+        || name.starts_with("NEXT_")
+    {
+        return true;
+    }
+    
+    false
+}
+
 impl TaskEnvs {
     pub fn resolve(base_dir: &Path, task: &ResolvedTaskConfig) -> Result<Self, Error> {
         // All envs that are passed to the task
@@ -128,9 +198,9 @@ impl TaskEnvs {
                 let Some(name) = name.to_str() else {
                     return None;
                 };
-                // TODO: glob
-                // TODO: more default passthrough envs: https://github.com/vercel/turborepo/blob/26d309f073ca3ac054109ba0c29c7e230e7caac3/crates/turborepo-lib/src/task_hash.rs#L439
-                if name == "PATH"
+                
+                // Check if this env var should be passed through
+                if is_default_passthrough_env(name)
                     || task.config.envs.contains(name)
                     || task.config.pass_through_envs.contains(name)
                 {
@@ -281,4 +351,45 @@ fn gather_inputs(task: &ResolvedTask, base_dir: &Path) -> Result<HashSet<Arc<OsS
         paths.insert(entry.into_path().into_os_string().into());
     }
     Ok(paths)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_default_passthrough_env() {
+        // Test exact matches
+        assert!(is_default_passthrough_env("PATH"));
+        assert!(is_default_passthrough_env("HOME"));
+        assert!(is_default_passthrough_env("USER"));
+        assert!(is_default_passthrough_env("CI"));
+        assert!(is_default_passthrough_env("NODE_OPTIONS"));
+        assert!(is_default_passthrough_env("SHELL"));
+        assert!(is_default_passthrough_env("LANG"));
+        assert!(is_default_passthrough_env("TZ"));
+        
+        // Test glob patterns
+        assert!(is_default_passthrough_env("VSCODE_PID"));
+        assert!(is_default_passthrough_env("VSCODE_GIT_ASKPASS_MAIN"));
+        assert!(is_default_passthrough_env("DOCKER_HOST"));
+        assert!(is_default_passthrough_env("DOCKER_CONFIG"));
+        assert!(is_default_passthrough_env("BUILDKIT_PROGRESS"));
+        assert!(is_default_passthrough_env("COMPOSE_FILE"));
+        assert!(is_default_passthrough_env("JB_IDE_PROJECT_DIR"));
+        assert!(is_default_passthrough_env("VERCEL_URL"));
+        assert!(is_default_passthrough_env("NEXT_PUBLIC_API_URL"));
+        
+        // Test variables that should NOT be passed through
+        assert!(!is_default_passthrough_env("SECRET_KEY"));
+        assert!(!is_default_passthrough_env("API_TOKEN"));
+        assert!(!is_default_passthrough_env("CUSTOM_VAR"));
+        assert!(!is_default_passthrough_env("RANDOM_ENV"));
+        assert!(!is_default_passthrough_env("MY_SECRET"));
+        
+        // Test edge cases
+        assert!(!is_default_passthrough_env("VSCODE")); // Should not match without underscore
+        assert!(!is_default_passthrough_env("DOCKER")); // Should not match without underscore
+        assert!(!is_default_passthrough_env(""));
+    }
 }
