@@ -110,7 +110,7 @@ impl ExecutedTask {
                     return true;
                 }
 
-                // Ignore all other paths that are not in node_modules
+                // Ignore all other paths that are not config files and not node_modules directories
                 false
             })
             .collect();
