@@ -25,7 +25,7 @@
     "vitest": "*"
   },
   "devDependencies": {
-    "tsdown": "catalog:",
+    "tsdown": "^0.14.1",
     "vite-plus": "workspace:*"
   },
   "engines": {
