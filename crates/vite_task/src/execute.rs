@@ -220,20 +220,9 @@ fn is_default_passthrough_env(name: &str) -> bool {
         return true;
     }
 
-    // Wildcard patterns that support full glob matching (including *_FOO_* patterns)
-    const WILDCARD_PATTERNS: &[&str] = &[
-        "VSCODE_*",
-        "DOCKER_*",
-        "BUILDKIT_*",
-        "COMPOSE_*",
-        "JB_IDE_*",
-        "VERCEL_*",
-        "NEXT_*",
-        // Example patterns that demonstrate middle wildcard support
-        "*_TEST_*",
-        "*_CONFIG_*",
-        "*_DEBUG_*",
-    ];
+    // Wildcard patterns for common development tools and platforms
+    const WILDCARD_PATTERNS: &[&str] =
+        &["VSCODE_*", "DOCKER_*", "BUILDKIT_*", "COMPOSE_*", "JB_IDE_*", "VERCEL_*", "NEXT_*"];
 
     // Check wildcard patterns
     for pattern in WILDCARD_PATTERNS {
@@ -470,10 +459,10 @@ mod tests {
         assert!(is_default_passthrough_env("VERCEL_URL"));
         assert!(is_default_passthrough_env("NEXT_PUBLIC_API_URL"));
 
-        // Test new wildcard patterns (middle wildcards)
-        assert!(is_default_passthrough_env("MY_TEST_VARIABLE"));
-        assert!(is_default_passthrough_env("APP_CONFIG_FILE"));
-        assert!(is_default_passthrough_env("SOME_DEBUG_FLAG"));
+        // Test patterns that should not match anymore (since we removed the example patterns)
+        assert!(!is_default_passthrough_env("MY_TEST_VARIABLE"));
+        assert!(!is_default_passthrough_env("APP_CONFIG_FILE"));
+        assert!(!is_default_passthrough_env("SOME_DEBUG_FLAG"));
 
         // Test variables that should NOT be passed through
         assert!(!is_default_passthrough_env("SECRET_KEY"));
@@ -486,7 +475,7 @@ mod tests {
         assert!(!is_default_passthrough_env("VSCODE")); // Should not match without underscore
         assert!(!is_default_passthrough_env("DOCKER")); // Should not match without underscore
         assert!(!is_default_passthrough_env(""));
-        assert!(!is_default_passthrough_env("TEST")); // Should not match *_TEST_* pattern
-        assert!(!is_default_passthrough_env("CONFIG")); // Should not match *_CONFIG_* pattern
+        assert!(!is_default_passthrough_env("TEST")); // Should not match any pattern
+        assert!(!is_default_passthrough_env("CONFIG")); // Should not match any pattern
     }
 }
