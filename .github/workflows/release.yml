@@ -32,6 +32,13 @@ jobs:
           save-if: ${{ github.ref_name == 'main' }}
           shared-key: ${{ matrix.target }}
 
+      - name: Cache xwin
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+        if: ${{ contains(matrix.target, 'windows') }}
+        with:
+          path: ${{ github.workspace }}/.xwin-cache
+          key: ${{ matrix.target }}-xwin
+
       - uses: mlugg/setup-zig@8d6198c65fb0feaa111df26e6b467fea8345e46f # v2.0.5
         if: ${{ contains(matrix.target, 'linux') }}
         with:
@@ -50,6 +57,10 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           tool: cargo-xwin
+
+      - name: Install llvm
+        if: ${{ contains(matrix.target, 'windows') }}
+        run: brew install llvm
 
       - name: Rustup Adds Target
         run: rustup target add ${{ matrix.target }}
@@ -75,6 +86,8 @@ jobs:
 
       - name: Build
         run: pnpm --filter=vite-plus build:binding --target ${{ matrix.target }} -x
+        env:
+          XWIN_CACHE_DIR: ${{ github.workspace }}/.xwin-cache
 
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
