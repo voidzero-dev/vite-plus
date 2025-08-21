@@ -137,5 +137,10 @@ jobs:
         run: |
           sed -i '' 's/"version": "0.0.0"/"version": "0.0.0-${{ github.sha }}"/' packages/global/package.json
 
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          registry-url: "https://npm.pkg.github.com"
+
       - name: Publish
         run: pnpm --filter=@vite-plus/global publish --registry https://npm.pkg.github.com --no-git-checks
