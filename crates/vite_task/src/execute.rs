@@ -65,8 +65,9 @@ impl ExecutedTask {
             .path_reads
             .into_iter()
             .filter(|(path, path_read)| {
-                // For paths in node_modules, only keep the top-level directory listing
-                if path == "node_modules" {
+                let path = Path::new(path);
+                // For paths ending with node_modules, only keep the top-level directory listing
+                if path.ends_with("node_modules") {
                     tracing::trace!(
                         "keep path: {:?}, read_dir_entries: {:?}",
                         path,
@@ -75,7 +76,7 @@ impl ExecutedTask {
                     return true;
                 }
 
-                let path = Path::new(path);
+                // Ignore other paths that are in node_modules
                 if path.components().any(|c| c == Component::Normal(OsStr::new("node_modules"))) {
                     tracing::trace!(
                         "ignore path: {:?}, read_dir_entries: {:?}",
@@ -86,17 +87,21 @@ impl ExecutedTask {
                 }
 
                 // Keep package.json, lock files, and config files (but only if not in node_modules)
-                if path.ends_with("package.json")
-                    || path.ends_with("package-lock.json")
-                    || path.ends_with("yarn.lock")
-                    || path.ends_with("pnpm-lock.yaml")
-                    || path.ends_with(".npmrc")
-                    || path.ends_with(".yarnrc")
-                    || path.ends_with(".yarnrc.yml")
-                    || path.ends_with("pnpm-workspace.yaml")
-                    || path.ends_with(".pnpmfile.cjs")
-                    || path.ends_with("yarn.config.cjs")
-                {
+                const CONFIG_FILES: &[&str] = &[
+                    "package.json",
+                    "package-lock.json",
+                    ".npmrc",
+                    // pnpm only
+                    "pnpm-workspace.yaml",
+                    "pnpm-lock.yaml",
+                    ".pnpmfile.cjs",
+                    // yarn only
+                    "yarn.lock",
+                    ".yarnrc",
+                    ".yarnrc.yml",
+                    "yarn.config.cjs",
+                ];
+                if CONFIG_FILES.iter().any(|file| path.ends_with(file)) {
                     tracing::trace!(
                         "keep path: {:?}, read_dir_entries: {:?}",
                         path,
@@ -558,10 +563,12 @@ mod tests {
 
         // Top-level node_modules entries should be kept
         assert!(filtered.path_reads.contains_key(&Str::from("node_modules")));
-        assert!(filtered.path_reads.contains_key(&Str::from("node_modules/@types")));
-        assert!(filtered.path_reads.contains_key(&Str::from("node_modules/react")));
         assert!(filtered.path_reads.contains_key(&Str::from("apps/web/node_modules")));
-        assert!(filtered.path_reads.contains_key(&Str::from("apps/web/node_modules/vite")));
+
+        // Deep node_modules entries should be filtered out
+        assert!(!filtered.path_reads.contains_key(&Str::from("apps/web/node_modules/vite")));
+        assert!(!filtered.path_reads.contains_key(&Str::from("node_modules/@types")));
+        assert!(!filtered.path_reads.contains_key(&Str::from("node_modules/react")));
     }
 
     #[test]
@@ -601,30 +608,6 @@ mod tests {
     }
 
     #[test]
-    fn test_filter_install_paths_keeps_non_node_modules() {
-        let mut path_reads = HashMap::new();
-        path_reads.insert("src/index.js".into(), PathRead { read_dir_entries: false });
-        path_reads.insert("README.md".into(), PathRead { read_dir_entries: false });
-        path_reads.insert(".gitignore".into(), PathRead { read_dir_entries: false });
-        path_reads.insert("dist/bundle.js".into(), PathRead { read_dir_entries: false });
-
-        let task = ExecutedTask {
-            std_outputs: Arc::new([]),
-            exit_status: std::process::ExitStatus::from_raw(0),
-            path_reads,
-            path_writes: HashMap::new(),
-        };
-
-        let filtered = task.filter_install_paths();
-
-        // Non-node_modules paths should be kept
-        assert!(filtered.path_reads.contains_key(&Str::from("src/index.js")));
-        assert!(filtered.path_reads.contains_key(&Str::from("README.md")));
-        assert!(filtered.path_reads.contains_key(&Str::from(".gitignore")));
-        assert!(filtered.path_reads.contains_key(&Str::from("dist/bundle.js")));
-    }
-
-    #[test]
     fn test_filter_install_paths_mixed_paths() {
         let mut path_reads = HashMap::new();
         // Config files
@@ -659,8 +642,6 @@ mod tests {
         assert!(filtered.path_reads.contains_key(&Str::from("package.json")));
         assert!(filtered.path_reads.contains_key(&Str::from("pnpm-lock.yaml")));
         assert!(filtered.path_reads.contains_key(&Str::from("node_modules")));
-        assert!(filtered.path_reads.contains_key(&Str::from("src/main.ts")));
-        assert!(filtered.path_reads.contains_key(&Str::from("tsconfig.json")));
 
         // Check what should be filtered out
         assert!(
@@ -671,8 +652,10 @@ mod tests {
         assert!(
             !filtered.path_reads.contains_key(&Str::from("node_modules/typescript/package.json"))
         );
+        assert!(!filtered.path_reads.contains_key(&Str::from("src/main.ts")));
+        assert!(!filtered.path_reads.contains_key(&Str::from("tsconfig.json")));
 
-        // Should have 6 paths after filtering (down from 8)
-        assert_eq!(filtered.path_reads.len(), 6);
+        // Should have 3 paths after filtering (down from 8)
+        assert_eq!(filtered.path_reads.len(), 3);
     }
 }
