@@ -138,4 +138,4 @@ jobs:
           sed -i '' 's/"version": "0.0.0"/"version": "0.0.0-${{ github.sha }}"/' packages/global/package.json
 
       - name: Publish
-        run: pnpm --filter=@vite-plus/global publish --registry https://npm.pkg.github.com
+        run: pnpm --filter=@vite-plus/global publish --registry https://npm.pkg.github.com --no-git-checks
