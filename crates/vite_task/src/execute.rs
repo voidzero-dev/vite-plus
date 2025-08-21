@@ -120,6 +120,51 @@ pub struct TaskEnvs {
     pub envs_without_pass_through: HashMap<Str, Str>,
 }
 
+/// Checks if a string matches a wildcard pattern.
+/// Supports * as a wildcard that matches any number of characters.
+fn matches_wildcard_pattern(text: &str, pattern: &str) -> bool {
+    let pattern_parts: Vec<&str> = pattern.split('*').collect();
+    
+    // If no wildcards, it's just an exact match
+    if pattern_parts.len() == 1 {
+        return text == pattern;
+    }
+    
+    let mut text_pos = 0;
+    let text_bytes = text.as_bytes();
+    
+    for (i, part) in pattern_parts.iter().enumerate() {
+        if part.is_empty() {
+            // Empty part means there was a * at this position
+            continue;
+        }
+        
+        let part_bytes = part.as_bytes();
+        
+        if i == 0 {
+            // First part - must match at the beginning
+            if !text_bytes.starts_with(part_bytes) {
+                return false;
+            }
+            text_pos = part.len();
+        } else if i == pattern_parts.len() - 1 {
+            // Last part - must match at the end
+            if !text_bytes[text_pos..].ends_with(part_bytes) {
+                return false;
+            }
+        } else {
+            // Middle part - find it somewhere after current position
+            if let Some(pos) = text[text_pos..].find(part) {
+                text_pos += pos + part.len();
+            } else {
+                return false;
+            }
+        }
+    }
+    
+    true
+}
+
 /// Checks if an environment variable should be passed through by default.
 /// Based on Turborepo's implementation for commonly needed environment variables.
 fn is_default_passthrough_env(name: &str) -> bool {
@@ -175,16 +220,26 @@ fn is_default_passthrough_env(name: &str) -> bool {
         return true;
     }
     
-    // Check glob patterns
-    if name.starts_with("VSCODE_") 
-        || name.starts_with("DOCKER_")
-        || name.starts_with("BUILDKIT_")
-        || name.starts_with("COMPOSE_")
-        || name.starts_with("JB_IDE_")
-        || name.starts_with("VERCEL_")
-        || name.starts_with("NEXT_")
-    {
-        return true;
+    // Wildcard patterns that support full glob matching (including *_FOO_* patterns)
+    const WILDCARD_PATTERNS: &[&str] = &[
+        "VSCODE_*",
+        "DOCKER_*",
+        "BUILDKIT_*",
+        "COMPOSE_*",
+        "JB_IDE_*",
+        "VERCEL_*",
+        "NEXT_*",
+        // Example patterns that demonstrate middle wildcard support
+        "*_TEST_*",
+        "*_CONFIG_*",
+        "*_DEBUG_*",
+    ];
+    
+    // Check wildcard patterns
+    for pattern in WILDCARD_PATTERNS {
+        if matches_wildcard_pattern(name, pattern) {
+            return true;
+        }
     }
     
     false
@@ -358,6 +413,41 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_matches_wildcard_pattern() {
+        // Test exact matches (no wildcards)
+        assert!(matches_wildcard_pattern("PATH", "PATH"));
+        assert!(!matches_wildcard_pattern("PATH", "HOME"));
+        
+        // Test prefix wildcards (existing behavior)
+        assert!(matches_wildcard_pattern("VSCODE_PID", "VSCODE_*"));
+        assert!(matches_wildcard_pattern("DOCKER_HOST", "DOCKER_*"));
+        assert!(!matches_wildcard_pattern("VSCODE", "VSCODE_*"));
+        
+        // Test suffix wildcards
+        assert!(matches_wildcard_pattern("MY_CONFIG", "*_CONFIG"));
+        assert!(matches_wildcard_pattern("APP_CONFIG", "*_CONFIG"));
+        assert!(!matches_wildcard_pattern("CONFIG", "*_CONFIG"));
+        
+        // Test middle wildcards (the key new feature)
+        assert!(matches_wildcard_pattern("MY_TEST_VAR", "*_TEST_*"));
+        assert!(matches_wildcard_pattern("APP_TEST_CONFIG", "*_TEST_*"));
+        assert!(matches_wildcard_pattern("SOME_CONFIG_VALUE", "*_CONFIG_*"));
+        assert!(!matches_wildcard_pattern("MY_TEST", "*_TEST_*"));
+        assert!(!matches_wildcard_pattern("TEST_VAR", "*_TEST_*"));
+        
+        // Test multiple wildcards
+        assert!(matches_wildcard_pattern("A_B_C_D", "*_B_*_D"));
+        assert!(matches_wildcard_pattern("X_B_Y_D", "*_B_*_D"));
+        assert!(!matches_wildcard_pattern("A_B_C", "*_B_*_D"));
+        
+        // Test edge cases
+        assert!(matches_wildcard_pattern("", "*"));
+        assert!(matches_wildcard_pattern("anything", "*"));
+        assert!(matches_wildcard_pattern("", ""));
+        assert!(!matches_wildcard_pattern("something", ""));
+    }
+
+    #[test]
     fn test_is_default_passthrough_env() {
         // Test exact matches
         assert!(is_default_passthrough_env("PATH"));
@@ -369,7 +459,7 @@ mod tests {
         assert!(is_default_passthrough_env("LANG"));
         assert!(is_default_passthrough_env("TZ"));
         
-        // Test glob patterns
+        // Test existing prefix patterns
         assert!(is_default_passthrough_env("VSCODE_PID"));
         assert!(is_default_passthrough_env("VSCODE_GIT_ASKPASS_MAIN"));
         assert!(is_default_passthrough_env("DOCKER_HOST"));
@@ -379,6 +469,11 @@ mod tests {
         assert!(is_default_passthrough_env("JB_IDE_PROJECT_DIR"));
         assert!(is_default_passthrough_env("VERCEL_URL"));
         assert!(is_default_passthrough_env("NEXT_PUBLIC_API_URL"));
+        
+        // Test new wildcard patterns (middle wildcards)
+        assert!(is_default_passthrough_env("MY_TEST_VARIABLE"));
+        assert!(is_default_passthrough_env("APP_CONFIG_FILE"));
+        assert!(is_default_passthrough_env("SOME_DEBUG_FLAG"));
         
         // Test variables that should NOT be passed through
         assert!(!is_default_passthrough_env("SECRET_KEY"));
@@ -391,5 +486,7 @@ mod tests {
         assert!(!is_default_passthrough_env("VSCODE")); // Should not match without underscore
         assert!(!is_default_passthrough_env("DOCKER")); // Should not match without underscore
         assert!(!is_default_passthrough_env(""));
+        assert!(!is_default_passthrough_env("TEST")); // Should not match *_TEST_* pattern
+        assert!(!is_default_passthrough_env("CONFIG")); // Should not match *_CONFIG_* pattern
     }
 }
