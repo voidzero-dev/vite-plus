@@ -140,7 +140,7 @@ jobs:
       - name: Publish
         run: |
           echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
-          echo "@vite-plus:registry=https://npm.pkg.github.com/" >> ~/.npmrc
-          pnpm --filter=@voidzero-dev/global publish --registry https://npm.pkg.github.com --no-git-checks
+          echo "@voidzero-dev:registry=https://npm.pkg.github.com/" >> ~/.npmrc
+          pnpm publish --filter=./packages/global --registry https://npm.pkg.github.com --no-git-checks
         env:
           NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
