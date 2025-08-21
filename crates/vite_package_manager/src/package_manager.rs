@@ -88,11 +88,11 @@ impl PackageManagerBuilder {
             get_package_manager_type_and_version(&workspace_root, self.package_manager_type)?;
 
         let mut package_name = package_manager_type.to_string();
-        let mut fix_package_manager_field = false;
+        let mut should_update_package_manager_field = false;
 
         if version == "latest" {
             version = get_latest_version(package_manager_type).await?;
-            fix_package_manager_field = true;
+            should_update_package_manager_field = true;
         }
 
         // handle yarn >= 2.0.0 to use `@yarnpkg/cli-dist` as package name
@@ -108,7 +108,7 @@ impl PackageManagerBuilder {
         let install_dir =
             download_package_manager(package_manager_type, &package_name, &version).await?;
 
-        if fix_package_manager_field {
+        if should_update_package_manager_field {
             // auto set `packageManager` field in package.json
             let package_json_path = workspace_root.join("package.json");
             set_package_manager_field(&package_json_path, package_manager_type, &version).await?;

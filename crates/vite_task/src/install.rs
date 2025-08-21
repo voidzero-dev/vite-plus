@@ -59,7 +59,7 @@ impl InstallCommand {
         };
         let mut workspace = Workspace::partial_load(self.workspace_root.clone())?;
         let resolve_command = package_manager.resolve_command();
-        let resolved_task = ResolvedTask::resolve_from_built_in_with_comment_result(
+        let resolved_task = ResolvedTask::resolve_from_built_in_with_command_result(
             &workspace,
             "install",
             iter::once("install").chain(args.iter().map(String::as_str)),
