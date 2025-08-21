@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-rust:
+    runs-on: blaze/macos-latest
+    strategy:
+      matrix:
+        target:
+          - aarch64-apple-darwin
+          - aarch64-unknown-linux-gnu
+          - x86_64-unknown-linux-gnu
+          - x86_64-pc-windows-msvc
+          - aarch64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+      - name: Setup Rust
+        uses: oxc-project/setup-rust@cd82e1efec7fef815e2c23d296756f31c7cdc03d # v1.0.0
+        with:
+          cache-key: release-${{ matrix.target }}
+          save-cache: ${{ github.ref_name == 'main' }}
+
+      - uses: taiki-e/install-action@ad95d4e02e061d4390c4b66ef5ed56c7fee3d2ce # v2.58.17
+        if: ${{ contains(matrix.target, 'linux') }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          tool: cargo-zigbuild
+
+      - uses: taiki-e/install-action@ad95d4e02e061d4390c4b66ef5ed56c7fee3d2ce # v2.58.17
+        if: ${{ contains(matrix.target, 'windows') }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          tool: cargo-xwin
+
+      - name: Rustup Adds Target
+        run: rustup target add ${{ matrix.target }}
+
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .node-version
+          registry-url: "https://registry.npmjs.org"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm --filter=vite-plus build:binding --target ${{ matrix.target }} -x
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bindings-${{ matrix.target }}
+          path: ./packages/cli/binding/*.node
+          if-no-files-found: error
+
+  Release:
+    runs-on: blaze/macos-latest
+    needs: build-rust
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .node-version
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Bootstrap
+        run: pnpm bootstrap-cli:ci
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: packages/global/dist
+          pattern: bindings-*
+          merge-multiple: true
+
+      - name: Build
+        run: vp run vite-plus#build:ts @vite-plus/global#build
+
+      # Download again because `@vite-plus/global#build` will cleanup the dist dir first
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: packages/global/dist
+          pattern: bindings-*
+          merge-multiple: true
+
+      - name: Set version
+        run: |
+          sed -i '' 's/"version": "0.0.0"/"version": "0.0.0-${{ github.sha }}"/' packages/global/package.json
+
+      - name: Publish
+        run: pnpm --filter=@vite-plus/global publish --registry https://npm.pkg.github.com

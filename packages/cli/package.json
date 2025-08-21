@@ -9,6 +9,9 @@
   "exports": {
     ".": {
       "import": "./dist/index.js"
+    },
+    "./bin": {
+      "import": "./dist/bin.js"
     }
   },
   "engines": {

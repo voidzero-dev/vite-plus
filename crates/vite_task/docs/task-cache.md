@@ -12,7 +12,9 @@ The task cache system enables:
 - **Output replay**: Cached stdout/stderr are replayed exactly as originally produced
 
 ### Shared caching
+
 For tasks defined as below:
+
 ```jsonc
 // package.json
 {
@@ -27,16 +29,16 @@ the task cache system is able to hit the same cache for `test` task and for the 
 
 1. user runs `vite run build` -> no cache hit. run `echo $foo` and create cache
 2. user runs `vite run test`
-  1. `echo $foo` -> **hit cache created in step 1 and replay**
-  2. `echo $bar` -> no cache hit. run `echo test` and create cache
-3. user changes env `$foo`
-4. user runs `vite run test`
-  1. `echo $foo`
-    1. the cache system should be able to **locate the cache that was created in step 1 and hit in step 2.1**
-    2. compare the command fingerprint and report cache miss because `$foo` is changed.
-    3. re-run and replace the cache with a new one.
-  2.  `echo $bar` -> hit cache created in step 2.2 and replay
-5. user runs `vite run build`: **hit the cache created in step 4.1.3 and replay**.
+3. `echo $foo` -> **hit cache created in step 1 and replay**
+4. `echo $bar` -> no cache hit. run `echo test` and create cache
+5. user changes env `$foo`
+6. user runs `vite run test`
+7. `echo $foo`
+   1. the cache system should be able to **locate the cache that was created in step 1 and hit in step 2.1**
+   2. compare the command fingerprint and report cache miss because `$foo` is changed.
+   3. re-run and replace the cache with a new one.
+8. `echo $bar` -> hit cache created in step 2.2 and replay
+9. user runs `vite run build`: **hit the cache created in step 4.1.3 and replay**.
 
 ## Architecture
 
@@ -114,7 +116,6 @@ This ensures cache invalidation when:
 - Command or arguments change
 - Environment variables differ
 
-
 ### 4. Command Fingerprinting
 
 The complete task fingerprint includes input files:
@@ -147,7 +148,6 @@ pub struct TaskId {
 ### 6. (`CommandCacheKey`, `TaskId`) Relationship
 
 The cache system maintains (`CommandCacheKey`, `TaskId`) relationship in order to locate the previous cache of the same task. This is a one-to-many relationship.
-
 
 #### Input File Tracking
 

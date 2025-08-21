@@ -104,10 +104,23 @@ importers:
         version: 0.12.9(typescript@5.9.2)
 
   packages/global:
+    dependencies:
+      oxlint:
+        specifier: 'catalog:'
+        version: 1.11.1
+      vite:
+        specifier: 'catalog:'
+        version: 7.1.1(@types/node@22.16.4)(jiti@2.4.2)(yaml@2.8.0)
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/node@22.16.4)(jiti@2.4.2)(yaml@2.8.0)
     devDependencies:
       tsdown:
         specifier: 'catalog:'
         version: 0.12.9(typescript@5.9.2)
+      vite-plus:
+        specifier: workspace:*
+        version: link:../cli
 
   packages/global/templates/minimal:
     devDependencies:

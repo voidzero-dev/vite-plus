@@ -2,6 +2,10 @@
   "name": "@vite-plus/global",
   "version": "0.0.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/voidzero-dev/vite-plus.git"
+  },
   "bin": {
     "vite-plus": "./bin/vp",
     "vp": "./bin/vp",
@@ -9,15 +13,20 @@
   },
   "files": [
     "bin",
-    "dist",
-    "template"
+    "dist"
   ],
   "scripts": {
     "dev": "tsdown --watch",
-    "prepack": "tsdown"
+    "build": "tsdown"
+  },
+  "dependencies": {
+    "oxlint": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   },
   "devDependencies": {
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "vite-plus": "workspace:*"
   },
   "engines": {
     "node": ">=20.11.0"
