@@ -124,9 +124,9 @@ jobs:
           merge-multiple: true
 
       - name: Build
-        run: vp run vite-plus#build:ts @vite-plus/global#build
+        run: vp run vite-plus#build:ts @voidzero-dev/global#build
 
-      # Download again because `@vite-plus/global#build` will cleanup the dist dir first
+      # Download again because `@voidzero-dev/global#build` will cleanup the dist dir first
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: packages/global/dist
@@ -141,6 +141,6 @@ jobs:
         run: |
           echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
           echo "@vite-plus:registry=https://npm.pkg.github.com/" >> ~/.npmrc
-          pnpm --filter=@vite-plus/global publish --registry https://npm.pkg.github.com --no-git-checks
+          pnpm --filter=@voidzero-dev/global publish --registry https://npm.pkg.github.com --no-git-checks
         env:
           NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
