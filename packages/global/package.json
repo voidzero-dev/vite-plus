@@ -20,9 +20,9 @@
     "build": "tsdown"
   },
   "dependencies": {
-    "oxlint": "catalog:",
-    "vite": "catalog:",
-    "vitest": "catalog:"
+    "oxlint": "*",
+    "vite": "*",
+    "vitest": "*"
   },
   "devDependencies": {
     "tsdown": "catalog:",
