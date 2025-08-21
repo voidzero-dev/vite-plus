@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::{env, iter};
 
@@ -282,7 +282,7 @@ fn prompt_package_manager_selection() -> Result<PackageManagerType, Error> {
     }
 
     // Check if stdin is a TTY (terminal) - if not, use default
-    if !atty::is(atty::Stream::Stdin) {
+    if !io::stdin().is_terminal() {
         println!("Non-interactive environment detected. Using default package manager: pnpm");
         return Ok(PackageManagerType::Pnpm);
     }

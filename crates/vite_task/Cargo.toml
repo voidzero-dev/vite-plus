@@ -17,7 +17,6 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-atty = { workspace = true }
 bincode = { workspace = true, features = ["derive"] }
 brush-parser = { workspace = true }
 bstr = { workspace = true }
