@@ -99,6 +99,11 @@ impl TaskFingerprint {
                     if path_fingerprint == &current_path_fingerprint {
                         None
                     } else {
+                        tracing::trace!(
+                            "input content changed: {:?}, path_read: {:?}",
+                            input_relative_path,
+                            path_read
+                        );
                         Some(Ok(FingerprintMismatch::InputContentChanged {
                             path: input_relative_path.clone(),
                         }))
