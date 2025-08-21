@@ -95,136 +95,265 @@ The auto-executed `vite install` task will not replay stdout after hitting the c
 
 ## Architecture
 
-### Install Command Execution Flow
+### Install Execution Flow
 
 ```
-vite install
-    │
-    ├─► Detect Workspace Root
-    │   ├─► pnpm-workspace.yaml?  ────► Use as root
-    │   ├─► package.json/workspaces? ──► Use as root  
-    │   └─► Search upward for package.json
-    │       └─► Not found? ────────────► Use current dir
-    │
-    ├─► Detect Package Manager
-    │   ├─► package.json#packageManager? ──► Parse pm@version
-    │   ├─► pnpm-lock.yaml exists? ────────► pnpm@latest
-    │   ├─► yarn.lock exists? ─────────────► yarn@latest
-    │   ├─► package-lock.json exists? ─────► npm@latest
-    │   └─► No PM detected?
-    │       ├─► CI environment? ───────────► Auto-select pnpm
-    │       ├─► Non-TTY? ──────────────────► Auto-select pnpm
-    │       └─► Interactive menu ──────────► User selects
-    │
-    ├─► Install Package Manager (if needed)
-    │   ├─► Check shim binary files exists
-    │   └─► Not exists?
-    │       ├─► Download with retry (exponential backoff)
-    │       ├─► Extract tgz archive
-    │       ├─► Create shims (sh/cmd/ps1)
-    │       └─► Update PATH
-    │
-    ├─► Execute Install
-    │   ├─► Run: {pm} install
-    │   ├─► Collect fingerprint
-    │   │   ├─► Hash package.json
-    │   │   ├─► Hash lock file
-    │   │   └─► List node_modules/* (names only)
-    │   └─► Save fingerprint to cache
-    │
-    └─► Post-Install
-        ├─► Update package.json (add packageManager if missing)
-        └─► Complete
+┌──────────────────────────────────────────────────────────────┐
+│                    Install Execution Flow                    │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  1. Install Request                                          │
+│  ──────────────────                                          │
+│    vite install [args]                                       │
+│         │                                                    │
+│         ▼                                                    │
+│  2. Workspace Detection                                      │
+│  ──────────────────────                                      │
+│    • Check pnpm-workspace.yaml                               │
+│    • Check package.json#workspaces                           │
+│    • Search upward for package.json                          │
+│         │                                                    │
+│         ▼                                                    │
+│  3. Package Manager Detection                                │
+│  ────────────────────────────                                │
+│    ┌──────────────────────┬────────────────┐                 │
+│    │ packageManager field │   Lock Files   │                 │
+│    └──────────┬───────────┴────────┬───────┘                 │
+│               │                     │                        │
+│               ▼                     ▼                        │
+│  4a. Parse pm@version    4b. Infer from locks                │
+│  ────────────────────    ────────────────────                │
+│    • pnpm@8.15.0           • pnpm-lock.yaml → pnpm           │
+│    • yarn@4.0.0            • yarn.lock → yarn                │
+│    • npm@10.0.0            • package-lock.json → npm         │
+│               │                     │                        │
+│               └──────────┬──────────┘                        │
+│                          │                                   │
+│                          ▼                                   │
+│  5. Package Manager Installation                             │
+│  ────────────────────────────────                            │
+│    • Check local cache for pm@version                        │
+│    • Download if missing (with retry)                        │
+│    • Extract and create shims                                │
+│    • Update PATH environment                                 │
+│         │                                                    │
+│         ▼                                                    │
+│  6. Execute Install Command                                  │
+│  ──────────────────────────                                  │
+│    • Run: {pm} install [args]                                │
+│    • Monitor with fspy                                       │
+│    • Capture stdout/stderr                                   │
+│         │                                                    │
+│         ▼                                                    │
+│  7. Fingerprint Collection                                   │
+│  ─────────────────────────                                   │
+│    • Hash package.json                                       │
+│    • Hash lock file                                          │
+│    • List node_modules/* (names only)                        │
+│         │                                                    │
+│         ▼                                                    │
+│  8. Cache Storage                                            │
+│  ────────────────                                            │
+│    • Save fingerprint                                        │
+│    • Store outputs                                           │
+│    • Update packageManager field                             │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### Simplified Component Flow
+### Package Manager Resolution
 
 ```
-┌─────────┐     ┌──────────┐     ┌───────────┐     ┌─────────┐
-│  User   │────►│  CLI     │────►│ Detector  │────►│ Cache   │
-└─────────┘     └──────────┘     └───────────┘     └─────────┘
-                      │                 │                 │
-                      ▼                 ▼                 ▼
-                ┌────────────┐     ┌───────────┐    ┌──────────────┐
-                │ Downloader │     │ Installer │    │ Fingerprint  │
-                └────────────┘     └───────────┘    └──────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                 Package Manager Resolution                   │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Priority Order:                                             │
+│  ──────────────                                              │
+│    1. package.json#packageManager                            │
+│    2. pnpm-workspace.yaml exists                             │
+│    3. Lock file detection                                    │
+│    4. User selection (interactive)                           │
+│         │                                                    │
+│         ▼                                                    │
+│  Detection Flow:                                             │
+│  ──────────────                                              │
+│                                                              │
+│    package.json                                              │
+│         │                                                    │
+│         ├─► packageManager: "pnpm@8.15.0"                    │
+│         │   └─► Use exact version                            │
+│         │                                                    │
+│         └─► No packageManager field                          │
+│             │                                                │
+│             ├─► pnpm-workspace.yaml exists?                  │
+│             │   └─► pnpm@latest                              │
+│             │                                                │
+│             ├─► pnpm-lock.yaml exists?                       │
+│             │   └─► pnpm@latest                              │
+│             │                                                │
+│             ├─► yarn.lock exists?                            │
+│             │   └─► yarn@latest                              │
+│             │                                                │
+│             ├─► package-lock.json exists?                    │
+│             │   └─► npm@latest                               │
+│             │                                                │
+│             └─► No indicators found                          │
+│                 │                                            │
+│                 ├─► CI environment?                          │
+│                 │   └─► Auto-select pnpm                     │
+│                 │                                            │
+│                 ├─► Non-TTY?                                 │
+│                 │   └─► Auto-select pnpm                     │
+│                 │                                            │
+│                 └─► Interactive menu                         │
+│                     └─► User selects                         │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### Decision Tree
+### Package Manager Download & Setup
 
 ```
-   [Start]
-      │
-┌─────▼───────┐
-│  Find Root? │
-└─────┬───────┘
-  Yes │ No → Use CWD
-      │
-┌─────▼─────┐
-│  Find PM? │
-└─────┬─────┘
-  Yes │ No → Select PM
-      │      │
-      │   ┌──▼──┐
-      │   │ CI? │→ Yes → pnpm
-      │   └──┬──┘
-      │      │ No
-      │   ┌──▼──┐
-      │   │TTY? │→ No → pnpm
-      │   └──┬──┘
-      │      │ Yes → Menu
-      │      │
-┌─────▼──────▼─────┐
-│  PM Installed?   │
-└─────┬────────────┘
-  Yes │ No → Download
-      │      │
-      │   ┌──▼────────┐
-      │   │  Extract  │
-      │   │  & Shims  │
-      │   └──┬────────┘
-      │      │
-┌─────▼──────▼─────┐
-│   Run Install    │
-└─────┬────────────┘
-      │
-┌─────▼───────┐
-│ Fingerprint │
-└─────┬───────┘
-      │
-   [Done]
+┌──────────────────────────────────────────────────────────────┐
+│              Package Manager Download & Setup                │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  1. Cache Check                                              │
+│  ─────────────                                               │
+│    $CACHE_DIR/vite/package_manager/{pm}/{version}/          │
+│         │                                                    │
+│         ├─► Exists? → Use cached                             │
+│         │                                                    │
+│         └─► Missing? → Download                              │
+│                  │                                           │
+│                  ▼                                           │
+│  2. Download with Retry                                      │
+│  ──────────────────────                                      │
+│    GET https://registry.npmjs.org/{package}/-/              │
+│        {package}-{version}.tgz                               │
+│         │                                                    │
+│         ├─► Success → Extract                                │
+│         │                                                    │
+│         └─► Failed → Retry with backoff                      │
+│             • 1st retry: wait 1s                             │
+│             • 2nd retry: wait 2s                             │
+│             • 3rd retry: wait 4s                             │
+│                  │                                           │
+│                  ▼                                           │
+│  3. Extract & Setup                                          │
+│  ─────────────────                                           │
+│    • Extract tgz to temp dir                                 │
+│    • Rename package/ to {pm}/                                │
+│    • Atomic move to cache dir                                │
+│         │                                                    │
+│         ▼                                                    │
+│  4. Create Shims                                             │
+│  ──────────────                                              │
+│    For each binary:                                          │
+│    • Create Unix shell script (.sh)                          │
+│    • Create Windows batch (.cmd)                             │
+│    • Create PowerShell script (.ps1)                         │
+│         │                                                    │
+│         ▼                                                    │
+│  Shim Structure:                                             │
+│  ──────────────                                              │
+│    bin/                                                      │
+│    ├── pnpm         → ../pnpm.cjs                            │
+│    ├── pnpm.cmd     → ..\pnpm.cjs                            │
+│    ├── pnpm.ps1     → ../pnpm.cjs                            │
+│    ├── pnpx         → ../pnpx.cjs                            │
+│    ├── pnpx.cmd     → ..\pnpx.cjs                            │
+│    └── pnpx.ps1     → ../pnpx.cjs                            │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### Key Components
+### Fingerprint Generation
 
-#### 1. Workspace Root Detector
+```
+┌──────────────────────────────────────────────────────────────┐
+│                   Fingerprint Generation                     │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Install Fingerprint Components:                             │
+│  ───────────────────────────────                             │
+│                                                              │
+│  1. Configuration Files                                      │
+│  ──────────────────────                                      │
+│    • package.json content hash                               │
+│    • Lock file content hash                                  │
+│    • .npmrc/.yarnrc/.pnpmfile (if exists)                    │
+│         │                                                    │
+│         ▼                                                    │
+│  2. Node Modules Structure                                   │
+│  ─────────────────────────                                   │
+│    Special handling for node_modules:                        │
+│    • Ignore file contents                                    │
+│    • Record first-level directory names only                 │
+│    • Example fingerprint:                                    │
+│      node_modules/                                           │
+│      ├── @types        (recorded)                            │
+│      ├── typescript    (recorded)                            │
+│      └── vite          (recorded)                            │
+│         │                                                    │
+│         ▼                                                    │
+│  3. Environment Context                                      │
+│  ─────────────────────                                       │
+│    • NODE_ENV value                                          │
+│    • Package manager version                                 │
+│    • Install command arguments                               │
+│         │                                                    │
+│         ▼                                                    │
+│  Fingerprint Hash:                                           │
+│  ────────────────                                            │
+│    xxHash3({                                                 │
+│      config_files + node_modules_list + env_context          │
+│    }) → 0xABCDEF123456789                                    │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
 
-- Searches for monorepo markers (`pnpm-workspace.yaml`, `workspaces` in package.json)
-- Falls back to searching for nearest `package.json`
-- Uses current directory if no package.json found
+### Cache Hit/Miss Behavior
 
-#### 2. Package Manager Detector
-
-- Priority order:
-  1. `packageManager` field in package.json
-  2. Lock file detection (pnpm-lock.yaml, yarn.lock, package-lock.json)
-  3. Interactive user selection with pnpm as default
-
-#### 3. Package Manager Installer
-
-- Downloads package manager if not present
-- Creates platform-specific shims (sh, cmd, ps1)
-- Sets up local installation without global pollution
-- Implements retry logic with exponential backoff
-
-#### 4. Fingerprint Collector
-
-- Captures installation state for caching
-- Special handling for node_modules (only first-level names)
-- Ignores paths outside working directory
-
-#### 5. Auto-execution Handler
-
-- Runs automatically before other vite+ commands
-- Skips replay output when cache hit
-- Manual execution available with `--force` flag
+```
+┌──────────────────────────────────────────────────────────────┐
+│                  Cache Hit/Miss Behavior                     │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Auto-execution Mode:                                        │
+│  ───────────────────                                         │
+│                                                              │
+│    Cache Lookup                                              │
+│         │                                                    │
+│         ├─► Cache Hit                                        │
+│         │   • Skip execution                                 │
+│         │   • No output replay                               │
+│         │   • Continue to next task                          │
+│         │                                                    │
+│         └─► Cache Miss                                       │
+│             • Execute install                                │
+│             • Capture outputs                                │
+│             • Generate fingerprint                           │
+│                                                              │
+│  Manual Execution Mode (`vite install`):                     │
+│  ────────────────────────────────                            │
+│                                                              │
+│    Skip Cache                                                │
+│         │                                                    │
+│         └─► Always Execute                                   │
+│             • Run install command                            │
+│             • Generate fingerprint                           │
+│                                                              │
+│  Fingerprint Validation:                                     │
+│  ──────────────────────                                      │
+│                                                              │
+│    Compare Current vs Cached:                                │
+│    • package.json changed?        → Cache miss               │
+│    • Lock file changed?           → Cache miss               │
+│    • node_modules/* changed?      → Cache miss               │
+│    • Install args different?      → Cache miss               │
+│    • All match?                   → Cache hit                │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```

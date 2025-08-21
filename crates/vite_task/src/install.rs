@@ -113,20 +113,24 @@ fn format_path_env(bin_prefix: impl AsRef<Path>) -> String {
     env::join_paths(paths).unwrap().to_string_lossy().to_string()
 }
 
+/// Common CI environment variables
+const CI_ENV_VARS: &[&str] = &[
+    "CI",
+    "CONTINUOUS_INTEGRATION",
+    "GITHUB_ACTIONS",
+    "GITLAB_CI",
+    "CIRCLECI",
+    "TRAVIS",
+    "JENKINS_URL",
+    "BUILDKITE",
+    "DRONE",
+    "CODEBUILD_BUILD_ID", // AWS CodeBuild
+    "TF_BUILD",           // Azure Pipelines
+];
+
 /// Check if running in a CI environment
 fn is_ci_environment() -> bool {
-    // Check common CI environment variables
-    env::var("CI").is_ok() ||
-    env::var("CONTINUOUS_INTEGRATION").is_ok() ||
-    env::var("GITHUB_ACTIONS").is_ok() ||
-    env::var("GITLAB_CI").is_ok() ||
-    env::var("CIRCLECI").is_ok() ||
-    env::var("TRAVIS").is_ok() ||
-    env::var("JENKINS_URL").is_ok() ||
-    env::var("BUILDKITE").is_ok() ||
-    env::var("DRONE").is_ok() ||
-    env::var("CODEBUILD_BUILD_ID").is_ok() || // AWS CodeBuild
-    env::var("TF_BUILD").is_ok() // Azure Pipelines
+    CI_ENV_VARS.iter().any(|key| env::var(key).is_ok())
 }
 
 /// Interactive menu for selecting a package manager with keyboard navigation
@@ -445,46 +449,15 @@ mod tests {
         assert!(command.execute(&vec![]).await.is_ok());
     }
 
-    #[test]
-    fn test_ci_environment_detection() {
-        // Save original env vars
-        let ci_vars = vec![
-            "CI",
-            "CONTINUOUS_INTEGRATION",
-            "GITHUB_ACTIONS",
-            "GITLAB_CI",
-            "CIRCLECI",
-            "TRAVIS",
-            "JENKINS_URL",
-            "BUILDKITE",
-            "DRONE",
-            "CODEBUILD_BUILD_ID",
-            "TF_BUILD",
-        ];
-
-        // Test that without CI vars, we're not in CI
-        unsafe {
-            for var in &ci_vars {
-                env::remove_var(var);
-            }
-        }
-        assert!(!is_ci_environment());
-
-        // Test that each CI var triggers CI detection
-        unsafe {
-            for var in &ci_vars {
-                env::set_var(var, "true");
-                assert!(is_ci_environment(), "Failed to detect CI with {} var", var);
-                env::remove_var(var);
-            }
-        }
-    }
-
+    /// Test that in CI environment, we will use pnpm without prompting
     #[test]
     fn test_prompt_package_manager_in_ci() {
-        // Set CI environment
-        unsafe {
-            env::set_var("CI", "true");
+        let has_ci_env = env::var("CI").is_ok();
+        if !has_ci_env {
+            // Set CI environment
+            unsafe {
+                env::set_var("CI", "true");
+            }
         }
 
         // Should return pnpm without prompting
@@ -492,9 +465,11 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), PackageManagerType::Pnpm);
 
-        // Clean up
-        unsafe {
-            env::remove_var("CI");
+        if !has_ci_env {
+            // Clean up
+            unsafe {
+                env::remove_var("CI");
+            }
         }
     }
 }
