@@ -54,6 +54,14 @@ jobs:
       - name: Rustup Adds Target
         run: rustup target add ${{ matrix.target }}
 
+      - name: Add musl target (x86_64)
+        if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
+        run: rustup target add x86_64-unknown-linux-musl
+
+      - name: Add musl target (aarch64)
+        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+        run: rustup target add aarch64-unknown-linux-musl
+
       - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
