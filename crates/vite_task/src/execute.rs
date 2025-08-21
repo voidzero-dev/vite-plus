@@ -132,6 +132,8 @@ fn matches_wildcard_pattern(text: &str, pattern: &str) -> bool {
 /// Based on Turborepo's implementation for commonly needed environment variables.
 fn is_default_passthrough_env(name: &str) -> bool {
     // Exact matches for common environment variables
+    // Referenced from Turborepo's implementation:
+    // https://github.com/vercel/turborepo/blob/26d309f073ca3ac054109ba0c29c7e230e7caac3/crates/turborepo-lib/src/task_hash.rs#L439
     const DEFAULT_PASSTHROUGH_ENVS: &[&str] = &[
         // System and shell
         "HOME",
