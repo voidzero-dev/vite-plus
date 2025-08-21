@@ -326,7 +326,6 @@ impl Workspace {
                         .cloned()
                         .map(|task_request| {
                             let sharp_pos = task_request.find('#');
-                            // contains multiple '#'
                             if sharp_pos == task_request.rfind('#') {
                                 let (dep_package_node_index, dep_task_name): (NodeIndex, Str) =
                                     if let Some(sharp_pos) = sharp_pos {
@@ -374,6 +373,7 @@ impl Workspace {
                                     subcommand_index: None, // Always points to the main task
                                 })
                             } else {
+                                // contains multiple '#'
                                 Err(Error::AmbiguousTaskRequest {
                                     task_request: task_request.to_string(),
                                 })
