@@ -137,7 +137,6 @@ impl ResolvedTask {
         replay_cached_outputs: Option<bool>,
         ignore_cache_paths: Option<Vec<Str>>,
     ) -> Result<Self, Error> {
-        // TODO(@fengmk2): refactor this to use the same code as resolve_from_built_in
         let ResolveCommandResult { bin_path, envs } = command_result;
         let link_task = TaskCommand::Parsed(TaskParsedCommand {
             args: args.clone().map(|arg| arg.as_ref().into()).collect(),
@@ -153,12 +152,12 @@ impl ResolvedTask {
         let resolved_command = ResolvedTaskCommand {
             fingerprint: CommandFingerprint {
                 cwd: workspace.dir.as_path().to_string_lossy().as_ref().into(),
-                command: link_task.clone().into(),
+                command: link_task,
                 envs_without_pass_through: resolved_envs.envs_without_pass_through,
             },
             all_envs: resolved_envs.all_envs,
         };
-        Ok(ResolvedTask {
+        Ok(Self {
             name: TaskName {
                 package_name: workspace.package_json.name.as_str().into(),
                 task_group_name: task_name.into(),
