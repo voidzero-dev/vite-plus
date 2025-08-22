@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 
 use crate::Error;
 use crate::config::{get_cache_dir, get_npm_package_tgz_url, get_npm_package_version_url};
-use crate::download::download_and_extract_tgz;
+use crate::request::download_and_extract_tgz;
 use crate::shim;
 
 /// The package manager type.

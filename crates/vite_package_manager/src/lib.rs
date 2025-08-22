@@ -1,6 +1,6 @@
 mod config;
-mod download;
 pub mod package_manager;
+mod request;
 mod shim;
 
 use std::{

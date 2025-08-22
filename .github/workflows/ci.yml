@@ -103,10 +103,10 @@ jobs:
         run: pnpm install
 
       - name: Build self
-        run: cargo build --bin vt
+        run: cargo build --release --bin vt
 
       - name: Run self
-        run: ./target/debug/vt run -r build
+        run: time ./target/release/vt run -r build
 
       - name: Run self again should be cached
-        run: ./target/debug/vt run -r build
+        run: time ./target/release/vt run -r build

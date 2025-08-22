@@ -166,15 +166,15 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
     println!("   Press Esc, q, or Ctrl+C to cancel installation\n");
 
     // Enable raw mode for keyboard input
-    terminal::enable_raw_mode().map_err(|e| Error::Io(e))?;
+    terminal::enable_raw_mode()?;
 
     // Clear the selection area and hide cursor
-    execute!(io::stdout(), cursor::Hide).map_err(|e| Error::Io(e))?;
+    execute!(io::stdout(), cursor::Hide)?;
 
     let result = loop {
         // Display menu with current selection
         for (i, (name, _)) in options.iter().enumerate() {
-            execute!(io::stdout(), cursor::MoveToColumn(2)).map_err(|e| Error::Io(e))?;
+            execute!(io::stdout(), cursor::MoveToColumn(2))?;
 
             if i == selected_index {
                 // Highlight selected item
@@ -186,8 +186,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
                     Print(name),
                     ResetColor,
                     Print(" ← ")
-                )
-                .map_err(|e| Error::Io(e))?;
+                )?;
             } else {
                 execute!(
                     io::stdout(),
@@ -197,30 +196,26 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
                     ResetColor,
                     Print(name),
                     Print("   ")
-                )
-                .map_err(|e| Error::Io(e))?;
+                )?;
             }
 
             if i < options.len() - 1 {
-                execute!(io::stdout(), Print("\n")).map_err(|e| Error::Io(e))?;
+                execute!(io::stdout(), Print("\n"))?;
             }
         }
 
         // Move cursor back up for next iteration
         if options.len() > 1 {
-            execute!(io::stdout(), cursor::MoveUp((options.len() - 1) as u16))
-                .map_err(|e| Error::Io(e))?;
+            execute!(io::stdout(), cursor::MoveUp((options.len() - 1) as u16))?;
         }
 
         // Read keyboard input
-        if let Event::Key(KeyEvent { code, modifiers, .. }) =
-            event::read().map_err(|e| Error::Io(e))?
-        {
+        if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
             match code {
                 // Handle Ctrl+C for exit
                 KeyCode::Char('c') if modifiers.contains(event::KeyModifiers::CONTROL) => {
                     // Clean up terminal before exiting
-                    terminal::disable_raw_mode().ok();
+                    terminal::disable_raw_mode()?;
                     execute!(
                         io::stdout(),
                         cursor::Show,
@@ -229,8 +224,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
                         SetForegroundColor(Color::Yellow),
                         Print("⚠ Installation cancelled by user\n"),
                         ResetColor
-                    )
-                    .ok();
+                    )?;
                     return Err(Error::UserCancelled(130)); // Standard exit code for Ctrl+C
                 }
                 KeyCode::Up => {
@@ -257,7 +251,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
                 }
                 KeyCode::Esc | KeyCode::Char('q') => {
                     // Exit on escape/quit
-                    terminal::disable_raw_mode().ok();
+                    terminal::disable_raw_mode()?;
                     execute!(
                         io::stdout(),
                         cursor::Show,
@@ -266,8 +260,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
                         SetForegroundColor(Color::Yellow),
                         Print("⚠ Installation cancelled by user\n"),
                         ResetColor
-                    )
-                    .ok();
+                    )?;
                     return Err(Error::UserCancelled(130)); // Standard exit code for user cancellation
                 }
                 _ => {}
@@ -276,9 +269,8 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
     };
 
     // Clean up: disable raw mode and show cursor
-    terminal::disable_raw_mode().map_err(|e| Error::Io(e))?;
-    execute!(io::stdout(), cursor::Show, cursor::MoveDown(options.len() as u16), Print("\n"))
-        .map_err(|e| Error::Io(e))?;
+    terminal::disable_raw_mode()?;
+    execute!(io::stdout(), cursor::Show, cursor::MoveDown(options.len() as u16), Print("\n"))?;
 
     // Print selection confirmation
     match &result {
@@ -343,10 +335,10 @@ fn simple_text_prompt() -> Result<PackageManagerType, Error> {
     }
 
     print!("\nEnter your choice (1-{}) [default: 1]: ", managers.len());
-    io::stdout().flush().unwrap();
+    io::stdout().flush()?;
 
     let mut input = String::new();
-    io::stdin().read_line(&mut input).map_err(|e| Error::Io(e))?;
+    io::stdin().read_line(&mut input)?;
 
     let choice = input.trim();
     let index = if choice.is_empty() {
