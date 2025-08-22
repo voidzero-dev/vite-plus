@@ -9,6 +9,7 @@ use std::{
 use compact_str::CompactString;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
+use tokio::fs::create_dir_all;
 use tokio::sync::Mutex;
 
 use crate::Error;
@@ -309,9 +310,9 @@ async fn download_package_manager(
 
     // $CACHE_DIR/vite/package_manager/pnpm/{tmp_name}
     // Use tempfile::TempDir for robust temporary directory creation
-    let target_dir_tmp = tempfile::tempdir_in(target_dir.parent().unwrap())?.path().to_path_buf();
-
-    remove_dir_all(&target_dir_tmp).await?;
+    let parent_dir = target_dir.parent().unwrap();
+    tokio::fs::create_dir_all(parent_dir).await?;
+    let target_dir_tmp = tempfile::tempdir_in(parent_dir)?.path().to_path_buf();
 
     download_and_extract_tgz(&tgz_url, &target_dir_tmp).await.map_err(|err| {
         // status 404 means the version is not found, convert to PackageManagerVersionNotFound error
