@@ -98,7 +98,7 @@ impl ExecutionPlan {
             }
             None => {
                 if !replay_cached_outputs {
-                    println!("Cache hit, skipping cache replay");
+                    println!("Cache hit, replaying previously executed task");
                 }
             }
         }
