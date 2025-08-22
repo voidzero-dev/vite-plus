@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 
 use crate::Error;
 use crate::config::{get_cache_dir, get_npm_package_tgz_url, get_npm_package_version_url};
-use crate::request::download_and_extract_tgz;
+use crate::request::{HttpClient, download_and_extract_tgz};
 use crate::shim;
 
 /// The package manager type.
@@ -276,8 +276,7 @@ async fn get_latest_version(
         package_manager_type.to_string()
     };
     let url = get_npm_package_version_url(&package_name, "latest");
-    let response = reqwest::get(url).await?;
-    let package_json: PackageJson = response.json().await?;
+    let package_json: PackageJson = HttpClient::new().get_json(&url).await?;
     Ok(package_json.version)
 }
 

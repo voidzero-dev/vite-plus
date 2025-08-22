@@ -26,9 +26,9 @@ impl Default for HttpClient {
 }
 
 impl HttpClient {
-    /// Create a new HTTP client with default settings (3 retries, 100ms base interval)
+    /// Create a new HTTP client with default settings (3 retries, 500ms base interval)
     pub fn new() -> Self {
-        Self::with_config(3, 100)
+        Self::with_config(3, 500)
     }
 
     /// Create a new HTTP client with custom retry configuration
@@ -130,36 +130,6 @@ impl HttpClient {
         file.flush().await?;
         Ok(())
     }
-}
-
-/// Download a tgz file with retry logic using the HttpClient.
-/// This function is deprecated in favor of using HttpClient directly.
-/// Kept for backward compatibility.
-///
-/// # Arguments
-///
-/// * `url` - The URL of the tgz file to download.
-/// * `target_path` - The path where the tgz file will be saved.
-/// * `max_retries` - Maximum number of retry attempts (default: 3).
-///
-/// # Returns
-///
-/// * `Ok(())` - If the file is downloaded successfully.
-/// * `Err(e)` - If all retry attempts fail.
-#[deprecated(note = "Use HttpClient::download_file instead")]
-#[allow(dead_code)]
-async fn download_file_with_retry(
-    url: &str,
-    target_path: impl AsRef<Path>,
-    max_retries: Option<u32>,
-) -> Result<(), Error> {
-    let client = if let Some(retries) = max_retries {
-        HttpClient::with_config(retries, 100)
-    } else {
-        HttpClient::new()
-    };
-
-    client.download_file(url, target_path).await
 }
 
 fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Result<(), Error> {
