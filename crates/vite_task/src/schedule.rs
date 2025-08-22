@@ -97,9 +97,7 @@ impl ExecutionPlan {
                 println!("> {command}");
             }
             None => {
-                if replay_cached_outputs {
-                    println!("Cache hit, replaying previously executed task");
-                } else {
+                if !replay_cached_outputs {
                     println!("Cache hit, skipping cache replay");
                 }
             }
@@ -145,16 +143,9 @@ async fn get_cached_or_execute<'a>(
         Err(cache_miss) => (
             Some(cache_miss),
             async move {
-                let mut executed_task = execute_task(&task.resolved_command, base_dir).await?;
-
-                // TODO: move this to a more general place
-                // TODO: how to known is the built-in install task?
-                // Apply path filtering for install tasks to optimize cache fingerprint,
-                // because install task reads too many paths in node_modules
-                if task.name.task_group_name == "install" {
-                    executed_task = executed_task.filter_install_paths();
-                }
-
+                let executed_task =
+                    execute_task(&task.resolved_command, base_dir, &task.ignore_cache_paths)
+                        .await?;
                 let cached_task = CachedTask::create(task.clone(), executed_task, fs, base_dir)?;
                 cache.update(&task, cached_task).await?;
                 Ok(())

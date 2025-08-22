@@ -70,6 +70,10 @@ pub struct ResolvedTask {
     /// Replay the cached outputs if cached outputs are valid
     /// Default is true
     pub replay_cached_outputs: Option<bool>,
+    /// Custom paths to ignore cache fingerprint.
+    /// Support glob pattern, like `["**/node_modules/**", "!**/node_modules", "!node_modules", "**/*/package.json"]`
+    /// Order matters: the last matching pattern wins (gitignore semantics)
+    pub ignore_cache_paths: Option<Vec<Str>>,
 }
 
 impl ResolvedTask {
@@ -120,6 +124,7 @@ impl ResolvedTask {
             ResolveCommandResult { bin_path, envs },
             None,
             None,
+            None,
         )
     }
 
@@ -130,6 +135,7 @@ impl ResolvedTask {
         command_result: ResolveCommandResult,
         force_refresh_cached: Option<bool>,
         replay_cached_outputs: Option<bool>,
+        ignore_cache_paths: Option<Vec<Str>>,
     ) -> Result<Self, Error> {
         // TODO(@fengmk2): refactor this to use the same code as resolve_from_built_in
         let ResolveCommandResult { bin_path, envs } = command_result;
@@ -163,6 +169,7 @@ impl ResolvedTask {
             resolved_command,
             force_refresh_cached,
             replay_cached_outputs,
+            ignore_cache_paths,
         })
     }
 }

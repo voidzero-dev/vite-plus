@@ -66,6 +66,29 @@ impl InstallCommand {
             ResolveCommandResult { bin_path: resolve_command.bin_path, envs: resolve_command.envs },
             self.force_refresh_cached,
             self.replay_cached_outputs,
+            // Apply path filtering for install tasks to optimize cache fingerprint,
+            // because install task reads too many paths in node_modules
+            Some(vec![
+                // ignore all paths by default
+                "**/*".into(),
+                // except the following paths
+                // keep node_modules directories themselves
+                "!**/node_modules".into(),
+                "!node_modules".into(),
+                // keep lock files and package.json
+                "!**/package.json".into(),
+                "!**/package-lock.json".into(),
+                "!**/.npmrc".into(),
+                // pnpm only
+                "!**/pnpm-lock.yaml".into(),
+                "!**/pnpm-workspace.yaml".into(),
+                "!**/pnpmfile.cjs".into(),
+                // yarn only
+                "!**/yarn.lock".into(),
+                "!**/yarn.config.cjs".into(),
+                "!**/yarnrc".into(),
+                "!**/yarnrc.yml".into(),
+            ]),
         )?;
         let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
         task_graph.add_node(resolved_task);

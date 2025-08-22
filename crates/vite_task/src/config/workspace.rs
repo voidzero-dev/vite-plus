@@ -196,6 +196,7 @@ impl Workspace {
             resolved_config,
             force_refresh_cached: None,
             replay_cached_outputs: None,
+            ignore_cache_paths: None,
         })
     }
 

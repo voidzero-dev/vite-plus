@@ -5,6 +5,7 @@ mod config;
 mod execute;
 mod fingerprint;
 mod fs;
+mod glob;
 mod install;
 mod lint;
 mod maybe_str;
