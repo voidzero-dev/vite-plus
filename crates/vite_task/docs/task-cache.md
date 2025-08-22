@@ -61,23 +61,24 @@ the task cache system is able to hit the same cache for `test` task and for the 
 │         ▼                                                                            │
 │  3. Cache Lookup (SQLite)                                                            │
 │  ────────────────────────                                                            │
-│    ┌─────────────────┬──────────────────────┐──────────────────────────┐             │
-│    │   Cache Hit     │   Cache Not Found    │  Cache Found but Miss    │             │
-│    └────────┬────────┴─────────┬────────────┘──────────────────┬───────┘             │
-│             │                  │                               │                     │
-│             ▼                  ▼                               ▼                     │
-│  4a. Validate Fingerprint   4b. Execute Task   ◀───── 4c. Report what change         |
-│  ────────────────────────   ────────────────              causes the miss            │
-│    • Config match?             • Run command                                         │
-│    • Inputs unchanged?         • Monitor files (fspy)                                │
-│    • Command same?             • Capture stdout/stderr                               │
-│             │                         │                                              │
-│             ▼                         ▼                                              │
-│  5a. Replay Outputs        5b. Store in Cache                                        │
-│  ──────────────────        ──────────────────                                        │
-│    • Write to stdout           • Save fingerprint                                    │
-│    • Write to stderr           • Save outputs                                        │
-│                                • Update database                                     │
+│    ┌─────────────────┬──────────────────────┬─────────────────────────┬──────────────┐
+│    │   Cache Hit     │   Cache Not Found    │  Cache Refresh Required │  Cache Miss  │
+│    └────────┬────────┴─────────┬────────────┴──────────┬──────────────┴──────┬───────┘
+│             │                  │                       │                     │       │
+│             ▼                  ▼                       ▼                     ▼       │
+│  4a. Validate Fingerprint   4b. Execute Task   4c. Force Refresh    4d. Report Miss │
+│  ────────────────────────   ────────────────   ─────────────────    ───────────────│
+│    • Config match?             • Run command      • User requested     • Config changed?
+│    • Inputs unchanged?         • Monitor files    • --force flag       • Inputs changed?
+│    • Command same?             • Capture output   • Ignore cache       • Command changed?
+│             │                         │                  │                    │      │
+│             │                         │                  └────────────────────┘      │
+│             ▼                         ▼                           ▼                  │
+│  5a. Replay Outputs        5b. Store in Cache          5c. Execute & Update Cache   │
+│  ──────────────────        ──────────────────          ──────────────────────────   │
+│    • Write to stdout           • Save fingerprint         • Run command              │
+│    • Write to stderr           • Save outputs             • Replace cache entry      │
+│                                • Update database          • Store new outputs        │
 │                                                                                      │
 └──────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -201,6 +202,7 @@ When a cache entry exists, the fingerprint is validated to detect changes:
 ```rust
 pub enum CacheMiss {
     NotFound,                    // No cache entry exists
+    RefreshRequired,             // Cache exists but user forced refresh
     FingerprintMismatch {        // Cache exists but invalid
         reason: FingerprintMismatchReason,
     },
@@ -293,14 +295,21 @@ pub struct StdOutput {
 │    }                                                         │
 │         │                                                    │
 │         ▼                                                    │
-│  4. Validate Fingerprint                                     │
+│  4. Check Force Refresh Flag                                 │
+│  ────────────────────────────                                │
+│    if task.force_refresh_cached {                            │
+│        return CacheMiss::RefreshRequired                     │
+│    }                                                         │
+│         │                                                    │
+│         ▼                                                    │
+│  5. Validate Fingerprint                                     │
 │  ───────────────────────                                     │
 │    • Compare resolved_config                                 │
 │    • Check command_fingerprint                               │
 │    • Verify input file hashes                                │
 │         │                                                    │
 │         ▼                                                    │
-│  5. Replay Outputs                                           │
+│  6. Replay Outputs                                           │
 │  ─────────────────                                           │
 │    For each StdOutput:                                       │
 │    • Write to stdout/stderr                                  │
@@ -597,20 +606,81 @@ VITE_LOG=trace vite-plus run build
 ### Debug Output Examples
 
 ```
+# Normal cache hit
+[DEBUG] Cache lookup for app#build
+[DEBUG] Cache key: TaskCacheKey { command_fingerprint: ..., args: ... }
+[DEBUG] Cache hit! Validating fingerprint...
+[DEBUG] Fingerprint valid, replaying cached outputs
+
+# Cache miss due to changes
 [DEBUG] Cache lookup for app#build
 [DEBUG] Cache key: TaskCacheKey { command_fingerprint: ..., args: ... }
 [DEBUG] Cache hit! Validating fingerprint...
 [DEBUG] Fingerprint mismatch: InputsChanged
 [DEBUG] File src/index.ts changed (hash: 0x1234... → 0x5678...)
 [DEBUG] Cache miss, executing task
+
+# Force refresh requested
+[DEBUG] Cache lookup for app#build with --force flag
+[DEBUG] Cache key: TaskCacheKey { command_fingerprint: ..., args: ... }
+[DEBUG] Cache found but refresh required (--force flag)
+[DEBUG] Executing task and updating cache
 ```
 
 ### Common Cache Miss Reasons
 
-1. **ConfigChanged**: Task configuration in vite-task.json modified
-2. **CommandChanged**: Command, args, or environment variables changed
-3. **InputsChanged**: Source files modified or file structure changed
-4. **NotFound**: No cache entry exists (first run or after cache clear)
+1. **NotFound**: No cache entry exists (first run or after cache clear)
+2. **RefreshRequired**: User explicitly requested cache refresh via `--force` flag
+3. **ConfigChanged**: Task configuration in vite-task.json modified
+4. **CommandChanged**: Command, args, or environment variables changed
+5. **InputsChanged**: Source files modified or file structure changed
+
+### Cache Refresh Required
+
+The cache refresh mechanism allows users to force re-execution of tasks even when the cache would normally be valid:
+
+```rust
+// In cache.rs - try_hit implementation
+pub async fn try_hit(
+    &self,
+    task: &ResolvedTask,
+    fs: &impl FileSystem,
+    base_dir: &Path,
+) -> Result<Result<CachedTask, CacheMiss>, Error> {
+    let Some(cached_task) = self.get_cache(task).await? else {
+        return Ok(Err(CacheMiss::NotFound));
+    };
+    
+    // Check if user requested force refresh BEFORE validating fingerprint
+    if task.force_refresh_cached.unwrap_or(false) {
+        return Ok(Err(CacheMiss::RefreshRequired));
+    }
+    
+    // Only validate fingerprint if not forcing refresh
+    if let Some(fingerprint_mismatch) = cached_task.fingerprint.validate(task, fs, base_dir)? {
+        return Ok(Err(CacheMiss::FingerprintMismatch(fingerprint_mismatch)));
+    }
+    
+    Ok(Ok(cached_task))
+}
+```
+
+This is useful for:
+
+- Debugging build issues
+- Ensuring fresh output after external changes
+- Working around cache-related problems
+- CI/CD pipelines that require clean builds
+
+Usage:
+
+```bash
+# Force refresh cache for specific task
+vite-plus run build --force
+
+# Force refresh for all tasks in recursive run
+vite-plus run build -r --force
+```
 
 ## Best Practices
 
