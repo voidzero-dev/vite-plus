@@ -98,16 +98,12 @@ pub enum Error {
     UnrecognizedPackageManager,
 
     #[error(
-        "Invalid version: {version} on {package_json_path}#packageManager, expected format: 'package-manager-name@major.minor.patch'"
+        "Package manager {name}@{version} in {package_json_path} is invalid, expected format: 'package-manager-name@major.minor.patch'"
     )]
-    PackageManagerVersionInvalid { version: String, package_json_path: PathBuf },
+    PackageManagerVersionInvalid { name: String, version: String, package_json_path: PathBuf },
 
-    #[error("Package manager {package_manager_name}@{version} not found on {package_manager_url}")]
-    PackageManagerVersionNotFound {
-        package_manager_name: String,
-        version: String,
-        package_manager_url: String,
-    },
+    #[error("Package manager {name}@{version} not found on {url}")]
+    PackageManagerVersionNotFound { name: String, version: String, url: String },
 
     #[error(transparent)]
     SemverError(#[from] semver::Error),

@@ -206,6 +206,7 @@ fn get_package_manager_type_and_version(
                 // check if the version is a valid semver
                 semver::Version::parse(version).map_err(|_| {
                     Error::PackageManagerVersionInvalid {
+                        name: name.into(),
                         version: version.into(),
                         package_json_path: package_json_path.into(),
                     }
@@ -318,9 +319,9 @@ async fn download_package_manager(
         // status 404 means the version is not found, convert to PackageManagerVersionNotFound error
         if matches!(&err, Error::ReqwestError(e) if e.status() == Some(reqwest::StatusCode::NOT_FOUND)) {
             Error::PackageManagerVersionNotFound {
-                package_manager_name: package_manager_type.to_string(),
+                name: package_manager_type.to_string(),
                 version: version.into(),
-                package_manager_url: tgz_url.clone(),
+                url: tgz_url.clone(),
             }
         } else {
             err
@@ -875,10 +876,8 @@ mod tests {
         assert!(result.is_err());
         println!("result: {:?}", result);
         // Check if it's the expected error type
-        if let Err(Error::PackageManagerVersionNotFound { package_manager_name, version, .. }) =
-            result
-        {
-            assert_eq!(package_manager_name, "yarn");
+        if let Err(Error::PackageManagerVersionNotFound { name, version, .. }) = result {
+            assert_eq!(name, "yarn");
             assert_eq!(version, "10000000000.0.0");
         } else {
             panic!("Expected PackageManagerVersionNotFound error, got {:?}", result);
