@@ -59,27 +59,6 @@ pub struct ExecutedTask {
     pub path_writes: HashMap<Str, PathWrite>,
 }
 
-impl ExecutedTask {
-    pub fn filter_cache_paths(mut self, ignore_cache_paths: &Vec<Str>) -> Self {
-        let filtered_reads: HashMap<Str, PathRead> = self
-            .path_reads
-            .into_iter()
-            .filter(|(path, _)| {
-                if ignore_cache_paths.iter().all(|pattern| matches_wildcard_pattern(path, pattern))
-                {
-                    tracing::trace!("ignore path: {:?}", path);
-                    return false;
-                }
-                tracing::trace!("keep path: {:?}", path);
-                true
-            })
-            .collect();
-
-        self.path_reads = filtered_reads;
-        self
-    }
-}
-
 /// Collects stdout/stderr into `outputs` and at the same time writes them to the real stdout/stderr
 async fn collect_std_outputs(
     outputs: &Mutex<Vec<StdOutput>>,
