@@ -15,6 +15,7 @@ compact_str = { workspace = true, features = ["serde"] }
 nix = { workspace = true }
 petgraph = { workspace = true }
 reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
 rusqlite = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

@@ -109,6 +109,9 @@ pub enum Error {
     ReqwestError(#[from] reqwest::Error),
 
     #[error(transparent)]
+    ReqwestMiddlewareError(#[from] reqwest_middleware::Error),
+
+    #[error(transparent)]
     JoinError(#[from] tokio::task::JoinError),
 
     #[error("User cancelled, exit code: {0}")]

@@ -11,7 +11,7 @@ use tar::Archive;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
-use vite_error::Error;
+use crate::Error;
 
 /// HTTP client with built-in retry support
 #[derive(Clone)]
@@ -66,13 +66,7 @@ impl HttpClient {
     pub async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T, Error> {
         tracing::debug!("Fetching JSON from: {}", url);
 
-        let response = self
-            .client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| Error::AnyhowError(anyhow::Error::msg(format!("Request failed: {}", e))))?
-            .error_for_status()?;
+        let response = self.client.get(url).send().await?.error_for_status()?;
 
         let data = response.json::<T>().await?;
         Ok(data)
@@ -97,13 +91,7 @@ impl HttpClient {
         let target_path = target_path.as_ref();
         tracing::debug!("Downloading {} to {:?}", url, target_path);
 
-        let response = self
-            .client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| Error::AnyhowError(anyhow::Error::msg(format!("Request failed: {}", e))))?
-            .error_for_status()?;
+        let response = self.client.get(url).send().await?.error_for_status()?;
 
         self.write_response_to_file(response, target_path).await?;
 
@@ -203,29 +191,6 @@ mod tests {
 
     use httpmock::prelude::*;
     use tempfile::TempDir;
-
-    /// Helper function to create a mock tar.gz file content
-    fn create_mock_tgz_content() -> Vec<u8> {
-        // Create a simple tar file with test content
-        let test_content = b"test file content";
-        let mut tar_builder = tar::Builder::new(Vec::new());
-        let mut header = tar::Header::new_gnu();
-        header.set_size(test_content.len() as u64);
-        header.set_mode(0o644);
-        tar_builder
-            .append_data(&mut header, "test.txt", std::io::Cursor::new(test_content))
-            .unwrap();
-        let tar_data = tar_builder.into_inner().unwrap();
-
-        // Compress with gzip
-        let mut gz_data = Vec::new();
-        {
-            let mut encoder =
-                flate2::write::GzEncoder::new(&mut gz_data, flate2::Compression::default());
-            std::io::copy(&mut std::io::Cursor::new(tar_data), &mut encoder).unwrap();
-        }
-        gz_data
-    }
 
     /// Helper function to create a mock package tar.gz that mimics npm package structure
     fn create_mock_package_tgz() -> Vec<u8> {
