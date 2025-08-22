@@ -42,45 +42,45 @@ the task cache system is able to hit the same cache for `test` task and for the 
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────────────────────────┐
-│                     Task Execution Flow                                              │
-├──────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
-│  1. Task Request                                                                     │
-│  ────────────────                                                                    │
-│    app#build                                                                         │
-│         │                                                                            │
-│         ▼                                                                            │
-│  2. Cache Key Generation                                                             │
-│  ──────────────────────                                                              │
-│    • Command fingerprint (includes cwd)                                              │
-│    • Command fingerprint                                                             │
-│    • Task arguments                                                                  │
-│         │                                                                            │
-│         ▼                                                                            │
-│  3. Cache Lookup (SQLite)                                                            │
-│  ────────────────────────                                                            │
-│    ┌─────────────────┬──────────────────────┬─────────────────────────┬──────────────┐
-│    │   Cache Hit     │   Cache Not Found    │  Cache Refresh Required │  Cache Miss  │
-│    └────────┬────────┴─────────┬────────────┴──────────┬──────────────┴──────┬───────┘
-│             │                  │                       │                     │       │
-│             ▼                  ▼                       ▼                     ▼       │
-│  4a. Validate Fingerprint   4b. Execute Task   4c. Force Refresh    4d. Report Miss │
-│  ────────────────────────   ────────────────   ─────────────────    ───────────────│
-│    • Config match?             • Run command      • User requested     • Config changed?
-│    • Inputs unchanged?         • Monitor files    • --force flag       • Inputs changed?
-│    • Command same?             • Capture output   • Ignore cache       • Command changed?
-│             │                         │                  │                    │      │
-│             │                         │                  └────────────────────┘      │
-│             ▼                         ▼                           ▼                  │
-│  5a. Replay Outputs        5b. Store in Cache          5c. Execute & Update Cache   │
-│  ──────────────────        ──────────────────          ──────────────────────────   │
-│    • Write to stdout           • Save fingerprint         • Run command              │
-│    • Write to stderr           • Save outputs             • Replace cache entry      │
-│                                • Update database          • Store new outputs        │
-│                                                                                      │
-└──────────────────────────────────────────────────────────────────────────────────────┘
+```text
+┌───────────────────────────────────────────────────────────────────────────────────────────┐
+│                     Task Execution Flow                                                   │
+├───────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                           │
+│  1. Task Request                                                                          │
+│  ────────────────                                                                         │
+│    app#build                                                                              │
+│         │                                                                                 │
+│         ▼                                                                                 │
+│  2. Cache Key Generation                                                                  │
+│  ──────────────────────                                                                   │
+│    • Command fingerprint (includes cwd)                                                   │
+│    • Command fingerprint                                                                  │
+│    • Task arguments                                                                       │
+│         │                                                                                 │
+│         ▼                                                                                 │
+│  3. Cache Lookup (SQLite)                                                                 │
+│  ────────────────────────                                                                 │
+│    ┌─────────────────┬──────────────────────┬─────────────────────────┬──────────────┐    │
+│    │   Cache Hit     │   Cache Not Found    │  Cache Refresh Required │  Cache Miss  │    │
+│    └────────┬────────┴─────────┬────────────┴──────────┬──────────────┴──────┬───────┘    │
+│             │                  │                       │                     │            │
+│             ▼                  ▼                       ▼                     ▼            │
+│  4a. Validate Fingerprint   4b. Execute Task   4c. Force Refresh    4d. Report Miss       │
+│  ────────────────────────   ────────────────   ─────────────────    ───────────────       │
+│    • Config match?             • Run command      • User requested     • Config changed?  │
+│    • Inputs unchanged?         • Monitor files    • --force flag       • Inputs changed?  │
+│    • Command same?             • Capture output   • Ignore cache       • Command changed? │
+│             │                         │                  │                    │           │
+│             │                         │                  └────────────────────┘           │
+│             ▼                         ▼                           ▼                       │
+│  5a. Replay Outputs        5b. Store in Cache          5c. Execute & Update Cache         │
+│  ──────────────────        ──────────────────          ───────────────────────────        │
+│    • Write to stdout           • Save fingerprint         • Run command                   │
+│    • Write to stderr           • Save outputs             • Replace cache entry           │
+│                                • Update database          • Store new outputs             │
+│                                                                                           │
+└───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Cache Key Components
@@ -154,7 +154,7 @@ The cache system maintains (`CommandCacheKey`, `TaskId`) relationship in order t
 
 Vite-plus uses `fspy` to monitor file system access during task execution:
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │                  File System Monitoring                      │
 ├──────────────────────────────────────────────────────────────┤
@@ -264,7 +264,7 @@ pub struct StdOutput {
 
 ### Cache Hit Flow
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │                      Cache Hit Process                       │
 ├──────────────────────────────────────────────────────────────┤
@@ -321,7 +321,7 @@ pub struct StdOutput {
 
 ### Cache Miss and Storage
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │                    Cache Miss Process                        │
 ├──────────────────────────────────────────────────────────────┤
@@ -417,7 +417,7 @@ pub fn hash_file_content(content: &[u8]) -> u64 {
 
 Instead of scanning all possible input files, `fspy` monitors actual file access:
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │              Efficient File Tracking                         │
 ├──────────────────────────────────────────────────────────────┤
@@ -530,7 +530,7 @@ Outputs are captured exactly as produced:
 
 When a task hits cache, outputs are replayed exactly:
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │                    Output Replay                             │
 ├──────────────────────────────────────────────────────────────┤
@@ -605,7 +605,7 @@ VITE_LOG=trace vite-plus run build
 
 ### Debug Output Examples
 
-```
+```bash
 # Normal cache hit
 [DEBUG] Cache lookup for app#build
 [DEBUG] Cache key: TaskCacheKey { command_fingerprint: ..., args: ... }
@@ -630,14 +630,14 @@ VITE_LOG=trace vite-plus run build
 ### Common Cache Miss Reasons
 
 1. **NotFound**: No cache entry exists (first run or after cache clear)
-2. **RefreshRequired**: User explicitly requested cache refresh via `--force` flag
+2. **RefreshRequired**: User explicitly requested cache refresh via `--force` flag (Only for `install` command now, `--force` flag is WIP)
 3. **ConfigChanged**: Task configuration in vite-task.json modified
 4. **CommandChanged**: Command, args, or environment variables changed
 5. **InputsChanged**: Source files modified or file structure changed
 
 ### Cache Refresh Required
 
-The cache refresh mechanism allows users to force re-execution of tasks even when the cache would normally be valid:
+The cache refresh mechanism allows users to force re-execution of tasks even when the cache would normally be exists and valid:
 
 ```rust
 // In cache.rs - try_hit implementation
@@ -676,10 +676,10 @@ Usage:
 
 ```bash
 # Force refresh cache for specific task
-vite-plus run build --force
+vite-plus run --force build
 
 # Force refresh for all tasks in recursive run
-vite-plus run build -r --force
+vite-plus run --force -r build
 ```
 
 ## Best Practices
@@ -764,7 +764,7 @@ No need to manually specify inputs - fspy captures actual dependencies.
 
 ### Core Cache Components
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │                   Cache System Architecture                  │
 ├──────────────────────────────────────────────────────────────┤
