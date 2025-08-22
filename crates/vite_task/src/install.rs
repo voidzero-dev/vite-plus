@@ -451,8 +451,7 @@ mod tests {
         assert_eq!(command.replay_cached_outputs, Some(false));
     }
 
-    // skip this test for auto run, should be run manually, because it will prompt for user selection
-    #[ignore]
+    #[ignore = "skip this test for auto run, should be run manually, because it will prompt for user selection"]
     #[tokio::test]
     async fn test_install_command_execute_with_invalid_workspace() {
         let temp_dir = TempDir::new().unwrap();
