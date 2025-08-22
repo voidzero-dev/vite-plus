@@ -111,6 +111,9 @@ pub enum Error {
     #[error(transparent)]
     JoinError(#[from] tokio::task::JoinError),
 
+    #[error("User cancelled, exit code: {0}")]
+    UserCancelled(i32),
+
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),
 }

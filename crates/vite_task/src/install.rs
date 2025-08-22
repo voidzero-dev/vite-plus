@@ -231,7 +231,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
                         ResetColor
                     )
                     .ok();
-                    std::process::exit(130); // Standard exit code for Ctrl+C
+                    return Err(Error::UserCancelled(130)); // Standard exit code for Ctrl+C
                 }
                 KeyCode::Up => {
                     if selected_index > 0 {
@@ -268,7 +268,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
                         ResetColor
                     )
                     .ok();
-                    std::process::exit(130); // Standard exit code for user cancellation
+                    return Err(Error::UserCancelled(130)); // Standard exit code for user cancellation
                 }
                 _ => {}
             }
@@ -313,7 +313,10 @@ fn prompt_package_manager_selection() -> Result<PackageManagerType, Error> {
     // Try interactive menu first, fall back to simple prompt on error
     match interactive_package_manager_menu() {
         Ok(pm) => Ok(pm),
-        Err(_) => {
+        Err(err) => {
+            if matches!(err, Error::UserCancelled(_)) {
+                return Err(err);
+            }
             // Fallback to simple text prompt if interactive menu fails
             simple_text_prompt()
         }
