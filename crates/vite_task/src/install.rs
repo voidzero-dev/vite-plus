@@ -365,8 +365,42 @@ fn simple_text_prompt() -> Result<PackageManagerType, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::fs;
     use tempfile::TempDir;
+
+    /// Helper struct to safely manage environment variables in tests
+    /// This struct ensures that environment variables are properly restored
+    /// after the test completes, even if the test panics.
+    struct EnvGuard {
+        key: String,
+        original_value: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn new(key: &str, value: &str) -> Self {
+            let original_value = env::var(key).ok();
+            // SAFETY: This is only used in tests which are run serially,
+            // preventing data races on environment variables
+            unsafe {
+                env::set_var(key, value);
+            }
+            Self { key: key.to_string(), original_value }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            // SAFETY: This is only used in tests which are run serially,
+            // preventing data races on environment variables
+            unsafe {
+                match &self.original_value {
+                    Some(value) => env::set_var(&self.key, value),
+                    None => env::remove_var(&self.key),
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_install_command_builder_new() {
@@ -465,25 +499,16 @@ mod tests {
 
     /// Test that in CI environment, we will use pnpm without prompting
     #[test]
+    #[serial] // Run serially to avoid race conditions with environment variables
     fn test_prompt_package_manager_in_ci() {
-        let has_ci_env = env::var("CI").is_ok();
-        if !has_ci_env {
-            // Set CI environment
-            unsafe {
-                env::set_var("CI", "true");
-            }
-        }
+        // Use EnvGuard to safely manage the CI environment variable
+        let _guard = EnvGuard::new("CI", "true");
 
         // Should return pnpm without prompting
         let result = prompt_package_manager_selection();
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), PackageManagerType::Pnpm);
 
-        if !has_ci_env {
-            // Clean up
-            unsafe {
-                env::remove_var("CI");
-            }
-        }
+        // EnvGuard will automatically restore the original value when dropped
     }
 }

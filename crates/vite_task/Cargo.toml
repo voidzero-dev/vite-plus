@@ -51,4 +51,6 @@ vite_error = { workspace = true }
 nix = { workspace = true }
 
 [dev-dependencies]
+serial_test = "3.2.0"
 tempfile = { workspace = true }
+test-log = { workspace = true }
