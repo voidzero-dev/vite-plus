@@ -2,9 +2,6 @@ name: Release
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - 08-21-fix_global_local_bin_path
 
 jobs:
   build-rust:
