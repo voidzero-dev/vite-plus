@@ -48,6 +48,7 @@ const BINCODE_CONFIG: bincode::config::Configuration = bincode::config::standard
 #[derive(Debug)]
 pub enum CacheMiss {
     NotFound,
+    RefreshRequired,
     FingerprintMismatch(FingerprintMismatch),
 }
 
@@ -146,12 +147,12 @@ impl TaskCache {
         fs: &impl FileSystem,
         base_dir: &Path,
     ) -> Result<Result<CachedTask, CacheMiss>, Error> {
-        if task.force_refresh_cached.unwrap_or(false) {
-            return Ok(Err(CacheMiss::NotFound));
-        }
         let Some(cached_task) = self.get_cache(task).await? else {
             return Ok(Err(CacheMiss::NotFound));
         };
+        if task.force_refresh_cached.unwrap_or(false) {
+            return Ok(Err(CacheMiss::RefreshRequired));
+        }
         if let Some(fingerprint_mismatch) = cached_task.fingerprint.validate(task, fs, base_dir)? {
             return Ok(Err(CacheMiss::FingerprintMismatch(fingerprint_mismatch)));
         }

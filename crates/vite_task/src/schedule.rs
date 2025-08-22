@@ -92,12 +92,17 @@ impl ExecutionPlan {
                 println!("Cache Not Found, executing task");
                 println!("> {command}");
             }
+            Some(CacheMiss::RefreshRequired) => {
+                // TODO: need to better way to print user friendly message
+                println!("Cache refresh required, executing task");
+                println!("> {command}");
+            }
             Some(CacheMiss::FingerprintMismatch(mismatch)) => {
                 println!("{mismatch}, executing task");
                 println!("> {command}");
             }
             None => {
-                if !replay_cached_outputs {
+                if replay_cached_outputs {
                     println!("Cache hit, replaying previously executed task");
                 }
             }
