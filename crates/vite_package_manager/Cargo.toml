@@ -10,7 +10,6 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-chrono = { workspace = true }
 compact_str = { workspace = true, features = ["serde"] }
 directories = { workspace = true }
 flate2 = { workspace = true }
@@ -18,7 +17,6 @@ futures-util = { workspace = true }
 indoc = { workspace = true }
 pathdiff = { workspace = true }
 petgraph = { workspace = true, features = ["serde-1"] }
-rand = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }
@@ -29,6 +27,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
 serde_yml = { workspace = true }
 tar = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -37,7 +36,6 @@ wax = { workspace = true }
 
 [dev-dependencies]
 httpmock = { workspace = true }
-tempfile = { workspace = true }
 test-log = { workspace = true }
 tokio-test = { workspace = true }
 

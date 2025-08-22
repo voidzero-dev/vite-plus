@@ -14,7 +14,7 @@ async fn main() -> Result<(), Error> {
     if let Err(err) = result {
         tracing::error!("Error: {}", err);
         match err {
-            Error::UserCancelled(exit_code) => std::process::exit(exit_code),
+            Error::UserCancelled => std::process::exit(130), // Standard exit code for Ctrl+C
             _ => return Err(err),
         }
     }

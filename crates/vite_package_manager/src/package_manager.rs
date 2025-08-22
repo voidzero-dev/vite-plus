@@ -6,7 +6,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use chrono::Utc;
 use compact_str::CompactString;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
@@ -205,7 +204,10 @@ fn get_package_manager_type_and_version(
             if let Some((name, version)) = package_json.package_manager.split_once('@') {
                 // check if the version is a valid semver
                 semver::Version::parse(version).map_err(|_| {
-                    Error::InvalidPackageManagerVersion(version.into(), package_json_path.into())
+                    Error::PackageManagerVersionInvalid {
+                        version: version.into(),
+                        package_json_path: package_json_path.into(),
+                    }
                 })?;
                 match name {
                     "pnpm" => return Ok((PackageManagerType::Pnpm, version.into())),
@@ -305,14 +307,24 @@ async fn download_package_manager(
         return Ok(install_dir);
     }
 
-    // $CACHE_DIR/vite/package_manager/pnpm/tmp_{timestamp}_{rid}_{version}
-    let timestamp = Utc::now().timestamp_millis();
-    let rid: u64 = rand::random();
-    let target_dir_tmp =
-        target_dir.with_file_name(format!("tmp_{}_{}_{}", timestamp, rid, version,));
+    // $CACHE_DIR/vite/package_manager/pnpm/{tmp_name}
+    // Use tempfile::TempDir for robust temporary directory creation
+    let target_dir_tmp = tempfile::tempdir_in(target_dir.parent().unwrap())?.path().to_path_buf();
 
     remove_dir_all(&target_dir_tmp).await?;
-    download_and_extract_tgz(&tgz_url, &target_dir_tmp).await?;
+
+    download_and_extract_tgz(&tgz_url, &target_dir_tmp).await.map_err(|err| {
+        // status 404 means the version is not found, convert to PackageManagerVersionNotFound error
+        if matches!(&err, Error::ReqwestError(e) if e.status() == Some(reqwest::StatusCode::NOT_FOUND)) {
+            Error::PackageManagerVersionNotFound {
+                package_manager_name: package_manager_type.to_string(),
+                version: version.into(),
+                package_manager_url: tgz_url.clone(),
+            }
+        } else {
+            err
+        }
+    })?;
 
     // rename $target_dir_tmp/package to $target_dir_tmp/{bin_name}
     tracing::debug!("Rename package dir to {}", bin_name);
@@ -848,6 +860,27 @@ mod tests {
             assert_eq!(name, "invalid");
         } else {
             panic!("Expected UnsupportedPackageManager error");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_with_not_exists_version_in_package_manager_field() {
+        let temp_dir = create_temp_dir();
+        let package_content =
+            r#"{"name": "test-package", "packageManager": "yarn@10000000000.0.0"}"#;
+        create_package_json(temp_dir.path(), package_content);
+
+        let result = PackageManager::builder(temp_dir.path()).build().await;
+        assert!(result.is_err());
+        println!("result: {:?}", result);
+        // Check if it's the expected error type
+        if let Err(Error::PackageManagerVersionNotFound { package_manager_name, version, .. }) =
+            result
+        {
+            assert_eq!(package_manager_name, "yarn");
+            assert_eq!(version, "10000000000.0.0");
+        } else {
+            panic!("Expected PackageManagerVersionNotFound error, got {:?}", result);
         }
     }
 

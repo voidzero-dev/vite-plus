@@ -98,9 +98,16 @@ pub enum Error {
     UnrecognizedPackageManager,
 
     #[error(
-        "Invalid version: {0} on {1}#packageManager, expected format: 'package-manager-name@major.minor.patch'"
+        "Invalid version: {version} on {package_json_path}#packageManager, expected format: 'package-manager-name@major.minor.patch'"
     )]
-    InvalidPackageManagerVersion(String, PathBuf),
+    PackageManagerVersionInvalid { version: String, package_json_path: PathBuf },
+
+    #[error("Package manager {package_manager_name}@{version} not found on {package_manager_url}")]
+    PackageManagerVersionNotFound {
+        package_manager_name: String,
+        version: String,
+        package_manager_url: String,
+    },
 
     #[error(transparent)]
     SemverError(#[from] semver::Error),
@@ -114,8 +121,8 @@ pub enum Error {
     #[error(transparent)]
     JoinError(#[from] tokio::task::JoinError),
 
-    #[error("User cancelled, exit code: {0}")]
-    UserCancelled(i32),
+    #[error("User cancelled by Ctrl+C")]
+    UserCancelled,
 
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),

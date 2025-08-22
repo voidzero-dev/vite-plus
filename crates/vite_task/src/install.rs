@@ -225,7 +225,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
                         Print("⚠ Installation cancelled by user\n"),
                         ResetColor
                     )?;
-                    return Err(Error::UserCancelled(130)); // Standard exit code for Ctrl+C
+                    return Err(Error::UserCancelled);
                 }
                 KeyCode::Up => {
                     if selected_index > 0 {
@@ -261,7 +261,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
                         Print("⚠ Installation cancelled by user\n"),
                         ResetColor
                     )?;
-                    return Err(Error::UserCancelled(130)); // Standard exit code for user cancellation
+                    return Err(Error::UserCancelled);
                 }
                 _ => {}
             }
@@ -306,11 +306,11 @@ fn prompt_package_manager_selection() -> Result<PackageManagerType, Error> {
     match interactive_package_manager_menu() {
         Ok(pm) => Ok(pm),
         Err(err) => {
-            if matches!(err, Error::UserCancelled(_)) {
-                return Err(err);
+            match err {
+                Error::UserCancelled => return Err(err),
+                // Fallback to simple text prompt if interactive menu fails
+                _ => simple_text_prompt(),
             }
-            // Fallback to simple text prompt if interactive menu fails
-            simple_text_prompt()
         }
     }
 }
