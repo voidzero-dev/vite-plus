@@ -13,8 +13,9 @@ async fn main() -> Result<(), Error> {
     let result = vite_task::main(current_dir()?, args, None::<CliOptions>).await;
     if let Err(err) = result {
         tracing::error!("Error: {}", err);
-        if matches!(err, Error::UserCancelled(_)) {
-            std::process::exit(130);
+        match err {
+            Error::UserCancelled(exit_code) => std::process::exit(exit_code),
+            _ => return Err(err),
         }
     }
     Ok(())
