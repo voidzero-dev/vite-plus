@@ -20,6 +20,8 @@ pathdiff = { workspace = true }
 petgraph = { workspace = true, features = ["serde-1"] }
 rand = { workspace = true }
 reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
+reqwest-retry = { workspace = true }
 rustc-hash = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

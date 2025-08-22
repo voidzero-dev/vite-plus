@@ -69,6 +69,8 @@ ratatui = "0.29.0"
 rayon = "1.10.0"
 relative-path = "2.0.1"
 reqwest = { version = "0.12", features = ["stream", "rustls-tls", "json"], default-features = false }
+reqwest-middleware = "0.4"
+reqwest-retry = "0.7"
 rusqlite = "0.37.0"
 rustc-hash = "2.1.1"
 semver = "1.0.26"
