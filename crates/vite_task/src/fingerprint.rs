@@ -1,5 +1,10 @@
 use std::{ffi::OsStr, fmt::Display, path::Path, sync::Arc};
 
+use bincode::{Decode, Encode};
+use diff::Diff as _;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
+
 use crate::{
     Error,
     collections::HashMap,
@@ -11,11 +16,6 @@ use crate::{
     fs::FileSystem,
     str::Str,
 };
-
-use bincode::{Decode, Encode};
-use diff::Diff as _;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use serde::{Deserialize, Serialize};
 
 /// The fingerprint of a task. Determines if the task needs to be re-executed
 #[derive(Encode, Decode, Debug, Serialize)]

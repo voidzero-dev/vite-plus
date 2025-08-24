@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::Display;
 
 use bincode::{Decode, Encode};
@@ -14,7 +15,6 @@ use diff::Diff;
 use serde::Serialize;
 
 use crate::str::Str;
-use std::collections::BTreeMap;
 
 /// "FOO=BAR program arg1 arg2"
 #[derive(Encode, Decode, Serialize, Debug, PartialEq, Eq, Diff, Clone)]
