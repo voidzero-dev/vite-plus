@@ -21,7 +21,6 @@ mod arena;
 
 use std::{env::temp_dir, ffi::OsStr, fs::create_dir, io, sync::OnceLock};
 
-use allocator_api2::vec::Vec;
 pub use command::Command;
 use futures_util::future::{BoxFuture};
 use os_impl::SpyInner;

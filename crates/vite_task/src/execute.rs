@@ -10,7 +10,7 @@ use std::{
 
 use anyhow::Context;
 use bincode::{Decode, Encode};
-use fspy::{AccessMode, Spy};
+use fspy::{AccessMode, Spy, TrackedChild};
 
 use futures_util::future::try_join4;
 use serde::{Deserialize, Serialize};
@@ -283,7 +283,7 @@ pub async fn execute_task(
     cmd.current_dir(base_dir.join(&resolved_command.fingerprint.cwd))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    let (mut child, mut path_accesses) = cmd.spawn().await?;
+    let TrackedChild { tokio_child: mut child, accesses_future } = cmd.spawn().await?;
 
     let child_stdout = child.stdout.take().unwrap();
     let child_stderr = child.stderr.take().unwrap();
@@ -291,10 +291,10 @@ pub async fn execute_task(
     let outputs = Mutex::new(Vec::<StdOutput>::new());
 
     let path_accesses_fut = async move {
+        let path_accesses = accesses_future.await?;
         let mut path_reads = HashMap::<Str, PathRead>::new();
         let mut path_writes = HashMap::<Str, PathWrite>::new();
-        let mut buf = Vec::<u8>::new();
-        while let Some(access) = path_accesses.next(&mut buf).await? {
+        for access in path_accesses.iter() {
             let path = access.path.to_cow_os_str();
             let path = Path::new(&path);
             let Ok(relative_path) = path.strip_prefix(base_dir) else {
