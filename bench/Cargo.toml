@@ -4,8 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
 vite_task = { path = "../crates/vite_task" }
 
 [dev-dependencies]

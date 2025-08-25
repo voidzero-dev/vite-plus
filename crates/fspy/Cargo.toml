@@ -7,13 +7,8 @@ publish = false
 [dependencies]
 rand = "0.9.1"
 bincode = "2.0.1"
-bytemuck = "1.23.0"
-cfg-if = "1.0.0"
-derive-where = "1.4.0"
-event_iterator = "0.2.2"
 futures-util = "0.3.31"
 libc = "0.2.171"
-ref-cast = "1.0.24"
 tempfile = "3.19.1"
 # async-send-fd = { version = "1.2.0", features = ["tokio"] }
 # passfd = "0.1.6"
@@ -71,7 +66,6 @@ fspy_preload_windows = { workspace = true }
 tempfile = "3.19.1"
 
 [dev-dependencies]
-dunce = "1.0.5"
 tokio = { version = "1.44.2", features = [
     "rt-multi-thread",
     "macros",
@@ -87,4 +81,3 @@ xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 flate2 = "1.1.1"
 tar = "0.4.44"
 anyhow = "1.0.98"
-bytemuck = { version = "1.23.0", features = ["extern_crate_alloc"] }

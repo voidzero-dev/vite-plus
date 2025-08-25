@@ -14,8 +14,6 @@ fspy_shared = { workspace = true }
 stackalloc = "1.2.1"
 
 [dev-dependencies]
-tempfile = "3.13.0"
-libc = "0.2.171"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 seccomp_unotify = { workspace = true, features = ["target"] }
