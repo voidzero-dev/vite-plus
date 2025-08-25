@@ -1,0 +1,34 @@
+[package]
+name = "fspy_preload_unix"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+arrayvec = "0.7.6"
+syscalls = { version = "0.6.18", default-features = false }
+seccomp_unotify = { workspace = true, features = ["target"] }
+libc-print = "0.1.23"
+const_format = "0.2.34"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.172"
+bstr = { version = "1.12.0", default-features = false }
+socket2 = "0.5.10"
+ctor = "0.4.2"
+thread_local = "1.1.9"
+arrayvec = "0.7.6"
+bincode = "2.0.1"
+bytemuck = { version = "1.23.0", features = ["extern_crate_alloc"] }
+derive-where = "1.4.0"
+path-dedot = "3.1.1"
+ref-cast = "1.0.24"
+which = "7.0.3"
+fspy_shared_unix = { workspace = true }
+fspy_shared = { workspace = true }
+nix = { version = "0.30.1", features = ["signal", "fs", "socket", "mman", "time"] }
+memmap2 = "0.9.7"
+anyhow = "1.0.98"
+passfd = { workspace = true }

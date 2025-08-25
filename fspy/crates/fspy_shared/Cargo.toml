@@ -1,0 +1,32 @@
+[package]
+name = "fspy_shared"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+bincode = "2.0.1"
+bstr = "1.12.0"
+allocator-api2 = { version = "0.2.21", default-features = false, features = ["std"] }
+# stable_deref_trait = { version = "1.2.0", optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi = { version = "0.3.9", features = ["std"] }
+ms-detours = "4.0.5"
+bytemuck = { version = "1.23.0", features = ["must_cast", "extern_crate_alloc"] }
+winsafe = { version = "0.0.24", features = ["kernel"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+phf = { version = "0.11.3", features = ["macros"] }
+
+[target.'cfg(unix)'.dependencies]
+nix = "0.30.1"
+libc = "0.2.174"
+base64 = { version = "0.22.1" }
+derive-where = "1.4.0"
+# tokio = { version = "1.46.1", optional = true, default-features = false }
+# passfd = { git = "https://github.com/polachok/passfd", optional = true, features = [ "async" ] }
+
+# [features]
+# supervisor = ["dep:tokio", "dep:passfd"]
+# target = []

@@ -1,0 +1,7 @@
+[cases.outline-oxlint]
+dir = "repos/outline"
+cmd = ["yarn", "lint"]
+
+[cases.outline-rolldown-vite-build]
+dir = "repos/outline"
+cmd = ["yarn", "vite:build"]

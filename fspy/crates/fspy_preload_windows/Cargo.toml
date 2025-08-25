@@ -1,0 +1,39 @@
+[package]
+name = "fspy_preload_windows"
+version = "0.1.0"
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# windows-sys = { version = "0.59.0", features = ["Win32_Foundation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_Security", "Win32_System_LibraryLoader"] }
+winsafe = { version = "0.0.24", features = ["kernel"] }
+ms-detours = "4.0.5"
+winapi = { version = "0.3.9", features = [
+    "winerror",
+    "winbase",
+    "namedpipeapi",
+    "memoryapi",
+    "std",
+] }
+smallvec = { version = "2.0.0-alpha.11", features = ["std"] }
+widestring = "1.2.0"
+constcat = "0.6.1"
+backtrace = "0.3.75"
+arrayvec = "0.7.6"
+bincode = "2.0.1"
+bytemuck = { version = "1.23.0", features = ["extern_crate_alloc"] }
+derive-where = "1.4.0"
+path-dedot = "3.1.1"
+ref-cast = "1.0.24"
+which = "7.0.3"
+fspy_shared = { workspace = true }
+ntapi = "0.4.1"
+
+
+[target.'cfg(target_os = "windows")'.dev-dependencies]
+tempfile = "3.20.0"
+
+[dependencies]
+dashmap = "6.1.0"

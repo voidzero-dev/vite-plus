@@ -1,0 +1,28 @@
+[package]
+name = "seccomp_unotify"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[target.'cfg(target_os = "linux")'.dependencies]
+seccompiler = { git = "https://github.com/branchseer/seccompiler", branch = "seccomp-action-raw" }
+arrayvec = "0.7.6"
+libc = "0.2.174"
+syscalls = { version = "0.6.18", default-features = false, features = ["std"] }
+tokio = { version = "1.46.1",  features = [ "net", "process", "io-util", "rt" ] }
+nix = { version = "0.30.1", features = [ "process", "fs", "poll", "socket", "uio" ] }
+bytes = "1.10.1"
+tracing = "0.1.41"
+bincode = "2.0.1"
+passfd = { workspace = true, default-features = false, optional = true }
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+tokio = { version = "1.46.1", features = [ "macros", "time" ] }
+nix = { version = "0.30.1", features = [ "fs" ] }
+assertables = "9.8.1"
+test-log = { version = "0.2.18", features = ["trace"] }
+futures-util = "0.3.31"
+
+[features]
+supervisor = ["dep:passfd", "passfd/async"]
+target = ["dep:passfd"]

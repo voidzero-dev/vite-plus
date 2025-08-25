@@ -1,0 +1,90 @@
+[package]
+name = "fspy_interpose"
+edition = "2024"
+publish = false
+
+[workspace]
+members = ["shared"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+arrayvec = "0.7.6"
+syscalls = { version = "0.6.18", default-features = false }
+nix = { version = "0.30.1", features = ["signal", "fs", "socket"] }
+seccompiler = "0.5.0"
+libc-print = "0.1.23"
+refcell-lock-api = "0.1.0"
+talc = { version = "4.4.3", default-features = false, features = [
+    "lock_api",
+    "allocator-api2",
+] }
+spin = { version = "0.10.0", default-features = false, features = [
+    "lock_api",
+    "spin_mutex",
+] }
+allocator-api2 = { version = "0.2.21", default-features = false, features = [
+    "alloc",
+    "std",
+] }
+const_format = "0.2.34"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.172"
+lexical-core = { version = "1.0.5", default-features = false, features = [
+    "parse-integers",
+] }
+bstr = { version = "1.12.0", default-features = false }
+socket2 = "0.5.10"
+ctor = "0.4.2"
+thread_local = "1.1.9"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+phf = { version = "0.11.3", features = ["macros"] }
+nix = { version = "0.30.1", features = ["fs"] }
+bumpalo = { version = "3.17.0", features = ["allocator-api2"] }
+smallvec = { version = "2.0.0-alpha.11", features = ["std"] }
+passfd = { git = "https://github.com/polachok/passfd", rev = "d55881752c16aced1a49a75f9c428d38d3767213" }
+allocator-api2 = { version = "0.2.21", default-features = false, features = [
+    "alloc",
+] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# windows-sys = { version = "0.59.0", features = ["Win32_Foundation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_Security", "Win32_System_LibraryLoader"] }
+winsafe = { version = "0.0.24", features = ["kernel"] }
+ms-detours = "4.0.5"
+winapi = { version = "0.3.9", features = [
+    "winerror",
+    "winbase",
+    "namedpipeapi",
+    "memoryapi",
+    "std",
+] }
+smallvec = { version = "2.0.0-alpha.11", features = ["std"] }
+widestring = "1.2.0"
+constcat = "0.6.1"
+backtrace = "0.3.75"
+
+[target.'cfg(target_os = "windows")'.dev-dependencies]
+tempfile = "3.20.0"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+strip = "symbols"
+lto = true
+codegen-units = 1
+
+[dependencies]
+arrayvec = "0.7.6"
+bincode = "2.0.1"
+bytemuck = { version = "1.23.0", features = ["extern_crate_alloc"] }
+derive-where = "1.4.0"
+path-dedot = "3.1.1"
+ref-cast = "1.0.24"
+which = "7.0.3"
+fspy_shared = { workspace = true }
+ntapi = "0.4.1"

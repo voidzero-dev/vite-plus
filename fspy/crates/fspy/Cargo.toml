@@ -1,0 +1,90 @@
+[package]
+name = "fspy"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+rand = "0.9.1"
+bincode = "2.0.1"
+bytemuck = "1.23.0"
+cfg-if = "1.0.0"
+derive-where = "1.4.0"
+event_iterator = "0.2.2"
+futures-util = "0.3.31"
+libc = "0.2.171"
+ref-cast = "1.0.24"
+tempfile = "3.19.1"
+# async-send-fd = { version = "1.2.0", features = ["tokio"] }
+# passfd = "0.1.6"
+tokio = { version = "1.44.2", features = ["net", "process", "io-util", "sync"] }
+bumpalo = { version = "3.17.0", features = ["allocator-api2"] }
+ouroboros = "0.18.5"
+bstr = { version = "1.12.0", default-features = false }
+which = "7.0.3"
+fspy_shared = { workspace = true }
+slab = "0.4.9"
+allocator-api2 = { version = "0.2.21", default-features = false, features = [
+    "alloc",
+] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+tokio-seqpacket = "0.8.0"
+arrayvec = "0.7.6"
+nix = { version = "0.30.1", features = ["uio"] }
+seccomp_unotify = { workspace = true, features = ["supervisor"]}
+blink-alloc =  { version = "0.3.1", features = ["sync"]}
+thread_local = "1.1.9"
+tokio = { version = "1.44.2", features = ["bytes"] }
+syscalls = { version = "0.6.18", default-features = false, features = ["std"]}
+
+[target.'cfg(unix)'.dependencies]
+fspy_shared_unix = { workspace = true }
+fspy_preload_unix = { workspace = true }
+nix = { version = "0.30.1", features = ["fs", "process", "socket", "feature"] }
+passfd = { git = "https://github.com/polachok/passfd", features = [
+    "async",
+] }
+memmap2 = "0.9.7"
+# asyncfd = "0.1.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+phf = { version = "0.11.3", features = ["macros"] }
+
+
+[target.'cfg(any(target_os = "macos", windows))'.dependencies]
+xxhash-rust = { version = "0.8.15", features = ["const_xxh3"] }
+const_format = { version = "0.2.34", features = ["fmt"] }
+
+
+[target.'cfg(target_os = "windows")'.dependencies]
+ms-detours = "4.0.5"
+winsafe = { version = "0.0.24", features = ["kernel"] }
+winapi = { version = "0.3.9", features = [
+    "winbase",
+    "securitybaseapi",
+    "handleapi",
+] }
+fspy_preload_windows = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+tempfile = "3.19.1"
+
+[dev-dependencies]
+dunce = "1.0.5"
+tokio = { version = "1.44.2", features = [
+    "rt-multi-thread",
+    "macros",
+    "fs",
+    "io-std",
+] }
+csv-async = { version = "1.3.1", features = ["tokio"] }
+ctor = "0.4.3"
+
+[build-dependencies]
+attohttpc = "0.29.2"
+xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
+flate2 = "1.1.1"
+tar = "0.4.44"
+anyhow = "1.0.98"
+bytemuck = { version = "1.23.0", features = ["extern_crate_alloc"] }

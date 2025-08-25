@@ -1,0 +1,23 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+debug = false
+panic = "abort"
+
+[workspace.dependencies]
+fspy_shared = { path = "crates/fspy_shared" }
+fspy = { path = "crates/fspy" }
+fspy_shared_unix = { path = "crates/fspy_shared_unix"}
+seccomp_unotify = { path = "crates/seccomp_unotify" }
+fspy_preload_unix = { path = "crates/fspy_preload_unix", artifact = "cdylib" }
+fspy_preload_windows = { path = "crates/fspy_preload_windows", artifact = "cdylib" }
+passfd = { git = "https://github.com/polachok/passfd", rev = "d55881752c16aced1a49a75f9c428d38d3767213", default-features = false }

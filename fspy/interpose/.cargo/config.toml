@@ -1,0 +1,6 @@
+[build]
+# - for rust-analyser, move the target dir to fspy's target,
+#   to avoid rebuild triggered cargo:rerun-if-changed=interpose in fspy's build.rs if target dir changes
+# - In fspy's build.rs, CARGO_TARGET_DIR overrides this settings to follow the rule that
+#   build.rs should only write to OUT_DIR
+target-dir = "../target/fspy_interpose_target"

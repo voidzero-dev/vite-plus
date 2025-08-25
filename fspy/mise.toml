@@ -1,0 +1,26 @@
+[tools]
+node = "22.18.0"
+# cargo-binstall = "1.14.1"
+"npm:corepack" = "0.34.0"
+
+[settings]
+idiomatic_version_file_enable_tools = []
+
+[tasks.clone]
+run = [
+  'cd {{arg(name="dir")}} || git init {{arg(name="dir")}}',
+  'cd {{arg(name="dir")}} && git remote add origin {{arg(name="url")}} || git remote set-url origin {{arg(name="url")}}',
+  'cd {{arg(name="dir")}} && git fetch --depth=1 origin {{arg(name="sha")}} && git reset --hard {{arg(name="sha")}}',
+]
+
+[tasks.clone-e2e-repos]
+run = [
+    "mise clone crates/fspy_e2e/repos/outline https://github.com/outline/outline c2f84466dfcfd40fedcab4bff2ec6dd9fb2938eb",
+]
+
+[tasks.prepare-e2e-repos]
+env = { COREPACK_ENABLE_DOWNLOAD_PROMPT = "0" }
+dir = "crates/fspy_e2e/repos/outline"
+run = [
+    "yarn",
+]
