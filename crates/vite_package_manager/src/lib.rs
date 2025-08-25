@@ -1,3 +1,5 @@
+pub mod package_manager;
+
 use anyhow::Context;
 use compact_str::CompactString;
 use petgraph::Graph;

@@ -18,5 +18,8 @@ serde_yml = { workspace = true }
 vite_error = { workspace = true }
 wax = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [lints]
 workspace = true
