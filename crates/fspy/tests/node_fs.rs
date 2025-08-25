@@ -20,10 +20,10 @@ async fn track_node_script(script: &str) -> io::Result<PathAccessIterable> {
         accesses_future,
     } = command.spawn().await?;
 
-    let acceses = accesses_future.await?;
+    let accesses = accesses_future.await?;
     let status = tokio_child.wait().await?;
     assert!(status.success());
-    Ok(acceses)
+    Ok(accesses)
 }
 
 #[tokio::test]

@@ -14,7 +14,7 @@ use winapi::{
         minwindef::{BOOL, DWORD, HFILE, MAX_PATH, UINT},
         ntdef::{
             BOOLEAN, HANDLE, LPCSTR, LPCWSTR, NTSTATUS, PHANDLE, PLARGE_INTEGER,
-            POBJECT_ATTRIBUTES, PUNICODE_STRING, PVOID, ULONG, UNICODE_STRING,
+            POBJECT_ATTRIBUTES, PUNYCODE_STRING, PVOID, ULONG, UNICODE_STRING,
         },
     },
     um::winnt::{ACCESS_MASK, GENERIC_READ},
@@ -176,7 +176,7 @@ static DETOUR_NT_OPEN_FILE: Detour<
     })
 };
 
-static DETOUR_NT_QUERY_ATRRIBUTES_FILE: Detour<
+static DETOUR_NT_QUERY_ATTRIBUTES_FILE: Detour<
     unsafe extern "system" fn(
         object_attributes: POBJECT_ATTRIBUTES,
         file_information: PFILE_BASIC_INFORMATION,
@@ -192,7 +192,7 @@ static DETOUR_NT_QUERY_ATRRIBUTES_FILE: Detour<
             ) -> HFILE {
                 unsafe { handle_open(AccessMode::Read, object_attributes) };
                 unsafe {
-                    (DETOUR_NT_QUERY_ATRRIBUTES_FILE.real())(object_attributes, file_information)
+                    (DETOUR_NT_QUERY_ATTRIBUTES_FILE.real())(object_attributes, file_information)
                 }
             }
             new_nt_open_file
@@ -200,7 +200,7 @@ static DETOUR_NT_QUERY_ATRRIBUTES_FILE: Detour<
     )
 };
 
-unsafe fn handle_open(acces_mode: impl ToAccessMode, path: impl ToAbsolutePath) {
+unsafe fn handle_open(access_mode: impl ToAccessMode, path: impl ToAbsolutePath) {
     let client = unsafe { global_client() };
     unsafe {
         path.to_absolute_path(|path| {
@@ -221,7 +221,7 @@ unsafe fn handle_open(acces_mode: impl ToAccessMode, path: impl ToAbsolutePath) 
                     }
                 } else {
                     PathAccess {
-                        mode: acces_mode.to_access_mode(),
+                        mode: access_mode.to_access_mode(),
                         path: NativeStr::from_wide(path),
                     }
                 };
@@ -232,7 +232,7 @@ unsafe fn handle_open(acces_mode: impl ToAccessMode, path: impl ToAbsolutePath) 
     .unwrap();
 }
 
-static DETOUR_NT_FULL_QUERY_ATRRIBUTES_FILE: Detour<
+static DETOUR_NT_FULL_QUERY_ATTRIBUTES_FILE: Detour<
     unsafe extern "system" fn(
         object_attributes: POBJECT_ATTRIBUTES,
         file_information: PFILE_NETWORK_OPEN_INFORMATION,
@@ -245,7 +245,7 @@ static DETOUR_NT_FULL_QUERY_ATRRIBUTES_FILE: Detour<
         ) -> HFILE {
             unsafe { handle_open(GENERIC_READ, object_attributes) };
             unsafe {
-                (DETOUR_NT_FULL_QUERY_ATRRIBUTES_FILE.real())(object_attributes, file_information)
+                (DETOUR_NT_FULL_QUERY_ATTRIBUTES_FILE.real())(object_attributes, file_information)
             }
         }
         new_fn
@@ -325,7 +325,7 @@ static DETOUR_NT_QUERY_DIRECTORY_FILE: Detour<
         length: ULONG,
         file_information_class: FILE_INFORMATION_CLASS,
         return_single_entry: BOOLEAN,
-        file_name: PUNICODE_STRING,
+        file_name: PUNYCODE_STRING,
         restart_scan: BOOLEAN,
     ) -> NTSTATUS,
 > = unsafe {
@@ -340,7 +340,7 @@ static DETOUR_NT_QUERY_DIRECTORY_FILE: Detour<
             length: ULONG,
             file_information_class: FILE_INFORMATION_CLASS,
             return_single_entry: BOOLEAN,
-            file_name: PUNICODE_STRING,
+            file_name: PUNYCODE_STRING,
             restart_scan: BOOLEAN,
         ) -> NTSTATUS {
             unsafe { handle_open(AccessMode::ReadDir, file_handle) };
@@ -367,8 +367,8 @@ static DETOUR_NT_QUERY_DIRECTORY_FILE: Detour<
 pub const DETOURS: &[DetourAny] = &[
     DETOUR_NT_CREATE_FILE.as_any(),
     DETOUR_NT_OPEN_FILE.as_any(),
-    DETOUR_NT_QUERY_ATRRIBUTES_FILE.as_any(),
-    DETOUR_NT_FULL_QUERY_ATRRIBUTES_FILE.as_any(),
+    DETOUR_NT_QUERY_ATTRIBUTES_FILE.as_any(),
+    DETOUR_NT_FULL_QUERY_ATTRIBUTES_FILE.as_any(),
     DETOUR_NT_OPEN_SYMBOLIC_LINK_OBJECT.as_any(),
     DETOUR_NT_QUERY_INFORMATION_BY_NAME.as_any(),
     DETOUR_NT_QUERY_DIRECTORY_FILE.as_any(),

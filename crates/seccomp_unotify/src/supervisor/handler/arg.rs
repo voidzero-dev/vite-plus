@@ -53,10 +53,10 @@ impl CStrPtr {
                 return Err(io::Error::last_os_error());
             };
 
-            // chunk[..read_size] are all initiliazed, but we are only going to advance until '\0'
+            // chunk[..read_size] are all initialized, but we are only going to advance until '\0'
             let chunk = unsafe { transmute::<&[MaybeUninit<u8>], &[u8]>(&chunk.as_uninit_slice_mut()[..read_size]) }; 
             let Some(nul_index) = chunk.iter().position(|byte| *byte == b'\0') else {
-                // No '\0' found, could be a partitial read, advance all of `read_size` and continue reading.
+                // No '\0' found, could be a partial read, advance all of `read_size` and continue reading.
                 unsafe { buf.advance_mut(read_size) };
                 continue;
             };

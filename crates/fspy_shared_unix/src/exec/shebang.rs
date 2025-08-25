@@ -172,7 +172,7 @@ pub fn parse_shebang(
 //     }
 
 //     #[test]
-//     fn shebang_triming_spaces() {
+//     fn shebang_trimming_spaces() {
 //         let mut buf = [0u8; PEEK_SIZE];
 //         let shebang = parse_shebang(&mut buf, "#! /bin/sh a \n".as_bytes())
 //             .unwrap()

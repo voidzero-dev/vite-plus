@@ -63,10 +63,10 @@ pub async fn spawn_with_id(id: &str) -> io::Result<PathAccessIterable> {
         accesses_future,
     } = command.spawn().await?;
 
-    let acceses = accesses_future.await?;
+    let accesses = accesses_future.await?;
     let status = tokio_child.wait().await?;
     assert!(status.success());
-    Ok(acceses)
+    Ok(accesses)
 }
 
 pub(crate) use track_child;

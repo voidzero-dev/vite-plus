@@ -26,7 +26,7 @@ async fn main() -> io::Result<()> {
         accesses_future,
     } = command.spawn().await?;
 
-    let acceses = accesses_future.await?;
+    let accesses = accesses_future.await?;
 
     let mut path_count = 0usize;
     let out_file: Pin<Box<dyn AsyncWrite>> = if out_path == "-" {
@@ -37,7 +37,7 @@ async fn main() -> io::Result<()> {
 
     let mut csv_writer = csv_async::AsyncWriter::from_writer(out_file);
 
-    for acc in acceses.iter() {
+    for acc in accesses.iter() {
         path_count += 1;
         csv_writer
             .write_record(&[
