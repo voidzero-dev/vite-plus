@@ -9,7 +9,6 @@ use std::{
 use compact_str::CompactString;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
-use tokio::fs::create_dir_all;
 use tokio::sync::Mutex;
 
 use crate::Error;
@@ -317,7 +316,10 @@ async fn download_package_manager(
 
     download_and_extract_tgz(&tgz_url, &target_dir_tmp).await.map_err(|err| {
         // status 404 means the version is not found, convert to PackageManagerVersionNotFound error
-        if matches!(&err, Error::ReqwestError(e) if e.status() == Some(reqwest::StatusCode::NOT_FOUND)) {
+        if let Error::ReqwestError(e) = &err
+            && let Some(status) = e.status()
+            && status == reqwest::StatusCode::NOT_FOUND
+        {
             Error::PackageManagerVersionNotFound {
                 name: package_manager_type.to_string(),
                 version: version.into(),
