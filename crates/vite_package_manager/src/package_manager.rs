@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use vite_error::Error;
 
 /// Find the package root directory from the current working directory.
-fn find_package_root(original_cwd: impl AsRef<Path>) -> PathBuf {
+pub fn find_package_root(original_cwd: impl AsRef<Path>) -> PathBuf {
     let mut cwd = original_cwd.as_ref();
     loop {
         if cwd.join("package.json").exists() {
