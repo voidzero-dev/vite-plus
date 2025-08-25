@@ -48,15 +48,9 @@ unsafe fn to_path_access<F: FnOnce(PathAccess<'_>)>(
         };
         let filename_cstr = U16CString::from_ustr_truncate(filename_str);
         let abs_path = combine_paths(root_dir_cstr, filename_cstr.as_ucstr()).unwrap();
-        f(PathAccess {
-            mode,
-            path: NativeStr::from_wide(abs_path.to_u16_str().as_slice()),
-        })
+        f(PathAccess { mode, path: NativeStr::from_wide(abs_path.to_u16_str().as_slice()) })
     } else {
-        f(PathAccess {
-            mode,
-            path: NativeStr::from_wide(filename_slice),
-        })
+        f(PathAccess { mode, path: NativeStr::from_wide(filename_slice) })
     }
 }
 
@@ -182,22 +176,16 @@ static DETOUR_NT_QUERY_ATTRIBUTES_FILE: Detour<
         file_information: PFILE_BASIC_INFORMATION,
     ) -> HFILE,
 > = unsafe {
-    Detour::new(
-        c"NtQueryAttributesFile",
-        ntapi::ntioapi::NtQueryAttributesFile,
-        {
-            unsafe extern "system" fn new_nt_open_file(
-                object_attributes: POBJECT_ATTRIBUTES,
-                file_information: PFILE_BASIC_INFORMATION,
-            ) -> HFILE {
-                unsafe { handle_open(AccessMode::Read, object_attributes) };
-                unsafe {
-                    (DETOUR_NT_QUERY_ATTRIBUTES_FILE.real())(object_attributes, file_information)
-                }
-            }
-            new_nt_open_file
-        },
-    )
+    Detour::new(c"NtQueryAttributesFile", ntapi::ntioapi::NtQueryAttributesFile, {
+        unsafe extern "system" fn new_nt_open_file(
+            object_attributes: POBJECT_ATTRIBUTES,
+            file_information: PFILE_BASIC_INFORMATION,
+        ) -> HFILE {
+            unsafe { handle_open(AccessMode::Read, object_attributes) };
+            unsafe { (DETOUR_NT_QUERY_ATTRIBUTES_FILE.real())(object_attributes, file_information) }
+        }
+        new_nt_open_file
+    })
 };
 
 unsafe fn handle_open(access_mode: impl ToAccessMode, path: impl ToAbsolutePath) {
@@ -208,23 +196,21 @@ unsafe fn handle_open(access_mode: impl ToAccessMode, path: impl ToAbsolutePath)
                 return Ok(());
             };
             let path = path.as_slice();
-            let path_access =
-                if let Some(wildcard_pos) = path.iter().rposition(|c| *c == b'*' as u16) {
-                    let path_before_wildcard = &path[..wildcard_pos];
-                    let slash_pos = path_before_wildcard
-                        .iter()
-                        .rposition(|c| *c == b'\\' as u16 || *c == b'/' as u16)
-                        .unwrap_or(0);
-                    PathAccess {
-                        mode: AccessMode::ReadDir,
-                        path: NativeStr::from_wide(&path[..slash_pos]),
-                    }
-                } else {
-                    PathAccess {
-                        mode: access_mode.to_access_mode(),
-                        path: NativeStr::from_wide(path),
-                    }
-                };
+            let path_access = if let Some(wildcard_pos) =
+                path.iter().rposition(|c| *c == b'*' as u16)
+            {
+                let path_before_wildcard = &path[..wildcard_pos];
+                let slash_pos = path_before_wildcard
+                    .iter()
+                    .rposition(|c| *c == b'\\' as u16 || *c == b'/' as u16)
+                    .unwrap_or(0);
+                PathAccess {
+                    mode: AccessMode::ReadDir,
+                    path: NativeStr::from_wide(&path[..slash_pos]),
+                }
+            } else {
+                PathAccess { mode: access_mode.to_access_mode(), path: NativeStr::from_wide(path) }
+            };
             client.send(path_access);
             Ok(())
         })
@@ -259,27 +245,23 @@ static DETOUR_NT_OPEN_SYMBOLIC_LINK_OBJECT: Detour<
         object_attributes: POBJECT_ATTRIBUTES,
     ) -> HFILE,
 > = unsafe {
-    Detour::new(
-        c"NtOpenSymbolicLinkObject",
-        ntapi::ntobapi::NtOpenSymbolicLinkObject,
-        {
-            unsafe extern "system" fn new_fn(
-                link_handle: PHANDLE,
-                desired_access: ACCESS_MASK,
-                object_attributes: POBJECT_ATTRIBUTES,
-            ) -> HFILE {
-                unsafe { handle_open(desired_access, object_attributes) };
-                unsafe {
-                    (DETOUR_NT_OPEN_SYMBOLIC_LINK_OBJECT.real())(
-                        link_handle,
-                        desired_access,
-                        object_attributes,
-                    )
-                }
+    Detour::new(c"NtOpenSymbolicLinkObject", ntapi::ntobapi::NtOpenSymbolicLinkObject, {
+        unsafe extern "system" fn new_fn(
+            link_handle: PHANDLE,
+            desired_access: ACCESS_MASK,
+            object_attributes: POBJECT_ATTRIBUTES,
+        ) -> HFILE {
+            unsafe { handle_open(desired_access, object_attributes) };
+            unsafe {
+                (DETOUR_NT_OPEN_SYMBOLIC_LINK_OBJECT.real())(
+                    link_handle,
+                    desired_access,
+                    object_attributes,
+                )
             }
-            new_fn
-        },
-    )
+        }
+        new_fn
+    })
 };
 
 static DETOUR_NT_QUERY_INFORMATION_BY_NAME: Detour<

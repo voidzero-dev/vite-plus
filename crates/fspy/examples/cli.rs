@@ -21,19 +21,13 @@ async fn main() -> io::Result<()> {
     let mut command = spy.new_command(program);
     command.envs(std::env::vars_os()).args(args);
 
-    let TrackedChild {
-        mut tokio_child,
-        accesses_future,
-    } = command.spawn().await?;
+    let TrackedChild { mut tokio_child, accesses_future } = command.spawn().await?;
 
     let accesses = accesses_future.await?;
 
     let mut path_count = 0usize;
-    let out_file: Pin<Box<dyn AsyncWrite>> = if out_path == "-" {
-        Box::pin(stdout())
-    } else {
-        Box::pin(File::create(out_path).await?)
-    };
+    let out_file: Pin<Box<dyn AsyncWrite>> =
+        if out_path == "-" { Box::pin(stdout()) } else { Box::pin(File::create(out_path).await?) };
 
     let mut csv_writer = csv_async::AsyncWriter::from_writer(out_file);
 
@@ -41,11 +35,7 @@ async fn main() -> io::Result<()> {
         path_count += 1;
         csv_writer
             .write_record(&[
-                acc.path
-                    .to_cow_os_str()
-                    .to_string_lossy()
-                    .as_ref()
-                    .as_bytes(),
+                acc.path.to_cow_os_str().to_string_lossy().as_ref().as_bytes(),
                 match acc.mode {
                     AccessMode::Read => b"read".as_slice(),
                     AccessMode::ReadWrite => b"readwrite",

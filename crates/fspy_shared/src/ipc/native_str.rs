@@ -19,7 +19,6 @@ pub struct NativeStr<'a> {
     data: &'a [u8],
 }
 
-
 #[cfg(unix)]
 impl<'a> From<&'a Path> for NativeStr<'a> {
     fn from(value: &'a Path) -> Self {
@@ -62,10 +61,7 @@ impl<'a> NativeStr<'a> {
     #[cfg(windows)]
     pub fn from_wide(wide: &'a [u16]) -> Self {
         use bytemuck::must_cast_slice;
-        Self {
-            is_wide: true,
-            data: must_cast_slice(wide),
-        }
+        Self { is_wide: true, data: must_cast_slice(wide) }
     }
 
     #[cfg(unix)]
@@ -140,17 +136,13 @@ impl<'a> Debug for NativeString {
 impl<'a> From<&'a OsStr> for NativeString {
     fn from(value: &'a OsStr) -> Self {
         use std::os::unix::ffi::OsStrExt;
-        Self {
-            data: value.as_bytes().into(),
-        }
+        Self { data: value.as_bytes().into() }
     }
 }
 #[cfg(unix)]
 impl<'a> From<String> for NativeString {
     fn from(value: String) -> Self {
-        Self {
-            data: value.as_bytes().into(),
-        }
+        Self { data: value.as_bytes().into() }
     }
 }
 #[cfg(unix)]

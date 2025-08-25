@@ -9,8 +9,8 @@ pub const OILS_BINARY: Fixture = fixture!("oils-for-unix");
 mod tests {
     use std::{process::Command, str::from_utf8};
 
-    use fspy_shared_unix::spawn::COREUTILS_FUNCTIONS_FOR_TEST;
     use super::*;
+    use fspy_shared_unix::spawn::COREUTILS_FUNCTIONS_FOR_TEST;
 
     #[test]
     fn coreutils_functions() {
@@ -22,18 +22,11 @@ mod tests {
             .split(|byte| *byte == b'\n')
             .filter_map(|line| {
                 let line = line.trim_ascii();
-                if line.is_empty() {
-                    None
-                } else {
-                    Some(from_utf8(line).unwrap())
-                }
+                if line.is_empty() { None } else { Some(from_utf8(line).unwrap()) }
             })
             .collect();
-        let mut actual_functions: Vec<&str> = COREUTILS_FUNCTIONS_FOR_TEST
-            .iter()
-            .copied()
-            .map(|f| from_utf8(f).unwrap())
-            .collect();
+        let mut actual_functions: Vec<&str> =
+            COREUTILS_FUNCTIONS_FOR_TEST.iter().copied().map(|f| from_utf8(f).unwrap()).collect();
 
         expected_functions.sort_unstable();
         actual_functions.sort_unstable();

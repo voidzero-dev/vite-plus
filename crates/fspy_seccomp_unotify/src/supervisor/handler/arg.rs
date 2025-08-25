@@ -1,5 +1,8 @@
 use std::{
-    ffi::{CStr, OsString}, io, mem::{transmute, MaybeUninit}, os::{fd::RawFd, raw::c_void}
+    ffi::{CStr, OsString},
+    io,
+    mem::{MaybeUninit, transmute},
+    os::{fd::RawFd, raw::c_void},
 };
 
 use arrayvec::ArrayVec;
@@ -24,47 +27,39 @@ impl CStrPtr {
             if chunk.len() == 0 {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidFilename,
-                    "CStrPtr::read: buf is filled before null-terminator is found"
-                ))
+                    "CStrPtr::read: buf is filled before null-terminator is found",
+                ));
             }
 
-            let local_iov = libc::iovec {
-                iov_base: chunk.as_mut_ptr().cast(),
-                iov_len: chunk.len(),
-            };
+            let local_iov =
+                libc::iovec { iov_base: chunk.as_mut_ptr().cast(), iov_len: chunk.len() };
 
-            let remote_iov = libc::iovec {
-                iov_base: self.remote_ptr,
-                iov_len: chunk.len(),
-            };
+            let remote_iov = libc::iovec { iov_base: self.remote_ptr, iov_len: chunk.len() };
 
-            let read_size = unsafe {
-                libc::process_vm_readv(
-                    self.pid,
-                    &local_iov,
-                    1,
-                    &remote_iov,
-                    1,
-                    0,
-                )
-            };
+            let read_size =
+                unsafe { libc::process_vm_readv(self.pid, &local_iov, 1, &remote_iov, 1, 0) };
 
             let Ok(read_size) = usize::try_from(read_size) else {
                 return Err(io::Error::last_os_error());
             };
 
             // chunk[..read_size] are all initialized, but we are only going to advance until '\0'
-            let chunk = unsafe { transmute::<&[MaybeUninit<u8>], &[u8]>(&chunk.as_uninit_slice_mut()[..read_size]) }; 
+            let chunk = unsafe {
+                transmute::<&[MaybeUninit<u8>], &[u8]>(&chunk.as_uninit_slice_mut()[..read_size])
+            };
             let Some(nul_index) = chunk.iter().position(|byte| *byte == b'\0') else {
                 // No '\0' found, could be a partial read, advance all of `read_size` and continue reading.
                 unsafe { buf.advance_mut(read_size) };
                 continue;
             };
             unsafe { buf.advance_mut(nul_index) };
-            return Ok(())
+            return Ok(());
         }
     }
-    pub fn read_with_buf<const BUF_SIZE: usize, R, F: FnOnce(&[u8]) -> io::Result<R>>(&self, f: F) -> io::Result<R> {
+    pub fn read_with_buf<const BUF_SIZE: usize, R, F: FnOnce(&[u8]) -> io::Result<R>>(
+        &self,
+        f: F,
+    ) -> io::Result<R> {
         let mut read_buf: [MaybeUninit<u8>; 32768] = [const { MaybeUninit::uninit() }; 32768];
         let mut read_buf = ReadBuf::uninit(read_buf.as_mut_slice());
         self.read(&mut read_buf)?;
@@ -74,10 +69,7 @@ impl CStrPtr {
 
 impl FromSyscallArg for CStrPtr {
     fn from_syscall_arg(pid: u32, arg: u64) -> io::Result<Self> {
-        Ok(Self {
-            pid: pid as _,
-            remote_ptr: arg as _,
-        })
+        Ok(Self { pid: pid as _, remote_ptr: arg as _ })
     }
 }
 

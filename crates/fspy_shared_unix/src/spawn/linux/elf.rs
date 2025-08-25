@@ -26,19 +26,14 @@ fn get_interp(executable: &[u8]) -> nix::Result<Option<&BStr>> {
         return Ok(None);
     };
 
-    let Some(interp_header) = headers
-        .into_iter()
-        .find(|header| header.p_type == PT_INTERP)
-    else {
+    let Some(interp_header) = headers.into_iter().find(|header| header.p_type == PT_INTERP) else {
         return Ok(None);
     };
     let Ok(interp) = elf.segment_data(&interp_header) else {
         return Err(nix::Error::ENOEXEC);
     };
 
-    let interp = CStr::from_bytes_until_nul(interp)
-        .map(CStr::to_bytes)
-        .unwrap_or(interp);
+    let interp = CStr::from_bytes_until_nul(interp).map(CStr::to_bytes).unwrap_or(interp);
     Ok(Some(BStr::new(interp)))
 }
 
@@ -49,10 +44,7 @@ mod tests {
     use super::*;
     #[test]
     fn dynamic_executable() {
-        assert_eq!(
-            is_dynamically_linked_to_libc(read("/bin/sh").unwrap()).unwrap(),
-            true
-        );
+        assert_eq!(is_dynamically_linked_to_libc(read("/bin/sh").unwrap()).unwrap(), true);
     }
     #[test]
     fn static_executable() {

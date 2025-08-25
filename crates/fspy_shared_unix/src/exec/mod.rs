@@ -38,18 +38,12 @@ pub struct ExecResolveConfig<'a> {
 impl<'a> ExecResolveConfig<'a> {
     /// Configuration for execve - no PATH search, direct execution
     pub fn search_path_disabled() -> Self {
-        Self {
-            search_path: None,
-            shebang_options: Default::default(),
-        }
+        Self { search_path: None, shebang_options: Default::default() }
     }
     /// execlp/execvp/execvP/execvpe
     /// `custom_path` allows a customized path to be searched like in execvP (macOS extension)
     pub fn search_path_enabled(custom_path: Option<&'a BStr>) -> Self {
-        Self {
-            search_path: Some(SearchPath { custom_path }),
-            shebang_options: Default::default(),
-        }
+        Self { search_path: Some(SearchPath { custom_path }), shebang_options: Default::default() }
     }
 }
 
@@ -63,11 +57,7 @@ pub struct Exec {
 
 fn getenv(name: &CStr) -> Option<&'static CStr> {
     let value = unsafe { nix::libc::getenv(name.as_ptr().cast()) };
-    if value.is_null() {
-        None
-    } else {
-        Some(unsafe { CStr::from_ptr(value) })
-    }
+    if value.is_null() { None } else { Some(unsafe { CStr::from_ptr(value) }) }
 }
 
 fn peek_executable(path: &Path, buf: &mut [u8]) -> nix::Result<usize> {
@@ -111,10 +101,7 @@ impl Exec {
                 self.program.as_ref(),
                 path,
                 |path| {
-                    on_path_access(PathAccess {
-                        path: path.into(),
-                        mode: AccessMode::Read,
-                    });
+                    on_path_access(PathAccess { path: path.into(), mode: AccessMode::Read });
                     access(OsStr::from_bytes(path), AccessFlags::X_OK)
                 },
                 |program| Ok(program.to_owned()),
@@ -142,8 +129,7 @@ impl Exec {
         )? {
             self.args[0] = shebang.interpreter.clone();
             let old_program = replace(&mut self.program, shebang.interpreter);
-            self.args
-                .splice(1..1, shebang.arguments.into_iter().chain(once(old_program)));
+            self.args.splice(1..1, shebang.arguments.into_iter().chain(once(old_program)));
         }
         Ok(())
     }
@@ -156,15 +142,9 @@ pub fn ensure_env(
 ) -> nix::Result<()> {
     let name = name.as_ref();
     let value = value.as_ref();
-    let existing_value = envs
-        .iter()
-        .find_map(|(n, v)| if n == name { v.as_ref() } else { None });
+    let existing_value = envs.iter().find_map(|(n, v)| if n == name { v.as_ref() } else { None });
     if let Some(existing_value) = existing_value {
-        return if existing_value == value {
-            Ok(())
-        } else {
-            Err(nix::Error::EINVAL)
-        };
+        return if existing_value == value { Ok(()) } else { Err(nix::Error::EINVAL) };
     };
     envs.push((name.to_owned(), Some(value.to_owned())));
     Ok(())

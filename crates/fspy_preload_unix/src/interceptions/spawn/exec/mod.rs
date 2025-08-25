@@ -40,20 +40,12 @@ fn handle_exec(
     let client =
         global_client().expect("exec unexpectedly called before client initialized in ctor");
     let result = unsafe {
-        client.handle_exec(
-            config,
-            RawExec { prog, argv, envp },
-            |raw_command, pre_exec| {
-                if let Some(mut pre_exec) = pre_exec {
-                    pre_exec.run()?
-                };
-                Ok(execve::original()(
-                    raw_command.prog,
-                    raw_command.argv,
-                    raw_command.envp,
-                ))
-            },
-        )
+        client.handle_exec(config, RawExec { prog, argv, envp }, |raw_command, pre_exec| {
+            if let Some(mut pre_exec) = pre_exec {
+                pre_exec.run()?
+            };
+            Ok(execve::original()(raw_command.prog, raw_command.argv, raw_command.envp))
+        })
     };
     match result {
         Ok(ret) => ret,
@@ -82,12 +74,7 @@ unsafe extern "C" fn execl(path: *const c_char, arg0: *const c_char, valist: ...
     let _unused = execl::original;
     unsafe {
         with_argv(valist, arg0, |args, _remaining| {
-            handle_exec(
-                ExecResolveConfig::search_path_disabled(),
-                path,
-                args.as_ptr(),
-                environ(),
-            )
+            handle_exec(ExecResolveConfig::search_path_disabled(), path, args.as_ptr(), environ())
         })
     }
 }
@@ -113,12 +100,7 @@ unsafe extern "C" fn execle(path: *const c_char, arg0: *const c_char, valist: ..
     unsafe {
         with_argv(valist, arg0, |args, mut remaining| {
             let envp = remaining.arg::<*const *const c_char>();
-            handle_exec(
-                ExecResolveConfig::search_path_disabled(),
-                path,
-                args.as_ptr(),
-                envp,
-            )
+            handle_exec(ExecResolveConfig::search_path_disabled(), path, args.as_ptr(), envp)
         })
     }
 }
@@ -126,14 +108,7 @@ unsafe extern "C" fn execle(path: *const c_char, arg0: *const c_char, valist: ..
 intercept!(execv(64): unsafe extern "C" fn(path: *const c_char, argv: *const *const c_char) -> c_int);
 unsafe extern "C" fn execv(path: *const c_char, argv: *const *const c_char) -> c_int {
     let _unused = execv::original;
-    unsafe {
-        handle_exec(
-            ExecResolveConfig::search_path_disabled(),
-            path,
-            argv,
-            environ(),
-        )
-    }
+    unsafe { handle_exec(ExecResolveConfig::search_path_disabled(), path, argv, environ()) }
 }
 
 intercept!(execvp(64): unsafe extern "C" fn(
@@ -142,12 +117,7 @@ intercept!(execvp(64): unsafe extern "C" fn(
 ) -> c_int);
 unsafe extern "C" fn execvp(prog: *const c_char, argv: *const *const c_char) -> c_int {
     let _unused = execvp::original;
-    handle_exec(
-        ExecResolveConfig::search_path_enabled(None),
-        prog,
-        argv,
-        unsafe { environ() },
-    )
+    handle_exec(ExecResolveConfig::search_path_enabled(None), prog, argv, unsafe { environ() })
 }
 
 #[cfg(target_os = "linux")]
@@ -165,12 +135,7 @@ mod linux_only {
         envp: *const *const libc::c_char,
     ) -> c_int {
         let _unused = execvpe::original;
-        handle_exec(
-            ExecResolveConfig::search_path_enabled(None),
-            file,
-            argv,
-            envp,
-        )
+        handle_exec(ExecResolveConfig::search_path_enabled(None), file, argv, envp)
     }
     intercept!(execveat(64): unsafe extern "C" fn(
         dirfd: c_int,
@@ -205,12 +170,7 @@ mod linux_only {
                 return -1;
             }
         };
-        handle_exec(
-            ExecResolveConfig::search_path_disabled(),
-            abs_path,
-            argv.cast(),
-            envp.cast(),
-        )
+        handle_exec(ExecResolveConfig::search_path_disabled(), abs_path, argv.cast(), envp.cast())
     }
 
     intercept!(fexecve(64): unsafe extern "C" fn(

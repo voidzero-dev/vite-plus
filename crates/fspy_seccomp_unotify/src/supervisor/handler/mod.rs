@@ -1,7 +1,7 @@
 pub mod arg;
 
-use std::io;
 use libc::seccomp_notif;
+use std::io;
 
 pub trait SeccompNotifyHandler {
     fn syscalls() -> &'static [syscalls::Sysno];

@@ -1,11 +1,11 @@
 use std::{io, os::unix::ffi::OsStrExt};
 
 use crate::arena::PathAccessArena;
-use fspy_shared::ipc::{AccessMode, NativeStr, PathAccess};
 use fspy_seccomp_unotify::{
     impl_handler,
     supervisor::handler::arg::{CStrPtr, Fd, Ignored},
 };
+use fspy_shared::ipc::{AccessMode, NativeStr, PathAccess};
 
 const PATH_MAX: usize = libc::PATH_MAX as usize;
 
@@ -17,10 +17,8 @@ pub struct SyscallHandler {
 impl SyscallHandler {
     fn openat(&mut self, (_, path): (Ignored, CStrPtr)) -> io::Result<()> {
         path.read_with_buf::<PATH_MAX, _, _>(|path| {
-            self.arena.add(PathAccess {
-                mode: AccessMode::Read,
-                path: NativeStr::from_bytes(path),
-            });
+            self.arena
+                .add(PathAccess { mode: AccessMode::Read, path: NativeStr::from_bytes(path) });
             Ok(())
         })?;
         Ok(())

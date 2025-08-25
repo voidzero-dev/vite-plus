@@ -15,22 +15,14 @@ use winapi::{
         winnt::{ACCESS_MASK, GENERIC_READ, GENERIC_WRITE},
     },
 };
-use winsafe::{co, GetLastError};
+use winsafe::{GetLastError, co};
 
 pub fn ck(b: BOOL) -> winsafe::SysResult<()> {
-    if b == FALSE {
-        Err(GetLastError())
-    } else {
-        Ok(())
-    }
+    if b == FALSE { Err(GetLastError()) } else { Ok(()) }
 }
 
 pub fn ck_long(val: c_long) -> winsafe::SysResult<()> {
-    if 0 == NO_ERROR {
-        Ok(())
-    } else {
-        Err(unsafe { winsafe::co::ERROR::from_raw(val as _) })
-    }
+    if 0 == NO_ERROR { Ok(()) } else { Err(unsafe { winsafe::co::ERROR::from_raw(val as _) }) }
 }
 
 pub unsafe fn get_u16_str(ustring: &UNICODE_STRING) -> &U16Str {
@@ -83,16 +75,11 @@ pub fn access_mask_to_mode(desired_access: ACCESS_MASK) -> AccessMode {
     let has_write = (desired_access & GENERIC_WRITE) != 0;
     let has_read = (desired_access & GENERIC_READ) != 0;
     if has_write {
-        if has_read {
-            AccessMode::ReadWrite
-        } else {
-            AccessMode::Write
-        }
+        if has_read { AccessMode::ReadWrite } else { AccessMode::Write }
     } else {
         AccessMode::Read
     }
 }
-
 
 unsafe extern "system" {
     fn LocalFree(hmem: HLOCAL) -> HLOCAL;
@@ -116,10 +103,7 @@ impl Drop for HeapPath {
     }
 }
 
-pub fn combine_paths(
-    path1: &U16CStr,
-    path2: &U16CStr,
-) -> winsafe::SysResult<HeapPath> {
+pub fn combine_paths(path1: &U16CStr, path2: &U16CStr) -> winsafe::SysResult<HeapPath> {
     const PATHCCH_ALLOW_LONG_PATHS: ULONG = 0x00000001;
     let mut out = std::ptr::null_mut();
     let hr = unsafe {

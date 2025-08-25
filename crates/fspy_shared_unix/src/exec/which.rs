@@ -85,9 +85,7 @@ mod tests {
 
     #[test]
     fn test_concat() {
-        let s = concat(&["a".into(), "bc".into(), "".into(), "e".into()], |s| {
-            s.to_owned()
-        });
+        let s = concat(&["a".into(), "bc".into(), "".into(), "e".into()], |s| s.to_owned());
         assert_eq!(s, "abce");
     }
 
@@ -162,10 +160,7 @@ mod tests {
             Ok(())
         });
         assert!(res.is_ok());
-        assert_eq!(
-            &*called.borrow().as_ref().unwrap(),
-            b"/usr/bin/foo".as_bstr()
-        );
+        assert_eq!(&*called.borrow().as_ref().unwrap(), b"/usr/bin/foo".as_bstr());
     }
 
     #[test]

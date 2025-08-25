@@ -112,16 +112,10 @@ impl Client {
             Mode::empty(),
         )?;
         shm_unlink(shm_name.as_str())?;
-        self.encoded_payload
-            .payload
-            .ipc_fd
-            .send_fd(shm_fd.as_raw_fd())?;
+        self.encoded_payload.payload.ipc_fd.send_fd(shm_fd.as_raw_fd())?;
         ftruncate(&shm_fd, SHM_CHUNK_SIZE)?;
         let mmap_mut = unsafe { MmapMut::map_mut(&shm_fd) }?;
-        Ok(ShmCursor {
-            mmap_mut,
-            position: 0,
-        })
+        Ok(ShmCursor { mmap_mut, position: 0 })
     }
 
     fn with_shm_buf<R>(
@@ -129,9 +123,8 @@ impl Client {
         len: usize,
         f: impl FnOnce(&mut [u8]) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
-        let shm_buf = self
-            .tls_shm_cursor
-            .get_or_try(|| io::Result::Ok(RefCell::new(self.new_shm()?)))?;
+        let shm_buf =
+            self.tls_shm_cursor.get_or_try(|| io::Result::Ok(RefCell::new(self.new_shm()?)))?;
 
         let mut shm_buf = shm_buf.borrow_mut();
         if let Some(buf) = shm_buf.advance(len) {
@@ -197,10 +190,7 @@ impl Client {
                 let Some(abs_path) = abs_path else {
                     return Ok(Ok(()));
                 };
-                Ok(self.send(PathAccess {
-                    mode,
-                    path: abs_path.into(),
-                }))
+                Ok(self.send(PathAccess { mode, path: abs_path.into() }))
             })
         }??;
 

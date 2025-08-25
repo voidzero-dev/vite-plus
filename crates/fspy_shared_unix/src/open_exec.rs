@@ -2,7 +2,7 @@ use std::{os::fd::OwnedFd, path::Path};
 
 use nix::{
     fcntl::{OFlag, open},
-    sys::stat::{Mode},
+    sys::stat::Mode,
     unistd::{AccessFlags, access},
 };
 

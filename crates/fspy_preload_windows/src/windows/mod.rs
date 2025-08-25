@@ -1,9 +1,8 @@
 pub(crate) mod client;
+mod convert;
 pub(crate) mod detour;
 mod detours;
 mod winapi_utils;
-mod convert;
-
 
 use std::{env::current_exe, slice};
 

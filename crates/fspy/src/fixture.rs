@@ -12,7 +12,7 @@ pub struct Fixture {
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! fixture  {
+macro_rules! fixture {
     ($name: literal) => {
         $crate::fixture::Fixture::new(
             $name,
@@ -26,14 +26,9 @@ pub use fixture;
 
 impl Fixture {
     pub const fn new(name: &'static str, content: &'static [u8], hash: &'static str) -> Self {
-        Self {
-            name,
-            content,
-            hash
-        }
+        Self { name, content, hash }
     }
     pub fn write_to(&self, dir: impl AsRef<Path>, suffix: &str) -> io::Result<PathBuf> {
-
         let dir = dir.as_ref();
         let path = dir.join(format!("{}_{}{}", self.name, self.hash, suffix));
 
@@ -42,10 +37,9 @@ impl Fixture {
         }
         let tmp_path = dir.join(format!("{:x}", rand::random::<u128>()));
         let mut tmp_file_open_options = OpenOptions::new();
-        tmp_file_open_options.write(true)
-            .create_new(true);
+        tmp_file_open_options.write(true).create_new(true);
         #[cfg(unix)]
-        std::os::unix::fs::OpenOptionsExt::mode(&mut tmp_file_open_options, 0o755);// executable
+        std::os::unix::fs::OpenOptionsExt::mode(&mut tmp_file_open_options, 0o755); // executable
         let mut tmp_file = tmp_file_open_options.open(&tmp_path)?;
         tmp_file.write_all(self.content)?;
         drop(tmp_file);

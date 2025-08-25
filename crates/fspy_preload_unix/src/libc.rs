@@ -1,6 +1,5 @@
 pub use libc::*;
 
-
 unsafe extern "C" {
     pub unsafe fn scandir(
         dirname: *const c_char,
@@ -17,5 +16,10 @@ unsafe extern "C" {
         compar: *const c_void,
     ) -> c_int;
 
-    pub unsafe fn getdirentries(fd: c_int, buf: *mut c_char, nbytes: c_int, basep: *mut c_long) -> c_int;
+    pub unsafe fn getdirentries(
+        fd: c_int,
+        buf: *mut c_char,
+        nbytes: c_int,
+        basep: *mut c_long,
+    ) -> c_int;
 }

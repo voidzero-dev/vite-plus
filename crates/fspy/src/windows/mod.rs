@@ -18,10 +18,7 @@ use fspy_shared::{
     ipc::{BINCODE_CONFIG, PathAccess},
     windows::{PAYLOAD_ID, Payload},
 };
-use futures_util::{
-    FutureExt, Stream,
-    stream::try_unfold,
-};
+use futures_util::{FutureExt, Stream, stream::try_unfold};
 use ms_detours::{DetourCopyPayloadToProcess, DetourUpdateProcessWithDll};
 use tokio::{
     io::AsyncReadExt,
@@ -35,7 +32,7 @@ use winapi::{
         handleapi::DuplicateHandle,
         processthreadsapi::{GetCurrentProcess, ResumeThread},
         winbase::CREATE_SUSPENDED,
-        winnt::{DUPLICATE_SAME_ACCESS},
+        winnt::DUPLICATE_SAME_ACCESS,
     },
 };
 // use windows_sys::Win32::System::Threading::{CREATE_SUSPENDED, ResumeThread};
@@ -44,13 +41,12 @@ use xxhash_rust::const_xxh3::xxh3_128;
 
 use crate::fixture::{Fixture, fixture};
 
-
 const PRELOAD_CDYLIB_BINARY: &[u8] = include_bytes!(env!("CARGO_CDYLIB_FILE_FSPY_PRELOAD_WINDOWS"));
-const INTERPOSE_CDYLIB: Fixture =  Fixture {
-            name: "fsyp_preload",
-            content: PRELOAD_CDYLIB_BINARY,
-            hash: formatcp!("{:x}", xxh3_128(PRELOAD_CDYLIB_BINARY)),
-        };
+const INTERPOSE_CDYLIB: Fixture = Fixture {
+    name: "fsyp_preload",
+    content: PRELOAD_CDYLIB_BINARY,
+    hash: formatcp!("{:x}", xxh3_128(PRELOAD_CDYLIB_BINARY)),
+};
 
 fn luid() -> io::Result<u64> {
     let mut luid = unsafe { std::mem::zeroed::<winapi::um::winnt::LUID>() };
@@ -66,15 +62,12 @@ fn named_pipe_server_stream(
     addr: String,
 ) -> io::Result<impl Stream<Item = io::Result<NamedPipeServer>>> {
     let server = opts.clone().first_pipe_instance(true).create(&addr)?;
-    Ok(try_unfold(
-        (opts, server, addr),
-        |(opts, mut server, addr)| async move {
-            server.connect().await?;
-            let connected_client = server;
-            server = opts.create(&addr)?;
-            io::Result::Ok(Some((connected_client, (opts, server, addr))))
-        },
-    ))
+    Ok(try_unfold((opts, server, addr), |(opts, mut server, addr)| async move {
+        server.connect().await?;
+        let connected_client = server;
+        server = opts.create(&addr)?;
+        io::Result::Ok(Some((connected_client, (opts, server, addr))))
+    }))
 }
 
 pub struct PathAccessIterable {
@@ -125,9 +118,7 @@ impl SpyInner {
 
         let asni_dll_path_with_nul =
             unsafe { CStr::from_bytes_with_nul_unchecked(asni_dll_path.as_slice()) };
-        Ok(Self {
-            asni_dll_path_with_nul: asni_dll_path_with_nul.into(),
-        })
+        Ok(Self { asni_dll_path_with_nul: asni_dll_path_with_nul.into() })
     }
 }
 
@@ -229,8 +220,5 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
     })?;
 
     drop(pipe_sender);
-    Ok(TrackedChild {
-        tokio_child: child,
-        accesses_future,
-    })
+    Ok(TrackedChild { tokio_child: child, accesses_future })
 }

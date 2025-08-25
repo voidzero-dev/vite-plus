@@ -3,8 +3,8 @@ use std::{
     ptr::{null, null_mut},
 };
 
-use fspy_shared_unix::exec::Exec;
 use bstr::{BStr, BString, ByteSlice};
+use fspy_shared_unix::exec::Exec;
 
 #[derive(Clone, Copy)]
 pub struct RawExec {
@@ -28,9 +28,7 @@ impl RawExec {
         let mut str_vec = Vec::<T>::with_capacity(count);
         for i in 0..count {
             let cur_str = unsafe { strs.add(i) };
-            str_vec.push(map_fn(
-                unsafe { CStr::from_ptr(*cur_str) }.to_bytes().as_bstr(),
-            ));
+            str_vec.push(map_fn(unsafe { CStr::from_ptr(*cur_str) }.to_bytes().as_bstr()));
         }
         str_vec
     }
@@ -52,31 +50,21 @@ impl RawExec {
     }
 
     pub unsafe fn to_exec<'a>(self) -> Exec {
-        let program = unsafe { CStr::from_ptr(self.prog) }
-            .to_bytes()
-            .as_bstr()
-            .to_owned();
+        let program = unsafe { CStr::from_ptr(self.prog) }.to_bytes().as_bstr().to_owned();
 
         let args = unsafe { Self::collect_c_str_array(self.argv, BStr::to_owned) };
 
         let envs = unsafe {
             Self::collect_c_str_array(self.envp, |env| {
                 if let Some(eq_pos) = env.iter().position(|b| *b == b'=') {
-                    (
-                        env[..eq_pos].to_owned(),
-                        Some(env[(eq_pos + 1)..].to_owned()),
-                    )
+                    (env[..eq_pos].to_owned(), Some(env[(eq_pos + 1)..].to_owned()))
                 } else {
                     (env.to_owned(), None)
                 }
             })
         };
 
-        Exec {
-            program,
-            args,
-            envs,
-        }
+        Exec { program, args, envs }
     }
     pub fn from_exec<R>(cmd: Exec, f: impl FnOnce(RawExec) -> R) -> R {
         let envs: Vec<BString> = cmd

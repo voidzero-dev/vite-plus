@@ -30,13 +30,8 @@ pub fn assert_contains(
 
 macro_rules! track_child {
     ($body: block) => {{
-        const ID: &str = ::core::concat!(
-            ::core::file!(),
-            ":",
-            ::core::line!(),
-            ":",
-            ::core::column!()
-        );
+        const ID: &str =
+            ::core::concat!(::core::file!(), ":", ::core::line!(), ":", ::core::column!());
         #[ctor::ctor]
         unsafe fn init() {
             let mut args = ::std::env::args();
@@ -58,10 +53,7 @@ macro_rules! track_child {
 pub async fn spawn_with_id(id: &str) -> io::Result<PathAccessIterable> {
     let mut command = fspy::Spy::global()?.new_command(::std::env::current_exe()?);
     command.arg(id);
-    let TrackedChild {
-        mut tokio_child,
-        accesses_future,
-    } = command.spawn().await?;
+    let TrackedChild { mut tokio_child, accesses_future } = command.spawn().await?;
 
     let accesses = accesses_future.await?;
     let status = tokio_child.wait().await?;
@@ -70,5 +62,3 @@ pub async fn spawn_with_id(id: &str) -> io::Result<PathAccessIterable> {
 }
 
 pub(crate) use track_child;
-
-

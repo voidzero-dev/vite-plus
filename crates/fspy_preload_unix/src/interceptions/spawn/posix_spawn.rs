@@ -40,11 +40,7 @@ unsafe fn handle_posix_spawn(
     let result = unsafe {
         client.handle_exec::<c_int>(
             config,
-            RawExec {
-                prog: file,
-                argv: argv.cast(),
-                envp: envp.cast(),
-            },
+            RawExec { prog: file, argv: argv.cast(), envp: envp.cast() },
             |raw_command, pre_exec| {
                 let call_original = move || {
                     original(

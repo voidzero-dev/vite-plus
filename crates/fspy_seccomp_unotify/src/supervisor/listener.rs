@@ -1,6 +1,8 @@
 use libc::{seccomp_notif, seccomp_notif_resp};
 use std::{
-    io, ops::Deref, os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd}
+    io,
+    ops::Deref,
+    os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd},
 };
 use tracing::trace;
 
@@ -18,10 +20,7 @@ pub struct NotifyListener {
 impl TryFrom<OwnedFd> for NotifyListener {
     type Error = io::Error;
     fn try_from(value: OwnedFd) -> Result<Self, Self::Error> {
-        Ok(Self {
-            async_fd: AsyncFd::new(value)?,
-            notif_buf: alloc_seccomp_notif(),
-        })
+        Ok(Self { async_fd: AsyncFd::new(value)?, notif_buf: alloc_seccomp_notif() })
     }
 }
 impl AsFd for NotifyListener {
@@ -45,11 +44,7 @@ impl NotifyListener {
         resp.flags = libc::SECCOMP_USER_NOTIF_FLAG_CONTINUE as _;
 
         let ret = unsafe {
-            libc::ioctl(
-                self.async_fd.as_raw_fd(),
-                SECCOMP_IOCTL_NOTIF_SEND,
-                &raw mut *resp,
-            )
+            libc::ioctl(self.async_fd.as_raw_fd(), SECCOMP_IOCTL_NOTIF_SEND, &raw mut *resp)
         };
         if ret < 0 {
             let err = nix::Error::last();

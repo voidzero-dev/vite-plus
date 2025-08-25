@@ -5,16 +5,20 @@ use crate::windows::{
     detour::{Detour, DetourAny},
 };
 
-use fspy_shared::{
-    ipc::{AccessMode, NativeStr, PathAccess},
-};
+use fspy_shared::ipc::{AccessMode, NativeStr, PathAccess};
 use ms_detours::{DetourCreateProcessWithDllExA, DetourCreateProcessWithDllExW};
 use widestring::U16CStr;
 use winapi::{
-    shared::{minwindef::{BOOL, DWORD, LPVOID}, ntdef::{LPCSTR, LPSTR}},
+    shared::{
+        minwindef::{BOOL, DWORD, LPVOID},
+        ntdef::{LPCSTR, LPSTR},
+    },
     um::{
         minwinbase::LPSECURITY_ATTRIBUTES,
-        processthreadsapi::{CreateProcessA, CreateProcessW, ResumeThread, LPPROCESS_INFORMATION, LPSTARTUPINFOA, LPSTARTUPINFOW},
+        processthreadsapi::{
+            CreateProcessA, CreateProcessW, LPPROCESS_INFORMATION, LPSTARTUPINFOA, LPSTARTUPINFOW,
+            ResumeThread,
+        },
         winbase::CREATE_SUSPENDED,
         winnt::{LPCWSTR, LPWSTR},
     },
@@ -144,7 +148,6 @@ static DETOUR_CREATE_PROCESS_W: Detour<
     })
 };
 
-
 static DETOUR_CREATE_PROCESS_A: Detour<
     unsafe extern "system" fn(
         LPCSTR,
@@ -195,9 +198,7 @@ static DETOUR_CREATE_PROCESS_A: Detour<
                 unsafe {
                     sender.send(PathAccess {
                         mode: AccessMode::Read,
-                        path: NativeStr::from_bytes(
-                            CStr::from_ptr(lp_application_name).to_bytes(),
-                        ),
+                        path: NativeStr::from_bytes(CStr::from_ptr(lp_application_name).to_bytes()),
                     });
                 }
             }
@@ -268,7 +269,5 @@ static DETOUR_CREATE_PROCESS_A: Detour<
         new_fn
     })
 };
-pub const DETOURS: &[DetourAny] = &[
-    DETOUR_CREATE_PROCESS_W.as_any(),
-    DETOUR_CREATE_PROCESS_A.as_any(),
-];
+pub const DETOURS: &[DetourAny] =
+    &[DETOUR_CREATE_PROCESS_W.as_any(), DETOUR_CREATE_PROCESS_A.as_any()];

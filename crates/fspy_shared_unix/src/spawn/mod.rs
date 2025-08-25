@@ -6,7 +6,6 @@ mod os_specific;
 #[path = "./macos.rs"]
 mod os_specific;
 
-
 #[doc(hidden)]
 #[cfg(target_os = "macos")]
 pub use os_specific::COREUTILS_FUNCTIONS as COREUTILS_FUNCTIONS_FOR_TEST;
@@ -32,18 +31,12 @@ pub fn handle_exec(
         } else {
             let path =
                 std::path::absolute(path_access.path.as_os_str()).expect("Failed to get cwd");
-            on_path_access(PathAccess {
-                path: path.as_path().into(),
-                mode: path_access.mode,
-            });
+            on_path_access(PathAccess { path: path.as_path().into(), mode: path_access.mode });
         }
     };
 
     command.resolve(&mut on_path_access, config)?;
-    on_path_access(PathAccess {
-        mode: AccessMode::Read,
-        path: command.program.as_bstr().into(),
-    });
+    on_path_access(PathAccess { mode: AccessMode::Read, path: command.program.as_bstr().into() });
 
     os_specific::handle_exec(command, encoded_payload)
 }

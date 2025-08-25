@@ -27,18 +27,10 @@ pub struct Detour<T> {
 
 impl<T: Copy> Detour<T> {
     pub const unsafe fn new(symbol_name: &'static CStr, target: T, new: T) -> Self {
-        Detour {
-            symbol_name: symbol_name,
-            target: UnsafeCell::new(unsafe { transmute_copy(&target) }),
-            new: new,
-        }
+        Detour { symbol_name, target: UnsafeCell::new(unsafe { transmute_copy(&target) }), new }
     }
     pub const unsafe fn dynamic(symbol_name: &'static CStr, new: T) -> Self {
-        Detour {
-            symbol_name: symbol_name,
-            target: UnsafeCell::new(null_mut()),
-            new: new,
-        }
+        Detour { symbol_name, target: UnsafeCell::new(null_mut()), new }
     }
     pub fn real(&self) -> &T {
         unsafe { &(*self.target.get().cast::<T>()) }
@@ -73,10 +65,7 @@ impl AttachContext {
         let kernel32 = unsafe { LoadLibraryA(c"kernel32".as_ptr()) };
         assert_ne!(kernelbase, null_mut());
         assert_ne!(kernel32, null_mut());
-        Self {
-            kernelbase,
-            kernel32,
-        }
+        Self { kernelbase, kernel32 }
     }
 }
 

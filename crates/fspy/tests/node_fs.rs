@@ -15,10 +15,7 @@ async fn track_node_script(script: &str) -> io::Result<PathAccessIterable> {
         .arg("-e")
         .envs(vars_os()) // https://github.com/jdx/mise/discussions/5968
         .arg(script);
-    let TrackedChild {
-        mut tokio_child,
-        accesses_future,
-    } = command.spawn().await?;
+    let TrackedChild { mut tokio_child, accesses_future } = command.spawn().await?;
 
     let accesses = accesses_future.await?;
     let status = tokio_child.wait().await?;
@@ -29,11 +26,7 @@ async fn track_node_script(script: &str) -> io::Result<PathAccessIterable> {
 #[tokio::test]
 async fn read_sync() -> io::Result<()> {
     let accesses = track_node_script("try { fs.readFileSync('hello') } catch {}").await?;
-    assert_contains(
-        &accesses,
-        current_dir().unwrap().join("hello").as_path(),
-        AccessMode::Read,
-    );
+    assert_contains(&accesses, current_dir().unwrap().join("hello").as_path(), AccessMode::Read);
     Ok(())
 }
 
@@ -55,10 +48,6 @@ async fn subprocess() -> io::Result<()> {
         "try {{ child_process.spawnSync({cmd}, {{ stdio: 'ignore' }}) }} catch {{}}"
     ))
     .await?;
-    assert_contains(
-        &accesses,
-        current_dir().unwrap().join("hello").as_path(),
-        AccessMode::Read,
-    );
+    assert_contains(&accesses, current_dir().unwrap().join("hello").as_path(), AccessMode::Read);
     Ok(())
 }

@@ -1,11 +1,14 @@
 pub mod alloc;
 
-use libc::{seccomp_notif, SECCOMP_GET_NOTIF_SIZES, syscall};
-use std::{mem::zeroed, os::{
-    fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd},
-    raw::c_int,
-}};
 use alloc::Alloced;
+use libc::{SECCOMP_GET_NOTIF_SIZES, seccomp_notif, syscall};
+use std::{
+    mem::zeroed,
+    os::{
+        fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd},
+        raw::c_int,
+    },
+};
 
 unsafe fn seccomp(
     operation: libc::c_uint,
@@ -14,7 +17,7 @@ unsafe fn seccomp(
 ) -> nix::Result<libc::c_int> {
     let ret = unsafe { syscall(libc::SYS_seccomp, operation, flags, args) };
     if ret < 0 {
-        return Err(nix::Error::last())
+        return Err(nix::Error::last());
     }
     Ok(c_int::try_from(ret).unwrap())
 }
@@ -28,11 +31,7 @@ fn get_notif_sizes() -> nix::Result<libc::seccomp_notif_sizes> {
 pub fn notif_recv(fd: BorrowedFd<'_>, notif_buf: &mut Alloced<seccomp_notif>) -> nix::Result<()> {
     const SECCOMP_IOCTL_NOTIF_RECV: libc::c_ulong = 3226476800;
     let ret = unsafe {
-        libc::ioctl(
-            fd.as_raw_fd(),
-            SECCOMP_IOCTL_NOTIF_RECV,
-            (&raw mut *notif_buf.zeroed()),
-        )
+        libc::ioctl(fd.as_raw_fd(), SECCOMP_IOCTL_NOTIF_RECV, (&raw mut *notif_buf.zeroed()))
     };
     if ret < 0 {
         return Err(nix::Error::last());

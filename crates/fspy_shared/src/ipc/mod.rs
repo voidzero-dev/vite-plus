@@ -26,15 +26,9 @@ pub struct PathAccess<'a> {
 
 impl<'a> PathAccess<'a> {
     pub fn read(path: impl Into<NativeStr<'a>>) -> Self {
-        Self {
-            mode: AccessMode::Read,
-            path: path.into(),
-        }
+        Self { mode: AccessMode::Read, path: path.into() }
     }
     pub fn read_dir(path: impl Into<NativeStr<'a>>) -> Self {
-        Self {
-            mode: AccessMode::ReadDir,
-            path: path.into(),
-        }
+        Self { mode: AccessMode::ReadDir, path: path.into() }
     }
 }

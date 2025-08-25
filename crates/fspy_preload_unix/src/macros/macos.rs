@@ -11,10 +11,7 @@ macro_rules! intercept {
             #[allow(dead_code)]
             #[unsafe(link_section = "__DATA,__interpose")]
             static mut _INTERPOSE_ENTRY: $crate::macros::InterposeEntry =
-                $crate::macros::InterposeEntry {
-                    _new: $name as _,
-                    _old: $crate::libc::$name as _,
-                };
+                $crate::macros::InterposeEntry { _new: $name as _, _old: $crate::libc::$name as _ };
         };
 
         mod $name {

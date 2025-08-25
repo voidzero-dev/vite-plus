@@ -16,11 +16,7 @@ async fn open_read() -> io::Result<()> {
         File::open("hello");
     })
     .await?;
-    assert_contains(
-        &accesses,
-        current_dir().unwrap().join("hello").as_path(),
-        AccessMode::Read,
-    );
+    assert_contains(&accesses, current_dir().unwrap().join("hello").as_path(), AccessMode::Read);
 
     Ok(())
 }
@@ -34,9 +30,7 @@ async fn open_write() -> io::Result<()> {
     .await?;
     assert_contains(
         &accesses,
-        Path::new(env!("CARGO_TARGET_TMPDIR"))
-            .join("hello")
-            .as_path(),
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join("hello").as_path(),
         AccessMode::Write,
     );
 
@@ -52,9 +46,7 @@ async fn readdir() -> io::Result<()> {
     .await?;
     assert_contains(
         &accesses,
-        Path::new(env!("CARGO_TARGET_TMPDIR"))
-            .join("hello")
-            .as_path(),
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join("hello").as_path(),
         AccessMode::ReadDir,
     );
 
@@ -83,11 +75,7 @@ async fn subprocess() -> io::Result<()> {
             .unwrap();
     })
     .await?;
-    assert_contains(
-        &accesses,
-        current_dir().unwrap().join("hello").as_path(),
-        AccessMode::Read,
-    );
+    assert_contains(&accesses, current_dir().unwrap().join("hello").as_path(), AccessMode::Read);
 
     Ok(())
 }

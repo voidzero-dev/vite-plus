@@ -37,10 +37,8 @@ fn unpack_tar_gz(content: impl Read, path: &str) -> anyhow::Result<Vec<u8>> {
 
 fn download_and_unpack_tar_gz(url: &str, path: &str) -> anyhow::Result<Vec<u8>> {
     let resp = download(url).context(format!("Failed to get ok response from {}", url))?;
-    let data = unpack_tar_gz(resp, path).context(format!(
-        "Failed to download or unpack {} out of {}",
-        path, url
-    ))?;
+    let data = unpack_tar_gz(resp, path)
+        .context(format!("Failed to download or unpack {} out of {}", path, url))?;
     Ok(data)
 }
 
@@ -81,9 +79,7 @@ fn fetch_macos_binaries() -> anyhow::Result<()> {
     if env::var("CARGO_CFG_TARGET_OS").unwrap() != "macos" {
         return Ok(());
     };
-    let out_dir = current_dir()
-        .unwrap()
-        .join(Path::new(&std::env::var_os("OUT_DIR").unwrap()));
+    let out_dir = current_dir().unwrap().join(Path::new(&std::env::var_os("OUT_DIR").unwrap()));
 
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
     let downloads = MACOS_BINARY_DOWNLOADS

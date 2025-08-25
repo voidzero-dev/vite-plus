@@ -24,10 +24,7 @@ impl PathAccessArena {
     pub fn add(&mut self, access: PathAccess<'_>) {
         self.with_mut(|fields| {
             let path = access.path.clone_in(fields.bump);
-            let path_access = PathAccess {
-                mode: access.mode,
-                path,
-            };
+            let path_access = PathAccess { mode: access.mode, path };
             fields.accesses.push(path_access);
         });
     }

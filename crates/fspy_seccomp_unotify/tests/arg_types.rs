@@ -1,9 +1,9 @@
 #![cfg(target_os = "linux")]
 
 use assertables::assert_contains;
+use fspy_seccomp_unotify::supervisor::Supervisor;
 use nix::fcntl::{AT_FDCWD, OFlag, openat};
 use nix::sys::stat::Mode;
-use fspy_seccomp_unotify::supervisor::Supervisor;
 use tokio::time::timeout;
 
 use std::env::{current_dir, set_current_dir};
@@ -51,11 +51,7 @@ async fn run_in_pre_exec(
 ) -> Result<Vec<Syscall>, Box<dyn Error>> {
     Ok(timeout(Duration::from_secs(5), async move {
         let mut cmd = Command::new("/bin/echo");
-        let Supervisor {
-            payload,
-            handling_loop,
-            mut pre_exec,
-        } = supervise::<SyscallRecorder>()?;
+        let Supervisor { payload, handling_loop, mut pre_exec } = supervise::<SyscallRecorder>()?;
 
         unsafe {
             cmd.pre_exec(move || {
@@ -86,10 +82,7 @@ async fn run_in_pre_exec(
 
         assert!(exit_status.success());
 
-        let syscalls = recorders
-            .into_iter()
-            .map(|recorder| recorder.0.into_iter())
-            .flatten();
+        let syscalls = recorders.into_iter().map(|recorder| recorder.0.into_iter()).flatten();
         io::Result::Ok(syscalls.collect())
     })
     .await??)
@@ -105,27 +98,12 @@ async fn fd_and_path() -> Result<(), Box<dyn Error>> {
         Ok(())
     })
     .await?;
+    assert_contains!(syscalls, &Syscall::Openat { at_dir: "/".into(), path: "/home".into() });
     assert_contains!(
         syscalls,
-        &Syscall::Openat {
-            at_dir: "/".into(),
-            path: "/home".into(),
-        }
+        &Syscall::Openat { at_dir: "/home".into(), path: "open_at_home".into() }
     );
-    assert_contains!(
-        syscalls,
-        &Syscall::Openat {
-            at_dir: "/home".into(),
-            path: "open_at_home".into(),
-        }
-    );
-    assert_contains!(
-        syscalls,
-        &Syscall::Openat {
-            at_dir: "/".into(),
-            path: "openat_cwd".into(),
-        }
-    );
+    assert_contains!(syscalls, &Syscall::Openat { at_dir: "/".into(), path: "openat_cwd".into() });
     Ok(())
 }
 
@@ -134,12 +112,7 @@ async fn path_long() -> Result<(), Box<dyn Error>> {
     let long_path = [b'a'].repeat(30000);
     let long_path_cstr = CString::new(long_path.as_slice()).unwrap();
     let syscalls = run_in_pre_exec(move || {
-        let _ = openat(
-            AT_FDCWD,
-            long_path_cstr.as_c_str(),
-            OFlag::O_RDONLY,
-            Mode::empty(),
-        );
+        let _ = openat(AT_FDCWD, long_path_cstr.as_c_str(), OFlag::O_RDONLY, Mode::empty());
         Ok(())
     })
     .await?;
@@ -158,19 +131,11 @@ async fn path_overflow() -> Result<(), Box<dyn Error>> {
     let long_path = [b'a'].repeat(40000);
     let long_path_cstr = CString::new(long_path.as_slice()).unwrap();
     let ret = run_in_pre_exec(move || {
-        let _ = openat(
-            AT_FDCWD,
-            long_path_cstr.as_c_str(),
-            OFlag::O_RDONLY,
-            Mode::empty(),
-        );
+        let _ = openat(AT_FDCWD, long_path_cstr.as_c_str(), OFlag::O_RDONLY, Mode::empty());
         Ok(())
     })
     .await;
     let err = ret.unwrap_err();
-    assert_eq!(
-        err.downcast::<io::Error>().unwrap().kind(),
-        io::ErrorKind::InvalidFilename
-    );
+    assert_eq!(err.downcast::<io::Error>().unwrap().kind(), io::ErrorKind::InvalidFilename);
     Ok(())
 }

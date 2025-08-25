@@ -46,10 +46,7 @@ pub fn supervise<H: SeccompNotifyHandler + Default + Send + 'static>()
     notify_fd_sender.set_nonblocking(false)?;
 
     let filter = SeccompFilter::new(
-        H::syscalls()
-            .iter()
-            .map(|sysno| (sysno.id().into(), vec![]))
-            .collect(),
+        H::syscalls().iter().map(|sysno| (sysno.id().into(), vec![])).collect(),
         SeccompAction::Allow,
         SeccompAction::Raw(libc::SECCOMP_RET_USER_NOTIF),
         std::env::consts::ARCH.try_into().unwrap(),
@@ -64,10 +61,7 @@ pub fn supervise<H: SeccompNotifyHandler + Default + Send + 'static>()
             .collect(),
     );
 
-    let payload = SeccompPayload {
-        ipc_fd: notify_fd_sender.as_raw_fd(),
-        filter,
-    };
+    let payload = SeccompPayload { ipc_fd: notify_fd_sender.as_raw_fd(), filter };
 
     let handling_loop = async move {
         let mut join_set: JoinSet<io::Result<H>> = JoinSet::new();
@@ -106,9 +100,5 @@ pub fn supervise<H: SeccompNotifyHandler + Default + Send + 'static>()
         }
         Ok(handlers)
     };
-    Ok(Supervisor {
-        payload,
-        pre_exec: PreExec(notify_fd_sender.into()),
-        handling_loop,
-    })
+    Ok(Supervisor { payload, pre_exec: PreExec(notify_fd_sender.into()), handling_loop })
 }

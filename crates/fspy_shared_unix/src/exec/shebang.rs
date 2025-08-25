@@ -1,6 +1,6 @@
 use crate::open_exec::open_executable;
 
-use std::{path::Path};
+use std::path::Path;
 
 use bstr::{BString, ByteSlice};
 
@@ -21,9 +21,7 @@ pub struct ParseShebangOptions {
 
 impl Default for ParseShebangOptions {
     fn default() -> Self {
-        Self {
-            split_arguments: cfg!(target_vendor = "apple"),
-        }
+        Self { split_arguments: cfg!(target_vendor = "apple") }
     }
 }
 
@@ -60,25 +58,14 @@ pub fn parse_shebang(
             .split(|ch| is_whitespace(*ch))
             .flat_map(|arg| {
                 let arg = arg.trim_ascii();
-                if arg.is_empty() {
-                    None
-                } else {
-                    Some(arg.as_bstr().to_owned())
-                }
+                if arg.is_empty() { None } else { Some(arg.as_bstr().to_owned()) }
             })
             .collect()
     } else {
-        if arguments_buf.is_empty() {
-            vec![]
-        } else {
-            vec![arguments_buf.to_owned()]
-        }
+        if arguments_buf.is_empty() { vec![] } else { vec![arguments_buf.to_owned()] }
     };
 
-    Ok(Some(Shebang {
-        interpreter: interpreter.as_bstr().to_owned(),
-        arguments,
-    }))
+    Ok(Some(Shebang { interpreter: interpreter.as_bstr().to_owned(), arguments }))
 }
 
 // #[derive(Debug)]

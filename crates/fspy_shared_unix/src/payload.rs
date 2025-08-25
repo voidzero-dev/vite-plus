@@ -3,12 +3,7 @@ use bincode::{Decode, Encode, config::standard};
 use bstr::BString;
 use fspy_shared::ipc::NativeString;
 
-use std::{
-    os::{
-        fd::RawFd,
-        unix::ffi::OsStringExt,
-    },
-};
+use std::os::{fd::RawFd, unix::ffi::OsStringExt};
 
 #[derive(Debug, Encode, Decode)]
 pub struct Payload {
@@ -30,7 +25,6 @@ pub struct Fixtures {
     // pub interpose_cdylib_path: NativeString,
 }
 
-
 pub(crate) const PAYLOAD_ENV_NAME: &str = "FSPY_PAYLOAD";
 
 pub struct EncodedPayload {
@@ -41,10 +35,7 @@ pub struct EncodedPayload {
 pub fn encode_payload(payload: Payload) -> EncodedPayload {
     let bincode_bytes = bincode::encode_to_vec(&payload, standard()).unwrap();
     let encoded_string = BASE64_STANDARD_NO_PAD.encode(&bincode_bytes);
-    EncodedPayload {
-        payload,
-        encoded_string: encoded_string.into(),
-    }
+    EncodedPayload { payload, encoded_string: encoded_string.into() }
 }
 
 pub fn decode_payload_from_env() -> anyhow::Result<EncodedPayload> {
@@ -58,8 +49,5 @@ fn decode_payload(encoded_string: BString) -> anyhow::Result<EncodedPayload> {
     let bincode_bytes = BASE64_STANDARD_NO_PAD.decode(&encoded_string)?;
     let (payload, n) = bincode::decode_from_slice::<Payload, _>(&bincode_bytes, standard())?;
     assert_eq!(bincode_bytes.len(), n);
-    Ok(EncodedPayload {
-        payload,
-        encoded_string,
-    })
+    Ok(EncodedPayload { payload, encoded_string })
 }

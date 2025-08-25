@@ -39,20 +39,12 @@ impl Command {
             iter::once,
             os::unix::ffi::{OsStrExt, OsStringExt},
         };
-        let arg0 = BString::from(
-            self.arg0
-                .clone()
-                .unwrap_or_else(|| self.program.clone())
-                .into_vec(),
-        );
+        let arg0 =
+            BString::from(self.arg0.clone().unwrap_or_else(|| self.program.clone()).into_vec());
         Exec {
             program: self.program.as_bytes().into(),
             args: once(arg0)
-                .chain(
-                    self.args
-                        .iter()
-                        .map(|arg| arg.as_bytes().as_bstr().to_owned()),
-                )
+                .chain(self.args.iter().map(|arg| arg.as_bytes().as_bstr().to_owned()))
                 .collect(),
             envs: self
                 .envs
@@ -68,11 +60,7 @@ impl Command {
 
         self.program = OsString::from_vec(exec.program.into());
         self.arg0 = Some(OsString::from_vec(exec.args.remove(0).into()));
-        self.args = exec
-            .args
-            .into_iter()
-            .map(|arg| OsString::from_vec(arg.into()))
-            .collect();
+        self.args = exec.args.into_iter().map(|arg| OsString::from_vec(arg.into())).collect();
         self.envs = exec
             .envs
             .into_iter()
@@ -107,8 +95,7 @@ impl Command {
         K: AsRef<OsStr>,
         V: AsRef<OsStr>,
     {
-        self.envs
-            .insert(key.as_ref().to_os_string(), val.as_ref().to_os_string());
+        self.envs.insert(key.as_ref().to_os_string(), val.as_ref().to_os_string());
         self
     }
 
@@ -139,8 +126,7 @@ impl Command {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
-        self.args
-            .extend(args.into_iter().map(|arg| arg.as_ref().to_os_string()));
+        self.args.extend(args.into_iter().map(|arg| arg.as_ref().to_os_string()));
         self
     }
 
@@ -162,11 +148,7 @@ impl Command {
         self.program = which::which_in(
             self.program.as_os_str(),
             self.envs.get(OsStr::new("PATH")),
-            if let Some(cwd) = &self.cwd {
-                cwd.clone()
-            } else {
-                std::env::current_dir()?
-            },
+            if let Some(cwd) = &self.cwd { cwd.clone() } else { std::env::current_dir()? },
         )
         .map_err(|err| io::Error::new(io::ErrorKind::NotFound, err))?
         .into_os_string();

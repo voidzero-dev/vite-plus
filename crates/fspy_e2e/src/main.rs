@@ -1,8 +1,8 @@
 use std::{
-    collections::{btree_map::Entry, BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, btree_map::Entry},
     env::{self, args},
-    fs::{read, File},
-    io::{stderr, BufWriter, Write as _},
+    fs::{File, read},
+    io::{BufWriter, Write as _, stderr},
     path::PathBuf,
     process::{self, Stdio},
 };
@@ -29,10 +29,7 @@ struct AccessCollector {
 
 impl AccessCollector {
     pub fn new(dir: PathBuf) -> Self {
-        Self {
-            dir,
-            accesses: BTreeMap::new(),
-        }
+        Self { dir, accesses: BTreeMap::new() }
     }
     pub fn iter(&self) -> impl Iterator<Item = (&str, AccessMode)> {
         self.accesses.iter().map(|(k, v)| (k.as_str(), *v))
@@ -40,10 +37,8 @@ impl AccessCollector {
     pub fn add(&mut self, access: PathAccess) {
         let path = PathBuf::from(access.path.to_cow_os_str().to_os_string());
         if let Ok(relative_path) = path.strip_prefix(&self.dir) {
-            let relative_path = relative_path
-                .to_str()
-                .expect("relative path should be valid UTF-8")
-                .to_owned();
+            let relative_path =
+                relative_path.to_str().expect("relative path should be valid UTF-8").to_owned();
             match self.accesses.entry(relative_path) {
                 Entry::Vacant(vacant) => {
                     vacant.insert(access.mode);
@@ -92,12 +87,10 @@ async fn main() {
 
         let tracked_child = cmd.spawn().await.unwrap();
 
-        let (accesses, output) = try_join(
-            tracked_child.accesses_future,
-            tracked_child.tokio_child.wait_with_output(),
-        )
-        .await
-        .unwrap();
+        let (accesses, output) =
+            try_join(tracked_child.accesses_future, tracked_child.tokio_child.wait_with_output())
+                .await
+                .unwrap();
         if !output.status.success() {
             eprintln!("----- stdout begin -----");
             stderr().write_all(&output.stdout).unwrap();

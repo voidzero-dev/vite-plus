@@ -85,9 +85,7 @@ impl SpyInner {
 
         let preload_lib_memfd = duplicate_until_safe(OwnedFd::from(execve_host_memfile))?;
 
-        Ok(Self {
-            preload_lib_memfd: Arc::new(preload_lib_memfd),
-        })
+        Ok(Self { preload_lib_memfd: Arc::new(preload_lib_memfd) })
     }
 
     #[cfg(target_os = "macos")]
@@ -109,10 +107,7 @@ impl SpyInner {
             bash_path: bash_path.as_path().into(), //Path::new("/opt/homebrew/bin/bash"),//brush.as_path(),
             coreutils_path: coreutils_path.as_path().into(),
         };
-        Ok(Self {
-            fixtures,
-            preload_path: preload_cdylib_path.as_path().into(),
-        })
+        Ok(Self { fixtures, preload_path: preload_cdylib_path.as_path().into() })
     }
 }
 
@@ -146,11 +141,8 @@ pub struct PathAccessIterable {
 
 impl PathAccessIterable {
     pub fn iter(&self) -> impl Iterator<Item = PathAccess<'_>> {
-        let accesses_in_arena = self
-            .arenas
-            .iter()
-            .flat_map(|arena| arena.borrow_accesses().iter())
-            .copied();
+        let accesses_in_arena =
+            self.arenas.iter().flat_map(|arena| arena.borrow_accesses().iter()).copied();
 
         let accesses_in_shm = self.shm_mmaps.iter().flat_map(|mmap| {
             let buf = mmap.deref();
@@ -211,11 +203,8 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
         preload_path: command.spy_inner.preload_path.clone(),
 
         #[cfg(target_os = "linux")]
-        preload_path: format!(
-            "/proc/self/fd/{}",
-            command.spy_inner.preload_lib_memfd.as_raw_fd()
-        )
-        .into(),
+        preload_path: format!("/proc/self/fd/{}", command.spy_inner.preload_lib_memfd.as_raw_fd())
+            .into(),
 
         #[cfg(target_os = "linux")]
         seccomp_payload: supervisor.payload,
@@ -264,13 +253,8 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
     let arenas_future = async move {
         let arenas = std::iter::once(exec_resolve_accesses);
         #[cfg(target_os = "linux")]
-        let arenas = arenas.chain(
-            supervisor
-                .handling_loop
-                .await?
-                .into_iter()
-                .map(|handler| handler.arena),
-        );
+        let arenas =
+            arenas.chain(supervisor.handling_loop.await?.into_iter().map(|handler| handler.arena));
         io::Result::Ok(arenas.collect::<Vec<_>>())
     };
 
@@ -302,8 +286,5 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
     }
     .boxed();
 
-    Ok(TrackedChild {
-        tokio_child: child,
-        accesses_future,
-    })
+    Ok(TrackedChild { tokio_child: child, accesses_future })
 }

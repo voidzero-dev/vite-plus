@@ -53,12 +53,7 @@ unsafe fn write_pipe_message(pipe: HANDLE, msg: &[u8]) {
                 null_mut(),
             )
         };
-        assert_ne!(
-            ret,
-            0,
-            "fspy WriteFile to pipe failed: {:?}",
-            GetLastError()
-        );
+        assert_ne!(ret, 0, "fspy WriteFile to pipe failed: {:?}", GetLastError());
         remaining_msg = &remaining_msg[bytes_written as usize..];
     }
 }
@@ -86,10 +81,7 @@ impl<'a> Client<'a> {
             borrow_decode_from_slice::<'a, Payload, _>(payload_bytes, BINCODE_CONFIG).unwrap();
         assert_eq!(decoded_len, payload_bytes.len());
 
-        Self {
-            payload,
-            messages: DashSet::with_capacity(1024),
-        }
+        Self { payload, messages: DashSet::with_capacity(1024) }
     }
     pub fn finish(&self) {
         for msg in self.messages.iter() {
@@ -106,10 +98,7 @@ impl<'a> Client<'a> {
     }
     pub fn sender(&self) -> Option<PathAccessSender> {
         let guard = PATH_ACCESS_ONCE.try_enter()?;
-        Some(PathAccessSender {
-            messages: &self.messages,
-            _once_guard: guard,
-        })
+        Some(PathAccessSender { messages: &self.messages, _once_guard: guard })
     }
     pub unsafe fn prepare_child_process(&self, child_handle: HANDLE) -> BOOL {
         let mut payload = self.payload;

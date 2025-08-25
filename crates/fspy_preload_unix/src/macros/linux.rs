@@ -15,14 +15,13 @@ macro_rules! intercept {
             #[unsafe(export_name = ::core::concat!(::core::stringify!($name), 64))]
             pub unsafe extern "C" fn interpose_fn() {
                 #[cfg(target_arch = "aarch64")]
-                ::core::arch::naked_asm!("b {}", sym $name);
+        ::core::arch::naked_asm!("b {}", sym $name);
                 #[cfg(target_arch = "x86_64")]
-                ::core::arch::naked_asm!("jmp {}", sym $name);
+        ::core::arch::naked_asm!("jmp {}", sym $name);
             }
         };
     };
     ($name: ident: $fn_sig: ty) => {
-
         $crate::macros::intercept_inner! {
             $name: $fn_sig;
 
@@ -32,7 +31,7 @@ macro_rules! intercept {
                ::core::assert_eq!($crate::macros::symbol_exists(::core::stringify!($name)), false);
             }
         }
-    }
+    };
 }
 
 use std::ffi::CString;

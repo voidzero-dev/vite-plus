@@ -1,10 +1,5 @@
-#![cfg_attr(
-    target_os = "windows",
-    feature(windows_process_extensions_main_thread_handle)
-)]
+#![cfg_attr(target_os = "windows", feature(windows_process_extensions_main_thread_handle))]
 #![feature(once_cell_try)]
-
-
 
 mod fixture;
 
@@ -16,18 +11,18 @@ mod os_impl;
 #[path = "./windows/mod.rs"]
 mod os_impl;
 
-mod command;
 mod arena;
+mod command;
 
 use std::{env::temp_dir, ffi::OsStr, fs::create_dir, io, sync::OnceLock};
 
 pub use command::Command;
-use futures_util::future::{BoxFuture};
+pub use fspy_shared::ipc::AccessMode;
+pub use fspy_shared::ipc::PathAccess;
+use futures_util::future::BoxFuture;
+pub use os_impl::PathAccessIterable;
 use os_impl::SpyInner;
 use tokio::process::Child;
-pub use fspy_shared::ipc::PathAccess;
-pub use fspy_shared::ipc::AccessMode;
-pub use os_impl::PathAccessIterable;
 
 pub struct TrackedChild {
     pub tokio_child: Child,

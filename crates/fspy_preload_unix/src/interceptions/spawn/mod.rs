@@ -1,2 +1,2 @@
-mod posix_spawn;
 mod exec;
+mod posix_spawn;
