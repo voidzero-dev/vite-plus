@@ -81,11 +81,10 @@ twox-hash = "2.1.1"
 vite_error = { path = "crates/vite_error" }
 vite_glob = { path = "crates/vite_glob" }
 vite_package_manager = { path = "crates/vite_package_manager" }
-vite_task = { path = "crates/vite_task" }
-vite_str = { path = "crates/vite_str" }
 vite_path = { path = "crates/vite_path" }
+vite_str = { path = "crates/vite_str" }
+vite_task = { path = "crates/vite_task" }
 wax = "0.6.0"
-wildmatch = "2.4.0"
 
 napi = { version = "3.0.0", default-features = false, features = ["async", "error_anyhow"] }
 napi-build = "2"
