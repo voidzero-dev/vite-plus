@@ -10,6 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+backon = { workspace = true }
 compact_str = { workspace = true, features = ["serde"] }
 directories = { workspace = true }
 flate2 = { workspace = true }
@@ -18,8 +19,6 @@ indoc = { workspace = true }
 pathdiff = { workspace = true }
 petgraph = { workspace = true, features = ["serde-1"] }
 reqwest = { workspace = true }
-reqwest-middleware = { workspace = true }
-reqwest-retry = { workspace = true }
 rustc-hash = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
