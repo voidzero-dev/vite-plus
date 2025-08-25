@@ -49,11 +49,16 @@ vite-plus cli#build
 ## Explicit mode
 
 With explicit mode, `vite-plus run` will run the task in the workspace subpackage. It can accept more than one task. The arguments will be treated as the task names; the args following the `--` will be treated as the task args and bypass to the task.
-Unlike implicit mode, explicit mode can't accept task name without `#`, unless `--recursive` flag is used.
 
 ### Default behavior
 
-The `vite-plus run` command will run the scoped tasks in dependency order. If there is a task name without `#`, it would cause an `Task not found` error.
+The `vite-plus run` command will run the scoped tasks in dependency order.
+
+Task names without `#` will be resolved in the current package (the package containing the nearest package.json file from the current working directory). For example:
+
+- `vite-plus run build` - runs the build task in the current package
+- `vite-plus run test lint` - runs test and lint tasks in the current package
+- `vite-plus run @other/package#build` - runs the build task in @other/package
 
 ### `--recursive,-r`
 

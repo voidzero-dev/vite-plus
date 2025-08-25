@@ -81,6 +81,9 @@ pub enum Error {
     #[error("{task_request} should not contain multiple '#'")]
     AmbiguousTaskRequest { task_request: String },
 
+    #[error("Only one task request is allowed when running in implicit mode: {0}")]
+    OnlyOneTaskRequest(String),
+
     #[error("Recursive run is not allowed when task name contains '#': {0}")]
     RecursiveRunWithScope(String),
 

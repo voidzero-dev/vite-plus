@@ -11,10 +11,11 @@ use petgraph::Graph;
 use petgraph::graph::NodeIndex;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
+use vite_error::Error;
 use wax::Glob;
 
-use crate::package_manager::{WorkspaceFile, find_workspace_root};
-use vite_error::Error;
+use crate::package_manager::WorkspaceFile;
+pub use package_manager::{find_package_root, find_workspace_root};
 
 /// The workspace configuration for pnpm.
 #[derive(Debug, Deserialize)]

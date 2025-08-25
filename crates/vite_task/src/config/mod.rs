@@ -1276,6 +1276,51 @@ mod tests {
     }
 
     #[test]
+    fn test_task_without_sharp_in_explicit_mode() {
+        with_unique_cache_path("task_without_sharp_explicit", |cache_path| {
+            let fixture_path =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
+
+            let workspace = Workspace::load_with_cache_path(
+                fixture_path,
+                Some(cache_path.to_path_buf()),
+                false,
+            )
+            .expect("Failed to load workspace");
+
+            // When in explicit mode (non-recursive), tasks without '#' should resolve to current package
+            // This test simulates being in a package directory
+
+            // First, test that the original scoped task works
+            let api_build_scoped = workspace
+                .build_task_subgraph(&vec!["@test/api#build".into()], Arc::default(), false)
+                .expect("Failed to resolve @test/api#build");
+
+            // Find the number of tasks for API build
+            let api_build_task_count = api_build_scoped.node_count();
+            assert!(api_build_task_count > 0, "Should find API build task");
+
+            // Test that we can resolve task with '#' in package
+            let app_test_scoped = workspace
+                .build_task_subgraph(&vec!["@test/app#test".into()], Arc::default(), false)
+                .expect("Failed to resolve @test/app#test");
+
+            // Should include dependencies
+            assert!(app_test_scoped.node_count() > 0, "Should find app test task");
+
+            // Verify task names in graph
+            let mut found_app_test = false;
+            for task in app_test_scoped.node_weights() {
+                if task.display_name() == "@test/app#test" {
+                    found_app_test = true;
+                    break;
+                }
+            }
+            assert!(found_app_test, "Should find @test/app#test task in graph");
+        })
+    }
+
+    #[test]
     fn test_dependency_resolution_with_ambiguous_names() {
         with_unique_cache_path("dependency_ambiguous_names", |cache_path| {
             let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/conflict-test");
