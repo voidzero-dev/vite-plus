@@ -45,7 +45,13 @@ dashmap = "6.1.0"
 diff-struct = "0.5.3"
 directories = "6.0.0"
 edit = "0.1.5"
-fspy = { git = "https://github.com/branchseer/fspy/", branch = "main" } # { path = "../fspy" }
+fspy_shared = { path = "crates/fspy_shared" }
+fspy = { path = "crates/fspy" }
+fspy_shared_unix = { path = "crates/fspy_shared_unix"}
+seccomp_unotify = { path = "crates/seccomp_unotify" }
+fspy_preload_unix = { path = "crates/fspy_preload_unix", artifact = "cdylib" }
+fspy_preload_windows = { path = "crates/fspy_preload_windows", artifact = "cdylib" }
+passfd = { git = "https://github.com/polachok/passfd", rev = "d55881752c16aced1a49a75f9c428d38d3767213", default-features = false }
 futures = "0.3.31"
 futures-core = "0.3.31"
 futures-util = "0.3.31"
