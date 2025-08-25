@@ -139,7 +139,8 @@ impl Command {
         self
     }
 
-    pub async fn spawn(self) -> io::Result<TrackedChild> {
+    pub async fn spawn(mut self) -> io::Result<TrackedChild> {
+        self.resolve_program()?;
         spawn_impl(self).await
     }
 
