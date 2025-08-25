@@ -23,7 +23,7 @@ const NAME_MAX: usize = 255;
 
 /// Search the executable in PATH.
 ///
-/// Referenced musl Implementation: https://github.com/kraj/musl/blob/1b06420abdf46f7d06ab4067e7c51b8b63731852/src/process/execvp.c#L5
+/// Referenced musl Implementation: <https://github.com/kraj/musl/blob/1b06420abdf46f7d06ab4067e7c51b8b63731852/src/process/execvp.c#L5>
 ///
 /// Difference from musl:
 /// - Instead of actually calling execve, use `access_executable` to check if the file is executable, and call `callback` with the found executable.
