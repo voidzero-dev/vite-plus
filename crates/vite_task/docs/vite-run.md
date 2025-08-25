@@ -57,7 +57,7 @@ The `vite-plus run` command will run the scoped tasks in dependency order.
 Task names without `#` will be resolved in the current package (the package containing the nearest package.json file from the current working directory). For example:
 
 - `vite-plus run build` - runs the build task in the current package
-- `vite-plus run test lint` - runs test and lint tasks in the current package
+- `vite-plus run test lint` - Throw `OnlyOneTaskRequest` error
 - `vite-plus run @other/package#build` - runs the build task in @other/package
 
 ### `--recursive,-r`
