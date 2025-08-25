@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 [target.'cfg(target_os = "linux")'.dependencies]
 arrayvec = "0.7.6"
 syscalls = { version = "0.6.18", default-features = false }
-seccomp_unotify = { workspace = true, features = ["target"] }
+fspy_seccomp_unotify = { workspace = true, features = ["target"] }
 libc-print = "0.1.23"
 const_format = "0.2.34"
 

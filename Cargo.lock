@@ -1082,6 +1082,7 @@ dependencies = [
  "flate2",
  "fspy_preload_unix",
  "fspy_preload_windows",
+ "fspy_seccomp_unotify",
  "fspy_shared",
  "fspy_shared_unix",
  "futures-util",
@@ -1093,7 +1094,6 @@ dependencies = [
  "passfd 0.2.0 (git+https://github.com/polachok/passfd)",
  "phf",
  "rand 0.9.1",
- "seccomp_unotify",
  "slab",
  "syscalls",
  "tar",
@@ -1130,6 +1130,7 @@ dependencies = [
  "const_format",
  "ctor",
  "derive-where",
+ "fspy_seccomp_unotify",
  "fspy_shared",
  "fspy_shared_unix",
  "libc",
@@ -1139,7 +1140,6 @@ dependencies = [
  "passfd 0.2.0 (git+https://github.com/polachok/passfd?rev=d55881752c16aced1a49a75f9c428d38d3767213)",
  "path-dedot",
  "ref-cast",
- "seccomp_unotify",
  "socket2 0.5.10",
  "syscalls",
  "thread_local",
@@ -1171,6 +1171,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "fspy_seccomp_unotify"
+version = "0.1.0"
+dependencies = [
+ "arrayvec",
+ "assertables",
+ "bincode",
+ "bytes",
+ "futures-util",
+ "libc",
+ "nix 0.30.1",
+ "passfd 0.2.0 (git+https://github.com/polachok/passfd?rev=d55881752c16aced1a49a75f9c428d38d3767213)",
+ "seccompiler",
+ "syscalls",
+ "test-log",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fspy_shared"
 version = "0.0.0"
 dependencies = [
@@ -1197,11 +1216,11 @@ dependencies = [
  "bincode",
  "bstr",
  "elf",
+ "fspy_seccomp_unotify",
  "fspy_shared",
  "memmap2",
  "nix 0.30.1",
  "phf",
- "seccomp_unotify",
  "stackalloc",
 ]
 
@@ -2689,25 +2708,6 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
-
-[[package]]
-name = "seccomp_unotify"
-version = "0.1.0"
-dependencies = [
- "arrayvec",
- "assertables",
- "bincode",
- "bytes",
- "futures-util",
- "libc",
- "nix 0.30.1",
- "passfd 0.2.0 (git+https://github.com/polachok/passfd?rev=d55881752c16aced1a49a75f9c428d38d3767213)",
- "seccompiler",
- "syscalls",
- "test-log",
- "tokio",
- "tracing",
-]
 
 [[package]]
 name = "seccompiler"

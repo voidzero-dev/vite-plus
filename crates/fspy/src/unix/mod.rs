@@ -20,7 +20,7 @@ use fspy_shared_unix::{
 use memmap2::Mmap;
 
 #[cfg(target_os = "linux")]
-use seccomp_unotify::supervisor::supervise;
+use fspy_seccomp_unotify::supervisor::supervise;
 #[cfg(target_os = "macos")]
 use std::path::Path;
 use std::{

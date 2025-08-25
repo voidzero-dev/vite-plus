@@ -601,7 +601,7 @@ dependencies = [
  "phf",
  "rand 0.9.2",
  "ref-cast",
- "seccomp_unotify",
+ "fspy_seccomp_unotify",
  "slab",
  "syscalls",
  "tar",
@@ -647,7 +647,7 @@ dependencies = [
  "passfd 0.2.0 (git+https://github.com/polachok/passfd?rev=d55881752c16aced1a49a75f9c428d38d3767213)",
  "path-dedot",
  "ref-cast",
- "seccomp_unotify",
+ "fspy_seccomp_unotify",
  "socket2 0.5.10",
  "syscalls",
  "thread_local",
@@ -710,7 +710,7 @@ dependencies = [
  "memmap2",
  "nix",
  "phf",
- "seccomp_unotify",
+ "fspy_seccomp_unotify",
  "stackalloc",
  "tempfile",
 ]
@@ -1671,7 +1671,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
-name = "seccomp_unotify"
+name = "fspy_seccomp_unotify"
 version = "0.1.0"
 dependencies = [
  "arrayvec",

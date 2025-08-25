@@ -16,7 +16,7 @@ stackalloc = "1.2.1"
 [dev-dependencies]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-seccomp_unotify = { workspace = true, features = ["target"] }
+fspy_seccomp_unotify = { workspace = true, features = ["target"] }
 memmap2 = "0.9.7"
 elf = { version = "0.8.0", default-features = false }
 

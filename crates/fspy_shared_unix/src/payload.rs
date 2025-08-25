@@ -19,7 +19,7 @@ pub struct Payload {
     pub fixtures: Fixtures,
 
     #[cfg(target_os = "linux")]
-    pub seccomp_payload: seccomp_unotify::payload::SeccompPayload,
+    pub seccomp_payload: fspy_seccomp_unotify::payload::SeccompPayload,
 }
 
 #[cfg(target_os = "macos")]

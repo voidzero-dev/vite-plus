@@ -2,7 +2,7 @@ use std::{io, os::unix::ffi::OsStrExt};
 
 use crate::arena::PathAccessArena;
 use fspy_shared::ipc::{AccessMode, NativeStr, PathAccess};
-use seccomp_unotify::{
+use fspy_seccomp_unotify::{
     impl_handler,
     supervisor::handler::arg::{CStrPtr, Fd, Ignored},
 };

@@ -3,7 +3,7 @@
 use assertables::assert_contains;
 use nix::fcntl::{AT_FDCWD, OFlag, openat};
 use nix::sys::stat::Mode;
-use seccomp_unotify::supervisor::Supervisor;
+use fspy_seccomp_unotify::supervisor::Supervisor;
 use tokio::time::timeout;
 
 use std::env::{current_dir, set_current_dir};
@@ -16,7 +16,7 @@ use std::time::Duration;
 use test_log::test;
 use tracing::{Level, span, trace};
 
-use seccomp_unotify::{
+use fspy_seccomp_unotify::{
     impl_handler,
     supervisor::{
         handler::arg::{CStrPtr, Fd},

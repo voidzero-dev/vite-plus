@@ -4,7 +4,7 @@ use std::{ffi::OsStr, os::unix::ffi::OsStrExt as _, path::Path};
 
 use fspy_shared::ipc::PathAccess;
 use memmap2::Mmap;
-use seccomp_unotify::{payload::SeccompPayload, target::install_target};
+use fspy_seccomp_unotify::{payload::SeccompPayload, target::install_target};
 
 use crate::{
     exec::{Exec, ExecResolveConfig, ensure_env},
