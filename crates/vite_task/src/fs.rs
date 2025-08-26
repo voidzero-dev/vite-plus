@@ -8,10 +8,10 @@ use std::{
 };
 
 use crate::Error;
-use vite_str::Str;
 use crate::{execute::PathRead, fingerprint::PathFingerprint};
 use dashmap::DashMap;
 use std::io::BufRead;
+use vite_str::Str;
 
 use crate::collections::HashMap;
 use crate::fingerprint::DirEntryKind;
