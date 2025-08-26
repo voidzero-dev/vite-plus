@@ -35,6 +35,7 @@ wax = { workspace = true }
 
 [dev-dependencies]
 httpmock = { workspace = true }
+tempfile = { workspace = true }
 test-log = { workspace = true }
 tokio-test = { workspace = true }
 

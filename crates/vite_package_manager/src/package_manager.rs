@@ -1,10 +1,9 @@
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{env, fmt};
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
 
 use compact_str::CompactString;
 use semver::{Version, VersionReq};
@@ -15,6 +14,15 @@ use crate::Error;
 use crate::config::{get_cache_dir, get_npm_package_tgz_url, get_npm_package_version_url};
 use crate::request::{HttpClient, download_and_extract_tgz};
 use crate::shim;
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+struct PackageJson {
+    #[serde(default)]
+    pub version: CompactString,
+    #[serde(default)]
+    pub package_manager: CompactString,
+}
 
 /// The package manager type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,21 +65,12 @@ pub struct PackageManager {
 #[derive(Debug)]
 pub struct PackageManagerBuilder {
     package_manager_type: Option<PackageManagerType>,
-    workspace_root: PathBuf,
-}
-
-#[derive(Serialize, Deserialize, Clone, Default)]
-#[serde(rename_all = "camelCase")]
-struct PackageJson {
-    #[serde(default)]
-    pub version: CompactString,
-    #[serde(default)]
-    pub package_manager: CompactString,
+    cwd: PathBuf,
 }
 
 impl PackageManagerBuilder {
-    pub fn new(workspace_root: impl AsRef<Path>) -> Self {
-        Self { package_manager_type: None, workspace_root: workspace_root.as_ref().into() }
+    pub fn new(cwd: impl AsRef<Path>) -> Self {
+        Self { package_manager_type: None, cwd: cwd.as_ref().to_path_buf() }
     }
 
     pub fn package_manager_type(mut self, package_manager_type: PackageManagerType) -> Self {
@@ -82,7 +81,7 @@ impl PackageManagerBuilder {
     /// Build the package manager.
     /// Detect the package manager from the current working directory.
     pub async fn build(self) -> Result<PackageManager, Error> {
-        let workspace_root = find_workspace_root(&self.workspace_root)?;
+        let workspace_root = find_workspace_root(&self.cwd)?;
         let (package_manager_type, mut version) =
             get_package_manager_type_and_version(&workspace_root, self.package_manager_type)?;
 
@@ -109,7 +108,7 @@ impl PackageManagerBuilder {
 
         if should_update_package_manager_field {
             // auto set `packageManager` field in package.json
-            let package_json_path = workspace_root.join("package.json");
+            let package_json_path = workspace_root.path.join("package.json");
             set_package_manager_field(&package_json_path, package_manager_type, &version).await?;
         }
 
@@ -118,7 +117,7 @@ impl PackageManagerBuilder {
             package_name,
             version,
             bin_name: package_manager_type.to_string(),
-            workspace_root,
+            workspace_root: workspace_root.path.to_path_buf(),
             install_dir,
         })
     }
@@ -141,40 +140,109 @@ impl PackageManager {
     }
 }
 
-/// Find the package root directory from the current working directory.
-pub fn find_package_root(original_cwd: impl AsRef<Path>) -> PathBuf {
-    let mut cwd = original_cwd.as_ref();
+/// The package root directory and its package.json file.
+#[derive(Debug)]
+pub struct PackageRoot<'a> {
+    pub path: &'a Path,
+    pub package_json: File,
+}
+
+/// Find the package root directory from the current working directory. `original_cwd` must be absolute.
+///
+/// If the package.json file is not found, will return PackageJsonNotFound error.
+pub fn find_package_root<'a>(original_cwd: &'a Path) -> Result<PackageRoot<'a>, Error> {
+    let mut cwd = original_cwd;
     loop {
-        if cwd.join("package.json").exists() {
-            return cwd.into();
+        // Check for package.json
+        match File::open(cwd.join("package.json")) {
+            Ok(file) => {
+                return Ok(PackageRoot { path: cwd, package_json: file });
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // File doesn't exist, continue searching
+            }
+            Err(e) => {
+                // Other errors (permission denied, etc.) should be propagated
+                return Err(e.into());
+            }
         }
+
         if let Some(parent) = cwd.parent() {
+            // Move up one directory
             cwd = parent;
         } else {
-            // We've reached the root, return the original directory
-            return original_cwd.as_ref().to_path_buf();
+            // We've reached the root, return PackageJsonNotFound error.
+            return Err(Error::PackageJsonNotFound(original_cwd.to_path_buf()));
         }
     }
 }
 
-/// Find the workspace root directory from the current working directory.
-pub fn find_workspace_root(original_cwd: impl AsRef<Path>) -> Result<PathBuf, Error> {
-    let mut cwd = original_cwd.as_ref();
+/// The workspace file.
+///
+/// - `PnpmWorkspaceYaml` is the pnpm workspace file.
+/// - `NonWorkspacePackage` is the package.json file of a non-workspace package.
+#[derive(Debug)]
+pub enum WorkspaceFile {
+    /// The pnpm-workspace.yaml file of a pnpm workspace.
+    PnpmWorkspaceYaml(File),
+    /// The package.json file of a non-workspace package.
+    NonWorkspacePackage(File),
+    // TODO(@fengmk2): other workspace file support, like yarn, npm, etc.
+}
+
+/// The workspace root directory and its workspace file.
+///
+/// If the workspace file is not found, but a package is found, `workspace_file` will be `NonWorkspacePackage` with the `package.json` File.
+#[derive(Debug)]
+pub struct WorkspaceRoot<'a> {
+    pub path: &'a Path,
+    pub workspace_file: WorkspaceFile,
+}
+
+/// Find the workspace root directory from the current working directory. `original_cwd` must be absolute.
+///
+/// If the workspace file is not found, but a package is found, `workspace_file` will be `NonWorkspacePackage` with the `package.json` File.
+///
+/// If neither workspace nor package is found, will return PackageJsonNotFound error.
+pub fn find_workspace_root<'a>(original_cwd: &'a Path) -> Result<WorkspaceRoot<'a>, Error> {
+    let mut cwd = original_cwd;
 
     loop {
-        // Check for pnpm-workspace.yaml
-        if cwd.join("pnpm-workspace.yaml").exists() {
-            return Ok(cwd.into());
+        // Check for pnpm-workspace.yaml for pnpm workspace
+        match File::open(cwd.join("pnpm-workspace.yaml")) {
+            Ok(file) => {
+                return Ok(WorkspaceRoot {
+                    path: cwd,
+                    workspace_file: WorkspaceFile::PnpmWorkspaceYaml(file),
+                });
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // File doesn't exist, continue searching
+            }
+            Err(e) => {
+                // Other errors (permission denied, etc.) should be propagated
+                return Err(e.into());
+            }
         }
 
-        // Check for package.json with workspaces field
+        // Check for package.json with workspaces field for npm/yarn workspace
         let package_json_path = cwd.join("package.json");
-        if package_json_path.exists() {
-            let package_json: serde_json::Value =
-                serde_json::from_slice(&fs::read(&package_json_path)?)?;
-
-            if package_json.get("workspaces").is_some() {
-                return Ok(cwd.into());
+        match File::open(&package_json_path) {
+            Ok(file) => {
+                let package_json: serde_json::Value =
+                    serde_json::from_reader(BufReader::new(&file))?;
+                if package_json.get("workspaces").is_some() {
+                    // TODO(@fengmk2): throw error for temporary.
+                    // npm/yarn can be supported later.
+                    return Err(Error::UnsupportedWorkspaceFile(package_json_path));
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // File doesn't exist, continue searching
+            }
+            Err(e) => {
+                // Other errors (permission denied, etc.) should be propagated
+                return Err(e.into());
             }
         }
 
@@ -184,39 +252,49 @@ pub fn find_workspace_root(original_cwd: impl AsRef<Path>) -> Result<PathBuf, Er
         if let Some(parent) = cwd.parent() {
             cwd = parent;
         } else {
-            // We've reached the root, try to find the package root
-            return Ok(find_package_root(original_cwd));
+            // We've reached the root, try to find the package root and return the non-workspace package.
+            let package_root = find_package_root(original_cwd)?;
+            let workspace_file = WorkspaceFile::NonWorkspacePackage(package_root.package_json);
+            return Ok(WorkspaceRoot { path: package_root.path, workspace_file });
         }
     }
 }
 
 /// Get the package manager name and version from the workspace root.
 fn get_package_manager_type_and_version(
-    workspace_root: impl AsRef<Path>,
+    workspace_root: &WorkspaceRoot,
     default: Option<PackageManagerType>,
 ) -> Result<(PackageManagerType, CompactString), Error> {
-    let workspace_root = workspace_root.as_ref();
     // check packageManager field in package.json
-    let package_json_path = workspace_root.join("package.json");
-    if package_json_path.exists() {
-        let package_json: PackageJson = serde_json::from_slice(&fs::read(&package_json_path)?)?;
-        if !package_json.package_manager.is_empty() {
-            if let Some((name, version)) = package_json.package_manager.split_once('@') {
-                // check if the version is a valid semver
-                semver::Version::parse(version).map_err(|_| {
-                    Error::PackageManagerVersionInvalid {
-                        name: name.into(),
-                        version: version.into(),
-                        package_json_path: package_json_path.into(),
+    let package_json_path = workspace_root.path.join("package.json");
+    match File::open(&package_json_path) {
+        Ok(file) => {
+            let package_json: PackageJson = serde_json::from_reader(BufReader::new(&file))?;
+            if !package_json.package_manager.is_empty() {
+                if let Some((name, version)) = package_json.package_manager.split_once('@') {
+                    // check if the version is a valid semver
+                    semver::Version::parse(version).map_err(|_| {
+                        Error::PackageManagerVersionInvalid {
+                            name: name.into(),
+                            version: version.into(),
+                            package_json_path: package_json_path.to_path_buf(),
+                        }
+                    })?;
+                    match name {
+                        "pnpm" => return Ok((PackageManagerType::Pnpm, version.into())),
+                        "yarn" => return Ok((PackageManagerType::Yarn, version.into())),
+                        "npm" => return Ok((PackageManagerType::Npm, version.into())),
+                        _ => return Err(Error::UnsupportedPackageManager(name.into())),
                     }
-                })?;
-                match name {
-                    "pnpm" => return Ok((PackageManagerType::Pnpm, version.into())),
-                    "yarn" => return Ok((PackageManagerType::Yarn, version.into())),
-                    "npm" => return Ok((PackageManagerType::Npm, version.into())),
-                    _ => return Err(Error::UnsupportedPackageManager(name.into())),
                 }
             }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // File doesn't exist, continue searching
+        }
+        Err(e) => {
+            // Other errors (permission denied, etc.) should be propagated
+            return Err(e.into());
         }
     }
 
@@ -224,38 +302,37 @@ fn get_package_manager_type_and_version(
 
     let version = CompactString::from("latest");
     // if pnpm-workspace.yaml exists, use pnpm@latest
-    let pnpm_workspace_yaml_path = workspace_root.join("pnpm-workspace.yaml");
-    if pnpm_workspace_yaml_path.exists() {
+    if matches!(workspace_root.workspace_file, WorkspaceFile::PnpmWorkspaceYaml(_)) {
         return Ok((PackageManagerType::Pnpm, version));
     }
 
     // if pnpm-lock.yaml exists, use pnpm@latest
-    let pnpm_lock_yaml_path = workspace_root.join("pnpm-lock.yaml");
+    let pnpm_lock_yaml_path = workspace_root.path.join("pnpm-lock.yaml");
     if pnpm_lock_yaml_path.exists() {
         return Ok((PackageManagerType::Pnpm, version));
     }
 
     // if yarn.lock or .yarnrc.yml exists, use yarn@latest
-    let yarn_lock_path = workspace_root.join("yarn.lock");
-    let yarnrc_yml_path = workspace_root.join(".yarnrc.yml");
+    let yarn_lock_path = workspace_root.path.join("yarn.lock");
+    let yarnrc_yml_path = workspace_root.path.join(".yarnrc.yml");
     if yarn_lock_path.exists() || yarnrc_yml_path.exists() {
         return Ok((PackageManagerType::Yarn, version));
     }
 
     // if package-lock.json exists, use npm@latest
-    let package_lock_json_path = workspace_root.join("package-lock.json");
+    let package_lock_json_path = workspace_root.path.join("package-lock.json");
     if package_lock_json_path.exists() {
         return Ok((PackageManagerType::Npm, version));
     }
 
     // if pnpmfile.cjs exists, use pnpm@latest
-    let pnpmfile_cjs_path = workspace_root.join("pnpmfile.cjs");
+    let pnpmfile_cjs_path = workspace_root.path.join("pnpmfile.cjs");
     if pnpmfile_cjs_path.exists() {
         return Ok((PackageManagerType::Pnpm, version));
     }
 
     // if yarn.config.cjs exists, use yarn@latest (yarn 2.0+)
-    let yarn_config_cjs_path = workspace_root.join("yarn.config.cjs");
+    let yarn_config_cjs_path = workspace_root.path.join("yarn.config.cjs");
     if yarn_config_cjs_path.exists() {
         return Ok((PackageManagerType::Yarn, version));
     }
@@ -466,6 +543,7 @@ mod tests {
     use std::env;
     use std::fs;
     use std::process::Command;
+
     use tempfile::{TempDir, tempdir};
 
     fn create_temp_dir() -> TempDir {
@@ -482,13 +560,103 @@ mod tests {
     }
 
     #[test]
+    fn test_find_package_root() {
+        let temp_dir = TempDir::new().unwrap();
+        let nested_dir = temp_dir.path().join("a").join("b").join("c");
+        fs::create_dir_all(&nested_dir).unwrap();
+
+        // Create package.json in a/b
+        let package_dir = temp_dir.path().join("a").join("b");
+        File::create(package_dir.join("package.json")).unwrap();
+
+        // Should find package.json in parent directory
+        let found = find_package_root(&nested_dir);
+        let package_root = found.unwrap();
+        assert_eq!(package_root.path, package_dir);
+
+        // Should return the same directory if package.json is there
+        let found = find_package_root(&package_dir);
+        let package_root = found.unwrap();
+        assert_eq!(package_root.path, package_dir);
+
+        // Should return PackageJsonNotFound error if no package.json found
+        let root_dir = temp_dir.path().join("x").join("y");
+        fs::create_dir_all(&root_dir).unwrap();
+        let found = find_package_root(&root_dir);
+        let err = found.unwrap_err();
+        assert!(matches!(err, Error::PackageJsonNotFound(_)));
+    }
+
+    #[test]
+    fn test_find_workspace_root_with_pnpm() {
+        let temp_dir = TempDir::new().unwrap();
+        let nested_dir = temp_dir.path().join("packages").join("app");
+        fs::create_dir_all(&nested_dir).unwrap();
+
+        // Create pnpm-workspace.yaml at root
+        File::create(temp_dir.path().join("pnpm-workspace.yaml")).unwrap();
+
+        // Should find workspace root
+        let found = find_workspace_root(&nested_dir).unwrap();
+        assert_eq!(found.path, temp_dir.path());
+        assert!(matches!(found.workspace_file, WorkspaceFile::PnpmWorkspaceYaml(_)));
+    }
+
+    #[test]
+    fn test_find_workspace_root_with_npm_workspaces() {
+        let temp_dir = TempDir::new().unwrap();
+        let nested_dir = temp_dir.path().join("packages").join("app");
+        fs::create_dir_all(&nested_dir).unwrap();
+
+        // Create package.json with workspaces field
+        let package_json = r#"{"workspaces": ["packages/*"]}"#;
+        fs::write(temp_dir.path().join("package.json"), package_json).unwrap();
+
+        // Should throw error for temporary.
+        // npm/yarn can be supported later.
+        let err = find_workspace_root(&nested_dir).unwrap_err();
+        assert!(matches!(err, Error::UnsupportedWorkspaceFile(_)));
+    }
+
+    #[test]
+    fn test_find_workspace_root_fallback_to_package_root() {
+        let temp_dir = TempDir::new().unwrap();
+        let nested_dir = temp_dir.path().join("src");
+        fs::create_dir_all(&nested_dir).unwrap();
+
+        // Create package.json without workspaces field
+        let package_json = r#"{"name": "test"}"#;
+        fs::write(temp_dir.path().join("package.json"), package_json).unwrap();
+
+        // Should fallback to package root
+        let found = find_workspace_root(&nested_dir).unwrap();
+        assert_eq!(found.path, temp_dir.path());
+        assert!(matches!(found.workspace_file, WorkspaceFile::NonWorkspacePackage(_)));
+        let package_root = find_package_root(temp_dir.path()).unwrap();
+        // equal to workspace root
+        assert_eq!(package_root.path, found.path);
+    }
+
+    #[test]
+    fn test_find_workspace_root_with_package_json_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+        let nested_dir = temp_dir.path().join("src");
+        fs::create_dir_all(&nested_dir).unwrap();
+
+        // Should return PackageJsonNotFound error if no package.json found
+        let found = find_workspace_root(&nested_dir);
+        let err = found.unwrap_err();
+        assert!(matches!(err, Error::PackageJsonNotFound(_)));
+    }
+
+    #[test]
     fn test_find_package_root_with_package_json_in_current_dir() {
         let temp_dir = create_temp_dir();
         let package_content = r#"{"name": "test-package"}"#;
         create_package_json(temp_dir.path(), package_content);
 
-        let result = find_package_root(temp_dir.path());
-        assert_eq!(result, temp_dir.path());
+        let result = find_package_root(temp_dir.path()).unwrap();
+        assert_eq!(result.path, temp_dir.path());
     }
 
     #[test]
@@ -500,8 +668,8 @@ mod tests {
         let sub_dir = temp_dir.path().join("subdir");
         fs::create_dir(&sub_dir).expect("Failed to create subdirectory");
 
-        let result = find_package_root(&sub_dir);
-        assert_eq!(result, temp_dir.path());
+        let result = find_package_root(&sub_dir).unwrap();
+        assert_eq!(result.path, temp_dir.path());
     }
 
     #[test]
@@ -513,18 +681,8 @@ mod tests {
         let sub_dir = temp_dir.path().join("subdir").join("nested");
         fs::create_dir_all(&sub_dir).expect("Failed to create nested directories");
 
-        let result = find_package_root(&sub_dir);
-        assert_eq!(result, temp_dir.path());
-    }
-
-    #[test]
-    fn test_find_package_root_without_package_json_returns_original_dir() {
-        let temp_dir = create_temp_dir();
-        let sub_dir = temp_dir.path().join("subdir");
-        fs::create_dir(&sub_dir).expect("Failed to create subdirectory");
-
-        let result = find_package_root(&sub_dir);
-        assert_eq!(result, sub_dir);
+        let result = find_package_root(&sub_dir).unwrap();
+        assert_eq!(result.path, temp_dir.path());
     }
 
     #[test]
@@ -534,7 +692,7 @@ mod tests {
         create_pnpm_workspace_yaml(temp_dir.path(), workspace_content);
 
         let result = find_workspace_root(temp_dir.path()).expect("Should find workspace root");
-        assert_eq!(result, temp_dir.path());
+        assert_eq!(result.path, temp_dir.path());
     }
 
     #[test]
@@ -547,7 +705,7 @@ mod tests {
         fs::create_dir(&sub_dir).expect("Failed to create subdirectory");
 
         let result = find_workspace_root(&sub_dir).expect("Should find workspace root");
-        assert_eq!(result, temp_dir.path());
+        assert_eq!(result.path, temp_dir.path());
     }
 
     #[test]
@@ -556,8 +714,8 @@ mod tests {
         let package_content = r#"{"name": "test-workspace", "workspaces": ["packages/*"]}"#;
         create_package_json(temp_dir.path(), package_content);
 
-        let result = find_workspace_root(temp_dir.path()).expect("Should find workspace root");
-        assert_eq!(result, temp_dir.path());
+        let result = find_workspace_root(temp_dir.path());
+        assert!(matches!(result.unwrap_err(), Error::UnsupportedWorkspaceFile(_)));
     }
 
     #[test]
@@ -569,8 +727,8 @@ mod tests {
         let sub_dir = temp_dir.path().join("subdir");
         fs::create_dir(&sub_dir).expect("Failed to create subdirectory");
 
-        let result = find_workspace_root(&sub_dir).expect("Should find workspace root");
-        assert_eq!(result, temp_dir.path());
+        let result = find_workspace_root(&sub_dir);
+        assert!(matches!(result.unwrap_err(), Error::UnsupportedWorkspaceFile(_)));
     }
 
     #[test]
@@ -586,7 +744,7 @@ mod tests {
         create_pnpm_workspace_yaml(temp_dir.path(), workspace_content);
 
         let result = find_workspace_root(temp_dir.path()).expect("Should find workspace root");
-        assert_eq!(result, temp_dir.path());
+        assert_eq!(result.path, temp_dir.path());
     }
 
     #[test]
@@ -599,7 +757,7 @@ mod tests {
         fs::create_dir(&sub_dir).expect("Failed to create subdirectory");
 
         let result = find_workspace_root(&sub_dir).expect("Should fall back to package root");
-        assert_eq!(result, temp_dir.path());
+        assert_eq!(result.path, temp_dir.path());
     }
 
     #[test]
@@ -612,7 +770,7 @@ mod tests {
         fs::create_dir_all(&nested_dir).expect("Failed to create nested directories");
 
         let result = find_workspace_root(&nested_dir).expect("Should find workspace root");
-        assert_eq!(result, temp_dir.path());
+        assert_eq!(result.path, temp_dir.path());
     }
 
     #[test]
@@ -622,7 +780,7 @@ mod tests {
         create_package_json(temp_dir.path(), package_content);
 
         let result = find_workspace_root(temp_dir.path()).expect("Should return package root");
-        assert_eq!(result, temp_dir.path());
+        assert_eq!(result.path, temp_dir.path());
     }
 
     #[test]
@@ -650,11 +808,12 @@ mod tests {
         create_package_json(&sub_dir, sub_package_content);
 
         // Should find the subdirectory package.json since find_package_root searches upward from original_cwd
-        let result = find_workspace_root(&sub_dir).expect("Should find subdirectory package");
-        assert_eq!(result, sub_dir);
+        let workspace_root =
+            find_workspace_root(&sub_dir).expect("Should find subdirectory package");
+        assert_eq!(workspace_root.path, sub_dir);
+        assert!(matches!(workspace_root.workspace_file, WorkspaceFile::NonWorkspacePackage(_)));
     }
 
-    // Tests for detect_package_manager and related functionality
     #[tokio::test]
     async fn test_detect_package_manager_with_pnpm_workspace_yaml() {
         let temp_dir = create_temp_dir();
