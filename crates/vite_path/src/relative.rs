@@ -68,7 +68,7 @@ impl PartialEq<&RelativePath> for RelativePathBuf {
 impl RelativePathBuf {
     /// Extends `self` with `path`.
     ///
-    /// Unlike [`PathBuf::push`], `self` and `path` are both always relative,
+    /// Unlike [`std::path::PathBuf::push`], `self` and `path` are both always relative,
     /// so `self` can only be appended, not replaced
     pub fn push<P: AsRef<RelativePath>>(&mut self, rel_path: P) {
         self.0.push('/');
