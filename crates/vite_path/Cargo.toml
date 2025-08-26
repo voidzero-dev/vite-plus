@@ -7,6 +7,14 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+bincode = { workspace = true }
+ref-cast = { workspace = true }
+vite_str = { workspace = true }
+thiserror = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+assert2 = "0.3.16"
+
