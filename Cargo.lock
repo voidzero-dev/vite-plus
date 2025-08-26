@@ -1094,7 +1094,6 @@ dependencies = [
  "passfd 0.2.0 (git+https://github.com/polachok/passfd)",
  "phf",
  "rand 0.9.1",
- "slab",
  "syscalls",
  "tar",
  "tempfile",

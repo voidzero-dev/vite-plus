@@ -25,7 +25,8 @@ watch *args='':
   watchexec --no-vcs-ignore {{args}}
 
 fmt:
-  cargo shear --fix
+  # TODO: cargo shear doesn't understand artifact dependencies yet
+  # cargo shear --fix
   cargo fmt --all
   dprint fmt
 
