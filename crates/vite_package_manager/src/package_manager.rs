@@ -14,8 +14,6 @@ pub struct PackageRoot<'a> {
 }
 
 /// Find the package root directory from the current working directory. `original_cwd` must be absolute.
-///
-/// If the package.json file is not found, return None.
 pub fn find_package_root<'a>(original_cwd: &'a Path) -> Result<PackageRoot<'a>, Error> {
     let mut cwd = original_cwd;
     loop {
