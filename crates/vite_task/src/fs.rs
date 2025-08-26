@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::Error;
-use crate::str::Str;
+use vite_str::Str;
 use crate::{execute::PathRead, fingerprint::PathFingerprint};
 use dashmap::DashMap;
 use std::io::BufRead;

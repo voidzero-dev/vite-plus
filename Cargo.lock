@@ -119,6 +119,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
+name = "assert2"
+version = "0.3.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d6c710e60d14b07d8f42d0e702b16120865eea39edb751e75cd6bf401d18f14"
+dependencies = [
+ "assert2-macros",
+ "diff",
+ "yansi",
+]
+
+[[package]]
+name = "assert2-macros"
+version = "0.3.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9008cbbba9e1d655538870b91fd93814bd82e6968f27788fc734375120ac6f57"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "rustc_version 0.4.1",
+ "syn 2.0.104",
+]
+
+[[package]]
 name = "assertables"
 version = "9.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -802,6 +825,12 @@ dependencies = [
  "quote",
  "syn 2.0.104",
 ]
+
+[[package]]
+name = "diff"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
 
 [[package]]
 name = "diff-struct"
@@ -2648,6 +2677,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustc_version"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
+dependencies = [
+ "semver 1.0.26",
+]
+
+[[package]]
 name = "rustix"
 version = "0.38.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2952,7 +2990,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00b5b7088084b7f78305a42468c9a3693918620f0b8ec86260f1132dc0521e78"
 dependencies = [
  "cc",
- "rustc_version",
+ "rustc_version 0.2.3",
 ]
 
 [[package]]
@@ -3495,6 +3533,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "vite_paths"
+version = "0.1.0"
+dependencies = [
+ "assert2",
+ "bincode",
+ "ref-cast",
+ "thiserror 2.0.12",
+ "vite_str",
+]
+
+[[package]]
+name = "vite_str"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "compact_str 0.9.0",
+ "diff-struct",
+ "serde",
+]
+
+[[package]]
 name = "vite_task"
 version = "0.0.0"
 dependencies = [
@@ -3526,6 +3585,7 @@ dependencies = [
  "twox-hash",
  "vite_error",
  "vite_package_manager",
+ "vite_str",
  "wax",
  "wildmatch",
 ]

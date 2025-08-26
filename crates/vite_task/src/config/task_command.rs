@@ -1,11 +1,12 @@
 use std::{fmt::Display, path::Path};
 
-use crate::{Error, cmd::TaskParsedCommand, execute::TaskEnvs, str::Str};
+use crate::{Error, cmd::TaskParsedCommand, execute::TaskEnvs};
 
 use bincode::{Decode, Encode};
 use diff::Diff;
 use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
+use vite_str::Str;
 
 use super::{CommandFingerprint, ResolvedTaskCommand, TaskConfig};
 

@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::str::Str;
+use vite_str::Str;
 
 /// For displaying and filtering tasks.
 ///

@@ -4,6 +4,7 @@ use bincode::{Decode, Encode};
 use diff::Diff as _;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use vite_str::Str;
 
 use crate::{
     Error,
@@ -14,7 +15,6 @@ use crate::{
     },
     execute::{ExecutedTask, PathRead},
     fs::FileSystem,
-    str::Str,
 };
 
 /// The fingerprint of a task. Determines if the task needs to be re-executed
@@ -142,8 +142,8 @@ mod tests {
         cmd::TaskParsedCommand,
         collections::HashSet,
         config::{CommandFingerprint, ResolvedTaskConfig, TaskCommand, TaskConfig},
-        str::Str,
     };
+    use vite_str::Str;
 
     #[test]
     fn test_command_fingerprint_stable_with_multiple_envs() {

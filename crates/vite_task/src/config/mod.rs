@@ -10,6 +10,7 @@ use compact_str::ToCompactString;
 use diff::Diff;
 use serde::{Deserialize, Serialize};
 use vite_error::Error;
+use vite_str::Str;
 
 use crate::{
     ResolveCommandResult,
@@ -17,7 +18,6 @@ use crate::{
     collections::{HashMap, HashSet},
     config::name::TaskName,
     execute::TaskEnvs,
-    str::Str,
 };
 
 pub use task_command::*;

@@ -14,7 +14,7 @@ use brush_parser::{
 use diff::Diff;
 use serde::Serialize;
 
-use crate::str::Str;
+use vite_str::Str;
 
 /// "FOO=BAR program arg1 arg2"
 #[derive(Encode, Decode, Serialize, Debug, PartialEq, Eq, Diff, Clone)]

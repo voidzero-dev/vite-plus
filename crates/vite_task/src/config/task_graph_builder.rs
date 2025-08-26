@@ -1,10 +1,10 @@
 use crate::{
     Error,
     collections::{HashMap, HashSet},
-    str::Str,
 };
 
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
+use vite_str::Str;
 
 use super::ResolvedTask;
 
