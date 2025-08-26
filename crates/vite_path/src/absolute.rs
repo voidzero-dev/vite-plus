@@ -68,7 +68,7 @@ impl AbsolutePath {
     }
 }
 
-/// An Error returned from [`AbsolutePath::strip_prefix`] if the strippped path is not a valid `RelativePath`
+/// An Error returned from [`AbsolutePath::strip_prefix`] if the stripped path is not a valid `RelativePath`
 #[derive(thiserror::Error, Debug)]
 pub struct StripPrefixError<'a> {
     pub stripped_path: &'a Path,
