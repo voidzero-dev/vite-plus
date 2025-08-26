@@ -13,7 +13,7 @@ pub struct PackageRoot {
     pub package_json: Option<File>,
 }
 
-/// Find the package root directory from the current working directory.
+/// Find the package root directory from the current working. `original_cwd` must be absolute.
 pub fn find_package_root(original_cwd: impl AsRef<Path>) -> Result<PackageRoot, Error> {
     let mut cwd = original_cwd.as_ref();
     loop {
