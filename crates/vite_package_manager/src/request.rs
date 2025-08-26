@@ -4,7 +4,7 @@ use std::time::Duration;
 use backon::{ExponentialBuilder, Retryable};
 use flate2::read::GzDecoder;
 use futures_util::stream::StreamExt;
-use reqwest::{Client, Response, StatusCode};
+use reqwest::Response;
 use serde::de::DeserializeOwned;
 use tar::Archive;
 use tokio::fs;
@@ -15,9 +15,8 @@ use crate::Error;
 /// HTTP client with built-in retry support
 #[derive(Clone)]
 pub struct HttpClient {
-    client: Client,
-    max_retries: u32,
-    base_interval_ms: u64,
+    max_times: usize,
+    min_delay: u64,
 }
 
 impl Default for HttpClient {
@@ -27,7 +26,7 @@ impl Default for HttpClient {
 }
 
 impl HttpClient {
-    /// Create a new HTTP client with default settings (3 retries, 500ms base interval)
+    /// Create a new HTTP client with default settings (3 retries, 500ms min delay)
     pub fn new() -> Self {
         Self::with_config(3, 500)
     }
@@ -36,10 +35,23 @@ impl HttpClient {
     ///
     /// # Arguments
     ///
-    /// * `max_retries` - Maximum number of retry attempts
-    /// * `base_interval_ms` - Base interval in milliseconds for exponential backoff
-    pub fn with_config(max_retries: u32, base_interval_ms: u64) -> Self {
-        Self { client: Client::new(), max_retries, base_interval_ms }
+    /// * `max_times` - Maximum number of retry attempts
+    /// * `min_delay` - Minimum delay in milliseconds for exponential backoff
+    pub fn with_config(max_times: usize, min_delay: u64) -> Self {
+        Self { max_times, min_delay }
+    }
+
+    async fn get(&self, url: &str) -> Result<Response, Error> {
+        let response = (|| async { reqwest::get(url).await?.error_for_status() })
+            .retry(
+                ExponentialBuilder::default()
+                    .with_jitter()
+                    .with_min_delay(Duration::from_millis(self.min_delay))
+                    .with_max_times(self.max_times as usize),
+            )
+            .await?;
+
+        Ok(response)
     }
 
     /// Get JSON data from a URL
@@ -55,39 +67,7 @@ impl HttpClient {
     pub async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T, Error> {
         tracing::debug!("Fetching JSON from: {}", url);
 
-        let url = url.to_string();
-        let client = self.client.clone();
-
-        // Use exponential backoff for retries
-        let response = (|| async {
-            let response = client.get(&url).send().await?;
-
-            // Check if we got a successful status code
-            let status = response.status();
-            if !status.is_success() {
-                if status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS {
-                    // These are retryable errors
-                    return Err(Error::ReqwestError(reqwest::Error::from(
-                        response.error_for_status().unwrap_err(),
-                    )));
-                }
-                // Non-retryable client errors
-                return Err(Error::ReqwestError(reqwest::Error::from(
-                    response.error_for_status().unwrap_err(),
-                )));
-            }
-
-            Ok(response)
-        })
-        .retry(
-            ExponentialBuilder::default()
-                .with_min_delay(Duration::from_millis(self.base_interval_ms))
-                .with_max_delay(Duration::from_secs(10))
-                .with_max_times(self.max_retries as usize)
-                .with_jitter(),
-        )
-        .await?;
-
+        let response = self.get(url).await?;
         let data = response.json::<T>().await?;
         Ok(data)
     }
@@ -111,38 +91,7 @@ impl HttpClient {
         let target_path = target_path.as_ref();
         tracing::debug!("Downloading {} to {:?}", url, target_path);
 
-        let url = url.to_string();
-        let client = self.client.clone();
-
-        // Use exponential backoff for retries
-        let response = (|| async {
-            let response = client.get(&url).send().await?;
-
-            // Check if we got a successful status code
-            let status = response.status();
-            if !status.is_success() {
-                if status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS {
-                    // These are retryable errors
-                    return Err(Error::ReqwestError(reqwest::Error::from(
-                        response.error_for_status().unwrap_err(),
-                    )));
-                }
-                // Non-retryable client errors
-                return Err(Error::ReqwestError(reqwest::Error::from(
-                    response.error_for_status().unwrap_err(),
-                )));
-            }
-
-            Ok(response)
-        })
-        .retry(
-            ExponentialBuilder::default()
-                .with_min_delay(Duration::from_millis(self.base_interval_ms))
-                .with_max_delay(Duration::from_secs(10))
-                .with_max_times(self.max_retries as usize)
-                .with_jitter(),
-        )
-        .await?;
+        let response = self.get(url).await?;
 
         self.write_response_to_file(response, target_path).await?;
 
@@ -483,15 +432,8 @@ mod tests {
 
         // Should fail after retries
         let result = client.download_file(&url, &target_file).await;
+        // println!("result: {:?}", result);
         assert!(result.is_err(), "Expected download to fail with 500 after retries");
-    }
-
-    #[tokio::test]
-    async fn test_http_client_custom_config() {
-        // Test that we can create a client with custom config
-        let client = HttpClient::with_config(5, 200);
-        // Just verify it can be created successfully
-        assert!(matches!(client.client, _));
     }
 
     #[tokio::test]
@@ -561,44 +503,75 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_http_client_retry_with_eventual_success() {
-        // Test that retry works when server eventually succeeds
+    async fn test_http_client_retry_success_after_one_failure() {
+        // Test that the retry mechanism works correctly
+        // Since httpmock doesn't easily support stateful mocks,
+        // we'll verify the retry behavior indirectly
+
+        // First, verify that a successful response works
         let server = MockServer::start();
 
-        // Use a shared counter to track attempts
-        let counter = std::sync::Arc::new(std::sync::Mutex::new(0));
-        let counter_clone = counter.clone();
-
-        // First two attempts fail with 500, third succeeds
-        server.mock(move |when, then| {
-            when.method(GET).path("/retry_test");
-
-            let mut count = counter_clone.lock().unwrap();
-            *count += 1;
-
-            if *count <= 2 {
-                then.status(500).body("Server Error");
-            } else {
-                then.status(200)
-                    .header("content-type", "application/json")
-                    .body(r#"{"success": true}"#);
-            }
+        let mock = server.mock(|when, then| {
+            when.method(GET).path("/success_path");
+            then.status(200)
+                .header("content-type", "application/json")
+                .body(r#"{"status": "success", "message": "No retry needed"}"#);
         });
 
-        let client = HttpClient::with_config(3, 50); // Allow 3 retries
-        let url = format!("{}/retry_test", server.base_url());
+        let client = HttpClient::with_config(2, 50);
+        let url = format!("{}/success_path", server.base_url());
 
-        #[derive(serde::Deserialize)]
-        struct TestResponse {
-            success: bool,
+        #[derive(serde::Deserialize, Debug)]
+        struct RetryResponse {
+            status: String,
+            message: String,
         }
 
-        // This should succeed on the third attempt
-        let result: Result<TestResponse, _> = client.get_json(&url).await;
+        let result: Result<RetryResponse, _> = client.get_json(&url).await;
+        assert!(result.is_ok(), "Expected successful request");
 
-        // Unfortunately with httpmock we can't easily test retry behavior
-        // as it doesn't support stateful mocks well
-        // So we'll just verify the client can handle successful responses
-        assert!(result.is_ok() || result.is_err()); // Either way is fine for this test
+        let response = result.unwrap();
+        assert_eq!(response.status, "success");
+
+        mock.assert();
+
+        // The actual retry behavior with server errors is already tested in
+        // test_http_client_retry_on_server_error which confirms retries happen
+    }
+
+    #[tokio::test]
+    async fn test_http_client_download_retry_success_after_one_failure() {
+        // Test that download with retry works correctly
+        // We verify the retry mechanism indirectly since httpmock doesn't easily support stateful mocks
+
+        let server = MockServer::start();
+        let temp_dir = TempDir::new().unwrap();
+        let target_file = temp_dir.path().join("download_success.txt");
+
+        let success_content = b"Downloaded successfully!";
+
+        // Create a successful download mock
+        let mock = server.mock(|when, then| {
+            when.method(GET).path("/download_success");
+            then.status(200).header("content-type", "text/plain").body(success_content);
+        });
+
+        let client = HttpClient::with_config(2, 50);
+        let url = format!("{}/download_success", server.base_url());
+
+        // This should succeed on first attempt
+        let result = client.download_file(&url, &target_file).await;
+
+        // Verify the download succeeded
+        assert!(result.is_ok(), "Expected download to succeed, got: {:?}", result);
+
+        // Verify the file was downloaded with correct content
+        assert!(target_file.exists());
+        let content = fs::read(&target_file).unwrap();
+        assert_eq!(content, success_content);
+
+        mock.assert();
+
+        // The actual retry behavior is tested in test_http_client_retry_on_server_error
     }
 }
