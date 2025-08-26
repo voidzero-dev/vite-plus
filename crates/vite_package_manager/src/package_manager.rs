@@ -5,22 +5,22 @@ use std::path::Path;
 use vite_error::Error;
 
 /// The package root directory and its package.json file.
-///
-/// If the package.json file is not found, the package_json field will be None.
 #[derive(Debug)]
 pub struct PackageRoot<'a> {
     pub path: &'a Path,
-    pub package_json: Option<File>,
+    pub package_json: File,
 }
 
 /// Find the package root directory from the current working directory. `original_cwd` must be absolute.
+///
+/// If the package.json file is not found, will return PackageJsonNotFound error.
 pub fn find_package_root<'a>(original_cwd: &'a Path) -> Result<PackageRoot<'a>, Error> {
     let mut cwd = original_cwd;
     loop {
         // Check for package.json
         match File::open(cwd.join("package.json")) {
             Ok(file) => {
-                return Ok(PackageRoot { path: cwd, package_json: Some(file) });
+                return Ok(PackageRoot { path: cwd, package_json: file });
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 // File doesn't exist, continue searching
@@ -35,8 +35,8 @@ pub fn find_package_root<'a>(original_cwd: &'a Path) -> Result<PackageRoot<'a>, 
             // Move up one directory
             cwd = parent;
         } else {
-            // We've reached the root, return the original directory
-            return Ok(PackageRoot { path: original_cwd, package_json: None });
+            // We've reached the root, return PackageJsonNotFound error.
+            return Err(Error::PackageJsonNotFound(original_cwd.to_path_buf()));
         }
     }
 }
@@ -57,15 +57,17 @@ pub enum WorkspaceFile {
 /// The workspace root directory and its workspace file.
 ///
 /// If the workspace file is not found, but a package is found, `workspace_file` will be `NonWorkspacePackage` with the `package.json` File.
-///
-/// If neither workspace nor package is found, `workspace_file` be None, and `path` will be `original_cwd`.
 #[derive(Debug)]
 pub struct WorkspaceRoot<'a> {
     pub path: &'a Path,
-    pub workspace_file: Option<WorkspaceFile>,
+    pub workspace_file: WorkspaceFile,
 }
 
 /// Find the workspace root directory from the current working directory. `original_cwd` must be absolute.
+///
+/// If the workspace file is not found, but a package is found, `workspace_file` will be `NonWorkspacePackage` with the `package.json` File.
+///
+/// If neither workspace nor package is found, will return PackageJsonNotFound error.
 pub fn find_workspace_root<'a>(original_cwd: &'a Path) -> Result<WorkspaceRoot<'a>, Error> {
     let mut cwd = original_cwd;
 
@@ -75,7 +77,7 @@ pub fn find_workspace_root<'a>(original_cwd: &'a Path) -> Result<WorkspaceRoot<'
             Ok(file) => {
                 return Ok(WorkspaceRoot {
                     path: cwd,
-                    workspace_file: Some(WorkspaceFile::PnpmWorkspaceYaml(file)),
+                    workspace_file: WorkspaceFile::PnpmWorkspaceYaml(file),
                 });
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -116,7 +118,7 @@ pub fn find_workspace_root<'a>(original_cwd: &'a Path) -> Result<WorkspaceRoot<'
         } else {
             // We've reached the root, try to find the package root and return the non-workspace package.
             let package_root = find_package_root(original_cwd)?;
-            let workspace_file = package_root.package_json.map(WorkspaceFile::NonWorkspacePackage);
+            let workspace_file = WorkspaceFile::NonWorkspacePackage(package_root.package_json);
             return Ok(WorkspaceRoot { path: package_root.path, workspace_file });
         }
     }
@@ -142,21 +144,18 @@ mod tests {
         let found = find_package_root(&nested_dir);
         let package_root = found.unwrap();
         assert_eq!(package_root.path, package_dir);
-        assert!(package_root.package_json.is_some());
 
         // Should return the same directory if package.json is there
         let found = find_package_root(&package_dir);
         let package_root = found.unwrap();
         assert_eq!(package_root.path, package_dir);
-        assert!(package_root.package_json.is_some());
 
-        // Should return original directory if no package.json found
+        // Should return PackageJsonNotFound error if no package.json found
         let root_dir = temp_dir.path().join("x").join("y");
         fs::create_dir_all(&root_dir).unwrap();
         let found = find_package_root(&root_dir);
-        let package_root = found.unwrap();
-        assert_eq!(package_root.path, root_dir);
-        assert!(package_root.package_json.is_none());
+        let err = found.unwrap_err();
+        assert!(matches!(err, Error::PackageJsonNotFound(_)));
     }
 
     #[test]
@@ -171,8 +170,7 @@ mod tests {
         // Should find workspace root
         let found = find_workspace_root(&nested_dir).unwrap();
         assert_eq!(found.path, temp_dir.path());
-        assert!(found.workspace_file.is_some());
-        assert!(matches!(found.workspace_file.unwrap(), WorkspaceFile::PnpmWorkspaceYaml(_)));
+        assert!(matches!(found.workspace_file, WorkspaceFile::PnpmWorkspaceYaml(_)));
     }
 
     #[test]
@@ -204,10 +202,21 @@ mod tests {
         // Should fallback to package root
         let found = find_workspace_root(&nested_dir).unwrap();
         assert_eq!(found.path, temp_dir.path());
-        assert!(found.workspace_file.is_some());
-        assert!(matches!(found.workspace_file.unwrap(), WorkspaceFile::NonWorkspacePackage(_)));
+        assert!(matches!(found.workspace_file, WorkspaceFile::NonWorkspacePackage(_)));
         let package_root = find_package_root(temp_dir.path()).unwrap();
         // equal to workspace root
         assert_eq!(package_root.path, found.path);
+    }
+
+    #[test]
+    fn test_find_workspace_root_with_package_json_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+        let nested_dir = temp_dir.path().join("src");
+        fs::create_dir_all(&nested_dir).unwrap();
+
+        // Should return PackageJsonNotFound error if no package.json found
+        let found = find_workspace_root(&nested_dir);
+        let err = found.unwrap_err();
+        assert!(matches!(err, Error::PackageJsonNotFound(_)));
     }
 }
