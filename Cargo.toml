@@ -47,13 +47,12 @@ diff-struct = "0.5.3"
 directories = "6.0.0"
 edit = "0.1.5"
 flate2 = "1.0.35"
-fspy_shared = { path = "crates/fspy_shared" }
 fspy = { path = "crates/fspy" }
-fspy_shared_unix = { path = "crates/fspy_shared_unix"}
-fspy_seccomp_unotify = { path = "crates/fspy_seccomp_unotify" }
 fspy_preload_unix = { path = "crates/fspy_preload_unix", artifact = "cdylib" }
 fspy_preload_windows = { path = "crates/fspy_preload_windows", artifact = "cdylib" }
-passfd = { git = "https://github.com/polachok/passfd", rev = "d55881752c16aced1a49a75f9c428d38d3767213", default-features = false }
+fspy_seccomp_unotify = { path = "crates/fspy_seccomp_unotify" }
+fspy_shared = { path = "crates/fspy_shared" }
+fspy_shared_unix = { path = "crates/fspy_shared_unix" }
 futures = "0.3.31"
 futures-core = "0.3.31"
 futures-util = "0.3.31"
@@ -61,6 +60,7 @@ httpmock = "0.7"
 indoc = "2.0.5"
 itertools = "0.14.0"
 nix = { version = "0.30.1", features = ["dir"] }
+passfd = { git = "https://github.com/polachok/passfd", rev = "d55881752c16aced1a49a75f9c428d38d3767213", default-features = false }
 pathdiff = "0.2.3"
 petgraph = "0.8.2"
 portable-pty = "0.9.0"
@@ -68,8 +68,6 @@ ratatui = "0.29.0"
 rayon = "1.10.0"
 relative-path = "2.0.1"
 reqwest = { version = "0.12", features = ["stream", "rustls-tls", "json"], default-features = false }
-reqwest-middleware = "0.4.2"
-reqwest-retry = "0.7.0"
 rusqlite = "0.37.0"
 rustc-hash = "2.1.1"
 semver = "1.0.26"
