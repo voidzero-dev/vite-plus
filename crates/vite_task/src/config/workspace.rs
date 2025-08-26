@@ -319,13 +319,14 @@ impl Workspace {
                 }
             }
         } else {
+            // Only one task request is allowed when task requests don't contain '#'
+            if task_requests.iter().any(|task| !task.contains('#')) && task_requests.len() > 1 {
+                return Err(Error::OnlyOneTaskRequest(task_requests.join(" ")));
+            }
             // For non-recursive mode, find the task in the full task graph
             // If task doesn't contain '#', use the current package determined at load time
             for task_request in task_requests {
                 if !task_request.contains('#') {
-                    if task_requests.len() > 1 {
-                        return Err(Error::OnlyOneTaskRequest(task_requests.join(" ")));
-                    }
                     // Task without '#' - look for it in the current package
                     let mut found_in_current = false;
 
