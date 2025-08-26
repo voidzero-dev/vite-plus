@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -154,17 +154,8 @@ pub fn find_package_root<'a>(original_cwd: &'a Path) -> Result<PackageRoot<'a>, 
     let mut cwd = original_cwd;
     loop {
         // Check for package.json
-        match File::open(cwd.join("package.json")) {
-            Ok(file) => {
-                return Ok(PackageRoot { path: cwd, package_json: file });
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                // File doesn't exist, continue searching
-            }
-            Err(e) => {
-                // Other errors (permission denied, etc.) should be propagated
-                return Err(e.into());
-            }
+        if let Some(file) = open_exists_file(cwd.join("package.json"))? {
+            return Ok(PackageRoot { path: cwd, package_json: file });
         }
 
         if let Some(parent) = cwd.parent() {
@@ -209,40 +200,21 @@ pub fn find_workspace_root<'a>(original_cwd: &'a Path) -> Result<WorkspaceRoot<'
 
     loop {
         // Check for pnpm-workspace.yaml for pnpm workspace
-        match File::open(cwd.join("pnpm-workspace.yaml")) {
-            Ok(file) => {
-                return Ok(WorkspaceRoot {
-                    path: cwd,
-                    workspace_file: WorkspaceFile::PnpmWorkspaceYaml(file),
-                });
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                // File doesn't exist, continue searching
-            }
-            Err(e) => {
-                // Other errors (permission denied, etc.) should be propagated
-                return Err(e.into());
-            }
+        if let Some(file) = open_exists_file(cwd.join("pnpm-workspace.yaml"))? {
+            return Ok(WorkspaceRoot {
+                path: cwd,
+                workspace_file: WorkspaceFile::PnpmWorkspaceYaml(file),
+            });
         }
 
         // Check for package.json with workspaces field for npm/yarn workspace
         let package_json_path = cwd.join("package.json");
-        match File::open(&package_json_path) {
-            Ok(file) => {
-                let package_json: serde_json::Value =
-                    serde_json::from_reader(BufReader::new(&file))?;
-                if package_json.get("workspaces").is_some() {
-                    // TODO(@fengmk2): throw error for temporary.
-                    // npm/yarn can be supported later.
-                    return Err(Error::UnsupportedWorkspaceFile(package_json_path));
-                }
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                // File doesn't exist, continue searching
-            }
-            Err(e) => {
-                // Other errors (permission denied, etc.) should be propagated
-                return Err(e.into());
+        if let Some(file) = open_exists_file(&package_json_path)? {
+            let package_json: serde_json::Value = serde_json::from_reader(BufReader::new(&file))?;
+            if package_json.get("workspaces").is_some() {
+                // TODO(@fengmk2): throw error for temporary.
+                // npm/yarn can be supported later.
+                return Err(Error::UnsupportedWorkspaceFile(package_json_path));
             }
         }
 
@@ -267,34 +239,25 @@ fn get_package_manager_type_and_version(
 ) -> Result<(PackageManagerType, CompactString), Error> {
     // check packageManager field in package.json
     let package_json_path = workspace_root.path.join("package.json");
-    match File::open(&package_json_path) {
-        Ok(file) => {
-            let package_json: PackageJson = serde_json::from_reader(BufReader::new(&file))?;
-            if !package_json.package_manager.is_empty() {
-                if let Some((name, version)) = package_json.package_manager.split_once('@') {
-                    // check if the version is a valid semver
-                    semver::Version::parse(version).map_err(|_| {
-                        Error::PackageManagerVersionInvalid {
-                            name: name.into(),
-                            version: version.into(),
-                            package_json_path: package_json_path.to_path_buf(),
-                        }
-                    })?;
-                    match name {
-                        "pnpm" => return Ok((PackageManagerType::Pnpm, version.into())),
-                        "yarn" => return Ok((PackageManagerType::Yarn, version.into())),
-                        "npm" => return Ok((PackageManagerType::Npm, version.into())),
-                        _ => return Err(Error::UnsupportedPackageManager(name.into())),
+    if let Some(file) = open_exists_file(&package_json_path)? {
+        let package_json: PackageJson = serde_json::from_reader(BufReader::new(&file))?;
+        if !package_json.package_manager.is_empty() {
+            if let Some((name, version)) = package_json.package_manager.split_once('@') {
+                // check if the version is a valid semver
+                semver::Version::parse(version).map_err(|_| {
+                    Error::PackageManagerVersionInvalid {
+                        name: name.into(),
+                        version: version.into(),
+                        package_json_path: package_json_path.to_path_buf(),
                     }
+                })?;
+                match name {
+                    "pnpm" => return Ok((PackageManagerType::Pnpm, version.into())),
+                    "yarn" => return Ok((PackageManagerType::Yarn, version.into())),
+                    "npm" => return Ok((PackageManagerType::Npm, version.into())),
+                    _ => return Err(Error::UnsupportedPackageManager(name.into())),
                 }
             }
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            // File doesn't exist, continue searching
-        }
-        Err(e) => {
-            // Other errors (permission denied, etc.) should be propagated
-            return Err(e.into());
         }
     }
 
@@ -308,32 +271,32 @@ fn get_package_manager_type_and_version(
 
     // if pnpm-lock.yaml exists, use pnpm@latest
     let pnpm_lock_yaml_path = workspace_root.path.join("pnpm-lock.yaml");
-    if pnpm_lock_yaml_path.exists() {
+    if is_exists_file(&pnpm_lock_yaml_path)? {
         return Ok((PackageManagerType::Pnpm, version));
     }
 
     // if yarn.lock or .yarnrc.yml exists, use yarn@latest
     let yarn_lock_path = workspace_root.path.join("yarn.lock");
     let yarnrc_yml_path = workspace_root.path.join(".yarnrc.yml");
-    if yarn_lock_path.exists() || yarnrc_yml_path.exists() {
+    if is_exists_file(&yarn_lock_path)? || is_exists_file(&yarnrc_yml_path)? {
         return Ok((PackageManagerType::Yarn, version));
     }
 
     // if package-lock.json exists, use npm@latest
     let package_lock_json_path = workspace_root.path.join("package-lock.json");
-    if package_lock_json_path.exists() {
+    if is_exists_file(&package_lock_json_path)? {
         return Ok((PackageManagerType::Npm, version));
     }
 
     // if pnpmfile.cjs exists, use pnpm@latest
     let pnpmfile_cjs_path = workspace_root.path.join("pnpmfile.cjs");
-    if pnpmfile_cjs_path.exists() {
+    if is_exists_file(&pnpmfile_cjs_path)? {
         return Ok((PackageManagerType::Pnpm, version));
     }
 
     // if yarn.config.cjs exists, use yarn@latest (yarn 2.0+)
     let yarn_config_cjs_path = workspace_root.path.join("yarn.config.cjs");
-    if yarn_config_cjs_path.exists() {
+    if is_exists_file(&yarn_config_cjs_path)? {
         return Ok((PackageManagerType::Yarn, version));
     }
 
@@ -344,6 +307,25 @@ fn get_package_manager_type_and_version(
 
     // unrecognized package manager, let user specify the package manager
     Err(Error::UnrecognizedPackageManager)
+}
+
+/// Open the file if it exists, otherwise return None.
+fn open_exists_file(path: impl AsRef<Path>) -> Result<Option<File>, Error> {
+    match File::open(path) {
+        Ok(file) => Ok(Some(file)),
+        // if the file does not exist, return None
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Check if the file exists.
+fn is_exists_file(path: impl AsRef<Path>) -> Result<bool, Error> {
+    match fs::metadata(path) {
+        Ok(metadata) => Ok(metadata.is_file()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e.into()),
+    }
 }
 
 async fn get_latest_version(
@@ -378,9 +360,9 @@ async fn download_package_manager(
     // $CACHE_DIR/vite/package_manager/pnpm/10.0.0/pnpm/bin/(pnpm|pnpm.cmd|pnpm.ps1)
     let bin_prefix = install_dir.join("bin");
     let bin_file = bin_prefix.join(&bin_name);
-    if bin_file.exists()
-        && bin_file.with_extension("cmd").exists()
-        && bin_file.with_extension("ps1").exists()
+    if is_exists_file(&bin_file)?
+        && is_exists_file(&bin_file.with_extension("cmd"))?
+        && is_exists_file(&bin_file.with_extension("ps1"))?
     {
         return Ok(install_dir);
     }
@@ -415,7 +397,7 @@ async fn download_package_manager(
     {
         let _lock = file_lock.lock().await;
         // check bin_file again, for the concurrent download cases
-        if bin_file.exists() {
+        if is_exists_file(&bin_file)? {
             tracing::debug!("bin_file already exists, skip rename");
             return Ok(install_dir);
         }
@@ -471,10 +453,10 @@ async fn create_shim_files(
     for (bin_name, js_bin_basename) in bin_names {
         // try .cjs first
         let mut js_bin_name = format!("{}.cjs", js_bin_basename);
-        if !bin_prefix.join(&js_bin_name).exists() {
+        if !is_exists_file(&bin_prefix.join(&js_bin_name))? {
             // fallback to .js
             js_bin_name = format!("{}.js", js_bin_basename);
-            if !bin_prefix.join(&js_bin_name).exists() {
+            if !is_exists_file(&bin_prefix.join(&js_bin_name))? {
                 continue;
             }
         }
@@ -493,7 +475,7 @@ async fn set_package_manager_field(
 ) -> Result<(), Error> {
     let package_json_path = package_json_path.as_ref();
     let package_manager_value = format!("{}@{}", package_manager_type, version);
-    let mut package_json = if package_json_path.exists() {
+    let mut package_json = if is_exists_file(package_json_path)? {
         let content = tokio::fs::read(&package_json_path).await?;
         serde_json::from_slice(&content)?
     } else {
