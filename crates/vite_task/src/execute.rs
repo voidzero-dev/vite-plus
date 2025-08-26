@@ -221,10 +221,7 @@ impl TaskEnvs {
             .collect();
 
         let mut envs_without_pass_through = HashMap::<Str, Str>::new();
-        // Sort env names to ensure stable fingerprint
-        let mut sorted_env_names: Vec<_> = task.config.envs.iter().collect();
-        sorted_env_names.sort();
-        for name in sorted_env_names {
+        for name in &task.config.envs {
             let Some(value) = all_envs.get(name) else {
                 continue;
             };
