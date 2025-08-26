@@ -78,8 +78,10 @@ serial_test = "3.2.0"
 shell-escape = "0.1.5"
 tar = "0.4.43"
 tempfile = "3.14.0"
+test-log = { version = "0.2.18", features = ["trace"] }
 thiserror = "2"
 tokio = "1.46.1"
+tokio-test = "0.4.4"
 tokio-util = "0.7.15"
 tracing = "0.1.41"
 tracing-error = "0.2.1"
@@ -95,8 +97,6 @@ wildmatch = "2.4.0"
 napi = { version = "3.0.0", default-features = false, features = ["async", "error_anyhow"] }
 napi-build = "2"
 napi-derive = { version = "3.0.0", default-features = false, features = ["type-def", "strict"] }
-test-log = { version = "0.2.18", features = ["trace"] }
-tokio-test = "0.4.4"
 
 [profile.dev]
 # Disabling debug info speeds up local and CI builds,
