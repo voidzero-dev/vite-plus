@@ -181,6 +181,23 @@ mod tests {
     }
 
     #[test]
+    fn strip_prefix_trailing_slash() {
+        let abs_path = AbsolutePath::new(Path::new(if cfg!(windows) {
+            "C:\\Users\\foo\\bar"
+        } else {
+            "/home/foo/bar"
+        }))
+        .unwrap();
+
+        let prefix =
+            AbsolutePath::new(Path::new(if cfg!(windows) { "C:\\Users\\" } else { "/home//" }))
+                .unwrap();
+
+        let rel_path = abs_path.strip_prefix(prefix).unwrap().unwrap();
+        assert_eq!(rel_path.as_str(), "foo/bar");
+    }
+
+    #[test]
     fn strip_prefix_not_found() {
         let abs_path = AbsolutePath::new(Path::new(if cfg!(windows) {
             "C:\\Users\\foo\\bar"
