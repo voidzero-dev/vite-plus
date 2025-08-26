@@ -60,6 +60,15 @@ Task names without `#` will be resolved in the current package (the package cont
 - `vite-plus run test lint` - Throw `OnlyOneTaskRequest` error
 - `vite-plus run @other/package#build` - runs the build task in @other/package
 
+Behaviors when the package root and/or the workspace root is not found:
+
+| package root | workspace root | behaviour                                                                                                                    |
+| ------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| found        | not found      | No possible: workspace root always fallbacks to package root.                                                                |
+| not found    | found          | `vite-plus run build` should throw an `CurrentPackageNotFound` error.  `vite-plus run @other/package#build` is still allowed |
+| not found    | not found      | Throw an error on any `vite run`. The workspace root must always exist as it's where we store the cache.                     |
+
+
 ### `--recursive,-r`
 
 With the `--recursive,-r` flag, the `vite-plus run` command will run the tasks in all monorepo packages.
