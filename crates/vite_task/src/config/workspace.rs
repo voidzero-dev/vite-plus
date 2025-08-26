@@ -16,7 +16,9 @@ use crate::{
 };
 
 use petgraph::{Graph, graph::NodeIndex, stable_graph::StableDiGraph, visit::IntoNodeReferences};
-use vite_package_manager::{DependencyType, PackageInfo, PackageJson, find_package_root};
+use vite_package_manager::{
+    DependencyType, PackageInfo, PackageJson, find_package_root, find_workspace_root,
+};
 
 use super::{
     ResolvedTask, ResolvedTaskConfig, TaskCommand, TaskConfig, TaskGraphBuilder, TaskId,
@@ -40,19 +42,23 @@ pub struct Workspace {
 impl Workspace {
     /// Determines the current package path relative to the workspace root.
     /// Returns an empty string if the current directory is the workspace root itself.
-    fn determine_current_package_path(workspace_root: &Path, original_cwd: &Path) -> String {
-        let current_package_root = find_package_root(original_cwd);
+    /// Returns the workspace root and the current package path.
+    fn determine_current_package_path(original_cwd: &Path) -> Result<(PathBuf, String), Error> {
+        let workspace_root = find_workspace_root(original_cwd)?.path;
+        let current_package_root = find_package_root(original_cwd)?.path;
         if current_package_root == workspace_root {
             // We're at workspace root with a package.json
-            String::new()
+            Ok((workspace_root, String::new()))
         } else {
             // Get relative path from workspace root to package root
-            current_package_root
-                .strip_prefix(workspace_root)
-                .ok()
-                .and_then(|p| p.to_str())
-                .unwrap_or("")
-                .to_string()
+            let path = current_package_root.strip_prefix(&workspace_root).map_err(|err| {
+                Error::PathPrefixError {
+                    err,
+                    message: "package root is not a subpath of workspace root".to_string(),
+                    path: current_package_root.clone(),
+                }
+            })?;
+            Ok((workspace_root, path.to_string_lossy().to_string()))
         }
     }
 
@@ -69,9 +75,8 @@ impl Workspace {
         cwd: PathBuf,
         cache_path: Option<PathBuf>,
     ) -> Result<Self, Error> {
-        let workspace_root = vite_package_manager::find_workspace_root(&cwd)?;
         // Determine current package path relative to workspace root
-        let current_package_path = Self::determine_current_package_path(&workspace_root, &cwd);
+        let (workspace_root, current_package_path) = Self::determine_current_package_path(&cwd)?;
 
         let cache_path = cache_path.unwrap_or_else(|| {
             if let Ok(env_cache_path) = std::env::var("VITE_CACHE_PATH") {
@@ -114,9 +119,8 @@ impl Workspace {
         cache_path: Option<PathBuf>,
         topological_run: bool,
     ) -> Result<Self, Error> {
-        let workspace_root = vite_package_manager::find_workspace_root(&cwd)?;
         // Determine current package path relative to workspace root
-        let current_package_path = Self::determine_current_package_path(&workspace_root, &cwd);
+        let (workspace_root, current_package_path) = Self::determine_current_package_path(&cwd)?;
 
         let package_graph = vite_package_manager::get_package_graph(&workspace_root)?;
         // Load vite-task.json files for all packages

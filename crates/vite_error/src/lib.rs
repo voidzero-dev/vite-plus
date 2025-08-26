@@ -99,6 +99,9 @@ pub enum Error {
     #[error("Test failed")]
     TestFailed { status: String, reason: String },
 
+    #[error("Path prefix error: {err} at {path:?}, {message}")]
+    PathPrefixError { err: std::path::StripPrefixError, message: String, path: PathBuf },
+
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),
 }
