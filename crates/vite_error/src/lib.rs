@@ -64,6 +64,9 @@ pub enum Error {
     #[error("Package {0} not found in workspace")]
     PackageNotFound(String),
 
+    #[error("Unsupported workspace file: {0:?}")]
+    UnsupportedWorkspaceFile(PathBuf),
+
     #[error("Task not found in workspace: {0}")]
     TaskNotFound(String),
 
