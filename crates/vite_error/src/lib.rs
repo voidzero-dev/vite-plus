@@ -28,6 +28,7 @@ pub enum Error {
     #[error(transparent)]
     JoinPathsError(#[from] std::env::JoinPathsError),
 
+    #[cfg(unix)]
     #[error(transparent)]
     NixError(#[from] nix::Error),
 
@@ -37,6 +38,7 @@ pub enum Error {
     #[error("Env value is not valid unicode: {key} = {value:?}")]
     EnvValueIsNotValidUnicode { key: String, value: OsString },
 
+    #[cfg(unix)]
     #[error("Unsupported file type: {0:?}")]
     UnsupportedFileType(nix::dir::Type),
 

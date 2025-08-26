@@ -13,10 +13,7 @@ pub struct PackageRoot<'a> {
     pub package_json: Option<File>,
 }
 
-/// Find the package root directory from the current working directory.
-///
-///
-/// The `original_cwd` should be absolute path.
+/// Find the package root directory from the current working directory. `original_cwd` must be absolute.
 ///
 /// If the package.json file is not found, return None.
 pub fn find_package_root<'a>(original_cwd: &'a Path) -> Result<PackageRoot<'a>, Error> {
@@ -61,14 +58,16 @@ pub enum WorkspaceFile {
 
 /// The workspace root directory and its workspace file.
 ///
-/// If the workspace file is not found, the workspace_file field will be `NonWorkspacePackage`.
+/// If the workspace file is not found, but a package is found, `workspace_file` will be `NonWorkspacePackage` with the `package.json` File.
+///
+/// If neither workspace nor package is found, `workspace_file` be None, and `path` will be `original_cwd`.
 #[derive(Debug)]
 pub struct WorkspaceRoot<'a> {
     pub path: &'a Path,
     pub workspace_file: Option<WorkspaceFile>,
 }
 
-/// Find the workspace root directory from the current working directory.
+/// Find the workspace root directory from the current working directory. `original_cwd` must be absolute.
 pub fn find_workspace_root<'a>(original_cwd: &'a Path) -> Result<WorkspaceRoot<'a>, Error> {
     let mut cwd = original_cwd;
 
