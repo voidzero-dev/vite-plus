@@ -46,7 +46,9 @@ pub enum WorkspaceFile {
 
 /// The workspace root directory and its workspace file.
 ///
-/// If the workspace file is not found, the workspace_file field will be `NonWorkspacePackage`.
+/// If the workspace file is not found, but a package is found, `workspace_file` will be `NonWorkspacePackage` with the `package.json` File.
+/// 
+/// If neither workspace nor package is found, `workspace_file` be None, and `path` will be `original_cwd`.
 #[derive(Debug)]
 pub struct WorkspaceRoot {
     pub path: PathBuf,
