@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use backon::{ExponentialBuilder, Retryable};
@@ -467,7 +468,7 @@ mod tests {
         let target_file = temp_dir.path().join("test.txt");
 
         // Mock a 404 response
-        server.mock(|when, then| {
+        let mock = server.mock(|when, then| {
             when.method(GET).path("/nonexistent");
             then.status(404).body("Not Found");
         });
@@ -478,6 +479,9 @@ mod tests {
         // Should fail with 404
         let result = client.download_file(&url, &target_file).await;
         assert!(result.is_err(), "Expected download to fail with 404");
+
+        // Should try 4 times, 1 for first request, 3 for retries
+        mock.assert_hits(4);
     }
 
     #[tokio::test]
@@ -500,78 +504,5 @@ mod tests {
 
         let result: Result<TestData, _> = client.get_json(&url).await;
         assert!(result.is_err(), "Expected JSON parsing to fail");
-    }
-
-    #[tokio::test]
-    async fn test_http_client_retry_success_after_one_failure() {
-        // Test that the retry mechanism works correctly
-        // Since httpmock doesn't easily support stateful mocks,
-        // we'll verify the retry behavior indirectly
-
-        // First, verify that a successful response works
-        let server = MockServer::start();
-
-        let mock = server.mock(|when, then| {
-            when.method(GET).path("/success_path");
-            then.status(200)
-                .header("content-type", "application/json")
-                .body(r#"{"status": "success", "message": "No retry needed"}"#);
-        });
-
-        let client = HttpClient::with_config(2, 50);
-        let url = format!("{}/success_path", server.base_url());
-
-        #[derive(serde::Deserialize, Debug)]
-        struct RetryResponse {
-            status: String,
-            message: String,
-        }
-
-        let result: Result<RetryResponse, _> = client.get_json(&url).await;
-        assert!(result.is_ok(), "Expected successful request");
-
-        let response = result.unwrap();
-        assert_eq!(response.status, "success");
-
-        mock.assert();
-
-        // The actual retry behavior with server errors is already tested in
-        // test_http_client_retry_on_server_error which confirms retries happen
-    }
-
-    #[tokio::test]
-    async fn test_http_client_download_retry_success_after_one_failure() {
-        // Test that download with retry works correctly
-        // We verify the retry mechanism indirectly since httpmock doesn't easily support stateful mocks
-
-        let server = MockServer::start();
-        let temp_dir = TempDir::new().unwrap();
-        let target_file = temp_dir.path().join("download_success.txt");
-
-        let success_content = b"Downloaded successfully!";
-
-        // Create a successful download mock
-        let mock = server.mock(|when, then| {
-            when.method(GET).path("/download_success");
-            then.status(200).header("content-type", "text/plain").body(success_content);
-        });
-
-        let client = HttpClient::with_config(2, 50);
-        let url = format!("{}/download_success", server.base_url());
-
-        // This should succeed on first attempt
-        let result = client.download_file(&url, &target_file).await;
-
-        // Verify the download succeeded
-        assert!(result.is_ok(), "Expected download to succeed, got: {:?}", result);
-
-        // Verify the file was downloaded with correct content
-        assert!(target_file.exists());
-        let content = fs::read(&target_file).unwrap();
-        assert_eq!(content, success_content);
-
-        mock.assert();
-
-        // The actual retry behavior is tested in test_http_client_retry_on_server_error
     }
 }
