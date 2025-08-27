@@ -44,14 +44,16 @@ pub fn find_package_root<'a>(original_cwd: &'a Path) -> Result<PackageRoot<'a>, 
 /// The workspace file.
 ///
 /// - `PnpmWorkspaceYaml` is the pnpm workspace file.
+/// - `NpmWorkspaceJson` is the package.json file of a yarn/npm workspace.
 /// - `NonWorkspacePackage` is the package.json file of a non-workspace package.
 #[derive(Debug)]
 pub enum WorkspaceFile {
     /// The pnpm-workspace.yaml file of a pnpm workspace.
     PnpmWorkspaceYaml(File),
+    /// The package.json file of a yarn/npm workspace.
+    NpmWorkspaceJson(File),
     /// The package.json file of a non-workspace package.
     NonWorkspacePackage(File),
-    // TODO(@fengmk2): other workspace file support, like yarn, npm, etc.
 }
 
 /// The workspace root directory and its workspace file.
@@ -96,9 +98,12 @@ pub fn find_workspace_root<'a>(original_cwd: &'a Path) -> Result<WorkspaceRoot<'
                 let package_json: serde_json::Value =
                     serde_json::from_reader(BufReader::new(&file))?;
                 if package_json.get("workspaces").is_some() {
-                    // TODO(@fengmk2): throw error for temporary.
-                    // npm/yarn can be supported later.
-                    return Err(Error::UnsupportedWorkspaceFile(package_json_path));
+                    // Re-open the file since we consumed it reading
+                    let fresh_file = File::open(&package_json_path)?;
+                    return Ok(WorkspaceRoot {
+                        path: cwd,
+                        workspace_file: WorkspaceFile::NpmWorkspaceJson(fresh_file),
+                    });
                 }
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -183,10 +188,10 @@ mod tests {
         let package_json = r#"{"workspaces": ["packages/*"]}"#;
         fs::write(temp_dir.path().join("package.json"), package_json).unwrap();
 
-        // Should throw error for temporary.
-        // npm/yarn can be supported later.
-        let err = find_workspace_root(&nested_dir).unwrap_err();
-        assert!(matches!(err, Error::UnsupportedWorkspaceFile(_)));
+        // Should find workspace root
+        let found = find_workspace_root(&nested_dir).unwrap();
+        assert_eq!(found.path, temp_dir.path());
+        assert!(matches!(found.workspace_file, WorkspaceFile::NpmWorkspaceJson(_)));
     }
 
     #[test]
