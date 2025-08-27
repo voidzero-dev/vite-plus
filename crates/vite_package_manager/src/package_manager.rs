@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Seek, SeekFrom};
 use std::path::Path;
 
 use vite_error::Error;
@@ -75,14 +75,14 @@ pub fn find_workspace_root<'a>(original_cwd: &'a Path) -> Result<WorkspaceRoot<'
 
         // Check for package.json with workspaces field for npm/yarn workspace
         let package_json_path = cwd.join("package.json");
-        if let Some(file) = open_exists_file(&package_json_path)? {
+        if let Some(mut file) = open_exists_file(&package_json_path)? {
             let package_json: serde_json::Value = serde_json::from_reader(BufReader::new(&file))?;
             if package_json.get("workspaces").is_some() {
-                // Re-open the file since we consumed it reading
-                let fresh_file = File::open(&package_json_path)?;
+                // Reset the file cursor since we consumed it reading
+                file.seek(SeekFrom::Start(0))?;
                 return Ok(WorkspaceRoot {
                     path: cwd,
-                    workspace_file: WorkspaceFile::NpmWorkspaceJson(fresh_file),
+                    workspace_file: WorkspaceFile::NpmWorkspaceJson(file),
                 });
             }
         }
