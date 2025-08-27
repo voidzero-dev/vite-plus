@@ -170,7 +170,7 @@ fn parse_args() -> Args {
         if let Some(first) = first.to_str()
             && BUILTIN_COMMANDS.contains(&first)
         {
-            let forwarded_args = raw_args.map(|a| a.to_string_lossy().to_string()).collect();
+            let forwarded_args = raw_args.map(|a| a.into_string().unwrap_or_else(|os_str| os_str.to_string_lossy().into_owned())).collect();
             return Args {
                 task: None,
                 task_args: vec![],
