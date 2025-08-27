@@ -43,7 +43,7 @@ impl Workspace {
     /// Determines the current package path relative to the workspace root.
     /// Returns an empty string if the current directory is the workspace root itself.
     /// Returns the workspace root and the current package path.
-    fn determine_current_package_path(original_cwd: &Path) -> Result<(PathBuf, String), Error> {
+    fn determine_current_package_path(original_cwd: &Path) -> Result<(&Path, String), Error> {
         let workspace_root = find_workspace_root(original_cwd)?.path;
         let current_package_root = find_package_root(original_cwd)?.path;
         if current_package_root == workspace_root {
@@ -55,7 +55,7 @@ impl Workspace {
                 Error::PathPrefixError {
                     err,
                     message: "package root is not a subpath of workspace root".to_string(),
-                    path: current_package_root.clone(),
+                    path: current_package_root.to_path_buf(),
                 }
             })?;
             Ok((workspace_root, path.to_string_lossy().to_string()))
@@ -105,7 +105,7 @@ impl Workspace {
 
         Ok(Self {
             package_graph: Graph::new(),
-            dir: workspace_root,
+            dir: workspace_root.to_path_buf(),
             current_package_path,
             task_cache,
             fs: CachedFileSystem::default(),
@@ -185,7 +185,7 @@ impl Workspace {
 
         Ok(Self {
             package_graph,
-            dir: workspace_root,
+            dir: workspace_root.to_path_buf(),
             current_package_path,
             task_cache,
             fs: CachedFileSystem::default(),
