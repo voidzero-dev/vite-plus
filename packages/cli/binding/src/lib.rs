@@ -19,10 +19,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::Parser as _;
-use napi::{bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
+use napi::{anyhow, bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
 use vite_error::Error;
-use vite_task::{Args, CliOptions as ViteTaskCliOptions, ResolveCommandResult};
+use vite_task::{Args, CliOptions as ViteTaskCliOptions, Commands, ResolveCommandResult};
 
 /// Module initialization - sets up tracing for debugging
 #[napi_derive::module_init]
@@ -69,6 +69,8 @@ impl From<JsCommandResolvedResult> for ResolveCommandResult {
     }
 }
 
+static BUILTIN_COMMANDS: &[&str] = &["lint", "build", "test"];
+
 /// Main entry point for the CLI, called from JavaScript.
 ///
 /// This function:
@@ -90,8 +92,7 @@ impl From<JsCommandResolvedResult> for ResolveCommandResult {
 /// (e.g., `LintFailed`, `ViteError`) to provide better error messages.
 #[napi]
 pub async fn run(options: CliOptions) -> Result<()> {
-    // Parse CLI arguments (skip first arg which is the node binary)
-    let args = Args::parse_from(std::env::args_os().skip(1));
+    let args = parse_args();
     // Use provided cwd or current directory
     let cwd = if let Some(cwd) = options.cwd { PathBuf::from(cwd) } else { current_dir()? };
     // Extract resolver functions from options
@@ -142,7 +143,7 @@ pub async fn run(options: CliOptions) -> Result<()> {
     .await
     {
         // Convert Rust errors to NAPI errors for JavaScript
-        return Err(napi::Error::new(Status::GenericFailure, e.to_string()));
+        return Err(anyhow::Error::from(e).into());
     }
     Ok(())
 }
@@ -160,4 +161,30 @@ fn js_error_to_vite_error(err: napi::Error) -> Error {
 /// Convert JavaScript errors to Rust test errors
 fn js_error_to_test_error(err: napi::Error) -> Error {
     Error::TestFailed { status: err.status.to_string(), reason: err.to_string() }
+}
+
+fn parse_args() -> Args {
+    // ArgsOs [node, vite-plus, ...]
+    let mut raw_args = std::env::args_os().skip(2);
+    if let Some(first) = raw_args.next() {
+        if let Some(first) = first.to_str()
+            && BUILTIN_COMMANDS.contains(&first)
+        {
+            let forwarded_args = raw_args.map(|a| a.to_string_lossy().to_string()).collect();
+            return Args {
+                task: None,
+                task_args: vec![],
+                commands: Some(match first {
+                    "lint" => Commands::Lint { args: forwarded_args },
+                    "build" => Commands::Build { args: forwarded_args },
+                    "test" => Commands::Test { args: forwarded_args },
+                    _ => unreachable!(),
+                }),
+                debug: false,
+                no_debug: true,
+            };
+        }
+    }
+    // Parse CLI arguments (skip first arg which is the node binary)
+    Args::parse_from(std::env::args_os().skip(1))
 }

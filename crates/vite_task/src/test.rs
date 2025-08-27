@@ -15,7 +15,7 @@ pub async fn test<
     workspace: &mut Workspace,
     args: &Vec<String>,
 ) -> Result<(), Error> {
-    let resolved_task = ResolvedTask::resolve_from_built_in(
+    let resolved_task = ResolvedTask::resolve_from_builtin(
         workspace,
         resolve_test_command,
         "test",

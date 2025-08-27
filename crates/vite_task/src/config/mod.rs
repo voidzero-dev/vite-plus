@@ -97,7 +97,7 @@ impl ResolvedTask {
 
     #[tracing::instrument(skip(workspace, resolve_command, args))]
     /// Resolve a built-in task, like `vite lint`, `vite build`
-    pub(crate) async fn resolve_from_built_in<
+    pub(crate) async fn resolve_from_builtin<
         Resolved: Future<Output = Result<ResolveCommandResult, Error>>,
         ResolveFn: Fn() -> Resolved,
     >(
@@ -107,12 +107,12 @@ impl ResolvedTask {
         args: impl Iterator<Item = impl AsRef<str>> + Clone,
     ) -> Result<Self, Error> {
         let ResolveCommandResult { bin_path, envs } = resolve_command().await?;
-        let link_task = TaskCommand::Parsed(TaskParsedCommand {
+        let builtin_task = TaskCommand::Parsed(TaskParsedCommand {
             args: args.clone().map(|arg| arg.as_ref().into()).collect(),
             envs: envs.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
             program: bin_path.into(),
         });
-        let task_config: TaskConfig = link_task.clone().into();
+        let task_config: TaskConfig = builtin_task.clone().into();
         let resolved_task_config = ResolvedTaskConfig {
             config_dir: workspace.dir.as_path().to_string_lossy().as_ref().into(),
             config: task_config,
@@ -121,7 +121,7 @@ impl ResolvedTask {
         let resolved_command = ResolvedTaskCommand {
             fingerprint: CommandFingerprint {
                 cwd: workspace.dir.as_path().to_string_lossy().as_ref().into(),
-                command: link_task,
+                command: builtin_task,
                 envs_without_pass_through: resolved_envs.envs_without_pass_through,
             },
             all_envs: resolved_envs.all_envs,

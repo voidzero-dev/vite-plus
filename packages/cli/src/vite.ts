@@ -11,6 +11,7 @@
 
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 
@@ -29,7 +30,9 @@ export async function vite(): Promise<{
   envs: Record<string, string>;
 }> {
   // Find the vite package.json to locate the installation directory
-  const pkgJsonPath = require.resolve('vite/package.json');
+  const pkgJsonPath = require.resolve('vite/package.json', {
+    paths: [process.cwd(), dirname(fileURLToPath(import.meta.url))],
+  });
   // Vite's CLI binary is located at bin/vite.js relative to the package root
   const binPath = join(dirname(pkgJsonPath), 'bin', 'vite.js');
 
