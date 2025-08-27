@@ -21,7 +21,7 @@ use vite_error::Error;
 struct PnpmWorkspace {
     /// The packages to include in the workspace.
     ///
-    /// https://pnpm.io/pnpm-workspace_yaml
+    /// <https://pnpm.io/pnpm-workspace_yaml>
     packages: Vec<CompactString>,
 }
 impl PnpmWorkspace {
@@ -32,14 +32,14 @@ impl PnpmWorkspace {
 
 /// The workspace configuration for npm/yarn.
 ///
-/// npm: https://docs.npmjs.com/cli/v11/using-npm/workspaces
-/// yarn: https://yarnpkg.com/features/workspaces
+/// npm: <https://docs.npmjs.com/cli/v11/using-npm/workspaces>
+/// yarn: <https://yarnpkg.com/features/workspaces>
 #[derive(Debug, Deserialize)]
 struct NpmWorkspace {
     /// Array of folder glob patterns referencing the workspaces of the project.
     ///
-    /// https://docs.npmjs.com/cli/v11/configuring-npm/package-json#workspaces
-    /// https://yarnpkg.com/configuration/manifest#workspaces
+    /// <https://docs.npmjs.com/cli/v11/configuring-npm/package-json#workspaces>
+    /// <https://yarnpkg.com/configuration/manifest#workspaces>
     workspaces: Vec<CompactString>,
 }
 impl NpmWorkspace {
