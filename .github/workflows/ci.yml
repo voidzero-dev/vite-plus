@@ -115,3 +115,60 @@ jobs:
           vite-plus lint -h
           vite-plus test -h
           vite-plus build -h
+
+  e2e-test:
+    name: E2E test
+    runs-on: blaze/macos-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4305c38b25d97ef35a8ad1f985ccf2d2242004f2 # stable
+        env:
+          CARGO_INCREMENTAL: "1"
+
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .node-version
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build vt
+        run: cargo build --bin vt --release
+
+      - name: Run vt install
+        run: |
+          export PATH=$PWD/target/release:$PATH
+
+          # Test vt install on various repositories with different package managers
+          repos=(
+            # pnpm workspace
+            "vitejs/vite:vite"
+            "pnpm/pnpm:pnpm"
+            # yarn workspace
+            "napi-rs/napi-rs:napi-rs"
+            "toeverything/AFFiNE:AFFiNE"
+            # npm workspace
+            "npm/cli:npm"
+            "redhat-developer/vscode-extension-tester:vscode-extension-tester"
+          )
+
+          for repo_info in "${repos[@]}"; do
+            IFS=':' read -r repo dir_name <<< "$repo_info"
+            echo "Testing vt install on $repo..."
+            # remove the directory if it exists
+            if [ -d "/tmp/$dir_name" ]; then
+              rm -rf "/tmp/$dir_name"
+            fi
+            git clone --depth 1 "https://github.com/$repo.git" "/tmp/$dir_name"
+            cd "/tmp/$dir_name"
+            vt install
+            # run again to show install cache increase by time
+            time vt install
+            echo "✓ Successfully installed dependencies for $repo"
+            echo ""
+          done

@@ -9,18 +9,35 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-vite_str = { workspace = true }
-vite_path = { workspace = true }
+backon = { workspace = true }
+directories = { workspace = true }
+flate2 = { workspace = true }
+futures-util = { workspace = true }
+indoc = { workspace = true }
+pathdiff = { workspace = true }
 petgraph = { workspace = true, features = ["serde-1"] }
+reqwest = { workspace = true }
 rustc-hash = { workspace = true }
+semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
+# use `preserve_order` feature to preserve the order of the fields in `package.json`
+serde_json = { workspace = true, features = ["preserve_order"] }
 serde_yml = { workspace = true }
+tar = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 vite_error = { workspace = true }
+vite_path = { workspace = true }
+vite_str = { workspace = true }
 wax = { workspace = true }
 
 [dev-dependencies]
+httpmock = { workspace = true }
 tempfile = { workspace = true }
+test-log = { workspace = true }
+tokio-test = { workspace = true }
 
 [lints]
 workspace = true

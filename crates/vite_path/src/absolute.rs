@@ -1,5 +1,6 @@
 use ref_cast::{RefCastCustom, ref_cast_custom};
 use std::{
+    ffi::OsStr,
     fmt::Display,
     ops::Deref,
     path::{Path, PathBuf},
@@ -84,6 +85,17 @@ impl AbsolutePath {
     pub fn parent(&self) -> Option<&AbsolutePath> {
         let parent_path = self.0.parent()?;
         Some(unsafe { AbsolutePath::assume_absolute(parent_path) })
+    }
+
+    /// Creates an owned [`AbsolutePathBuf`] like `self` but with the extension added.
+    pub fn with_extension<S: AsRef<OsStr>>(&self, extension: S) -> AbsolutePathBuf {
+        let path = self.0.with_extension(extension);
+        unsafe { AbsolutePathBuf::assume_absolute(path) }
+    }
+
+    /// Returns true if `self` ends with `path`.
+    pub fn ends_with<P: AsRef<Path>>(&self, path: P) -> bool {
+        self.0.ends_with(path.as_ref())
     }
 }
 
@@ -262,5 +274,16 @@ mod tests {
 
         assert_eq!(err.stripped_path.as_os_str().as_bytes(), &[0xC0]);
         let_assert!(InvalidPathDataError::NonUtf8 = err.invalid_path_data_error);
+    }
+
+    #[test]
+    fn with_extension() {
+        let abs_path = AbsolutePath::new(Path::new("/home/foo/bar")).unwrap();
+        let abs_path_with_extension = abs_path.with_extension("txt");
+        assert_eq!(abs_path_with_extension.as_path().as_os_str(), "/home/foo/bar.txt");
+        let abs_path_with_extension = abs_path.with_extension("txt").with_extension("tgz");
+        assert_eq!(abs_path_with_extension.as_path().as_os_str(), "/home/foo/bar.tgz");
+        // abs_path is not changed
+        assert_eq!(abs_path.as_path().as_os_str(), "/home/foo/bar");
     }
 }

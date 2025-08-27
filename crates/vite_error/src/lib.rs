@@ -107,6 +107,32 @@ pub enum Error {
     #[error("The package at {package_path:?} is outside the workspace at {workspace_root:?}")]
     PackageOutsideWorkspace { package_path: AbsolutePathBuf, workspace_root: AbsolutePathBuf },
 
+    #[error("Unsupported package manager: {0}")]
+    UnsupportedPackageManager(Str),
+
+    #[error("Unrecognized any package manager, please specify the package manager")]
+    UnrecognizedPackageManager,
+
+    #[error(
+        "Package manager {name}@{version} in {package_json_path:?} is invalid, expected format: 'package-manager-name@major.minor.patch'"
+    )]
+    PackageManagerVersionInvalid { name: Str, version: Str, package_json_path: AbsolutePathBuf },
+
+    #[error("Package manager {name}@{version} not found on {url}")]
+    PackageManagerVersionNotFound { name: Str, version: Str, url: Str },
+
+    #[error(transparent)]
+    SemverError(#[from] semver::Error),
+
+    #[error(transparent)]
+    ReqwestError(#[from] reqwest::Error),
+
+    #[error(transparent)]
+    JoinError(#[from] tokio::task::JoinError),
+
+    #[error("User cancelled by Ctrl+C")]
+    UserCancelled,
+
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),
 }

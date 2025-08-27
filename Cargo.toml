@@ -33,6 +33,7 @@ cargo_common_metadata = "allow"
 
 [workspace.dependencies]
 anyhow = "1.0.98"
+backon = "1.3.0"
 bincode = "2.0.1"
 brush-parser = "0.2.18"
 bstr = "1.12.0"
@@ -45,6 +46,7 @@ dashmap = "6.1.0"
 diff-struct = "0.5.3"
 directories = "6.0.0"
 edit = "0.1.5"
+flate2 = "1.0.35"
 fspy = { path = "crates/fspy" }
 fspy_preload_unix = { path = "crates/fspy_preload_unix", artifact = "cdylib" }
 fspy_preload_windows = { path = "crates/fspy_preload_windows", artifact = "cdylib" }
@@ -54,25 +56,34 @@ fspy_shared_unix = { path = "crates/fspy_shared_unix" }
 futures = "0.3.31"
 futures-core = "0.3.31"
 futures-util = "0.3.31"
+httpmock = "0.7"
+indoc = "2.0.5"
 itertools = "0.14.0"
 nix = { version = "0.30.1", features = ["dir"] }
 owo-colors = "4.1.0"
 passfd = { git = "https://github.com/polachok/passfd", rev = "d55881752c16aced1a49a75f9c428d38d3767213", default-features = false }
+pathdiff = "0.2.3"
 petgraph = "0.8.2"
 portable-pty = "0.9.0"
 ratatui = "0.29.0"
 rayon = "1.10.0"
 ref-cast = "1.0.24"
+reqwest = { version = "0.12", features = ["stream", "rustls-tls", "json"], default-features = false }
 rusqlite = "0.37.0"
 rustc-hash = "2.1.1"
+semver = "1.0.26"
 serde = "1.0.219"
 serde_json = "1.0.140"
 serde_yml = "0.0.12"
+serial_test = "3.2.0"
 shell-escape = "0.1.5"
 supports-color = "3.0.1"
+tar = "0.4.43"
 tempfile = "3.14.0"
+test-log = { version = "0.2.18", features = ["trace"] }
 thiserror = "2"
 tokio = "1.46.1"
+tokio-test = "0.4.4"
 tokio-util = "0.7.15"
 tracing = "0.1.41"
 tracing-error = "0.2.1"

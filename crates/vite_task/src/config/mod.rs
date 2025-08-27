@@ -114,6 +114,21 @@ impl ResolvedTask {
         args: impl Iterator<Item = impl AsRef<str>> + Clone,
     ) -> Result<Self, Error> {
         let ResolveCommandResult { bin_path, envs } = resolve_command().await?;
+        Self::resolve_from_builtin_with_command_result(
+            workspace,
+            task_name,
+            args,
+            ResolveCommandResult { bin_path, envs },
+        )
+    }
+
+    pub(crate) fn resolve_from_builtin_with_command_result(
+        workspace: &Workspace,
+        task_name: &str,
+        args: impl Iterator<Item = impl AsRef<str>> + Clone,
+        command_result: ResolveCommandResult,
+    ) -> Result<Self, Error> {
+        let ResolveCommandResult { bin_path, envs } = command_result;
         let builtin_task = TaskCommand::Parsed(TaskParsedCommand {
             args: args.clone().map(|arg| arg.as_ref().into()).collect(),
             envs: envs.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),

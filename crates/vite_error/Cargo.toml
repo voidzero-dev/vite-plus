@@ -13,10 +13,14 @@ bincode = { workspace = true }
 bstr = { workspace = true }
 nix = { workspace = true }
 petgraph = { workspace = true }
+reqwest = { workspace = true }
 rusqlite = { workspace = true }
+semver = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yml = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
+wax = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }
-wax = { workspace = true }

@@ -1,4 +1,7 @@
+mod config;
 pub mod package_manager;
+mod request;
+mod shim;
 
 use std::{fs, io};
 

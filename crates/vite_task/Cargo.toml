@@ -22,6 +22,7 @@ brush-parser = { workspace = true }
 bstr = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 compact_str = { workspace = true, features = ["serde"] }
+crossterm = { workspace = true }
 dashmap = { workspace = true }
 diff-struct = { workspace = true }
 edit = { workspace = true }
@@ -53,4 +54,6 @@ vite_error = { workspace = true }
 nix = { workspace = true }
 
 [dev-dependencies]
+serial_test = { workspace = true }
 tempfile = { workspace = true }
+test-log = { workspace = true }

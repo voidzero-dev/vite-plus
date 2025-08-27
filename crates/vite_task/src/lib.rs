@@ -5,6 +5,7 @@ mod config;
 mod execute;
 mod fingerprint;
 mod fs;
+mod install;
 mod lint;
 mod maybe_str;
 mod schedule;
@@ -88,6 +89,11 @@ pub enum Commands {
     Test {
         #[clap(last = true)]
         /// Arguments to pass to vite test
+        args: Vec<String>,
+    },
+    Install {
+        #[clap(last = true)]
+        /// Arguments to pass to vite install
         args: Vec<String>,
     },
 }
@@ -215,6 +221,10 @@ pub async fn main<
                 test::test(test_fn, &mut workspace, args).await?;
                 workspace.unload().await?;
             }
+            return Ok(());
+        }
+        Some(Commands::Install { args }) => {
+            install::InstallCommand::builder(cwd).build().execute(&args).await?;
             return Ok(());
         }
         None => {
