@@ -57,11 +57,11 @@ impl WorkspaceMemberGlobs {
     fn new(glob_patterns: impl IntoIterator<Item = CompactString>) -> Self {
         let mut inclusions = Vec::<CompactString>::new();
         let mut exclusions = Vec::<CompactString>::new();
-        for glob_pattern in glob_patterns {
-            if glob_pattern.starts_with('!') {
-                exclusions.push(glob_pattern.strip_prefix('!').unwrap().into());
+        for pattern in glob_patterns {
+            if let Some(exclusion) = pattern.strip_prefix("!") {
+                exclusions.push(exclusion.into());
             } else {
-                inclusions.push(glob_pattern);
+                inclusions.push(pattern);
             }
         }
         Self { inclusions, exclusions }
