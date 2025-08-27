@@ -101,13 +101,13 @@ jobs:
         run: pnpm install
 
       - name: Build self
-        run: cargo build --release --bin vt
+        run: cargo build --bin vt
 
       - name: Run self
-        run: time ./target/release/vt run -r build
+        run: ./target/debug/vt run -r build
 
       - name: Run self again should be cached
-        run: time ./target/release/vt run -r build
+        run: ./target/debug/vt run -r build
 
   e2e-test:
     name: E2E test
@@ -131,15 +131,15 @@ jobs:
         run: pnpm install
 
       - name: Build vt
-        run: cargo build --release --bin vt
+        run: cargo build --bin vt
 
       - name: Run vt install
         run: |
-          export PATH=$PWD/target/release:$PATH && echo $PATH
+          export PATH=$PWD/target/debug:$PATH && echo $PATH
           # pnpm
           git clone --depth 1 https://github.com/pnpm/pnpm.git /tmp/pnpm && cd /tmp/pnpm && vt install
-          # yarn
-          git clone --depth 1 https://github.com/napi-rs/napi-rs.git /tmp/napi-rs && cd /tmp/napi-rs && vt install
-          git clone --depth 1 https://github.com/toeverything/AFFiNE.git /tmp/AFFiNE && cd /tmp/AFFiNE && vt install
-          # npm
-          git clone --depth 1 https://github.com/npm/cli.git /tmp/npm && cd /tmp/npm && vt install
+          # yarn not supported yet
+          # git clone --depth 1 https://github.com/napi-rs/napi-rs.git /tmp/napi-rs && cd /tmp/napi-rs && vt install
+          # git clone --depth 1 https://github.com/toeverything/AFFiNE.git /tmp/AFFiNE && cd /tmp/AFFiNE && vt install
+          # npm not supported yet
+          # git clone --depth 1 https://github.com/npm/cli.git /tmp/npm && cd /tmp/npm && vt install
