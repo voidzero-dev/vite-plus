@@ -138,8 +138,8 @@ jobs:
           export PATH=$PWD/target/debug:$PATH && echo $PATH
           # pnpm
           git clone --depth 1 https://github.com/pnpm/pnpm.git /tmp/pnpm && cd /tmp/pnpm && vt install
-          # yarn not supported yet
-          # git clone --depth 1 https://github.com/napi-rs/napi-rs.git /tmp/napi-rs && cd /tmp/napi-rs && vt install
-          # git clone --depth 1 https://github.com/toeverything/AFFiNE.git /tmp/AFFiNE && cd /tmp/AFFiNE && vt install
-          # npm not supported yet
-          # git clone --depth 1 https://github.com/npm/cli.git /tmp/npm && cd /tmp/npm && vt install
+          # yarn
+          git clone --depth 1 https://github.com/napi-rs/napi-rs.git /tmp/napi-rs && cd /tmp/napi-rs && vt install
+          git clone --depth 1 https://github.com/toeverything/AFFiNE.git /tmp/AFFiNE && cd /tmp/AFFiNE && vt install
+          # npm
+          git clone --depth 1 https://github.com/npm/cli.git /tmp/npm && cd /tmp/npm && vt install

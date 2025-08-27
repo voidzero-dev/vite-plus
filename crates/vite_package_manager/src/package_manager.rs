@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::BufReader;
+use std::io::{BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::{env, fmt};
 
@@ -169,14 +169,16 @@ pub fn find_package_root<'a>(original_cwd: &'a Path) -> Result<PackageRoot<'a>, 
 /// The workspace file.
 ///
 /// - `PnpmWorkspaceYaml` is the pnpm workspace file.
+/// - `NpmWorkspaceJson` is the package.json file of a yarn/npm workspace.
 /// - `NonWorkspacePackage` is the package.json file of a non-workspace package.
 #[derive(Debug)]
 pub enum WorkspaceFile {
     /// The pnpm-workspace.yaml file of a pnpm workspace.
     PnpmWorkspaceYaml(File),
+    /// The package.json file of a yarn/npm workspace.
+    NpmWorkspaceJson(File),
     /// The package.json file of a non-workspace package.
     NonWorkspacePackage(File),
-    // TODO(@fengmk2): other workspace file support, like yarn, npm, etc.
 }
 
 /// The workspace root directory and its workspace file.
@@ -207,12 +209,15 @@ pub fn find_workspace_root<'a>(original_cwd: &'a Path) -> Result<WorkspaceRoot<'
 
         // Check for package.json with workspaces field for npm/yarn workspace
         let package_json_path = cwd.join("package.json");
-        if let Some(file) = open_exists_file(&package_json_path)? {
+        if let Some(mut file) = open_exists_file(&package_json_path)? {
             let package_json: serde_json::Value = serde_json::from_reader(BufReader::new(&file))?;
             if package_json.get("workspaces").is_some() {
-                // TODO(@fengmk2): throw error for temporary.
-                // npm/yarn can be supported later.
-                return Err(Error::UnsupportedWorkspaceFile(package_json_path));
+                // Reset the file cursor since we consumed it reading
+                file.seek(SeekFrom::Start(0))?;
+                return Ok(WorkspaceRoot {
+                    path: cwd,
+                    workspace_file: WorkspaceFile::NpmWorkspaceJson(file),
+                });
             }
         }
 
@@ -588,10 +593,10 @@ mod tests {
         let package_json = r#"{"workspaces": ["packages/*"]}"#;
         fs::write(temp_dir.path().join("package.json"), package_json).unwrap();
 
-        // Should throw error for temporary.
-        // npm/yarn can be supported later.
-        let err = find_workspace_root(&nested_dir).unwrap_err();
-        assert!(matches!(err, Error::UnsupportedWorkspaceFile(_)));
+        // Should find workspace root
+        let found = find_workspace_root(&nested_dir).unwrap();
+        assert_eq!(found.path, temp_dir.path());
+        assert!(matches!(found.workspace_file, WorkspaceFile::NpmWorkspaceJson(_)));
     }
 
     #[test]
@@ -690,8 +695,9 @@ mod tests {
         let package_content = r#"{"name": "test-workspace", "workspaces": ["packages/*"]}"#;
         create_package_json(temp_dir.path(), package_content);
 
-        let result = find_workspace_root(temp_dir.path());
-        assert!(matches!(result.unwrap_err(), Error::UnsupportedWorkspaceFile(_)));
+        let result = find_workspace_root(temp_dir.path()).unwrap();
+        assert_eq!(result.path, temp_dir.path());
+        assert!(matches!(result.workspace_file, WorkspaceFile::NpmWorkspaceJson(_)));
     }
 
     #[test]
@@ -703,8 +709,9 @@ mod tests {
         let sub_dir = temp_dir.path().join("subdir");
         fs::create_dir(&sub_dir).expect("Failed to create subdirectory");
 
-        let result = find_workspace_root(&sub_dir);
-        assert!(matches!(result.unwrap_err(), Error::UnsupportedWorkspaceFile(_)));
+        let result = find_workspace_root(&sub_dir).unwrap();
+        assert_eq!(result.path, temp_dir.path());
+        assert!(matches!(result.workspace_file, WorkspaceFile::NpmWorkspaceJson(_)));
     }
 
     #[test]
