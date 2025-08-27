@@ -91,7 +91,7 @@ impl<'a, Context> Decode<Context> for RelativePathBuf {
         }
         if path_str.contains('\\') {
             return Err(DecodeError::OtherString(format!(
-                "tried to decode a `RelativePath` from a string with bashslashes: {path_str}"
+                "tried to decode a `RelativePath` from a string with backslashes: {path_str}"
             )));
         }
         while path_str.ends_with('/') {
