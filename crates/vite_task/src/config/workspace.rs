@@ -330,70 +330,16 @@ impl Workspace {
                 return Err(Error::OnlyOneTaskRequest(task_requests.join(" ")));
             }
             // For non-recursive mode, find the task in the full task graph
-            // If task doesn't contain '#', use the current package determined at load time
             for task_request in task_requests {
-                if !task_request.contains('#') {
-                    // Task without '#' - look for it in the current package
-                    let mut found_in_current = false;
-
-                    for package in self.package_graph.node_weights() {
-                        if Some(package.path.as_str()) == self.current_package_path.as_deref() {
-                            // Check if this package has the requested task
-                            let task_id_to_check = TaskId {
-                                task_group_id: TaskGroupId {
-                                    task_group_name: task_request.clone(),
-                                    package_path: package.path.clone().into(),
-                                },
-                                subcommand_index: None,
-                            };
-
-                            for (task_node_index, task) in self.task_graph.node_references() {
-                                if task.id() == task_id_to_check {
-                                    found_in_current = true;
-                                    remaining_task_node_indexes.insert(task_node_index);
-                                    break;
-                                }
-                            }
-                            break;
-                        }
+                let mut has_matched_task = false;
+                for (task_node_index, task) in self.task_graph.node_references() {
+                    if task.matches(task_request, self.current_package_path.as_deref()) {
+                        has_matched_task = true;
+                        remaining_task_node_indexes.insert(task_node_index);
                     }
-
-                    if !found_in_current {
-                        // Task not found in current package, return helpful error
-                        let current_package_name = self
-                            .package_graph
-                            .node_weights()
-                            .find(|p| Some(p.path.as_str()) == self.current_package_path.as_deref())
-                            .map(|p| &p.package_json.name)
-                            .filter(|name| !name.is_empty())
-                            .map(|name| name.as_str())
-                            .unwrap_or(
-                                self.current_package_path
-                                    .as_ref()
-                                    .ok_or_else(|| Error::NoPackageJsonFound(self.cwd.clone()))?,
-                            );
-
-                        return Err(Error::TaskNotFound(format!(
-                            "Task '{}' not found in current package '{}'. Use '<package-name>#{0}' to run it in a different package.",
-                            task_request, current_package_name
-                        )));
-                    }
-                } else {
-                    // Task with '#' - use normal resolution
-                    let mut has_matched_task = false;
-                    for (task_node_index, task) in self.task_graph.node_references() {
-                        if task.matches(task_request) {
-                            has_matched_task = true;
-                            remaining_task_node_indexes.insert(task_node_index);
-                        }
-                    }
-
-                    if !has_matched_task {
-                        return Err(Error::TaskNotFound(format!(
-                            "Task '{}' not found in workspace",
-                            task_request
-                        )));
-                    }
+                }
+                if !has_matched_task {
+                    return Err(Error::TaskNotFound { task_request: task_request.to_string() });
                 }
             }
         }
@@ -472,10 +418,11 @@ impl Workspace {
                                 let (dep_package_node_index, dep_task_name): (NodeIndex, Str) =
                                     if let Some(sharp_pos) = sharp_pos {
                                         let package_name = &task_request[..sharp_pos];
-                                        let package_node_indexes =
-                                            package_name_to_node.get(package_name).ok_or_else(
-                                                || Error::TaskNotFound(task_request.to_string()),
-                                            )?;
+                                        let package_node_indexes = package_name_to_node
+                                            .get(package_name)
+                                            .ok_or_else(|| Error::TaskNotFound {
+                                                task_request: task_request.to_string(),
+                                            })?;
                                         match package_node_indexes.as_slice() {
                                             [] => {
                                                 return Err(Error::PackageNotFound(

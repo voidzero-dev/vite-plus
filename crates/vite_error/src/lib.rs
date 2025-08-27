@@ -72,8 +72,8 @@ pub enum Error {
     #[error("The package.json file is not found at {0:?}")]
     PackageJsonNotFound(PathBuf),
 
-    #[error("Task not found in workspace: {0}")]
-    TaskNotFound(String),
+    #[error("Task '{task_request}' not found in workspace")]
+    TaskNotFound { task_request: String },
 
     #[error("Dependency Task '{name}' not found in package located at {package_path}")]
     TaskDependencyNotFound { name: String, package_path: String },

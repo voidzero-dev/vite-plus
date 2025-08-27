@@ -77,13 +77,19 @@ impl ResolvedTask {
         }
     }
 
-    pub fn matches(&self, task_request: &str) -> bool {
+    pub fn matches(&self, task_request: &str, current_package_path: Option<&str>) -> bool {
         if self.name.subcommand_index.is_some() {
             // never match non-last subcommand
             return false;
         }
+
+        // match tasks in current package if the task_request doesn't contain '#'
+        if !task_request.contains('#') {
+            return current_package_path == Some(self.resolved_config.config_dir.as_str())
+                && self.name.task_group_name == task_request;
+        };
         let package_name = self.name.package_name.as_str();
-        // TODO: match tasks in current package if the task_request doesn't contain '#'
+
         task_request.get(..package_name.len()) == Some(package_name)
             && task_request.get(package_name.len()..=package_name.len()) == Some("#")
             && task_request.get(package_name.len() + 1..) == Some(&self.name.task_group_name)
