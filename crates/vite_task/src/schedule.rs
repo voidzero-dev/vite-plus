@@ -81,9 +81,13 @@ impl ExecutionPlan {
         let command = step.resolved_command.fingerprint.command.clone();
 
         // Check cache and prepare execution
-        let (cache_miss, execute_or_replay) =
-            get_cached_or_execute(step, &mut workspace.task_cache, &workspace.fs, &workspace.dir)
-                .await?;
+        let (cache_miss, execute_or_replay) = get_cached_or_execute(
+            step,
+            &mut workspace.task_cache,
+            &workspace.fs,
+            &workspace.workspace_dir,
+        )
+        .await?;
 
         // Print cache status
         match cache_miss {

@@ -114,13 +114,14 @@ impl ResolvedTask {
         });
         let task_config: TaskConfig = builtin_task.clone().into();
         let resolved_task_config = ResolvedTaskConfig {
-            config_dir: workspace.dir.as_path().to_string_lossy().as_ref().into(),
+            config_dir: workspace.workspace_dir.as_path().to_string_lossy().as_ref().into(),
             config: task_config,
         };
-        let resolved_envs = TaskEnvs::resolve(workspace.dir.as_path(), &resolved_task_config)?;
+        let resolved_envs =
+            TaskEnvs::resolve(workspace.workspace_dir.as_path(), &resolved_task_config)?;
         let resolved_command = ResolvedTaskCommand {
             fingerprint: CommandFingerprint {
-                cwd: workspace.dir.as_path().to_string_lossy().as_ref().into(),
+                cwd: workspace.workspace_dir.as_path().to_string_lossy().as_ref().into(),
                 command: builtin_task,
                 envs_without_pass_through: resolved_envs.envs_without_pass_through,
             },

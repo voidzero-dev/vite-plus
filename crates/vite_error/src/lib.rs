@@ -102,6 +102,9 @@ pub enum Error {
     #[error("Path prefix error: {err} at {path:?}, {message}")]
     PathPrefixError { err: std::path::StripPrefixError, message: String, path: PathBuf },
 
+    #[error("No package.json found at {0:?}")]
+    NoPackageJsonFound(PathBuf),
+
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),
 }

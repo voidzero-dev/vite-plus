@@ -27,11 +27,13 @@ use super::{
 
 #[derive(Debug)]
 pub struct Workspace {
-    pub(crate) dir: PathBuf,
+    pub(crate) workspace_dir: PathBuf,
+    cwd: PathBuf,
     /// Relative path from workspace root to current package directory.
     /// Empty string ("") represents the workspace root package itself.
+    /// None indicates that it cannot find the package root from the current directory..
     /// This allows distinguishing between workspace-level tasks and package-level tasks.
-    pub(crate) current_package_path: String,
+    pub(crate) current_package_path: Option<String>,
     pub(crate) task_cache: TaskCache,
     pub(crate) fs: CachedFileSystem,
     pub(crate) package_graph: Graph<PackageInfo, DependencyType>,
@@ -43,23 +45,25 @@ impl Workspace {
     /// Determines the current package path relative to the workspace root.
     /// Returns an empty string if the current directory is the workspace root itself.
     /// Returns the workspace root and the current package path.
-    fn determine_current_package_path(original_cwd: &Path) -> Result<(&Path, String), Error> {
+    fn determine_current_package_path(
+        original_cwd: &Path,
+    ) -> Result<(&Path, Option<String>), Error> {
         let workspace_root = find_workspace_root(original_cwd)?.path;
-        let current_package_root = find_package_root(original_cwd)?.path;
-        if current_package_root == workspace_root {
-            // We're at workspace root with a package.json
-            Ok((workspace_root, String::new()))
-        } else {
-            // Get relative path from workspace root to package root
-            let path = current_package_root.strip_prefix(&workspace_root).map_err(|err| {
-                Error::PathPrefixError {
-                    err,
-                    message: "package root is not a subpath of workspace root".to_string(),
-                    path: current_package_root.to_path_buf(),
-                }
-            })?;
-            Ok((workspace_root, path.to_string_lossy().to_string()))
-        }
+        // If can't find package root, return the workspace root and an empty string
+        let Ok(package_root) = find_package_root(original_cwd) else {
+            return Ok((workspace_root, None));
+        };
+        let current_package_root = package_root.path;
+
+        // Get relative path from workspace root to package root
+        let path = current_package_root.strip_prefix(&workspace_root).map_err(|err| {
+            Error::PathPrefixError {
+                err,
+                message: "package root is not a subpath of workspace root".to_string(),
+                path: current_package_root.to_path_buf(),
+            }
+        })?;
+        Ok((workspace_root, path.to_str().map(|s| s.to_string())))
     }
 
     #[tracing::instrument]
@@ -105,7 +109,8 @@ impl Workspace {
 
         Ok(Self {
             package_graph: Graph::new(),
-            dir: workspace_root.to_path_buf(),
+            workspace_dir: workspace_root.to_path_buf(),
+            cwd,
             current_package_path,
             task_cache,
             fs: CachedFileSystem::default(),
@@ -185,7 +190,8 @@ impl Workspace {
 
         Ok(Self {
             package_graph,
-            dir: workspace_root.to_path_buf(),
+            workspace_dir: workspace_root.to_path_buf(),
+            cwd,
             current_package_path,
             task_cache,
             fs: CachedFileSystem::default(),
@@ -199,7 +205,7 @@ impl Workspace {
     }
 
     pub async fn unload(self) -> Result<(), Error> {
-        tracing::debug!("Saving task cache {}", self.dir.display());
+        tracing::debug!("Saving task cache {}", self.workspace_dir.display());
         self.task_cache.save().await?;
         Ok(())
     }
@@ -331,7 +337,7 @@ impl Workspace {
                     let mut found_in_current = false;
 
                     for package in self.package_graph.node_weights() {
-                        if package.path == self.current_package_path {
+                        if Some(package.path.as_str()) == self.current_package_path.as_deref() {
                             // Check if this package has the requested task
                             let task_id_to_check = TaskId {
                                 task_group_id: TaskGroupId {
@@ -357,11 +363,15 @@ impl Workspace {
                         let current_package_name = self
                             .package_graph
                             .node_weights()
-                            .find(|p| p.path == self.current_package_path)
+                            .find(|p| Some(p.path.as_str()) == self.current_package_path.as_deref())
                             .map(|p| &p.package_json.name)
                             .filter(|name| !name.is_empty())
                             .map(|name| name.as_str())
-                            .unwrap_or(&self.current_package_path);
+                            .unwrap_or(
+                                self.current_package_path
+                                    .as_ref()
+                                    .ok_or_else(|| Error::NoPackageJsonFound(self.cwd.clone()))?,
+                            );
 
                         return Err(Error::TaskNotFound(format!(
                             "Task '{}' not found in current package '{}'. Use '<package-name>#{0}' to run it in a different package.",
@@ -407,8 +417,9 @@ impl Workspace {
                 "Pre-built tasks in the full task graph should not contain additional args"
             );
             if !task_args.is_empty() {
-                updated_task.resolved_command =
-                    updated_task.resolved_config.resolve_command(&self.dir, &task_args)?;
+                updated_task.resolved_command = updated_task
+                    .resolved_config
+                    .resolve_command(&self.workspace_dir, &task_args)?;
             }
 
             // Add to filtered graph
