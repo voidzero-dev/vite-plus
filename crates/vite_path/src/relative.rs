@@ -111,7 +111,7 @@ impl TryFrom<&Path> for RelativePathBuf {
                     return Err(FromPathError::NonRelative);
                 }
                 Component::CurDir => {
-                    // normailize dots
+                    // normalize dots
                     continue;
                 }
                 Component::ParentDir => {
