@@ -2,13 +2,11 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::{env, fmt};
 
 use compact_str::CompactString;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 
 use crate::Error;
 use crate::config::{get_cache_dir, get_npm_package_tgz_url, get_npm_package_version_url};
@@ -393,20 +391,16 @@ async fn download_package_manager(
     tracing::debug!("Rename package dir to {}", bin_name);
     tokio::fs::rename(&target_dir_tmp.join("package"), &target_dir_tmp.join(&bin_name)).await?;
 
-    let file_lock = Arc::new(Mutex::new(()));
-    {
-        let _lock = file_lock.lock().await;
-        // check bin_file again, for the concurrent download cases
-        if is_exists_file(&bin_file)? {
-            tracing::debug!("bin_file already exists, skip rename");
-            return Ok(install_dir);
-        }
-
-        // rename $target_dir_tmp to $target_dir
-        tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
-        remove_dir_all(&target_dir).await?;
-        tokio::fs::rename(&target_dir_tmp, &target_dir).await?;
+    // check bin_file again, for the concurrent download cases
+    if is_exists_file(&bin_file)? {
+        tracing::debug!("bin_file already exists, skip rename");
+        return Ok(install_dir);
     }
+
+    // rename $target_dir_tmp to $target_dir
+    tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
+    remove_dir_all(&target_dir).await?;
+    tokio::fs::rename(&target_dir_tmp, &target_dir).await?;
 
     // create shim file
     tracing::debug!("Create shim files for {}", bin_name);
