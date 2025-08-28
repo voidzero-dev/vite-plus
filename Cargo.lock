@@ -4608,6 +4608,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "vite_glob"
+version = "0.0.0"
+dependencies = [
+ "vite_error",
+ "vite_str",
+ "wax",
+]
+
+[[package]]
 name = "vite_package_manager"
 version = "0.0.0"
 dependencies = [
@@ -4634,6 +4643,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "vite_error",
+ "vite_glob",
  "vite_path",
  "vite_str",
  "wax",
