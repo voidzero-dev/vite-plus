@@ -3480,6 +3480,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "vite_glob"
+version = "0.0.0"
+dependencies = [
+ "compact_str 0.9.0",
+ "vite_error",
+ "wax",
+]
+
+[[package]]
 name = "vite_package_manager"
 version = "0.0.0"
 dependencies = [
@@ -3492,6 +3501,7 @@ dependencies = [
  "serde_yml",
  "tempfile",
  "vite_error",
+ "vite_glob",
  "wax",
 ]
 

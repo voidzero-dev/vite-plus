@@ -1,0 +1,13 @@
+[package]
+name = "vite_glob"
+version = "0.0.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+rust-version.workspace = true
+
+[dependencies]
+compact_str = { workspace = true }
+vite_error = { workspace = true }
+wax = { workspace = true }
