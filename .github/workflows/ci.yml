@@ -106,7 +106,7 @@ jobs:
       - name: Run self
         run: ./target/debug/vt run -r build
 
-      - name: Print builtin task helper messages
+      - name: Print help for built-in commands
         run: |
           export PATH="$PATH:$(pwd)/packages/cli/bin"
           vite-plus -h
