@@ -1,3 +1,4 @@
+pub mod package;
 pub mod package_manager;
 
 use std::{
@@ -11,11 +12,12 @@ use petgraph::Graph;
 use petgraph::graph::NodeIndex;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
-use vite_error::Error;
 use wax::Glob;
 
-use crate::package_manager::WorkspaceFile;
-pub use package_manager::{find_package_root, find_workspace_root};
+pub use crate::package::{DependencyType, PackageJson};
+pub use crate::package_manager::{WorkspaceFile, find_package_root, find_workspace_root};
+use vite_error::Error;
+use vite_glob::GlobPatternSet;
 
 /// The workspace configuration for pnpm.
 #[derive(Debug, Deserialize)]
@@ -24,11 +26,6 @@ struct PnpmWorkspace {
     ///
     /// <https://pnpm.io/pnpm-workspace_yaml>
     packages: Vec<CompactString>,
-}
-impl PnpmWorkspace {
-    fn into_member_globs(self) -> WorkspaceMemberGlobs {
-        WorkspaceMemberGlobs::new(self.packages)
-    }
 }
 
 /// The workspace configuration for npm/yarn.
@@ -43,29 +40,14 @@ struct NpmWorkspace {
     /// <https://yarnpkg.com/configuration/manifest#workspaces>
     workspaces: Vec<CompactString>,
 }
-impl NpmWorkspace {
-    fn into_member_globs(self) -> WorkspaceMemberGlobs {
-        WorkspaceMemberGlobs::new(self.workspaces)
-    }
-}
 
 #[derive(Debug)]
 struct WorkspaceMemberGlobs {
-    inclusions: Vec<CompactString>,
-    exclusions: Vec<CompactString>,
+    workspaces: Vec<CompactString>,
 }
 impl WorkspaceMemberGlobs {
-    fn new(glob_patterns: impl IntoIterator<Item = CompactString>) -> Self {
-        let mut inclusions = Vec::<CompactString>::new();
-        let mut exclusions = Vec::<CompactString>::new();
-        for pattern in glob_patterns {
-            if let Some(exclusion) = pattern.strip_prefix("!") {
-                exclusions.push(exclusion.into());
-            } else {
-                inclusions.push(pattern);
-            }
-        }
-        Self { inclusions, exclusions }
+    fn new(workspaces: Vec<CompactString>) -> Self {
+        Self { workspaces }
     }
 
     fn get_package_json_paths(
@@ -74,24 +56,36 @@ impl WorkspaceMemberGlobs {
     ) -> Result<impl IntoIterator<Item = PathBuf>, Error> {
         let workspace_root = workspace_root.as_ref();
         let mut package_json_paths = HashSet::<PathBuf>::default();
-        // TODO: parallelize this
-        for mut inclusion in self.inclusions {
-            inclusion.push_str(if inclusion.ends_with('/') {
-                "package.json"
+        let mut has_negated = false;
+        let mut inclusions = Vec::<CompactString>::new();
+        let mut all = Vec::<CompactString>::new();
+        for mut pattern in self.workspaces {
+            pattern.push_str(if pattern.ends_with('/') { "package.json" } else { "/package.json" });
+            if pattern.starts_with("!") {
+                has_negated = true;
             } else {
-                "/package.json"
-            });
+                inclusions.push(pattern.clone());
+            }
+            all.push(pattern.clone());
+        }
+        let glob_patterns = if has_negated { Some(GlobPatternSet::new(&all)?) } else { None };
 
+        // TODO: parallelize this
+        for inclusion in inclusions {
             let glob = Glob::new(&inclusion)?;
-            // FIXME: should be last match pattern wins
-            let entries =
-                glob.walk(workspace_root).not(self.exclusions.iter().map(CompactString::as_str))?;
-            for entry in entries {
+            for entry in glob.walk(workspace_root) {
                 let Ok(entry) = entry else {
                     continue;
                 };
+
                 if !entry.file_type().is_file() {
                     continue;
+                }
+
+                if let Some(glob_patterns) = glob_patterns.as_ref() {
+                    if !glob_patterns.is_match(entry.to_candidate_path().as_ref()) {
+                        continue;
+                    }
                 }
                 package_json_paths.insert(entry.into_path());
             }
@@ -99,74 +93,6 @@ impl WorkspaceMemberGlobs {
         let mut package_json_paths = package_json_paths.into_iter().collect::<Vec<_>>();
         package_json_paths.sort_unstable();
         Ok(package_json_paths)
-    }
-}
-
-#[derive(Copy, Clone, Debug, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub enum DependencyType {
-    Normal,
-    Dev,
-    Peer,
-}
-
-#[derive(Serialize, Deserialize, Clone, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct PackageJson {
-    #[serde(default)]
-    pub name: CompactString,
-    #[serde(default)]
-    pub scripts: HashMap<CompactString, CompactString>,
-    #[serde(default)]
-    pub dependencies: HashMap<CompactString, CompactString>,
-    #[serde(default)]
-    pub dev_dependencies: HashMap<CompactString, CompactString>,
-    #[serde(default)]
-    pub peer_dependencies: HashMap<CompactString, CompactString>,
-}
-
-impl std::fmt::Debug for PackageJson {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if std::env::var("VITE_DEBUG_VERBOSE").map(|v| v != "0" && v != "false").unwrap_or(false) {
-            write!(
-                f,
-                "PackageJson {{ name: {:?}, scripts: {:?}, dependencies: {:?}, dev_dependencies: {:?}, peer_dependencies: {:?} }}",
-                self.name,
-                self.scripts,
-                self.dependencies,
-                self.dev_dependencies,
-                self.peer_dependencies
-            )
-        } else {
-            write!(f, "PackageJson {{ name: {:?}, scripts: {:?} }}", self.name, self.scripts)
-        }
-    }
-}
-
-impl PackageJson {
-    fn get_workspace_dependencies(
-        &self,
-    ) -> impl Iterator<Item = (CompactString, DependencyType)> + use<'_> {
-        self.dependencies
-            .iter()
-            .map(|entry| (entry, DependencyType::Normal))
-            .chain(self.dev_dependencies.iter().map(|entry| (entry, DependencyType::Dev)))
-            .chain(self.peer_dependencies.iter().map(|entry| (entry, DependencyType::Peer)))
-            .filter_map(|((key, value), dep_type)| {
-                let Some(workspace_version) = value.strip_prefix("workspace:") else {
-                    // TODO: support link-workspace-packages: https://pnpm.io/workspaces#workspace-protocol-workspace)
-                    return None;
-                };
-                // TODO: support paths: https://github.com/pnpm/pnpm/pull/2972
-                Some((
-                    if let Some((name, _)) = workspace_version.rsplit_once('@') {
-                        CompactString::new(name)
-                    } else {
-                        key.clone()
-                    },
-                    dep_type,
-                ))
-            })
     }
 }
 
@@ -240,14 +166,14 @@ pub fn get_package_graph(
 ) -> Result<Graph<PackageInfo, DependencyType>, Error> {
     let mut graph_builder = PackageGraphBuilder::default();
     let workspace_root = find_workspace_root(cwd.as_ref())?;
-    let member_globs = match &workspace_root.workspace_file {
+    let workspaces = match &workspace_root.workspace_file {
         WorkspaceFile::PnpmWorkspaceYaml(file) => {
             let workspace: PnpmWorkspace = serde_yml::from_reader(file)?;
-            workspace.into_member_globs()
+            workspace.packages
         }
         WorkspaceFile::NpmWorkspaceJson(file) => {
             let workspace: NpmWorkspace = serde_json::from_reader(file)?;
-            workspace.into_member_globs()
+            workspace.workspaces
         }
         WorkspaceFile::NonWorkspacePackage(file) => {
             // For non-workspace packages, add the package.json to the graph as a root package
@@ -258,6 +184,7 @@ pub fn get_package_graph(
         }
     };
 
+    let member_globs = WorkspaceMemberGlobs::new(workspaces);
     let mut has_root_package = false;
     for package_json_path in member_globs.get_package_json_paths(workspace_root.path)? {
         let package_json: PackageJson = serde_json::from_slice(&fs::read(&package_json_path)?)?;
@@ -390,11 +317,6 @@ mod tests {
     #[test]
     fn test_get_package_graph_workspace_exclusions() {
         let temp_dir = TempDir::new().unwrap();
-
-        // Create pnpm-workspace.yaml with exclusions using different patterns
-        // Note: The exclusion pattern uses `!` prefix, but the exclusion path matching
-        // seems to not work correctly with wax glob's .not() method when the exclusion
-        // is a plain path rather than a glob pattern.
         let workspace_yaml = r#"packages:
   - "packages/*"
   - "!packages/excluded*"
@@ -437,11 +359,66 @@ mod tests {
             }
         }
         assert!(found_included, "Should have found included package");
+        assert!(!found_excluded, "Should not have found excluded package");
+    }
 
-        // TODO: The exclusion functionality with wax glob needs to be reviewed
-        // Currently exclusions with the .not() method don't work as expected
-        // This should be addressed in a future fix to properly support pnpm workspace exclusions
-        assert!(found_excluded, "Exclusion not yet working - known limitation");
+    #[test]
+    fn test_get_package_graph_workspace_work_with_last_match_wins() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_yaml = r#"packages:
+  - "packages/**"
+  - "!packages/excluded/**"
+  - "packages/excluded/a"
+"#;
+        fs::write(temp_dir.path().join("pnpm-workspace.yaml"), workspace_yaml).unwrap();
+
+        // Create packages directory
+        fs::create_dir_all(temp_dir.path().join("packages")).unwrap();
+
+        // Create included package
+        fs::create_dir_all(temp_dir.path().join("packages/included")).unwrap();
+        let included = serde_json::json!({
+            "name": "included-pkg"
+        });
+        fs::write(temp_dir.path().join("packages/included/package.json"), included.to_string())
+            .unwrap();
+
+        // Create excluded package b
+        fs::create_dir_all(temp_dir.path().join("packages/excluded/b")).unwrap();
+        let excluded = serde_json::json!({
+            "name": "excluded-b"
+        });
+        fs::write(temp_dir.path().join("packages/excluded/b/package.json"), excluded.to_string())
+            .unwrap();
+
+        // Create included package a
+        fs::create_dir_all(temp_dir.path().join("packages/excluded/a")).unwrap();
+        let excluded = serde_json::json!({
+            "name": "excluded-a"
+        });
+        fs::write(temp_dir.path().join("packages/excluded/a/package.json"), excluded.to_string())
+            .unwrap();
+
+        let graph = get_package_graph(temp_dir.path()).unwrap();
+
+        // Should have the included package
+        let mut found_included = false;
+        let mut found_b = false;
+        let mut found_a = false;
+        for node in graph.node_weights() {
+            if node.package_json.name == "included-pkg" {
+                found_included = true;
+            }
+            if node.package_json.name == "excluded-b" {
+                found_b = true;
+            }
+            if node.package_json.name == "excluded-a" {
+                found_a = true;
+            }
+        }
+        assert!(found_included, "Should have found included package");
+        assert!(!found_b, "Should not have found excluded package b");
+        assert!(found_a, "Should have found included package a");
     }
 
     #[test]
