@@ -29,7 +29,7 @@
   ],
   "dependencies": {
     "oxlint": "catalog:",
-    "vite": "catalog:",
+    "rolldown-vite": "catalog:",
     "vitest": "catalog:"
   },
   "devDependencies": {
