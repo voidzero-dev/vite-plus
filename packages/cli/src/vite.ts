@@ -29,8 +29,8 @@ export async function vite(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
-  // Find the vite package.json to locate the installation directory
-  const pkgJsonPath = require.resolve('vite/package.json', {
+  // Find the roldown-vite package.json to locate the installation directory
+  const pkgJsonPath = require.resolve('rolldown-vite/package.json', {
     paths: [process.cwd(), dirname(fileURLToPath(import.meta.url))],
   });
   // Vite's CLI binary is located at bin/vite.js relative to the package root
