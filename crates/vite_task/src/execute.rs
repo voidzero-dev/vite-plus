@@ -387,6 +387,8 @@ fn gather_inputs(
 
 #[cfg(test)]
 mod tests {
+    use vite_path::relative::RelativePathBuf;
+
     use super::*;
 
     #[test]
