@@ -358,6 +358,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(not(windows))]
     fn test_task_envs_stable_ordering() {
         use crate::collections::HashSet;
         use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
@@ -440,6 +441,156 @@ mod tests {
             std::env::remove_var("VSCODE_VAR");
             std::env::remove_var("APP1_NAME");
             std::env::remove_var("APP2_NAME");
+        }
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_unix_env_case_sensitive() {
+        use crate::collections::HashSet;
+        use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
+        use std::path::Path;
+
+        // Test that Unix environment variable matching is case-sensitive
+        // Unix env vars are case-sensitive, so PATH and path are different
+
+        // Create a task config with envs in different cases
+        let mut envs = HashSet::new();
+        envs.insert("TEST_VAR".into());
+        envs.insert("test_var".into()); // Different variable on Unix
+        envs.insert("Test_Var".into()); // Different variable on Unix
+
+        let task_config = TaskConfig {
+            command: TaskCommand::ShellScript("echo test".into()),
+            cwd: ".".into(),
+            cacheable: true,
+            inputs: HashSet::new(),
+            envs,
+            pass_through_envs: HashSet::new(),
+        };
+
+        let resolved_task_config =
+            ResolvedTaskConfig { config_dir: ".".into(), config: task_config };
+
+        // Set up environment variables with different cases
+        unsafe {
+            std::env::set_var("TEST_VAR", "uppercase");
+            std::env::set_var("test_var", "lowercase");
+            std::env::set_var("Test_Var", "mixed");
+        }
+
+        // Resolve envs
+        let result = TaskEnvs::resolve(Path::new("."), &resolved_task_config).unwrap();
+        let envs_without_pass_through = result.envs_without_pass_through;
+
+        // On Unix, all three should be treated as separate variables
+        assert_eq!(
+            envs_without_pass_through.len(),
+            3,
+            "Unix should treat different cases as different variables"
+        );
+
+        assert_eq!(
+            envs_without_pass_through.get("TEST_VAR").map(|s| s.as_str()),
+            Some("uppercase")
+        );
+        assert_eq!(
+            envs_without_pass_through.get("test_var").map(|s| s.as_str()),
+            Some("lowercase")
+        );
+        assert_eq!(envs_without_pass_through.get("Test_Var").map(|s| s.as_str()), Some("mixed"));
+
+        // Clean up
+        unsafe {
+            std::env::remove_var("TEST_VAR");
+            std::env::remove_var("test_var");
+            std::env::remove_var("Test_Var");
+        }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_windows_env_case_insensitive() {
+        use crate::collections::HashSet;
+        use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
+        use std::path::Path;
+
+        // Create a task config with multiple envs in a HashSet
+        let mut envs = HashSet::new();
+        envs.insert("ZEBRA_VAR".into());
+        envs.insert("ALPHA_VAR".into());
+        envs.insert("MIDDLE_VAR".into());
+        envs.insert("BETA_VAR".into());
+        envs.insert("NOT_EXISTS_VAR".into());
+        envs.insert("APP?_*".into());
+
+        let task_config = TaskConfig {
+            command: TaskCommand::ShellScript("echo test".into()),
+            cwd: ".".into(),
+            cacheable: true,
+            inputs: HashSet::new(),
+            envs,
+            pass_through_envs: HashSet::new(),
+        };
+
+        let resolved_task_config =
+            ResolvedTaskConfig { config_dir: ".".into(), config: task_config };
+
+        // Set up environment variables
+        unsafe {
+            std::env::set_var("ZEBRA_VAR", "zebra_value");
+            std::env::set_var("ALPHA_VAR", "alpha_value");
+            std::env::set_var("MIDDLE_VAR", "middle_value");
+            std::env::set_var("BETA_VAR", "beta_value");
+            // VSCode specific
+            std::env::set_var("VSCODE_VAR", "vscode_value");
+            std::env::set_var("app1_name", "app1_value");
+            std::env::set_var("app2_name", "app2_value");
+        }
+
+        // Resolve envs multiple times
+        let result1 = TaskEnvs::resolve(Path::new("."), &resolved_task_config).unwrap();
+        let result2 = TaskEnvs::resolve(Path::new("."), &resolved_task_config).unwrap();
+        let result3 = TaskEnvs::resolve(Path::new("."), &resolved_task_config).unwrap();
+
+        // Convert to sorted vecs for comparison
+        let mut envs1: Vec<_> = result1.envs_without_pass_through.iter().collect();
+        let mut envs2: Vec<_> = result2.envs_without_pass_through.iter().collect();
+        let mut envs3: Vec<_> = result3.envs_without_pass_through.iter().collect();
+
+        envs1.sort();
+        envs2.sort();
+        envs3.sort();
+
+        // Verify all resolutions produce the same result
+        assert_eq!(envs1, envs2);
+        assert_eq!(envs2, envs3);
+
+        // Verify all expected variables are present
+        assert_eq!(envs1.len(), 6);
+        assert!(envs1.iter().any(|(k, _)| k.as_str() == "ALPHA_VAR"));
+        assert!(envs1.iter().any(|(k, _)| k.as_str() == "BETA_VAR"));
+        assert!(envs1.iter().any(|(k, _)| k.as_str() == "MIDDLE_VAR"));
+        assert!(envs1.iter().any(|(k, _)| k.as_str() == "ZEBRA_VAR"));
+        assert!(envs1.iter().any(|(k, _)| k.as_str() == "app1_name"));
+        assert!(envs1.iter().any(|(k, _)| k.as_str() == "app1_name"));
+
+        // Verify default pass-through envs are present
+        let all_envs = result1.all_envs;
+        assert!(all_envs.contains_key("VSCODE_VAR"));
+        assert!(all_envs.contains_key("Path"));
+        assert!(all_envs.contains_key("app1_name"));
+        assert!(all_envs.contains_key("app1_name"));
+
+        // Clean up
+        unsafe {
+            std::env::remove_var("ZEBRA_VAR");
+            std::env::remove_var("ALPHA_VAR");
+            std::env::remove_var("MIDDLE_VAR");
+            std::env::remove_var("BETA_VAR");
+            std::env::remove_var("VSCODE_VAR");
+            std::env::remove_var("app1_name");
+            std::env::remove_var("app1_name");
         }
     }
 }
