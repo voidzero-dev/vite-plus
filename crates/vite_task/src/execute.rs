@@ -11,9 +11,9 @@ use std::{
 use anyhow::Context;
 use bincode::{Decode, Encode};
 use fspy::{AccessMode, Spy, TrackedChild};
-
 use futures_util::future::try_join4;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _};
 use vite_glob::GlobPatternSet;
 use vite_str::Str;
@@ -151,90 +151,135 @@ fn resolve_envs_with_patterns(patterns: &[&str]) -> Result<HashMap<Str, Arc<OsSt
     Ok(envs)
 }
 
+fn create_all_envs_patterns<'a>(
+    pass_through_envs: &'a HashSet<Str>,
+    envs: &'a HashSet<Str>,
+) -> Vec<&'a str> {
+    // Exact matches for common environment variables
+    // Referenced from Turborepo's implementation:
+    // https://github.com/vercel/turborepo/blob/26d309f073ca3ac054109ba0c29c7e230e7caac3/crates/turborepo-lib/src/task_hash.rs#L439
+    const DEFAULT_PASSTHROUGH_ENVS: &[&str] = &[
+        // System and shell
+        "HOME",
+        "USER",
+        "TZ",
+        "LANG",
+        "SHELL",
+        "PWD",
+        "PATH",
+        // CI/CD environments
+        "CI",
+        // Node.js specific
+        "NODE_OPTIONS",
+        "COREPACK_HOME",
+        "NPM_CONFIG_STORE_DIR",
+        "PNPM_HOME",
+        // Library paths
+        "LD_LIBRARY_PATH",
+        "DYLD_FALLBACK_LIBRARY_PATH",
+        "LIBPATH",
+        // Terminal/display
+        "COLORTERM",
+        "TERM",
+        "TERM_PROGRAM",
+        "DISPLAY",
+        // Temporary directories
+        "TMP",
+        "TEMP",
+        // Vercel specific
+        "VERCEL",
+        "VERCEL_*",
+        "NEXT_*",
+        "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
+        "NOW_BUILDER",
+        // Windows specific
+        "APPDATA",
+        "PROGRAMDATA",
+        "SYSTEMROOT",
+        "SYSTEMDRIVE",
+        "USERPROFILE",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        // IDE specific (exact matches)
+        "ELECTRON_RUN_AS_NODE",
+        "JB_INTERPRETER",
+        "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE",
+        "JB_IDE_*",
+        // VSCode specific
+        "VSCODE_*",
+        // Docker specific
+        "DOCKER_*",
+        "BUILDKIT_*",
+        "COMPOSE_*",
+    ];
+
+    // All envs that are passed to the task
+    let all_patterns: Vec<&str> = DEFAULT_PASSTHROUGH_ENVS
+        .iter()
+        .copied()
+        .chain(pass_through_envs.iter().map(|s| s.as_ref()))
+        .chain(envs.iter().map(|s| s.as_ref()))
+        .collect();
+    all_patterns
+}
+
+const SENSITIVE_PATTERNS: &[&str] = &[
+    "*_KEY",
+    "*_SECRET",
+    "*_TOKEN",
+    "*_PASSWORD",
+    "*_PASS",
+    "*_PWD",
+    "*_CREDENTIAL*",
+    "*_API_KEY",
+    "*_PRIVATE_*",
+    "AWS_*",
+    "GITHUB_*",
+    "NPM_*TOKEN",
+    "DATABASE_URL",
+    "MONGODB_URI",
+    "REDIS_URL",
+    "*_CERT*",
+    // Exact matches for known sensitive names
+    "PASSWORD",
+    "SECRET",
+    "TOKEN",
+    "PRIVATE_KEY",
+    "PUBLIC_KEY",
+];
+
 impl TaskEnvs {
     pub fn resolve(base_dir: &Path, task: &ResolvedTaskConfig) -> Result<Self, Error> {
-        // Exact matches for common environment variables
-        // Referenced from Turborepo's implementation:
-        // https://github.com/vercel/turborepo/blob/26d309f073ca3ac054109ba0c29c7e230e7caac3/crates/turborepo-lib/src/task_hash.rs#L439
-        const DEFAULT_PASSTHROUGH_ENVS: &[&str] = &[
-            // System and shell
-            "HOME",
-            "USER",
-            "TZ",
-            "LANG",
-            "SHELL",
-            "PWD",
-            "PATH",
-            // CI/CD environments
-            "CI",
-            // Node.js specific
-            "NODE_OPTIONS",
-            "COREPACK_HOME",
-            "NPM_CONFIG_STORE_DIR",
-            "PNPM_HOME",
-            // Library paths
-            "LD_LIBRARY_PATH",
-            "DYLD_FALLBACK_LIBRARY_PATH",
-            "LIBPATH",
-            // Terminal/display
-            "COLORTERM",
-            "TERM",
-            "TERM_PROGRAM",
-            "DISPLAY",
-            // Temporary directories
-            "TMP",
-            "TEMP",
-            // Vercel specific
-            "VERCEL",
-            "VERCEL_*",
-            "NEXT_*",
-            "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
-            "NOW_BUILDER",
-            // Windows specific
-            "APPDATA",
-            "PROGRAMDATA",
-            "SYSTEMROOT",
-            "SYSTEMDRIVE",
-            "USERPROFILE",
-            "HOMEDRIVE",
-            "HOMEPATH",
-            // IDE specific (exact matches)
-            "ELECTRON_RUN_AS_NODE",
-            "JB_INTERPRETER",
-            "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE",
-            "JB_IDE_*",
-            // VSCode specific
-            "VSCODE_*",
-            // Docker specific
-            "DOCKER_*",
-            "BUILDKIT_*",
-            "COMPOSE_*",
-        ];
-
         // All envs that are passed to the task
-        let all_patterns: Vec<&str> = DEFAULT_PASSTHROUGH_ENVS
-            .iter()
-            .copied()
-            .chain(task.config.pass_through_envs.iter().map(|s| s.as_ref()))
-            .chain(task.config.envs.iter().map(|s| s.as_ref()))
-            .collect();
+        let all_patterns =
+            create_all_envs_patterns(&task.config.pass_through_envs, &task.config.envs);
         let mut all_envs = resolve_envs_with_patterns(&all_patterns)?;
 
         // envs need to calculate fingerprint
         let mut envs_without_pass_through = HashMap::<Str, Str>::new();
-        let envs_without_pass_through_patterns =
-            GlobPatternSet::new(task.config.envs.iter().filter(|s| !s.starts_with("!")))?;
-        for (name, value) in all_envs.iter() {
-            if !envs_without_pass_through_patterns.is_match(name) {
-                continue;
+        if !task.config.envs.is_empty() {
+            let envs_without_pass_through_patterns =
+                GlobPatternSet::new(task.config.envs.iter().filter(|s| !s.starts_with("!")))?;
+            let sensitive_patterns = GlobPatternSet::new(SENSITIVE_PATTERNS)?;
+            for (name, value) in all_envs.iter() {
+                if !envs_without_pass_through_patterns.is_match(name) {
+                    continue;
+                }
+                let Some(value) = value.to_str() else {
+                    return Err(Error::EnvValueIsNotValidUnicode {
+                        key: name.to_string(),
+                        value: value.to_os_string(),
+                    });
+                };
+                let value: Str = if sensitive_patterns.is_match(name) {
+                    let mut hasher = Sha256::new();
+                    hasher.update(value.as_bytes());
+                    format!("sha256:{:x}", hasher.finalize()).into()
+                } else {
+                    value.into()
+                };
+                envs_without_pass_through.insert(name.clone(), value);
             }
-            let Some(value) = value.to_str() else {
-                return Err(Error::EnvValueIsNotValidUnicode {
-                    key: name.to_string(),
-                    value: value.to_os_string(),
-                });
-            };
-            envs_without_pass_through.insert(name.clone(), value.into());
         }
 
         // Add node_modules/.bin to PATH
@@ -371,7 +416,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[cfg(not(windows))]
+    #[cfg(unix)]
     fn test_task_envs_stable_ordering() {
         use crate::collections::HashSet;
         use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
@@ -410,6 +455,7 @@ mod tests {
             std::env::set_var("VSCODE_VAR", "vscode_value");
             std::env::set_var("APP1_NAME", "app1_value");
             std::env::set_var("APP2_NAME", "app2_value");
+            std::env::set_var("APP1_PASSWORD", "app1_password");
         }
 
         // Resolve envs multiple times
@@ -431,13 +477,21 @@ mod tests {
         assert_eq!(envs2, envs3);
 
         // Verify all expected variables are present
-        assert_eq!(envs1.len(), 6);
+        assert_eq!(envs1.len(), 7);
         assert!(envs1.iter().any(|(k, _)| k.as_str() == "ALPHA_VAR"));
         assert!(envs1.iter().any(|(k, _)| k.as_str() == "BETA_VAR"));
         assert!(envs1.iter().any(|(k, _)| k.as_str() == "MIDDLE_VAR"));
         assert!(envs1.iter().any(|(k, _)| k.as_str() == "ZEBRA_VAR"));
         assert!(envs1.iter().any(|(k, _)| k.as_str() == "APP1_NAME"));
         assert!(envs1.iter().any(|(k, _)| k.as_str() == "APP2_NAME"));
+        assert!(envs1.iter().any(|(k, _)| k.as_str() == "APP1_PASSWORD"));
+
+        // APP1_PASSWORD should be hashed
+        let password = result1.envs_without_pass_through.get("APP1_PASSWORD").unwrap();
+        assert_eq!(
+            password,
+            "sha256:17f1ef795d5663faa129f6fe3e5335e67ac7a701d1a70533a5f4b1635413a1aa"
+        );
 
         // Verify default pass-through envs are present
         let all_envs = result1.all_envs;
@@ -446,6 +500,7 @@ mod tests {
         assert!(all_envs.contains_key("HOME"));
         assert!(all_envs.contains_key("APP1_NAME"));
         assert!(all_envs.contains_key("APP2_NAME"));
+        assert!(all_envs.contains_key("APP1_PASSWORD"));
 
         // Clean up
         unsafe {
@@ -456,6 +511,7 @@ mod tests {
             std::env::remove_var("VSCODE_VAR");
             std::env::remove_var("APP1_NAME");
             std::env::remove_var("APP2_NAME");
+            std::env::remove_var("APP1_PASSWORD");
         }
     }
 
