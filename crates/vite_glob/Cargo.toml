@@ -9,5 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 vite_error = { workspace = true }
-vite_str = { workspace = true }
 wax = { workspace = true }
+
+[dev-dependencies]
+vite_str = { workspace = true }

@@ -3,7 +3,6 @@ use std::path::Path;
 use wax::{Glob, Pattern};
 
 use vite_error::Error;
-use vite_str::Str;
 
 /// A glob pattern set, support the last match wins semantics.
 ///
@@ -17,18 +16,23 @@ pub struct GlobPatternSet<'a> {
 }
 
 impl<'a> GlobPatternSet<'a> {
-    pub fn new(match_patterns: &'a [Str]) -> Result<Self, Error> {
+    pub fn new<I, S>(match_patterns: I) -> Result<Self, Error>
+    where
+        I: IntoIterator<Item = &'a S>,
+        S: AsRef<str> + 'a + ?Sized,
+    {
         let mut patterns = Vec::new();
         let mut has_negated = false;
         for pattern in match_patterns {
-            if let Some(negated) = pattern.strip_prefix('!') {
+            let pattern_str = pattern.as_ref();
+            if let Some(negated) = pattern_str.strip_prefix('!') {
                 // negated pattern, ignore the path
                 patterns.push((Glob::new(negated)?, false));
                 // set to true to follow last match wins semantics
                 has_negated = true;
             } else {
                 // positive pattern, match the path
-                patterns.push((Glob::new(pattern)?, true));
+                patterns.push((Glob::new(pattern_str)?, true));
             }
         }
         Ok(Self { patterns, has_negated })
@@ -57,15 +61,15 @@ mod tests {
     fn test_match_ignores_node_modules() -> Result<(), Error> {
         let patterns = vec![
             // ignore all paths
-            "**/*".into(),
+            "**/*",
             // keep node_modules directories themselves
-            "!**/node_modules".into(),
-            "!node_modules".into(),
+            "!**/node_modules",
+            "!node_modules",
             // keep lock files and package.json
-            "!**/package.json".into(),
-            "!**/package-lock.json".into(),
-            "!**/yarn.lock".into(),
-            "!**/pnpm-lock.yaml".into(),
+            "!**/package.json",
+            "!**/package-lock.json",
+            "!**/yarn.lock",
+            "!**/pnpm-lock.yaml",
         ];
         let ignores = GlobPatternSet::new(&patterns)?;
 
@@ -96,10 +100,7 @@ mod tests {
 
     #[test]
     fn test_match_ignores_with_file_patterns() -> Result<(), Error> {
-        let mut patterns = Vec::<Str>::new();
-        patterns.push("*.log".into());
-        patterns.push("**/*.tmp".into());
-        patterns.push("!important.log".into());
+        let patterns = vec!["*.log", "**/*.tmp", "!important.log"];
         let ignores = GlobPatternSet::new(&patterns)?;
 
         // Should ignore matching files
@@ -107,7 +108,6 @@ mod tests {
         assert!(ignores.is_match("error.log"));
         assert!(ignores.is_match("temp/file.tmp"));
         assert!(ignores.is_match("deep/nested/path/cache.tmp"));
-        assert!(ignores.is_match(Str::from("deep/nested/path/cache.tmp")));
         assert!(ignores.is_match(String::from("deep/nested/path/cache.tmp")));
         assert!(ignores.is_match(Path::new("deep/nested/path/cache.tmp")));
 
@@ -123,7 +123,7 @@ mod tests {
 
     #[test]
     fn test_match_ignores_directory_patterns() -> Result<(), Error> {
-        let patterns = vec!["dist/**".into(), "build/**".into(), "!dist/public/**".into()];
+        let patterns = vec!["dist/**", "build/**", "!dist/public/**"];
         let ignores = GlobPatternSet::new(&patterns)?;
 
         // Should ignore paths in dist and build
@@ -146,11 +146,11 @@ mod tests {
     #[test]
     fn test_match_ignores_complex_patterns() -> Result<(), Error> {
         let patterns = vec![
-            "**/*.test.js".into(),
-            "**/*.spec.ts".into(),
-            "**/test/**".into(),
-            "**/tests/**".into(),
-            "!**/integration/tests/**".into(),
+            "**/*.test.js",
+            "**/*.spec.ts",
+            "**/test/**",
+            "**/tests/**",
+            "!**/integration/tests/**",
         ];
         let ignores = GlobPatternSet::new(&patterns)?;
 
@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn test_match_ignores_empty_patterns() -> Result<(), Error> {
-        let patterns = vec![];
+        let patterns: Vec<&str> = vec![];
         let ignores = GlobPatternSet::new(&patterns)?;
 
         // Should not ignore anything with empty patterns
@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn test_match_ignores_with_wildcards() -> Result<(), Error> {
-        let patterns = vec!["*.{js,ts,jsx,tsx}".into(), "!index.js".into(), "!main.ts".into()];
+        let patterns = vec!["*.{js,ts,jsx,tsx}", "!index.js", "!main.ts"];
         let ignores = GlobPatternSet::new(&patterns)?;
 
         // Should ignore matching extensions
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn test_match_ignores_dotfiles() -> Result<(), Error> {
-        let patterns = vec![".*".into(), "!.gitignore".into(), "!.env.example".into()];
+        let patterns = vec![".*", "!.gitignore", "!.env.example"];
         let ignores = GlobPatternSet::new(&patterns)?;
 
         // Should ignore dotfiles
@@ -232,9 +232,9 @@ mod tests {
         // Note: wax doesn't support leading / for root patterns like gitignore
         // Using glob patterns that work with wax
         let patterns = vec![
-            "**/dist".into(), // Match dist at any level
-            "!dist/public".into(),
-            "**/node_modules".into(),
+            "**/dist", // Match dist at any level
+            "!dist/public",
+            "**/node_modules",
         ];
         let ignores = GlobPatternSet::new(&patterns)?;
         // Patterns match at any level
@@ -255,8 +255,8 @@ mod tests {
     #[test]
     fn test_match_ignores_directory_only_patterns() -> Result<(), Error> {
         let patterns = vec![
-            "build/**".into(),       // Match everything under build
-            "!build/keep/**".into(), // But not under build/keep
+            "build/**",       // Match everything under build
+            "!build/keep/**", // But not under build/keep
         ];
         let ignores = GlobPatternSet::new(&patterns)?;
         // Directory patterns
@@ -272,11 +272,11 @@ mod tests {
     #[test]
     fn test_match_ignores_mixed_patterns() -> Result<(), Error> {
         let patterns = vec![
-            "**/*.log".into(), // Match .log files at any depth
-            "**/temp/**".into(),
-            "node_modules/**".into(),
-            "!**/temp/keep/**".into(),
-            "!debug.log".into(),
+            "**/*.log", // Match .log files at any depth
+            "**/temp/**",
+            "node_modules/**",
+            "!**/temp/keep/**",
+            "!debug.log",
         ];
         let ignores = GlobPatternSet::new(&patterns)?;
 
@@ -299,12 +299,49 @@ mod tests {
     }
 
     #[test]
+    fn test_generic_api_with_different_types() -> Result<(), Error> {
+        use vite_str::Str;
+
+        // Test with Vec<&str>
+        let patterns_str = vec!["*.log", "!important.log"];
+        let ignores_str = GlobPatternSet::new(&patterns_str)?;
+        assert!(ignores_str.is_match("debug.log"));
+        assert!(!ignores_str.is_match("important.log"));
+
+        // Test with Vec<String>
+        let patterns_string = vec![String::from("*.tmp"), String::from("!keep.tmp")];
+        let ignores_string = GlobPatternSet::new(&patterns_string)?;
+        assert!(ignores_string.is_match("temp.tmp"));
+        assert!(!ignores_string.is_match("keep.tmp"));
+
+        // Test with Vec<Str>
+        let patterns_vite_str = vec![Str::from("*.rs"), Str::from("!main.rs")];
+        let ignores_vite_str = GlobPatternSet::new(&patterns_vite_str)?;
+        assert!(ignores_vite_str.is_match("lib.rs"));
+        assert!(!ignores_vite_str.is_match("main.rs"));
+
+        // Test with array
+        let patterns_array = ["build/**", "!build/dist/**"];
+        let ignores_array = GlobPatternSet::new(&patterns_array)?;
+        assert!(ignores_array.is_match("build/src/main.js"));
+        assert!(!ignores_array.is_match("build/dist/bundle.js"));
+
+        // Test with iterator
+        let patterns_iter = ["*.md", "!README.md"].iter();
+        let ignores_iter = GlobPatternSet::new(patterns_iter)?;
+        assert!(ignores_iter.is_match("CHANGELOG.md"));
+        assert!(!ignores_iter.is_match("README.md"));
+
+        Ok(())
+    }
+
+    #[test]
     fn test_match_ignores_last_matching_pattern() -> Result<(), Error> {
         // Test that the last matching pattern wins (gitignore semantics)
         let patterns = vec![
-            "logs/**".into(),             // First: ignore everything in logs/
-            "!logs/important.log".into(), // Second: don't ignore important.log
-            "logs/important.log".into(),  // Third: ignore important.log again (this wins)
+            "logs/**",             // First: ignore everything in logs/
+            "!logs/important.log", // Second: don't ignore important.log
+            "logs/important.log",  // Third: ignore important.log again (this wins)
         ];
         let ignores = GlobPatternSet::new(&patterns)?;
 
