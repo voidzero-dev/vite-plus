@@ -4,6 +4,62 @@
 
 This package provides the JavaScript-to-Rust bridge that enables vite-plus to execute JavaScript tooling (like Vite, Vitest, and oxlint) from the Rust core. It uses NAPI-RS to create native Node.js bindings.
 
+## Usage
+
+### Install
+
+Add to your project's devDependencies:
+
+```bash
+pnpm add -D @voidzero-dev/vite-plus
+# or
+npm install -D @voidzero-dev/vite-plus
+# or
+yarn add -D @voidzero-dev/vite-plus
+```
+
+### Built-in Commands
+
+#### Build
+
+build command will use `rolldown-vite` to build your project.
+
+```bash
+npx vite build
+```
+
+#### Test
+
+test command will use `vitest` to test your project.
+
+```bash
+npx vite test
+```
+
+#### Lint
+
+lint command will use `oxlint` to lint your project.
+
+```bash
+npx vite lint
+```
+
+#### Task runner
+
+You can use `vite run` to run any task that you want.
+
+Run a task on the current project.
+
+```bash
+npx vite run <task-name>
+```
+
+Run all task with the same name in monorepo.
+
+```bash
+npx vite run -r <task-name>
+```
+
 ## Architecture
 
 ### How It Works

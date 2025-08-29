@@ -1,5 +1,5 @@
+import { defineConfig } from '@voidzero-dev/vite-plus';
 import { join } from 'node:path';
-import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   resolve: {

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { defineConfig } from 'vite-plus';
+import { defineConfig } from '@voidzero-dev/vite-plus';
 
 export default defineConfig({
   extends: '../../vite.config.ts',
