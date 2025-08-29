@@ -236,3 +236,93 @@ impl<FS> CachedFileSystem<FS> {
         self.cache.remove(path);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::execute::PathRead;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_fingerprint_nonexistent_file() {
+        let fs = RealFileSystem::default();
+        let nonexistent_path = Arc::<OsStr>::from(std::ffi::OsString::from("/nonexistent/path"));
+        let path_read = PathRead { read_dir_entries: false };
+        
+        let result = fs.fingerprint_path(&nonexistent_path, path_read).unwrap();
+        assert!(matches!(result, PathFingerprint::NotFound));
+    }
+
+    #[test]
+    fn test_fingerprint_temp_file() {
+        let fs = RealFileSystem::default();
+        let temp_dir = TempDir::new().unwrap();
+        let temp_file = temp_dir.path().join("test_file.txt");
+        
+        // Create a test file with known content
+        std::fs::write(&temp_file, "Hello, World!").unwrap();
+        
+        let file_path = Arc::<OsStr>::from(temp_file.as_os_str().to_os_string());
+        let path_read = PathRead { read_dir_entries: false };
+        
+        let result = fs.fingerprint_path(&file_path, path_read).unwrap();
+        assert!(matches!(result, PathFingerprint::FileContentHash(_)));
+        
+        // Verify that the same file gives the same hash
+        let result2 = fs.fingerprint_path(&file_path, path_read).unwrap();
+        assert_eq!(result, result2);
+    }
+
+    #[test] 
+    fn test_fingerprint_temp_directory() {
+        let fs = RealFileSystem::default();
+        let temp_dir = TempDir::new().unwrap();
+        
+        // Create some files in the directory
+        std::fs::write(temp_dir.path().join("file1.txt"), "content1").unwrap();
+        std::fs::write(temp_dir.path().join("file2.txt"), "content2").unwrap();
+        
+        let dir_path = Arc::<OsStr>::from(temp_dir.path().as_os_str().to_os_string());
+        let path_read = PathRead { read_dir_entries: true };
+        
+        let result = fs.fingerprint_path(&dir_path, path_read).unwrap();
+        match result {
+            PathFingerprint::Folder(Some(entries)) => {
+                // Should contain our test files (but not . or .. or .DS_Store)
+                assert!(entries.contains_key("file1.txt"));
+                assert!(entries.contains_key("file2.txt"));
+                assert_eq!(entries.len(), 2);
+            }
+            _ => panic!("Expected folder with entries, got: {:?}", result),
+        }
+        
+        // Test without reading entries
+        let path_read_no_entries = PathRead { read_dir_entries: false };
+        let result_no_entries = fs.fingerprint_path(&dir_path, path_read_no_entries).unwrap();
+        assert!(matches!(result_no_entries, PathFingerprint::Folder(None)));
+    }
+
+    #[test]
+    fn test_fingerprint_consistency_across_calls() {
+        let fs = RealFileSystem::default();
+        let temp_dir = TempDir::new().unwrap();
+        let temp_file = temp_dir.path().join("consistent_test.txt");
+        
+        std::fs::write(&temp_file, "consistent content").unwrap();
+        
+        let file_path = Arc::<OsStr>::from(temp_file.as_os_str().to_os_string());
+        let path_read = PathRead { read_dir_entries: false };
+        
+        // Get multiple fingerprints
+        let results: Vec<_> = (0..5)
+            .map(|_| fs.fingerprint_path(&file_path, path_read))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        
+        // All results should be identical
+        for result in &results[1..] {
+            assert_eq!(&results[0], result);
+        }
+    }
+}
