@@ -3,7 +3,7 @@ pub mod relative;
 
 use std::io;
 
-use absolute::{AbsolutePath, AbsolutePathBuf};
+use absolute::AbsolutePathBuf;
 
 pub fn current_dir() -> io::Result<AbsolutePathBuf> {
     let cwd = std::env::current_dir()?;

@@ -172,7 +172,11 @@ pub enum FromPathError {
 
 #[cfg(test)]
 mod tests {
-    use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
+    use std::ffi::OsStr;
+    #[cfg(unix)]
+    use std::os::unix::ffi::OsStrExt;
+    #[cfg(windows)]
+    use std::os::windows::ffi::OsStrExt;
 
     use assert2::let_assert;
 
@@ -183,9 +187,24 @@ mod tests {
         let abs_path = Path::new(if cfg!(windows) { "C:\\Users" } else { "/home" });
         let_assert!(Err(FromPathError::NonRelative) = RelativePathBuf::try_from(abs_path));
     }
+
     #[test]
-    fn non_utf8() {
+    #[cfg(unix)]
+    fn non_utf8_unix() {
+        // On Unix, paths can contain arbitrary bytes
         let non_utf8_path = Path::new(OsStr::from_bytes(&[0xC0]));
+        let_assert!(
+            Err(FromPathError::InvalidPathData(InvalidPathDataError::NonUtf8)) =
+                RelativePathBuf::try_from(non_utf8_path),
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn non_utf8_windows() {
+        // On Windows, create invalid UTF-16 sequence
+        let invalid_utf16 = [0xD800]; // Unpaired surrogate
+        let non_utf8_path = Path::new(OsStr::from_wide(&invalid_utf16));
         let_assert!(
             Err(FromPathError::InvalidPathData(InvalidPathDataError::NonUtf8)) =
                 RelativePathBuf::try_from(non_utf8_path),
