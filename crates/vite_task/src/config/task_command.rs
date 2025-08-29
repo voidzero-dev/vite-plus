@@ -6,6 +6,7 @@ use crate::{Error, cmd::TaskParsedCommand, execute::TaskEnvs};
 use bincode::{Decode, Encode};
 use diff::Diff;
 use serde::{Deserialize, Serialize};
+use vite_path::relative::RelativePathBuf;
 use vite_str::Str;
 
 use super::{CommandFingerprint, ResolvedTaskCommand, TaskConfig};

@@ -13,8 +13,11 @@ use std::{
 };
 use vite_str::Str;
 
-use bincode::{Decode, Encode, de::Decoder, error::DecodeError, impl_borrow_decode};
-
+use bincode::{
+    BorrowDecode, Decode, Encode,
+    de::{BorrowDecoder, Decoder},
+    error::DecodeError,
+};
 use ref_cast::{RefCastCustom, ref_cast_custom};
 
 /// A relative path with additional guarantees to make it portable:
@@ -78,9 +81,7 @@ impl RelativePath {
     Serialize,
     Deserialize,
     Default,
-    Diff,
 )]
-#[diff(attr(#[derive(Debug)]))]
 pub struct RelativePathBuf(Str);
 
 impl AsRef<Path> for RelativePathBuf {
@@ -103,6 +104,19 @@ impl PartialEq<RelativePath> for RelativePathBuf {
 impl PartialEq<&RelativePath> for RelativePathBuf {
     fn eq(&self, other: &&RelativePath) -> bool {
         self.as_relative_path().eq(other)
+    }
+}
+
+impl Diff for RelativePathBuf {
+    type Repr = Option<Str>;
+    fn diff(&self, other: &Self) -> Self::Repr {
+        self.0.diff(&other.0)
+    }
+    fn apply(&mut self, diff: &Self::Repr) {
+        self.0.apply(diff);
+    }
+    fn identity() -> Self {
+        Self(Str::identity())
     }
 }
 
@@ -166,12 +180,47 @@ impl RelativePathBuf {
 
 impl<'a, Context> Decode<Context> for RelativePathBuf {
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
-        let path_str = Str::decode(decoder)?;
-        RelativePathBuf::new(path_str.as_str())
-            .map_err(|err| DecodeError::OtherString(format!("{}: {}", err, path_str)))
+        let mut path_str = Str::decode(decoder)?;
+        // checks relativity and slashes
+        if Path::new(&path_str).is_absolute() {
+            return Err(DecodeError::OtherString(format!(
+                "tried to decode a `RelativePath` from an absolute path: {path_str}"
+            )));
+        }
+        if path_str.contains('\\') {
+            return Err(DecodeError::OtherString(format!(
+                "tried to decode a `RelativePath` from a string with backslashes: {path_str}"
+            )));
+        }
+        while path_str.ends_with('/') {
+            path_str.pop();
+        }
+        Ok(Self(path_str))
     }
 }
-impl_borrow_decode!(RelativePathBuf);
+
+impl<'de, Context> BorrowDecode<'de, Context> for RelativePathBuf {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = Context>>(
+        decoder: &mut D,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self(Str::borrow_decode(decoder)?))
+    }
+}
+
+impl TryFrom<&Path> for RelativePathBuf {
+    type Error = FromPathError;
+    fn try_from(path: &Path) -> Result<Self, Self::Error> {
+        Self::new(path)
+    }
+}
+
+impl TryFrom<&str> for RelativePathBuf {
+    type Error = FromPathError;
+    fn try_from(path: &str) -> Result<Self, Self::Error> {
+        let path = Path::new(path);
+        Self::try_from(path)
+    }
+}
 
 impl AsRef<RelativePath> for RelativePathBuf {
     fn as_ref(&self) -> &RelativePath {

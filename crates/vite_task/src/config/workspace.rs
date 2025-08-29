@@ -21,6 +21,7 @@ use petgraph::{Graph, graph::NodeIndex, stable_graph::StableDiGraph, visit::Into
 use vite_package_manager::{
     DependencyType, PackageInfo, PackageJson, find_package_root, find_workspace_root,
 };
+use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePath, RelativePathBuf};
 use vite_str::Str;
 
 use super::{

@@ -107,6 +107,15 @@ pub enum Error {
     #[error("The package at {package_path:?} is outside the workspace at {workspace_root:?}")]
     PackageOutsideWorkspace { package_path: AbsolutePathBuf, workspace_root: AbsolutePathBuf },
 
+    #[error(transparent)]
+    FromPathError(#[from] vite_path::relative::FromPathError),
+
+    #[error("Path prefix error: at {path:?}, relative to {relative_to:?}, {message}")]
+    PathPrefixError { message: String, path: PathBuf, relative_to: PathBuf },
+
+    #[error("The path is expected to be absolute but is not: {0:?}")]
+    PathIsNotAbsolute(PathBuf),
+
     #[error("Path is not valid utf8: {0:?}")]
     PathNotValidUtf8(AbsolutePathBuf),
 

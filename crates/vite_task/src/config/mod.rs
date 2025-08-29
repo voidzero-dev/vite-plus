@@ -3,7 +3,7 @@ mod task_command;
 mod task_graph_builder;
 mod workspace;
 
-use std::{ffi::OsStr, future::Future, sync::Arc};
+use std::{convert::identity, ffi::OsStr, future::Future, sync::Arc};
 
 use bincode::{Decode, Encode};
 use compact_str::ToCompactString;

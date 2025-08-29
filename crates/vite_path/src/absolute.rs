@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::relative::{FromPathError, InvalidPathDataError, RelativePath, RelativePathBuf};
+use crate::relative::{FromPathError, InvalidPathDataError, RelativePathBuf};
 
 /// A path that is guaranteed to be absolute
 #[derive(RefCastCustom, Debug, PartialEq, Eq)]
