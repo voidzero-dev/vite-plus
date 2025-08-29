@@ -37,7 +37,7 @@ This approach becomes cumbersome when dealing with multiple environment variable
 
 ## Proposed Solution
 
-### 1. Pattern Syntax
+### Pattern Syntax
 
 Support standard glob wildcard patterns:
 
@@ -58,7 +58,7 @@ We don't support `!` for negated patterns. If match the negated pattern, will ig
 
 > Explicitness over Convenience
 
-### 2. Implementation Architecture
+### Implementation Architecture
 
 ```
 ┌─────────────────┐
@@ -98,81 +98,7 @@ We don't support `!` for negated patterns. If match the negated pattern, will ig
 └───────────────────┘
 ```
 
-### 3. Code Changes
-
-#### 3.1 Pattern Detection and Parsing
-
-```rust
-// In crates/vite_task/src/execute.rs
-use wax::Glob;
-
-enum EnvPattern {
-    Exact(Str),
-    Wildcard(Glob),
-}
-
-impl EnvPattern {
-    fn from_str(pattern: &str) -> Self {
-        if pattern.contains('*') || pattern.contains('?') {
-            EnvPattern::Wildcard(Glob::new(pattern))
-        } else {
-            EnvPattern::Exact(pattern.into())
-        }
-    }
-    
-    fn is_match(&self, name: &str) -> bool {
-        match self {
-            EnvPattern::Exact(exact) => exact.as_str() == name,
-            EnvPattern::Wildcard(wild) => wild.is_match(name),
-        }
-    }
-}
-```
-
-#### 3.2 Environment Variable Resolution
-
-```rust
-impl TaskEnvs {
-    pub fn resolve(base_dir: &Path, task: &ResolvedTaskConfig) -> Result<Self, Error> {
-        // Parse patterns from task config
-        let patterns: Vec<EnvPattern> = task.config.envs
-            .iter()
-            .map(|s| EnvPattern::from_str(s))
-            .collect();
-        
-        // Collect all matching environment variables
-        let mut matched_env_names = HashSet::new();
-        
-        for (env_name, _) in std::env::vars_os() {
-            let Some(name_str) = env_name.to_str() else { continue };
-            
-            // Check if any pattern matches this env var
-            for pattern in &patterns {
-                if pattern.is_match(name_str) {
-                    matched_env_names.insert(Str::from(name_str));
-                    break;
-                }
-            }
-        }
-        
-        // Sort for stable fingerprint
-        let mut sorted_names: Vec<_> = matched_env_names.into_iter().collect();
-        sorted_names.sort();
-        
-        // Build envs_without_pass_through with sorted names
-        let mut envs_without_pass_through = HashMap::new();
-        for name in sorted_names {
-            if let Some(value) = std::env::var(&name).ok() {
-                envs_without_pass_through.insert(name, value.into());
-            }
-        }
-        
-        // ... rest of the implementation
-    }
-}
-```
-
-#### 3.3 Cache Fingerprint Stability and Security
+#### Cache Fingerprint Stability and Security
 
 The implementation must ensure:
 
@@ -229,7 +155,7 @@ pub struct CommandFingerprint {
 - Cache entries never contain plaintext secrets
 - Fingerprint comparison still works (same value = same hash)
 
-### 4. Configuration Examples
+### Configuration Examples
 
 #### Before (Current)
 
@@ -264,21 +190,21 @@ pub struct CommandFingerprint {
 }
 ```
 
-### 5. Testing Strategy
+### Testing Strategy
 
 - Test with real Vite projects using `VITE_*` variables
 - Test with Node.js projects using `NODE_*` variables
 - Test cache hit/miss scenarios with wildcard patterns
 
-### 6. Performance Considerations
+### Performance Considerations
 
 1. **Pattern Compilation**: Compile wildcard patterns once during task configuration parsing
 2. **Caching**: Cache resolved environment variable lists per task to avoid repeated pattern matching
 3. **Lazy Evaluation**: Only resolve wildcards when actually needed for task execution
 
-### 7. Security Considerations
+### Security Considerations
 
-#### 7.1 Sensitive Environment Variable Masking
+#### Sensitive Environment Variable Masking
 
 When displaying environment variables in logs or console output, sensitive values must be automatically masked with `***` to prevent accidental exposure of secrets.
 
@@ -357,7 +283,7 @@ fn display_env_value(name: &str, value: &str) -> String {
 }
 ```
 
-#### 7.2 Cache Storage Security
+#### Cache Storage Security
 
 **Principles for Secure Cache Storage:**
 
@@ -394,7 +320,7 @@ fn display_env_value(name: &str, value: &str) -> String {
    }
    ```
 
-#### 7.3 Additional Security Measures
+#### Additional Security Measures
 
 1. **Secret Leakage Prevention**:
    - Wildcard patterns could inadvertently capture sensitive environment variables
@@ -416,25 +342,11 @@ fn display_env_value(name: &str, value: &str) -> String {
    - Use secure string types that zero memory on drop
    - Implement rate limiting for cache operations
 
-### 8. Migration Path
-
-1. **Phase 1**: Implement wildcard support alongside exact matches
-2. **Phase 2**: Update documentation with examples and best practices
-3. **Phase 3**: Provide migration tool to suggest wildcard patterns based on existing configs
-
-### 9. Alternative Approaches Considered
-
-1. **Regex Patterns**: More powerful but complex, potential performance overhead
-2. **Prefix-only Wildcards**: Simpler but less flexible (only `NODE_*` style)
-3. **Separate Wildcard Field**: Keep `envs` for exact matches, add `env_patterns` for wildcards
-   - Rejected for complexity
-
 ## Open Questions
 
 1. Should we support `?` for single character matching? (yes)
 2. Should we warn when wildcards match > 100 variables? (no)
 3. Should we support exclusion patterns (e.g., `!SECRET_*`)? (no)
-4. Should task envs override the default envs `DEFAULT_PASSTHROUGH_ENVS`? (maybe no, to be discussed)
 
 ## References
 
