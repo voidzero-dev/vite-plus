@@ -122,7 +122,19 @@ pub struct TaskEnvs {
 }
 
 fn resolve_envs_with_patterns(patterns: &[&str]) -> Result<HashMap<Str, Arc<OsStr>>, Error> {
-    let patterns = GlobPatternSet::new(patterns)?;
+    let patterns = GlobPatternSet::new(patterns.iter().filter(|pattern| {
+        if pattern.starts_with("!") {
+            // FIXME: use better way to print warning log
+            // Or parse and validate TaskConfig in command parsing phase
+            tracing::warn!(
+                "env pattern starts with '!' is not supported, will be ignored: {}",
+                pattern
+            );
+            false
+        } else {
+            true
+        }
+    }))?;
     let envs: HashMap<Str, Arc<OsStr>> = std::env::vars_os()
         .filter_map(|(name, value)| {
             let Some(name) = name.to_str() else {
@@ -199,18 +211,19 @@ impl TaskEnvs {
             "COMPOSE_*",
         ];
 
-        let pass_through_patterns: Vec<&str> = DEFAULT_PASSTHROUGH_ENVS
+        // All envs that are passed to the task
+        let all_patterns: Vec<&str> = DEFAULT_PASSTHROUGH_ENVS
             .iter()
             .copied()
             .chain(task.config.pass_through_envs.iter().map(|s| s.as_ref()))
             .chain(task.config.envs.iter().map(|s| s.as_ref()))
             .collect();
-        // All envs that are passed to the task
-        let mut all_envs = resolve_envs_with_patterns(&pass_through_patterns)?;
+        let mut all_envs = resolve_envs_with_patterns(&all_patterns)?;
 
         // envs need to calculate fingerprint
         let mut envs_without_pass_through = HashMap::<Str, Str>::new();
-        let envs_without_pass_through_patterns = GlobPatternSet::new(&task.config.envs)?;
+        let envs_without_pass_through_patterns =
+            GlobPatternSet::new(task.config.envs.iter().filter(|s| !s.starts_with("!")))?;
         for (name, value) in all_envs.iter() {
             if !envs_without_pass_through_patterns.is_match(name) {
                 continue;
@@ -372,6 +385,8 @@ mod tests {
         envs.insert("BETA_VAR".into());
         envs.insert("NOT_EXISTS_VAR".into());
         envs.insert("APP?_*".into());
+        // will auto ignore ! prefix
+        envs.insert("!APP*".into());
 
         let task_config = TaskConfig {
             command: TaskCommand::ShellScript("echo test".into()),
