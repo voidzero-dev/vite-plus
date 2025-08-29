@@ -31,7 +31,7 @@ use super::{
 #[derive(Debug)]
 pub struct Workspace {
     pub(crate) workspace_dir: AbsolutePathBuf,
-    cwd: AbsolutePathBuf,
+    pub(crate) cwd: AbsolutePathBuf,
     /// Relative path from workspace root to current package directory.
     /// Empty string ("") represents the workspace root package itself.
     /// None indicates that it cannot find the package root from the current directory..

@@ -107,6 +107,12 @@ pub enum Error {
     #[error("The package at {package_path:?} is outside the workspace at {workspace_root:?}")]
     PackageOutsideWorkspace { package_path: AbsolutePathBuf, workspace_root: AbsolutePathBuf },
 
+    #[error("Path is not valid utf8: {0:?}")]
+    PathNotValidUtf8(AbsolutePathBuf),
+
+    #[error("No package.json found at {0:?}")]
+    NoPackageJsonFound(AbsolutePathBuf),
+
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),
 }

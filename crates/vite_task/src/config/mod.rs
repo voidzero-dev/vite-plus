@@ -120,15 +120,15 @@ impl ResolvedTask {
             program: bin_path.into(),
         });
         let task_config: TaskConfig = builtin_task.clone().into();
+        let cwd = workspace.cwd.strip_prefix(&workspace.workspace_dir)?;
         let resolved_task_config = ResolvedTaskConfig {
-            // TODO: config_dir should be cwd
-            config_dir: RelativePathBuf::default(),
+            config_dir: cwd.clone(),
             config: task_config,
         };
         let resolved_envs = TaskEnvs::resolve(&workspace.workspace_dir, &resolved_task_config)?;
         let resolved_command = ResolvedTaskCommand {
             fingerprint: CommandFingerprint {
-                cwd: RelativePathBuf::default(),
+                cwd,
                 command: builtin_task,
                 envs_without_pass_through: resolved_envs.envs_without_pass_through,
             },
