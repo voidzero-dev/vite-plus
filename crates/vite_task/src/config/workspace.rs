@@ -166,7 +166,7 @@ impl Workspace {
             HashMap::<String, Vec<NodeIndex>>::with_capacity(package_graph.node_count());
         for (package_node_index, package) in package_graph.node_references() {
             package_path_to_node
-                .entry(package.package_json.name.clone().into())
+                .entry(package.package_json.name.to_string())
                 .or_default()
                 .push(package_node_index);
         }
@@ -439,10 +439,10 @@ impl Workspace {
                                                     name: package_name.to_string(),
                                                     path1: package_graph[*package_node_index1]
                                                         .path
-                                                        .clone(),
+                                                        .to_string(),
                                                     path2: package_graph[*package_node_index2]
                                                         .path
-                                                        .clone(),
+                                                        .to_string(),
                                                 });
                                             }
                                         }

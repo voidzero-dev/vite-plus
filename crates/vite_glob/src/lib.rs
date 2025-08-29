@@ -1,9 +1,9 @@
 use std::path::Path;
 
-use compact_str::CompactString;
 use wax::{Glob, Pattern};
 
 use vite_error::Error;
+use vite_str::Str;
 
 /// A glob pattern set, support the last match wins semantics.
 ///
@@ -17,7 +17,7 @@ pub struct GlobPatternSet<'a> {
 }
 
 impl<'a> GlobPatternSet<'a> {
-    pub fn new(match_patterns: &'a [CompactString]) -> Result<Self, Error> {
+    pub fn new(match_patterns: &'a [Str]) -> Result<Self, Error> {
         let mut patterns = Vec::new();
         let mut has_negated = false;
         for pattern in match_patterns {
@@ -96,7 +96,7 @@ mod tests {
 
     #[test]
     fn test_match_ignores_with_file_patterns() -> Result<(), Error> {
-        let mut patterns = Vec::<CompactString>::new();
+        let mut patterns = Vec::<Str>::new();
         patterns.push("*.log".into());
         patterns.push("**/*.tmp".into());
         patterns.push("!important.log".into());
@@ -107,7 +107,7 @@ mod tests {
         assert!(ignores.is_match("error.log"));
         assert!(ignores.is_match("temp/file.tmp"));
         assert!(ignores.is_match("deep/nested/path/cache.tmp"));
-        assert!(ignores.is_match(CompactString::from("deep/nested/path/cache.tmp")));
+        assert!(ignores.is_match(Str::from("deep/nested/path/cache.tmp")));
         assert!(ignores.is_match(String::from("deep/nested/path/cache.tmp")));
         assert!(ignores.is_match(Path::new("deep/nested/path/cache.tmp")));
 

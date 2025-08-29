@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use compact_str::CompactString;
 use serde::{Deserialize, Serialize};
+
+use vite_str::Str;
 
 #[derive(Copy, Clone, Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -15,15 +16,15 @@ pub enum DependencyType {
 #[serde(rename_all = "camelCase")]
 pub struct PackageJson {
     #[serde(default)]
-    pub name: CompactString,
+    pub name: Str,
     #[serde(default)]
-    pub scripts: HashMap<CompactString, CompactString>,
+    pub scripts: HashMap<Str, Str>,
     #[serde(default)]
-    pub dependencies: HashMap<CompactString, CompactString>,
+    pub dependencies: HashMap<Str, Str>,
     #[serde(default)]
-    pub dev_dependencies: HashMap<CompactString, CompactString>,
+    pub dev_dependencies: HashMap<Str, Str>,
     #[serde(default)]
-    pub peer_dependencies: HashMap<CompactString, CompactString>,
+    pub peer_dependencies: HashMap<Str, Str>,
 }
 
 impl std::fmt::Debug for PackageJson {
@@ -47,7 +48,7 @@ impl std::fmt::Debug for PackageJson {
 impl PackageJson {
     pub fn get_workspace_dependencies(
         &self,
-    ) -> impl Iterator<Item = (CompactString, DependencyType)> + use<'_> {
+    ) -> impl Iterator<Item = (Str, DependencyType)> + use<'_> {
         self.dependencies
             .iter()
             .map(|entry| (entry, DependencyType::Normal))
@@ -61,7 +62,7 @@ impl PackageJson {
                 // TODO: support paths: https://github.com/pnpm/pnpm/pull/2972
                 Some((
                     if let Some((name, _)) = workspace_version.rsplit_once('@') {
-                        CompactString::new(name)
+                        name.into()
                     } else {
                         key.clone()
                     },

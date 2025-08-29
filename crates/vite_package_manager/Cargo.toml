@@ -9,7 +9,6 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-compact_str = { workspace = true, features = ["serde"] }
 petgraph = { workspace = true, features = ["serde-1"] }
 rustc-hash = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -17,6 +16,7 @@ serde_json = { workspace = true }
 serde_yml = { workspace = true }
 vite_error = { workspace = true }
 vite_glob = { workspace = true }
+vite_str = { workspace = true }
 wax = { workspace = true }
 
 [dev-dependencies]

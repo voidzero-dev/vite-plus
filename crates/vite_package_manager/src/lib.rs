@@ -7,7 +7,6 @@ use std::{
 };
 
 use anyhow::Context;
-use compact_str::CompactString;
 use petgraph::Graph;
 use petgraph::graph::NodeIndex;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
@@ -18,6 +17,7 @@ pub use crate::package::{DependencyType, PackageJson};
 pub use crate::package_manager::{WorkspaceFile, find_package_root, find_workspace_root};
 use vite_error::Error;
 use vite_glob::GlobPatternSet;
+use vite_str::Str;
 
 /// The workspace configuration for pnpm.
 #[derive(Debug, Deserialize)]
@@ -25,7 +25,7 @@ struct PnpmWorkspace {
     /// The packages to include in the workspace.
     ///
     /// <https://pnpm.io/pnpm-workspace_yaml>
-    packages: Vec<CompactString>,
+    packages: Vec<Str>,
 }
 
 /// The workspace configuration for npm/yarn.
@@ -38,15 +38,15 @@ struct NpmWorkspace {
     ///
     /// <https://docs.npmjs.com/cli/v11/configuring-npm/package-json#workspaces>
     /// <https://yarnpkg.com/configuration/manifest#workspaces>
-    workspaces: Vec<CompactString>,
+    workspaces: Vec<Str>,
 }
 
 #[derive(Debug)]
 struct WorkspaceMemberGlobs {
-    workspaces: Vec<CompactString>,
+    workspaces: Vec<Str>,
 }
 impl WorkspaceMemberGlobs {
-    fn new(workspaces: Vec<CompactString>) -> Self {
+    fn new(workspaces: Vec<Str>) -> Self {
         Self { workspaces }
     }
 
@@ -57,8 +57,8 @@ impl WorkspaceMemberGlobs {
         let workspace_root = workspace_root.as_ref();
         let mut package_json_paths = HashSet::<PathBuf>::default();
         let mut has_negated = false;
-        let mut inclusions = Vec::<CompactString>::new();
-        let mut all = Vec::<CompactString>::new();
+        let mut inclusions = Vec::<Str>::new();
+        let mut all = Vec::<Str>::new();
         for mut pattern in self.workspaces {
             pattern.push_str(if pattern.ends_with('/') { "package.json" } else { "/package.json" });
             if pattern.starts_with("!") {
@@ -99,23 +99,19 @@ impl WorkspaceMemberGlobs {
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct PackageInfo {
     pub package_json: PackageJson,
-    pub path: CompactString,
+    pub path: Str,
 }
 
 #[derive(Default)]
 struct PackageGraphBuilder {
-    id_and_deps_by_path: HashMap<CompactString, (NodeIndex, Vec<(CompactString, DependencyType)>)>,
+    id_and_deps_by_path: HashMap<Str, (NodeIndex, Vec<(Str, DependencyType)>)>,
     // Only for packages with a name
-    name_to_path: HashMap<CompactString, CompactString>,
+    name_to_path: HashMap<Str, Str>,
     graph: Graph<PackageInfo, DependencyType>,
 }
 
 impl PackageGraphBuilder {
-    fn add_package(
-        &mut self,
-        package_path: CompactString,
-        package_json: PackageJson,
-    ) -> Result<(), Error> {
+    fn add_package(&mut self, package_path: Str, package_json: PackageJson) -> Result<(), Error> {
         let deps = package_json.get_workspace_dependencies().collect::<Vec<_>>();
         let package_name = package_json.name.clone();
         let id = self.graph.add_node(PackageInfo { package_json, path: package_path.clone() });
@@ -132,8 +128,8 @@ impl PackageGraphBuilder {
             let existing_package_info = &self.graph[existing_id];
             return Err(Error::DuplicatedPackageName {
                 name: existing_package_info.package_json.name.to_string(),
-                path1: existing_package_info.path.clone(),
-                path2: self.graph[id].path.clone(),
+                path1: existing_package_info.path.to_string(),
+                path2: self.graph[id].path.to_string(),
             });
         }
         Ok(())
