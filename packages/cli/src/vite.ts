@@ -22,17 +22,29 @@ const require = createRequire(import.meta.url);
  *   - binPath: Absolute path to the Vite CLI entry point (vite.js)
  *   - envs: Environment variables to set when executing Vite
  *
- * The function uses require.resolve to find the vite package installation,
- * then constructs the path to the CLI binary within the package.
+ * The function first tries to resolve rolldown-vite package, then falls back
+ * to vite package (for cases where rolldown-vite is installed via npm alias).
+ * It constructs the path to the CLI binary within the resolved package.
  */
 export async function vite(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
-  // Find the roldown-vite package.json to locate the installation directory
-  const pkgJsonPath = require.resolve('rolldown-vite/package.json', {
-    paths: [process.cwd(), dirname(fileURLToPath(import.meta.url))],
-  });
+  const resolvePaths = [process.cwd(), dirname(fileURLToPath(import.meta.url))];
+  
+  let pkgJsonPath: string;
+  try {
+    // First try to resolve rolldown-vite package.json
+    pkgJsonPath = require.resolve('rolldown-vite/package.json', {
+      paths: resolvePaths,
+    });
+  } catch {
+    // Fallback to vite package.json (for npm alias installations like "vite": "npm:rolldown-vite@latest")
+    pkgJsonPath = require.resolve('vite/package.json', {
+      paths: resolvePaths,
+    });
+  }
+  
   // Vite's CLI binary is located at bin/vite.js relative to the package root
   const binPath = join(dirname(pkgJsonPath), 'bin', 'vite.js');
 
