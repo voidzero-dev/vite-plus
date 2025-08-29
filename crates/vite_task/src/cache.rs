@@ -12,7 +12,7 @@ use crate::config::{CommandFingerprint, ResolvedTask};
 use crate::execute::{ExecutedTask, StdOutput};
 use crate::fingerprint::{FingerprintMismatch, TaskFingerprint};
 use crate::fs::FileSystem;
-use crate::str::Str;
+use vite_str::Str;
 
 #[derive(Debug, Encode, Decode, Serialize)]
 pub struct CachedTask {

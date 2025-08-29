@@ -12,13 +12,13 @@ use crate::{
     cmd::try_parse_as_and_list,
     config::{TaskGroupId, name::TaskName},
     fs::CachedFileSystem,
-    str::Str,
 };
 
 use petgraph::{Graph, graph::NodeIndex, stable_graph::StableDiGraph, visit::IntoNodeReferences};
 use vite_package_manager::{
     DependencyType, PackageInfo, PackageJson, find_package_root, find_workspace_root,
 };
+use vite_str::Str;
 
 use super::{
     ResolvedTask, ResolvedTaskConfig, TaskCommand, TaskConfig, TaskGraphBuilder, TaskId,

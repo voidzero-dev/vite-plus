@@ -8,7 +8,6 @@ mod fs;
 mod lint;
 mod maybe_str;
 mod schedule;
-mod str;
 mod test;
 mod vite;
 
@@ -24,7 +23,7 @@ use clap::{Parser, Subcommand};
 use serde::Serialize;
 
 use crate::cache::{CachedTask, TaskCacheKey};
-use crate::str::Str;
+use vite_str::Str;
 
 use crate::schedule::ExecutionPlan;
 

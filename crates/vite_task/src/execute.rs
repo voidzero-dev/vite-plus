@@ -15,6 +15,7 @@ use fspy::{AccessMode, Spy, TrackedChild};
 use futures_util::future::try_join4;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _};
+use vite_str::Str;
 use wax::Glob;
 use wildmatch::WildMatch;
 
@@ -23,7 +24,6 @@ use crate::{
     collections::{HashMap, HashSet},
     config::{ResolvedTask, ResolvedTaskCommand, ResolvedTaskConfig, TaskCommand},
     maybe_str::MaybeString,
-    str::Str,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode, Serialize, Deserialize)]
