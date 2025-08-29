@@ -45,6 +45,7 @@ dashmap = "6.1.0"
 diff-struct = "0.5.3"
 directories = "6.0.0"
 edit = "0.1.5"
+fast-glob = "1.0.0"
 fspy = { path = "crates/fspy" }
 fspy_preload_unix = { path = "crates/fspy_preload_unix", artifact = "cdylib" }
 fspy_preload_windows = { path = "crates/fspy_preload_windows", artifact = "cdylib" }

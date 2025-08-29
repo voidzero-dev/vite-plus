@@ -1,7 +1,5 @@
-use std::path::Path;
-
 use compact_str::CompactString;
-use wax::{Glob, Pattern};
+use fast_glob::glob_match;
 
 use vite_error::Error;
 
@@ -12,32 +10,30 @@ use vite_error::Error;
 #[derive(Debug)]
 pub struct GlobPatternSet<'a> {
     /// (glob_pattern, match_or_not)
-    patterns: Vec<(Glob<'a>, bool)>,
+    patterns: Vec<(&'a str, bool)>,
     has_negated: bool,
 }
 
 impl<'a> GlobPatternSet<'a> {
     pub fn new(match_patterns: &'a [CompactString]) -> Result<Self, Error> {
-        let mut patterns = Vec::new();
         let mut has_negated = false;
+        let mut patterns = Vec::new();
         for pattern in match_patterns {
             if let Some(negated) = pattern.strip_prefix('!') {
-                // negated pattern, ignore the path
-                patterns.push((Glob::new(negated)?, false));
                 // set to true to follow last match wins semantics
                 has_negated = true;
+                patterns.push((negated, false));
             } else {
-                // positive pattern, match the path
-                patterns.push((Glob::new(pattern)?, true));
+                patterns.push((pattern, true));
             }
         }
         Ok(Self { patterns, has_negated })
     }
 
-    pub fn is_match(&self, path: impl AsRef<Path>) -> bool {
+    pub fn is_match(&self, path: &str) -> bool {
         let mut should_match = false; // Default: don't match
-        for (glob, match_or_not) in &self.patterns {
-            if glob.is_match(path.as_ref()) {
+        for (pattern, match_or_not) in &self.patterns {
+            if glob_match(pattern, path) {
                 should_match = *match_or_not;
                 if !self.has_negated {
                     // first match wins semantics
