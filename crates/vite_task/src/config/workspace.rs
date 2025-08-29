@@ -223,22 +223,6 @@ impl Workspace {
         Ok(())
     }
 
-    pub fn relative_cwd(&self) -> Result<RelativePathBuf, Error> {
-        // self.workspace_dir is absolute dir resolved by find_workspace_root
-        let workspace_dir =
-            AbsolutePathBuf::new(self.workspace_dir.clone()).expect("Workspace dir is absolute");
-        Ok(self
-            .cwd
-            .strip_prefix(&workspace_dir)
-            .map_err(|err| Error::PathPrefixError {
-                message: format!("{err}"),
-                path: self.cwd.as_path().to_path_buf(),
-                relative_to: workspace_dir.as_path().to_path_buf(),
-            })?
-            // strip prefix will return None if the path is the same as the workspace dir
-            .unwrap_or_else(|| RelativePathBuf::default()))
-    }
-
     fn resolve_task(
         user_task_config: impl Into<TaskConfig>,
         package_info: &PackageInfo,
@@ -394,7 +378,7 @@ impl Workspace {
             if !task_args.is_empty() {
                 updated_task.resolved_command = updated_task
                     .resolved_config
-                    .resolve_command(&self.workspace_dir, &task_args)?;
+                    .resolve_command(&self.workspace_dir.as_path(), &task_args)?;
             }
 
             // Add to filtered graph

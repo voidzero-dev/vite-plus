@@ -86,7 +86,7 @@ impl ExecutionPlan {
             step,
             &mut workspace.task_cache,
             &workspace.fs,
-            &workspace.workspace_dir,
+            workspace.workspace_dir.as_path(),
         )
         .await?;
 
