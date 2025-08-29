@@ -107,6 +107,9 @@ mod tests {
         assert!(ignores.is_match("error.log"));
         assert!(ignores.is_match("temp/file.tmp"));
         assert!(ignores.is_match("deep/nested/path/cache.tmp"));
+        assert!(ignores.is_match(CompactString::from("deep/nested/path/cache.tmp")));
+        assert!(ignores.is_match(String::from("deep/nested/path/cache.tmp")));
+        assert!(ignores.is_match(Path::new("deep/nested/path/cache.tmp")));
 
         // Should NOT ignore negated patterns
         assert!(!ignores.is_match("important.log"));
