@@ -3,7 +3,7 @@ mod task_command;
 mod task_graph_builder;
 mod workspace;
 
-use std::{convert::identity, ffi::OsStr, future::Future, sync::Arc};
+use std::{ffi::OsStr, future::Future, sync::Arc};
 
 use bincode::{Decode, Encode};
 use compact_str::ToCompactString;
@@ -120,7 +120,7 @@ impl ResolvedTask {
             program: bin_path.into(),
         });
         let task_config: TaskConfig = builtin_task.clone().into();
-        let cwd = workspace.cwd.strip_prefix(&workspace.workspace_dir)?;
+        let cwd = workspace.relative_cwd()?;
         let resolved_task_config = ResolvedTaskConfig {
             config_dir: cwd.clone(),
             config: task_config,
