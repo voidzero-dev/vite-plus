@@ -19,6 +19,7 @@
     "lint-staged": "^16.1.2",
     "oxlint": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vite-plus": "workspace:*"
   },
   "lint-staged": {

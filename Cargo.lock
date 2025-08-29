@@ -3528,6 +3528,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yml",
+ "tempfile",
  "vite_error",
  "wax",
 ]

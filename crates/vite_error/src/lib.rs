@@ -28,6 +28,7 @@ pub enum Error {
     #[error(transparent)]
     JoinPathsError(#[from] std::env::JoinPathsError),
 
+    #[cfg(unix)]
     #[error(transparent)]
     NixError(#[from] nix::Error),
 
@@ -37,6 +38,7 @@ pub enum Error {
     #[error("Env value is not valid unicode: {key} = {value:?}")]
     EnvValueIsNotValidUnicode { key: String, value: OsString },
 
+    #[cfg(unix)]
     #[error("Unsupported file type: {0:?}")]
     UnsupportedFileType(nix::dir::Type),
 
@@ -64,14 +66,23 @@ pub enum Error {
     #[error("Package {0} not found in workspace")]
     PackageNotFound(String),
 
-    #[error("Task not found in workspace: {0}")]
-    TaskNotFound(String),
+    #[error("Unsupported workspace file: {0:?}")]
+    UnsupportedWorkspaceFile(PathBuf),
+
+    #[error("The package.json file is not found at {0:?}")]
+    PackageJsonNotFound(PathBuf),
+
+    #[error("Task '{task_request}' not found in workspace")]
+    TaskNotFound { task_request: String },
 
     #[error("Dependency Task '{name}' not found in package located at {package_path}")]
     TaskDependencyNotFound { name: String, package_path: String },
 
     #[error("{task_request} should not contain multiple '#'")]
     AmbiguousTaskRequest { task_request: String },
+
+    #[error("Only one task request is allowed when running in implicit mode: {0}")]
+    OnlyOneTaskRequest(String),
 
     #[error("Recursive run is not allowed when task name contains '#': {0}")]
     RecursiveRunWithScope(String),
@@ -87,6 +98,12 @@ pub enum Error {
 
     #[error("Test failed")]
     TestFailed { status: String, reason: String },
+
+    #[error("Path prefix error: {err} at {path:?}, {message}")]
+    PathPrefixError { err: std::path::StripPrefixError, message: String, path: PathBuf },
+
+    #[error("No package.json found at {0:?}")]
+    NoPackageJsonFound(PathBuf),
 
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),

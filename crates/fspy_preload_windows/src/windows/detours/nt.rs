@@ -14,7 +14,7 @@ use winapi::{
         minwindef::{BOOL, DWORD, HFILE, MAX_PATH, UINT},
         ntdef::{
             BOOLEAN, HANDLE, LPCSTR, LPCWSTR, NTSTATUS, PHANDLE, PLARGE_INTEGER,
-            POBJECT_ATTRIBUTES, PUNYCODE_STRING, PVOID, ULONG, UNICODE_STRING,
+            POBJECT_ATTRIBUTES, PUNICODE_STRING, PVOID, ULONG, UNICODE_STRING,
         },
     },
     um::winnt::{ACCESS_MASK, GENERIC_READ},
@@ -307,7 +307,7 @@ static DETOUR_NT_QUERY_DIRECTORY_FILE: Detour<
         length: ULONG,
         file_information_class: FILE_INFORMATION_CLASS,
         return_single_entry: BOOLEAN,
-        file_name: PUNYCODE_STRING,
+        file_name: PUNICODE_STRING,
         restart_scan: BOOLEAN,
     ) -> NTSTATUS,
 > = unsafe {
@@ -322,7 +322,7 @@ static DETOUR_NT_QUERY_DIRECTORY_FILE: Detour<
             length: ULONG,
             file_information_class: FILE_INFORMATION_CLASS,
             return_single_entry: BOOLEAN,
-            file_name: PUNYCODE_STRING,
+            file_name: PUNICODE_STRING,
             restart_scan: BOOLEAN,
         ) -> NTSTATUS {
             unsafe { handle_open(AccessMode::ReadDir, file_handle) };

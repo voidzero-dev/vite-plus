@@ -6,6 +6,7 @@ use crate::config::ResolvedTask;
 use crate::schedule::ExecutionPlan;
 use crate::{Error, ResolveCommandResult, Workspace};
 
+#[tracing::instrument(skip(resolve_lint_command, workspace))]
 pub async fn lint<
     Lint: Future<Output = Result<ResolveCommandResult, Error>>,
     LintFn: Fn() -> Lint,
@@ -15,7 +16,7 @@ pub async fn lint<
     args: &Vec<String>,
 ) -> Result<(), Error> {
     let resolved_task =
-        ResolvedTask::resolve_from_built_in(workspace, resolve_lint_command, "lint", args.iter())
+        ResolvedTask::resolve_from_builtin(workspace, resolve_lint_command, "lint", args.iter())
             .await?;
     let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
     task_graph.add_node(resolved_task);

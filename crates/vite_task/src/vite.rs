@@ -16,7 +16,7 @@ pub async fn create_vite<
     workspace: &mut Workspace,
     args: &Vec<String>,
 ) -> Result<(), Error> {
-    let resolved_task = ResolvedTask::resolve_from_built_in(
+    let resolved_task = ResolvedTask::resolve_from_builtin(
         workspace,
         resolve_vite_command,
         arg_forward,

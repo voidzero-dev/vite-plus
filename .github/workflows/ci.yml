@@ -35,8 +35,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # - os: ubuntu-latest
-          #   target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
           # - os: windows-latest
           #   target: x86_64-pc-windows-msvc
           - os: blaze/macos-latest
@@ -54,8 +54,6 @@ jobs:
         with:
           save-if: ${{ github.ref_name == 'main' }}
           shared-key: ${{ matrix.os }}-${{ matrix.target }}
-      - run: rustup target add x86_64-unknown-linux-musl
-        if: matrix.os == 'ubuntu-latest'
       - run: cargo check --all-targets --all-features
       - run: cargo test
 

@@ -15,7 +15,9 @@ use crate::{
 };
 
 use petgraph::{Graph, graph::NodeIndex, stable_graph::StableDiGraph, visit::IntoNodeReferences};
-use vite_package_manager::{DependencyType, PackageInfo, PackageJson};
+use vite_package_manager::{
+    DependencyType, PackageInfo, PackageJson, find_package_root, find_workspace_root,
+};
 use vite_str::Str;
 
 use super::{
@@ -25,34 +27,66 @@ use super::{
 
 #[derive(Debug)]
 pub struct Workspace {
-    pub(crate) dir: PathBuf,
+    pub(crate) workspace_dir: PathBuf,
+    cwd: PathBuf,
+    /// Relative path from workspace root to current package directory.
+    /// Empty string ("") represents the workspace root package itself.
+    /// None indicates that it cannot find the package root from the current directory..
+    /// This allows distinguishing between workspace-level tasks and package-level tasks.
+    pub(crate) current_package_path: Option<String>,
     pub(crate) task_cache: TaskCache,
     pub(crate) fs: CachedFileSystem,
     pub(crate) package_graph: Graph<PackageInfo, DependencyType>,
     pub(crate) package_json: PackageJson,
     pub(crate) task_graph: StableDiGraph<ResolvedTask, ()>,
-    pub(crate) topological_run: bool,
 }
 
 impl Workspace {
-    #[tracing::instrument]
-    pub fn load(dir: PathBuf, topological_run: bool) -> Result<Self, Error> {
-        Self::load_with_cache_path(dir, None, topological_run)
+    /// Determines the current package path relative to the workspace root.
+    /// Returns an empty string if the current directory is the workspace root itself.
+    /// Returns the workspace root and the current package path.
+    fn determine_current_package_path(
+        original_cwd: &Path,
+    ) -> Result<(&Path, Option<String>), Error> {
+        let workspace_root = find_workspace_root(original_cwd)?.path;
+        // If can't find package root, return the workspace root and an empty string
+        let Ok(package_root) = find_package_root(original_cwd) else {
+            return Ok((workspace_root, None));
+        };
+        let current_package_root = package_root.path;
+
+        // Get relative path from workspace root to package root
+        let path = current_package_root.strip_prefix(&workspace_root).map_err(|err| {
+            Error::PathPrefixError {
+                err,
+                message: "package root is not a subpath of workspace root".to_string(),
+                path: current_package_root.to_path_buf(),
+            }
+        })?;
+        Ok((workspace_root, path.to_str().map(|s| s.to_string())))
     }
 
-    pub fn partial_load(dir: PathBuf) -> Result<Self, Error> {
-        Self::partial_load_with_cache_path(dir, None)
+    #[tracing::instrument]
+    pub fn load(cwd: PathBuf, topological_run: bool) -> Result<Self, Error> {
+        Self::load_with_cache_path(cwd, None, topological_run)
+    }
+
+    pub fn partial_load(cwd: PathBuf) -> Result<Self, Error> {
+        Self::partial_load_with_cache_path(cwd, None)
     }
 
     pub fn partial_load_with_cache_path(
-        dir: PathBuf,
+        cwd: PathBuf,
         cache_path: Option<PathBuf>,
     ) -> Result<Self, Error> {
+        // Determine current package path relative to workspace root
+        let (workspace_root, current_package_path) = Self::determine_current_package_path(&cwd)?;
+
         let cache_path = cache_path.unwrap_or_else(|| {
             if let Ok(env_cache_path) = std::env::var("VITE_CACHE_PATH") {
                 PathBuf::from(env_cache_path)
             } else {
-                dir.join("node_modules/.vite/task-cache.db")
+                workspace_root.join("node_modules/.vite/task-cache.db")
             }
         });
 
@@ -64,7 +98,7 @@ impl Workspace {
         }
         let task_cache = TaskCache::load_from_file(&cache_path)?;
 
-        let package_json_path = dir.join("package.json");
+        let package_json_path = workspace_root.join("package.json");
         let package_json = if package_json_path.exists() {
             let file = File::open(&package_json_path)?;
             let reader = BufReader::new(file);
@@ -75,23 +109,27 @@ impl Workspace {
 
         Ok(Self {
             package_graph: Graph::new(),
-            dir,
+            workspace_dir: workspace_root.to_path_buf(),
+            cwd,
+            current_package_path,
             task_cache,
             fs: CachedFileSystem::default(),
             package_json,
             task_graph: StableDiGraph::new(),
-            topological_run: false,
         })
     }
 
     pub fn load_with_cache_path(
-        dir: PathBuf,
+        cwd: PathBuf,
         cache_path: Option<PathBuf>,
         topological_run: bool,
     ) -> Result<Self, Error> {
-        let package_graph = vite_package_manager::get_package_graph(&dir)?;
+        // Determine current package path relative to workspace root
+        let (workspace_root, current_package_path) = Self::determine_current_package_path(&cwd)?;
+
+        let package_graph = vite_package_manager::get_package_graph(&workspace_root)?;
         // Load vite-task.json files for all packages
-        let packages_with_task_jsons = Self::load_vite_task_jsons(&package_graph, &dir)?;
+        let packages_with_task_jsons = Self::load_vite_task_jsons(&package_graph, &workspace_root)?;
 
         // Find root package.json
         let mut package_json = None;
@@ -107,7 +145,7 @@ impl Workspace {
             if let Ok(env_cache_path) = std::env::var("VITE_CACHE_PATH") {
                 PathBuf::from(env_cache_path)
             } else {
-                dir.join("node_modules/.vite/task-cache.db")
+                workspace_root.join("node_modules/.vite/task-cache.db")
             }
         });
 
@@ -139,7 +177,7 @@ impl Workspace {
             &package_graph,
             &package_path_to_node,
             &mut task_graph_builder,
-            &dir,
+            &workspace_root,
         )?;
 
         // Add topological dependencies if enabled
@@ -152,12 +190,13 @@ impl Workspace {
 
         Ok(Self {
             package_graph,
-            dir,
+            workspace_dir: workspace_root.to_path_buf(),
+            cwd,
+            current_package_path,
             task_cache,
             fs: CachedFileSystem::default(),
             package_json: package_json.unwrap_or_default(),
             task_graph,
-            topological_run,
         })
     }
 
@@ -166,7 +205,7 @@ impl Workspace {
     }
 
     pub async fn unload(self) -> Result<(), Error> {
-        tracing::debug!("Saving task cache {}", self.dir.display());
+        tracing::debug!("Saving task cache {}", self.workspace_dir.display());
         self.task_cache.save().await?;
         Ok(())
     }
@@ -286,17 +325,21 @@ impl Workspace {
                 }
             }
         } else {
+            // Only one task request is allowed when task requests don't contain '#'
+            if task_requests.iter().any(|task| !task.contains('#')) && task_requests.len() > 1 {
+                return Err(Error::OnlyOneTaskRequest(task_requests.join(" ")));
+            }
             // For non-recursive mode, find the task in the full task graph
             for task_request in task_requests {
                 let mut has_matched_task = false;
                 for (task_node_index, task) in self.task_graph.node_references() {
-                    if task.matches(task_request) {
+                    if task.matches(task_request, self.current_package_path.as_deref()) {
                         has_matched_task = true;
                         remaining_task_node_indexes.insert(task_node_index);
                     }
                 }
                 if !has_matched_task {
-                    return Err(Error::TaskNotFound(task_request.to_string()));
+                    return Err(Error::TaskNotFound { task_request: task_request.to_string() });
                 }
             }
         }
@@ -320,8 +363,9 @@ impl Workspace {
                 "Pre-built tasks in the full task graph should not contain additional args"
             );
             if !task_args.is_empty() {
-                updated_task.resolved_command =
-                    updated_task.resolved_config.resolve_command(&self.dir, &task_args)?;
+                updated_task.resolved_command = updated_task
+                    .resolved_config
+                    .resolve_command(&self.workspace_dir, &task_args)?;
             }
 
             // Add to filtered graph
@@ -374,10 +418,11 @@ impl Workspace {
                                 let (dep_package_node_index, dep_task_name): (NodeIndex, Str) =
                                     if let Some(sharp_pos) = sharp_pos {
                                         let package_name = &task_request[..sharp_pos];
-                                        let package_node_indexes =
-                                            package_name_to_node.get(package_name).ok_or_else(
-                                                || Error::TaskNotFound(task_request.to_string()),
-                                            )?;
+                                        let package_node_indexes = package_name_to_node
+                                            .get(package_name)
+                                            .ok_or_else(|| Error::TaskNotFound {
+                                                task_request: task_request.to_string(),
+                                            })?;
                                         match package_node_indexes.as_slice() {
                                             [] => {
                                                 return Err(Error::PackageNotFound(

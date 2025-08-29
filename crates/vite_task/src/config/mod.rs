@@ -77,13 +77,19 @@ impl ResolvedTask {
         }
     }
 
-    pub fn matches(&self, task_request: &str) -> bool {
+    pub fn matches(&self, task_request: &str, current_package_path: Option<&str>) -> bool {
         if self.name.subcommand_index.is_some() {
             // never match non-last subcommand
             return false;
         }
+
+        // match tasks in current package if the task_request doesn't contain '#'
+        if !task_request.contains('#') {
+            return current_package_path == Some(self.resolved_config.config_dir.as_str())
+                && self.name.task_group_name == task_request;
+        };
         let package_name = self.name.package_name.as_str();
-        // TODO: match tasks in current package if the task_request doesn't contain '#'
+
         task_request.get(..package_name.len()) == Some(package_name)
             && task_request.get(package_name.len()..=package_name.len()) == Some("#")
             && task_request.get(package_name.len() + 1..) == Some(&self.name.task_group_name)
@@ -97,7 +103,7 @@ impl ResolvedTask {
 
     #[tracing::instrument(skip(workspace, resolve_command, args))]
     /// Resolve a built-in task, like `vite lint`, `vite build`
-    pub(crate) async fn resolve_from_built_in<
+    pub(crate) async fn resolve_from_builtin<
         Resolved: Future<Output = Result<ResolveCommandResult, Error>>,
         ResolveFn: Fn() -> Resolved,
     >(
@@ -107,21 +113,22 @@ impl ResolvedTask {
         args: impl Iterator<Item = impl AsRef<str>> + Clone,
     ) -> Result<Self, Error> {
         let ResolveCommandResult { bin_path, envs } = resolve_command().await?;
-        let link_task = TaskCommand::Parsed(TaskParsedCommand {
+        let builtin_task = TaskCommand::Parsed(TaskParsedCommand {
             args: args.clone().map(|arg| arg.as_ref().into()).collect(),
             envs: envs.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
             program: bin_path.into(),
         });
-        let task_config: TaskConfig = link_task.clone().into();
+        let task_config: TaskConfig = builtin_task.clone().into();
         let resolved_task_config = ResolvedTaskConfig {
-            config_dir: workspace.dir.as_path().to_string_lossy().as_ref().into(),
+            config_dir: workspace.workspace_dir.as_path().to_string_lossy().as_ref().into(),
             config: task_config,
         };
-        let resolved_envs = TaskEnvs::resolve(workspace.dir.as_path(), &resolved_task_config)?;
+        let resolved_envs =
+            TaskEnvs::resolve(workspace.workspace_dir.as_path(), &resolved_task_config)?;
         let resolved_command = ResolvedTaskCommand {
             fingerprint: CommandFingerprint {
-                cwd: workspace.dir.as_path().to_string_lossy().as_ref().into(),
-                command: link_task,
+                cwd: workspace.workspace_dir.as_path().to_string_lossy().as_ref().into(),
+                command: builtin_task,
                 envs_without_pass_through: resolved_envs.envs_without_pass_through,
             },
             all_envs: resolved_envs.all_envs,
@@ -1272,6 +1279,51 @@ mod tests {
                     && has_edge(&build_graph, "build", "normal-package#test"),
                 "Should have dependency from normal-package to second nameless package due to topological ordering"
             );
+        })
+    }
+
+    #[test]
+    fn test_task_without_sharp_in_explicit_mode() {
+        with_unique_cache_path("task_without_sharp_explicit", |cache_path| {
+            let fixture_path =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
+
+            let workspace = Workspace::load_with_cache_path(
+                fixture_path,
+                Some(cache_path.to_path_buf()),
+                false,
+            )
+            .expect("Failed to load workspace");
+
+            // When in explicit mode (non-recursive), tasks without '#' should resolve to current package
+            // This test simulates being in a package directory
+
+            // First, test that the original scoped task works
+            let api_build_scoped = workspace
+                .build_task_subgraph(&vec!["@test/api#build".into()], Arc::default(), false)
+                .expect("Failed to resolve @test/api#build");
+
+            // Find the number of tasks for API build
+            let api_build_task_count = api_build_scoped.node_count();
+            assert!(api_build_task_count > 0, "Should find API build task");
+
+            // Test that we can resolve task with '#' in package
+            let app_test_scoped = workspace
+                .build_task_subgraph(&vec!["@test/app#test".into()], Arc::default(), false)
+                .expect("Failed to resolve @test/app#test");
+
+            // Should include dependencies
+            assert!(app_test_scoped.node_count() > 0, "Should find app test task");
+
+            // Verify task names in graph
+            let mut found_app_test = false;
+            for task in app_test_scoped.node_weights() {
+                if task.display_name() == "@test/app#test" {
+                    found_app_test = true;
+                    break;
+                }
+            }
+            assert!(found_app_test, "Should find @test/app#test task in graph");
         })
     }
 

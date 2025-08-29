@@ -10,7 +10,7 @@ use anyhow::{Context, bail};
 use xxhash_rust::xxh3::xxh3_128;
 
 fn download(url: &str) -> anyhow::Result<impl Read + use<>> {
-    let resp = attohttpc::get(url).send().unwrap();
+    let resp = attohttpc::get(url).send()?;
     if resp.status() != attohttpc::StatusCode::OK {
         bail!("non-ok response: {:?}", resp.status())
     }
