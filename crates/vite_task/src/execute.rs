@@ -208,7 +208,7 @@ impl TaskEnvs {
         // All envs that are passed to the task
         let mut all_envs = resolve_envs_with_patterns(&pass_through_patterns)?;
 
-        // envs need to caculate fingerprint
+        // envs need to calculate fingerprint
         let mut envs_without_pass_through = HashMap::<Str, Str>::new();
         let envs_without_pass_through_patterns = GlobPatternSet::new(&task.config.envs)?;
         for (name, value) in all_envs.iter() {
@@ -369,6 +369,8 @@ mod tests {
         envs.insert("ALPHA_VAR".into());
         envs.insert("MIDDLE_VAR".into());
         envs.insert("BETA_VAR".into());
+        envs.insert("NOT_EXISTS_VAR".into());
+        envs.insert("APP?_*".into());
 
         let task_config = TaskConfig {
             command: TaskCommand::ShellScript("echo test".into()),
@@ -390,6 +392,8 @@ mod tests {
             std::env::set_var("BETA_VAR", "beta_value");
             // VSCode specific
             std::env::set_var("VSCODE_VAR", "vscode_value");
+            std::env::set_var("APP1_NAME", "app1_value");
+            std::env::set_var("APP2_NAME", "app2_value");
         }
 
         // Resolve envs multiple times
@@ -411,17 +415,21 @@ mod tests {
         assert_eq!(envs2, envs3);
 
         // Verify all expected variables are present
-        assert_eq!(envs1.len(), 4);
+        assert_eq!(envs1.len(), 6);
         assert!(envs1.iter().any(|(k, _)| k.as_str() == "ALPHA_VAR"));
         assert!(envs1.iter().any(|(k, _)| k.as_str() == "BETA_VAR"));
         assert!(envs1.iter().any(|(k, _)| k.as_str() == "MIDDLE_VAR"));
         assert!(envs1.iter().any(|(k, _)| k.as_str() == "ZEBRA_VAR"));
+        assert!(envs1.iter().any(|(k, _)| k.as_str() == "APP1_NAME"));
+        assert!(envs1.iter().any(|(k, _)| k.as_str() == "APP2_NAME"));
 
         // Verify default pass-through envs are present
         let all_envs = result1.all_envs;
         assert!(all_envs.contains_key("VSCODE_VAR"));
         assert!(all_envs.contains_key("PATH"));
         assert!(all_envs.contains_key("HOME"));
+        assert!(all_envs.contains_key("APP1_NAME"));
+        assert!(all_envs.contains_key("APP2_NAME"));
 
         // Clean up
         unsafe {
@@ -430,6 +438,8 @@ mod tests {
             std::env::remove_var("MIDDLE_VAR");
             std::env::remove_var("BETA_VAR");
             std::env::remove_var("VSCODE_VAR");
+            std::env::remove_var("APP1_NAME");
+            std::env::remove_var("APP2_NAME");
         }
     }
 }
