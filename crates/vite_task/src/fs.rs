@@ -133,7 +133,7 @@ impl FileSystem for RealFileSystem {
             // On Windows, trying to read from a directory handle typically fails
             // with a different error than IsADirectory, but let's handle it generically
             // by checking if we can read the directory instead
-            
+
             // Check if this is a directory by trying to read it as such
             match fs::read_dir(path.as_ref()) {
                 Ok(dir_iter) => {
@@ -141,11 +141,11 @@ impl FileSystem for RealFileSystem {
                     let dir_entries: Option<std::collections::HashMap<Str, DirEntryKind>> =
                         if path_read.read_dir_entries {
                             let mut dir_entries = HashMap::<Str, DirEntryKind>::new();
-                            
+
                             for entry in dir_iter {
                                 let entry = entry?;
                                 let file_name = entry.file_name();
-                                
+
                                 // Skip special entries (same as Unix version)
                                 if matches!(
                                     file_name.to_string_lossy().as_ref(),
@@ -153,7 +153,7 @@ impl FileSystem for RealFileSystem {
                                 ) {
                                     continue;
                                 }
-                                
+
                                 // Get file type with minimal additional syscalls
                                 let entry_kind = match entry.file_type() {
                                     Ok(file_type) => {
@@ -174,10 +174,12 @@ impl FileSystem for RealFileSystem {
                                         DirEntryKind::File
                                     }
                                 };
-                                
+
                                 // Convert filename to Str (using OsStr -> String conversion)
-                                let filename_str = file_name.to_string_lossy();
-                                dir_entries.insert(filename_str.into(), entry_kind);
+                                dir_entries.insert(
+                                    file_name.to_string_lossy().as_ref().into(),
+                                    entry_kind,
+                                );
                             }
                             Some(dir_entries)
                         } else {
@@ -249,7 +251,7 @@ mod tests {
         let fs = RealFileSystem::default();
         let nonexistent_path = Arc::<OsStr>::from(std::ffi::OsString::from("/nonexistent/path"));
         let path_read = PathRead { read_dir_entries: false };
-        
+
         let result = fs.fingerprint_path(&nonexistent_path, path_read).unwrap();
         assert!(matches!(result, PathFingerprint::NotFound));
     }
@@ -259,33 +261,33 @@ mod tests {
         let fs = RealFileSystem::default();
         let temp_dir = TempDir::new().unwrap();
         let temp_file = temp_dir.path().join("test_file.txt");
-        
+
         // Create a test file with known content
         std::fs::write(&temp_file, "Hello, World!").unwrap();
-        
+
         let file_path = Arc::<OsStr>::from(temp_file.as_os_str().to_os_string());
         let path_read = PathRead { read_dir_entries: false };
-        
+
         let result = fs.fingerprint_path(&file_path, path_read).unwrap();
         assert!(matches!(result, PathFingerprint::FileContentHash(_)));
-        
+
         // Verify that the same file gives the same hash
         let result2 = fs.fingerprint_path(&file_path, path_read).unwrap();
         assert_eq!(result, result2);
     }
 
-    #[test] 
+    #[test]
     fn test_fingerprint_temp_directory() {
         let fs = RealFileSystem::default();
         let temp_dir = TempDir::new().unwrap();
-        
+
         // Create some files in the directory
         std::fs::write(temp_dir.path().join("file1.txt"), "content1").unwrap();
         std::fs::write(temp_dir.path().join("file2.txt"), "content2").unwrap();
-        
+
         let dir_path = Arc::<OsStr>::from(temp_dir.path().as_os_str().to_os_string());
         let path_read = PathRead { read_dir_entries: true };
-        
+
         let result = fs.fingerprint_path(&dir_path, path_read).unwrap();
         match result {
             PathFingerprint::Folder(Some(entries)) => {
@@ -296,7 +298,7 @@ mod tests {
             }
             _ => panic!("Expected folder with entries, got: {:?}", result),
         }
-        
+
         // Test without reading entries
         let path_read_no_entries = PathRead { read_dir_entries: false };
         let result_no_entries = fs.fingerprint_path(&dir_path, path_read_no_entries).unwrap();
@@ -308,18 +310,18 @@ mod tests {
         let fs = RealFileSystem::default();
         let temp_dir = TempDir::new().unwrap();
         let temp_file = temp_dir.path().join("consistent_test.txt");
-        
+
         std::fs::write(&temp_file, "consistent content").unwrap();
-        
+
         let file_path = Arc::<OsStr>::from(temp_file.as_os_str().to_os_string());
         let path_read = PathRead { read_dir_entries: false };
-        
+
         // Get multiple fingerprints
         let results: Vec<_> = (0..5)
             .map(|_| fs.fingerprint_path(&file_path, path_read))
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
-        
+
         // All results should be identical
         for result in &results[1..] {
             assert_eq!(&results[0], result);
