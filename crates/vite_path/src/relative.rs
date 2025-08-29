@@ -9,7 +9,7 @@ use std::fmt::Display;
 use std::{
     borrow::Borrow,
     ops::Deref,
-    path::{Component, Path},
+    path::{Component, Path, PathBuf},
 };
 use vite_str::Str;
 
@@ -48,6 +48,9 @@ impl RelativePath {
     }
     pub fn as_path(&self) -> &Path {
         Path::new(self.as_str())
+    }
+    pub fn to_path_buf(&self) -> PathBuf {
+        PathBuf::from(self.as_str())
     }
     pub fn to_relative_path_buf(&self) -> RelativePathBuf {
         RelativePathBuf(self.0.into())
@@ -121,6 +124,10 @@ impl Diff for RelativePathBuf {
 }
 
 impl RelativePathBuf {
+    pub fn empty() -> Self {
+        Self("".into())
+    }
+
     /// Extends `self` with `path`.
     ///
     /// Unlike [`std::path::PathBuf::push`], `self` and `path` are both always relative,

@@ -99,7 +99,7 @@ The command fingerprint captures the complete execution context:
 
 ```rust
 pub struct CommandFingerprint {
-    pub cwd: Str,                                      // Working directory
+    pub cwd: Str,                                      // Working directory, relative to workspace root
     pub command: TaskCommand,                          // Shell script or command
     pub envs_without_pass_through: HashMap<Str, Str>,  // Environment variables
 }
@@ -555,7 +555,7 @@ When a task hits cache, outputs are replayed exactly:
 // Task: app#build --production
 TaskCacheKey {
     command_fingerprint: CommandFingerprint {
-        cwd: "/monorepo/packages/app".into(),  // Package identified by cwd
+        cwd: "monorepo/packages/app".into(),  // Package identified by cwd, relative to workspace root
         command: TaskCommand::Shell("tsc && rollup -c".into()),
         envs_without_pass_through: hashmap! {
             "NODE_ENV" => "production"
@@ -571,7 +571,7 @@ TaskCacheKey {
 // Task in packages/frontend (no name in package.json)
 TaskCacheKey {
     command_fingerprint: CommandFingerprint {
-        cwd: "/monorepo/packages/frontend".into(),  // Package identified by cwd
+        cwd: "monorepo/packages/frontend".into(),  // Package identified by cwd, relative to workspace root
         command: TaskCommand::Parsed {
             bin: "webpack".into(),
             args: vec!["--mode", "production"].into(),

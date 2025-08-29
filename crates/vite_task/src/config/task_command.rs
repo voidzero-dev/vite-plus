@@ -33,7 +33,7 @@ impl From<TaskCommand> for TaskConfig {
     fn from(command: TaskCommand) -> Self {
         Self {
             command,
-            cwd: RelativePathBuf::default(),
+            cwd: RelativePathBuf::empty(),
             cacheable: true,
             inputs: Default::default(),
             envs: Default::default(),
