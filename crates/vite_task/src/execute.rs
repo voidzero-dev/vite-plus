@@ -151,77 +151,63 @@ fn resolve_envs_with_patterns(patterns: &[&str]) -> Result<HashMap<Str, Arc<OsSt
     Ok(envs)
 }
 
-fn create_all_envs_patterns<'a>(
-    pass_through_envs: &'a HashSet<Str>,
-    envs: &'a HashSet<Str>,
-) -> Vec<&'a str> {
-    // Exact matches for common environment variables
-    // Referenced from Turborepo's implementation:
-    // https://github.com/vercel/turborepo/blob/26d309f073ca3ac054109ba0c29c7e230e7caac3/crates/turborepo-lib/src/task_hash.rs#L439
-    const DEFAULT_PASSTHROUGH_ENVS: &[&str] = &[
-        // System and shell
-        "HOME",
-        "USER",
-        "TZ",
-        "LANG",
-        "SHELL",
-        "PWD",
-        "PATH",
-        // CI/CD environments
-        "CI",
-        // Node.js specific
-        "NODE_OPTIONS",
-        "COREPACK_HOME",
-        "NPM_CONFIG_STORE_DIR",
-        "PNPM_HOME",
-        // Library paths
-        "LD_LIBRARY_PATH",
-        "DYLD_FALLBACK_LIBRARY_PATH",
-        "LIBPATH",
-        // Terminal/display
-        "COLORTERM",
-        "TERM",
-        "TERM_PROGRAM",
-        "DISPLAY",
-        // Temporary directories
-        "TMP",
-        "TEMP",
-        // Vercel specific
-        "VERCEL",
-        "VERCEL_*",
-        "NEXT_*",
-        "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
-        "NOW_BUILDER",
-        // Windows specific
-        "APPDATA",
-        "PROGRAMDATA",
-        "SYSTEMROOT",
-        "SYSTEMDRIVE",
-        "USERPROFILE",
-        "HOMEDRIVE",
-        "HOMEPATH",
-        // IDE specific (exact matches)
-        "ELECTRON_RUN_AS_NODE",
-        "JB_INTERPRETER",
-        "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE",
-        "JB_IDE_*",
-        // VSCode specific
-        "VSCODE_*",
-        // Docker specific
-        "DOCKER_*",
-        "BUILDKIT_*",
-        "COMPOSE_*",
-    ];
-
-    // All envs that are passed to the task
-    let all_patterns: Vec<&str> = DEFAULT_PASSTHROUGH_ENVS
-        .iter()
-        .copied()
-        .chain(pass_through_envs.iter().map(|s| s.as_ref()))
-        .chain(envs.iter().map(|s| s.as_ref()))
-        .collect();
-    all_patterns
-}
+// Exact matches for common environment variables
+// Referenced from Turborepo's implementation:
+// https://github.com/vercel/turborepo/blob/26d309f073ca3ac054109ba0c29c7e230e7caac3/crates/turborepo-lib/src/task_hash.rs#L439
+const DEFAULT_PASSTHROUGH_ENVS: &[&str] = &[
+    // System and shell
+    "HOME",
+    "USER",
+    "TZ",
+    "LANG",
+    "SHELL",
+    "PWD",
+    "PATH",
+    // CI/CD environments
+    "CI",
+    // Node.js specific
+    "NODE_OPTIONS",
+    "COREPACK_HOME",
+    "NPM_CONFIG_STORE_DIR",
+    "PNPM_HOME",
+    // Library paths
+    "LD_LIBRARY_PATH",
+    "DYLD_FALLBACK_LIBRARY_PATH",
+    "LIBPATH",
+    // Terminal/display
+    "COLORTERM",
+    "TERM",
+    "TERM_PROGRAM",
+    "DISPLAY",
+    // Temporary directories
+    "TMP",
+    "TEMP",
+    // Vercel specific
+    "VERCEL",
+    "VERCEL_*",
+    "NEXT_*",
+    "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
+    "NOW_BUILDER",
+    // Windows specific
+    "APPDATA",
+    "PROGRAMDATA",
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    "USERPROFILE",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    // IDE specific (exact matches)
+    "ELECTRON_RUN_AS_NODE",
+    "JB_INTERPRETER",
+    "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE",
+    "JB_IDE_*",
+    // VSCode specific
+    "VSCODE_*",
+    // Docker specific
+    "DOCKER_*",
+    "BUILDKIT_*",
+    "COMPOSE_*",
+];
 
 const SENSITIVE_PATTERNS: &[&str] = &[
     "*_KEY",
@@ -244,15 +230,17 @@ const SENSITIVE_PATTERNS: &[&str] = &[
     "PASSWORD",
     "SECRET",
     "TOKEN",
-    "PRIVATE_KEY",
-    "PUBLIC_KEY",
 ];
 
 impl TaskEnvs {
     pub fn resolve(base_dir: &Path, task: &ResolvedTaskConfig) -> Result<Self, Error> {
         // All envs that are passed to the task
-        let all_patterns =
-            create_all_envs_patterns(&task.config.pass_through_envs, &task.config.envs);
+        let all_patterns: Vec<&str> = DEFAULT_PASSTHROUGH_ENVS
+            .iter()
+            .copied()
+            .chain(task.config.pass_through_envs.iter().map(|s| s.as_ref()))
+            .chain(task.config.envs.iter().map(|s| s.as_ref()))
+            .collect();
         let mut all_envs = resolve_envs_with_patterns(&all_patterns)?;
 
         // envs need to calculate fingerprint
