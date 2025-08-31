@@ -150,6 +150,7 @@ mod tests {
     use std::path::Path;
 
     use super::*;
+    #[cfg(unix)]
     use assert2::let_assert;
 
     #[test]

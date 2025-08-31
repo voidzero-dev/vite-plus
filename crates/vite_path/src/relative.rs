@@ -175,8 +175,6 @@ mod tests {
     use std::ffi::OsStr;
     #[cfg(unix)]
     use std::os::unix::ffi::OsStrExt;
-    #[cfg(windows)]
-    use std::os::windows::ffi::OsStrExt;
 
     use assert2::let_assert;
 
@@ -202,6 +200,7 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn non_utf8_windows() {
+        use std::os::windows::ffi::OsStrExt;
         // On Windows, create invalid UTF-16 sequence
         let invalid_utf16 = [0xD800]; // Unpaired surrogate
         let non_utf8_path = Path::new(OsStr::from_wide(&invalid_utf16));
