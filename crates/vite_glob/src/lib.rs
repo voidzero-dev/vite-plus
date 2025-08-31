@@ -4,9 +4,7 @@ use wax::{Glob, Pattern};
 
 use vite_error::Error;
 
-/// A glob pattern set, support the last match wins semantics.
-///
-/// If there no any negated pattern, it will follow the first match wins semantics.
+/// If there are no negated patterns, it will follow the first match wins semantics.
 /// Otherwise, it will follow the last match wins semantics.
 #[derive(Debug)]
 pub struct GlobPatternSet<'a> {
