@@ -1,5 +1,5 @@
-use std::path::Path;
 use std::sync::Arc;
+use vite_path::AbsolutePath;
 
 // use bincode::config::{Configuration, standard};
 use bincode::{Decode, Encode, decode_from_slice, encode_to_vec};
@@ -25,9 +25,9 @@ impl CachedTask {
         task: ResolvedTask,
         executed_task: ExecutedTask,
         fs: &impl FileSystem,
-        base_dir: &Path,
+        base_dir: &AbsolutePath,
     ) -> Result<Self, Error> {
-        let fingerprint = TaskFingerprint::create(task, &executed_task, fs, base_dir)?;
+        let fingerprint = TaskFingerprint::create(task, &executed_task, fs, base_dir.as_path())?;
         Ok(Self { fingerprint, std_outputs: executed_task.std_outputs })
     }
 }
@@ -52,9 +52,9 @@ pub enum CacheMiss {
 }
 
 impl TaskCache {
-    pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self, Error> {
+    pub fn load_from_file(path: impl AsRef<AbsolutePath>) -> Result<Self, Error> {
         let path = path.as_ref();
-        let conn = Connection::open(path)?;
+        let conn = Connection::open(path.as_path())?;
         conn.execute_batch("PRAGMA journal_mode=WAL")?;
         conn.execute("BEGIN EXCLUSIVE", ())?;
         loop {
@@ -144,12 +144,14 @@ impl TaskCache {
         &self,
         task: &ResolvedTask,
         fs: &impl FileSystem,
-        base_dir: &Path,
+        base_dir: &AbsolutePath,
     ) -> Result<Result<CachedTask, CacheMiss>, Error> {
         let Some(cached_task) = self.get_cache(task).await? else {
             return Ok(Err(CacheMiss::NotFound));
         };
-        if let Some(fingerprint_mismatch) = cached_task.fingerprint.validate(task, fs, base_dir)? {
+        if let Some(fingerprint_mismatch) =
+            cached_task.fingerprint.validate(task, fs, base_dir.as_path())?
+        {
             return Ok(Err(CacheMiss::FingerprintMismatch(fingerprint_mismatch)));
         }
         Ok(Ok(cached_task))

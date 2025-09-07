@@ -42,6 +42,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 twox-hash = { workspace = true }
 vite_package_manager = { workspace = true }
+vite_path = { workspace = true }
 vite_str = { workspace = true }
 wax = { workspace = true }
 wildmatch = { workspace = true }

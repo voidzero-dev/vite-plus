@@ -19,6 +19,9 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use anyhow;
+use vite_path::AbsolutePathBuf;
+
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 
@@ -164,6 +167,10 @@ pub async fn main<
     args: Args,
     options: Option<CliOptions<Lint, LintFn, Vite, ViteFn, Test, TestFn>>,
 ) -> Result<(), Error> {
+    let cwd = AbsolutePathBuf::new(cwd).ok_or_else(|| {
+        Error::AnyhowError(anyhow::anyhow!("current working directory is not absolute"))
+    })?;
+
     let mut recursive_run = false;
     let mut parallel_run = false;
     let (tasks, mut workspace, task_args) = match &args.commands {
@@ -224,7 +231,9 @@ pub async fn main<
             };
             let name = &workspace.package_json.name;
             if name.is_empty() {
-                return Err(Error::EmptyPackageName(workspace.workspace_dir));
+                return Err(Error::EmptyPackageName(
+                    workspace.workspace_dir.as_path().to_path_buf(),
+                ));
             }
             (
                 &vec![if task.contains('#') { task } else { format!("{name}#{task}").into() }],

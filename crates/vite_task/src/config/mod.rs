@@ -3,13 +3,14 @@ mod task_command;
 mod task_graph_builder;
 mod workspace;
 
-use std::{ffi::OsStr, future::Future, sync::Arc};
+use std::{ffi::OsStr, future::Future, path::Path, sync::Arc};
 
 use bincode::{Decode, Encode};
 use compact_str::ToCompactString;
 use diff::Diff;
 use serde::{Deserialize, Serialize};
 use vite_error::Error;
+use vite_path;
 use vite_str::Str;
 
 use crate::{
@@ -1285,12 +1286,18 @@ mod tests {
     #[test]
     fn test_task_without_sharp_in_explicit_mode() {
         with_unique_cache_path("task_without_sharp_explicit", |cache_path| {
-            let fixture_path =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
+            let fixture_path = {
+                let path =
+                    Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
+                vite_path::AbsolutePathBuf::new(path).expect("fixture path should be absolute")
+            };
 
             let workspace = Workspace::load_with_cache_path(
                 fixture_path,
-                Some(cache_path.to_path_buf()),
+                Some(
+                    vite_path::AbsolutePathBuf::new(cache_path.to_path_buf())
+                        .expect("cache path should be absolute"),
+                ),
                 false,
             )
             .expect("Failed to load workspace");
@@ -1330,7 +1337,10 @@ mod tests {
     #[test]
     fn test_dependency_resolution_with_ambiguous_names() {
         with_unique_cache_path("dependency_ambiguous_names", |cache_path| {
-            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/conflict-test");
+            let fixture_path = {
+                let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/conflict-test");
+                vite_path::AbsolutePathBuf::new(path).expect("fixture path should be absolute")
+            };
 
             // This should fail with a TaskNameConflict error because the dependency
             // "@test/scope-a#b#c" is ambiguous - it could mean:
@@ -1339,7 +1349,10 @@ mod tests {
             // And both packages exist in the fixture
             let result = Workspace::load_with_cache_path(
                 fixture_path,
-                Some(cache_path.to_path_buf()),
+                Some(
+                    vite_path::AbsolutePathBuf::new(cache_path.to_path_buf())
+                        .expect("cache path should be absolute"),
+                ),
                 false,
             );
 

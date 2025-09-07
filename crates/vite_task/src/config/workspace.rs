@@ -1,10 +1,13 @@
 use std::{
-    collections::{BTreeSet, HashMap, HashSet, hash_map::Entry},
+    collections::{BTreeSet, hash_map::Entry},
     fs::File,
     io::BufReader,
-    path::{Path, PathBuf},
     sync::Arc,
 };
+
+use crate::collections::{HashMap, HashSet};
+use anyhow;
+use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 
 use crate::{
     Error,
@@ -27,8 +30,8 @@ use super::{
 
 #[derive(Debug)]
 pub struct Workspace {
-    pub(crate) workspace_dir: PathBuf,
-    cwd: PathBuf,
+    pub(crate) workspace_dir: AbsolutePathBuf,
+    cwd: AbsolutePathBuf,
     /// Relative path from workspace root to current package directory.
     /// Empty string ("") represents the workspace root package itself.
     /// None indicates that it cannot find the package root from the current directory..
@@ -46,61 +49,80 @@ impl Workspace {
     /// Returns an empty string if the current directory is the workspace root itself.
     /// Returns the workspace root and the current package path.
     fn determine_current_package_path(
-        original_cwd: &Path,
-    ) -> Result<(&Path, Option<String>), Error> {
-        let workspace_root = find_workspace_root(original_cwd)?.path;
+        original_cwd: &AbsolutePath,
+    ) -> Result<(&AbsolutePath, Option<String>), Error> {
+        let workspace_root = find_workspace_root(original_cwd.as_path())?.path;
+        let workspace_root = vite_path::AbsolutePath::new(workspace_root)
+            .ok_or_else(|| Error::AnyhowError(anyhow::anyhow!("workspace root is not absolute")))?;
         // If can't find package root, return the workspace root and an empty string
-        let Ok(package_root) = find_package_root(original_cwd) else {
+        let Ok(package_root) = find_package_root(original_cwd.as_path()) else {
             return Ok((workspace_root, None));
         };
         let current_package_root = package_root.path;
+        let current_package_root = vite_path::AbsolutePath::new(current_package_root)
+            .ok_or_else(|| Error::AnyhowError(anyhow::anyhow!("package root is not absolute")))?;
 
         // Get relative path from workspace root to package root
-        let path = current_package_root.strip_prefix(&workspace_root).map_err(|err| {
-            Error::PathPrefixError {
-                err,
-                message: "package root is not a subpath of workspace root".to_string(),
-                path: current_package_root.to_path_buf(),
-            }
+        let path_result = current_package_root.strip_prefix(workspace_root).map_err(|err| {
+            Error::AnyhowError(anyhow::anyhow!(
+                "package root is not a subpath of workspace root: {}",
+                err
+            ))
         })?;
-        Ok((workspace_root, path.to_str().map(|s| s.to_string())))
+
+        let path_str = match path_result {
+            Some(relative_path) => Some(relative_path.as_str().to_string()),
+            None => None,
+        };
+
+        Ok((workspace_root, path_str))
     }
 
     #[tracing::instrument]
-    pub fn load(cwd: PathBuf, topological_run: bool) -> Result<Self, Error> {
+    pub fn load(cwd: AbsolutePathBuf, topological_run: bool) -> Result<Self, Error> {
         Self::load_with_cache_path(cwd, None, topological_run)
     }
 
-    pub fn partial_load(cwd: PathBuf) -> Result<Self, Error> {
+    pub fn partial_load(cwd: AbsolutePathBuf) -> Result<Self, Error> {
         Self::partial_load_with_cache_path(cwd, None)
     }
 
     pub fn partial_load_with_cache_path(
-        cwd: PathBuf,
-        cache_path: Option<PathBuf>,
+        cwd: AbsolutePathBuf,
+        cache_path: Option<AbsolutePathBuf>,
     ) -> Result<Self, Error> {
         // Determine current package path relative to workspace root
         let (workspace_root, current_package_path) = Self::determine_current_package_path(&cwd)?;
 
         let cache_path = cache_path.unwrap_or_else(|| {
             if let Ok(env_cache_path) = std::env::var("VITE_CACHE_PATH") {
-                PathBuf::from(env_cache_path)
+                AbsolutePathBuf::new(env_cache_path.into()).expect("Cache path should be absolute")
             } else {
-                workspace_root.join("node_modules/.vite/task-cache.db")
+                workspace_root.join(
+                    RelativePathBuf::try_from(std::path::Path::new(
+                        "node_modules/.vite/task-cache.db",
+                    ))
+                    .unwrap()
+                    .as_relative_path(),
+                )
             }
         });
 
-        if !cache_path.exists()
-            && let Some(cache_dir) = cache_path.parent()
+        if !cache_path.as_path().exists()
+            && let Some(cache_dir) = cache_path.as_path().parent()
         {
             tracing::info!("Creating task cache directory at {}", cache_dir.display());
             std::fs::create_dir_all(cache_dir)?;
         }
         let task_cache = TaskCache::load_from_file(&cache_path)?;
 
-        let package_json_path = workspace_root.join("package.json");
-        let package_json = if package_json_path.exists() {
-            let file = File::open(&package_json_path)?;
+        let package_json_path = workspace_root.join(
+            RelativePathBuf::try_from(std::path::Path::new("package.json"))
+                .unwrap()
+                .as_relative_path(),
+        );
+        let package_json = if package_json_path.as_path().exists() {
+            let file = File::open(package_json_path.as_path())?;
             let reader = BufReader::new(file);
             serde_json::from_reader(reader)?
         } else {
@@ -109,7 +131,7 @@ impl Workspace {
 
         Ok(Self {
             package_graph: Graph::new(),
-            workspace_dir: workspace_root.to_path_buf(),
+            workspace_dir: workspace_root.to_absolute_path_buf(),
             cwd,
             current_package_path,
             task_cache,
@@ -120,8 +142,8 @@ impl Workspace {
     }
 
     pub fn load_with_cache_path(
-        cwd: PathBuf,
-        cache_path: Option<PathBuf>,
+        cwd: AbsolutePathBuf,
+        cache_path: Option<AbsolutePathBuf>,
         topological_run: bool,
     ) -> Result<Self, Error> {
         // Determine current package path relative to workspace root
@@ -143,14 +165,20 @@ impl Workspace {
 
         let cache_path = cache_path.unwrap_or_else(|| {
             if let Ok(env_cache_path) = std::env::var("VITE_CACHE_PATH") {
-                PathBuf::from(env_cache_path)
+                AbsolutePathBuf::new(env_cache_path.into()).expect("Cache path should be absolute")
             } else {
-                workspace_root.join("node_modules/.vite/task-cache.db")
+                workspace_root.join(
+                    RelativePathBuf::try_from(std::path::Path::new(
+                        "node_modules/.vite/task-cache.db",
+                    ))
+                    .unwrap()
+                    .as_relative_path(),
+                )
             }
         });
 
-        if !cache_path.exists()
-            && let Some(cache_dir) = cache_path.parent()
+        if !cache_path.as_path().exists()
+            && let Some(cache_dir) = cache_path.as_path().parent()
         {
             tracing::info!("Creating task cache directory at {}", cache_dir.display());
             std::fs::create_dir_all(cache_dir)?;
@@ -190,7 +218,7 @@ impl Workspace {
 
         Ok(Self {
             package_graph,
-            workspace_dir: workspace_root.to_path_buf(),
+            workspace_dir: workspace_root.to_absolute_path_buf(),
             cwd,
             current_package_path,
             task_cache,
@@ -205,7 +233,7 @@ impl Workspace {
     }
 
     pub async fn unload(self) -> Result<(), Error> {
-        tracing::debug!("Saving task cache {}", self.workspace_dir.display());
+        tracing::debug!("Saving task cache {}", self.workspace_dir.as_path().display());
         self.task_cache.save().await?;
         Ok(())
     }
@@ -216,7 +244,7 @@ impl Workspace {
         name: Str,
         subcommand_index: Option<usize>,
         task_args: Arc<[Str]>,
-        base_dir: &Path,
+        base_dir: &AbsolutePath,
     ) -> Result<ResolvedTask, Error> {
         let resolved_config = ResolvedTaskConfig {
             config_dir: package_info.path.as_str().into(),
@@ -391,7 +419,7 @@ impl Workspace {
         package_graph: &Graph<PackageInfo, DependencyType>,
         package_name_to_node: &HashMap<String, Vec<NodeIndex>>,
         task_graph_builder: &mut TaskGraphBuilder,
-        base_dir: &Path,
+        base_dir: &AbsolutePath,
     ) -> Result<(), Error> {
         for (package_node_index, task_json) in packages_with_task_jsons {
             let package_info = &package_graph[*package_node_index];
@@ -495,7 +523,7 @@ impl Workspace {
                         let deps = if let Some(dep_index) = index.checked_sub(1) {
                             HashSet::from([TaskId { subcommand_index: Some(dep_index), ..task_id }])
                         } else {
-                            HashSet::new()
+                            HashSet::default()
                         };
                         task_graph_builder.add_task_with_deps(resolved_task, deps)?;
                     }
@@ -508,7 +536,7 @@ impl Workspace {
                         Arc::default(),
                         base_dir,
                     )?;
-                    task_graph_builder.add_task_with_deps(resolved_task, HashSet::new())?;
+                    task_graph_builder.add_task_with_deps(resolved_task, HashSet::default())?;
                 }
             }
         }
@@ -527,7 +555,7 @@ impl Workspace {
 
         // Collect all tasks grouped by task group id
         let mut task_ids_by_task_group_id: HashMap<TaskGroupId, Vec<(TaskId, usize)>> =
-            HashMap::new();
+            HashMap::default();
 
         // Iterate through all tasks in the graph builder to collect them
         for task_id in task_graph_builder.resolved_tasks_and_dep_ids_by_id.keys() {
@@ -596,25 +624,36 @@ impl Workspace {
     /// Load vite-task.json files for all packages
     fn load_vite_task_jsons(
         package_graph: &Graph<PackageInfo, DependencyType>,
-        base_dir: &Path,
+        base_dir: &AbsolutePath,
     ) -> Result<Vec<(NodeIndex, Option<ViteTaskJson>)>, Error> {
         let mut packages_with_task_jsons = Vec::new();
 
         for node_idx in package_graph.node_indices() {
             let package = &package_graph[node_idx];
-            let vite_task_json_path =
-                base_dir.join(Path::new(&package.path)).join("vite-task.json");
-            let vite_task_json: Option<ViteTaskJson> = match File::open(vite_task_json_path) {
-                Ok(vite_task_json_file) => {
-                    Some(serde_json::from_reader(BufReader::new(vite_task_json_file))?)
-                }
-                Err(err) => {
-                    if err.kind() != std::io::ErrorKind::NotFound {
-                        return Err(err.into());
-                    }
-                    None
-                }
+            let vite_task_json_path = {
+                let package_path = if package.path.is_empty() {
+                    RelativePathBuf::try_from(std::path::Path::new(".")).unwrap()
+                } else {
+                    RelativePathBuf::try_from(std::path::Path::new(&package.path)).unwrap()
+                };
+                base_dir.join(package_path.as_relative_path()).join(
+                    RelativePathBuf::try_from(std::path::Path::new("vite-task.json"))
+                        .unwrap()
+                        .as_relative_path(),
+                )
             };
+            let vite_task_json: Option<ViteTaskJson> =
+                match File::open(vite_task_json_path.as_path()) {
+                    Ok(vite_task_json_file) => {
+                        Some(serde_json::from_reader(BufReader::new(vite_task_json_file))?)
+                    }
+                    Err(err) => {
+                        if err.kind() != std::io::ErrorKind::NotFound {
+                            return Err(err.into());
+                        }
+                        None
+                    }
+                };
             packages_with_task_jsons.push((node_idx, vite_task_json));
         }
 
@@ -629,7 +668,7 @@ fn find_transitive_dependencies(
     package_path_to_node_index: &HashMap<&str, NodeIndex>,
 ) -> Vec<Str> {
     let mut result = Vec::new();
-    let mut visited = HashSet::new();
+    let mut visited = HashSet::default();
 
     find_transitive_dependencies_recursive(
         package_path,

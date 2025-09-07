@@ -3549,7 +3549,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vite_paths"
+name = "vite_path"
 version = "0.1.0"
 dependencies = [
  "assert2",
@@ -3602,6 +3602,7 @@ dependencies = [
  "twox-hash",
  "vite_error",
  "vite_package_manager",
+ "vite_path",
  "vite_str",
  "wax",
  "wildmatch",

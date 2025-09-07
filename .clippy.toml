@@ -12,4 +12,6 @@ disallowed-methods = [
 disallowed-types = [
   { path = "std::collections::HashMap", reason = "Use `rustc_hash::FxHashMap` instead, which is typically faster." },
   { path = "std::collections::HashSet", reason = "Use `rustc_hash::FxHashSet` instead, which is typically faster." },
+  { path = "std::path::Path", reason = "Use `vite_path::RelativePath` or `vite_path::AbsolutePath` instead" },
+  { path = "std::path::PathBuf", reason = "Use `vite_path::RelativePathBuf` or `vite_path::AbsolutePathBuf` instead" },
 ]

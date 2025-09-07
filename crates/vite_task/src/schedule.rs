@@ -1,4 +1,5 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
+use vite_path::{AbsolutePath, AbsolutePathBuf};
 
 use futures_core::future::BoxFuture;
 use futures_util::future::FutureExt as _;
@@ -116,7 +117,7 @@ async fn get_cached_or_execute<'a>(
     task: ResolvedTask,
     cache: &'a mut TaskCache,
     fs: &'a impl FileSystem,
-    base_dir: &'a Path,
+    base_dir: &'a AbsolutePath,
 ) -> Result<(Option<CacheMiss>, BoxFuture<'a, Result<(), Error>>), Error> {
     Ok(match cache.try_hit(&task, fs, base_dir).await? {
         Ok(cache_task) => (
@@ -141,7 +142,8 @@ async fn get_cached_or_execute<'a>(
         Err(cache_miss) => (
             Some(cache_miss),
             async move {
-                let executed_task = execute_task(&task.resolved_command, base_dir).await?;
+                let executed_task =
+                    execute_task(&task.resolved_command, base_dir.as_path()).await?;
                 let cached_task = CachedTask::create(task.clone(), executed_task, fs, base_dir)?;
                 cache.update(&task, cached_task).await?;
                 Ok(())
@@ -170,12 +172,21 @@ mod tests {
     #[test]
     fn test_execution_non_parallel() {
         with_unique_cache_path("comprehensive_task_graph", |cache_path| {
-            let fixture_path =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
+            let fixture_path = {
+                let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("fixtures/comprehensive-task-graph");
+                AbsolutePathBuf::new(path).expect("fixture path should be absolute")
+            };
 
-            let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(
+                fixture_path,
+                Some(
+                    AbsolutePathBuf::new(cache_path.to_path_buf())
+                        .expect("cache path should be absolute"),
+                ),
+                true,
+            )
+            .expect("Failed to load workspace");
 
             // Test build task graph
             let build_graph = workspace

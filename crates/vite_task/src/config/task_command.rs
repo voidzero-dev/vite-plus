@@ -1,4 +1,5 @@
-use std::{fmt::Display, path::Path};
+use std::fmt::Display;
+use vite_path::AbsolutePath;
 
 use crate::{Error, cmd::TaskParsedCommand, execute::TaskEnvs};
 
@@ -51,7 +52,7 @@ pub struct ResolvedTaskConfig {
 impl ResolvedTaskConfig {
     pub(crate) fn resolve_command(
         &self,
-        base_dir: &Path,
+        base_dir: &AbsolutePath,
         task_args: &[Str],
     ) -> Result<ResolvedTaskCommand, Error> {
         let cwd = RelativePath::new(&self.config_dir).join(self.config.cwd.as_str());
@@ -77,7 +78,7 @@ impl ResolvedTaskConfig {
                 }
             }
         };
-        let task_envs = TaskEnvs::resolve(base_dir, self)?;
+        let task_envs = TaskEnvs::resolve(base_dir.as_path(), self)?;
         Ok(ResolvedTaskCommand {
             fingerprint: CommandFingerprint {
                 cwd: cwd.as_str().into(),
