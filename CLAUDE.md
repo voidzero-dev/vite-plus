@@ -24,9 +24,9 @@ vite-plus dev                             # runs dev script from package.json
 ## Key Architecture
 
 - **Entry**: `crates/vite_task/src/lib.rs` - CLI parsing and main logic
-- **Workspace**: `src/config/workspace.rs` - Loads packages, creates task graph
-- **Task Graph**: `src/config/task_graph_builder.rs` - Builds dependency graph
-- **Execution**: `src/schedule.rs` - Executes tasks in dependency order
+- **Workspace**: `crates/vite_task/src/config/workspace.rs` - Loads packages, creates task graph
+- **Task Graph**: `crates/vite_task/src/config/task_graph_builder.rs` - Builds dependency graph
+- **Execution**: `crates/vite_task/src/schedule.rs` - Executes tasks in dependency order
 
 ## Task Dependencies
 
@@ -56,12 +56,30 @@ vite-plus dev                             # runs dev script from package.json
   - Conflicts handled by clap
   - If you want to add a new boolean flag, follow this pattern
 
+## Path Type System
+
+- **Type Safety**: All paths use typed `vite_path` instead of `std::path` for better safety
+  - **Absolute Paths**: `vite_path::AbsolutePath` / `AbsolutePathBuf`
+  - **Relative Paths**: `vite_path::RelativePath` / `RelativePathBuf`
+  - **Principle**: Paths of `Str` type are relative, paths of `PathBuf` type are absolute
+
+- **Usage Guidelines**:
+  - Use `strip_prefix` provided in `vite_path` for path conversions
+  - Use `.as_path()` when interfacing with std library functions
+  - Add necessary methods in `vite_path` instead of falling back to std path types
+
+- **Clippy Enforcement**:
+  - `std::path::{Path, PathBuf}` are disallowed by clippy rules
+  - Use `cargo clippy --no-deps -p vite_task -- -A clippy::all -W clippy::disallowed-types` to check compliance
+
 ## Quick Reference
 
 - **Compound Commands**: `"build": "tsc && rollup"` splits into subtasks
 - **Task Format**: `package#task` (e.g., `app#build`)
+- **Path Types**: Use `vite_path` types instead of `std::path` types for type safety
 - **Tests**: Run `cargo test -p vite_task` to verify changes
 - **Debug**: Use `--debug` to see cache operations
+- **Clippy Check**: Use `cargo clippy --no-deps -p vite_task -- -A clippy::all -W clippy::disallowed-types` to find disallowed std types
 
 ## Tests
 
