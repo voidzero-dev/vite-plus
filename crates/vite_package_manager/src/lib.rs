@@ -1,11 +1,7 @@
 pub mod package_manager;
 
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::{fs, io};
 
-use anyhow::Context;
 use petgraph::Graph;
 use petgraph::graph::NodeIndex;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
@@ -71,7 +67,7 @@ impl WorkspaceMemberGlobs {
 
     fn get_package_json_paths(
         self,
-        workspace_root: impl AsRef<Path>,
+        workspace_root: impl AsRef<AbsolutePath>,
     ) -> Result<impl IntoIterator<Item = AbsolutePathBuf>, Error> {
         let workspace_root = workspace_root.as_ref();
         let mut package_json_paths = HashSet::<AbsolutePathBuf>::default();
