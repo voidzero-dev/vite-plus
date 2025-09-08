@@ -99,11 +99,9 @@ impl Workspace {
                 AbsolutePathBuf::new(env_cache_path.into()).expect("Cache path should be absolute")
             } else {
                 workspace_root.join(
-                    RelativePathBuf::try_from(std::path::Path::new(
-                        "node_modules/.vite/task-cache.db",
-                    ))
-                    .unwrap()
-                    .as_relative_path(),
+                    RelativePathBuf::new(std::path::Path::new("node_modules/.vite/task-cache.db"))
+                        .unwrap()
+                        .as_relative_path(),
                 )
             }
         });
@@ -117,9 +115,7 @@ impl Workspace {
         let task_cache = TaskCache::load_from_file(&cache_path)?;
 
         let package_json_path = workspace_root.join(
-            RelativePathBuf::try_from(std::path::Path::new("package.json"))
-                .unwrap()
-                .as_relative_path(),
+            RelativePathBuf::new(std::path::Path::new("package.json")).unwrap().as_relative_path(),
         );
         let package_json = if package_json_path.as_path().exists() {
             let file = File::open(package_json_path.as_path())?;
@@ -168,11 +164,9 @@ impl Workspace {
                 AbsolutePathBuf::new(env_cache_path.into()).expect("Cache path should be absolute")
             } else {
                 workspace_root.join(
-                    RelativePathBuf::try_from(std::path::Path::new(
-                        "node_modules/.vite/task-cache.db",
-                    ))
-                    .unwrap()
-                    .as_relative_path(),
+                    RelativePathBuf::new(std::path::Path::new("node_modules/.vite/task-cache.db"))
+                        .unwrap()
+                        .as_relative_path(),
                 )
             }
         });
@@ -632,12 +626,12 @@ impl Workspace {
             let package = &package_graph[node_idx];
             let vite_task_json_path = {
                 let package_path = if package.path.is_empty() {
-                    RelativePathBuf::try_from(std::path::Path::new(".")).unwrap()
+                    RelativePathBuf::new(std::path::Path::new(".")).unwrap()
                 } else {
-                    RelativePathBuf::try_from(std::path::Path::new(&package.path)).unwrap()
+                    RelativePathBuf::new(std::path::Path::new(&package.path)).unwrap()
                 };
                 base_dir.join(package_path.as_relative_path()).join(
-                    RelativePathBuf::try_from(std::path::Path::new("vite-task.json"))
+                    RelativePathBuf::new(std::path::Path::new("vite-task.json"))
                         .unwrap()
                         .as_relative_path(),
                 )

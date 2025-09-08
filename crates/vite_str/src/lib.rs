@@ -14,7 +14,7 @@ use bincode::{
     error::{DecodeError, EncodeError},
     impl_borrow_decode,
 };
-use compact_str::{CompactString};
+use compact_str::CompactString;
 use diff::Diff;
 use serde::{Deserialize, Serialize};
 

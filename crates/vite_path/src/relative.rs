@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn replace_backslash_separators() {
         let path = Path::new("foo\\bar");
-        let rel_path = RelativePathBuf::try_from(path).unwrap();
+        let rel_path = RelativePathBuf::new(path).unwrap();
         assert_eq!(rel_path.as_str(), "foo/bar");
     }
 
