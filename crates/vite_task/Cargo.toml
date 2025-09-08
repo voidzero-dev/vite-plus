@@ -31,7 +31,6 @@ futures-util = { workspace = true }
 itertools = { workspace = true }
 petgraph = { workspace = true }
 rayon = { workspace = true }
-relative-path = { workspace = true }
 rusqlite = { workspace = true, features = ["bundled"] }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { workspace = true }

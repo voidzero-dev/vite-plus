@@ -2639,15 +2639,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
-name = "relative-path"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bca40a312222d8ba74837cb474edef44b37f561da5f773981007a10bbaa992b0"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "rusqlite"
 version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3529,6 +3520,8 @@ dependencies = [
  "serde_json",
  "serde_yml",
  "thiserror 2.0.12",
+ "vite_path",
+ "vite_str",
  "wax",
 ]
 
@@ -3554,7 +3547,9 @@ version = "0.1.0"
 dependencies = [
  "assert2",
  "bincode",
+ "diff-struct",
  "ref-cast",
+ "serde",
  "thiserror 2.0.12",
  "vite_str",
 ]
@@ -3589,7 +3584,6 @@ dependencies = [
  "nix 0.30.1",
  "petgraph",
  "rayon",
- "relative-path",
  "rusqlite",
  "serde",
  "serde_json",

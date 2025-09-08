@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use compact_str::CompactString;
 use petgraph::graph::NodeIndex;
 use thiserror::Error;
+use vite_path::RelativePathBuf;
+use vite_str::Str;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -36,7 +38,7 @@ pub enum Error {
     SerdeError(#[from] serde_json::Error),
 
     #[error("Env value is not valid unicode: {key} = {value:?}")]
-    EnvValueIsNotValidUnicode { key: String, value: OsString },
+    EnvValueIsNotValidUnicode { key: Str, value: OsString },
 
     #[cfg(unix)]
     #[error("Unsupported file type: {0:?}")]
@@ -52,10 +54,10 @@ pub enum Error {
     WaxWalkError(#[from] wax::WalkError),
 
     #[error("Duplicated task name: {0}")]
-    DuplicatedTask(String),
+    DuplicatedTask(Str),
 
     #[error("Duplicated package name: {name} at {path1} and {path2}")]
-    DuplicatedPackageName { name: String, path1: CompactString, path2: CompactString },
+    DuplicatedPackageName { name: Str, path1: CompactString, path2: CompactString },
 
     #[error("Circular dependency found : {0:?}")]
     CycleDependenciesError(petgraph::algo::Cycle<NodeIndex>),
@@ -64,7 +66,7 @@ pub enum Error {
     EmptyPackageName(PathBuf),
 
     #[error("Package {0} not found in workspace")]
-    PackageNotFound(String),
+    PackageNotFound(Str),
 
     #[error("Unsupported workspace file: {0:?}")]
     UnsupportedWorkspaceFile(PathBuf),
@@ -73,34 +75,34 @@ pub enum Error {
     PackageJsonNotFound(PathBuf),
 
     #[error("Task '{task_request}' not found in workspace")]
-    TaskNotFound { task_request: String },
+    TaskNotFound { task_request: Str },
 
     #[error("Dependency Task '{name}' not found in package located at {package_path}")]
-    TaskDependencyNotFound { name: String, package_path: String },
+    TaskDependencyNotFound { name: Str, package_path: RelativePathBuf },
 
     #[error("{task_request} should not contain multiple '#'")]
-    AmbiguousTaskRequest { task_request: String },
+    AmbiguousTaskRequest { task_request: Str },
 
     #[error("Only one task request is allowed when running in implicit mode: {0}")]
-    OnlyOneTaskRequest(String),
+    OnlyOneTaskRequest(Str),
 
     #[error("Recursive run is not allowed when task name contains '#': {0}")]
-    RecursiveRunWithScope(String),
+    RecursiveRunWithScope(Str),
 
     #[error(transparent)]
     SerdeYmlError(#[from] serde_yml::Error),
 
     #[error("Lint failed")]
-    LintFailed { status: String, reason: String },
+    LintFailed { status: Str, reason: Str },
 
     #[error("Vite failed")]
-    ViteError { status: String, reason: String },
+    ViteError { status: Str, reason: Str },
 
     #[error("Test failed")]
-    TestFailed { status: String, reason: String },
+    TestFailed { status: Str, reason: Str },
 
     #[error("Path prefix error: {err} at {path:?}, {message}")]
-    PathPrefixError { err: std::path::StripPrefixError, message: String, path: PathBuf },
+    PathPrefixError { err: std::path::StripPrefixError, message: Str, path: PathBuf },
 
     #[error("No package.json found at {0:?}")]
     NoPackageJsonFound(PathBuf),
