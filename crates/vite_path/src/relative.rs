@@ -31,6 +31,12 @@ impl AsRef<RelativePath> for RelativePath {
     }
 }
 
+impl AsRef<Path> for RelativePath {
+    fn as_ref(&self) -> &Path {
+        self.as_path()
+    }
+}
+
 impl RelativePath {
     #[ref_cast_custom]
     unsafe fn assume_portable(path: &str) -> &Self;
@@ -76,6 +82,12 @@ impl RelativePath {
 )]
 #[diff(attr(#[derive(Debug)]))]
 pub struct RelativePathBuf(Str);
+
+impl AsRef<Path> for RelativePathBuf {
+    fn as_ref(&self) -> &Path {
+        self.as_path()
+    }
+}
 
 impl Display for RelativePathBuf {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

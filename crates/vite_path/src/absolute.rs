@@ -61,10 +61,10 @@ impl AbsolutePath {
         }
     }
 
-    /// Creates an owned [`AbsolutePathBuf`] with `rel_path` adjoined to `self`.
-    pub fn join<P: AsRef<RelativePath>>(&self, rel_path: P) -> AbsolutePathBuf {
+    /// Creates an owned [`AbsolutePathBuf`] with `path` adjoined to `self`.
+    pub fn join<P: AsRef<Path>>(&self, path: P) -> AbsolutePathBuf {
         let mut absolute_path_buf = self.to_absolute_path_buf();
-        absolute_path_buf.push(rel_path);
+        absolute_path_buf.push(path);
         absolute_path_buf
     }
 }
@@ -109,10 +109,10 @@ impl AbsolutePathBuf {
     }
 
     /// Extends `self` with `path`.
-    ///
-    /// Unlike [`PathBuf::push`], `path` is always relative, so `self` can only be appended, not replaced.
-    pub fn push<P: AsRef<RelativePath>>(&mut self, rel_path: P) {
-        self.0.push(rel_path.as_ref().as_path());
+    /// 
+    /// `path` replaces `self` only when `path` is absolute. Either way, the resulting `self` is always absolute.
+    pub fn push<P: AsRef<Path>>(&mut self, path: P) {
+        self.0.push(path.as_ref());
     }
 
     pub fn into_path_buf(self) -> PathBuf {
