@@ -76,6 +76,7 @@ serde = "1.0.219"
 serde_json = "1.0.140"
 serde_yml = "0.0.12"
 serial_test = "3.2.0"
+sha2 = "0.10.9"
 shell-escape = "0.1.5"
 supports-color = "3.0.1"
 tar = "0.4.43"
@@ -97,7 +98,6 @@ vite_path = { path = "crates/vite_path" }
 vite_str = { path = "crates/vite_str" }
 vite_task = { path = "crates/vite_task" }
 wax = "0.6.0"
-wildmatch = "2.4.0"
 
 napi = { version = "3.0.0", default-features = false, features = ["async", "error_anyhow"] }
 napi-build = "2"
