@@ -117,7 +117,7 @@ impl RelativePathBuf {
             return;
         }
         self.0.push('/');
-        self.0.push_str(rel_path.as_ref().as_str());
+        self.0.push_str(rel_path_str);
     }
 
     /// Creates a new `RelativePathBuf` from a `Path`.
