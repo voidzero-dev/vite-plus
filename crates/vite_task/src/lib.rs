@@ -226,7 +226,7 @@ pub async fn main<
             let name = &workspace.package_json.name;
             if name.is_empty() {
                 return Err(Error::EmptyPackageName(
-                    workspace.workspace_dir.as_path().to_path_buf(),
+                    workspace.workspace_dir
                 ));
             }
             (

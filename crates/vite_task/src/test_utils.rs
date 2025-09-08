@@ -6,8 +6,8 @@ where
     F: FnOnce(AbsolutePathBuf) -> R,
 {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
-    let cache_db_name = RelativePathBuf::new(&format!("vite-test-{}.db", test_name)).unwrap();
-    let cache_path = AbsolutePath::new(temp_dir.path()).unwrap().join(cache_db_name);
+    let cache_path =
+        AbsolutePath::new(temp_dir.path()).unwrap().join(&format!("vite-test-{}.db", test_name));
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(cache_path)));
 
@@ -21,7 +21,5 @@ where
 }
 
 pub fn get_fixture_path(rel_path: &str) -> AbsolutePathBuf {
-    AbsolutePath::new(env!("CARGO_MANIFEST_DIR"))
-        .unwrap()
-        .join(RelativePathBuf::new(rel_path).unwrap())
+    AbsolutePath::new(env!("CARGO_MANIFEST_DIR")).unwrap().join(rel_path)
 }

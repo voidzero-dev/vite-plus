@@ -115,7 +115,6 @@ impl AsRef<Path> for AbsolutePath {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct AbsolutePathBuf(PathBuf);
 
-
 impl From<AbsolutePathBuf> for Arc<AbsolutePath> {
     fn from(path: AbsolutePathBuf) -> Arc<AbsolutePath> {
         let arc: Arc<Path> = path.0.into();
@@ -123,7 +122,6 @@ impl From<AbsolutePathBuf> for Arc<AbsolutePath> {
         unsafe { Arc::from_raw(arc_raw) }
     }
 }
-
 
 impl AbsolutePathBuf {
     pub fn new(path: PathBuf) -> Option<Self> {

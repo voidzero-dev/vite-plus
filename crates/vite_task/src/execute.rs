@@ -243,11 +243,11 @@ impl TaskEnvs {
         let node_modules_bin_paths = [
             base_dir
                 .join(&task.config.cwd)
-                .join(RelativePathBuf::new("node_modules/.bin").unwrap())
+                .join("node_modules/.bin")
                 .into_path_buf(),
             base_dir
                 .join(&task.config_dir)
-                .join(RelativePathBuf::new("node_modules/.bin").unwrap())
+                .join("node_modules/.bin")
                 .into_path_buf(),
         ];
         *env_path = join_paths(node_modules_bin_paths.into_iter().chain(paths))?.into();

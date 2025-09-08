@@ -99,9 +99,7 @@ impl Workspace {
                 AbsolutePathBuf::new(env_cache_path.into()).expect("Cache path should be absolute")
             } else {
                 workspace_root.join(
-                    RelativePathBuf::new("node_modules/.vite/task-cache.db")
-                        .unwrap()
-                        .as_relative_path(),
+                    "node_modules/.vite/task-cache.db"
                 )
             }
         });
@@ -115,7 +113,7 @@ impl Workspace {
         let task_cache = TaskCache::load_from_file(&cache_path)?;
 
         let package_json_path =
-            workspace_root.join(RelativePathBuf::new("package.json").unwrap().as_relative_path());
+            workspace_root.join("package.json");
         let package_json = if package_json_path.as_path().exists() {
             let file = File::open(package_json_path.as_path())?;
             let reader = BufReader::new(file);
@@ -162,11 +160,7 @@ impl Workspace {
             if let Ok(env_cache_path) = std::env::var("VITE_CACHE_PATH") {
                 AbsolutePathBuf::new(env_cache_path.into()).expect("Cache path should be absolute")
             } else {
-                workspace_root.join(
-                    RelativePathBuf::new("node_modules/.vite/task-cache.db")
-                        .unwrap()
-                        .as_relative_path(),
-                )
+                workspace_root.join("node_modules/.vite/task-cache.db")
             }
         });
 

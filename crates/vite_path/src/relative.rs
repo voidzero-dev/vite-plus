@@ -231,8 +231,10 @@ mod tests {
 
     #[test]
     fn non_relative() {
-        let abs_path = Path::new(if cfg!(windows) { "C:\\Users" } else { "/home" });
-        let_assert!(Err(FromPathError::NonRelative) = RelativePathBuf::new(abs_path));
+        let_assert!(
+            Err(FromPathError::NonRelative) =
+                RelativePathBuf::new(if cfg!(windows) { "C:\\Users" } else { "/home" })
+        );
     }
     #[test]
     fn non_utf8() {
@@ -246,74 +248,69 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn backslash_in_component() {
-        let path = Path::new("foo\\bar");
         let_assert!(
             Err(FromPathError::InvalidPathData(InvalidPathDataError::BackslashInComponent)) =
-                RelativePathBuf::new(path)
+                RelativePathBuf::new("foo\\bar")
         );
     }
 
     #[cfg(windows)]
     #[test]
     fn replace_backslash_separators() {
-        let path = Path::new("foo\\bar");
-        let rel_path = RelativePathBuf::new(path).unwrap();
+        let rel_path = RelativePathBuf::new("foo\\bar").unwrap();
         assert_eq!(rel_path.as_str(), "foo/bar");
     }
 
     #[test]
     fn normalize_dots() {
-        let path = Path::new("./foo/./bar/.");
-        let rel_path = RelativePathBuf::new(path).unwrap();
+        let rel_path = RelativePathBuf::new("./foo/./bar/.").unwrap();
         assert_eq!(rel_path.as_str(), "foo/bar")
     }
 
     #[test]
     fn normalize_trailing_slashes() {
-        let path = Path::new("foo/bar//");
-        let rel_path = RelativePathBuf::new(path).unwrap();
+        let rel_path = RelativePathBuf::new("foo/bar//").unwrap();
         assert_eq!(rel_path.as_str(), "foo/bar")
     }
     #[test]
     fn preserve_double_dots() {
-        let path = Path::new("../foo/../bar/..");
-        let rel_path = RelativePathBuf::new(path).unwrap();
+        let rel_path = RelativePathBuf::new("../foo/../bar/..").unwrap();
         assert_eq!(rel_path.as_str(), "../foo/../bar/..")
     }
 
     #[test]
     fn push() {
-        let mut rel_path = RelativePathBuf::new(Path::new("foo/bar")).unwrap();
+        let mut rel_path = RelativePathBuf::new("foo/bar").unwrap();
         rel_path.push(RelativePathBuf::new(Path::new("baz")).unwrap());
         assert_eq!(rel_path.as_str(), "foo/bar/baz")
     }
 
     #[test]
     fn push_empty() {
-        let mut rel_path = RelativePathBuf::new(Path::new("foo/bar")).unwrap();
+        let mut rel_path = RelativePathBuf::new("foo/bar").unwrap();
         rel_path.push(RelativePathBuf::new("").unwrap());
         assert_eq!(rel_path.as_str(), "foo/bar")
     }
 
     #[test]
     fn join() {
-        let rel_path = RelativePathBuf::new(Path::new("foo/bar")).unwrap();
+        let rel_path = RelativePathBuf::new("foo/bar").unwrap();
         let joined_path =
-            rel_path.as_relative_path().join(RelativePathBuf::new(Path::new("baz")).unwrap());
+            rel_path.as_relative_path().join(RelativePathBuf::new("baz").unwrap());
         assert_eq!(joined_path.as_str(), "foo/bar/baz")
     }
 
     #[test]
     fn strip_prefix() {
-        let rel_path = RelativePathBuf::new(Path::new("foo/bar/baz")).unwrap();
-        let prefix = RelativePathBuf::new(Path::new("foo")).unwrap();
+        let rel_path = RelativePathBuf::new("foo/bar/baz").unwrap();
+        let prefix = RelativePathBuf::new("foo").unwrap();
         let stripped_path = rel_path.strip_prefix(prefix).unwrap();
         assert_eq!(stripped_path.as_str(), "bar/baz")
     }
 
     #[test]
     fn encode_decode() {
-        let rel_path = RelativePathBuf::new(Path::new("foo/bar")).unwrap();
+        let rel_path = RelativePathBuf::new("foo/bar").unwrap();
         let config = bincode::config::standard();
         let encoded = bincode::encode_to_vec(&rel_path, config).unwrap();
         let (decoded, _) =

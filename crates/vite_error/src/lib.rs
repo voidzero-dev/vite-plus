@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::{ffi::OsString, path::Path};
 
@@ -65,13 +64,10 @@ pub enum Error {
     CycleDependenciesError(petgraph::algo::Cycle<NodeIndex>),
 
     #[error("The package.json name is empty at {0:?}/package.json")]
-    EmptyPackageName(PathBuf),
+    EmptyPackageName(AbsolutePathBuf),
 
     #[error("Package {0} not found in workspace")]
     PackageNotFound(Str),
-
-    #[error("Unsupported workspace file: {0:?}")]
-    UnsupportedWorkspaceFile(PathBuf),
 
     #[error("The package.json file is not found at {0:?}")]
     PackageJsonNotFound(AbsolutePathBuf),
@@ -113,9 +109,6 @@ pub enum Error {
         package_path: AbsolutePathBuf,
         workspace_root: AbsolutePathBuf,
     },
-
-    #[error("No package.json found at {0:?}")]
-    NoPackageJsonFound(PathBuf),
 
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),
