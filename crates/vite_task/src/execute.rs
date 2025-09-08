@@ -323,7 +323,6 @@ pub async fn execute_task(
                 // ignore accesses outside the workspace
                 continue;
             };
-            let relative_path = RelativePathBuf::from(relative_path);
             match access.mode {
                 AccessMode::Read => {
                     path_reads.entry(relative_path).or_insert(PathRead { read_dir_entries: false });

@@ -173,22 +173,9 @@ impl RelativePathBuf {
 
 impl<'a, Context> Decode<Context> for RelativePathBuf {
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
-        let mut path_str = Str::decode(decoder)?;
-        // checks relativity and slashes
-        if Path::new(&path_str).is_absolute() {
-            return Err(DecodeError::OtherString(format!(
-                "tried to decode a `RelativePath` from an absolute path: {path_str}"
-            )));
-        }
-        if path_str.contains('\\') {
-            return Err(DecodeError::OtherString(format!(
-                "tried to decode a `RelativePath` from a string with backslashes: {path_str}"
-            )));
-        }
-        while path_str.ends_with('/') {
-            path_str.pop();
-        }
-        Ok(Self(path_str))
+        let path_str = Str::decode(decoder)?;
+        RelativePathBuf::new(path_str.as_str())
+            .map_err(|err| DecodeError::OtherString(format!("{}: {}", err, path_str)))
     }
 }
 
