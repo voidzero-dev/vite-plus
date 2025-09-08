@@ -5,7 +5,7 @@ import {
   type UserConfigFn,
   type UserConfigFnObject,
   type UserConfigFnPromise,
-} from 'vite';
+} from 'rolldown-vite';
 import { type ViteUserConfig } from 'vitest/config';
 
 type ExtendsConfig<T> = T extends UserConfig ? T & { extends?: string; test?: ViteUserConfig['test'] }

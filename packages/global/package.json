@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "oxlint": "*",
-    "vite": "*",
+    "rolldown-vite": "*",
     "vitest": "*"
   },
   "devDependencies": {

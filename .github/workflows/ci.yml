@@ -105,3 +105,12 @@ jobs:
 
       - name: Run self
         run: ./target/debug/vt run -r build
+
+      - name: Print help for built-in commands
+        run: |
+          export PATH="$PATH:$(pwd)/packages/cli/bin"
+          vite-plus -h
+          vite-plus run -h
+          vite-plus lint -h
+          vite-plus test -h
+          vite-plus build -h

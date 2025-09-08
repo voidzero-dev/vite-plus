@@ -19,5 +19,5 @@ catalog:
   rolldown: ^1.0.0-beta.27
   tsdown: ^0.14.1
   typescript: ^5.9.2
-  vite: ^7.1.1
+  rolldown-vite: ^7.1.5
   vitest: ^3.2.4
