@@ -200,10 +200,12 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn non_utf8_windows() {
-        use std::os::windows::ffi::OsStrExt;
+        use std::ffi::OsString;
+        use std::os::windows::ffi::OsStringExt;
         // On Windows, create invalid UTF-16 sequence
         let invalid_utf16 = [0xD800]; // Unpaired surrogate
-        let non_utf8_path = Path::new(OsStr::from_wide(&invalid_utf16));
+        let non_utf8_os_string = OsString::from_wide(&invalid_utf16);
+        let non_utf8_path = Path::new(&non_utf8_os_string);
         let_assert!(
             Err(FromPathError::InvalidPathData(InvalidPathDataError::NonUtf8)) =
                 RelativePathBuf::try_from(non_utf8_path),
