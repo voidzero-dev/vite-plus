@@ -546,11 +546,10 @@ mod tests {
     fn test_force_color_auto_detection() {
         use crate::collections::HashSet;
         use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
-        use std::path::Path;
 
         let task_config = TaskConfig {
             command: TaskCommand::ShellScript("echo test".into()),
-            cwd: ".".into(),
+            cwd: RelativePathBuf::default(),
             cacheable: true,
             inputs: HashSet::new(),
             envs: HashSet::new(),
@@ -558,14 +557,19 @@ mod tests {
         };
 
         let resolved_task_config =
-            ResolvedTaskConfig { config_dir: ".".into(), config: task_config };
+            ResolvedTaskConfig { config_dir: RelativePathBuf::default(), config: task_config };
 
         // Test when FORCE_COLOR is not already set
         unsafe {
             std::env::remove_var("FORCE_COLOR");
         }
 
-        let result = TaskEnvs::resolve(Path::new("."), &resolved_task_config).unwrap();
+        let base_dir = if cfg!(windows) {
+            AbsolutePath::new("C:\\workspace").unwrap()
+        } else {
+            AbsolutePath::new("/workspace").unwrap()
+        };
+        let result = TaskEnvs::resolve(base_dir, &resolved_task_config).unwrap();
 
         // FORCE_COLOR should be automatically added if color is supported
         // Note: This test might vary based on the test environment
@@ -582,7 +586,7 @@ mod tests {
             std::env::set_var("FORCE_COLOR", "2");
         }
 
-        let result2 = TaskEnvs::resolve(Path::new("."), &resolved_task_config).unwrap();
+        let result2 = TaskEnvs::resolve(base_dir, &resolved_task_config).unwrap();
 
         // Should contain the original FORCE_COLOR value
         assert!(result2.all_envs.contains_key("FORCE_COLOR"));
