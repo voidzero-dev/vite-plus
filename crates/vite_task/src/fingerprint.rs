@@ -121,10 +121,8 @@ impl TaskFingerprint {
             .par_iter()
             .flat_map(|(path, path_read)| {
                 Some((|| {
-                    let path_fingerprint = fs.fingerprint_path(
-                        &base_dir.join(path).into(),
-                        *path_read,
-                    )?;
+                    let path_fingerprint =
+                        fs.fingerprint_path(&base_dir.join(path).into(), *path_read)?;
                     Ok((path.clone(), path_fingerprint))
                 })())
             })

@@ -3,8 +3,8 @@ use std::{ffi::OsString, path::Path};
 
 use petgraph::graph::NodeIndex;
 use thiserror::Error;
-use vite_path::relative::InvalidPathDataError;
 use vite_path::AbsolutePath;
+use vite_path::relative::InvalidPathDataError;
 use vite_path::{AbsolutePathBuf, RelativePathBuf, absolute::StripPrefixError};
 use vite_str::Str;
 
@@ -105,10 +105,7 @@ pub enum Error {
     StripPathError { stripped_path: Box<Path>, invalid_path_data_error: InvalidPathDataError },
 
     #[error("The package at {package_path:?} is outside the workspace at {workspace_root:?}")]
-    PackageOutsideWorkspace {
-        package_path: AbsolutePathBuf,
-        workspace_root: AbsolutePathBuf,
-    },
+    PackageOutsideWorkspace { package_path: AbsolutePathBuf, workspace_root: AbsolutePathBuf },
 
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),

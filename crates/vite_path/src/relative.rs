@@ -295,8 +295,7 @@ mod tests {
     #[test]
     fn join() {
         let rel_path = RelativePathBuf::new("foo/bar").unwrap();
-        let joined_path =
-            rel_path.as_relative_path().join(RelativePathBuf::new("baz").unwrap());
+        let joined_path = rel_path.as_relative_path().join(RelativePathBuf::new("baz").unwrap());
         assert_eq!(joined_path.as_str(), "foo/bar/baz")
     }
 

@@ -142,8 +142,7 @@ async fn get_cached_or_execute<'a>(
         Err(cache_miss) => (
             Some(cache_miss),
             async move {
-                let executed_task =
-                    execute_task(&task.resolved_command, base_dir).await?;
+                let executed_task = execute_task(&task.resolved_command, base_dir).await?;
                 let cached_task = CachedTask::create(task.clone(), executed_task, fs, base_dir)?;
                 cache.update(&task, cached_task).await?;
                 Ok(())

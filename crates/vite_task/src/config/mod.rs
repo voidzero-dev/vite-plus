@@ -125,8 +125,7 @@ impl ResolvedTask {
             config_dir: RelativePathBuf::default(),
             config: task_config,
         };
-        let resolved_envs =
-            TaskEnvs::resolve(&workspace.workspace_dir, &resolved_task_config)?;
+        let resolved_envs = TaskEnvs::resolve(&workspace.workspace_dir, &resolved_task_config)?;
         let resolved_command = ResolvedTaskCommand {
             fingerprint: CommandFingerprint {
                 cwd: RelativePathBuf::default(),
