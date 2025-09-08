@@ -2,7 +2,6 @@ use std::{
     collections::hash_map::Entry,
     env::{join_paths, split_paths},
     ffi::OsStr,
-    iter,
     process::{ExitStatus, Stdio},
     sync::{Arc, Mutex},
 };
@@ -14,7 +13,7 @@ use supports_color::{Stream, on};
 use futures_util::future::try_join4;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _};
-use vite_path::{AbsolutePath, RelativePath, RelativePathBuf};
+use vite_path::{AbsolutePath, RelativePathBuf};
 use vite_str::Str;
 use wax::Glob;
 use wildmatch::WildMatch;

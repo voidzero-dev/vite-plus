@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_path::AbsolutePath;
 
 use futures_core::future::BoxFuture;
 use futures_util::future::FutureExt as _;
@@ -86,7 +86,7 @@ impl ExecutionPlan {
             step,
             &mut workspace.task_cache,
             &workspace.fs,
-            workspace.workspace_dir.as_path(),
+            &workspace.workspace_dir,
         )
         .await?;
 

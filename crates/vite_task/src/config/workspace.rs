@@ -21,7 +21,6 @@ use petgraph::{Graph, graph::NodeIndex, stable_graph::StableDiGraph, visit::Into
 use vite_package_manager::{
     DependencyType, PackageInfo, PackageJson, find_package_root, find_workspace_root,
 };
-use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePath, RelativePathBuf};
 use vite_str::Str;
 
 use super::{
@@ -378,7 +377,7 @@ impl Workspace {
             if !task_args.is_empty() {
                 updated_task.resolved_command = updated_task
                     .resolved_config
-                    .resolve_command(&self.workspace_dir.as_path(), &task_args)?;
+                    .resolve_command(&self.workspace_dir, &task_args)?;
             }
 
             // Add to filtered graph

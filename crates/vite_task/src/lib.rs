@@ -225,7 +225,7 @@ pub async fn main<
             };
             let name = &workspace.package_json.name;
             if name.is_empty() {
-                return Err(Error::EmptyPackageName(workspace.workspace_dir.to_path_buf()));
+                return Err(Error::EmptyPackageName(workspace.workspace_dir));
             }
             (
                 &vec![if task.contains('#') { task } else { format!("{name}#{task}").into() }],

@@ -1,4 +1,4 @@
-use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
+use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::format;
 
 pub fn with_unique_cache_path<F, R>(test_name: &str, f: F) -> R

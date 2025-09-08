@@ -3,7 +3,6 @@ use std::{
     fs::File,
     hash::Hasher as _,
     io::{self, Read},
-    path::PathBuf,
     sync::Arc,
 };
 

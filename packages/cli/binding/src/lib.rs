@@ -14,7 +14,6 @@
 //! 5. Rust executes the tool with the resolved path
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use vite_path::current_dir;
 

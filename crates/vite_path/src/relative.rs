@@ -13,11 +13,7 @@ use std::{
 };
 use vite_str::Str;
 
-use bincode::{
-    BorrowDecode, Decode, Encode,
-    de::{BorrowDecoder, Decoder},
-    error::DecodeError,
-};
+use bincode::{Decode, Encode, de::Decoder, error::DecodeError};
 use ref_cast::{RefCastCustom, ref_cast_custom};
 
 /// A relative path with additional guarantees to make it portable:
@@ -73,17 +69,7 @@ impl RelativePath {
 
 /// A owned relative path buf with the same guarantees as `RelativePath`
 #[derive(
-    Debug,
-    Encode,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Clone,
-    Serialize,
-    Deserialize,
-    Default,
+    Debug, Encode, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize, Default,
 )]
 pub struct RelativePathBuf(Str);
 
@@ -206,13 +192,7 @@ impl<'a, Context> Decode<Context> for RelativePathBuf {
     }
 }
 
-impl<'de, Context> BorrowDecode<'de, Context> for RelativePathBuf {
-    fn borrow_decode<D: BorrowDecoder<'de, Context = Context>>(
-        decoder: &mut D,
-    ) -> Result<Self, DecodeError> {
-        Ok(Self(Str::borrow_decode(decoder)?))
-    }
-}
+bincode::impl_borrow_decode!(RelativePathBuf);
 
 impl TryFrom<&Path> for RelativePathBuf {
     type Error = FromPathError;
