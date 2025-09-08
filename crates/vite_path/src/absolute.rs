@@ -114,6 +114,10 @@ impl AbsolutePathBuf {
     pub fn push<P: AsRef<RelativePath>>(&mut self, rel_path: P) {
         self.0.push(rel_path.as_ref().as_path());
     }
+
+    pub fn into_path_buf(self) -> PathBuf {
+        self.0
+    }
 }
 
 impl PartialEq<AbsolutePath> for AbsolutePathBuf {

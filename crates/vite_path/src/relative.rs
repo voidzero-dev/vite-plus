@@ -3,6 +3,9 @@
 //! ## Why not use crate `relative-path`
 //! `relative-path::RelativePath` allows backslashes in its components, which is valid in unix systems but not portable to Windows.
 
+use diff::Diff;
+use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use std::{
     borrow::Borrow,
     ops::Deref,
@@ -57,8 +60,28 @@ impl RelativePath {
 }
 
 /// A owned relative path buf with the same guarantees as `RelativePath`
-#[derive(Debug, Encode, PartialEq, Eq)]
+#[derive(
+    Debug,
+    Encode,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Clone,
+    Serialize,
+    Deserialize,
+    Default,
+    Diff,
+)]
+#[diff(attr(#[derive(Debug)]))]
 pub struct RelativePathBuf(Str);
+
+impl Display for RelativePathBuf {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
 
 impl PartialEq<RelativePath> for RelativePathBuf {
     fn eq(&self, other: &RelativePath) -> bool {

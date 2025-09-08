@@ -11,6 +11,8 @@ bincode = { workspace = true }
 ref-cast = { workspace = true }
 thiserror = { workspace = true }
 vite_str = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+diff-struct = { workspace = true }
 
 [lints]
 workspace = true
