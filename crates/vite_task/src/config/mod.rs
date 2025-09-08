@@ -198,7 +198,6 @@ pub struct CommandFingerprint {
 #[cfg(test)]
 mod tests {
     use crate::test_utils::{get_fixture_path, with_unique_cache_path};
-    use std::path::Path;
 
     use petgraph::stable_graph::StableDiGraph;
 
@@ -265,16 +264,11 @@ mod tests {
     #[test]
     fn test_topological_run_false_no_implicit_deps() {
         with_unique_cache_path("topological_run_false", |cache_path| {
-            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("fixtures/recursive-topological-workspace");
+            let fixture_path = get_fixture_path("fixtures/recursive-topological-workspace");
 
             // Load with topological_run = false
-            let workspace = Workspace::load_with_cache_path(
-                fixture_path,
-                Some(cache_path.to_path_buf()),
-                false,
-            )
-            .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), false)
+                .expect("Failed to load workspace");
 
             let task_graph = workspace
                 .build_task_subgraph(&vec!["@test/web#build".into()], Arc::default(), false)
@@ -300,16 +294,11 @@ mod tests {
     #[test]
     fn test_explicit_deps_with_topological_false() {
         with_unique_cache_path("explicit_deps_topological_false", |cache_path| {
-            let fixture_path =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/explicit-deps-workspace");
+            let fixture_path = get_fixture_path("fixtures/explicit-deps-workspace");
 
             // Load with topological_run = false
-            let workspace = Workspace::load_with_cache_path(
-                fixture_path,
-                Some(cache_path.to_path_buf()),
-                false,
-            )
-            .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), false)
+                .expect("Failed to load workspace");
 
             // Test @test/utils#lint which has explicit dependencies
             let task_graph = workspace
@@ -346,13 +335,11 @@ mod tests {
     #[test]
     fn test_explicit_deps_with_topological_true() {
         with_unique_cache_path("explicit_deps_topological_true", |cache_path| {
-            let fixture_path =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/explicit-deps-workspace");
+            let fixture_path = get_fixture_path("fixtures/explicit-deps-workspace");
 
             // Load with topological_run = true
-            let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), true)
+                .expect("Failed to load workspace");
 
             // Test @test/utils#lint which has explicit dependencies
             let task_graph = workspace
@@ -388,16 +375,11 @@ mod tests {
     #[test]
     fn test_recursive_with_topological_false() {
         with_unique_cache_path("recursive_topological_false", |cache_path| {
-            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("fixtures/recursive-topological-workspace");
+            let fixture_path = get_fixture_path("fixtures/recursive-topological-workspace");
 
             // Load with topological_run = false
-            let workspace = Workspace::load_with_cache_path(
-                fixture_path,
-                Some(cache_path.to_path_buf()),
-                false,
-            )
-            .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), false)
+                .expect("Failed to load workspace");
 
             // Test recursive build with topological_run=false
             let task_graph = workspace
@@ -440,18 +422,14 @@ mod tests {
 
     #[test]
     fn test_topological_true_vs_false_comparison() {
-        let fixture_path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/recursive-topological-workspace");
+        let fixture_path = get_fixture_path("fixtures/recursive-topological-workspace");
 
         // Use separate cache paths to avoid database locking
         with_unique_cache_path("topological_comparison_true", |cache_path_true| {
             // Load with topological_run = true
-            let workspace_true = Workspace::load_with_cache_path(
-                fixture_path.clone(),
-                Some(cache_path_true.to_path_buf()),
-                true,
-            )
-            .expect("Failed to load workspace with topological=true");
+            let workspace_true =
+                Workspace::load_with_cache_path(fixture_path.clone(), Some(cache_path_true), true)
+                    .expect("Failed to load workspace with topological=true");
 
             let graph_true = workspace_true
                 .build_task_subgraph(&vec!["@test/app#build".into()], Arc::default(), false)
@@ -459,12 +437,9 @@ mod tests {
 
             with_unique_cache_path("topological_comparison_false", |cache_path_false| {
                 // Load with topological_run = false
-                let workspace_false = Workspace::load_with_cache_path(
-                    fixture_path,
-                    Some(cache_path_false.to_path_buf()),
-                    false,
-                )
-                .expect("Failed to load workspace with topological=false");
+                let workspace_false =
+                    Workspace::load_with_cache_path(fixture_path, Some(cache_path_false), false)
+                        .expect("Failed to load workspace with topological=false");
 
                 let graph_false = workspace_false
                     .build_task_subgraph(&vec!["@test/app#build".into()], Arc::default(), false)
@@ -508,12 +483,10 @@ mod tests {
     #[test]
     fn test_recursive_without_topological() {
         with_unique_cache_path("recursive_without_topological", |cache_path| {
-            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("fixtures/recursive-topological-workspace");
+            let fixture_path = get_fixture_path("fixtures/recursive-topological-workspace");
 
-            let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), true)
+                .expect("Failed to load workspace");
 
             // Test recursive build without topological flag
             // Note: Even without topological flag, cross-package dependencies are now always included
@@ -550,12 +523,10 @@ mod tests {
     #[test]
     fn test_recursive_run_with_scope_error() {
         with_unique_cache_path("recursive_run_with_scope_error", |cache_path| {
-            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("fixtures/recursive-topological-workspace");
+            let fixture_path = get_fixture_path("fixtures/recursive-topological-workspace");
 
-            let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), true)
+                .expect("Failed to load workspace");
 
             // Test that specifying a scoped task with recursive flag returns an error
             let result = workspace.build_task_subgraph(
@@ -577,12 +548,10 @@ mod tests {
     #[test]
     fn test_non_recursive_single_package() {
         with_unique_cache_path("non_recursive_single_package", |cache_path| {
-            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("fixtures/recursive-topological-workspace");
+            let fixture_path = get_fixture_path("fixtures/recursive-topological-workspace");
 
-            let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), true)
+                .expect("Failed to load workspace");
 
             // Test non-recursive build of a single package
             let task_graph = workspace
@@ -606,12 +575,10 @@ mod tests {
     #[test]
     fn test_recursive_topological_with_compound_commands() {
         with_unique_cache_path("recursive_topological_with_compound_commands", |cache_path| {
-            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("fixtures/recursive-topological-workspace");
+            let fixture_path = get_fixture_path("fixtures/recursive-topological-workspace");
 
-            let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), true)
+                .expect("Failed to load workspace");
 
             // Test recursive topological build with compound commands
             let task_graph = workspace
@@ -664,12 +631,10 @@ mod tests {
     #[test]
     fn test_transitive_dependency_resolution() {
         with_unique_cache_path("transitive_dependency_resolution", |cache_path| {
-            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("fixtures/transitive-dependency-workspace");
+            let fixture_path = get_fixture_path("fixtures/transitive-dependency-workspace");
 
-            let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), true)
+                .expect("Failed to load workspace");
 
             // Test recursive topological build with transitive dependencies
             let task_graph = workspace
@@ -710,12 +675,10 @@ mod tests {
     #[test]
     fn test_comprehensive_task_graph() {
         with_unique_cache_path("comprehensive_task_graph", |cache_path| {
-            let fixture_path =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
+            let fixture_path = get_fixture_path("fixtures/comprehensive-task-graph");
 
-            let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), true)
+                .expect("Failed to load workspace");
 
             // Test build task graph
             let build_graph = workspace
@@ -841,12 +804,10 @@ mod tests {
     #[test]
     fn test_scripts_with_hash_in_names() {
         with_unique_cache_path("scripts_with_hash_in_names", |cache_path| {
-            let fixture_path =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
+            let fixture_path = get_fixture_path("fixtures/comprehensive-task-graph");
 
-            let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), true)
+                .expect("Failed to load workspace");
 
             // Test that we can't use recursive with task names containing # (would be interpreted as scope)
             let result = workspace.build_task_subgraph(
@@ -861,12 +822,10 @@ mod tests {
     #[test]
     fn test_task_graph_visualization() {
         with_unique_cache_path("task_graph_visualization", |cache_path| {
-            let fixture_path =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
+            let fixture_path = get_fixture_path("fixtures/comprehensive-task-graph");
 
-            let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), true)
+                .expect("Failed to load workspace");
 
             // Test app build task graph - this should show the full dependency tree
             let app_build_graph = workspace
@@ -1007,11 +966,11 @@ mod tests {
     #[test]
     fn test_cache_sharing_between_subtasks() {
         with_unique_cache_path("cache_sharing_between_subtasks", |cache_path| {
-            let fixtures_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/cache-sharing");
+            let fixtures_dir = get_fixture_path("fixtures/cache-sharing");
 
             let workspace = Workspace::load_with_cache_path(
                 fixtures_dir,
-                Some(cache_path.to_path_buf()),
+                Some(cache_path),
                 false, // topological_run
             )
             .unwrap();
@@ -1105,12 +1064,10 @@ mod tests {
         with_unique_cache_path("empty_package_name", |cache_path| {
             // Create a separate fixture directory for testing empty package names
             // to avoid conflicts with the comprehensive-task-graph test
-            let fixture_path =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/empty-package-test");
+            let fixture_path = get_fixture_path("fixtures/empty-package-test");
 
-            let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace with empty package name");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), true)
+                .expect("Failed to load workspace with empty package name");
 
             // Test that empty-name package is loaded correctly
             let empty_name_package =
@@ -1170,12 +1127,10 @@ mod tests {
     #[test]
     fn test_multiple_nameless_packages() {
         with_unique_cache_path("multiple_nameless_packages", |cache_path| {
-            let fixture_path =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/empty-package-test");
+            let fixture_path = get_fixture_path("fixtures/empty-package-test");
 
-            let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace with multiple nameless packages");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), true)
+                .expect("Failed to load workspace with multiple nameless packages");
 
             // Verify both nameless packages are loaded
             let nameless_packages: Vec<_> = workspace
@@ -1284,21 +1239,10 @@ mod tests {
     #[test]
     fn test_task_without_sharp_in_explicit_mode() {
         with_unique_cache_path("task_without_sharp_explicit", |cache_path| {
-            let fixture_path = {
-                let path =
-                    Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
-                vite_path::AbsolutePathBuf::new(path).expect("fixture path should be absolute")
-            };
+            let fixture_path = get_fixture_path("fixtures/comprehensive-task-graph");
 
-            let workspace = Workspace::load_with_cache_path(
-                fixture_path,
-                Some(
-                    vite_path::AbsolutePathBuf::new(cache_path.to_path_buf())
-                        .expect("cache path should be absolute"),
-                ),
-                false,
-            )
-            .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), false)
+                .expect("Failed to load workspace");
 
             // When in explicit mode (non-recursive), tasks without '#' should resolve to current package
             // This test simulates being in a package directory
@@ -1335,24 +1279,14 @@ mod tests {
     #[test]
     fn test_dependency_resolution_with_ambiguous_names() {
         with_unique_cache_path("dependency_ambiguous_names", |cache_path| {
-            let fixture_path = {
-                let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/conflict-test");
-                vite_path::AbsolutePathBuf::new(path).expect("fixture path should be absolute")
-            };
+            let fixture_path = get_fixture_path("fixtures/conflict-test");
 
             // This should fail with a TaskNameConflict error because the dependency
             // "@test/scope-a#b#c" is ambiguous - it could mean:
             // - Package "@test/scope-a" with task "b#c", or
             // - Package "@test/scope-a#b" with task "c"
             // And both packages exist in the fixture
-            let result = Workspace::load_with_cache_path(
-                fixture_path,
-                Some(
-                    vite_path::AbsolutePathBuf::new(cache_path.to_path_buf())
-                        .expect("cache path should be absolute"),
-                ),
-                false,
-            );
+            let result = Workspace::load_with_cache_path(fixture_path, Some(cache_path), false);
 
             // The workspace loading should fail due to the conflict
             assert!(result.is_err(), "Should fail to load workspace with conflicting task names");

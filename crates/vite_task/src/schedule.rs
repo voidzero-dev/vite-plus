@@ -156,9 +156,11 @@ async fn get_cached_or_execute<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
-    use crate::{Workspace, test_utils::with_unique_cache_path};
+    use crate::{
+        Workspace,
+        test_utils::{get_fixture_path, with_unique_cache_path},
+    };
 
     #[track_caller]
     fn assert_order(plan: &ExecutionPlan, before: &str, after: &str) {
@@ -172,21 +174,10 @@ mod tests {
     #[test]
     fn test_execution_non_parallel() {
         with_unique_cache_path("comprehensive_task_graph", |cache_path| {
-            let fixture_path = {
-                let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("fixtures/comprehensive-task-graph");
-                AbsolutePathBuf::new(path).expect("fixture path should be absolute")
-            };
+            let fixture_path = get_fixture_path("fixtures/comprehensive-task-graph");
 
-            let workspace = Workspace::load_with_cache_path(
-                fixture_path,
-                Some(
-                    AbsolutePathBuf::new(cache_path.to_path_buf())
-                        .expect("cache path should be absolute"),
-                ),
-                true,
-            )
-            .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), true)
+                .expect("Failed to load workspace");
 
             // Test build task graph
             let build_graph = workspace
