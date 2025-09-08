@@ -3,18 +3,19 @@ use std::io::{BufReader, Seek, SeekFrom};
 use std::path::Path;
 
 use vite_error::Error;
+use vite_path::AbsolutePath;
 
 /// The package root directory and its package.json file.
 #[derive(Debug)]
 pub struct PackageRoot<'a> {
-    pub path: &'a Path,
+    pub path: &'a AbsolutePath,
     pub package_json: File,
 }
 
 /// Find the package root directory from the current working directory. `original_cwd` must be absolute.
 ///
 /// If the package.json file is not found, will return PackageJsonNotFound error.
-pub fn find_package_root<'a>(original_cwd: &'a Path) -> Result<PackageRoot<'a>, Error> {
+pub fn find_package_root<'a>(original_cwd: &'a AbsolutePath) -> Result<PackageRoot<'a>, Error> {
     let mut cwd = original_cwd;
     loop {
         // Check for package.json
@@ -27,7 +28,7 @@ pub fn find_package_root<'a>(original_cwd: &'a Path) -> Result<PackageRoot<'a>, 
             cwd = parent;
         } else {
             // We've reached the root, return PackageJsonNotFound error.
-            return Err(Error::PackageJsonNotFound(original_cwd.to_path_buf()));
+            return Err(Error::PackageJsonNotFound(original_cwd.to_absolute_path_buf()));
         }
     }
 }
@@ -52,7 +53,7 @@ pub enum WorkspaceFile {
 /// If the workspace file is not found, but a package is found, `workspace_file` will be `NonWorkspacePackage` with the `package.json` File.
 #[derive(Debug)]
 pub struct WorkspaceRoot<'a> {
-    pub path: &'a Path,
+    pub path: &'a AbsolutePath,
     pub workspace_file: WorkspaceFile,
 }
 
@@ -61,7 +62,7 @@ pub struct WorkspaceRoot<'a> {
 /// If the workspace file is not found, but a package is found, `workspace_file` will be `NonWorkspacePackage` with the `package.json` File.
 ///
 /// If neither workspace nor package is found, will return PackageJsonNotFound error.
-pub fn find_workspace_root<'a>(original_cwd: &'a Path) -> Result<WorkspaceRoot<'a>, Error> {
+pub fn find_workspace_root<'a>(original_cwd: &'a AbsolutePath) -> Result<WorkspaceRoot<'a>, Error> {
     let mut cwd = original_cwd;
 
     loop {
@@ -120,11 +121,12 @@ mod tests {
     #[test]
     fn test_find_package_root() {
         let temp_dir = TempDir::new().unwrap();
-        let nested_dir = temp_dir.path().join("a").join("b").join("c");
+        let temp_dir_path = AbsolutePath::new(temp_dir.path()).unwrap();
+        let nested_dir = temp_dir_path.join("a").join("b").join("c");
         fs::create_dir_all(&nested_dir).unwrap();
 
         // Create package.json in a/b
-        let package_dir = temp_dir.path().join("a").join("b");
+        let package_dir = temp_dir_path.join("a").join("b");
         File::create(package_dir.join("package.json")).unwrap();
 
         // Should find package.json in parent directory
@@ -138,7 +140,7 @@ mod tests {
         assert_eq!(package_root.path, package_dir);
 
         // Should return PackageJsonNotFound error if no package.json found
-        let root_dir = temp_dir.path().join("x").join("y");
+        let root_dir = temp_dir_path.join("x").join("y");
         fs::create_dir_all(&root_dir).unwrap();
         let found = find_package_root(&root_dir);
         let err = found.unwrap_err();
@@ -148,7 +150,9 @@ mod tests {
     #[test]
     fn test_find_workspace_root_with_pnpm() {
         let temp_dir = TempDir::new().unwrap();
-        let nested_dir = temp_dir.path().join("packages").join("app");
+
+        let temp_dir_path = AbsolutePath::new(temp_dir.path()).unwrap();
+        let nested_dir = temp_dir_path.join("packages").join("app");
         fs::create_dir_all(&nested_dir).unwrap();
 
         // Create pnpm-workspace.yaml at root
@@ -156,13 +160,14 @@ mod tests {
 
         // Should find workspace root
         let found = find_workspace_root(&nested_dir).unwrap();
-        assert_eq!(found.path, temp_dir.path());
+        assert_eq!(found.path, temp_dir_path);
         assert!(matches!(found.workspace_file, WorkspaceFile::PnpmWorkspaceYaml(_)));
     }
 
     #[test]
     fn test_find_workspace_root_with_npm_workspaces() {
         let temp_dir = TempDir::new().unwrap();
+        let temp_dir_path = AbsolutePath::new(temp_dir.path()).unwrap();
         let nested_dir = temp_dir.path().join("packages").join("app");
         fs::create_dir_all(&nested_dir).unwrap();
 
@@ -171,15 +176,16 @@ mod tests {
         fs::write(temp_dir.path().join("package.json"), package_json).unwrap();
 
         // Should find workspace root
-        let found = find_workspace_root(&nested_dir).unwrap();
-        assert_eq!(found.path, temp_dir.path());
+        let found = find_workspace_root(&temp_dir_path).unwrap();
+        assert_eq!(found.path, temp_dir_path);
         assert!(matches!(found.workspace_file, WorkspaceFile::NpmWorkspaceJson(_)));
     }
 
     #[test]
     fn test_find_workspace_root_fallback_to_package_root() {
         let temp_dir = TempDir::new().unwrap();
-        let nested_dir = temp_dir.path().join("src");
+        let temp_dir_path = AbsolutePath::new(temp_dir.path()).unwrap();
+        let nested_dir = temp_dir_path.join("src");
         fs::create_dir_all(&nested_dir).unwrap();
 
         // Create package.json without workspaces field
@@ -188,9 +194,9 @@ mod tests {
 
         // Should fallback to package root
         let found = find_workspace_root(&nested_dir).unwrap();
-        assert_eq!(found.path, temp_dir.path());
+        assert_eq!(found.path, temp_dir_path);
         assert!(matches!(found.workspace_file, WorkspaceFile::NonWorkspacePackage(_)));
-        let package_root = find_package_root(temp_dir.path()).unwrap();
+        let package_root = find_package_root(temp_dir_path).unwrap();
         // equal to workspace root
         assert_eq!(package_root.path, found.path);
     }
@@ -198,7 +204,8 @@ mod tests {
     #[test]
     fn test_find_workspace_root_with_package_json_not_found() {
         let temp_dir = TempDir::new().unwrap();
-        let nested_dir = temp_dir.path().join("src");
+        let temp_dir_path = AbsolutePath::new(temp_dir.path()).unwrap();
+        let nested_dir = temp_dir_path.join("src");
         fs::create_dir_all(&nested_dir).unwrap();
 
         // Should return PackageJsonNotFound error if no package.json found

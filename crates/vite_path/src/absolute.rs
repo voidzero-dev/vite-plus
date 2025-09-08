@@ -17,6 +17,17 @@ impl AsRef<AbsolutePath> for AbsolutePath {
     }
 }
 
+impl PartialEq<AbsolutePathBuf> for AbsolutePath {
+    fn eq(&self, other: &AbsolutePathBuf) -> bool {
+        self.0 == other.0
+    }
+}
+impl PartialEq<AbsolutePathBuf> for &AbsolutePath {
+    fn eq(&self, other: &AbsolutePathBuf) -> bool {
+        self.0 == other.0
+    }
+}
+
 impl AbsolutePath {
     /// Creates a [`AbsolutePath`] if the give path is absolute.
     pub fn new<P: AsRef<Path> + ?Sized>(path: &P) -> Option<&Self> {
@@ -67,6 +78,12 @@ impl AbsolutePath {
         absolute_path_buf.push(path);
         absolute_path_buf
     }
+
+    /// Returns the parent directory of `self`, or `None` if `self` is the root.
+    pub fn parent(&self) -> Option<&AbsolutePath> {
+        let parent_path = self.0.parent()?;
+        Some(unsafe { AbsolutePath::assume_absolute(parent_path) })
+    }
 }
 
 /// An Error returned from [`AbsolutePath::strip_prefix`] if the stripped path is not a valid `RelativePath`
@@ -94,7 +111,7 @@ impl AsRef<Path> for AbsolutePath {
 }
 
 /// An owned path buf that is guaranteed to be absolute
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct AbsolutePathBuf(PathBuf);
 
 impl AbsolutePathBuf {
@@ -109,7 +126,7 @@ impl AbsolutePathBuf {
     }
 
     /// Extends `self` with `path`.
-    /// 
+    ///
     /// `path` replaces `self` only when `path` is absolute. Either way, the resulting `self` is always absolute.
     pub fn push<P: AsRef<Path>>(&mut self, path: P) {
         self.0.push(path.as_ref());
@@ -127,7 +144,7 @@ impl PartialEq<AbsolutePath> for AbsolutePathBuf {
 }
 impl PartialEq<&AbsolutePath> for AbsolutePathBuf {
     fn eq(&self, other: &&AbsolutePath) -> bool {
-        self.as_absolute_path().eq(other)
+        self.as_absolute_path().eq(*other)
     }
 }
 

@@ -1,9 +1,10 @@
-use std::ffi::OsString;
 use std::path::PathBuf;
+use std::{ffi::OsString, path::Path};
 
 use petgraph::graph::NodeIndex;
 use thiserror::Error;
-use vite_path::RelativePathBuf;
+use vite_path::relative::InvalidPathDataError;
+use vite_path::{AbsolutePathBuf, RelativePathBuf, absolute::StripPrefixError};
 use vite_str::Str;
 
 #[derive(Error, Debug)]
@@ -56,7 +57,7 @@ pub enum Error {
     DuplicatedTask(Str),
 
     #[error("Duplicated package name: {name} at {path1} and {path2}")]
-    DuplicatedPackageName { name: Str, path1: Str, path2: Str },
+    DuplicatedPackageName { name: Str, path1: RelativePathBuf, path2: RelativePathBuf },
 
     #[error("Circular dependency found : {0:?}")]
     CycleDependenciesError(petgraph::algo::Cycle<NodeIndex>),
@@ -71,7 +72,7 @@ pub enum Error {
     UnsupportedWorkspaceFile(PathBuf),
 
     #[error("The package.json file is not found at {0:?}")]
-    PackageJsonNotFound(PathBuf),
+    PackageJsonNotFound(AbsolutePathBuf),
 
     #[error("Task '{task_request}' not found in workspace")]
     TaskNotFound { task_request: Str },
@@ -100,12 +101,29 @@ pub enum Error {
     #[error("Test failed")]
     TestFailed { status: Str, reason: Str },
 
-    #[error("Path prefix error: {err} at {path:?}, {message}")]
-    PathPrefixError { err: std::path::StripPrefixError, message: Str, path: PathBuf },
+    #[error(
+        "The stripped path ({stripped_path:?}) is not a valid relative path because: {invalid_path_data_error}"
+    )]
+    StripPathError { stripped_path: Box<Path>, invalid_path_data_error: InvalidPathDataError },
+
+    #[error("The package at {package_path:?} is outside the workspace at {workspace_root:?}")]
+    PackageOutsideWorkspace {
+        package_path: AbsolutePathBuf,
+        workspace_root: AbsolutePathBuf,
+    },
 
     #[error("No package.json found at {0:?}")]
     NoPackageJsonFound(PathBuf),
 
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),
+}
+
+impl From<StripPrefixError<'_>> for Error {
+    fn from(value: StripPrefixError<'_>) -> Self {
+        Self::StripPathError {
+            stripped_path: Box::from(value.stripped_path),
+            invalid_path_data_error: value.invalid_path_data_error,
+        }
+    }
 }
