@@ -14,4 +14,9 @@ disallowed-types = [
   { path = "std::collections::HashSet", reason = "Use `rustc_hash::FxHashSet` instead, which is typically faster." },
   { path = "std::path::Path", reason = "Use `vite_path::RelativePath` or `vite_path::AbsolutePath` instead" },
   { path = "std::path::PathBuf", reason = "Use `vite_path::RelativePathBuf` or `vite_path::AbsolutePathBuf` instead" },
+  { path = "std::string::String", reason = "Use `vite_str::Str` for small strings. For large strings, prefer `Box/Rc/Arc<str>` if mutation is not needed." },
+]
+
+disallowed-macros = [
+  { path = "std::format", reason = "Use `vite_str::format` for small strings." }
 ]
