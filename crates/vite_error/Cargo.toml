@@ -11,7 +11,6 @@ rust-version.workspace = true
 anyhow = { workspace = true }
 bincode = { workspace = true }
 bstr = { workspace = true }
-compact_str = { workspace = true, features = ["serde"] }
 nix = { workspace = true }
 petgraph = { workspace = true }
 rusqlite = { workspace = true }

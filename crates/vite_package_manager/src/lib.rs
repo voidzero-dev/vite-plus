@@ -6,12 +6,12 @@ use std::{
 };
 
 use anyhow::Context;
-use compact_str::CompactString;
 use petgraph::Graph;
 use petgraph::graph::NodeIndex;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
 use vite_error::Error;
+use vite_str::Str;
 use wax::Glob;
 
 use crate::package_manager::WorkspaceFile;
@@ -23,7 +23,7 @@ struct PnpmWorkspace {
     /// The packages to include in the workspace.
     ///
     /// <https://pnpm.io/pnpm-workspace_yaml>
-    packages: Vec<CompactString>,
+    packages: Vec<Str>,
 }
 impl PnpmWorkspace {
     fn into_member_globs(self) -> WorkspaceMemberGlobs {
@@ -41,7 +41,7 @@ struct NpmWorkspace {
     ///
     /// <https://docs.npmjs.com/cli/v11/configuring-npm/package-json#workspaces>
     /// <https://yarnpkg.com/configuration/manifest#workspaces>
-    workspaces: Vec<CompactString>,
+    workspaces: Vec<Str>,
 }
 impl NpmWorkspace {
     fn into_member_globs(self) -> WorkspaceMemberGlobs {
@@ -51,13 +51,13 @@ impl NpmWorkspace {
 
 #[derive(Debug)]
 struct WorkspaceMemberGlobs {
-    inclusions: Vec<CompactString>,
-    exclusions: Vec<CompactString>,
+    inclusions: Vec<Str>,
+    exclusions: Vec<Str>,
 }
 impl WorkspaceMemberGlobs {
-    fn new(glob_patterns: impl IntoIterator<Item = CompactString>) -> Self {
-        let mut inclusions = Vec::<CompactString>::new();
-        let mut exclusions = Vec::<CompactString>::new();
+    fn new(glob_patterns: impl IntoIterator<Item = Str>) -> Self {
+        let mut inclusions = Vec::<Str>::new();
+        let mut exclusions = Vec::<Str>::new();
         for pattern in glob_patterns {
             if let Some(exclusion) = pattern.strip_prefix("!") {
                 exclusions.push(exclusion.into());
@@ -84,8 +84,7 @@ impl WorkspaceMemberGlobs {
 
             let glob = Glob::new(&inclusion)?;
             // FIXME: should be last match pattern wins
-            let entries =
-                glob.walk(workspace_root).not(self.exclusions.iter().map(CompactString::as_str))?;
+            let entries = glob.walk(workspace_root).not(self.exclusions.iter().map(Str::as_str))?;
             for entry in entries {
                 let Ok(entry) = entry else {
                     continue;
@@ -114,15 +113,15 @@ pub enum DependencyType {
 #[serde(rename_all = "camelCase")]
 pub struct PackageJson {
     #[serde(default)]
-    pub name: CompactString,
+    pub name: Str,
     #[serde(default)]
-    pub scripts: HashMap<CompactString, CompactString>,
+    pub scripts: HashMap<Str, Str>,
     #[serde(default)]
-    pub dependencies: HashMap<CompactString, CompactString>,
+    pub dependencies: HashMap<Str, Str>,
     #[serde(default)]
-    pub dev_dependencies: HashMap<CompactString, CompactString>,
+    pub dev_dependencies: HashMap<Str, Str>,
     #[serde(default)]
-    pub peer_dependencies: HashMap<CompactString, CompactString>,
+    pub peer_dependencies: HashMap<Str, Str>,
 }
 
 impl std::fmt::Debug for PackageJson {
@@ -144,9 +143,7 @@ impl std::fmt::Debug for PackageJson {
 }
 
 impl PackageJson {
-    fn get_workspace_dependencies(
-        &self,
-    ) -> impl Iterator<Item = (CompactString, DependencyType)> + use<'_> {
+    fn get_workspace_dependencies(&self) -> impl Iterator<Item = (Str, DependencyType)> + use<'_> {
         self.dependencies
             .iter()
             .map(|entry| (entry, DependencyType::Normal))
@@ -160,7 +157,7 @@ impl PackageJson {
                 // TODO: support paths: https://github.com/pnpm/pnpm/pull/2972
                 Some((
                     if let Some((name, _)) = workspace_version.rsplit_once('@') {
-                        CompactString::new(name)
+                        name.into()
                     } else {
                         key.clone()
                     },
@@ -173,23 +170,19 @@ impl PackageJson {
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct PackageInfo {
     pub package_json: PackageJson,
-    pub path: CompactString,
+    pub path: Str,
 }
 
 #[derive(Default)]
 struct PackageGraphBuilder {
-    id_and_deps_by_path: HashMap<CompactString, (NodeIndex, Vec<(CompactString, DependencyType)>)>,
+    id_and_deps_by_path: HashMap<Str, (NodeIndex, Vec<(Str, DependencyType)>)>,
     // Only for packages with a name
-    name_to_path: HashMap<CompactString, CompactString>,
+    name_to_path: HashMap<Str, Str>,
     graph: Graph<PackageInfo, DependencyType>,
 }
 
 impl PackageGraphBuilder {
-    fn add_package(
-        &mut self,
-        package_path: CompactString,
-        package_json: PackageJson,
-    ) -> Result<(), Error> {
+    fn add_package(&mut self, package_path: Str, package_json: PackageJson) -> Result<(), Error> {
         let deps = package_json.get_workspace_dependencies().collect::<Vec<_>>();
         let package_name = package_json.name.clone();
         let id = self.graph.add_node(PackageInfo { package_json, path: package_path.clone() });
@@ -205,7 +198,7 @@ impl PackageGraphBuilder {
             let existing_id = self.id_and_deps_by_path.get(&existing_path).unwrap().0;
             let existing_package_info = &self.graph[existing_id];
             return Err(Error::DuplicatedPackageName {
-                name: existing_package_info.package_json.name.to_string(),
+                name: existing_package_info.package_json.name.clone(),
                 path1: existing_package_info.path.clone(),
                 path2: self.graph[id].path.clone(),
             });

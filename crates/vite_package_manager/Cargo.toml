@@ -9,7 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-compact_str = { workspace = true, features = ["serde"] }
+vite_str = { workspace = true }
 petgraph = { workspace = true, features = ["serde-1"] }
 rustc-hash = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

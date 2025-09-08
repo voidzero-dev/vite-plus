@@ -1,7 +1,6 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use compact_str::CompactString;
 use petgraph::graph::NodeIndex;
 use thiserror::Error;
 use vite_path::RelativePathBuf;
@@ -57,7 +56,7 @@ pub enum Error {
     DuplicatedTask(Str),
 
     #[error("Duplicated package name: {name} at {path1} and {path2}")]
-    DuplicatedPackageName { name: Str, path1: CompactString, path2: CompactString },
+    DuplicatedPackageName { name: Str, path1: Str, path2: Str },
 
     #[error("Circular dependency found : {0:?}")]
     CycleDependenciesError(petgraph::algo::Cycle<NodeIndex>),
