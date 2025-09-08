@@ -197,7 +197,7 @@ pub struct CommandFingerprint {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_utils::with_unique_cache_path;
+    use crate::test_utils::{get_fixture_path, with_unique_cache_path};
     use std::path::Path;
 
     use petgraph::stable_graph::StableDiGraph;
@@ -208,12 +208,10 @@ mod tests {
     #[test]
     fn test_recursive_topological_build() {
         with_unique_cache_path("recursive_topological_build", |cache_path| {
-            let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("fixtures/recursive-topological-workspace");
+            let fixture_path = get_fixture_path("fixtures/recursive-topological-workspace");
 
-            let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), true)
+                .expect("Failed to load workspace");
 
             // Test recursive topological build
             let task_graph = workspace
