@@ -22,7 +22,7 @@ use ref_cast::{RefCastCustom, ref_cast_custom};
 /// - It is valid utf-8
 /// - It uses slashes `/` as separators, not backslashes `\`
 /// - There's no backslash `\` in components (this is valid in unix systems but not portable to Windows)
-#[derive(RefCastCustom, PartialEq, Eq)]
+#[derive(RefCastCustom, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct RelativePath(str);
 impl AsRef<RelativePath> for RelativePath {

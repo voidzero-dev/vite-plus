@@ -11,13 +11,18 @@ use crate::Error;
 use crate::{execute::PathRead, fingerprint::PathFingerprint};
 use dashmap::DashMap;
 use std::io::BufRead;
+#[cfg(unix)]
+use vite_path::AbsolutePath;
 use vite_str::Str;
 
 use crate::collections::HashMap;
 use crate::fingerprint::DirEntryKind;
 pub trait FileSystem: Sync {
-    fn fingerprint_path(&self, path: &Arc<OsStr>, read: PathRead)
-    -> Result<PathFingerprint, Error>;
+    fn fingerprint_path(
+        &self,
+        path: &Arc<AbsolutePath>,
+        read: PathRead,
+    ) -> Result<PathFingerprint, Error>;
 }
 
 #[derive(Debug, Default)]
@@ -40,7 +45,7 @@ impl FileSystem for RealFileSystem {
     #[cfg(unix)] // TODO: windows
     fn fingerprint_path(
         &self,
-        path: &Arc<OsStr>,
+        path: &Arc<AbsolutePath>,
         path_read: PathRead,
     ) -> Result<PathFingerprint, Error> {
         use nix::dir::{Dir, Type};
@@ -57,7 +62,7 @@ impl FileSystem for RealFileSystem {
                 ) {
                     Ok(PathFingerprint::NotFound)
                 } else {
-                    Err(Error::IoWithPath { err, path: PathBuf::from(path.as_ref()) })
+                    Err(Error::IoWithPath { err, path: path.clone() })
                 };
             }
         };
@@ -112,7 +117,7 @@ pub struct CachedFileSystem<FS = RealFileSystem> {
 impl<FS: FileSystem> FileSystem for CachedFileSystem<FS> {
     fn fingerprint_path(
         &self,
-        path: &Arc<OsStr>,
+        path: &Arc<AbsolutePath>,
         path_read: PathRead,
     ) -> Result<PathFingerprint, Error> {
         self.underlying.fingerprint_path(path, path_read)

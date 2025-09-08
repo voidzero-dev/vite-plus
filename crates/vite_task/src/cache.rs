@@ -27,7 +27,7 @@ impl CachedTask {
         fs: &impl FileSystem,
         base_dir: &AbsolutePath,
     ) -> Result<Self, Error> {
-        let fingerprint = TaskFingerprint::create(task, &executed_task, fs, base_dir.as_path())?;
+        let fingerprint = TaskFingerprint::create(task, &executed_task, fs, base_dir)?;
         Ok(Self { fingerprint, std_outputs: executed_task.std_outputs })
     }
 }
@@ -149,9 +149,7 @@ impl TaskCache {
         let Some(cached_task) = self.get_cache(task).await? else {
             return Ok(Err(CacheMiss::NotFound));
         };
-        if let Some(fingerprint_mismatch) =
-            cached_task.fingerprint.validate(task, fs, base_dir.as_path())?
-        {
+        if let Some(fingerprint_mismatch) = cached_task.fingerprint.validate(task, fs, base_dir)? {
             return Ok(Err(CacheMiss::FingerprintMismatch(fingerprint_mismatch)));
         }
         Ok(Ok(cached_task))

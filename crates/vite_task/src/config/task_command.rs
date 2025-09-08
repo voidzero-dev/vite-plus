@@ -1,11 +1,10 @@
 use std::fmt::Display;
-use vite_path::AbsolutePath;
+use vite_path::{AbsolutePath, RelativePath, RelativePathBuf};
 
 use crate::{Error, cmd::TaskParsedCommand, execute::TaskEnvs};
 
 use bincode::{Decode, Encode};
 use diff::Diff;
-use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
 use vite_str::Str;
 
@@ -33,7 +32,7 @@ impl From<TaskCommand> for TaskConfig {
     fn from(command: TaskCommand) -> Self {
         Self {
             command,
-            cwd: "".into(),
+            cwd: RelativePathBuf::default(),
             cacheable: true,
             inputs: Default::default(),
             envs: Default::default(),
@@ -45,7 +44,7 @@ impl From<TaskCommand> for TaskConfig {
 #[derive(Encode, Decode, Debug, Serialize, PartialEq, Eq, Diff, Clone)]
 #[diff(attr(#[derive(Debug)]))]
 pub struct ResolvedTaskConfig {
-    pub config_dir: Str,
+    pub config_dir: RelativePathBuf,
     pub config: TaskConfig,
 }
 
@@ -55,7 +54,7 @@ impl ResolvedTaskConfig {
         base_dir: &AbsolutePath,
         task_args: &[Str],
     ) -> Result<ResolvedTaskCommand, Error> {
-        let cwd = RelativePath::new(&self.config_dir).join(self.config.cwd.as_str());
+        let cwd = self.config_dir.join(&self.config.cwd);
         let command = if task_args.is_empty() {
             self.config.command.clone()
         } else {
@@ -78,10 +77,10 @@ impl ResolvedTaskConfig {
                 }
             }
         };
-        let task_envs = TaskEnvs::resolve(base_dir.as_path(), self)?;
+        let task_envs = TaskEnvs::resolve(base_dir, self)?;
         Ok(ResolvedTaskCommand {
             fingerprint: CommandFingerprint {
-                cwd: cwd.as_str().into(),
+                cwd,
                 command,
                 envs_without_pass_through: task_envs.envs_without_pass_through,
             },

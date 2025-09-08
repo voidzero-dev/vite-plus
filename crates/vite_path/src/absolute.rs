@@ -3,6 +3,7 @@ use std::{
     fmt::Display,
     ops::Deref,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use crate::relative::{FromPathError, InvalidPathDataError, RelativePath, RelativePathBuf};
@@ -113,6 +114,16 @@ impl AsRef<Path> for AbsolutePath {
 /// An owned path buf that is guaranteed to be absolute
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct AbsolutePathBuf(PathBuf);
+
+
+impl From<AbsolutePathBuf> for Arc<AbsolutePath> {
+    fn from(path: AbsolutePathBuf) -> Arc<AbsolutePath> {
+        let arc: Arc<Path> = path.0.into();
+        let arc_raw = Arc::into_raw(arc) as *const AbsolutePath;
+        unsafe { Arc::from_raw(arc_raw) }
+    }
+}
+
 
 impl AbsolutePathBuf {
     pub fn new(path: PathBuf) -> Option<Self> {

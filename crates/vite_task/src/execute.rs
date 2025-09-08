@@ -3,7 +3,6 @@ use std::{
     env::{join_paths, split_paths},
     ffi::OsStr,
     iter,
-    path::Path,
     process::{ExitStatus, Stdio},
     sync::{Arc, Mutex},
 };
@@ -16,6 +15,7 @@ use supports_color::{Stream, on};
 use futures_util::future::try_join4;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _};
+use vite_path::{AbsolutePath, RelativePath, RelativePathBuf};
 use vite_str::Str;
 use wax::Glob;
 use wildmatch::WildMatch;
@@ -53,9 +53,9 @@ pub struct ExecutedTask {
     pub std_outputs: Arc<[StdOutput]>,
     #[expect(dead_code)]
     pub exit_status: ExitStatus,
-    pub path_reads: HashMap<Str, PathRead>,
+    pub path_reads: HashMap<RelativePathBuf, PathRead>,
     #[expect(dead_code)]
-    pub path_writes: HashMap<Str, PathWrite>,
+    pub path_writes: HashMap<RelativePathBuf, PathWrite>,
 }
 
 /// Collects stdout/stderr into `outputs` and at the same time writes them to the real stdout/stderr
@@ -202,7 +202,7 @@ fn is_default_passthrough_env(name: &str) -> bool {
 }
 
 impl TaskEnvs {
-    pub fn resolve(base_dir: &Path, task: &ResolvedTaskConfig) -> Result<Self, Error> {
+    pub fn resolve(base_dir: &AbsolutePath, task: &ResolvedTaskConfig) -> Result<Self, Error> {
         // All envs that are passed to the task
         let mut all_envs: HashMap<Str, Arc<OsStr>> = std::env::vars_os()
             .filter_map(|(name, value)| {
@@ -229,7 +229,7 @@ impl TaskEnvs {
             };
             let Some(value) = value.to_str() else {
                 return Err(Error::EnvValueIsNotValidUnicode {
-                    key: name.to_string(),
+                    key: name.clone(),
                     value: value.to_os_string(),
                 });
             };
@@ -239,13 +239,18 @@ impl TaskEnvs {
         let env_path =
             all_envs.entry("PATH".into()).or_insert_with(|| Arc::<OsStr>::from(OsStr::new("")));
         let paths = split_paths(env_path);
-        let node_modules_bin = base_dir.join(&task.config.cwd).join("node_modules/.bin");
-        *env_path = join_paths(
-            iter::once(node_modules_bin)
-                .chain(iter::once(base_dir.join(&task.config_dir).join("node_modules/.bin")))
-                .chain(paths),
-        )?
-        .into();
+
+        let node_modules_bin_paths = [
+            base_dir
+                .join(&task.config.cwd)
+                .join(RelativePathBuf::new("node_modules/.bin").unwrap())
+                .into_path_buf(),
+            base_dir
+                .join(&task.config_dir)
+                .join(RelativePathBuf::new("node_modules/.bin").unwrap())
+                .into_path_buf(),
+        ];
+        *env_path = join_paths(node_modules_bin_paths.into_iter().chain(paths))?.into();
 
         // Automatically add FORCE_COLOR environment variable if not already set
         // This enables color output in subprocesses when color is supported
@@ -274,7 +279,7 @@ impl TaskEnvs {
 
 pub async fn execute_task(
     resolved_command: &ResolvedTaskCommand,
-    base_dir: &Path,
+    base_dir: &AbsolutePath,
 ) -> Result<ExecutedTask, Error> {
     let spy = Spy::global()?;
 
@@ -315,19 +320,18 @@ pub async fn execute_task(
 
     let path_accesses_fut = async move {
         let path_accesses = accesses_future.await?;
-        let mut path_reads = HashMap::<Str, PathRead>::new();
-        let mut path_writes = HashMap::<Str, PathWrite>::new();
+        let mut path_reads = HashMap::<RelativePathBuf, PathRead>::new();
+        let mut path_writes = HashMap::<RelativePathBuf, PathWrite>::new();
         for access in path_accesses.iter() {
             let path = access.path.to_cow_os_str();
-            let path = Path::new(&path);
-            let Ok(relative_path) = path.strip_prefix(base_dir) else {
+            let Some(path) = AbsolutePath::new(&path) else {
+                continue;
+            };
+            let Some(relative_path) = path.strip_prefix(base_dir)? else {
                 // ignore accesses outside the workspace
                 continue;
             };
-            let relative_path = relative_path.to_str().with_context(|| {
-                format!("Non-utf8 relative path in the workspace: {relative_path:?}")
-            })?;
-            let relative_path = Str::from(relative_path);
+
             match access.mode {
                 AccessMode::Read => {
                     path_reads.entry(relative_path).or_insert(PathRead { read_dir_entries: false });
@@ -368,7 +372,10 @@ pub async fn execute_task(
 }
 
 #[expect(dead_code)]
-fn gather_inputs(task: &ResolvedTask, base_dir: &Path) -> Result<HashSet<Arc<OsStr>>, Error> {
+fn gather_inputs(
+    task: &ResolvedTask,
+    base_dir: &AbsolutePath,
+) -> Result<HashSet<Arc<OsStr>>, Error> {
     // Task inferring to be implemented here
     let inputs = &task.resolved_config.config.inputs;
     if inputs.is_empty() {
@@ -474,7 +481,6 @@ mod tests {
     fn test_task_envs_stable_ordering() {
         use crate::collections::HashSet;
         use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
-        use std::path::Path;
 
         // Create a task config with multiple envs in a HashSet
         let mut envs = HashSet::new();
@@ -485,7 +491,7 @@ mod tests {
 
         let task_config = TaskConfig {
             command: TaskCommand::ShellScript("echo test".into()),
-            cwd: ".".into(),
+            cwd: RelativePathBuf::default(),
             cacheable: true,
             inputs: HashSet::new(),
             envs,
@@ -493,7 +499,7 @@ mod tests {
         };
 
         let resolved_task_config =
-            ResolvedTaskConfig { config_dir: ".".into(), config: task_config };
+            ResolvedTaskConfig { config_dir: RelativePathBuf::default(), config: task_config };
 
         // Set up environment variables
         unsafe {
@@ -503,10 +509,15 @@ mod tests {
             std::env::set_var("BETA_VAR", "beta_value");
         }
 
+        let base_dir = if cfg!(windows) {
+            AbsolutePath::new("C:\\workspace").unwrap()
+        } else {
+            AbsolutePath::new("/workspace").unwrap()
+        };
         // Resolve envs multiple times
-        let result1 = TaskEnvs::resolve(Path::new("."), &resolved_task_config).unwrap();
-        let result2 = TaskEnvs::resolve(Path::new("."), &resolved_task_config).unwrap();
-        let result3 = TaskEnvs::resolve(Path::new("."), &resolved_task_config).unwrap();
+        let result1 = TaskEnvs::resolve(base_dir, &resolved_task_config).unwrap();
+        let result2 = TaskEnvs::resolve(base_dir, &resolved_task_config).unwrap();
+        let result3 = TaskEnvs::resolve(base_dir, &resolved_task_config).unwrap();
 
         // Convert to sorted vecs for comparison
         let mut envs1: Vec<_> = result1.envs_without_pass_through.iter().collect();

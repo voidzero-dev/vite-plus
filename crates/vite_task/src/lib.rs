@@ -15,11 +15,9 @@ mod vite;
 mod test_utils;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use anyhow;
 use vite_path::AbsolutePathBuf;
 
 use clap::{Parser, Subcommand};
@@ -163,14 +161,10 @@ pub async fn main<
     Test: Future<Output = Result<ResolveCommandResult, Error>>,
     TestFn: Fn() -> Test,
 >(
-    cwd: PathBuf,
+    cwd: AbsolutePathBuf,
     args: Args,
     options: Option<CliOptions<Lint, LintFn, Vite, ViteFn, Test, TestFn>>,
 ) -> Result<(), Error> {
-    let cwd = AbsolutePathBuf::new(cwd).ok_or_else(|| {
-        Error::AnyhowError(anyhow::anyhow!("current working directory is not absolute"))
-    })?;
-
     let mut recursive_run = false;
     let mut parallel_run = false;
     let (tasks, mut workspace, task_args) = match &args.commands {

@@ -4,6 +4,7 @@ use crate::{
 };
 
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
+use vite_path::RelativePathBuf;
 use vite_str::Str;
 
 use super::ResolvedTask;
@@ -14,7 +15,7 @@ use super::ResolvedTask;
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
 pub struct TaskGroupId {
     pub task_group_name: Str,
-    pub package_path: Str,
+    pub package_path: RelativePathBuf,
 }
 
 /// Uniquely identifies a task.
@@ -43,7 +44,7 @@ impl TaskGraphBuilder {
         if let Some((old_task, _)) =
             self.resolved_tasks_and_dep_ids_by_id.insert(task.id(), (task, dep_ids))
         {
-            return Err(Error::DuplicatedTask(old_task.display_name().to_string()));
+            return Err(Error::DuplicatedTask(old_task.display_name()));
         }
         Ok(())
     }
@@ -65,8 +66,8 @@ impl TaskGraphBuilder {
             for dep in deps {
                 let Some(&dep_index) = node_indices_by_task_ids.get(dep) else {
                     return Err(Error::TaskDependencyNotFound {
-                        name: dep.task_group_id.task_group_name.to_string(),
-                        package_path: dep.task_group_id.package_path.to_string(),
+                        name: dep.task_group_id.task_group_name.clone(),
+                        package_path: dep.task_group_id.package_path.clone(),
                     });
                 };
                 task_graph.add_edge(current_task_index, dep_index, ());

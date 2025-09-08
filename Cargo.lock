@@ -3491,6 +3491,7 @@ name = "vite-plus-benches"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "vite_path",
  "vite_task",
 ]
 
@@ -3503,6 +3504,7 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "vite_error",
+ "vite_path",
  "vite_task",
 ]
 
@@ -3513,7 +3515,6 @@ dependencies = [
  "anyhow",
  "bincode",
  "bstr",
- "compact_str 0.9.0",
  "nix 0.30.1",
  "petgraph",
  "rusqlite",
@@ -3530,7 +3531,6 @@ name = "vite_package_manager"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "compact_str 0.9.0",
  "petgraph",
  "rustc-hash",
  "serde",
@@ -3538,6 +3538,8 @@ dependencies = [
  "serde_yml",
  "tempfile",
  "vite_error",
+ "vite_path",
+ "vite_str",
  "wax",
 ]
 

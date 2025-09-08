@@ -3,14 +3,14 @@ mod task_command;
 mod task_graph_builder;
 mod workspace;
 
-use std::{ffi::OsStr, future::Future, path::Path, sync::Arc};
+use std::{ffi::OsStr, future::Future, sync::Arc};
 
 use bincode::{Decode, Encode};
 use compact_str::ToCompactString;
 use diff::Diff;
 use serde::{Deserialize, Serialize};
 use vite_error::Error;
-use vite_path;
+use vite_path::{self, RelativePathBuf};
 use vite_str::Str;
 
 use crate::{
@@ -31,7 +31,7 @@ pub use workspace::*;
 pub struct TaskConfig {
     pub(crate) command: TaskCommand,
     #[serde(default)]
-    pub(crate) cwd: Str,
+    pub(crate) cwd: RelativePathBuf,
     pub(crate) cacheable: bool,
 
     #[serde(default)]
@@ -121,14 +121,15 @@ impl ResolvedTask {
         });
         let task_config: TaskConfig = builtin_task.clone().into();
         let resolved_task_config = ResolvedTaskConfig {
-            config_dir: workspace.workspace_dir.as_path().to_string_lossy().as_ref().into(),
+            // TODO: config_dir should be cwd
+            config_dir: RelativePathBuf::default(),
             config: task_config,
         };
         let resolved_envs =
-            TaskEnvs::resolve(workspace.workspace_dir.as_path(), &resolved_task_config)?;
+            TaskEnvs::resolve(&workspace.workspace_dir, &resolved_task_config)?;
         let resolved_command = ResolvedTaskCommand {
             fingerprint: CommandFingerprint {
-                cwd: workspace.workspace_dir.as_path().to_string_lossy().as_ref().into(),
+                cwd: RelativePathBuf::default(),
                 command: builtin_task,
                 envs_without_pass_through: resolved_envs.envs_without_pass_through,
             },
@@ -189,7 +190,7 @@ impl std::fmt::Debug for ResolvedTaskCommand {
 #[derive(Encode, Decode, Debug, Serialize, PartialEq, Eq, Diff, Clone)]
 #[diff(attr(#[derive(Debug)]))]
 pub struct CommandFingerprint {
-    pub cwd: Str,
+    pub cwd: RelativePathBuf,
     pub command: TaskCommand,
     /// Environment variables that affect caching (excludes pass-through envs)
     pub envs_without_pass_through: HashMap<Str, Str>,

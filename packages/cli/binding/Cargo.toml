@@ -9,6 +9,7 @@ napi = { workspace = true }
 napi-derive = { workspace = true }
 vite_error = { workspace = true }
 vite_task = { workspace = true }
+vite_path = { workspace = true }
 
 [build-dependencies]
 napi-build = { workspace = true }

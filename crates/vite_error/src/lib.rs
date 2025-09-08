@@ -1,9 +1,11 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::{ffi::OsString, path::Path};
 
 use petgraph::graph::NodeIndex;
 use thiserror::Error;
 use vite_path::relative::InvalidPathDataError;
+use vite_path::AbsolutePath;
 use vite_path::{AbsolutePathBuf, RelativePathBuf, absolute::StripPrefixError};
 use vite_str::Str;
 
@@ -25,7 +27,7 @@ pub enum Error {
     Io(#[from] std::io::Error),
 
     #[error("IO error: {err} at {path:?}")]
-    IoWithPath { err: std::io::Error, path: PathBuf },
+    IoWithPath { err: std::io::Error, path: Arc<AbsolutePath> },
 
     #[error(transparent)]
     JoinPathsError(#[from] std::env::JoinPathsError),

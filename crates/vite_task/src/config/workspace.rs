@@ -7,7 +7,7 @@ use std::{
 
 use crate::collections::{HashMap, HashSet};
 use anyhow;
-use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
+use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePath, RelativePathBuf};
 
 use crate::{
     Error,
@@ -51,11 +51,11 @@ impl Workspace {
     fn determine_current_package_path(
         original_cwd: &AbsolutePath,
     ) -> Result<(&AbsolutePath, Option<String>), Error> {
-        let workspace_root = find_workspace_root(original_cwd.as_path())?.path;
+        let workspace_root = find_workspace_root(original_cwd)?.path;
         let workspace_root = vite_path::AbsolutePath::new(workspace_root)
             .ok_or_else(|| Error::AnyhowError(anyhow::anyhow!("workspace root is not absolute")))?;
         // If can't find package root, return the workspace root and an empty string
-        let Ok(package_root) = find_package_root(original_cwd.as_path()) else {
+        let Ok(package_root) = find_package_root(original_cwd) else {
             return Ok((workspace_root, None));
         };
         let current_package_root = package_root.path;
@@ -99,7 +99,7 @@ impl Workspace {
                 AbsolutePathBuf::new(env_cache_path.into()).expect("Cache path should be absolute")
             } else {
                 workspace_root.join(
-                    RelativePathBuf::new(std::path::Path::new("node_modules/.vite/task-cache.db"))
+                    RelativePathBuf::new("node_modules/.vite/task-cache.db")
                         .unwrap()
                         .as_relative_path(),
                 )
@@ -114,9 +114,8 @@ impl Workspace {
         }
         let task_cache = TaskCache::load_from_file(&cache_path)?;
 
-        let package_json_path = workspace_root.join(
-            RelativePathBuf::new(std::path::Path::new("package.json")).unwrap().as_relative_path(),
-        );
+        let package_json_path =
+            workspace_root.join(RelativePathBuf::new("package.json").unwrap().as_relative_path());
         let package_json = if package_json_path.as_path().exists() {
             let file = File::open(package_json_path.as_path())?;
             let reader = BufReader::new(file);
@@ -153,7 +152,7 @@ impl Workspace {
         let mut package_json = None;
         for node_index in package_graph.node_indices() {
             let package = &package_graph[node_index];
-            if package.path.is_empty() {
+            if package.path.as_str().is_empty() {
                 package_json = Some(package.package_json.clone());
                 break;
             }
@@ -164,7 +163,7 @@ impl Workspace {
                 AbsolutePathBuf::new(env_cache_path.into()).expect("Cache path should be absolute")
             } else {
                 workspace_root.join(
-                    RelativePathBuf::new(std::path::Path::new("node_modules/.vite/task-cache.db"))
+                    RelativePathBuf::new("node_modules/.vite/task-cache.db")
                         .unwrap()
                         .as_relative_path(),
                 )
@@ -185,10 +184,10 @@ impl Workspace {
         // Create a map from package name to node index for efficient lookups
         // The values are Vecs because multiple packages can have the same name.
         let mut package_path_to_node =
-            HashMap::<String, Vec<NodeIndex>>::with_capacity(package_graph.node_count());
+            HashMap::<Str, Vec<NodeIndex>>::with_capacity(package_graph.node_count());
         for (package_node_index, package) in package_graph.node_references() {
             package_path_to_node
-                .entry(package.package_json.name.clone().into())
+                .entry(package.package_json.name.clone())
                 .or_default()
                 .push(package_node_index);
         }
@@ -241,7 +240,7 @@ impl Workspace {
         base_dir: &AbsolutePath,
     ) -> Result<ResolvedTask, Error> {
         let resolved_config = ResolvedTaskConfig {
-            config_dir: package_info.path.as_str().into(),
+            config_dir: package_info.path.clone(),
             config: user_task_config.into(),
         };
 
@@ -318,7 +317,7 @@ impl Workspace {
         if recursive_run {
             for task in task_requests {
                 if task.contains('#') {
-                    return Err(Error::RecursiveRunWithScope(task.to_string()));
+                    return Err(Error::RecursiveRunWithScope(task.clone()));
                 }
             }
         }
@@ -349,7 +348,7 @@ impl Workspace {
         } else {
             // Only one task request is allowed when task requests don't contain '#'
             if task_requests.iter().any(|task| !task.contains('#')) && task_requests.len() > 1 {
-                return Err(Error::OnlyOneTaskRequest(task_requests.join(" ")));
+                return Err(Error::OnlyOneTaskRequest(task_requests.join(" ").into()));
             }
             // For non-recursive mode, find the task in the full task graph
             for task_request in task_requests {
@@ -361,7 +360,7 @@ impl Workspace {
                     }
                 }
                 if !has_matched_task {
-                    return Err(Error::TaskNotFound { task_request: task_request.to_string() });
+                    return Err(Error::TaskNotFound { task_request: task_request.clone() });
                 }
             }
         }
@@ -411,7 +410,7 @@ impl Workspace {
     fn load_tasks_into_builder(
         packages_with_task_jsons: &[(NodeIndex, Option<ViteTaskJson>)],
         package_graph: &Graph<PackageInfo, DependencyType>,
-        package_name_to_node: &HashMap<String, Vec<NodeIndex>>,
+        package_name_to_node: &HashMap<Str, Vec<NodeIndex>>,
         task_graph_builder: &mut TaskGraphBuilder,
         base_dir: &AbsolutePath,
     ) -> Result<(), Error> {
@@ -443,12 +442,12 @@ impl Workspace {
                                         let package_node_indexes = package_name_to_node
                                             .get(package_name)
                                             .ok_or_else(|| Error::TaskNotFound {
-                                                task_request: task_request.to_string(),
+                                                task_request: task_request.clone(),
                                             })?;
                                         match package_node_indexes.as_slice() {
                                             [] => {
                                                 return Err(Error::PackageNotFound(
-                                                    package_name.to_string(),
+                                                    package_name.into(),
                                                 ));
                                             }
                                             [package_node_index] => (
@@ -458,7 +457,7 @@ impl Workspace {
                                             // Found more than one package with the same name
                                             [package_node_index1, package_node_index2, ..] => {
                                                 return Err(Error::DuplicatedPackageName {
-                                                    name: package_name.to_string(),
+                                                    name: package_name.into(),
                                                     path1: package_graph[*package_node_index1]
                                                         .path
                                                         .clone(),
@@ -486,7 +485,7 @@ impl Workspace {
                             } else {
                                 // contains multiple '#'
                                 Err(Error::AmbiguousTaskRequest {
-                                    task_request: task_request.to_string(),
+                                    task_request: task_request.clone(),
                                 })
                             }
                         })
@@ -544,8 +543,8 @@ impl Workspace {
     ) {
         let package_path_to_node_index = package_graph
             .node_references()
-            .map(|(node_index, package)| (package.path.as_str(), node_index))
-            .collect::<HashMap<&str, NodeIndex>>();
+            .map(|(node_index, package)| (package.path.as_relative_path(), node_index))
+            .collect::<HashMap<&RelativePath, NodeIndex>>();
 
         // Collect all tasks grouped by task group id
         let mut task_ids_by_task_group_id: HashMap<TaskGroupId, Vec<(TaskId, usize)>> =
@@ -574,7 +573,7 @@ impl Workspace {
 
         // Add topological dependencies
         for (task_group_id, current_tasks) in &task_ids_by_task_group_id {
-            let package_path = task_group_id.package_path.as_str();
+            let package_path = task_group_id.package_path.as_relative_path();
             let task_group_name = &task_group_id.task_group_name;
             // Find the FIRST subtask of the current package (or the only task if no subtasks)
             let first_current_task = current_tasks.first().map(|(task_id, _)| task_id);
@@ -624,18 +623,7 @@ impl Workspace {
 
         for node_idx in package_graph.node_indices() {
             let package = &package_graph[node_idx];
-            let vite_task_json_path = {
-                let package_path = if package.path.is_empty() {
-                    RelativePathBuf::new(std::path::Path::new(".")).unwrap()
-                } else {
-                    RelativePathBuf::new(std::path::Path::new(&package.path)).unwrap()
-                };
-                base_dir.join(package_path.as_relative_path()).join(
-                    RelativePathBuf::new(std::path::Path::new("vite-task.json"))
-                        .unwrap()
-                        .as_relative_path(),
-                )
-            };
+            let vite_task_json_path = base_dir.join(&package.path).join("vite-task.json");
             let vite_task_json: Option<ViteTaskJson> =
                 match File::open(vite_task_json_path.as_path()) {
                     Ok(vite_task_json_file) => {
@@ -657,10 +645,10 @@ impl Workspace {
 
 /// Find paths of all transitive dependencies of a package
 fn find_transitive_dependencies(
-    package_path: &str,
+    package_path: &RelativePath,
     package_graph: &Graph<PackageInfo, DependencyType>,
-    package_path_to_node_index: &HashMap<&str, NodeIndex>,
-) -> Vec<Str> {
+    package_path_to_node_index: &HashMap<&RelativePath, NodeIndex>,
+) -> Vec<RelativePathBuf> {
     let mut result = Vec::new();
     let mut visited = HashSet::default();
 
@@ -676,11 +664,11 @@ fn find_transitive_dependencies(
 }
 
 fn find_transitive_dependencies_recursive<'a>(
-    package_path: &'a str,
+    package_path: &'a RelativePath,
     package_graph: &'a Graph<PackageInfo, DependencyType>,
-    package_name_to_node: &HashMap<&'a str, NodeIndex>,
-    visited: &mut HashSet<&'a str>,
-    result: &mut Vec<Str>,
+    package_path_to_node: &HashMap<&'a RelativePath, NodeIndex>,
+    visited: &mut HashSet<&'a RelativePath>,
+    result: &mut Vec<RelativePathBuf>,
 ) {
     if visited.contains(package_path) {
         return;
@@ -688,17 +676,17 @@ fn find_transitive_dependencies_recursive<'a>(
     visited.insert(package_path);
 
     // Find the package in the graph
-    if let Some(&node_idx) = package_name_to_node.get(package_path) {
+    if let Some(&node_idx) = package_path_to_node.get(package_path) {
         // Check all dependencies from the package from
         for dep_index in package_graph.neighbors(node_idx) {
-            let dep_path = package_graph[dep_index].path.as_str();
-            result.push(dep_path.into());
+            let dep_path = &package_graph[dep_index].path;
+            result.push(dep_path.clone());
 
             // Continue searching transitively
             find_transitive_dependencies_recursive(
                 dep_path,
                 package_graph,
-                package_name_to_node,
+                package_path_to_node,
                 visited,
                 result,
             );

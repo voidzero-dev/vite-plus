@@ -1,10 +1,13 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use std::hint::black_box;
-use std::path::PathBuf;
+use std::{hint::black_box, path::PathBuf};
+use vite_path::AbsolutePathBuf;
 use vite_task::Workspace;
 
 fn bench_workspace_load(c: &mut Criterion) {
-    let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures").join("monorepo");
+    let fixture_path = AbsolutePathBuf::new(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+        .unwrap()
+        .join("fixtures")
+        .join("monorepo");
 
     // Basic workspace load benchmark
     c.bench_function("workspace_load_1000_packages", |b| {
