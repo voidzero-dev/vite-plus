@@ -45,18 +45,18 @@ dashmap = "6.1.0"
 diff-struct = "0.5.3"
 directories = "6.0.0"
 edit = "0.1.5"
-fspy_shared = { path = "crates/fspy_shared" }
 fspy = { path = "crates/fspy" }
-fspy_shared_unix = { path = "crates/fspy_shared_unix"}
-fspy_seccomp_unotify = { path = "crates/fspy_seccomp_unotify" }
 fspy_preload_unix = { path = "crates/fspy_preload_unix", artifact = "cdylib" }
 fspy_preload_windows = { path = "crates/fspy_preload_windows", artifact = "cdylib" }
-passfd = { git = "https://github.com/polachok/passfd", rev = "d55881752c16aced1a49a75f9c428d38d3767213", default-features = false }
+fspy_seccomp_unotify = { path = "crates/fspy_seccomp_unotify" }
+fspy_shared = { path = "crates/fspy_shared" }
+fspy_shared_unix = { path = "crates/fspy_shared_unix" }
 futures = "0.3.31"
 futures-core = "0.3.31"
 futures-util = "0.3.31"
 itertools = "0.14.0"
 nix = { version = "0.30.1", features = ["dir"] }
+passfd = { git = "https://github.com/polachok/passfd", rev = "d55881752c16aced1a49a75f9c428d38d3767213", default-features = false }
 petgraph = "0.8.2"
 portable-pty = "0.9.0"
 ratatui = "0.29.0"
@@ -69,6 +69,7 @@ serde = "1.0.219"
 serde_json = "1.0.140"
 serde_yml = "0.0.12"
 shell-escape = "0.1.5"
+supports-color = "3.0.1"
 tempfile = "3.14.0"
 thiserror = "2"
 tokio = "1.46.1"
@@ -80,9 +81,9 @@ tui-term = "0.2.0"
 twox-hash = "2.1.1"
 vite_error = { path = "crates/vite_error" }
 vite_package_manager = { path = "crates/vite_package_manager" }
-vite_task = { path = "crates/vite_task" }
-vite_str = { path = "crates/vite_str" }
 vite_path = { path = "crates/vite_path" }
+vite_str = { path = "crates/vite_str" }
+vite_task = { path = "crates/vite_task" }
 wax = "0.6.0"
 wildmatch = "2.4.0"
 

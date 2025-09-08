@@ -11,6 +11,7 @@ use std::{
 use anyhow::Context;
 use bincode::{Decode, Encode};
 use fspy::{AccessMode, Spy, TrackedChild};
+use supports_color::{Stream, on};
 
 use futures_util::future::try_join4;
 use serde::{Deserialize, Serialize};
@@ -159,6 +160,7 @@ fn is_default_passthrough_env(name: &str) -> bool {
         "TERM",
         "TERM_PROGRAM",
         "DISPLAY",
+        "FORCE_COLOR",
         // Temporary directories
         "TMP",
         "TEMP",
@@ -244,6 +246,27 @@ impl TaskEnvs {
                 .chain(paths),
         )?
         .into();
+
+        // Automatically add FORCE_COLOR environment variable if not already set
+        // This enables color output in subprocesses when color is supported
+        // TODO: will remove this temporarily until we have a better solution
+        if !all_envs.contains_key("FORCE_COLOR") {
+            if let Some(support) = on(Stream::Stdout) {
+                let force_color_value = if support.has_16m {
+                    "3" // True color (16 million colors)
+                } else if support.has_256 {
+                    "2" // 256 colors
+                } else if support.has_basic {
+                    "1" // Basic ANSI colors
+                } else {
+                    "0" // No color support
+                };
+                all_envs.insert(
+                    "FORCE_COLOR".into(),
+                    Arc::<OsStr>::from(OsStr::new(force_color_value)),
+                );
+            }
+        }
 
         Ok(Self { all_envs, envs_without_pass_through })
     }
@@ -436,6 +459,9 @@ mod tests {
         assert!(!is_default_passthrough_env("RANDOM_ENV"));
         assert!(!is_default_passthrough_env("MY_SECRET"));
 
+        // Test FORCE_COLOR is a passthrough env
+        assert!(is_default_passthrough_env("FORCE_COLOR"));
+
         // Test edge cases
         assert!(!is_default_passthrough_env("VSCODE")); // Should not match without underscore
         assert!(!is_default_passthrough_env("DOCKER")); // Should not match without underscore
@@ -508,6 +534,62 @@ mod tests {
             std::env::remove_var("ALPHA_VAR");
             std::env::remove_var("MIDDLE_VAR");
             std::env::remove_var("BETA_VAR");
+        }
+    }
+
+    #[test]
+    fn test_force_color_auto_detection() {
+        use crate::collections::HashSet;
+        use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
+        use std::path::Path;
+
+        let task_config = TaskConfig {
+            command: TaskCommand::ShellScript("echo test".into()),
+            cwd: ".".into(),
+            cacheable: true,
+            inputs: HashSet::new(),
+            envs: HashSet::new(),
+            pass_through_envs: HashSet::new(),
+        };
+
+        let resolved_task_config =
+            ResolvedTaskConfig { config_dir: ".".into(), config: task_config };
+
+        // Test when FORCE_COLOR is not already set
+        unsafe {
+            std::env::remove_var("FORCE_COLOR");
+        }
+
+        let result = TaskEnvs::resolve(Path::new("."), &resolved_task_config).unwrap();
+
+        // FORCE_COLOR should be automatically added if color is supported
+        // Note: This test might vary based on the test environment
+        let force_color_present = result.all_envs.contains_key("FORCE_COLOR");
+        if force_color_present {
+            let force_color_value = result.all_envs.get("FORCE_COLOR").unwrap();
+            let force_color_str = force_color_value.to_str().unwrap();
+            // Should be a valid FORCE_COLOR level
+            assert!(matches!(force_color_str, "0" | "1" | "2" | "3"));
+        }
+
+        // Test when FORCE_COLOR is already set - should not be overridden
+        unsafe {
+            std::env::set_var("FORCE_COLOR", "2");
+        }
+
+        let result2 = TaskEnvs::resolve(Path::new("."), &resolved_task_config).unwrap();
+
+        // Should contain the original FORCE_COLOR value
+        assert!(result2.all_envs.contains_key("FORCE_COLOR"));
+        let force_color_value = result2.all_envs.get("FORCE_COLOR").unwrap();
+        assert_eq!(force_color_value.to_str().unwrap(), "2");
+
+        // FORCE_COLOR should not be in envs_without_pass_through since it's a passthrough env
+        assert!(!result2.envs_without_pass_through.contains_key("FORCE_COLOR"));
+
+        // Clean up
+        unsafe {
+            std::env::remove_var("FORCE_COLOR");
         }
     }
 }

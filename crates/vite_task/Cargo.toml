@@ -36,6 +36,7 @@ rusqlite = { workspace = true, features = ["bundled"] }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { workspace = true }
 shell-escape = { workspace = true }
+supports-color = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "io-std", "macros"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
