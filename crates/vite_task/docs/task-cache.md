@@ -55,8 +55,8 @@ the task cache system is able to hit the same cache for `test` task and for the 
 │  2. Cache Key Generation                                                             │
 │  ──────────────────────                                                              │
 │    • Command fingerprint (includes cwd)                                              │
-│    • Command fingerprint                                                             │
 │    • Task arguments                                                                  │
+│    • Environment variables                                                           │
 │         │                                                                            │
 │         ▼                                                                            │
 │  3. Cache Lookup (SQLite)                                                            │
@@ -99,53 +99,77 @@ The command fingerprint captures the complete execution context:
 
 ```rust
 pub struct CommandFingerprint {
-    pub cwd: Str,                                      // Working directory, relative to workspace root
-    pub command: TaskCommand,                          // Shell script or command
-    pub envs_without_pass_through: HashMap<Str, Str>,  // Environment variables
+    pub cwd: RelativePathBuf,                          // Working directory, relative to workspace root
+    pub command: TaskCommand,                          // Shell script or parsed command
+    pub envs_without_pass_through: HashMap<Str, Str>,  // Environment variables (excludes pass-through)
 }
 
 pub enum TaskCommand {
-    Shell(Str),              // Raw shell script
-    Parsed { bin: Str, args: Arc<[Str]> },  // Parsed command with args
+    ShellScript(Str),                    // Raw shell script
+    Parsed(TaskParsedCommand),           // Parsed command with program and args
 }
 ```
 
 This ensures cache invalidation when:
 
-- Working directory changes
+- Working directory changes (package location changes)
 - Command or arguments change
-- Environment variables differ
+- Declared environment variables differ (pass-through envs don't affect cache)
 
-### 4. Command Fingerprinting
+### 2. Environment Variable Impact on Cache
 
-The complete task fingerprint includes input files:
+The `envs_without_pass_through` field is crucial for cache correctness:
+
+- Only includes envs explicitly declared in the task's `envs` array
+- Does NOT include pass-through envs (PATH, CI, etc.)
+- These envs become part of the cache key
+
+When a task runs:
+
+1. All envs (including pass-through) are available to the process
+2. Only declared envs affect the cache key
+3. If a declared env changes value, cache will miss
+4. If a pass-through env changes, cache will still hit
+
+For built-in tasks (lint, build, test):
+
+- The resolver provides envs which become part of the fingerprint
+- If resolver provides different envs between runs, cache breaks
+- Each built-in task type must have unique task name to avoid cache collision
+
+### 3. Task Fingerprinting
+
+The complete task fingerprint includes input files tracked during execution:
 
 ```rust
-pub struct CommandFingerprint {
-    pub inputs: HashMap<Str, PathFingerprint>,      // Input file states
+pub struct TaskFingerprint {
+    pub resolved_config: ResolvedTaskConfig,        // Task configuration
+    pub command_fingerprint: CommandFingerprint,    // Command execution context
+    pub inputs: HashMap<RelativePathBuf, PathFingerprint>,  // Input file states
 }
 ```
 
-### 5. Task Cache Key Structure
+### 4. Task ID Structure
 
-The task id uniquely identifies a task:
+The task ID uniquely identifies a task:
 
 ```rust
 pub struct TaskId {
-    /// The name in `task.json`, or the name of the `package.json` script containing this task.
+    /// The name in `vite-task.json`, or the name of the `package.json` script containing this task.
     /// See [`terminologies.md`](./terminologies.md) for details
     pub task_group_name: Str,
 
-    /// the path of the package containing this task, relative to the monorepo root.
+    /// The path of the package containing this task, relative to the monorepo root.
     /// We don't use package names as they can be the same for different packages.
-    pub package_dir: Str,
+    pub package_dir: RelativePathBuf,
+    
     /// The index of the subcommand in a parsed command (`echo A && echo B`).
     /// None if the task is the last command.
     pub subcommand_index: Option<usize>,
 }
 ```
 
-### 6. (`CommandCacheKey`, `TaskId`) Relationship
+### 5. (`CommandCacheKey`, `TaskId`) Relationship
 
 The cache system maintains (`CommandCacheKey`, `TaskId`) relationship in order to locate the previous cache of the same task. This is a one-to-many relationship.
 
@@ -194,7 +218,7 @@ Vite-plus uses `fspy` to monitor file system access during task execution:
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### 4. Fingerprint Validation
+### 6. Fingerprint Validation
 
 When a cache entry exists, the fingerprint is validated to detect changes:
 
@@ -267,16 +291,16 @@ pub struct StdOutput {
 │                      Cache Hit Process                       │
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
-│  1. Generate Cache Key and task Id                           │
+│  1. Generate Cache Key and Task ID                           │
 │  ─────────────────────                                       │
-│    TaskCacheKey {                                            │
+│    CommandCacheKey {                                         │
 │        command_fingerprint: {...},                           │
 │        args: ["--production"]                                │
 │    }                                                         │
 │    TaskId {                                                  │
 │        task_group_name: "build",                             │
-│        package_path: "./packages/app",                       │
-|        subcommand_index: None,                               │
+│        package_dir: "packages/app",                          │
+│        subcommand_index: None,                               │
 │    }                                                         │
 │         │                                                    │
 │         ▼                                                    │
@@ -354,9 +378,9 @@ pub struct StdOutput {
 
 Cache entries are automatically invalidated when:
 
-1. **Command changes**: Different command, arguments, or working directory (includes package path)
-2. **Package location changes**: Working directory in command fingerprint changes
-3. **Environment changes**: Modified environment variables
+1. **Command changes**: Different command, arguments, or working directory
+2. **Package location changes**: Working directory (`cwd`) in command fingerprint changes
+3. **Environment changes**: Modified declared environment variables (pass-through envs don't affect cache)
 4. **Input files change**: Content hash differs (detected via xxHash3)
 5. **Configuration changes**: Task configuration in vite-task.json modified
 6. **File structure changes**: Files added, removed, or type changed
@@ -553,12 +577,12 @@ When a task hits cache, outputs are replayed exactly:
 
 ```rust
 // Task: app#build --production
-TaskCacheKey {
+CommandCacheKey {
     command_fingerprint: CommandFingerprint {
-        cwd: "monorepo/packages/app".into(),  // Package identified by cwd, relative to workspace root
-        command: TaskCommand::Shell("tsc && rollup -c".into()),
+        cwd: RelativePathBuf::from("packages/app"),  // Package location relative to workspace root
+        command: TaskCommand::ShellScript("tsc && rollup -c".into()),
         envs_without_pass_through: hashmap! {
-            "NODE_ENV" => "production"
+            "NODE_ENV".into() => "production".into()
         },
     },
     args: vec!["--production"].into(),
@@ -569,13 +593,14 @@ TaskCacheKey {
 
 ```rust
 // Task in packages/frontend (no name in package.json)
-TaskCacheKey {
+CommandCacheKey {
     command_fingerprint: CommandFingerprint {
-        cwd: "monorepo/packages/frontend".into(),  // Package identified by cwd, relative to workspace root
-        command: TaskCommand::Parsed {
-            bin: "webpack".into(),
-            args: vec!["--mode", "production"].into(),
-        },
+        cwd: RelativePathBuf::from("packages/frontend"),  // Package location relative to workspace root
+        command: TaskCommand::Parsed(TaskParsedCommand {
+            program: "webpack".into(),
+            args: vec!["--mode".into(), "production".into()].into(),
+            envs: HashMap::new(),
+        }),
         envs_without_pass_through: HashMap::new(),
     },
     args: vec![].into(),
@@ -701,7 +726,7 @@ No need to manually specify inputs - fspy captures actual dependencies.
 │                                                              │
 │  crates/vite_task/src/                                       │
 │  ├── cache.rs           # Cache storage and retrieval        │
-│  │   ├── TaskCacheKey   # Cache key structure                │
+│  │   ├── CommandCacheKey # Cache key structure               │
 │  │   ├── CachedTask     # Cached data structure              │
 │  │   └── Cache          # Main cache interface               │
 │  │                                                           │
@@ -727,10 +752,10 @@ No need to manually specify inputs - fspy captures actual dependencies.
 
 ```rust
 // Simplified from actual implementation
-impl TaskCacheKey {
+impl CommandCacheKey {
     pub fn new(resolved: &ResolvedTask) -> Self {
         Self {
-            command_fingerprint: resolved.command_fingerprint.clone(),
+            command_fingerprint: resolved.resolved_command.fingerprint.clone(),
             args: resolved.args.clone(),
         }
     }

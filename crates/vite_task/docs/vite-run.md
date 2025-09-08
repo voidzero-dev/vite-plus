@@ -62,12 +62,11 @@ Task names without `#` will be resolved in the current package (the package cont
 
 Behaviors when the package root and/or the workspace root is not found:
 
-| package root | workspace root | behaviour                                                                                                                    |
-| ------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| found        | not found      | No possible: workspace root always fallbacks to package root.                                                                |
-| not found    | found          | `vite-plus run build` should throw an `CurrentPackageNotFound` error.  `vite-plus run @other/package#build` is still allowed |
-| not found    | not found      | Throw an error on any `vite run`. The workspace root must always exist as it's where we store the cache.                     |
-
+| package root | workspace root | behaviour                                                                                                                   |
+| ------------ | -------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| found        | not found      | No possible: workspace root always fallbacks to package root.                                                               |
+| not found    | found          | `vite-plus run build` should throw an `CurrentPackageNotFound` error. `vite-plus run @other/package#build` is still allowed |
+| not found    | not found      | Throw an error on any `vite run`. The workspace root must always exist as it's where we store the cache.                    |
 
 ### `--recursive,-r`
 
@@ -169,9 +168,9 @@ The execution flow for `vite-plus run build -r --topological`:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Task Resolution                           │
+│                    Task Resolution                          │
 ├─────────────────────────────────────────────────────────────┤
-│                                                              │
+│                                                             │
 │  Step 1: Collect all build tasks                            │
 │  ────────────────────────────────────────                   │
 │    • app#build                                              │
