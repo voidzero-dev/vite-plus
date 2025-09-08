@@ -1,5 +1,5 @@
 //! Provides `RelativePath(Buf)`, a relative path type with additional guarantees to make it portable.
-//! 
+//!
 //! ## Why not use crate `relative-path`
 //! `relative-path::RelativePath` allows backslashes in its components, which is valid in unix systems but not portable to Windows.
 
@@ -77,35 +77,24 @@ impl RelativePathBuf {
     /// Unlike [`std::path::PathBuf::push`], `self` and `path` are both always relative,
     /// so `self` can only be appended, not replaced
     pub fn push<P: AsRef<RelativePath>>(&mut self, rel_path: P) {
+        let rel_path_str = rel_path.as_ref().as_str();
+        if rel_path_str.is_empty() {
+            return;
+        }
         self.0.push('/');
         self.0.push_str(rel_path.as_ref().as_str());
     }
 
-    pub fn as_relative_path(&self) -> &RelativePath {
-        unsafe { RelativePath::assume_portable(&self.0) }
-    }
-}
-
-impl<'a, Context> Decode<Context> for RelativePathBuf {
-    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
-        let path_str = Str::decode(decoder)?;
-        RelativePathBuf::try_from(path_str.as_str())
-            .map_err(|err| DecodeError::OtherString(format!("{}: {}", err, path_str)))
-    }
-}
-impl_borrow_decode!(RelativePathBuf);
-
-impl TryFrom<&str> for RelativePathBuf {
-    type Error = FromPathError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        Path::new(value).try_into()
-    }
-}
-
-impl TryFrom<&Path> for RelativePathBuf {
-    type Error = FromPathError;
-    fn try_from(path: &Path) -> Result<Self, Self::Error> {
+    /// Creates a new `RelativePathBuf` from a `Path`.
+    ///
+    /// This function normalizes the path by:
+    /// - Removing `.` components
+    /// - Replacing backslash `\` separators with slashes `/` (on Windows)
+    ///
+    /// # Errors
+    /// Returns an error if the path is not relative or contains invalid data that makes it non-portable.
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, FromPathError> {
+        let path = path.as_ref();
         let mut path_str = Str::with_capacity(path.as_os_str().len());
         for component in path.components() {
             match component {
@@ -134,7 +123,20 @@ impl TryFrom<&Path> for RelativePathBuf {
         path_str.pop(); // remove last pushed '/'
         Ok(Self(path_str))
     }
+
+    pub fn as_relative_path(&self) -> &RelativePath {
+        unsafe { RelativePath::assume_portable(&self.0) }
+    }
 }
+
+impl<'a, Context> Decode<Context> for RelativePathBuf {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
+        let path_str = Str::decode(decoder)?;
+        RelativePathBuf::new(path_str.as_str())
+            .map_err(|err| DecodeError::OtherString(format!("{}: {}", err, path_str)))
+    }
+}
+impl_borrow_decode!(RelativePathBuf);
 
 impl AsRef<RelativePath> for RelativePathBuf {
     fn as_ref(&self) -> &RelativePath {
@@ -195,14 +197,14 @@ mod tests {
     #[test]
     fn non_relative() {
         let abs_path = Path::new(if cfg!(windows) { "C:\\Users" } else { "/home" });
-        let_assert!(Err(FromPathError::NonRelative) = RelativePathBuf::try_from(abs_path));
+        let_assert!(Err(FromPathError::NonRelative) = RelativePathBuf::new(abs_path));
     }
     #[test]
     fn non_utf8() {
         let non_utf8_path = Path::new(OsStr::from_bytes(&[0xC0]));
         let_assert!(
             Err(FromPathError::InvalidPathData(InvalidPathDataError::NonUtf8)) =
-                RelativePathBuf::try_from(non_utf8_path),
+                RelativePathBuf::new(non_utf8_path),
         );
     }
 
@@ -212,7 +214,7 @@ mod tests {
         let path = Path::new("foo\\bar");
         let_assert!(
             Err(FromPathError::InvalidPathData(InvalidPathDataError::BackslashInComponent)) =
-                RelativePathBuf::try_from(path)
+                RelativePathBuf::new(path)
         );
     }
 
@@ -227,49 +229,56 @@ mod tests {
     #[test]
     fn normalize_dots() {
         let path = Path::new("./foo/./bar/.");
-        let rel_path = RelativePathBuf::try_from(path).unwrap();
+        let rel_path = RelativePathBuf::new(path).unwrap();
         assert_eq!(rel_path.as_str(), "foo/bar")
     }
 
     #[test]
     fn normalize_trailing_slashes() {
         let path = Path::new("foo/bar//");
-        let rel_path = RelativePathBuf::try_from(path).unwrap();
+        let rel_path = RelativePathBuf::new(path).unwrap();
         assert_eq!(rel_path.as_str(), "foo/bar")
     }
     #[test]
     fn preserve_double_dots() {
         let path = Path::new("../foo/../bar/..");
-        let rel_path = RelativePathBuf::try_from(path).unwrap();
+        let rel_path = RelativePathBuf::new(path).unwrap();
         assert_eq!(rel_path.as_str(), "../foo/../bar/..")
     }
 
     #[test]
     fn push() {
-        let mut rel_path = RelativePathBuf::try_from(Path::new("foo/bar")).unwrap();
-        rel_path.push(RelativePathBuf::try_from(Path::new("baz")).unwrap());
+        let mut rel_path = RelativePathBuf::new(Path::new("foo/bar")).unwrap();
+        rel_path.push(RelativePathBuf::new(Path::new("baz")).unwrap());
         assert_eq!(rel_path.as_str(), "foo/bar/baz")
     }
 
     #[test]
+    fn push_empty() {
+        let mut rel_path = RelativePathBuf::new(Path::new("foo/bar")).unwrap();
+        rel_path.push(RelativePathBuf::new("").unwrap());
+        assert_eq!(rel_path.as_str(), "foo/bar")
+    }
+
+    #[test]
     fn join() {
-        let rel_path = RelativePathBuf::try_from(Path::new("foo/bar")).unwrap();
+        let rel_path = RelativePathBuf::new(Path::new("foo/bar")).unwrap();
         let joined_path =
-            rel_path.as_relative_path().join(RelativePathBuf::try_from(Path::new("baz")).unwrap());
+            rel_path.as_relative_path().join(RelativePathBuf::new(Path::new("baz")).unwrap());
         assert_eq!(joined_path.as_str(), "foo/bar/baz")
     }
 
     #[test]
     fn strip_prefix() {
-        let rel_path = RelativePathBuf::try_from(Path::new("foo/bar/baz")).unwrap();
-        let prefix = RelativePathBuf::try_from(Path::new("foo")).unwrap();
+        let rel_path = RelativePathBuf::new(Path::new("foo/bar/baz")).unwrap();
+        let prefix = RelativePathBuf::new(Path::new("foo")).unwrap();
         let stripped_path = rel_path.strip_prefix(prefix).unwrap();
         assert_eq!(stripped_path.as_str(), "bar/baz")
     }
 
     #[test]
     fn encode_decode() {
-        let rel_path = RelativePathBuf::try_from(Path::new("foo/bar")).unwrap();
+        let rel_path = RelativePathBuf::new(Path::new("foo/bar")).unwrap();
         let config = bincode::config::standard();
         let encoded = bincode::encode_to_vec(&rel_path, config).unwrap();
         let (decoded, _) =

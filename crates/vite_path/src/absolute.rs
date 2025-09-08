@@ -19,7 +19,8 @@ impl AsRef<AbsolutePath> for AbsolutePath {
 
 impl AbsolutePath {
     /// Creates a [`AbsolutePath`] if the give path is absolute.
-    pub fn new(path: &Path) -> Option<&Self> {
+    pub fn new<P: AsRef<Path> + ?Sized>(path: &P) -> Option<&Self> {
+        let path = path.as_ref();
         if path.is_absolute() { Some(unsafe { Self::assume_absolute(path) }) } else { None }
     }
 
@@ -49,7 +50,7 @@ impl AbsolutePath {
         let Ok(stripped_path) = self.0.strip_prefix(&base.0) else {
             return Ok(None);
         };
-        match RelativePathBuf::try_from(stripped_path) {
+        match RelativePathBuf::new(stripped_path) {
             Ok(relative_path) => Ok(Some(relative_path)),
             Err(FromPathError::NonRelative) => {
                 unreachable!("stripped path should always be relative")
