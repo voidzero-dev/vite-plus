@@ -44,13 +44,12 @@ pub struct Workspace {
 
 impl Workspace {
     /// Determines the current package path relative to the workspace root.
-    /// Returns an empty string if the current directory is the workspace root itself.
-    /// Returns the workspace root and the current package path.
+    /// Returns (workspace root, cwd relative to workspace root, current package root relative to workspace root).
     fn determine_current_package_path(
         original_cwd: &AbsolutePath,
     ) -> Result<(&AbsolutePath, RelativePathBuf, Option<String>), Error> {
         let WorkspaceRoot { path: workspace_root, cwd, .. } = find_workspace_root(original_cwd)?;
-        // If can't find package root, return the workspace root and an empty string
+        // current package root is None if it can't be found
         let Ok(package_root) = find_package_root(original_cwd) else {
             return Ok((workspace_root, cwd, None));
         };
