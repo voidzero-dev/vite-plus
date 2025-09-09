@@ -229,6 +229,7 @@ impl Workspace {
             args: task_args,
             resolved_command,
             resolved_config,
+            is_builtin: false,
             ignore_replay: false,
         })
     }

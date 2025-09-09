@@ -65,6 +65,7 @@ pub struct ResolvedTask {
     pub args: Arc<[Str]>,
     pub resolved_config: ResolvedTaskConfig,
     pub resolved_command: ResolvedTaskCommand,
+    pub is_builtin: bool,
     /// If true, the task will not be replayed from the cache.
     /// This is useful for tasks that should not be replayed, like auto run install command.
     /// TODO: this is a temporary solution, we should find a better way to handle this.
@@ -162,6 +163,7 @@ impl ResolvedTask {
             args: args.map(|arg| arg.as_ref().into()).collect(),
             resolved_config: resolved_task_config,
             resolved_command,
+            is_builtin: true,
             ignore_replay,
         })
     }

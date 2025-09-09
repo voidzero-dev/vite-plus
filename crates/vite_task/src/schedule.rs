@@ -82,7 +82,8 @@ impl ExecutionPlan {
 
         let command = step.resolved_command.fingerprint.command.clone();
         let cwd = step.resolved_command.fingerprint.cwd.clone();
-        let pretty_command = format!("~/{}$ {}", cwd, command);
+        let display_command: Option<String> =
+            if step.is_builtin { None } else { Some(format!("~/{}$ {}", cwd, command)) };
         let ignore_replay = step.ignore_replay;
 
         // Check cache and prepare execution
@@ -98,28 +99,34 @@ impl ExecutionPlan {
         match cache_miss {
             Some(CacheMiss::NotFound) => {
                 tracing::debug!("{}", "Cache not found".style(Style::new().yellow()));
-                println!(
-                    "{} {}",
-                    "►".style(Style::new().bright_blue()),
-                    pretty_command.style(Style::new().cyan())
-                );
+                if let Some(display_command) = display_command {
+                    println!(
+                        "{} {}",
+                        "►".style(Style::new().bright_blue()),
+                        display_command.style(Style::new().cyan())
+                    );
+                }
             }
             Some(CacheMiss::FingerprintMismatch(mismatch)) => {
                 println!("{}: {}", "Cache miss".style(Style::new().yellow()), mismatch);
-                println!(
-                    "{} {}",
-                    "►".style(Style::new().bright_blue()),
-                    pretty_command.style(Style::new().cyan())
-                );
+                if let Some(display_command) = display_command {
+                    println!(
+                        "{} {}",
+                        "►".style(Style::new().bright_blue()),
+                        display_command.style(Style::new().cyan())
+                    );
+                }
             }
             None => {
                 if !ignore_replay {
-                    println!(
-                        "{} {} {}",
-                        "►".style(Style::new().bright_green()),
-                        pretty_command.style(Style::new().dimmed()),
-                        "(Cache hit, replaying)".style(Style::new().green())
-                    );
+                    println!("{}", "Cache hit, replaying".style(Style::new().green()));
+                    if let Some(display_command) = display_command {
+                        println!(
+                            "{} {}",
+                            "►".style(Style::new().bright_green()),
+                            display_command.style(Style::new().dimmed())
+                        );
+                    }
                 }
             }
         }
