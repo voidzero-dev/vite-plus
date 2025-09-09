@@ -106,7 +106,7 @@ impl FileSystem for RealFileSystem {
     #[cfg(windows)]
     fn fingerprint_path(
         &self,
-        path: &Arc<OsStr>,
+        path: &Arc<AbsolutePath>,
         path_read: PathRead,
     ) -> Result<PathFingerprint, Error> {
         use std::fs;
@@ -124,7 +124,7 @@ impl FileSystem for RealFileSystem {
                 ) {
                     Ok(PathFingerprint::NotFound)
                 } else {
-                    Err(Error::IoWithPath { err, path: PathBuf::from(path.as_ref()) })
+                    Err(Error::IoWithPath { err, path: path.clone() })
                 };
             }
         };
@@ -178,10 +178,8 @@ impl FileSystem for RealFileSystem {
                                 };
 
                                 // Convert filename to Str (using OsStr -> String conversion)
-                                dir_entries.insert(
-                                    file_name.to_string_lossy().as_ref().into(),
-                                    entry_kind,
-                                );
+                                let filename_str = file_name.to_string_lossy();
+                                dir_entries.insert(filename_str.as_ref().into(), entry_kind);
                             }
                             Some(dir_entries)
                         } else {
