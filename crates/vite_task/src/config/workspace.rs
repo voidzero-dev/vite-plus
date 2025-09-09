@@ -34,7 +34,7 @@ pub struct Workspace {
     /// Empty string ("") represents the workspace root package itself.
     /// None indicates that it cannot find the package root from the current directory..
     /// This allows distinguishing between workspace-level tasks and package-level tasks.
-    pub(crate) current_package_path: Option<String>,
+    pub(crate) current_package_path: Option<RelativePathBuf>,
     pub(crate) task_cache: TaskCache,
     pub(crate) fs: CachedFileSystem,
     pub(crate) package_graph: Graph<PackageInfo, DependencyType>,
@@ -47,7 +47,7 @@ impl Workspace {
     /// Returns (workspace root, cwd relative to workspace root, current package root relative to workspace root).
     fn determine_current_package_path(
         original_cwd: &AbsolutePath,
-    ) -> Result<(&AbsolutePath, RelativePathBuf, Option<String>), Error> {
+    ) -> Result<(&AbsolutePath, RelativePathBuf, Option<RelativePathBuf>), Error> {
         let WorkspaceRoot { path: workspace_root, cwd, .. } = find_workspace_root(original_cwd)?;
         // current package root is None if it can't be found
         let Ok(package_root) = find_package_root(original_cwd) else {
@@ -56,14 +56,8 @@ impl Workspace {
         let current_package_root = package_root.path;
 
         // Get relative path from workspace root to package root
-        let path_result = current_package_root.strip_prefix(workspace_root)?;
-
-        let path_str = match path_result {
-            Some(relative_path) => Some(relative_path.as_str().to_string()),
-            None => None,
-        };
-
-        Ok((workspace_root, cwd, path_str))
+        let current_package_root = current_package_root.strip_prefix(workspace_root)?;
+        Ok((workspace_root, cwd, current_package_root))
     }
 
     #[tracing::instrument]

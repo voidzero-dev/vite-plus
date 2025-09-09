@@ -10,7 +10,7 @@ use compact_str::ToCompactString;
 use diff::Diff;
 use serde::{Deserialize, Serialize};
 use vite_error::Error;
-use vite_path::{self, RelativePathBuf};
+use vite_path::{self, RelativePath, RelativePathBuf};
 use vite_str::Str;
 
 use crate::{
@@ -78,7 +78,7 @@ impl ResolvedTask {
         }
     }
 
-    pub fn matches(&self, task_request: &str, current_package_path: Option<&str>) -> bool {
+    pub fn matches(&self, task_request: &str, current_package_path: Option<&RelativePath>) -> bool {
         if self.name.subcommand_index.is_some() {
             // never match non-last subcommand
             return false;
@@ -86,7 +86,7 @@ impl ResolvedTask {
 
         // match tasks in current package if the task_request doesn't contain '#'
         if !task_request.contains('#') {
-            return current_package_path == Some(self.resolved_config.config_dir.as_str())
+            return current_package_path == Some(&self.resolved_config.config_dir)
                 && self.name.task_group_name == task_request;
         };
         let package_name = self.name.package_name.as_str();
