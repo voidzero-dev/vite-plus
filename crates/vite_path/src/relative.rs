@@ -45,9 +45,6 @@ impl RelativePath {
     pub fn as_path(&self) -> &Path {
         Path::new(self.as_str())
     }
-    pub fn to_path_buf(&self) -> PathBuf {
-        PathBuf::from(self.as_str())
-    }
     pub fn to_relative_path_buf(&self) -> RelativePathBuf {
         RelativePathBuf(self.0.into())
     }

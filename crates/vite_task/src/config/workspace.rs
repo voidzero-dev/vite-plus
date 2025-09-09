@@ -5,23 +5,22 @@ use std::{
     sync::Arc,
 };
 
-use crate::collections::{HashMap, HashSet};
 use anyhow;
+use petgraph::{Graph, graph::NodeIndex, stable_graph::StableDiGraph, visit::IntoNodeReferences};
+use vite_package_manager::{
+    DependencyType, PackageInfo, PackageJson, WorkspaceRoot, find_package_root, find_workspace_root,
+};
 use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePath, RelativePathBuf};
+use vite_str::Str;
 
 use crate::{
     Error,
     cache::TaskCache,
     cmd::try_parse_as_and_list,
+    collections::{HashMap, HashSet},
     config::{TaskGroupId, name::TaskName},
     fs::CachedFileSystem,
 };
-
-use petgraph::{Graph, graph::NodeIndex, stable_graph::StableDiGraph, visit::IntoNodeReferences};
-use vite_package_manager::{
-    DependencyType, PackageInfo, PackageJson, find_package_root, find_workspace_root,
-};
-use vite_str::Str;
 
 use super::{
     ResolvedTask, ResolvedTaskConfig, TaskCommand, TaskConfig, TaskGraphBuilder, TaskId,
@@ -31,7 +30,7 @@ use super::{
 #[derive(Debug)]
 pub struct Workspace {
     pub(crate) workspace_dir: AbsolutePathBuf,
-    pub(crate) cwd: AbsolutePathBuf,
+    pub(crate) cwd: RelativePathBuf,
     /// Relative path from workspace root to current package directory.
     /// Empty string ("") represents the workspace root package itself.
     /// None indicates that it cannot find the package root from the current directory..
@@ -50,13 +49,13 @@ impl Workspace {
     /// Returns the workspace root and the current package path.
     fn determine_current_package_path(
         original_cwd: &AbsolutePath,
-    ) -> Result<(&AbsolutePath, Option<String>), Error> {
-        let workspace_root = find_workspace_root(original_cwd)?.path;
+    ) -> Result<(&AbsolutePath, RelativePathBuf, Option<String>), Error> {
+        let WorkspaceRoot { path: workspace_root, cwd, .. } = find_workspace_root(original_cwd)?;
         let workspace_root = vite_path::AbsolutePath::new(workspace_root)
             .ok_or_else(|| Error::AnyhowError(anyhow::anyhow!("workspace root is not absolute")))?;
         // If can't find package root, return the workspace root and an empty string
         let Ok(package_root) = find_package_root(original_cwd) else {
-            return Ok((workspace_root, None));
+            return Ok((workspace_root, cwd, None));
         };
         let current_package_root = package_root.path;
         let current_package_root = vite_path::AbsolutePath::new(current_package_root)
@@ -75,7 +74,7 @@ impl Workspace {
             None => None,
         };
 
-        Ok((workspace_root, path_str))
+        Ok((workspace_root, cwd, path_str))
     }
 
     #[tracing::instrument]
@@ -92,7 +91,8 @@ impl Workspace {
         cache_path: Option<AbsolutePathBuf>,
     ) -> Result<Self, Error> {
         // Determine current package path relative to workspace root
-        let (workspace_root, current_package_path) = Self::determine_current_package_path(&cwd)?;
+        let (workspace_root, cwd, current_package_path) =
+            Self::determine_current_package_path(&cwd)?;
 
         let cache_path = cache_path.unwrap_or_else(|| {
             if let Ok(env_cache_path) = std::env::var("VITE_CACHE_PATH") {
@@ -137,7 +137,8 @@ impl Workspace {
         topological_run: bool,
     ) -> Result<Self, Error> {
         // Determine current package path relative to workspace root
-        let (workspace_root, current_package_path) = Self::determine_current_package_path(&cwd)?;
+        let (workspace_root, cwd, current_package_path) =
+            Self::determine_current_package_path(&cwd)?;
 
         let package_graph = vite_package_manager::get_package_graph(&workspace_root)?;
         // Load vite-task.json files for all packages

@@ -108,15 +108,6 @@ pub enum Error {
     PackageOutsideWorkspace { package_path: AbsolutePathBuf, workspace_root: AbsolutePathBuf },
 
     #[error(transparent)]
-    FromPathError(#[from] vite_path::relative::FromPathError),
-
-    #[error("Path is not valid utf8: {0:?}")]
-    PathNotValidUtf8(AbsolutePathBuf),
-
-    #[error("No package.json found at {0:?}")]
-    NoPackageJsonFound(AbsolutePathBuf),
-
-    #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),
 }
 

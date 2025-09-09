@@ -44,11 +44,6 @@ impl AbsolutePath {
         &self.0
     }
 
-    /// Gets the underlying [`Path`] as a [`PathBuf`]
-    pub fn to_path_buf(&self) -> PathBuf {
-        self.0.to_path_buf()
-    }
-
     /// Converts `self` to an owned [`AbsolutePathBuf`].
     pub fn to_absolute_path_buf(&self) -> AbsolutePathBuf {
         unsafe { AbsolutePathBuf::assume_absolute(self.0.to_path_buf()) }
