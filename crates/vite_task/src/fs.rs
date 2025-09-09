@@ -249,8 +249,14 @@ mod tests {
     #[test]
     fn test_fingerprint_nonexistent_file() {
         let fs = RealFileSystem::default();
-        let nonexistent_path =
-            Arc::<AbsolutePath>::from(AbsolutePathBuf::new("/nonexistent/path".into()).unwrap());
+        let nonexistent_path = Arc::<AbsolutePath>::from(
+            AbsolutePathBuf::new(if cfg!(windows) {
+                "C:\\nonexistent\\path".into()
+            } else {
+                "/nonexistent/path".into()
+            })
+            .unwrap(),
+        );
         let path_read = PathRead { read_dir_entries: false };
 
         let result = fs.fingerprint_path(&nonexistent_path, path_read).unwrap();
