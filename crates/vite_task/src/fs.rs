@@ -1,9 +1,7 @@
 use std::{
-    ffi::OsStr,
     fs::File,
     hash::Hasher as _,
     io::{self, Read},
-    path::PathBuf,
     sync::Arc,
 };
 
@@ -11,8 +9,7 @@ use crate::Error;
 use crate::{execute::PathRead, fingerprint::PathFingerprint};
 use dashmap::DashMap;
 use std::io::BufRead;
-#[cfg(unix)]
-use vite_path::AbsolutePath;
+use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
 
 use crate::collections::HashMap;
@@ -208,7 +205,7 @@ impl FileSystem for RealFileSystem {
 pub struct CachedFileSystem<FS = RealFileSystem> {
     underlying: FS,
     #[expect(dead_code)]
-    cache: DashMap<Arc<OsStr>, PathFingerprint>,
+    cache: DashMap<AbsolutePathBuf, PathFingerprint>,
 }
 
 impl<FS: FileSystem> FileSystem for CachedFileSystem<FS> {
@@ -239,8 +236,8 @@ impl<FS: FileSystem> FileSystem for CachedFileSystem<FS> {
 
 impl<FS> CachedFileSystem<FS> {
     #[expect(dead_code)]
-    pub fn invalidate_path(&self, path: &OsStr) {
-        self.cache.remove(path);
+    pub fn invalidate_path(&self, path: &AbsolutePath) {
+        self.cache.remove(&path.to_absolute_path_buf());
     }
 }
 
@@ -254,7 +251,8 @@ mod tests {
     #[test]
     fn test_fingerprint_nonexistent_file() {
         let fs = RealFileSystem::default();
-        let nonexistent_path = Arc::<OsStr>::from(std::ffi::OsString::from("/nonexistent/path"));
+        let nonexistent_path =
+            Arc::<AbsolutePath>::from(AbsolutePathBuf::new("/nonexistent/path".into()).unwrap());
         let path_read = PathRead { read_dir_entries: false };
 
         let result = fs.fingerprint_path(&nonexistent_path, path_read).unwrap();
@@ -270,7 +268,8 @@ mod tests {
         // Create a test file with known content
         std::fs::write(&temp_file, "Hello, World!").unwrap();
 
-        let file_path = Arc::<OsStr>::from(temp_file.as_os_str().to_os_string());
+        let file_path =
+            Arc::<AbsolutePath>::from(AbsolutePathBuf::new(temp_file.to_path_buf()).unwrap());
         let path_read = PathRead { read_dir_entries: false };
 
         let result = fs.fingerprint_path(&file_path, path_read).unwrap();
@@ -290,7 +289,8 @@ mod tests {
         std::fs::write(temp_dir.path().join("file1.txt"), "content1").unwrap();
         std::fs::write(temp_dir.path().join("file2.txt"), "content2").unwrap();
 
-        let dir_path = Arc::<OsStr>::from(temp_dir.path().as_os_str().to_os_string());
+        let dir_path =
+            Arc::<AbsolutePath>::from(AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap());
         let path_read = PathRead { read_dir_entries: true };
 
         let result = match fs.fingerprint_path(&dir_path, path_read) {
@@ -341,7 +341,8 @@ mod tests {
 
         std::fs::write(&temp_file, "consistent content").unwrap();
 
-        let file_path = Arc::<OsStr>::from(temp_file.as_os_str().to_os_string());
+        let file_path =
+            Arc::<AbsolutePath>::from(AbsolutePathBuf::new(temp_file.to_path_buf()).unwrap());
         let path_read = PathRead { read_dir_entries: false };
 
         // Get multiple fingerprints
