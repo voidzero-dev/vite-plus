@@ -105,6 +105,17 @@ const fn resolve_bool_flag(positive: bool, negative: bool) -> bool {
     if negative { false } else { positive }
 }
 
+/// Automatically run install command
+async fn auto_install(workspace_root: &AbsolutePathBuf) -> Result<(), Error> {
+    tracing::debug!("Running install automatically...");
+    crate::install::InstallCommand::builder(workspace_root.clone())
+        .ignore_replay()
+        .build()
+        .execute(&vec![])
+        .await?;
+    Ok(())
+}
+
 pub struct CliOptions<
     Lint: Future<Output = Result<ResolveCommandResult, Error>> = Pin<
         Box<dyn Future<Output = Result<ResolveCommandResult, Error>>>,
@@ -171,6 +182,11 @@ pub async fn main<
     args: Args,
     options: Option<CliOptions<Lint, LintFn, Vite, ViteFn, Test, TestFn>>,
 ) -> Result<(), Error> {
+    // Auto-install dependencies if needed, but skip for install command itself
+    if !matches!(args.commands, Some(Commands::Install { .. })) {
+        auto_install(&cwd).await?;
+    }
+
     let mut recursive_run = false;
     let mut parallel_run = false;
     let (tasks, mut workspace, task_args) = match &args.commands {

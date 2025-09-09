@@ -65,6 +65,10 @@ pub struct ResolvedTask {
     pub args: Arc<[Str]>,
     pub resolved_config: ResolvedTaskConfig,
     pub resolved_command: ResolvedTaskCommand,
+    /// If true, the task will not be replayed from the cache.
+    /// This is useful for tasks that should not be replayed, like auto run install command.
+    /// TODO: this is a temporary solution, we should find a better way to handle this.
+    pub ignore_replay: bool,
 }
 
 impl ResolvedTask {
@@ -119,6 +123,7 @@ impl ResolvedTask {
             task_name,
             args,
             ResolveCommandResult { bin_path, envs },
+            false,
         )
     }
 
@@ -127,6 +132,7 @@ impl ResolvedTask {
         task_name: &str,
         args: impl Iterator<Item = impl AsRef<str>> + Clone,
         command_result: ResolveCommandResult,
+        ignore_replay: bool,
     ) -> Result<Self, Error> {
         let ResolveCommandResult { bin_path, envs } = command_result;
         let builtin_task = TaskCommand::Parsed(TaskParsedCommand {
@@ -156,6 +162,7 @@ impl ResolvedTask {
             args: args.map(|arg| arg.as_ref().into()).collect(),
             resolved_config: resolved_task_config,
             resolved_command,
+            ignore_replay,
         })
     }
 }

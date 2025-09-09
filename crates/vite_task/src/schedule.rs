@@ -83,6 +83,7 @@ impl ExecutionPlan {
         let command = step.resolved_command.fingerprint.command.clone();
         let cwd = step.resolved_command.fingerprint.cwd.clone();
         let pretty_command = format!("~/{}$ {}", cwd, command);
+        let ignore_replay = step.ignore_replay;
 
         // Check cache and prepare execution
         let (cache_miss, execute_or_replay) = get_cached_or_execute(
@@ -112,12 +113,14 @@ impl ExecutionPlan {
                 );
             }
             None => {
-                println!(
-                    "{} {} {}",
-                    "►".style(Style::new().bright_green()),
-                    pretty_command.style(Style::new().dimmed()),
-                    "(Cache hit, replaying)".style(Style::new().green())
-                );
+                if !ignore_replay {
+                    println!(
+                        "{} {} {}",
+                        "►".style(Style::new().bright_green()),
+                        pretty_command.style(Style::new().dimmed()),
+                        "(Cache hit, replaying)".style(Style::new().green())
+                    );
+                }
             }
         }
 
@@ -140,6 +143,9 @@ async fn get_cached_or_execute<'a>(
             None,
             ({
                 async move {
+                    if task.ignore_replay {
+                        return Ok(());
+                    }
                     // replay
                     let std_outputs = Arc::clone(&cache_task.std_outputs);
                     let mut stdout = tokio::io::stdout();

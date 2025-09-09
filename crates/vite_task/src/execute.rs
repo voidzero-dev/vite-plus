@@ -186,8 +186,16 @@ fn is_default_passthrough_env(name: &str) -> bool {
     }
 
     // Wildcard patterns for common development tools and platforms
-    const WILDCARD_PATTERNS: &[&str] =
-        &["VSCODE_*", "DOCKER_*", "BUILDKIT_*", "COMPOSE_*", "JB_IDE_*", "VERCEL_*", "NEXT_*"];
+    const WILDCARD_PATTERNS: &[&str] = &[
+        "VSCODE_*",
+        "DOCKER_*",
+        "BUILDKIT_*",
+        "COMPOSE_*",
+        "JB_IDE_*",
+        "VERCEL_*",
+        "NEXT_*",
+        "*_TOKEN",
+    ];
 
     // Check wildcard patterns
     for pattern in WILDCARD_PATTERNS {
@@ -264,6 +272,7 @@ impl TaskEnvs {
                 );
             }
         }
+        tracing::debug!("all_envs: {:?}", all_envs);
 
         Ok(Self { all_envs, envs_without_pass_through })
     }
@@ -472,6 +481,7 @@ mod tests {
         assert!(is_default_passthrough_env("JB_IDE_PROJECT_DIR"));
         assert!(is_default_passthrough_env("VERCEL_URL"));
         assert!(is_default_passthrough_env("NEXT_PUBLIC_API_URL"));
+        assert!(is_default_passthrough_env("API_TOKEN"));
 
         // Test patterns that should not match anymore (since we removed the example patterns)
         assert!(!is_default_passthrough_env("MY_TEST_VARIABLE"));
@@ -480,7 +490,6 @@ mod tests {
 
         // Test variables that should NOT be passed through
         assert!(!is_default_passthrough_env("SECRET_KEY"));
-        assert!(!is_default_passthrough_env("API_TOKEN"));
         assert!(!is_default_passthrough_env("CUSTOM_VAR"));
         assert!(!is_default_passthrough_env("RANDOM_ENV"));
         assert!(!is_default_passthrough_env("MY_SECRET"));

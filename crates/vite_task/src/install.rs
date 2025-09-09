@@ -22,6 +22,7 @@ use vite_path::AbsolutePathBuf;
 ///
 pub struct InstallCommand {
     workspace_root: AbsolutePathBuf,
+    ignore_replay: bool,
 }
 
 /// Install command builder.
@@ -30,6 +31,7 @@ pub struct InstallCommand {
 ///
 pub struct InstallCommandBuilder {
     workspace_root: AbsolutePathBuf,
+    ignore_replay: bool,
 }
 
 impl InstallCommand {
@@ -58,6 +60,7 @@ impl InstallCommand {
             "install",
             iter::once("install").chain(args.iter().map(String::as_str)),
             ResolveCommandResult { bin_path: resolve_command.bin_path, envs: resolve_command.envs },
+            self.ignore_replay,
         )?;
         let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
         task_graph.add_node(resolved_task);
@@ -70,11 +73,16 @@ impl InstallCommand {
 
 impl InstallCommandBuilder {
     pub fn new(workspace_root: AbsolutePathBuf) -> Self {
-        Self { workspace_root }
+        Self { workspace_root, ignore_replay: false }
+    }
+
+    pub fn ignore_replay(mut self) -> Self {
+        self.ignore_replay = true;
+        self
     }
 
     pub fn build(self) -> InstallCommand {
-        InstallCommand { workspace_root: self.workspace_root }
+        InstallCommand { workspace_root: self.workspace_root, ignore_replay: self.ignore_replay }
     }
 }
 
