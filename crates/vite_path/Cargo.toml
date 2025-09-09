@@ -8,11 +8,11 @@ rust-version.workspace = true
 
 [dependencies]
 bincode = { workspace = true }
+diff-struct = { workspace = true }
 ref-cast = { workspace = true }
+serde = { workspace = true, features = ["derive", "rc"] }
 thiserror = { workspace = true }
 vite_str = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-diff-struct = { workspace = true }
 
 [lints]
 workspace = true

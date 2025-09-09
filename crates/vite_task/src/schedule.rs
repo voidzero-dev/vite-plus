@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_path::AbsolutePath;
 
 use futures_core::future::BoxFuture;
 use futures_util::future::FutureExt as _;

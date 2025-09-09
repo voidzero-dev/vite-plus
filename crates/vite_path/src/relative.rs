@@ -13,8 +13,7 @@ use std::{
 };
 use vite_str::Str;
 
-use bincode::{Decode, Encode, de::Decoder, error::DecodeError, impl_borrow_decode};
-
+use bincode::{Decode, Encode, de::Decoder, error::DecodeError};
 use ref_cast::{RefCastCustom, ref_cast_custom};
 
 /// A relative path with additional guarantees to make it portable:
@@ -67,20 +66,8 @@ impl RelativePath {
 
 /// A owned relative path buf with the same guarantees as `RelativePath`
 #[derive(
-    Debug,
-    Encode,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Clone,
-    Serialize,
-    Deserialize,
-    Default,
-    Diff,
+    Debug, Encode, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize, Default,
 )]
-#[diff(attr(#[derive(Debug)]))]
 pub struct RelativePathBuf(Str);
 
 impl AsRef<Path> for RelativePathBuf {
@@ -106,7 +93,24 @@ impl PartialEq<&RelativePath> for RelativePathBuf {
     }
 }
 
+impl Diff for RelativePathBuf {
+    type Repr = Option<Str>;
+    fn diff(&self, other: &Self) -> Self::Repr {
+        self.0.diff(&other.0)
+    }
+    fn apply(&mut self, diff: &Self::Repr) {
+        self.0.apply(diff);
+    }
+    fn identity() -> Self {
+        Self(Str::identity())
+    }
+}
+
 impl RelativePathBuf {
+    pub fn empty() -> Self {
+        Self("".into())
+    }
+
     /// Extends `self` with `path`.
     ///
     /// Unlike [`std::path::PathBuf::push`], `self` and `path` are both always relative,
@@ -171,7 +175,23 @@ impl<'a, Context> Decode<Context> for RelativePathBuf {
             .map_err(|err| DecodeError::OtherString(format!("{}: {}", err, path_str)))
     }
 }
-impl_borrow_decode!(RelativePathBuf);
+
+bincode::impl_borrow_decode!(RelativePathBuf);
+
+impl TryFrom<&Path> for RelativePathBuf {
+    type Error = FromPathError;
+    fn try_from(path: &Path) -> Result<Self, Self::Error> {
+        Self::new(path)
+    }
+}
+
+impl TryFrom<&str> for RelativePathBuf {
+    type Error = FromPathError;
+    fn try_from(path: &str) -> Result<Self, Self::Error> {
+        let path = Path::new(path);
+        Self::try_from(path)
+    }
+}
 
 impl AsRef<RelativePath> for RelativePathBuf {
     fn as_ref(&self) -> &RelativePath {

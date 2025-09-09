@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use vite_path::{AbsolutePath, RelativePath, RelativePathBuf};
+use vite_path::{AbsolutePath, RelativePathBuf};
 
 use crate::{Error, cmd::TaskParsedCommand, execute::TaskEnvs};
 
@@ -32,7 +32,7 @@ impl From<TaskCommand> for TaskConfig {
     fn from(command: TaskCommand) -> Self {
         Self {
             command,
-            cwd: RelativePathBuf::default(),
+            cwd: RelativePathBuf::empty(),
             cacheable: true,
             inputs: Default::default(),
             envs: Default::default(),

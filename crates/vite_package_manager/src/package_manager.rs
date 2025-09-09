@@ -3,12 +3,13 @@ use std::io::{BufReader, Seek, SeekFrom};
 use std::path::Path;
 
 use vite_error::Error;
-use vite_path::AbsolutePath;
+use vite_path::{AbsolutePath, RelativePathBuf};
 
 /// The package root directory and its package.json file.
 #[derive(Debug)]
 pub struct PackageRoot<'a> {
     pub path: &'a AbsolutePath,
+    pub cwd: RelativePathBuf,
     pub package_json: File,
 }
 
@@ -20,7 +21,11 @@ pub fn find_package_root<'a>(original_cwd: &'a AbsolutePath) -> Result<PackageRo
     loop {
         // Check for package.json
         if let Some(file) = open_exists_file(cwd.join("package.json"))? {
-            return Ok(PackageRoot { path: cwd, package_json: file });
+            return Ok(PackageRoot {
+                path: cwd,
+                cwd: original_cwd.strip_prefix(cwd)?.expect("cwd must be within the package root"),
+                package_json: file,
+            });
         }
 
         if let Some(parent) = cwd.parent() {
@@ -54,6 +59,7 @@ pub enum WorkspaceFile {
 #[derive(Debug)]
 pub struct WorkspaceRoot<'a> {
     pub path: &'a AbsolutePath,
+    pub cwd: RelativePathBuf,
     pub workspace_file: WorkspaceFile,
 }
 
@@ -70,6 +76,9 @@ pub fn find_workspace_root<'a>(original_cwd: &'a AbsolutePath) -> Result<Workspa
         if let Some(file) = open_exists_file(cwd.join("pnpm-workspace.yaml"))? {
             return Ok(WorkspaceRoot {
                 path: cwd,
+                cwd: original_cwd
+                    .strip_prefix(cwd)?
+                    .expect("cwd must be within the pnpm workspace"),
                 workspace_file: WorkspaceFile::PnpmWorkspaceYaml(file),
             });
         }
@@ -83,6 +92,7 @@ pub fn find_workspace_root<'a>(original_cwd: &'a AbsolutePath) -> Result<Workspa
                 file.seek(SeekFrom::Start(0))?;
                 return Ok(WorkspaceRoot {
                     path: cwd,
+                    cwd: original_cwd.strip_prefix(cwd)?.expect("cwd must be within the workspace"),
                     workspace_file: WorkspaceFile::NpmWorkspaceJson(file),
                 });
             }
@@ -97,7 +107,11 @@ pub fn find_workspace_root<'a>(original_cwd: &'a AbsolutePath) -> Result<Workspa
             // We've reached the root, try to find the package root and return the non-workspace package.
             let package_root = find_package_root(original_cwd)?;
             let workspace_file = WorkspaceFile::NonWorkspacePackage(package_root.package_json);
-            return Ok(WorkspaceRoot { path: package_root.path, workspace_file });
+            return Ok(WorkspaceRoot {
+                path: package_root.path,
+                cwd: package_root.cwd,
+                workspace_file,
+            });
         }
     }
 }

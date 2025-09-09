@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, fmt::Display, sync::Arc};
+use std::{fmt::Display, sync::Arc};
 
 use bincode::{Decode, Encode};
 use diff::Diff as _;

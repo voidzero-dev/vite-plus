@@ -12,7 +12,7 @@ use vite_str::Str;
 use wax::Glob;
 
 use crate::package_manager::WorkspaceFile;
-pub use package_manager::{find_package_root, find_workspace_root};
+pub use package_manager::{WorkspaceRoot, find_package_root, find_workspace_root};
 
 /// The workspace configuration for pnpm.
 #[derive(Debug, Deserialize)]
