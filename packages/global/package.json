@@ -7,6 +7,7 @@
     "url": "https://github.com/voidzero-dev/vite-plus.git"
   },
   "bin": {
+    "vite": "./bin/vp",
     "vite-plus": "./bin/vp",
     "vp": "./bin/vp",
     "vite-plus-dev": "./bin/vp-dev"
