@@ -1,9 +1,10 @@
-use std::{ffi::OsStr, fmt::Display, path::Path, sync::Arc};
+use std::{ffi::OsStr, fmt::Display, sync::Arc};
 
 use bincode::{Decode, Encode};
 use diff::Diff as _;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use vite_path::{AbsolutePath, RelativePathBuf};
 use vite_str::Str;
 
 use crate::{
@@ -22,7 +23,7 @@ use crate::{
 pub struct TaskFingerprint {
     pub resolved_config: ResolvedTaskConfig,
     pub command_fingerprint: CommandFingerprint,
-    pub inputs: HashMap<Str, PathFingerprint>,
+    pub inputs: HashMap<RelativePathBuf, PathFingerprint>,
 }
 
 #[derive(Encode, Decode, PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
@@ -43,7 +44,7 @@ pub enum PathFingerprint {
 #[derive(Debug)]
 pub enum FingerprintMismatch {
     ConfigChanged(ResolvedTaskConfigDiff),
-    InputContentChanged { path: Str },
+    InputContentChanged { path: RelativePathBuf },
     ResolvedCommandChanged(CommandFingerprintDiff),
 }
 
@@ -69,7 +70,7 @@ impl TaskFingerprint {
         &self,
         resolved_task: &ResolvedTask,
         fs: &impl FileSystem,
-        base_dir: &Path,
+        base_dir: &AbsolutePath,
     ) -> Result<Option<FingerprintMismatch>, Error> {
         // TODO: use diff result instead of eq
         Ok(if self.resolved_config != resolved_task.resolved_config {
@@ -84,7 +85,7 @@ impl TaskFingerprint {
             let input_mismatch =
                 self.inputs.par_iter().find_map_any(|(input_relative_path, path_fingerprint)| {
                     let input_full_path =
-                        Arc::<OsStr>::from(base_dir.join(input_relative_path).into_os_string());
+                        Arc::<AbsolutePath>::from(base_dir.join(input_relative_path));
                     let path_read = PathRead {
                         read_dir_entries: matches!(
                             path_fingerprint,
@@ -113,21 +114,19 @@ impl TaskFingerprint {
         task: ResolvedTask,
         executed_task: &ExecutedTask,
         fs: &impl FileSystem,
-        base_dir: &Path,
+        base_dir: &AbsolutePath,
     ) -> Result<Self, Error> {
         let inputs = executed_task
             .path_reads
             .par_iter()
             .flat_map(|(path, path_read)| {
                 Some((|| {
-                    let path_fingerprint = fs.fingerprint_path(
-                        &base_dir.join(path).into_os_string().into(),
-                        *path_read,
-                    )?;
+                    let path_fingerprint =
+                        fs.fingerprint_path(&base_dir.join(path).into(), *path_read)?;
                     Ok((path.clone(), path_fingerprint))
                 })())
             })
-            .collect::<Result<HashMap<Str, PathFingerprint>, Error>>()?;
+            .collect::<Result<HashMap<RelativePathBuf, PathFingerprint>, Error>>()?;
         Ok(Self {
             resolved_config: task.resolved_config,
             command_fingerprint: task.resolved_command.fingerprint,
@@ -143,6 +142,7 @@ mod tests {
         collections::HashSet,
         config::{CommandFingerprint, ResolvedTaskConfig, TaskCommand, TaskConfig},
     };
+    use vite_path::RelativePathBuf;
     use vite_str::Str;
 
     #[test]
@@ -160,7 +160,7 @@ mod tests {
         };
 
         let fingerprint1 = CommandFingerprint {
-            cwd: "/test/dir".into(),
+            cwd: RelativePathBuf::default(),
             command: TaskCommand::Parsed(parsed_cmd.clone()),
             envs_without_pass_through: [
                 ("ENV_C".into(), "c".into()),
@@ -172,7 +172,7 @@ mod tests {
         };
 
         let fingerprint2 = CommandFingerprint {
-            cwd: "/test/dir".into(),
+            cwd: RelativePathBuf::default(),
             command: TaskCommand::Parsed(parsed_cmd.clone()),
             envs_without_pass_through: [
                 ("ENV_A".into(), "a".into()),
@@ -220,7 +220,7 @@ mod tests {
             };
 
             let fingerprint = CommandFingerprint {
-                cwd: "/project".into(),
+                cwd: RelativePathBuf::default(),
                 command: TaskCommand::Parsed(parsed_cmd),
                 envs_without_pass_through: [
                     ("NODE_ENV".into(), "production".into()),
@@ -260,7 +260,7 @@ mod tests {
 
         let config = TaskConfig {
             command: TaskCommand::ShellScript("npm run build".into()),
-            cwd: ".".into(),
+            cwd: RelativePathBuf::default(),
             cacheable: true,
             inputs: HashSet::new(),
             envs: envs.clone(),
@@ -268,7 +268,7 @@ mod tests {
         };
 
         // Create resolved config
-        let resolved = ResolvedTaskConfig { config_dir: "/workspace".into(), config };
+        let resolved = ResolvedTaskConfig { config_dir: RelativePathBuf::default(), config };
 
         // Serialize multiple times
         use bincode::encode_to_vec;

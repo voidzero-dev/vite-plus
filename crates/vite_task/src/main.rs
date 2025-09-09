@@ -1,4 +1,4 @@
-use std::env::current_dir;
+use vite_path::current_dir;
 
 use clap::Parser as _;
 use vite_task::{Args, CliOptions, init_tracing};

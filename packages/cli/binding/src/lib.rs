@@ -14,9 +14,9 @@
 //! 5. Rust executes the tool with the resolved path
 
 use std::collections::HashMap;
-use std::env::current_dir;
 use std::path::PathBuf;
 use std::sync::Arc;
+use vite_path::current_dir;
 
 use clap::Parser as _;
 use napi::{anyhow, bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
@@ -94,7 +94,10 @@ static BUILTIN_COMMANDS: &[&str] = &["lint", "build", "test"];
 pub async fn run(options: CliOptions) -> Result<()> {
     let args = parse_args();
     // Use provided cwd or current directory
-    let cwd = if let Some(cwd) = options.cwd { PathBuf::from(cwd) } else { current_dir()? };
+    let mut cwd = current_dir()?;
+    if let Some(options_cwd) = options.cwd {
+        cwd.push(options_cwd);
+    };
     // Extract resolver functions from options
     let lint = options.lint;
     let vite = options.vite;
@@ -150,17 +153,17 @@ pub async fn run(options: CliOptions) -> Result<()> {
 
 /// Convert JavaScript errors to Rust lint errors
 fn js_error_to_lint_error(err: napi::Error) -> Error {
-    Error::LintFailed { status: err.status.to_string(), reason: err.to_string() }
+    Error::LintFailed { status: err.status.to_string().into(), reason: err.to_string().into() }
 }
 
 /// Convert JavaScript errors to Rust vite errors
 fn js_error_to_vite_error(err: napi::Error) -> Error {
-    Error::ViteError { status: err.status.to_string(), reason: err.to_string() }
+    Error::ViteError { status: err.status.to_string().into(), reason: err.to_string().into() }
 }
 
 /// Convert JavaScript errors to Rust test errors
 fn js_error_to_test_error(err: napi::Error) -> Error {
-    Error::TestFailed { status: err.status.to_string(), reason: err.to_string() }
+    Error::TestFailed { status: err.status.to_string().into(), reason: err.to_string().into() }
 }
 
 fn parse_args() -> Args {

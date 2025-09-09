@@ -1,5 +1,5 @@
 [package]
-name = "vite_paths"
+name = "vite_path"
 version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
@@ -9,12 +9,13 @@ rust-version.workspace = true
 [dependencies]
 bincode = { workspace = true }
 ref-cast = { workspace = true }
-vite_str = { workspace = true }
 thiserror = { workspace = true }
+vite_str = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+diff-struct = { workspace = true }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 assert2 = "0.3.16"
-

@@ -15,9 +15,10 @@ mod vite;
 mod test_utils;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
+
+use vite_path::AbsolutePathBuf;
 
 use clap::{Parser, Subcommand};
 use serde::Serialize;
@@ -160,7 +161,7 @@ pub async fn main<
     Test: Future<Output = Result<ResolveCommandResult, Error>>,
     TestFn: Fn() -> Test,
 >(
-    cwd: PathBuf,
+    cwd: AbsolutePathBuf,
     args: Args,
     options: Option<CliOptions<Lint, LintFn, Vite, ViteFn, Test, TestFn>>,
 ) -> Result<(), Error> {

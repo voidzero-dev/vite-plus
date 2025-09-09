@@ -7,9 +7,17 @@ disallowed-methods = [
   { path = "str::to_uppercase", reason = "To avoid memory allocation, use `cow_utils::CowUtils::cow_to_uppercase` instead." },
   { path = "str::replace", reason = "To avoid memory allocation, use `cow_utils::CowUtils::cow_replace` instead." },
   { path = "str::replacen", reason = "To avoid memory allocation, use `cow_utils::CowUtils::cow_replacen` instead." },
+  { path = "std::env::current_dir", reason = "To get an `AbsolutePathBuf`, Use `vite_path::current_dir` instead." },
 ]
 
 disallowed-types = [
   { path = "std::collections::HashMap", reason = "Use `rustc_hash::FxHashMap` instead, which is typically faster." },
   { path = "std::collections::HashSet", reason = "Use `rustc_hash::FxHashSet` instead, which is typically faster." },
+  { path = "std::path::Path", reason = "Use `vite_path::RelativePath` or `vite_path::AbsolutePath` instead" },
+  { path = "std::path::PathBuf", reason = "Use `vite_path::RelativePathBuf` or `vite_path::AbsolutePathBuf` instead" },
+  { path = "std::string::String", reason = "Use `vite_str::Str` for small strings. For large strings, prefer `Box/Rc/Arc<str>` if mutation is not needed." },
+]
+
+disallowed-macros = [
+  { path = "std::format", reason = "Use `vite_str::format` for small strings." }
 ]

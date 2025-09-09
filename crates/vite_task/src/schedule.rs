@@ -1,4 +1,5 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
+use vite_path::{AbsolutePath, AbsolutePathBuf};
 
 use futures_core::future::BoxFuture;
 use futures_util::future::FutureExt as _;
@@ -116,7 +117,7 @@ async fn get_cached_or_execute<'a>(
     task: ResolvedTask,
     cache: &'a mut TaskCache,
     fs: &'a impl FileSystem,
-    base_dir: &'a Path,
+    base_dir: &'a AbsolutePath,
 ) -> Result<(Option<CacheMiss>, BoxFuture<'a, Result<(), Error>>), Error> {
     Ok(match cache.try_hit(&task, fs, base_dir).await? {
         Ok(cache_task) => (
@@ -154,9 +155,11 @@ async fn get_cached_or_execute<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
-    use crate::{Workspace, test_utils::with_unique_cache_path};
+    use crate::{
+        Workspace,
+        test_utils::{get_fixture_path, with_unique_cache_path},
+    };
 
     #[track_caller]
     fn assert_order(plan: &ExecutionPlan, before: &str, after: &str) {
@@ -170,12 +173,10 @@ mod tests {
     #[test]
     fn test_execution_non_parallel() {
         with_unique_cache_path("comprehensive_task_graph", |cache_path| {
-            let fixture_path =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/comprehensive-task-graph");
+            let fixture_path = get_fixture_path("fixtures/comprehensive-task-graph");
 
-            let workspace =
-                Workspace::load_with_cache_path(fixture_path, Some(cache_path.to_path_buf()), true)
-                    .expect("Failed to load workspace");
+            let workspace = Workspace::load_with_cache_path(fixture_path, Some(cache_path), true)
+                .expect("Failed to load workspace");
 
             // Test build task graph
             let build_graph = workspace

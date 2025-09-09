@@ -3,6 +3,7 @@ use std::{
     fmt::Display,
     ops::Deref,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use crate::relative::{FromPathError, InvalidPathDataError, RelativePath, RelativePathBuf};
@@ -17,9 +18,21 @@ impl AsRef<AbsolutePath> for AbsolutePath {
     }
 }
 
+impl PartialEq<AbsolutePathBuf> for AbsolutePath {
+    fn eq(&self, other: &AbsolutePathBuf) -> bool {
+        self.0 == other.0
+    }
+}
+impl PartialEq<AbsolutePathBuf> for &AbsolutePath {
+    fn eq(&self, other: &AbsolutePathBuf) -> bool {
+        self.0 == other.0
+    }
+}
+
 impl AbsolutePath {
     /// Creates a [`AbsolutePath`] if the give path is absolute.
-    pub fn new(path: &Path) -> Option<&Self> {
+    pub fn new<P: AsRef<Path> + ?Sized>(path: &P) -> Option<&Self> {
+        let path = path.as_ref();
         if path.is_absolute() { Some(unsafe { Self::assume_absolute(path) }) } else { None }
     }
 
@@ -49,7 +62,7 @@ impl AbsolutePath {
         let Ok(stripped_path) = self.0.strip_prefix(&base.0) else {
             return Ok(None);
         };
-        match RelativePathBuf::try_from(stripped_path) {
+        match RelativePathBuf::new(stripped_path) {
             Ok(relative_path) => Ok(Some(relative_path)),
             Err(FromPathError::NonRelative) => {
                 unreachable!("stripped path should always be relative")
@@ -60,11 +73,17 @@ impl AbsolutePath {
         }
     }
 
-    /// Creates an owned [`AbsolutePathBuf`] with `rel_path` adjoined to `self`.
-    pub fn join<P: AsRef<RelativePath>>(&self, rel_path: P) -> AbsolutePathBuf {
+    /// Creates an owned [`AbsolutePathBuf`] with `path` adjoined to `self`.
+    pub fn join<P: AsRef<Path>>(&self, path: P) -> AbsolutePathBuf {
         let mut absolute_path_buf = self.to_absolute_path_buf();
-        absolute_path_buf.push(rel_path);
+        absolute_path_buf.push(path);
         absolute_path_buf
+    }
+
+    /// Returns the parent directory of `self`, or `None` if `self` is the root.
+    pub fn parent(&self) -> Option<&AbsolutePath> {
+        let parent_path = self.0.parent()?;
+        Some(unsafe { AbsolutePath::assume_absolute(parent_path) })
     }
 }
 
@@ -93,8 +112,16 @@ impl AsRef<Path> for AbsolutePath {
 }
 
 /// An owned path buf that is guaranteed to be absolute
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct AbsolutePathBuf(PathBuf);
+
+impl From<AbsolutePathBuf> for Arc<AbsolutePath> {
+    fn from(path: AbsolutePathBuf) -> Arc<AbsolutePath> {
+        let arc: Arc<Path> = path.0.into();
+        let arc_raw = Arc::into_raw(arc) as *const AbsolutePath;
+        unsafe { Arc::from_raw(arc_raw) }
+    }
+}
 
 impl AbsolutePathBuf {
     pub fn new(path: PathBuf) -> Option<Self> {
@@ -109,9 +136,13 @@ impl AbsolutePathBuf {
 
     /// Extends `self` with `path`.
     ///
-    /// Unlike [`PathBuf::push`], `path` is always relative, so `self` can only be appended, not replaced.
-    pub fn push<P: AsRef<RelativePath>>(&mut self, rel_path: P) {
-        self.0.push(rel_path.as_ref().as_path());
+    /// `path` replaces `self` only when `path` is absolute. Either way, the resulting `self` is always absolute.
+    pub fn push<P: AsRef<Path>>(&mut self, path: P) {
+        self.0.push(path.as_ref());
+    }
+
+    pub fn into_path_buf(self) -> PathBuf {
+        self.0
     }
 }
 
@@ -122,7 +153,7 @@ impl PartialEq<AbsolutePath> for AbsolutePathBuf {
 }
 impl PartialEq<&AbsolutePath> for AbsolutePathBuf {
     fn eq(&self, other: &&AbsolutePath) -> bool {
-        self.as_absolute_path().eq(other)
+        self.as_absolute_path().eq(*other)
     }
 }
 

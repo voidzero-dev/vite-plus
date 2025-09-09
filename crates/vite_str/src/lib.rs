@@ -18,6 +18,16 @@ use compact_str::CompactString;
 use diff::Diff;
 use serde::{Deserialize, Serialize};
 
+#[doc(hidden)] // for `format` macro only
+pub use compact_str::format_compact;
+
+#[macro_export]
+macro_rules! format {
+    ($($arg:tt)*) => {
+        $crate::Str::from($crate::format_compact!($($arg)*))
+    };
+}
+
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Default, Hash, PartialOrd, Ord)]
 #[serde(transparent)]
 pub struct Str(CompactString);

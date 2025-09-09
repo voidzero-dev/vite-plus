@@ -1609,6 +1609,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "is_ci"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7655c9839580ee829dfacba1d1278c2b7883e50a277ff7541299489d6bdfdc45"
+
+[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2633,15 +2639,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
-name = "relative-path"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bca40a312222d8ba74837cb474edef44b37f561da5f773981007a10bbaa992b0"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "rusqlite"
 version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3025,6 +3022,15 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 2.0.104",
+]
+
+[[package]]
+name = "supports-color"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c64fc7232dd8d2e4ac5ce4ef302b1d81e0b80d055b9d77c7c4f51f6aa4c867d6"
+dependencies = [
+ "is_ci",
 ]
 
 [[package]]
@@ -3485,6 +3491,7 @@ name = "vite-plus-benches"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "vite_path",
  "vite_task",
 ]
 
@@ -3497,6 +3504,7 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "vite_error",
+ "vite_path",
  "vite_task",
 ]
 
@@ -3507,13 +3515,14 @@ dependencies = [
  "anyhow",
  "bincode",
  "bstr",
- "compact_str 0.9.0",
  "nix 0.30.1",
  "petgraph",
  "rusqlite",
  "serde_json",
  "serde_yml",
  "thiserror 2.0.12",
+ "vite_path",
+ "vite_str",
  "wax",
 ]
 
@@ -3522,7 +3531,6 @@ name = "vite_package_manager"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "compact_str 0.9.0",
  "petgraph",
  "rustc-hash",
  "serde",
@@ -3530,16 +3538,20 @@ dependencies = [
  "serde_yml",
  "tempfile",
  "vite_error",
+ "vite_path",
+ "vite_str",
  "wax",
 ]
 
 [[package]]
-name = "vite_paths"
+name = "vite_path"
 version = "0.1.0"
 dependencies = [
  "assert2",
  "bincode",
+ "diff-struct",
  "ref-cast",
+ "serde",
  "thiserror 2.0.12",
  "vite_str",
 ]
@@ -3574,11 +3586,11 @@ dependencies = [
  "nix 0.30.1",
  "petgraph",
  "rayon",
- "relative-path",
  "rusqlite",
  "serde",
  "serde_json",
  "shell-escape",
+ "supports-color",
  "tempfile",
  "tokio",
  "tracing",
@@ -3586,6 +3598,7 @@ dependencies = [
  "twox-hash",
  "vite_error",
  "vite_package_manager",
+ "vite_path",
  "vite_str",
  "wax",
  "wildmatch",
