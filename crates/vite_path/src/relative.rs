@@ -9,7 +9,7 @@ use std::fmt::Display;
 use std::{
     borrow::Borrow,
     ops::Deref,
-    path::{Component, Path, PathBuf},
+    path::{Component, Path},
 };
 use vite_str::Str;
 
