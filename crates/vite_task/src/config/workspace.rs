@@ -5,7 +5,6 @@ use std::{
     sync::Arc,
 };
 
-use anyhow;
 use petgraph::{Graph, graph::NodeIndex, stable_graph::StableDiGraph, visit::IntoNodeReferences};
 use vite_package_manager::{
     DependencyType, PackageInfo, PackageJson, WorkspaceRoot, find_package_root, find_workspace_root,
@@ -51,23 +50,14 @@ impl Workspace {
         original_cwd: &AbsolutePath,
     ) -> Result<(&AbsolutePath, RelativePathBuf, Option<String>), Error> {
         let WorkspaceRoot { path: workspace_root, cwd, .. } = find_workspace_root(original_cwd)?;
-        let workspace_root = vite_path::AbsolutePath::new(workspace_root)
-            .ok_or_else(|| Error::AnyhowError(anyhow::anyhow!("workspace root is not absolute")))?;
         // If can't find package root, return the workspace root and an empty string
         let Ok(package_root) = find_package_root(original_cwd) else {
             return Ok((workspace_root, cwd, None));
         };
         let current_package_root = package_root.path;
-        let current_package_root = vite_path::AbsolutePath::new(current_package_root)
-            .ok_or_else(|| Error::AnyhowError(anyhow::anyhow!("package root is not absolute")))?;
 
         // Get relative path from workspace root to package root
-        let path_result = current_package_root.strip_prefix(workspace_root).map_err(|err| {
-            Error::AnyhowError(anyhow::anyhow!(
-                "package root is not a subpath of workspace root: {}",
-                err
-            ))
-        })?;
+        let path_result = current_package_root.strip_prefix(workspace_root)?;
 
         let path_str = match path_result {
             Some(relative_path) => Some(relative_path.as_str().to_string()),

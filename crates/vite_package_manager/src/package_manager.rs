@@ -9,6 +9,7 @@ use vite_path::{AbsolutePath, RelativePathBuf};
 #[derive(Debug)]
 pub struct PackageRoot<'a> {
     pub path: &'a AbsolutePath,
+    pub cwd: RelativePathBuf,
     pub package_json: File,
 }
 
@@ -20,7 +21,11 @@ pub fn find_package_root<'a>(original_cwd: &'a AbsolutePath) -> Result<PackageRo
     loop {
         // Check for package.json
         if let Some(file) = open_exists_file(cwd.join("package.json"))? {
-            return Ok(PackageRoot { path: cwd, package_json: file });
+            return Ok(PackageRoot {
+                path: cwd,
+                cwd: original_cwd.strip_prefix(cwd)?.expect("cwd must be within the package root"),
+                package_json: file,
+            });
         }
 
         if let Some(parent) = cwd.parent() {
@@ -104,9 +109,7 @@ pub fn find_workspace_root<'a>(original_cwd: &'a AbsolutePath) -> Result<Workspa
             let workspace_file = WorkspaceFile::NonWorkspacePackage(package_root.package_json);
             return Ok(WorkspaceRoot {
                 path: package_root.path,
-                cwd: original_cwd
-                    .strip_prefix(package_root.path)?
-                    .expect("cwd must be within the package root"),
+                cwd: package_root.cwd,
                 workspace_file,
             });
         }
