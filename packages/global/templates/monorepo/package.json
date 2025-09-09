@@ -6,6 +6,6 @@
   "scripts": {},
   "devDependencies": {
     "multiplexer": "workspace:*",
-    "vite-plus": "workspace:*"
+    "@voidzero-dev/vite-plus": "workspace:*"
   }
 }

@@ -62,6 +62,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.16.4
+      '@voidzero-dev/vite-plus':
+        specifier: workspace:*
+        version: link:packages/cli
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -77,9 +80,6 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.2
-      vite-plus:
-        specifier: workspace:*
-        version: link:packages/cli
 
   docs:
     devDependencies:
@@ -109,25 +109,25 @@ importers:
   packages/global:
     dependencies:
       oxlint:
-        specifier: '*'
+        specifier: 'catalog:'
         version: 1.11.1
       rolldown-vite:
-        specifier: '*'
+        specifier: 'catalog:'
         version: 7.1.5(@types/node@22.16.4)(esbuild@0.25.8)(jiti@2.4.2)(yaml@2.8.0)
       vitest:
-        specifier: '*'
+        specifier: 'catalog:'
         version: 3.2.4(@types/node@22.16.4)(jiti@2.4.2)(lightningcss@1.30.1)(yaml@2.8.0)
     devDependencies:
-      tsdown:
-        specifier: ^0.14.1
-        version: 0.14.1(typescript@5.9.2)
-      vite-plus:
+      '@voidzero-dev/vite-plus':
         specifier: workspace:*
         version: link:../cli
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.14.1(typescript@5.9.2)
 
   packages/global/templates/minimal:
     devDependencies:
-      vite-plus:
+      '@voidzero-dev/vite-plus':
         specifier: workspace:*
         version: link:../../../cli
 
@@ -136,21 +136,21 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.16.4
+      '@voidzero-dev/vite-plus':
+        specifier: workspace:*
+        version: link:../../../cli
       typescript:
         specifier: 'catalog:'
         version: 5.9.2
-      vite-plus:
-        specifier: workspace:*
-        version: link:../../../cli
 
   packages/global/templates/monorepo:
     devDependencies:
+      '@voidzero-dev/vite-plus':
+        specifier: workspace:*
+        version: link:../../../cli
       multiplexer:
         specifier: workspace:*
         version: link:../../../multiplexer
-      vite-plus:
-        specifier: workspace:*
-        version: link:../../../cli
 
   packages/global/templates/monorepo/apps/next:
     dependencies:
@@ -185,15 +185,15 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.16.4
+      '@voidzero-dev/vite-plus':
+        specifier: workspace:*
+        version: link:../../../../../cli
       tsdown:
         specifier: 'catalog:'
         version: 0.14.1(typescript@5.9.2)
       typescript:
         specifier: 'catalog:'
         version: 5.9.2
-      vite-plus:
-        specifier: workspace:*
-        version: link:../../../../../cli
 
   packages/multiplexer:
     dependencies:
@@ -2115,14 +2115,6 @@ packages:
 
   fast-string-truncated-width@1.2.1:
     resolution: {integrity: sha512-Q9acT/+Uu3GwGj+5w/zsGuQjh9O1TyywhIwAxHudtWrgF09nHOPrvTLhQevPbttcxjr/SNN7mJmfOw/B1bXgow==}
-
-  fdir@6.4.6:
-    resolution: {integrity: sha512-hiFoqpyZcfNm1yc4u8oWCf9A2c4D3QjCrks3zmoVKVxpQRzmPNar1hUJcBG2RQHvEVGDN+Jm81ZheVLAQMK6+w==}
-    peerDependencies:
-      picomatch: ^3 || ^4
-    peerDependenciesMeta:
-      picomatch:
-        optional: true
 
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
@@ -4537,10 +4529,6 @@ snapshots:
 
   fast-string-truncated-width@1.2.1: {}
 
-  fdir@6.4.6(picomatch@4.0.3):
-    optionalDependencies:
-      picomatch: 4.0.3
-
   fdir@6.5.0(picomatch@4.0.3):
     optionalDependencies:
       picomatch: 4.0.3
@@ -5097,7 +5085,7 @@ snapshots:
 
   tinyglobby@0.2.14:
     dependencies:
-      fdir: 6.4.6(picomatch@4.0.3)
+      fdir: 6.5.0(picomatch@4.0.3)
       picomatch: 4.0.3
 
   tinypool@1.1.1: {}
@@ -5230,7 +5218,7 @@ snapshots:
   vite@7.1.1(@types/node@22.16.4)(jiti@2.4.2)(lightningcss@1.30.1)(yaml@2.8.0):
     dependencies:
       esbuild: 0.25.8
-      fdir: 6.4.6(picomatch@4.0.3)
+      fdir: 6.5.0(picomatch@4.0.3)
       picomatch: 4.0.3
       postcss: 8.5.6
       rollup: 4.45.1

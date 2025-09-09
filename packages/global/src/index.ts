@@ -1,1 +1,1 @@
-import 'vite-plus/bin';
+import '@voidzero-dev/vite-plus/bin';

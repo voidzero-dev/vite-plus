@@ -3591,6 +3591,7 @@ dependencies = [
  "futures-util",
  "itertools 0.14.0",
  "nix 0.30.1",
+ "owo-colors",
  "petgraph",
  "rayon",
  "rusqlite",

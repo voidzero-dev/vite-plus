@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite-plus';
+import { defineConfig } from '@voidzero-dev/vite-plus';
 
 export default defineConfig({
   base: 'web',

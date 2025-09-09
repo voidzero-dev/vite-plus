@@ -82,7 +82,7 @@ jobs:
         run: pnpm install
 
       - name: Build
-        run: pnpm --filter=vite-plus build:binding --target ${{ matrix.target }} -x
+        run: pnpm --filter=@voidzero-dev/vite-plus build:binding --target ${{ matrix.target }} -x
         env:
           XWIN_CACHE_DIR: ${{ github.workspace }}/.xwin-cache
 
@@ -121,7 +121,7 @@ jobs:
           merge-multiple: true
 
       - name: Build
-        run: vp run vite-plus#build:ts @voidzero-dev/global#build
+        run: vite run @voidzero-dev/vite-plus#build:ts @voidzero-dev/global#build
 
       # Download again because `@voidzero-dev/global#build` will cleanup the dist dir first
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -130,14 +130,21 @@ jobs:
           pattern: bindings-*
           merge-multiple: true
 
+      - name: Copy *.node to cli/dist
+        run: |
+          cp -r packages/global/dist/*.node packages/cli/dist
+          ls -alh packages/cli/dist
+
       - name: Set version
         run: |
           sed -i '' 's/"version": "0.0.0"/"version": "0.0.0-${{ github.sha }}"/' packages/global/package.json
+          sed -i '' 's/"version": "0.0.0"/"version": "0.0.0-${{ github.sha }}"/' packages/cli/package.json
 
       - name: Publish
         run: |
           echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
           echo "@voidzero-dev:registry=https://npm.pkg.github.com/" >> ~/.npmrc
           pnpm publish --filter=./packages/global --registry https://npm.pkg.github.com --no-git-checks
+          pnpm publish --filter=./packages/cli --registry https://npm.pkg.github.com --no-git-checks
         env:
           NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -55,7 +55,7 @@ impl Display for FingerprintMismatch {
                 write!(f, "Config inputs changed: {config_diff:?}")
             }
             Self::InputContentChanged { path } => {
-                write!(f, "File content changed: {path:?}")
+                write!(f, "{path} content changed")
             }
             Self::ResolvedCommandChanged(env_diff) => {
                 write!(f, "Resolved command changed: {env_diff:?}")

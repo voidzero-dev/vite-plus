@@ -3,6 +3,7 @@ use vite_path::AbsolutePath;
 
 use futures_core::future::BoxFuture;
 use futures_util::future::FutureExt as _;
+use owo_colors::{OwoColorize, Style};
 use petgraph::{algo::toposort, stable_graph::StableDiGraph};
 use tokio::io::AsyncWriteExt as _;
 
@@ -80,6 +81,8 @@ impl ExecutionPlan {
         tracing::debug!("Executing task {}", step.display_name());
 
         let command = step.resolved_command.fingerprint.command.clone();
+        let cwd = step.resolved_command.fingerprint.cwd.clone();
+        let pretty_command = format!("~/{}$ {}", cwd, command);
 
         // Check cache and prepare execution
         let (cache_miss, execute_or_replay) = get_cached_or_execute(
@@ -93,15 +96,28 @@ impl ExecutionPlan {
         // Print cache status
         match cache_miss {
             Some(CacheMiss::NotFound) => {
-                println!("Cache Not Found, executing task");
-                println!("> {command}");
+                tracing::debug!("{}", "Cache not found".style(Style::new().yellow()));
+                println!(
+                    "{} {}",
+                    "►".style(Style::new().bright_blue()),
+                    pretty_command.style(Style::new().cyan())
+                );
             }
             Some(CacheMiss::FingerprintMismatch(mismatch)) => {
-                println!("{mismatch}, executing task");
-                println!("> {command}");
+                println!("{}: {}", "Cache miss".style(Style::new().yellow()), mismatch);
+                println!(
+                    "{} {}",
+                    "►".style(Style::new().bright_blue()),
+                    pretty_command.style(Style::new().cyan())
+                );
             }
             None => {
-                println!("Cache hit, replaying previously executed task");
+                println!(
+                    "{} {} {}",
+                    "►".style(Style::new().bright_green()),
+                    pretty_command.style(Style::new().dimmed()),
+                    "(Cache hit, replaying)".style(Style::new().green())
+                );
             }
         }
 

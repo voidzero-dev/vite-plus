@@ -1,14 +1,15 @@
 {
-  "name": "vite-plus",
+  "name": "@voidzero-dev/vite-plus",
   "version": "0.0.0",
-  "private": true,
   "type": "module",
   "bin": {
+    "vite": "./bin/vite-plus",
     "vite-plus": "./bin/vite-plus"
   },
   "exports": {
     ".": {
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     },
     "./bin": {
       "import": "./dist/bin.js"
@@ -20,12 +21,11 @@
   "scripts": {
     "build": "pnpm run build:binding && pnpm run build:ts",
     "build:binding": "napi build --package-json-path ../package.json --cwd binding --platform --release --esm",
-    "build:ts": "tsc -p ./tsconfig.json"
+    "build:ts": "tsdown"
   },
   "files": [
     "bin",
-    "index.js",
-    "index.d.ts"
+    "dist"
   ],
   "dependencies": {
     "oxlint": "catalog:",

@@ -9,6 +9,6 @@
   },
   "scripts": {},
   "devDependencies": {
-    "vite-plus": "workspace:*"
+    "@voidzero-dev/vite-plus": "workspace:*"
   }
 }

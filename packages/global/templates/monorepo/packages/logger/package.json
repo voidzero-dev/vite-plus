@@ -19,6 +19,6 @@
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "tsdown": "catalog:",
-    "vite-plus": "workspace:*"
+    "@voidzero-dev/vite-plus": "workspace:*"
   }
 }

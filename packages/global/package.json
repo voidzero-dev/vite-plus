@@ -7,6 +7,7 @@
     "url": "https://github.com/voidzero-dev/vite-plus.git"
   },
   "bin": {
+    "vite": "./bin/vp",
     "vite-plus": "./bin/vp",
     "vp": "./bin/vp",
     "vite-plus-dev": "./bin/vp-dev"
@@ -20,13 +21,13 @@
     "build": "tsdown"
   },
   "dependencies": {
-    "oxlint": "*",
-    "rolldown-vite": "*",
-    "vitest": "*"
+    "oxlint": "catalog:",
+    "rolldown-vite": "catalog:",
+    "vitest": "catalog:"
   },
   "devDependencies": {
-    "tsdown": "^0.14.1",
-    "vite-plus": "workspace:*"
+    "tsdown": "catalog:",
+    "@voidzero-dev/vite-plus": "workspace:*"
   },
   "engines": {
     "node": ">=20.11.0"
