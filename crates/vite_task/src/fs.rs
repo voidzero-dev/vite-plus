@@ -164,23 +164,23 @@ impl RealFileSystem {
                             DirEntryKind::Symlink
                         } else {
                             // Return error for unsupported file types instead of treating as file
+                            let fallback_path = if cfg!(windows) { "C:\\" } else { "/" };
+                            let error_path = AbsolutePath::new(path)
+                                .or_else(|| AbsolutePath::new(fallback_path))
+                                .expect("fallback path should be valid");
                             return Err(Error::IoWithPath {
                                 err: io::Error::new(io::ErrorKind::Other, "Unsupported file type"),
-                                path: Arc::new(AbsolutePath::new(path).unwrap_or_else(|| {
-                                    AbsolutePath::new(if cfg!(windows) { "C:\\" } else { "/" })
-                                        .unwrap()
-                                })),
+                                path: Arc::new(error_path),
                             });
                         }
                     }
                     Err(err) => {
                         // Return error instead of treating as file
-                        return Err(Error::IoWithPath {
-                            err,
-                            path: Arc::new(AbsolutePath::new(path).unwrap_or_else(|| {
-                                AbsolutePath::new(if cfg!(windows) { "C:\\" } else { "/" }).unwrap()
-                            })),
-                        });
+                        let fallback_path = if cfg!(windows) { "C:\\" } else { "/" };
+                        let error_path = AbsolutePath::new(path)
+                            .or_else(|| AbsolutePath::new(fallback_path))
+                            .expect("fallback path should be valid");
+                        return Err(Error::IoWithPath { err, path: Arc::new(error_path) });
                     }
                 };
 
@@ -191,14 +191,16 @@ impl RealFileSystem {
                     }
                     None => {
                         // Return error instead of skipping files with invalid UTF-8 names
+                        let fallback_path = if cfg!(windows) { "C:\\" } else { "/" };
+                        let error_path = AbsolutePath::new(path)
+                            .or_else(|| AbsolutePath::new(fallback_path))
+                            .expect("fallback path should be valid");
                         return Err(Error::IoWithPath {
                             err: io::Error::new(
                                 io::ErrorKind::InvalidData,
                                 "Invalid UTF-8 in filename",
                             ),
-                            path: Arc::new(AbsolutePath::new(path).unwrap_or_else(|| {
-                                AbsolutePath::new(if cfg!(windows) { "C:\\" } else { "/" }).unwrap()
-                            })),
+                            path: Arc::new(error_path),
                         });
                     }
                 }
