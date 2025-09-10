@@ -69,13 +69,13 @@ impl TaskCache {
                 2.. => return Err(Error::UnrecognizedDbVersion(user_version)),
             }
         }
+        conn.execute_batch("COMMIT")?;
         Ok(Self { conn: Mutex::new(conn) })
     }
 
     #[tracing::instrument]
     pub async fn save(self) -> Result<(), Error> {
-        let conn = self.conn.lock().await;
-        conn.execute("COMMIT", ())?;
+        // do some cleanup in the future
         Ok(())
     }
 
