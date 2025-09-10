@@ -166,15 +166,10 @@ impl RealFileSystem {
                             // Return error for unsupported file types instead of treating as file
                             return Err(Error::IoWithPath {
                                 err: io::Error::new(io::ErrorKind::Other, "Unsupported file type"),
-                                path: Arc::new(AbsolutePath::new(path).ok_or_else(|| {
-                                    Error::IoWithPath {
-                                        err: io::Error::new(
-                                            io::ErrorKind::InvalidInput,
-                                            "Invalid path",
-                                        ),
-                                        path: Arc::new(AbsolutePath::new("/").unwrap()),
-                                    }
-                                })?),
+                                path: Arc::new(AbsolutePath::new(path).unwrap_or_else(|| {
+                                    AbsolutePath::new(if cfg!(windows) { "C:\\" } else { "/" })
+                                        .unwrap()
+                                })),
                             });
                         }
                     }
@@ -182,15 +177,9 @@ impl RealFileSystem {
                         // Return error instead of treating as file
                         return Err(Error::IoWithPath {
                             err,
-                            path: Arc::new(AbsolutePath::new(path).ok_or_else(|| {
-                                Error::IoWithPath {
-                                    err: io::Error::new(
-                                        io::ErrorKind::InvalidInput,
-                                        "Invalid path",
-                                    ),
-                                    path: Arc::new(AbsolutePath::new("/").unwrap()),
-                                }
-                            })?),
+                            path: Arc::new(AbsolutePath::new(path).unwrap_or_else(|| {
+                                AbsolutePath::new(if cfg!(windows) { "C:\\" } else { "/" }).unwrap()
+                            })),
                         });
                     }
                 };
@@ -207,15 +196,9 @@ impl RealFileSystem {
                                 io::ErrorKind::InvalidData,
                                 "Invalid UTF-8 in filename",
                             ),
-                            path: Arc::new(AbsolutePath::new(path).ok_or_else(|| {
-                                Error::IoWithPath {
-                                    err: io::Error::new(
-                                        io::ErrorKind::InvalidInput,
-                                        "Invalid path",
-                                    ),
-                                    path: Arc::new(AbsolutePath::new("/").unwrap()),
-                                }
-                            })?),
+                            path: Arc::new(AbsolutePath::new(path).unwrap_or_else(|| {
+                                AbsolutePath::new(if cfg!(windows) { "C:\\" } else { "/" }).unwrap()
+                            })),
                         });
                     }
                 }
