@@ -159,8 +159,16 @@ async fn get_cached_or_execute<'a>(
                     let mut stderr = tokio::io::stderr();
                     for output_section in std_outputs.as_ref() {
                         match output_section.kind {
-                            OutputKind::StdOut => stdout.write_all(&output_section.content).await?,
-                            OutputKind::StdErr => stderr.write_all(&output_section.content).await?,
+                            OutputKind::StdOut => {
+                                stdout.write_all(&output_section.content).await?;
+                                // flush stdout to ensure the output is displayed in the correct order
+                                stdout.flush().await?;
+                            }
+                            OutputKind::StdErr => {
+                                stderr.write_all(&output_section.content).await?;
+                                // flush stderr too
+                                stderr.flush().await?;
+                            }
                         }
                     }
                     Ok(())
