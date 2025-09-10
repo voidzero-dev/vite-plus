@@ -297,6 +297,7 @@ pub async fn execute_task(
                     .args(&task_parsed_command.args)
                     .envs(&resolved_command.all_envs)
                     .envs(&task_parsed_command.envs)
+                    .current_dir(base_dir.join(&resolved_command.fingerprint.cwd))
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
                     .spawn()?;
