@@ -55,8 +55,7 @@ impl TaskCache {
     pub fn load_from_file(path: impl AsRef<AbsolutePath>) -> Result<Self, Error> {
         let path = path.as_ref();
         let conn = Connection::open(path.as_path())?;
-        conn.execute_batch("PRAGMA journal_mode=WAL")?;
-        conn.execute("BEGIN EXCLUSIVE", ())?;
+        conn.execute_batch("PRAGMA journal_mode=WAL; BEGIN EXCLUSIVE;")?;
         loop {
             let user_version: u32 = conn.query_one("PRAGMA user_version", (), |row| row.get(0))?;
             match user_version {
@@ -70,13 +69,13 @@ impl TaskCache {
                 2.. => return Err(Error::UnrecognizedDbVersion(user_version)),
             }
         }
+        conn.execute_batch("COMMIT")?;
         Ok(Self { conn: Mutex::new(conn) })
     }
 
     #[tracing::instrument]
     pub async fn save(self) -> Result<(), Error> {
-        let conn = self.conn.lock().await;
-        conn.execute("COMMIT", ())?;
+        // do some cleanup in the future
         Ok(())
     }
 

@@ -10,7 +10,7 @@ use bincode::{Decode, Encode};
 use fspy::{AccessMode, Spy, TrackedChild};
 use supports_color::{Stream, on};
 
-use futures_util::future::try_join4;
+use futures_util::future::{try_join3, try_join4};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _};
 use vite_path::{AbsolutePath, RelativePathBuf};
@@ -292,6 +292,32 @@ pub async fn execute_task(
             cmd
         }
         TaskCommand::Parsed(task_parsed_command) => {
+            if resolved_command.fingerprint.command.is_vite() {
+                let mut child = tokio::process::Command::new("vite")
+                    .args(&task_parsed_command.args)
+                    .envs(&resolved_command.all_envs)
+                    .envs(&task_parsed_command.envs)
+                    .current_dir(base_dir.join(&resolved_command.fingerprint.cwd))
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()?;
+                let child_stdout = child.stdout.take().unwrap();
+                let child_stderr = child.stderr.take().unwrap();
+
+                let outputs = Mutex::new(Vec::<StdOutput>::new());
+                let ((), (), exit_status) = try_join3(
+                    collect_std_outputs(&outputs, child_stdout, OutputKind::StdOut),
+                    collect_std_outputs(&outputs, child_stderr, OutputKind::StdErr),
+                    async move { Ok(child.wait().await?) },
+                )
+                .await?;
+                return Ok(ExecutedTask {
+                    std_outputs: outputs.into_inner().unwrap().into(),
+                    exit_status,
+                    path_reads: HashMap::new(),
+                    path_writes: HashMap::new(),
+                });
+            }
             let mut cmd = spy.new_command(&task_parsed_command.program);
             cmd.args(&task_parsed_command.args);
             cmd.envs(&resolved_command.all_envs);

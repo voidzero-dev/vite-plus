@@ -1,7 +1,7 @@
 {
   "name": "vite-plus-monorepo",
   "private": true,
-  "packageManager": "pnpm@10.14.0",
+  "packageManager": "pnpm@10.15.1",
   "volta": {
     "node": "22.17.0"
   },
@@ -9,18 +9,18 @@
     "bootstrap-cli": "pnpm --filter=@voidzero-dev/vite-plus build && cp -r ./packages/cli/binding/*.node ./packages/global/dist && pnpm --filter=@voidzero-dev/global build && npm install -g ./packages/global",
     "bootstrap-cli:ci": "pnpm --filter=@voidzero-dev/vite-plus build:ts && pnpm --filter=@voidzero-dev/global build && npm install -g ./packages/global",
     "typecheck": "tsc -b tsconfig.json",
+    "lint": "vite lint",
     "prepare": "husky"
   },
   "devDependencies": {
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
     "@types/node": "catalog:",
+    "@voidzero-dev/vite-plus": "workspace:*",
     "husky": "^9.1.7",
-    "lint-staged": "^16.1.2",
+    "lint-staged": "^16.1.6",
     "oxlint": "catalog:",
-    "typescript": "catalog:",
-    "rolldown-vite": "catalog:",
-    "@voidzero-dev/vite-plus": "workspace:*"
+    "typescript": "catalog:"
   },
   "lint-staged": {
     "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [

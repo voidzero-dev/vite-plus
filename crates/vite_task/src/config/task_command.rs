@@ -41,6 +41,12 @@ impl From<TaskCommand> for TaskConfig {
     }
 }
 
+impl TaskCommand {
+    pub fn is_vite(&self) -> bool {
+        matches!(self, Self::Parsed(parsed_command) if parsed_command.program == "vite")
+    }
+}
+
 #[derive(Encode, Decode, Debug, Serialize, PartialEq, Eq, Diff, Clone)]
 #[diff(attr(#[derive(Debug)]))]
 pub struct ResolvedTaskConfig {
