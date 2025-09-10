@@ -34,7 +34,8 @@
   },
   "devDependencies": {
     "@napi-rs/cli": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "puppeteer": "catalog:"
   },
   "napi": {
     "binaryName": "vite-plus",

@@ -21,3 +21,4 @@ catalog:
   tsdown: ^0.15.0
   typescript: ^5.9.2
   vitest: ^3.2.4
+  puppeteer: ^24.19.0
