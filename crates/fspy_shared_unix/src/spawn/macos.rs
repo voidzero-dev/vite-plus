@@ -2,6 +2,7 @@ use crate::{
     exec::{Exec, ensure_env},
     payload::{EncodedPayload, PAYLOAD_ENV_NAME},
 };
+use bstr::ByteSlice;
 use phf::{Set, phf_set};
 use std::{
     convert::Infallible,
@@ -35,8 +36,8 @@ pub fn handle_exec(
         // Exclude Chrome and Chromium-based browsers
         if file_name.as_bytes().windows(6).any(|w| w == b"Chrome" || w == b"chrome")
             || file_name.as_bytes().windows(8).any(|w| w == b"Chromium" || w == b"chromium")
-            || program_path.to_string_lossy().contains("Google Chrome")
-            || program_path.to_string_lossy().contains("Chromium")
+            || command.program.contains_str("Google Chrome")
+            || command.program.contains_str("Chromium")
         {
             false
         } else if matches!(parent.as_os_str().as_bytes(), b"/bin" | b"/usr/bin") {
