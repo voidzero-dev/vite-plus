@@ -10,9 +10,9 @@
  */
 
 import { run } from '../binding/index.js';
-import { lint } from './lint.js';
-import { test } from './test.js';
-import { vite } from './vite.js';
+import { lint } from './lint.ts';
+import { test } from './test.ts';
+import { vite } from './vite.ts';
 
 // Initialize the CLI with tool resolvers
 // These functions will be called from Rust when needed

@@ -13,7 +13,8 @@
     "strict": true,
     "target": "esnext",
     "types": ["node"],
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true
   },
   "include": [],
   "references": [
