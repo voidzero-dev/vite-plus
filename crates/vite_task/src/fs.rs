@@ -39,17 +39,26 @@ fn hash_content(mut stream: impl Read) -> io::Result<u64> {
 }
 
 impl FileSystem for RealFileSystem {
-    #[cfg(unix)]
     fn fingerprint_path(
         &self,
         path: &Arc<AbsolutePath>,
         path_read: PathRead,
     ) -> Result<PathFingerprint, Error> {
-        use nix::dir::{Dir, Type};
-
         let file = match File::open(path.as_ref()) {
             Ok(file) => file,
             Err(err) => {
+                // On Windows, File::open fails for directories, so we need to check
+                // if this might be a directory before giving up
+                #[cfg(windows)]
+                {
+                    // On Windows, opening a directory can fail with various error codes
+                    // Try to check if it's a directory first
+                    let path_ref: &std::path::Path = path.as_ref();
+                    if let Ok(dir_iter) = std::fs::read_dir(path_ref) {
+                        return RealFileSystem::process_directory(dir_iter, path_read);
+                    }
+                }
+
                 return if matches!(
                     err.kind(),
                     io::ErrorKind::NotFound |
@@ -69,133 +78,117 @@ impl FileSystem for RealFileSystem {
             if io_err.kind() != io::ErrorKind::IsADirectory {
                 return Err(io_err.into());
             }
-            // Is a directory
-            let dir_entries: Option<std::collections::HashMap<Str, DirEntryKind>> =
-                if path_read.read_dir_entries {
-                    let mut dir_entries = HashMap::<Str, DirEntryKind>::new();
-                    let dir = Dir::from_fd(reader.into_inner().into())?;
-                    for entry in dir {
-                        use bstr::ByteSlice;
-
-                        let entry = entry?;
-
-                        let entry_kind = match entry.file_type() {
-                            None => todo!("handle DT_UNKNOWN (see readdir(3))"),
-                            Some(Type::File) => DirEntryKind::File,
-                            Some(Type::Directory) => DirEntryKind::Dir,
-                            Some(Type::Symlink) => DirEntryKind::Symlink,
-                            Some(other_type) => {
-                                return Err(Error::UnsupportedFileType(other_type));
-                            }
-                        };
-                        let filename: &[u8] = entry.file_name().to_bytes();
-                        if matches!(filename, b"." | b".." | b".DS_Store") {
-                            continue;
-                        }
-                        dir_entries.insert(filename.to_str()?.into(), entry_kind);
-                    }
-                    Some(dir_entries)
-                } else {
-                    None
-                };
-            return Ok(PathFingerprint::Folder(dir_entries));
+            // Is a directory on Unix - use the optimized nix implementation first
+            #[cfg(unix)]
+            {
+                return RealFileSystem::process_directory_unix(reader, path_read);
+            }
+            #[cfg(windows)]
+            {
+                // This shouldn't happen on Windows since File::open should have failed
+                // But if it does, fallback to std::fs::read_dir
+                let path_ref: &std::path::Path = path.as_ref();
+                let dir_iter = std::fs::read_dir(path_ref)?;
+                return RealFileSystem::process_directory(dir_iter, path_read);
+            }
         }
         Ok(PathFingerprint::FileContentHash(hash_content(reader)?))
     }
+}
 
-    #[cfg(windows)]
-    fn fingerprint_path(
-        &self,
-        path: &Arc<AbsolutePath>,
+impl RealFileSystem {
+    #[cfg(unix)]
+    fn process_directory_unix(
+        reader: io::BufReader<File>,
         path_read: PathRead,
     ) -> Result<PathFingerprint, Error> {
-        use std::fs;
+        use bstr::ByteSlice;
+        use nix::dir::{Dir, Type};
 
-        // Try to open the path as a file first (single syscall)
-        let file = match File::open(path.as_ref()) {
-            Ok(file) => file,
-            Err(err) => {
-                return if matches!(
-                    err.kind(),
-                    io::ErrorKind::NotFound |
-                    // A component used as a directory in path is not a directory,
-                    // e.g. "/foo.txt/bar" where "/foo.txt" is a file
-                    io::ErrorKind::NotADirectory
-                ) {
-                    Ok(PathFingerprint::NotFound)
-                } else {
-                    Err(Error::IoWithPath { err, path: path.clone() })
+        let dir_entries: Option<HashMap<Str, DirEntryKind>> = if path_read.read_dir_entries {
+            let mut dir_entries = HashMap::<Str, DirEntryKind>::new();
+            let dir = Dir::from_fd(reader.into_inner().into())?;
+            for entry in dir {
+                let entry = entry?;
+
+                let entry_kind = match entry.file_type() {
+                    None => todo!("handle DT_UNKNOWN (see readdir(3))"),
+                    Some(Type::File) => DirEntryKind::File,
+                    Some(Type::Directory) => DirEntryKind::Dir,
+                    Some(Type::Symlink) => DirEntryKind::Symlink,
+                    Some(other_type) => {
+                        return Err(Error::UnsupportedFileType(other_type));
+                    }
                 };
+                let filename: &[u8] = entry.file_name().to_bytes();
+                if matches!(filename, b"." | b".." | b".DS_Store") {
+                    continue;
+                }
+                dir_entries.insert(filename.to_str()?.into(), entry_kind);
             }
+            Some(dir_entries)
+        } else {
+            None
         };
+        Ok(PathFingerprint::Folder(dir_entries))
+    }
 
-        // Try to read from the file to check if it's actually a directory
-        let mut reader = io::BufReader::new(file);
-        if let Err(io_err) = reader.fill_buf() {
-            // On Windows, trying to read from a directory handle typically fails
-            // with a different error than IsADirectory, but let's handle it generically
-            // by checking if we can read the directory instead
+    #[cfg(any(unix, windows))]
+    fn process_directory(
+        dir_iter: std::fs::ReadDir,
+        path_read: PathRead,
+    ) -> Result<PathFingerprint, Error> {
+        let dir_entries: Option<HashMap<Str, DirEntryKind>> = if path_read.read_dir_entries {
+            let mut dir_entries = HashMap::<Str, DirEntryKind>::new();
 
-            // Check if this is a directory by trying to read it as such
-            match fs::read_dir(path.as_ref()) {
-                Ok(dir_iter) => {
-                    // It's a directory, process entries if requested
-                    let dir_entries: Option<std::collections::HashMap<Str, DirEntryKind>> =
-                        if path_read.read_dir_entries {
-                            let mut dir_entries = HashMap::<Str, DirEntryKind>::new();
+            for entry in dir_iter {
+                let entry = entry?;
+                let file_name = entry.file_name();
 
-                            for entry in dir_iter {
-                                let entry = entry?;
-                                let file_name = entry.file_name();
-
-                                // Skip special entries (same as Unix version)
-                                if matches!(
-                                    file_name.to_string_lossy().as_ref(),
-                                    "." | ".." | ".DS_Store"
-                                ) {
-                                    continue;
-                                }
-
-                                // Get file type with minimal additional syscalls
-                                let entry_kind = match entry.file_type() {
-                                    Ok(file_type) => {
-                                        if file_type.is_file() {
-                                            DirEntryKind::File
-                                        } else if file_type.is_dir() {
-                                            DirEntryKind::Dir
-                                        } else if file_type.is_symlink() {
-                                            DirEntryKind::Symlink
-                                        } else {
-                                            // For any other file type, we'll treat it as a file
-                                            // This is a conservative approach for Windows
-                                            DirEntryKind::File
-                                        }
-                                    }
-                                    Err(_) => {
-                                        // If we can't determine the file type, treat as file
-                                        DirEntryKind::File
-                                    }
-                                };
-
-                                // Convert filename to Str (using OsStr -> String conversion)
-                                let filename_str = file_name.to_string_lossy();
-                                dir_entries.insert(filename_str.as_ref().into(), entry_kind);
-                            }
-                            Some(dir_entries)
-                        } else {
-                            None
-                        };
-                    return Ok(PathFingerprint::Folder(dir_entries));
+                // Skip special entries (same as Unix version)
+                // Convert OsStr to bytes for comparison to avoid to_string_lossy
+                let file_name_bytes = file_name.as_encoded_bytes();
+                if matches!(file_name_bytes, b"." | b".." | b".DS_Store") {
+                    continue;
                 }
-                Err(_) => {
-                    // Not a directory, so the original error was legitimate
-                    return Err(io_err.into());
+
+                // Get file type with minimal additional syscalls
+                let entry_kind = match entry.file_type() {
+                    Ok(file_type) => {
+                        if file_type.is_file() {
+                            DirEntryKind::File
+                        } else if file_type.is_dir() {
+                            DirEntryKind::Dir
+                        } else if file_type.is_symlink() {
+                            DirEntryKind::Symlink
+                        } else {
+                            // For any other file type, we'll treat it as a file
+                            // This is a conservative approach
+                            DirEntryKind::File
+                        }
+                    }
+                    Err(_) => {
+                        // If we can't determine the file type, treat as file
+                        DirEntryKind::File
+                    }
+                };
+
+                // Convert filename to Str - need to ensure it's valid UTF-8
+                match file_name.to_str() {
+                    Some(filename_str) => {
+                        dir_entries.insert(filename_str.into(), entry_kind);
+                    }
+                    None => {
+                        // Skip files with invalid UTF-8 names
+                        continue;
+                    }
                 }
             }
-        }
-
-        // If we got here, it's a regular file and we can read it
-        Ok(PathFingerprint::FileContentHash(hash_content(reader)?))
+            Some(dir_entries)
+        } else {
+            None
+        };
+        Ok(PathFingerprint::Folder(dir_entries))
     }
 }
 

@@ -8,6 +8,8 @@ disallowed-methods = [
   { path = "str::replace", reason = "To avoid memory allocation, use `cow_utils::CowUtils::cow_replace` instead." },
   { path = "str::replacen", reason = "To avoid memory allocation, use `cow_utils::CowUtils::cow_replacen` instead." },
   { path = "std::env::current_dir", reason = "To get an `AbsolutePathBuf`, Use `vite_path::current_dir` instead." },
+  { path = "std::ffi::OsStr::to_string_lossy", reason = "DO NOT ever use to_string_lossy on paths. Use proper UTF-8 handling instead." },
+  { path = "std::path::Path::to_string_lossy", reason = "DO NOT ever use to_string_lossy on paths. Use proper UTF-8 handling instead." },
 ]
 
 disallowed-types = [
