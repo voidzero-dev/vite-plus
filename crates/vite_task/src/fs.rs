@@ -44,18 +44,17 @@ impl FileSystem for RealFileSystem {
         path: &Arc<AbsolutePath>,
         path_read: PathRead,
     ) -> Result<PathFingerprint, Error> {
-        let file = match File::open(path.as_ref()) {
+        let path_ref: &std::path::Path = path.as_ref().as_ref();
+
+        let file = match File::open(path_ref) {
             Ok(file) => file,
             Err(err) => {
-                // On Windows, File::open fails for directories, so we need to check
-                // if this might be a directory before giving up
+                // On Windows, File::open fails specifically for directories with PermissionDenied
                 #[cfg(windows)]
                 {
-                    // On Windows, opening a directory can fail with various error codes
-                    // Try to check if it's a directory first
-                    let path_ref: &std::path::Path = path.as_ref();
-                    if let Ok(dir_iter) = std::fs::read_dir(path_ref) {
-                        return RealFileSystem::process_directory(dir_iter, path_read);
+                    if err.kind() == io::ErrorKind::PermissionDenied {
+                        // This might be a directory - try reading it as such
+                        return RealFileSystem::process_directory(path_ref, path_read);
                     }
                 }
 
@@ -81,15 +80,13 @@ impl FileSystem for RealFileSystem {
             // Is a directory on Unix - use the optimized nix implementation first
             #[cfg(unix)]
             {
-                return RealFileSystem::process_directory_unix(reader, path_read);
+                return RealFileSystem::process_directory_unix(reader.into_inner(), path_read);
             }
             #[cfg(windows)]
             {
                 // This shouldn't happen on Windows since File::open should have failed
                 // But if it does, fallback to std::fs::read_dir
-                let path_ref: &std::path::Path = path.as_ref();
-                let dir_iter = std::fs::read_dir(path_ref)?;
-                return RealFileSystem::process_directory(dir_iter, path_read);
+                return RealFileSystem::process_directory(path_ref, path_read);
             }
         }
         Ok(PathFingerprint::FileContentHash(hash_content(reader)?))
@@ -98,21 +95,25 @@ impl FileSystem for RealFileSystem {
 
 impl RealFileSystem {
     #[cfg(unix)]
-    fn process_directory_unix(
-        reader: io::BufReader<File>,
-        path_read: PathRead,
-    ) -> Result<PathFingerprint, Error> {
+    fn process_directory_unix(fd: File, path_read: PathRead) -> Result<PathFingerprint, Error> {
         use bstr::ByteSlice;
         use nix::dir::{Dir, Type};
 
         let dir_entries: Option<HashMap<Str, DirEntryKind>> = if path_read.read_dir_entries {
             let mut dir_entries = HashMap::<Str, DirEntryKind>::new();
-            let dir = Dir::from_fd(reader.into_inner().into())?;
+            let dir = Dir::from_fd(fd.into())?;
             for entry in dir {
                 let entry = entry?;
 
                 let entry_kind = match entry.file_type() {
-                    None => todo!("handle DT_UNKNOWN (see readdir(3))"),
+                    None => {
+                        // Handle DT_UNKNOWN by returning an error
+                        // We don't have the path here, so use a generic error
+                        return Err(Error::Io(io::Error::new(
+                            io::ErrorKind::Other,
+                            "Unknown file type (DT_UNKNOWN)",
+                        )));
+                    }
                     Some(Type::File) => DirEntryKind::File,
                     Some(Type::Directory) => DirEntryKind::Dir,
                     Some(Type::Symlink) => DirEntryKind::Symlink,
@@ -133,22 +134,22 @@ impl RealFileSystem {
         Ok(PathFingerprint::Folder(dir_entries))
     }
 
-    #[cfg(any(unix, windows))]
+    #[cfg(windows)]
     fn process_directory(
-        dir_iter: std::fs::ReadDir,
+        path: &std::path::Path,
         path_read: PathRead,
     ) -> Result<PathFingerprint, Error> {
         let dir_entries: Option<HashMap<Str, DirEntryKind>> = if path_read.read_dir_entries {
             let mut dir_entries = HashMap::<Str, DirEntryKind>::new();
+            let dir_iter = std::fs::read_dir(path)?;
 
             for entry in dir_iter {
                 let entry = entry?;
                 let file_name = entry.file_name();
 
                 // Skip special entries (same as Unix version)
-                // Convert OsStr to bytes for comparison to avoid to_string_lossy
-                let file_name_bytes = file_name.as_encoded_bytes();
-                if matches!(file_name_bytes, b"." | b".." | b".DS_Store") {
+                // Use direct OsStr comparison with str
+                if file_name == "." || file_name == ".." || file_name == ".DS_Store" {
                     continue;
                 }
 
@@ -162,25 +163,60 @@ impl RealFileSystem {
                         } else if file_type.is_symlink() {
                             DirEntryKind::Symlink
                         } else {
-                            // For any other file type, we'll treat it as a file
-                            // This is a conservative approach
-                            DirEntryKind::File
+                            // Return error for unsupported file types instead of treating as file
+                            return Err(Error::IoWithPath {
+                                err: io::Error::new(io::ErrorKind::Other, "Unsupported file type"),
+                                path: Arc::new(AbsolutePath::new(path).ok_or_else(|| {
+                                    Error::IoWithPath {
+                                        err: io::Error::new(
+                                            io::ErrorKind::InvalidInput,
+                                            "Invalid path",
+                                        ),
+                                        path: Arc::new(AbsolutePath::new("/").unwrap()),
+                                    }
+                                })?),
+                            });
                         }
                     }
-                    Err(_) => {
-                        // If we can't determine the file type, treat as file
-                        DirEntryKind::File
+                    Err(err) => {
+                        // Return error instead of treating as file
+                        return Err(Error::IoWithPath {
+                            err,
+                            path: Arc::new(AbsolutePath::new(path).ok_or_else(|| {
+                                Error::IoWithPath {
+                                    err: io::Error::new(
+                                        io::ErrorKind::InvalidInput,
+                                        "Invalid path",
+                                    ),
+                                    path: Arc::new(AbsolutePath::new("/").unwrap()),
+                                }
+                            })?),
+                        });
                     }
                 };
 
-                // Convert filename to Str - need to ensure it's valid UTF-8
+                // Convert filename to Str - return error for invalid UTF-8
                 match file_name.to_str() {
                     Some(filename_str) => {
                         dir_entries.insert(filename_str.into(), entry_kind);
                     }
                     None => {
-                        // Skip files with invalid UTF-8 names
-                        continue;
+                        // Return error instead of skipping files with invalid UTF-8 names
+                        return Err(Error::IoWithPath {
+                            err: io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                "Invalid UTF-8 in filename",
+                            ),
+                            path: Arc::new(AbsolutePath::new(path).ok_or_else(|| {
+                                Error::IoWithPath {
+                                    err: io::Error::new(
+                                        io::ErrorKind::InvalidInput,
+                                        "Invalid path",
+                                    ),
+                                    path: Arc::new(AbsolutePath::new("/").unwrap()),
+                                }
+                            })?),
+                        });
                     }
                 }
             }
