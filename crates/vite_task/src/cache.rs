@@ -34,7 +34,7 @@ impl CachedTask {
 
 #[derive(Debug)]
 pub struct TaskCache {
-    pub(crate) conn: Mutex<Connection>,
+    conn: Mutex<Connection>,
 }
 
 #[derive(Debug, Encode, Decode, Serialize)]
