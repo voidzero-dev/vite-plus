@@ -158,9 +158,18 @@ async fn get_cached_or_execute<'a>(
         Err(cache_miss) => (
             Some(cache_miss),
             async move {
+                let is_vite = task.resolved_command.fingerprint.command.is_vite();
+                if is_vite {
+                    cache.conn.lock().await.execute_batch("COMMIT")?;
+                }
                 let executed_task = execute_task(&task.resolved_command, base_dir).await?;
-                let cached_task = CachedTask::create(task.clone(), executed_task, fs, base_dir)?;
-                cache.update(&task, cached_task).await?;
+                if !is_vite {
+                    let cached_task =
+                        CachedTask::create(task.clone(), executed_task, fs, base_dir)?;
+                    cache.update(&task, cached_task).await?;
+                } else {
+                    cache.conn.lock().await.execute_batch("BEGIN EXCLUSIVE;")?;
+                }
                 Ok(())
             }
             .boxed(),

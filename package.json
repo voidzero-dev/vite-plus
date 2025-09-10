@@ -9,6 +9,7 @@
     "bootstrap-cli": "pnpm --filter=@voidzero-dev/vite-plus build && cp -r ./packages/cli/binding/*.node ./packages/global/dist && pnpm --filter=@voidzero-dev/global build && npm install -g ./packages/global",
     "bootstrap-cli:ci": "pnpm --filter=@voidzero-dev/vite-plus build:ts && pnpm --filter=@voidzero-dev/global build && npm install -g ./packages/global",
     "typecheck": "tsc -b tsconfig.json",
+    "lint": "vite lint",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -19,7 +20,6 @@
     "lint-staged": "^16.1.2",
     "oxlint": "catalog:",
     "typescript": "catalog:",
-    "rolldown-vite": "catalog:",
     "@voidzero-dev/vite-plus": "workspace:*"
   },
   "lint-staged": {
