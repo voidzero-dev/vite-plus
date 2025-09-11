@@ -86,6 +86,9 @@ impl ExecutionPlan {
             if step.is_builtin { None } else { Some(format!("~/{}$ {}", cwd, command)) };
         let ignore_replay = step.ignore_replay;
 
+        // TODO: this should be replaced by something like `--json-output` when structured logging is implemented.
+        let is_in_cli_test = std::env::var_os("VITE_PLUS_CLI_TEST").is_some();
+
         // Check cache and prepare execution
         let (cache_miss, execute_or_replay) = get_cached_or_execute(
             step,
@@ -99,7 +102,9 @@ impl ExecutionPlan {
         match cache_miss {
             Some(CacheMiss::NotFound) => {
                 tracing::debug!("{}", "Cache not found".style(Style::new().yellow()));
-                if let Some(display_command) = display_command {
+                if is_in_cli_test {
+                    println!("Cache not found");
+                } else if let Some(display_command) = display_command {
                     println!(
                         "{} {}",
                         "►".style(Style::new().bright_blue()),
@@ -108,17 +113,23 @@ impl ExecutionPlan {
                 }
             }
             Some(CacheMiss::FingerprintMismatch(mismatch)) => {
-                println!("{}: {}", "Cache miss".style(Style::new().yellow()), mismatch);
-                if let Some(display_command) = display_command {
-                    println!(
-                        "{} {}",
-                        "►".style(Style::new().bright_blue()),
-                        display_command.style(Style::new().cyan())
-                    );
+                if is_in_cli_test {
+                    println!("{}: {}", "Cache miss", mismatch);
+                } else {
+                    println!("{}: {}", "Cache miss".style(Style::new().yellow()), mismatch);
+                    if let Some(display_command) = display_command {
+                        println!(
+                            "{} {}",
+                            "►".style(Style::new().bright_blue()),
+                            display_command.style(Style::new().cyan())
+                        );
+                    }
                 }
             }
             None => {
-                if !ignore_replay {
+                if is_in_cli_test {
+                    println!("Cache hit, replaying");
+                } else if !ignore_replay {
                     println!("{}", "Cache hit, replaying".style(Style::new().green()));
                     if let Some(display_command) = display_command {
                         println!(
