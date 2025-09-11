@@ -127,16 +127,18 @@ impl ExecutionPlan {
                 }
             }
             None => {
-                if is_in_cli_test {
-                    println!("Cache hit, replaying");
-                } else if !ignore_replay {
-                    println!("{}", "Cache hit, replaying".style(Style::new().green()));
-                    if let Some(display_command) = display_command {
-                        println!(
-                            "{} {}",
-                            "►".style(Style::new().bright_green()),
-                            display_command.style(Style::new().dimmed())
-                        );
+                if !ignore_replay {
+                    if is_in_cli_test {
+                        println!("Cache hit, replaying");
+                    } else {
+                        println!("{}", "Cache hit, replaying".style(Style::new().green()));
+                        if let Some(display_command) = display_command {
+                            println!(
+                                "{} {}",
+                                "►".style(Style::new().bright_green()),
+                                display_command.style(Style::new().dimmed())
+                            );
+                        }
                     }
                 }
             }

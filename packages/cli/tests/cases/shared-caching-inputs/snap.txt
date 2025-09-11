@@ -1,4 +1,9 @@
 > vite-plus run script1 # initial run, create the cache
+Non-interactive environment detected. Using default package manager: pnpm
+Cache not found
+Already up to date
+
+Done in 186ms using pnpm v10.15.1
 Cache not found
 bar
 
