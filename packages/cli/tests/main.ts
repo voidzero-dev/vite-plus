@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import cp from 'node:child_process';
 import path from 'node:path'
+import assert from 'node:assert';
 
 // Create a unique temporary directory for testing
 const tempTmpDir = `${tmpdir()}/vite-plus-test-${randomUUID()}`;
@@ -48,5 +49,9 @@ function runTestCase(name: string) {
     }
     const newSnapContent = newSnap.join('\n');
 
-    fs.writeFileSync(`${casesDir}/${name}/snap.txt`, newSnapContent);
+    if (process.env.VITE_PLUS_UPDATE_SNAP === '1') {
+        fs.writeFileSync(`${casesDir}/${name}/snap.txt`, newSnapContent);
+    } else {
+        assert.equal(newSnapContent, snap, `Snapshot mismatch in case: ${name}`);
+    }
 }
