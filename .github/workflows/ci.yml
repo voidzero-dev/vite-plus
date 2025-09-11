@@ -210,7 +210,8 @@ jobs:
       - test
       - lint
       - run
-      - e2e-test
+      - cli-e2e-test
+      - install-e2e-test
     steps:
       - run: exit 1
         # Thank you, next https://github.com/vercel/next.js/blob/canary/.github/workflows/build_and_test.yml#L379
