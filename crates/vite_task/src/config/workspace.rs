@@ -310,7 +310,7 @@ impl Workspace {
                     let task_id_to_match = TaskId {
                         task_group_id: TaskGroupId {
                             task_group_name: task_request.clone(),
-                            package_path: package.path.clone().into(),
+                            config_path: package.path.clone().into(),
                         },
                         // Starts with the main command only. The subcommands before the main command will be included later as dependencies.
                         subcommand_index: None,
@@ -452,7 +452,7 @@ impl Workspace {
                                 Ok(TaskId {
                                     task_group_id: TaskGroupId {
                                         task_group_name: dep_task_name,
-                                        package_path: package_graph[dep_package_node_index]
+                                        config_path: package_graph[dep_package_node_index]
                                             .path
                                             .clone()
                                             .into(),
@@ -550,7 +550,7 @@ impl Workspace {
 
         // Add topological dependencies
         for (task_group_id, current_tasks) in &task_ids_by_task_group_id {
-            let package_path = task_group_id.package_path.as_relative_path();
+            let package_path = task_group_id.config_path.as_relative_path();
             let task_group_name = &task_group_id.task_group_name;
             // Find the FIRST subtask of the current package (or the only task if no subtasks)
             let first_current_task = current_tasks.first().map(|(task_id, _)| task_id);
@@ -570,7 +570,7 @@ impl Workspace {
                     for dep_package_path in transitive_deps {
                         if let Some(dep_tasks) = task_ids_by_task_group_id.get(&TaskGroupId {
                             task_group_name: task_group_name.clone(),
-                            package_path: dep_package_path,
+                            config_path: dep_package_path,
                         }) {
                             // Find the LAST subtask of the dependency (highest order)
                             if let Some((last_dep_task, _)) = dep_tasks.last() {

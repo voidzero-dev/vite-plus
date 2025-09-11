@@ -15,7 +15,12 @@ use super::ResolvedTask;
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
 pub struct TaskGroupId {
     pub task_group_name: Str,
-    pub package_path: RelativePathBuf,
+
+    /// The path to the config file that defines this task group, relative to the workspace root.
+    /// 
+    /// For built-in tasks, there's no config file. This value will be the cwd,
+    /// so that same built-in command running under different folders will be treated as different tasks.
+    pub config_path: RelativePathBuf,
 }
 
 /// Uniquely identifies a task.
@@ -67,7 +72,7 @@ impl TaskGraphBuilder {
                 let Some(&dep_index) = node_indices_by_task_ids.get(dep) else {
                     return Err(Error::TaskDependencyNotFound {
                         name: dep.task_group_id.task_group_name.clone(),
-                        package_path: dep.task_group_id.package_path.clone(),
+                        package_path: dep.task_group_id.config_path.clone(),
                     });
                 };
                 task_graph.add_edge(current_task_index, dep_index, ());

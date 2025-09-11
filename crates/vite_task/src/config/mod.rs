@@ -78,7 +78,7 @@ impl ResolvedTask {
             subcommand_index: self.name.subcommand_index,
             task_group_id: TaskGroupId {
                 task_group_name: self.name.task_group_name.clone(),
-                package_path: self.resolved_config.config_dir.clone(),
+                config_path: self.resolved_config.config_dir.clone(),
             },
         }
     }
