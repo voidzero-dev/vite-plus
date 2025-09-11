@@ -1,4 +1,3 @@
-import assert from 'node:assert';
 import cp from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';

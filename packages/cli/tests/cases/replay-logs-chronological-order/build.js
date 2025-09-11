@@ -37,9 +37,10 @@ async function main() {
   console.log('[build.js] --------------------------------');
   console.log('[build.js] start');
 
-  await Promise.all(commands.map(cmd => exec(...cmd)));
-  // const r = await exec('node', ['echo.js', '4'.repeat(100)], { stdio: 'inherit' });
-  // console.log(r);
+  // await Promise.all(commands.map(cmd => exec(...cmd)));
+  for (const command of commands) {
+    await exec(...command);
+  }
 
   console.log('[build.js] main process end');
 }
