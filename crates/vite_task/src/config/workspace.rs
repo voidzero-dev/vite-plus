@@ -311,6 +311,7 @@ impl Workspace {
                         task_group_id: TaskGroupId {
                             task_group_name: task_request.clone(),
                             config_path: package.path.clone().into(),
+                            is_builtin: false,
                         },
                         // Starts with the main command only. The subcommands before the main command will be included later as dependencies.
                         subcommand_index: None,
@@ -452,6 +453,7 @@ impl Workspace {
                                 Ok(TaskId {
                                     task_group_id: TaskGroupId {
                                         task_group_name: dep_task_name,
+                                        is_builtin: false,
                                         config_path: package_graph[dep_package_node_index]
                                             .path
                                             .clone()
@@ -569,6 +571,7 @@ impl Workspace {
                     let mut additional_deps = Vec::new();
                     for dep_package_path in transitive_deps {
                         if let Some(dep_tasks) = task_ids_by_task_group_id.get(&TaskGroupId {
+                            is_builtin: false,
                             task_group_name: task_group_name.clone(),
                             config_path: dep_package_path,
                         }) {

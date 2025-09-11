@@ -14,10 +14,15 @@ use super::ResolvedTask;
 /// A task group can be parsed into one task or multiple tasks split by `&&`
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
 pub struct TaskGroupId {
+    /// For user defined task, this is the name of the script or the entry in `vite-task.json`.
+    /// For built-in tasks, this is the command name.
     pub task_group_name: Str,
 
+    /// Whether this is a built-in task like `vite lint`.
+    pub is_builtin: bool,
+
     /// The path to the config file that defines this task group, relative to the workspace root.
-    /// 
+    ///
     /// For built-in tasks, there's no config file. This value will be the cwd,
     /// so that same built-in command running under different folders will be treated as different tasks.
     pub config_path: RelativePathBuf,
@@ -25,7 +30,7 @@ pub struct TaskGroupId {
 
 /// Uniquely identifies a task.
 ///
-/// Similar to `TaskName` but replaces `package_name` with `package_path` to ensure uniqueness.
+/// Similar to `TaskName` but replaces `package_name` with `config_path` to ensure uniqueness.
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
 pub struct TaskId {
     pub task_group_id: TaskGroupId,

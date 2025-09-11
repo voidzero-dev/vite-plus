@@ -79,6 +79,7 @@ impl ResolvedTask {
             task_group_id: TaskGroupId {
                 task_group_name: self.name.task_group_name.clone(),
                 config_path: self.resolved_config.config_dir.clone(),
+                is_builtin: self.name.package_name.is_none(),
             },
         }
     }
@@ -89,12 +90,16 @@ impl ResolvedTask {
             return false;
         }
 
+        let Some(package_name) = &self.name.package_name else {
+            // never match built-in task
+            return false;
+        };
+
         // match tasks in current package if the task_request doesn't contain '#'
         if !task_request.contains('#') {
             return current_package_path == Some(&self.resolved_config.config_dir)
                 && self.name.task_group_name == task_request;
         };
-        let package_name = self.name.package_name.as_str();
 
         task_request.get(..package_name.len()) == Some(package_name)
             && task_request.get(package_name.len()..=package_name.len()) == Some("#")
@@ -156,7 +161,7 @@ impl ResolvedTask {
         };
         Ok(Self {
             name: TaskName {
-                package_name: workspace.package_json.name.as_str().into(),
+                package_name: None,
                 task_group_name: task_name.into(),
                 subcommand_index: None,
             },

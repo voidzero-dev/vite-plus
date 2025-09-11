@@ -13,8 +13,11 @@ pub struct TaskName {
     /// Both task `echo A` and task `echo B` will have `task_group_name` = "build".
     pub task_group_name: Str,
 
-    /// The name of the package where this task is defined. Can be empty when field `name` is not defined in a package.
-    pub package_name: Str,
+    /// The name of the package where this task is defined.
+    ///
+    /// - the value is `Some("")` if field `name` is not defined in a package
+    /// - the value is `None` the built-in task like `vite lint`, which doesn't belong to any package.
+    pub package_name: Option<Str>,
 
     /// The index of the subcommand in a parsed command (`echo A && echo B`).
     /// `None` if the task is a main task, which is the last subcommand or the only subcommand in a script.
@@ -25,8 +28,10 @@ pub struct TaskName {
 
 impl Display for TaskName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if !self.package_name.is_empty() {
-            write!(f, "{}#", self.package_name)?;
+        if let Some(package_name) = &self.package_name
+            && !package_name.is_empty()
+        {
+            write!(f, "{}#", package_name)?;
         }
         write!(f, "{}", self.task_group_name)?;
         if let Some(subcommand_index) = self.subcommand_index {
