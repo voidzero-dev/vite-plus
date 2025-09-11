@@ -116,8 +116,39 @@ jobs:
           vite-plus test -h
           vite-plus build -h
 
-  e2e-test:
-    name: E2E test
+  cli-e2e-test:
+    name: CLI E2E test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4305c38b25d97ef35a8ad1f985ccf2d2242004f2 # stable
+        env:
+          CARGO_INCREMENTAL: "1"
+
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .node-version
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build CLI
+        run: |
+          pnpm run --filter=@voidzero-dev/vite-plus build
+          cp packages/cli/binding/*.node packages/cli/dist
+
+      - name: Run CLI E2E tests
+        run: |
+          pnpm run --filter=@voidzero-dev/vite-plus test
+          git diff --exit-code
+
+  install-e2e-test:
+    name: vite install E2E test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
