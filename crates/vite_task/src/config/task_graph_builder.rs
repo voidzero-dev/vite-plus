@@ -3,7 +3,9 @@ use crate::{
     collections::{HashMap, HashSet},
 };
 
+use bincode::{Decode, Encode};
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
+use serde::Serialize;
 use vite_path::RelativePathBuf;
 use vite_str::Str;
 
@@ -12,7 +14,7 @@ use super::ResolvedTask;
 /// Uniquely identifies a task group, which is a script in `package.json`, or an entry in `vite-task.json`.
 ///
 /// A task group can be parsed into one task or multiple tasks split by `&&`
-#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Encode, Decode, Serialize)]
 pub struct TaskGroupId {
     /// For user defined task, this is the name of the script or the entry in `vite-task.json`.
     /// For built-in tasks, this is the command name.
@@ -31,7 +33,7 @@ pub struct TaskGroupId {
 /// Uniquely identifies a task.
 ///
 /// Similar to `TaskName` but replaces `package_name` with `config_path` to ensure uniqueness.
-#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Encode, Decode, Serialize)]
 pub struct TaskId {
     pub task_group_id: TaskGroupId,
 

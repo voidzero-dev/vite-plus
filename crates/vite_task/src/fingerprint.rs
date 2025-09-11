@@ -18,11 +18,9 @@ use crate::{
     fs::FileSystem,
 };
 
-/// The fingerprint of a task. Determines if the task needs to be re-executed
+/// The fingerprint of a command. Determines if the command needs to be re-executed
 #[derive(Encode, Decode, Debug, Serialize)]
 pub struct TaskFingerprint {
-    pub resolved_config: ResolvedTaskConfig,
-    pub command_fingerprint: CommandFingerprint,
     pub inputs: HashMap<RelativePathBuf, PathFingerprint>,
 }
 

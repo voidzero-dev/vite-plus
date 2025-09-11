@@ -1,3 +1,4 @@
+use rusqlite::config::DbConfig;
 use std::sync::Arc;
 use vite_path::AbsolutePath;
 
@@ -8,7 +9,7 @@ use serde::Serialize;
 use tokio::sync::Mutex;
 
 use crate::Error;
-use crate::config::{CommandFingerprint, ResolvedTask};
+use crate::config::{CommandFingerprint, ResolvedTask, TaskId};
 use crate::execute::{ExecutedTask, StdOutput};
 use crate::fingerprint::{FingerprintMismatch, TaskFingerprint};
 use crate::fs::FileSystem;
@@ -38,8 +39,8 @@ pub struct TaskCache {
 }
 
 #[derive(Debug, Encode, Decode, Serialize)]
-pub struct TaskCacheKey {
-    pub command_fingerprint: CommandFingerprint,
+pub struct TaskKey {
+    pub task_id: TaskId,
     pub args: Arc<[Str]>,
 }
 
@@ -61,12 +62,21 @@ impl TaskCache {
             match user_version {
                 0 => {
                     // fresh new db
-                    conn.execute("CREATE TABLE tasks (key BLOB PRIMARY KEY, value BLOB);", ())?;
-                    conn.execute("PRAGMA user_version = 1", ())?;
+                    conn.execute("CREATE TABLE command_cache (command_fingerprint BLOB PRIMARY KEY, value BLOB);", ())?;
+                    conn.execute(
+                        "CREATE TABLE task_to_command (task_key BLOB PRIMARY KEY, command_fingerprint BLOB);",
+                        (),
+                    )?;
+                    conn.execute("PRAGMA user_version = 2", ())?;
                 }
-                // Migration done here
-                1 => break,
-                2.. => return Err(Error::UnrecognizedDbVersion(user_version)),
+                1 => {
+                    // internal versions during dev, we just rebuild the whole cache
+                    conn.set_db_config(DbConfig::SQLITE_DBCONFIG_RESET_DATABASE, true)?;
+                    conn.execute("VACUUM", ())?;
+                    conn.set_db_config(DbConfig::SQLITE_DBCONFIG_RESET_DATABASE, false)?;
+                }
+                2 => break, // current version
+                3.. => return Err(Error::UnrecognizedDbVersion(user_version)),
             }
         }
         conn.execute_batch("COMMIT")?;
@@ -77,6 +87,23 @@ impl TaskCache {
     pub async fn save(self) -> Result<(), Error> {
         // do some cleanup in the future
         Ok(())
+    }
+
+    fn get_command_cache(
+        &self,
+        command_fingerprint: &CommandFingerprint,
+    ) -> Result<Option<CachedTask>, Error> {
+        let conn = self.conn.blocking_lock();
+        let mut select_stmt =
+            conn.prepare_cached("SELECT value FROM command_cache WHERE command_fingerprint=?")?;
+        let key_blob = encode_to_vec(command_fingerprint, BINCODE_CONFIG)?;
+        let Some(value_blob) =
+            select_stmt.query_row::<Vec<u8>, _, _>([key_blob], |row| row.get(0)).optional()?
+        else {
+            return Ok(None);
+        };
+        let (cached_task, _) = decode_from_slice::<CachedTask, _>(&value_blob, BINCODE_CONFIG)?;
+        Ok(Some(cached_task))
     }
 
     pub async fn update(
