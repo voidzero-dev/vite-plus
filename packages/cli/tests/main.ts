@@ -39,16 +39,16 @@ function runTestCase(name: string) {
   env['PATH'] = [
     ...env['PATH']!.split(path.delimiter),
     // Extend PATH to include the CLI's bin directory
-    path.dirname(import.meta.dirname) + '/bin',
+    path.join(path.dirname(import.meta.dirname), 'bin'),
     // Also include node_modules/.bin for local dev dependencies
-    path.dirname(import.meta.dirname) + '/node_modules/.bin',
+    path.join(path.dirname(import.meta.dirname), 'node_modules/.bin'),
   ].join(path.delimiter);
 
   const newSnap: string[] = [];
 
   for (const command of steps.commands) {
     newSnap.push(`> ${command}`);
-    const output = cp.execSync(command, { env, cwd: caseTmpDir, encoding: 'utf8' });
+    const output = cp.execSync(command, { env, cwd: caseTmpDir, encoding: 'utf-8' });
     newSnap.push(output);
   }
   const newSnapContent = newSnap.join('\n');
