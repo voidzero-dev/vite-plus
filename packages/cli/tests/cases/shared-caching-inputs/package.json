@@ -1,6 +1,6 @@
 {
-    "scripts": {
-        "script1": "cat foo.txt",
-        "script2": "cat foo.txt"
-    }
+  "scripts": {
+    "script1": "cat foo.txt",
+    "script2": "cat foo.txt"
+  }
 }
