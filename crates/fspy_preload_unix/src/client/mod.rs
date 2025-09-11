@@ -18,7 +18,7 @@ use std::{
         LazyLock, OnceLock,
         atomic::{AtomicU8, AtomicU16, AtomicUsize, Ordering, fence},
     },
-    thread::panicking,
+    thread::{AccessError, panicking},
     time::{Instant, SystemTime},
 };
 
@@ -67,10 +67,13 @@ impl ShmCursor {
     }
 }
 
+thread_local! {
+    static SHM_CURSOR: RefCell<Option<ShmCursor>> = RefCell::new(None);
+}
+
 pub struct Client {
     encoded_payload: EncodedPayload,
     shm_id: AtomicUsize,
-    tls_shm_cursor: ThreadLocal<RefCell<ShmCursor>>,
 
     #[cfg(target_os = "macos")]
     posix_spawn_file_actions: OnceLock<libc::posix_spawn_file_actions_t>,
@@ -95,7 +98,6 @@ impl Client {
         Self {
             shm_id: AtomicUsize::new(0),
             encoded_payload,
-            tls_shm_cursor: ThreadLocal::new(),
             #[cfg(target_os = "macos")]
             posix_spawn_file_actions: OnceLock::new(),
         }
@@ -118,26 +120,35 @@ impl Client {
         Ok(ShmCursor { mmap_mut, position: 0 })
     }
 
-    fn with_shm_buf<R>(
+    fn with_shm_buf(
         &self,
         len: usize,
-        f: impl FnOnce(&mut [u8]) -> anyhow::Result<R>,
-    ) -> anyhow::Result<R> {
-        let shm_buf =
-            self.tls_shm_cursor.get_or_try(|| io::Result::Ok(RefCell::new(self.new_shm()?)))?;
+        f: impl FnOnce(&mut [u8]) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        let result = SHM_CURSOR.try_with(|shm_cursor| {
+            let mut shm_cursor = shm_cursor.borrow_mut();
+            let shm_buf = if let Some(some) = shm_cursor.as_mut() {
+                some
+            } else {
+                shm_cursor.insert(self.new_shm()?)
+            };
 
-        let mut shm_buf = shm_buf.borrow_mut();
-        if let Some(buf) = shm_buf.advance(len) {
-            f(buf)
-        } else {
-            *shm_buf = self.new_shm()?;
-            let buf = shm_buf.advance(len).with_context(|| {
-                format!(
-                    "The requested buf ({}) is greater than the shm chunk size ({})",
-                    len, SHM_CHUNK_SIZE
-                )
-            })?;
-            f(buf)
+            if let Some(buf) = shm_buf.advance(len) {
+                f(buf)
+            } else {
+                *shm_buf = self.new_shm()?;
+                let buf = shm_buf.advance(len).with_context(|| {
+                    format!(
+                        "The requested buf ({}) is greater than the shm chunk size ({})",
+                        len, SHM_CHUNK_SIZE
+                    )
+                })?;
+                f(buf)
+            }
+        });
+        match result {
+            Ok(ok) => ok,
+            Err(_) => Ok(()), // Ignore AccessError. TODO(fix): handle AccessError
         }
     }
 
@@ -290,11 +301,14 @@ fn init_client() {
         let Some(client) = global_client() else {
             return;
         };
-        if let Some(shm_cursor) = client.tls_shm_cursor.get() {
-            // Move the shm cursor to the end so that the next time it's used it will be reset.
+        let _ = SHM_CURSOR.try_with(|shm_cursor| {
+            // Move the shm cursor to the end so that the next time it's used a new one will be created.
             let mut shm_cursor = shm_cursor.borrow_mut();
+            let Some(shm_cursor) = shm_cursor.as_mut() else {
+                return;
+            };
             shm_cursor.position = shm_cursor.mmap_mut.len();
-        }
+        });
     }
     let ret = unsafe { pthread_atfork(None, None, Some(reset_shm_atfork)) };
     if ret != 0 {
