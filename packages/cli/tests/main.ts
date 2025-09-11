@@ -48,8 +48,8 @@ function runTestCase(name: string) {
 
   for (const command of steps.commands) {
     newSnap.push(`> ${command}`);
-    const output = cp.execSync(command, { env, cwd: caseTmpDir });
-    newSnap.push(output.toString('utf8'));
+    const output = cp.execSync(command, { env, cwd: caseTmpDir, encoding: 'utf8' });
+    newSnap.push(output);
   }
   const newSnapContent = newSnap.join('\n');
 
