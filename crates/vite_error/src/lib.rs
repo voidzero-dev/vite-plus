@@ -45,6 +45,10 @@ pub enum Error {
     #[error("Unsupported file type: {0:?}")]
     UnsupportedFileType(nix::dir::Type),
 
+    #[cfg(windows)]
+    #[error("Unsupported file type")]
+    UnsupportedFileType,
+
     #[error(transparent)]
     Utf8Error(#[from] bstr::Utf8Error),
 

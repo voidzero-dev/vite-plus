@@ -2,7 +2,6 @@ use std::{
     fs::File,
     hash::Hasher as _,
     io::{self, Read},
-    path::PathBuf,
     sync::Arc,
 };
 
@@ -55,7 +54,7 @@ impl FileSystem for RealFileSystem {
                 {
                     if err.kind() == io::ErrorKind::PermissionDenied {
                         // This might be a directory - try reading it as such
-                        return RealFileSystem::process_directory(path_ref, path_read);
+                        return RealFileSystem::process_directory(path.as_ref(), path_read);
                     }
                 }
 
@@ -87,7 +86,7 @@ impl FileSystem for RealFileSystem {
             {
                 // This shouldn't happen on Windows since File::open should have failed
                 // But if it does, fallback to std::fs::read_dir
-                return RealFileSystem::process_directory(path_ref, path_read);
+                return RealFileSystem::process_directory(path.as_ref(), path_read);
             }
         }
         Ok(PathFingerprint::FileContentHash(hash_content(reader)?))
@@ -107,14 +106,7 @@ impl RealFileSystem {
                 let entry = entry?;
 
                 let entry_kind = match entry.file_type() {
-                    None => {
-                        // Handle DT_UNKNOWN by returning an error
-                        // We don't have the path here, so use a generic error
-                        return Err(Error::Io(io::Error::new(
-                            io::ErrorKind::Other,
-                            "Unknown file type (DT_UNKNOWN)",
-                        )));
-                    }
+                    None => todo!("handle DT_UNKNOWN (see readdir(3))"),
                     Some(Type::File) => DirEntryKind::File,
                     Some(Type::Directory) => DirEntryKind::Dir,
                     Some(Type::Symlink) => DirEntryKind::Symlink,
@@ -137,12 +129,12 @@ impl RealFileSystem {
 
     #[cfg(windows)]
     fn process_directory(
-        path: &std::path::Path,
+        path: &AbsolutePath,
         path_read: PathRead,
     ) -> Result<PathFingerprint, Error> {
         let dir_entries: Option<HashMap<Str, DirEntryKind>> = if path_read.read_dir_entries {
             let mut dir_entries = HashMap::<Str, DirEntryKind>::new();
-            let dir_iter = std::fs::read_dir(path)?;
+            let dir_iter = std::fs::read_dir(path.as_ref())?;
 
             for entry in dir_iter {
                 let entry = entry?;
@@ -164,24 +156,13 @@ impl RealFileSystem {
                         } else if file_type.is_symlink() {
                             DirEntryKind::Symlink
                         } else {
-                            // Return error for unsupported file types instead of treating as file
-                            let fallback_path = if cfg!(windows) { "C:\\" } else { "/" };
-                            let error_path = AbsolutePathBuf::new(path.to_path_buf())
-                                .or_else(|| AbsolutePathBuf::new(PathBuf::from(fallback_path)))
-                                .expect("fallback path should be valid");
-                            return Err(Error::IoWithPath {
-                                err: io::Error::new(io::ErrorKind::Other, "Unsupported file type"),
-                                path: error_path.into(),
-                            });
+                            // Use Error::UnsupportedFileType instead of IoWithPath
+                            return Err(Error::UnsupportedFileType);
                         }
                     }
                     Err(err) => {
-                        // Return error instead of treating as file
-                        let fallback_path = if cfg!(windows) { "C:\\" } else { "/" };
-                        let error_path = AbsolutePathBuf::new(path.to_path_buf())
-                            .or_else(|| AbsolutePathBuf::new(PathBuf::from(fallback_path)))
-                            .expect("fallback path should be valid");
-                        return Err(Error::IoWithPath { err, path: error_path.into() });
+                        // Return the original error instead of complex path handling
+                        return Err(Error::Io(err));
                     }
                 };
 
@@ -191,18 +172,11 @@ impl RealFileSystem {
                         dir_entries.insert(filename_str.into(), entry_kind);
                     }
                     None => {
-                        // Return error instead of skipping files with invalid UTF-8 names
-                        let fallback_path = if cfg!(windows) { "C:\\" } else { "/" };
-                        let error_path = AbsolutePathBuf::new(path.to_path_buf())
-                            .or_else(|| AbsolutePathBuf::new(PathBuf::from(fallback_path)))
-                            .expect("fallback path should be valid");
-                        return Err(Error::IoWithPath {
-                            err: io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                "Invalid UTF-8 in filename",
-                            ),
-                            path: error_path.into(),
-                        });
+                        // Return error instead of complex path handling
+                        return Err(Error::Io(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "Invalid UTF-8 in filename",
+                        )));
                     }
                 }
             }
