@@ -188,8 +188,10 @@ pub async fn main<
     args: Args,
     options: Option<CliOptions<Lint, LintFn, Vite, ViteFn, Test, TestFn>>,
 ) -> Result<(), Error> {
-    // Auto-install dependencies if needed, but skip for install command itself
-    if !matches!(args.commands, Some(Commands::Install { .. })) {
+    // Auto-install dependencies if needed, but skip for install command itself, or if `VITE_DISABLE_AUTO_INSTALL=1` is set.
+    if !matches!(args.commands, Some(Commands::Install { .. }))
+        && std::env::var_os("VITE_DISABLE_AUTO_INSTALL") != Some("1".into())
+    {
         auto_install(&cwd).await?;
     }
 

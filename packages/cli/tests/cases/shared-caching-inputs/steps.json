@@ -1,0 +1,12 @@
+{
+    "env": {
+        "VITE_DISABLE_AUTO_INSTALL": "1"
+    },
+    "commands": [
+        "vite-plus run script1 # initial run, create the cache",
+        "vite-plus run script2 # script2 has the same command as script1, should hit the cache",
+        "echo baz > foo.txt # change the input file to invalidate the cache",
+        "vite-plus run script2 # script2 should report a cache miss, and update the cache",
+        "vite-plus run script1 # script1 should hit the updated cache"
+    ]
+}
