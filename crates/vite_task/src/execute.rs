@@ -396,6 +396,12 @@ pub async fn execute_task(
     .await?;
 
     let outputs = outputs.into_inner().unwrap();
+    tracing::debug!(
+        "executed task finished, path_reads: {}, path_writes: {}, outputs: {}",
+        path_reads.len(),
+        path_writes.len(),
+        outputs.len()
+    );
 
     // let input_paths = gather_inputs(task, base_dir)?;
 
