@@ -107,6 +107,12 @@ const fn resolve_bool_flag(positive: bool, negative: bool) -> bool {
 
 /// Automatically run install command
 async fn auto_install(workspace_root: &AbsolutePathBuf) -> Result<(), Error> {
+    // Skip if we're already running inside a vite_task execution to prevent nested installs
+    if std::env::var("VITE_TASK_EXECUTION_ENV").map_or(false, |v| v == "1") {
+        tracing::debug!("Skipping auto-install: already running inside vite_task execution");
+        return Ok(());
+    }
+
     tracing::debug!("Running install automatically...");
     crate::install::InstallCommand::builder(workspace_root.clone())
         .ignore_replay()
@@ -721,6 +727,47 @@ mod tests {
             assert_eq!(args, &vec!["--watch".to_string(), "--mode=development".to_string()]);
         } else {
             panic!("Expected Build command");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_auto_install_skipped_conditions() {
+        use vite_path::AbsolutePathBuf;
+
+        // Test auto_install function directly
+        let test_workspace = if cfg!(windows) {
+            AbsolutePathBuf::new("C:\\test-workspace-not-exists".into()).unwrap()
+        } else {
+            AbsolutePathBuf::new("/test-workspace-not-exists".into()).unwrap()
+        };
+
+        // Without the environment variable, auto_install should attempt to run
+        // (it may fail due to invalid workspace, but that's expected)
+        unsafe {
+            std::env::remove_var("VITE_TASK_EXECUTION_ENV");
+        }
+        let result_without_env = auto_install(&test_workspace).await;
+        // Should attempt to run (and likely fail with workspace error, which is fine)
+        assert!(result_without_env.is_err());
+
+        // With environment variable set to different value, auto_install should still attempt to run
+        unsafe {
+            std::env::set_var("VITE_TASK_EXECUTION_ENV", "0");
+        }
+        let result_with_wrong_value = auto_install(&test_workspace).await;
+        // Should attempt to run (and likely fail with workspace error, which is fine)
+        assert!(result_with_wrong_value.is_err());
+
+        // With environment variable set to "1", auto_install should be skipped (return Ok)
+        unsafe {
+            std::env::set_var("VITE_TASK_EXECUTION_ENV", "1");
+        }
+        let result_with_correct_value = auto_install(&test_workspace).await;
+        assert!(result_with_correct_value.is_ok());
+
+        // Clean up
+        unsafe {
+            std::env::remove_var("VITE_TASK_EXECUTION_ENV");
         }
     }
 }

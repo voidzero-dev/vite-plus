@@ -272,6 +272,11 @@ impl TaskEnvs {
                 );
             }
         }
+
+        // Add VITE_TASK_EXECUTION_ENV to indicate we're running inside vite_task
+        // This prevents nested auto-install execution
+        all_envs.insert("VITE_TASK_EXECUTION_ENV".into(), Arc::<OsStr>::from(OsStr::new("1")));
+
         tracing::debug!("all_envs: {:?}", all_envs);
 
         Ok(Self { all_envs, envs_without_pass_through })
@@ -634,5 +639,39 @@ mod tests {
         unsafe {
             std::env::remove_var("FORCE_COLOR");
         }
+    }
+
+    #[test]
+    fn test_vite_task_execution_env_added() {
+        use crate::collections::HashSet;
+        use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
+
+        let task_config = TaskConfig {
+            command: TaskCommand::ShellScript("echo test".into()),
+            cwd: RelativePathBuf::default(),
+            cacheable: true,
+            inputs: HashSet::new(),
+            envs: HashSet::new(),
+            pass_through_envs: HashSet::new(),
+        };
+
+        let resolved_task_config =
+            ResolvedTaskConfig { config_dir: RelativePathBuf::default(), config: task_config };
+
+        let base_dir = if cfg!(windows) {
+            AbsolutePath::new("C:\\workspace").unwrap()
+        } else {
+            AbsolutePath::new("/workspace").unwrap()
+        };
+
+        let result = TaskEnvs::resolve(base_dir, &resolved_task_config).unwrap();
+
+        // VITE_TASK_EXECUTION_ENV should always be added automatically
+        assert!(result.all_envs.contains_key("VITE_TASK_EXECUTION_ENV"));
+        let env_value = result.all_envs.get("VITE_TASK_EXECUTION_ENV").unwrap();
+        assert_eq!(env_value.to_str().unwrap(), "1");
+
+        // VITE_TASK_EXECUTION_ENV should not be in envs_without_pass_through since it's not declared
+        assert!(!result.envs_without_pass_through.contains_key("VITE_TASK_EXECUTION_ENV"));
     }
 }
