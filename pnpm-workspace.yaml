@@ -13,6 +13,7 @@ catalog:
   "@types/react": ^19.1.8
   "@types/react-dom": ^19.1.6
   next: ^15.4.3
+  oxfmt: ^0.0.2
   oxlint: ^1.14.0
   react: ^19.1.0
   react-dom: ^19.1.0

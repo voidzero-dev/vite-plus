@@ -29,6 +29,7 @@
     "dist"
   ],
   "dependencies": {
+    "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "rolldown-vite": "catalog:",
     "vitest": "catalog:"
