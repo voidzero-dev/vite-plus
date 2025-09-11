@@ -39,7 +39,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
           # - os: windows-latest
           #   target: x86_64-pc-windows-msvc
-          - os: blaze/macos-latest
+          - os: macos-latest
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
@@ -59,7 +59,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: blaze/macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -81,7 +81,7 @@ jobs:
 
   run:
     name: Run task
-    runs-on: blaze/macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -118,7 +118,7 @@ jobs:
 
   e2e-test:
     name: E2E test
-    runs-on: blaze/macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -172,3 +172,15 @@ jobs:
             echo "✓ Successfully installed dependencies for $repo"
             echo ""
           done
+
+  done:
+    runs-on: ubuntu-latest
+    needs:
+      - test
+      - lint
+      - run
+      - e2e-test
+    steps:
+      - run: exit 1
+        # Thank you, next https://github.com/vercel/next.js/blob/canary/.github/workflows/build_and_test.yml#L379
+        if: ${{ always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}

@@ -5,7 +5,7 @@ on:
 
 jobs:
   build-rust:
-    runs-on: blaze/macos-latest
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +39,7 @@ jobs:
       - uses: mlugg/setup-zig@8d6198c65fb0feaa111df26e6b467fea8345e46f # v2.0.5
         if: ${{ contains(matrix.target, 'linux') }}
         with:
-          version: 0.14.1
+          version: 0.15.1
 
       - uses: taiki-e/install-action@ad95d4e02e061d4390c4b66ef5ed56c7fee3d2ce # v2.58.17
         if: ${{ contains(matrix.target, 'linux') }}
@@ -94,7 +94,7 @@ jobs:
           if-no-files-found: error
 
   Release:
-    runs-on: blaze/macos-latest
+    runs-on: ubuntu-latest
     needs: build-rust
     permissions:
       contents: read
