@@ -10,6 +10,7 @@
  */
 
 import { run } from '../binding/index.js';
+import { fmt } from './fmt.ts';
 import { lint } from './lint.ts';
 import { test } from './test.ts';
 import { vite } from './vite.ts';
@@ -18,6 +19,7 @@ import { vite } from './vite.ts';
 // These functions will be called from Rust when needed
 run({
   lint, // Resolves oxlint binary for linting
+  fmt,  // Resolves oxfmt binary for formatting
   vite, // Resolves vite binary for build/dev commands
   test, // Resolves vitest binary for test commands
 });

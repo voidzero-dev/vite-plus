@@ -4,6 +4,7 @@ mod collections;
 mod config;
 mod execute;
 mod fingerprint;
+mod fmt;
 mod fs;
 mod install;
 mod lint;
@@ -81,6 +82,11 @@ pub enum Commands {
         /// Arguments to pass to oxlint
         args: Vec<String>,
     },
+    Fmt {
+        #[clap(last = true)]
+        /// Arguments to pass to oxfmt
+        args: Vec<String>,
+    },
     Build {
         #[clap(last = true)]
         /// Arguments to pass to vite build
@@ -127,6 +133,10 @@ pub struct CliOptions<
         Box<dyn Future<Output = Result<ResolveCommandResult, Error>>>,
     >,
     LintFn: Fn() -> Lint = Box<dyn Fn() -> Lint>,
+    Fmt: Future<Output = Result<ResolveCommandResult, Error>> = Pin<
+        Box<dyn Future<Output = Result<ResolveCommandResult, Error>>>,
+    >,
+    FmtFn: Fn() -> Fmt = Box<dyn Fn() -> Fmt>,
     Vite: Future<Output = Result<ResolveCommandResult, Error>> = Pin<
         Box<dyn Future<Output = Result<ResolveCommandResult, Error>>>,
     >,
@@ -137,6 +147,7 @@ pub struct CliOptions<
     TestFn: Fn() -> Test = Box<dyn Fn() -> Test>,
 > {
     pub lint: LintFn,
+    pub fmt: FmtFn,
     pub vite: ViteFn,
     pub test: TestFn,
 }
@@ -179,6 +190,8 @@ pub struct ResolveCommandResult {
 pub async fn main<
     Lint: Future<Output = Result<ResolveCommandResult, Error>>,
     LintFn: Fn() -> Lint,
+    Fmt: Future<Output = Result<ResolveCommandResult, Error>>,
+    FmtFn: Fn() -> Fmt,
     Vite: Future<Output = Result<ResolveCommandResult, Error>>,
     ViteFn: Fn() -> Vite,
     Test: Future<Output = Result<ResolveCommandResult, Error>>,
@@ -186,7 +199,7 @@ pub async fn main<
 >(
     cwd: AbsolutePathBuf,
     args: Args,
-    options: Option<CliOptions<Lint, LintFn, Vite, ViteFn, Test, TestFn>>,
+    options: Option<CliOptions<Lint, LintFn, Fmt, FmtFn, Vite, ViteFn, Test, TestFn>>,
 ) -> Result<(), Error> {
     // Auto-install dependencies if needed, but skip for install command itself, or if `VITE_DISABLE_AUTO_INSTALL=1` is set.
     if !matches!(args.commands, Some(Commands::Install { .. }))
@@ -227,6 +240,14 @@ pub async fn main<
             let mut workspace = Workspace::partial_load(cwd)?;
             if let Some(lint_fn) = options.map(|o| o.lint) {
                 lint::lint(lint_fn, &mut workspace, args).await?;
+                workspace.unload().await?;
+            }
+            return Ok(());
+        }
+        Some(Commands::Fmt { args }) => {
+            let mut workspace = Workspace::partial_load(cwd)?;
+            if let Some(fmt_fn) = options.map(|o| o.fmt) {
+                fmt::fmt(fmt_fn, &mut workspace, args).await?;
                 workspace.unload().await?;
             }
             return Ok(());
@@ -353,6 +374,28 @@ mod tests {
         assert!(args.task_args.is_empty());
         assert!(matches!(args.commands, Some(Commands::Build { .. })));
         assert!(!args.debug);
+    }
+
+    #[test]
+    fn test_args_fmt_command() {
+        let args = Args::try_parse_from(&["vite-plus", "fmt"]).unwrap();
+        assert_eq!(args.task, None);
+        assert!(args.task_args.is_empty());
+        assert!(matches!(args.commands, Some(Commands::Fmt { .. })));
+        assert!(!args.debug);
+    }
+
+    #[test]
+    fn test_args_fmt_command_with_args() {
+        let args =
+            Args::try_parse_from(&["vite-plus", "fmt", "--", "--check", "--ignore-path", ".gitignore"]).unwrap();
+        assert_eq!(args.task, None);
+        assert!(args.task_args.is_empty());
+        if let Some(Commands::Fmt { args }) = &args.commands {
+            assert_eq!(args, &vec!["--check".to_string(), "--ignore-path".to_string(), ".gitignore".to_string()]);
+        } else {
+            panic!("Expected Fmt command");
+        }
     }
 
     #[test]

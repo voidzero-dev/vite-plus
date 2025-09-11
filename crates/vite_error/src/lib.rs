@@ -93,6 +93,9 @@ pub enum Error {
     #[error("Lint failed")]
     LintFailed { status: Str, reason: Str },
 
+    #[error("Fmt failed")]
+    FmtFailed { status: Str, reason: Str },
+
     #[error("Vite failed")]
     ViteError { status: Str, reason: Str },
 

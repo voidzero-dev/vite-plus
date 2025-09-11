@@ -40,6 +40,8 @@ pub fn init() {
 pub struct CliOptions {
     /// Resolver function for the lint tool (oxlint)
     pub lint: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    /// Resolver function for the fmt tool (oxfmt)
+    pub fmt: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     /// Resolver function for the vite tool (used for build/dev)
     pub vite: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     /// Resolver function for the test tool (vitest)
@@ -68,7 +70,7 @@ impl From<JsCommandResolvedResult> for ResolveCommandResult {
     }
 }
 
-static BUILTIN_COMMANDS: &[&str] = &["lint", "build", "test"];
+static BUILTIN_COMMANDS: &[&str] = &["lint", "fmt", "build", "test"];
 
 /// Main entry point for the CLI, called from JavaScript.
 ///
@@ -99,6 +101,7 @@ pub async fn run(options: CliOptions) -> Result<()> {
     };
     // Extract resolver functions from options
     let lint = options.lint;
+    let fmt = options.fmt;
     let vite = options.vite;
     let test = options.test;
     // Call the Rust core with wrapped resolver functions
@@ -117,6 +120,17 @@ pub async fn run(options: CliOptions) -> Result<()> {
                     .map_err(js_error_to_lint_error)?; // Convert promise errors
 
                 Ok(resolved.into()) // Convert to Rust type
+            },
+            // Wrap the fmt resolver to be callable from Rust
+            fmt: || async {
+                let resolved = fmt
+                    .call_async(Ok(()))
+                    .await
+                    .map_err(js_error_to_fmt_error)?
+                    .await
+                    .map_err(js_error_to_fmt_error)?;
+
+                Ok(resolved.into())
             },
             // Wrap the vite resolver to be callable from Rust
             vite: || async {
@@ -155,6 +169,11 @@ fn js_error_to_lint_error(err: napi::Error) -> Error {
     Error::LintFailed { status: err.status.to_string().into(), reason: err.to_string().into() }
 }
 
+/// Convert JavaScript errors to Rust fmt errors
+fn js_error_to_fmt_error(err: napi::Error) -> Error {
+    Error::FmtFailed { status: err.status.to_string().into(), reason: err.to_string().into() }
+}
+
 /// Convert JavaScript errors to Rust vite errors
 fn js_error_to_vite_error(err: napi::Error) -> Error {
     Error::ViteError { status: err.status.to_string().into(), reason: err.to_string().into() }
@@ -182,6 +201,7 @@ fn parse_args() -> Args {
                 task_args: vec![],
                 commands: Some(match first {
                     "lint" => Commands::Lint { args: forwarded_args },
+                    "fmt" => Commands::Fmt { args: forwarded_args },
                     "build" => Commands::Build { args: forwarded_args },
                     "test" => Commands::Test { args: forwarded_args },
                     _ => unreachable!(),

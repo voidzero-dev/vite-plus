@@ -12,6 +12,8 @@
 export interface CliOptions {
   /** Resolver function for the lint tool (oxlint) */
   lint: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
+  /** Resolver function for the fmt tool (oxfmt) */
+  fmt: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
   /** Resolver function for the vite tool (used for build/dev) */
   vite: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
   /** Resolver function for the test tool (vitest) */
