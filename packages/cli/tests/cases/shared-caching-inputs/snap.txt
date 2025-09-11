@@ -1,0 +1,17 @@
+> vite-plus run script1
+Cache not found
+bar
+
+> vite-plus run script2
+Cache hit, replaying
+bar
+
+> echo baz > foo.txt
+
+> vite-plus run script2
+Cache miss: foo.txt content changed
+baz
+
+> vite-plus run script1
+Cache hit, replaying
+baz
