@@ -7,10 +7,7 @@ use crate::schedule::ExecutionPlan;
 use crate::{Error, ResolveCommandResult, Workspace};
 
 #[tracing::instrument(skip(resolve_fmt_command, workspace))]
-pub async fn fmt<
-    Fmt: Future<Output = Result<ResolveCommandResult, Error>>,
-    FmtFn: Fn() -> Fmt,
->(
+pub async fn fmt<Fmt: Future<Output = Result<ResolveCommandResult, Error>>, FmtFn: Fn() -> Fmt>(
     resolve_fmt_command: FmtFn,
     workspace: &mut Workspace,
     args: &Vec<String>,

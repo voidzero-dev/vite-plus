@@ -387,12 +387,22 @@ mod tests {
 
     #[test]
     fn test_args_fmt_command_with_args() {
-        let args =
-            Args::try_parse_from(&["vite-plus", "fmt", "--", "--check", "--ignore-path", ".gitignore"]).unwrap();
+        let args = Args::try_parse_from(&[
+            "vite-plus",
+            "fmt",
+            "--",
+            "--check",
+            "--ignore-path",
+            ".gitignore",
+        ])
+        .unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
         if let Some(Commands::Fmt { args }) = &args.commands {
-            assert_eq!(args, &vec!["--check".to_string(), "--ignore-path".to_string(), ".gitignore".to_string()]);
+            assert_eq!(
+                args,
+                &vec!["--check".to_string(), "--ignore-path".to_string(), ".gitignore".to_string()]
+            );
         } else {
             panic!("Expected Fmt command");
         }
