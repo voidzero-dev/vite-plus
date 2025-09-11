@@ -20,9 +20,8 @@
   },
   "scripts": {
     "build": "pnpm run build:binding && pnpm run build:ts",
-    "build:binding": "napi build --package-json-path ../package.json --cwd binding --platform --esm",
-    "build:ts": "tsdown && cp binding/*.node dist/",
-    "test": "node tests/main.ts"
+    "build:binding": "napi build --package-json-path ../package.json --cwd binding --platform --release --esm",
+    "build:ts": "tsdown"
   },
   "files": [
     "bin",
