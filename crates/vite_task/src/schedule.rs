@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{process::ExitStatus, sync::Arc};
 
 use futures_core::future::BoxFuture;
 use futures_util::future::FutureExt as _;
@@ -66,18 +66,31 @@ impl ExecutionPlan {
     /// 1. Check if cached result exists and is valid
     /// 2. If cache hit: replay the cached output
     /// 3. If cache miss: execute the task and cache the result
+    ///
+    /// Returns:
+    /// - `Ok(None)` if all tasks succeeded
+    /// - `Ok(Some(exit_status))` if any task failed (contains the first failure's exit status)
+    /// - `Err(_)` for other errors (network, filesystem, etc.)
     #[tracing::instrument(skip(self, workspace))]
-    pub async fn execute(self, workspace: &mut Workspace) -> anyhow::Result<()> {
+    pub async fn execute(self, workspace: &mut Workspace) -> Result<Option<ExitStatus>, Error> {
+        let mut first_failed_exit_status = None;
         for step in self.steps {
-            Self::execute_resolved_task(step, workspace).await?;
+            let exit_status = Self::execute_resolved_task(step, workspace).await?;
+            if let Some(exit_status) = exit_status
+                && !exit_status.success()
+                && first_failed_exit_status.is_none()
+            {
+                first_failed_exit_status = Some(exit_status);
+            }
         }
-        Ok(())
+        // Return the exit status of the first failed task, or None if all succeeded
+        Ok(first_failed_exit_status)
     }
 
     pub async fn execute_resolved_task(
         step: ResolvedTask,
         workspace: &mut Workspace,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<ExitStatus>> {
         tracing::debug!("Executing task {}", step.display_name());
 
         let command = step.resolved_command.fingerprint.command.clone();
@@ -145,8 +158,8 @@ impl ExecutionPlan {
         }
 
         // Execute or replay the task
-        execute_or_replay.await?;
-        Ok(())
+        let exit_status = execute_or_replay.await?;
+        Ok(exit_status)
     }
 }
 
@@ -157,14 +170,14 @@ async fn get_cached_or_execute<'a>(
     cache: &'a mut TaskCache,
     fs: &'a impl FileSystem,
     base_dir: &'a AbsolutePath,
-) -> Result<(Option<CacheMiss>, BoxFuture<'a, Result<(), Error>>), Error> {
+) -> Result<(Option<CacheMiss>, BoxFuture<'a, Result<Option<ExitStatus>, Error>>), Error> {
     Ok(match cache.try_hit(&task, fs, base_dir).await? {
         Ok(cache_task) => (
             None,
             ({
                 async move {
                     if task.ignore_replay {
-                        return Ok(());
+                        return Ok(None);
                     }
                     // replay
                     let std_outputs = Arc::clone(&cache_task.std_outputs);
@@ -184,7 +197,7 @@ async fn get_cached_or_execute<'a>(
                             }
                         }
                     }
-                    Ok(())
+                    Ok(None)
                 }
                 .boxed()
             }),
@@ -194,11 +207,12 @@ async fn get_cached_or_execute<'a>(
             async move {
                 let is_vite = task.resolved_command.fingerprint.command.is_vite();
                 let executed_task = execute_task(&task.resolved_command, base_dir).await?;
-                if !is_vite && executed_task.exit_status.success() {
+                let exit_status = executed_task.exit_status;
+                if !is_vite && exit_status.success() {
                     let cached_task = CommandCacheValue::create(executed_task, fs, base_dir)?;
                     cache.update(&task, cached_task).await?;
                 }
-                Ok(())
+                Ok(Some(exit_status))
             }
             .boxed(),
         ),

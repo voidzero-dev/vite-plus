@@ -1,0 +1,17 @@
+> vite-plus run script1 # script1 run, create the cache and should be success
+Cache not found
+success
+
+> vite-plus run script1 # script1 should hit the updated cache
+Cache hit, replaying
+success
+
+[1]> vite-plus run script2 # script2 should be failure and not cache
+Cache not found
+failure
+
+
+[1]> vite-plus run script2 # script2 should be failure and not cache
+Cache not found
+failure
+

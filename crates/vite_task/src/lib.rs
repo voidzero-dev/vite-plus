@@ -16,7 +16,7 @@ mod vite;
 #[cfg(test)]
 mod test_utils;
 
-use std::{collections::HashMap, pin::Pin, sync::Arc};
+use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use clap::{Parser, Subcommand};
 pub(crate) use vite_error::Error;
@@ -125,11 +125,12 @@ async fn auto_install(workspace_root: &AbsolutePathBuf) -> Result<(), Error> {
     }
 
     tracing::debug!("Running install automatically...");
-    crate::install::InstallCommand::builder(workspace_root.clone())
+    let _exit_status = crate::install::InstallCommand::builder(workspace_root.clone())
         .ignore_replay()
         .build()
         .execute(&vec![])
         .await?;
+    // For auto-install, we don't propagate exit failures to avoid breaking the main command
     Ok(())
 }
 
@@ -205,7 +206,7 @@ pub async fn main<
     cwd: AbsolutePathBuf,
     args: Args,
     options: Option<CliOptions<Lint, LintFn, Fmt, FmtFn, Vite, ViteFn, Test, TestFn>>,
-) -> Result<(), Error> {
+) -> Result<Option<std::process::ExitStatus>, Error> {
     // Auto-install dependencies if needed, but skip for install command itself, or if `VITE_DISABLE_AUTO_INSTALL=1` is set.
     if !matches!(args.commands, Some(Commands::Install { .. }))
         && std::env::var_os("VITE_DISABLE_AUTO_INSTALL") != Some("1".into())
@@ -244,38 +245,42 @@ pub async fn main<
         Some(Commands::Lint { args }) => {
             let mut workspace = Workspace::partial_load(cwd)?;
             if let Some(lint_fn) = options.map(|o| o.lint) {
-                lint::lint(lint_fn, &mut workspace, args).await?;
+                let exit_status = lint::lint(lint_fn, &mut workspace, args).await?;
                 workspace.unload().await?;
+                return Ok(exit_status);
             }
-            return Ok(());
+            return Ok(None);
         }
         Some(Commands::Fmt { args }) => {
             let mut workspace = Workspace::partial_load(cwd)?;
             if let Some(fmt_fn) = options.map(|o| o.fmt) {
-                fmt::fmt(fmt_fn, &mut workspace, args).await?;
+                let exit_status = fmt::fmt(fmt_fn, &mut workspace, args).await?;
                 workspace.unload().await?;
+                return Ok(exit_status);
             }
-            return Ok(());
+            return Ok(None);
         }
         Some(Commands::Build { args }) => {
             let mut workspace = Workspace::partial_load(cwd)?;
             if let Some(vite_fn) = options.map(|o| o.vite) {
-                vite::create_vite("build", vite_fn, &mut workspace, args).await?;
+                let exit_status = vite::create_vite("build", vite_fn, &mut workspace, args).await?;
                 workspace.unload().await?;
+                return Ok(exit_status);
             }
-            return Ok(());
+            return Ok(None);
         }
         Some(Commands::Test { args }) => {
             let mut workspace = Workspace::partial_load(cwd)?;
             if let Some(test_fn) = options.map(|o| o.test) {
-                test::test(test_fn, &mut workspace, args).await?;
+                let exit_status = test::test(test_fn, &mut workspace, args).await?;
                 workspace.unload().await?;
+                return Ok(exit_status);
             }
-            return Ok(());
+            return Ok(None);
         }
         Some(Commands::Install { args }) => {
-            install::InstallCommand::builder(cwd).build().execute(args).await?;
-            return Ok(());
+            let exit_status = install::InstallCommand::builder(cwd).build().execute(&args).await?;
+            return Ok(exit_status);
         }
         Some(Commands::Cache { subcmd }) => {
             let cache_path = Workspace::get_cache_path(&cwd)?;
@@ -288,13 +293,13 @@ pub async fn main<
                     cache.list(std::io::stdout()).await?;
                 }
             }
-            return Ok(());
+            return Ok(None);
         }
         None => {
             let workspace = Workspace::load(cwd, false)?;
             // in implicit mode, vite-plus will run the task in the current package, replace the `pnpm/yarn/npm run` command.
             let Some(task) = args.task else {
-                return Ok(());
+                return Ok(None);
             };
             let name = &workspace.package_json.name;
             if name.is_empty() {
@@ -311,11 +316,10 @@ pub async fn main<
     let task_graph = workspace.build_task_subgraph(tasks, task_args.clone(), recursive_run)?;
 
     let plan = ExecutionPlan::plan(task_graph, parallel_run)?;
-    plan.execute(&mut workspace).await?;
+    let exit_status = plan.execute(&mut workspace).await?;
 
     workspace.unload().await?;
-
-    Ok(())
+    Ok(exit_status)
 }
 
 pub fn init_tracing() {

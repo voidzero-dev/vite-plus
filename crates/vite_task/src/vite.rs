@@ -1,4 +1,4 @@
-use std::{future::Future, iter};
+use std::{future::Future, iter, process::ExitStatus};
 
 use petgraph::stable_graph::StableGraph;
 
@@ -14,7 +14,7 @@ pub async fn create_vite<
     resolve_vite_command: ViteFn,
     workspace: &mut Workspace,
     args: &Vec<String>,
-) -> Result<(), Error> {
+) -> Result<Option<ExitStatus>, Error> {
     let resolved_task = ResolvedTask::resolve_from_builtin(
         workspace,
         resolve_vite_command,
@@ -24,6 +24,5 @@ pub async fn create_vite<
     .await?;
     let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
     task_graph.add_node(resolved_task);
-    ExecutionPlan::plan(task_graph, false)?.execute(workspace).await?;
-    Ok(())
+    ExecutionPlan::plan(task_graph, false)?.execute(workspace).await
 }

@@ -1,4 +1,4 @@
-use std::future::Future;
+use std::{future::Future, process::ExitStatus};
 
 use petgraph::stable_graph::StableGraph;
 
@@ -11,12 +11,11 @@ pub async fn fmt<Fmt: Future<Output = Result<ResolveCommandResult, Error>>, FmtF
     resolve_fmt_command: FmtFn,
     workspace: &mut Workspace,
     args: &Vec<String>,
-) -> Result<(), Error> {
+) -> Result<Option<ExitStatus>, Error> {
     let resolved_task =
         ResolvedTask::resolve_from_builtin(workspace, resolve_fmt_command, "fmt", args.iter())
             .await?;
     let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
     task_graph.add_node(resolved_task);
-    ExecutionPlan::plan(task_graph, false)?.execute(workspace).await?;
-    Ok(())
+    ExecutionPlan::plan(task_graph, false)?.execute(workspace).await
 }

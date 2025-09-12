@@ -51,9 +51,15 @@ function runTestCase(name: string) {
   const newSnap: string[] = [];
 
   for (const command of steps.commands) {
-    newSnap.push(`> ${command}`);
-    const output = cp.execSync(command, { env, cwd: caseTmpDir, encoding: 'utf-8' });
-    newSnap.push(replaceUnstableOutput(output));
+    try {
+      const output = cp.execSync(command, { env, cwd: caseTmpDir, encoding: 'utf-8' });
+      newSnap.push(`> ${command}`);
+      newSnap.push(replaceUnstableOutput(output));
+    } catch (error) {
+      // add error status code to the command
+      newSnap.push(`[${error.status}]> ${command}`);
+      newSnap.push(error.output.filter((line: string | null) => line !== null).join('\n'));
+    }
   }
   const newSnapContent = newSnap.join('\n');
 

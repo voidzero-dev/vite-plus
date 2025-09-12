@@ -104,7 +104,7 @@ pub async fn run(options: CliOptions) -> Result<()> {
     let vite = options.vite;
     let test = options.test;
     // Call the Rust core with wrapped resolver functions
-    if let Err(e) = vite_task::main(
+    let result = vite_task::main(
         cwd,
         args,
         Some(ViteTaskCliOptions {
@@ -155,10 +155,27 @@ pub async fn run(options: CliOptions) -> Result<()> {
             },
         }),
     )
-    .await
-    {
-        // Convert Rust errors to NAPI errors for JavaScript
-        return Err(anyhow::Error::from(e).into());
+    .await;
+
+    match result {
+        Ok(Some(exit_status)) => {
+            // Exit with the exit status of the first failed task
+            std::process::exit(exit_status.code().unwrap_or(1))
+        }
+        Ok(None) => {
+            // Success case - no failed tasks
+            // Continue to Ok(()) return
+        }
+        Err(e) => {
+            match e {
+                // Standard exit code for Ctrl+C
+                Error::UserCancelled => std::process::exit(130),
+                _ => {
+                    // Convert Rust errors to NAPI errors for JavaScript
+                    return Err(anyhow::Error::from(e).into());
+                }
+            }
+        }
     }
     Ok(())
 }

@@ -8,12 +8,22 @@ async fn main() -> Result<(), Error> {
     init_tracing();
 
     let args = Args::parse();
-    match vite_task::main(current_dir()?, args, None::<CliOptions>).await {
-        Ok(()) => Ok(()),
+    let result = vite_task::main(current_dir()?, args, None::<CliOptions>).await;
+
+    match result {
+        Ok(Some(exit_status)) => {
+            // Exit with the exit status of the first failed task
+            std::process::exit(exit_status.code().unwrap_or(1))
+        }
+        Ok(None) => {
+            // Success case - no failed tasks
+            Ok(())
+        }
         Err(err) => {
             tracing::error!("Error: {}", err);
             match err {
-                Error::UserCancelled => std::process::exit(130), // Standard exit code for Ctrl+C
+                // Standard exit code for Ctrl+C
+                Error::UserCancelled => std::process::exit(130),
                 _ => return Err(err),
             }
         }
