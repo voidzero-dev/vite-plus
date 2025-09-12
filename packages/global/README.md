@@ -31,7 +31,7 @@ GITHUB_TOKEN=$(op read "op://YOUR_GITHUB_TOKEN_PATH") npm install -g @voidzero-d
 ## Overview
 
 ```bash
-$ vite --help                                                                        
+$ vite --help
 Usage: vite [OPTIONS] [TASK] [-- <TASK_ARGS>...] [COMMAND]
 
 Commands:
