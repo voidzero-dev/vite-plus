@@ -6,7 +6,7 @@ Vite-plus implements a sophisticated caching system to avoid re-running tasks wh
 
 The task cache system enables:
 
-- **Incremental builds**: Only run tasks when inputs haven't changed
+- **Incremental builds**: Only run tasks when inputs have changed
 - **Shared caching**: Multiple tasks with identical commands can share cache entries
 - **Individual task run caching**: Tasks with different arguments get separate cache entries
 - **Content-based hashing**: Cache keys based on actual content, not timestamps
