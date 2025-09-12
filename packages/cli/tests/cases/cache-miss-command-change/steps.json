@@ -4,9 +4,9 @@
   },
   "commands": [
     "vite-plus run hello # create caches for 'echo foo' and 'echo bar'",
-    "jaq -i '.scripts.hello = \"echo baz && echo bar\"' package.json # update the first subcommand",
+    "json-edit package.json '_.scripts.hello = \"echo baz && echo bar\"' # update the first subcommand",
     "vite-plus run hello # should report cache miss of the first subcommand, and hit cache of the second subcommand",
-    "jaq -i '.scripts.hello = \"echo bar\"' package.json # remove the first subcommand, now the second subcommand becomes the first",
+    "json-edit package.json '_.scripts.hello = \"echo bar\"' # remove the first subcommand, now the second subcommand becomes the first",
     "vite-plus run hello # can still hit cache even the subcommand index changed"
   ]
 }

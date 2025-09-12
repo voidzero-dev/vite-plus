@@ -5,7 +5,7 @@
   "commands": [
     "MY_ENV=1 vite-plus run hello",
     "MY_ENV=2 vite-plus run hello # MY_ENV is pass-through. should hit the cache created in step 1",
-    "jaq -i '.tasks.hello.passThroughEnvs += [\"MY_ENV2\"]' vite-task.json # add a new pass through env",
+    "json-edit vite-task.json '_.tasks.hello.passThroughEnvs.push(\"MY_ENV2\")' # add a new pass through env",
     "MY_ENV=2 vite-plus run hello # cache should be invalidated because passThroughEnvs config changed"
   ]
 }

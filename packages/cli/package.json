@@ -36,7 +36,8 @@
   },
   "devDependencies": {
     "@napi-rs/cli": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "@voidzero-dev/vite-plus-tools": "workspace:"
   },
   "napi": {
     "binaryName": "vite-plus",

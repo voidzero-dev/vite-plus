@@ -5,7 +5,7 @@
   "commands": [
     "vite-plus run script1 # create the cache for 'echo hello'",
     "vite-plus run script2 # script2 has the same command as script1, should hit and associate the cache",
-    "jaq -i '.scripts.script2 = \"echo world\"' package.json # update the command of script2",
+    "json-edit package.json '_.scripts.script2 = \"echo world\"' # update the command of script2",
     "vite-plus run script2 # should report cache miss due to command mismatch with the cache associated in step 2"
   ]
 }
