@@ -52,12 +52,16 @@ function runTestCase(name: string) {
 
   for (const command of steps.commands) {
     newSnap.push(`> ${command}`);
-    const output = cp.execSync(command, { env, cwd: caseTmpDir, encoding: 'utf-8' })
-      .replace(/\d+(?:\.\d+)?s|\d+ms/, "<variable>ms")
-      .replace(/with \d+ rules using \d+ threads/, "with <variable> rules using <variable> threads");
-    newSnap.push(output);
+    const output = cp.execSync(command, { env, cwd: caseTmpDir, encoding: 'utf-8' });
+    newSnap.push(replaceUnstableOutput(output));
   }
   const newSnapContent = newSnap.join('\n');
 
   fs.writeFileSync(`${casesDir}/${name}/snap.txt`, newSnapContent);
+}
+
+
+function replaceUnstableOutput(output: string) {
+  return output.replace(/\d+(?:\.\d+)?s|\d+ms/, "<variable>ms")
+    .replace(/with \d+ rules using \d+ threads/, "with <variable> rules using <variable> threads");
 }

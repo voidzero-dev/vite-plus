@@ -5,7 +5,7 @@ use std::sync::Arc;
 use vite_path::AbsolutePath;
 
 // use bincode::config::{Configuration, standard};
-use bincode::{Decode, Encode, de, decode_from_slice, encode_to_vec};
+use bincode::{Decode, Encode, decode_from_slice, encode_to_vec};
 use rusqlite::{Connection, OptionalExtension as _};
 use serde::Serialize;
 use tokio::sync::Mutex;
