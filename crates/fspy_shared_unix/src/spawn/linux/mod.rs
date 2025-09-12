@@ -33,8 +33,6 @@ pub fn handle_exec(
         // Check for Chrome or Chromium in the filename (case-insensitive)
         file_name_bytes.windows(6).any(|w| w == b"Chrome" || w == b"chrome")
             || file_name_bytes.windows(8).any(|w| w == b"Chromium" || w == b"chromium")
-            || command.program.contains_str("Google Chrome")
-            || command.program.contains_str("Chromium")
     } else {
         false
     };
