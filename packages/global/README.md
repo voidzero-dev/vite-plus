@@ -1,31 +1,104 @@
-# Vite+
+# Vite+ Global CLI
 
 - Global `vite` CLI for Vite+
-- `vite new`
-- Everything else is delegated to [vite-plus][1] for local tasks
+- Everything else is delegated to [vite-plus local CLI][1] for local tasks
+
+## Install
+
+> **Note**: need GitHub token to install before we publish the package to npm.
+
+Add the following lines to your `~/.npmrc` file:
+
+```ini
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+@voidzero-dev:registry=https://npm.pkg.github.com/
+```
+
+Create a fine-grained personal access token with the `read:packages` scope, following this guide: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens
+
+Use this token to install the global cli:
+
+```bash
+GITHUB_TOKEN=<your-token> npm install -g @voidzero-dev/global
+```
+
+Use 1Password cli:
+
+```bash
+GITHUB_TOKEN=$(op read "op://YOUR_GITHUB_TOKEN_PATH") npm install -g @voidzero-dev/global
+```
 
 ## Overview
 
-```
-$ vite --help
+```bash
+$ vite --help                                                                        
+Usage: vite [OPTIONS] [TASK] [-- <TASK_ARGS>...] [COMMAND]
 
-vite new               Scaffold new project
-vite build [dir]       Run vite build (default in: ".")
-vite optimize [dir]    Run vite optimize
-vite preview [dir]     Run vite preview
-vite dev [dir]         Run vite dev
-vite lint [dir]        Run oxlint
-vite lib [dir]         Run tsdown
-vite test [dir]        Run vitest
-vite bench [dir]       Run vitest bench
-vite docs [dir]        Run vitepress
-vite task [name]       Run [name] script of package.json#scripts in each workspace
+Commands:
+  run      
+  lint     
+  fmt      
+  build    
+  test     
+  install  
+  help     Print this message or the help of the given subcommand(s)
+
+Arguments:
+  [TASK]          
+  [TASK_ARGS]...  Optional arguments for the tasks, captured after '--'
+
+Options:
+  -d, --debug     Display cache for debugging
+      --no-debug  
+  -h, --help      Print help
+  -V, --version   Print version
+```
+
+## Commands Usage
+
+### built-in commands: `lint`, `build`, `test`
+
+Execute our own toolchain in current directory, see [vite-plus local CLI][1] for more details.
+
+### task runner
+
+`vite run [name]` runs script with the same `name` from `package.json` across the monorepo (topologically sorted).
+
+e.g.:
+
+```json
+// package.json
+{
+  "scripts": {
+    "ready": "vite lint && vite run -r build && vite test"
+  },
+  "devDependencies": {
+    "@voidzero-dev/vite-plus": "*"
+  }
+}
+```
+
+Run the `ready` task with global CLI `vite`:
+
+```bash
+vite run ready
+```
+
+## Display tracing logs
+
+You can use the `VITE_LOG` environment variable to display tracing logs.
+
+```bash
+# display trace level logs
+VITE_LOG=trace vite run ready
+
+# display debug level logs
+VITE_LOG=debug vite run ready
 ```
 
 ## Development
 
 - The global executable is `vite`, use `vite-dev` for development
-- The local executable is `vite-plus`, use `vpl` for development
 
 Example workflow:
 
@@ -81,33 +154,11 @@ pnpm vite-plus task build lint
 pnpm run all
 ```
 
-## Commands
-
-### lint, build, dev, preview, test, etc.
-
-Execute our own toolchain in current directory
-
-### new
-
-Run questionnaire to copy a template to current or sub directory:
-
-```sh
-vite new
-```
-
-Or `vite-dev new` to directly use TS source code.
-
-### task
-
-`vite task [name]` or `vite-plus task [name]` runs script with the same `name`
-from `package.json` across the monorepo (topologically sorted). Multiple `name`
-arguments supported.
-
 ## Verdaccio
 
 Install [Verdaccio][2] for local actual package installs ([pkg.pr.new][3]
 publishes only from CI and e.g. `npm link` doesn't always cut it).
 
-[1]: ../cli
+[1]: ../cli/README.md
 [2]: ./verdaccio.md
 [3]: https://github.com/stackblitz-labs/pkg.pr.new

@@ -1,4 +1,4 @@
-# Vite-Plus CLI Package
+# Vite+ Local CLI Package
 
 ## Overview
 
