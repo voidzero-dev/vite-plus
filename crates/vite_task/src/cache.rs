@@ -140,16 +140,20 @@ impl TaskCache {
     ) -> Result<Result<CommandCacheValue, CacheMiss>, Error> {
         let task_run_key = TaskRunKey { task_id: task.id(), args: task.args.clone() };
         let command_fingerprint = &task.resolved_command.fingerprint;
+        // Try to directly find the command cache by command fingerprint first, ignoring the task run key
         if let Some(cache_value) =
             self.get_command_cache_by_command_fingerprint(command_fingerprint).await?
         {
             if let Some(post_run_fingerprint_mismatch) =
                 cache_value.post_run_fingerprint.validate(fs, base_dir)?
             {
+                // Found the command cache with the same command fingerprint, but the post-run fingerprint mismatches
                 Ok(Err(CacheMiss::FingerprintMismatch(
                     FingerprintMismatch::PostRunFingerprintMismatch(post_run_fingerprint_mismatch),
                 )))
             } else {
+                // Associate the task run key to the command fingerprint if not already,
+                // so that next time we can find it and report command fingerprint mismatch
                 self.upsert_taskrun_to_command(&task_run_key, command_fingerprint).await?;
                 Ok(Ok(cache_value))
             }
@@ -157,6 +161,9 @@ impl TaskCache {
             if let Some(task_run_fingerprint) =
                 self.get_command_fingerprint_by_task_run_key(&task_run_key).await?
             {
+                // No command cache found with the current command fingerprint,
+                // but found a command fingerprint associated with the same task run key,
+                // meaning the command or env has changed since last run
                 Ok(Err(CacheMiss::FingerprintMismatch(
                     FingerprintMismatch::CommandFingerprintMismatch(
                         command_fingerprint.diff(&task_run_fingerprint),
