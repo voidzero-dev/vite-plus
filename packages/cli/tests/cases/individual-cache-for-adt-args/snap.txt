@@ -1,0 +1,7 @@
+> vite-plus run echo -- a
+Cache not found
+a
+
+> vite-plus run echo -- b
+Cache not found
+b
