@@ -1,3 +1,4 @@
+use diff::Diff;
 use rusqlite::config::DbConfig;
 use std::fmt::Display;
 use std::sync::Arc;
@@ -87,9 +88,12 @@ impl TaskCache {
             match user_version {
                 0 => {
                     // fresh new db
-                    conn.execute("CREATE TABLE command_cache (command_fingerprint BLOB PRIMARY KEY, value BLOB);", ())?;
                     conn.execute(
-                        "CREATE TABLE task_to_command (task_key BLOB PRIMARY KEY, command_fingerprint BLOB);",
+                        "CREATE TABLE command_cache (key BLOB PRIMARY KEY, value BLOB);",
+                        (),
+                    )?;
+                    conn.execute(
+                        "CREATE TABLE taskrun_to_command (key BLOB PRIMARY KEY, value BLOB);",
                         (),
                     )?;
                     conn.execute("PRAGMA user_version = 2", ())?;
@@ -114,84 +118,18 @@ impl TaskCache {
         Ok(())
     }
 
-    fn get_command_cache(
-        &self,
-        command_fingerprint: &CommandFingerprint,
-    ) -> Result<Option<CommandCacheValue>, Error> {
-        let conn = self.conn.blocking_lock();
-        let mut select_stmt =
-            conn.prepare_cached("SELECT value FROM command_cache WHERE command_fingerprint=?")?;
-        let key_blob = encode_to_vec(command_fingerprint, BINCODE_CONFIG)?;
-        let Some(value_blob) =
-            select_stmt.query_row::<Vec<u8>, _, _>([key_blob], |row| row.get(0)).optional()?
-        else {
-            return Ok(None);
-        };
-        let (cached_task, _) =
-            decode_from_slice::<CommandCacheValue, _>(&value_blob, BINCODE_CONFIG)?;
-        Ok(Some(cached_task))
-    }
-
     pub async fn update(
         &mut self,
         resolved_task: &ResolvedTask,
         cached_task: CommandCacheValue,
     ) -> Result<(), Error> {
-        todo!()
-        // let key = TaskCacheKey {
-        //     command_fingerprint: resolved_task.resolved_command.fingerprint.clone(),
-        //     args: resolved_task.args.clone(),
-        // };
-        // let conn = self.conn.lock().await;
-        // let key_blob = encode_to_vec(&key, BINCODE_CONFIG)?;
-        // let value_blob = encode_to_vec(&cached_task, BINCODE_CONFIG)?;
-        // let mut update_stmt = conn.prepare_cached(
-        //     "INSERT INTO tasks (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value=?2"
-        // )?;
-        // update_stmt.execute([key_blob, value_blob])?;
-        // Ok(())
+        let task_run_key =
+            TaskRunKey { task_id: resolved_task.id(), args: resolved_task.args.clone() };
+        let command_fingerprint = &resolved_task.resolved_command.fingerprint;
+        self.upsert_command_cache(command_fingerprint, &cached_task).await?;
+        self.upsert_taskrun_to_command(&task_run_key, command_fingerprint).await?;
+        Ok(())
     }
-
-    pub async fn get_cache(
-        &self,
-        resolved_task: &ResolvedTask,
-    ) -> Result<Option<CommandCacheValue>, Error> {
-        todo!()
-        // let key = TaskCacheKey {
-        //     command_fingerprint: resolved_task.resolved_command.fingerprint.clone(),
-        //     args: resolved_task.args.clone(),
-        // };
-        // let conn = self.conn.lock().await;
-        // let mut select_stmt = conn.prepare_cached("SELECT value FROM tasks WHERE key=?")?;
-        // let key_blob = encode_to_vec(&key, BINCODE_CONFIG)?;
-        // let Some(value_blob) =
-        //     select_stmt.query_row::<Vec<u8>, _, _>([key_blob], |row| row.get(0)).optional()?
-        // else {
-        //     return Ok(None);
-        // };
-        // let (cached_task, _) = decode_from_slice::<CommandCacheValue, _>(&value_blob, BINCODE_CONFIG)?;
-        // Ok(Some(cached_task))
-    }
-
-    // pub async fn list_cache(
-    //     &self,
-    //     mut f: impl FnMut(TaskCacheKey, CommandCacheValue) -> Result<(), Error>,
-    // ) -> Result<(), Error> {
-    //     let conn = self.conn.lock().await;
-    //     let mut select_stmt = conn.prepare_cached("SELECT key, value FROM tasks")?;
-    //     let cache_list = select_stmt.query_and_then((), |row| {
-    //         let key_blob: Vec<u8> = row.get(0)?;
-    //         let value_blob: Vec<u8> = row.get(1)?;
-    //         let (key, _) = decode_from_slice::<TaskCacheKey, _>(&key_blob, BINCODE_CONFIG)?;
-    //         let (cached_task, _) = decode_from_slice::<CommandCacheValue, _>(&value_blob, BINCODE_CONFIG)?;
-    //         Ok::<_, Error>((key, cached_task))
-    //     })?;
-    //     for cache in cache_list {
-    //         let (key, cached_task) = cache?;
-    //         f(key, cached_task)?;
-    //     }
-    //     Ok(())
-    // }
 
     /// Tries to get the task cache if the fingerprint matches, otherwise returns why the cache misses
     pub async fn try_hit(
@@ -200,13 +138,99 @@ impl TaskCache {
         fs: &impl FileSystem,
         base_dir: &AbsolutePath,
     ) -> Result<Result<CommandCacheValue, CacheMiss>, Error> {
-        todo!()
-        // let Some(cached_task) = self.get_cache(task).await? else {
-        //     return Ok(Err(CacheMiss::NotFound));
-        // };
-        // if let Some(fingerprint_mismatch) = cached_task.post_run_fingerprint.validate(task, fs, base_dir)? {
-        //     return Ok(Err(CacheMiss::PostRunFingerprintMismatch(fingerprint_mismatch)));
-        // }
-        // Ok(Ok(cached_task))
+        let task_run_key = TaskRunKey { task_id: task.id(), args: task.args.clone() };
+        let command_fingerprint = &task.resolved_command.fingerprint;
+        if let Some(cache_value) =
+            self.get_command_cache_by_command_fingerprint(command_fingerprint).await?
+        {
+            if let Some(post_run_fingerprint_mismatch) =
+                cache_value.post_run_fingerprint.validate(fs, base_dir)?
+            {
+                Ok(Err(CacheMiss::FingerprintMismatch(
+                    FingerprintMismatch::PostRunFingerprintMismatch(post_run_fingerprint_mismatch),
+                )))
+            } else {
+                self.upsert_taskrun_to_command(&task_run_key, command_fingerprint).await?;
+                Ok(Ok(cache_value))
+            }
+        } else {
+            if let Some(task_run_fingerprint) =
+                self.get_command_fingerprint_by_task_run_key(&task_run_key).await?
+            {
+                Ok(Err(CacheMiss::FingerprintMismatch(
+                    FingerprintMismatch::CommandFingerprintMismatch(
+                        command_fingerprint.diff(&task_run_fingerprint),
+                    ),
+                )))
+            } else {
+                Ok(Err(CacheMiss::NotFound))
+            }
+        }
+    }
+}
+
+// basic database operations
+impl TaskCache {
+    async fn get_key_by_value<K: Encode, V: Decode<()>>(
+        &self,
+        table: &str,
+        key: &K,
+    ) -> Result<Option<V>, Error> {
+        let conn = self.conn.lock().await;
+        let mut select_stmt =
+            conn.prepare_cached(&format!("SELECT value FROM {} WHERE key=?", table))?;
+        let key_blob = encode_to_vec(key, BINCODE_CONFIG)?;
+        let Some(value_blob) =
+            select_stmt.query_row::<Vec<u8>, _, _>([key_blob], |row| row.get(0)).optional()?
+        else {
+            return Ok(None);
+        };
+        let (value, _) = decode_from_slice::<V, _>(&value_blob, BINCODE_CONFIG)?;
+        Ok(Some(value))
+    }
+    async fn get_command_cache_by_command_fingerprint(
+        &self,
+        command_fingerprint: &CommandFingerprint,
+    ) -> Result<Option<CommandCacheValue>, Error> {
+        self.get_key_by_value("command_cache", command_fingerprint).await
+    }
+    async fn get_command_fingerprint_by_task_run_key(
+        &self,
+        task_run_key: &TaskRunKey,
+    ) -> Result<Option<CommandFingerprint>, Error> {
+        self.get_key_by_value("taskrun_to_command", task_run_key).await
+    }
+
+    async fn upsert<K: Encode, V: Encode>(
+        &self,
+        table: &str,
+        key: &K,
+        value: &V,
+    ) -> Result<(), Error> {
+        let conn = self.conn.lock().await;
+        let key_blob = encode_to_vec(key, BINCODE_CONFIG)?;
+        let value_blob = encode_to_vec(value, BINCODE_CONFIG)?;
+        let mut update_stmt = conn.prepare_cached(&format!(
+            "INSERT INTO {} (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value=?2",
+            table
+        ))?;
+        update_stmt.execute([key_blob, value_blob])?;
+        Ok(())
+    }
+
+    async fn upsert_command_cache(
+        &self,
+        command_fingerprint: &CommandFingerprint,
+        cached_task: &CommandCacheValue,
+    ) -> Result<(), Error> {
+        self.upsert("command_cache", command_fingerprint, cached_task).await
+    }
+
+    async fn upsert_taskrun_to_command(
+        &self,
+        task_run_key: &TaskRunKey,
+        command_fingerprint: &CommandFingerprint,
+    ) -> Result<(), Error> {
+        self.upsert("taskrun_to_command", task_run_key, command_fingerprint).await
     }
 }
