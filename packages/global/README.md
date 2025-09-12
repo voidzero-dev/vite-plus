@@ -56,7 +56,7 @@ Options:
 
 ## Commands Usage
 
-### built-in commands: `lint`, `build`, `test`
+### Built-in commands: `lint`, `build`, `test`
 
 Execute our own toolchain in current directory, see [vite-plus local CLI][1] for more details.
 
