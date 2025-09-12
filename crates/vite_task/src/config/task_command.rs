@@ -88,7 +88,11 @@ impl ResolvedTaskConfig {
             fingerprint: CommandFingerprint {
                 cwd,
                 command,
-                envs_without_pass_through: task_envs.envs_without_pass_through,
+                envs_without_pass_through: task_envs
+                    .envs_without_pass_through
+                    .into_iter()
+                    .collect(),
+                pass_through_envs: self.config.pass_through_envs.iter().cloned().collect(),
             },
             all_envs: task_envs.all_envs,
         })

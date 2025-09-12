@@ -135,6 +135,7 @@ mod tests {
             ]
             .into_iter()
             .collect(),
+            pass_through_envs: Default::default(),
         };
 
         let fingerprint2 = CommandFingerprint {
@@ -147,6 +148,7 @@ mod tests {
             ]
             .into_iter()
             .collect(),
+            pass_through_envs: Default::default(),
         };
 
         // Serialize both fingerprints
@@ -194,6 +196,7 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
+                pass_through_envs: Default::default(),
             };
 
             // Serialize the fingerprint
