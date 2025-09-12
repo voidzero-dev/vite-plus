@@ -6,7 +6,7 @@ Cache not found
 Cache hit, replaying
 1
 
-> jaq -i '.tasks.hello.passThroughEnvs += ["MY_ENV2"]' vite-task.json # add a new pass through env
+> yq -i '.tasks.hello.passThroughEnvs += ["MY_ENV2"]' vite-task.json # add a new pass through env
 
 > MY_ENV=2 vite-plus run hello # cache should be invalidated because passThroughEnvs config changed
 Cache miss: Command fingerprint changed: CommandFingerprintDiff { cwd: None, command: NoChange, envs_without_pass_through: BTreeMapDiff { altered: {}, removed: {} }, pass_through_envs: BTreeSetDiff { added: {}, removed: {"MY_ENV2"} } }

@@ -4,7 +4,7 @@ foo
 Cache not found
 bar
 
-> jaq -i '.scripts.hello = "echo baz && echo bar"' package.json # update the first subcommand
+> yq -i '.scripts.hello = "echo baz && echo bar"' package.json # update the first subcommand
 
 > vite-plus run hello # should report cache miss of the first subcommand, and hit cache of the second subcommand
 Cache miss: Command fingerprint changed: CommandFingerprintDiff { cwd: None, command: Parsed(TaskParsedCommandDiff { envs: BTreeMapDiff { altered: {}, removed: {} }, program: None, args: [Altered { index: 0, changes: [Some("foo")] }] }), envs_without_pass_through: HashMapDiff { altered: {}, removed: {} } }
@@ -12,7 +12,7 @@ baz
 Cache hit, replaying
 bar
 
-> jaq -i '.scripts.hello = "echo bar"' package.json # remove the first subcommand, now the second subcommand becomes the first
+> yq -i '.scripts.hello = "echo bar"' package.json # remove the first subcommand, now the second subcommand becomes the first
 
 > vite-plus run hello # can still hit cache even the subcommand index changed
 Cache hit, replaying
