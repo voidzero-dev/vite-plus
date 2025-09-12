@@ -363,6 +363,8 @@ impl Workspace {
                 "Pre-built tasks in the full task graph should not contain additional args"
             );
             if !task_args.is_empty() {
+                // This is needed for constructing the task run key for caching, so that different args lead to different task runs.
+                updated_task.args = task_args.clone();
                 updated_task.resolved_command = updated_task
                     .resolved_config
                     .resolve_command(&self.workspace_dir, &task_args)?;
