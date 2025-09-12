@@ -7,7 +7,7 @@ const script = process.argv[3];
 
 if (!filename || !script) {
     console.error('Usage: json-edit <filename> <script>');
-    console.error('Example: json-edit package.json \'$.version = "1.2.3"\'');
+    console.error('Example: json-edit package.json \'_.version = "1.2.3"\'');
     process.exit(1);
 }
 
