@@ -195,8 +195,7 @@ async fn get_cached_or_execute<'a>(
                 let is_vite = task.resolved_command.fingerprint.command.is_vite();
                 let executed_task = execute_task(&task.resolved_command, base_dir).await?;
                 if !is_vite && executed_task.exit_status.success() {
-                    let cached_task =
-                        CommandCacheValue::create( executed_task, fs, base_dir)?;
+                    let cached_task = CommandCacheValue::create(executed_task, fs, base_dir)?;
                     cache.update(&task, cached_task).await?;
                 }
                 Ok(())
