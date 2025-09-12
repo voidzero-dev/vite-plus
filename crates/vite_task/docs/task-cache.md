@@ -865,7 +865,7 @@ Found 0 warnings and 0 errors.
 │  │   └── try_hit()         # Two-level cache lookup          │
 │  │                                                           │
 │  ├── fingerprint.rs     # Post-run fingerprint generation    │
-│  │   ├── PostRunFingerprint     # Input file states         │
+│  │   ├── PostRunFingerprint     # Input file states          │
 │  │   ├── PathFingerprint        # File/directory state       │
 │  │   └── PostRunFingerprintMismatch # Validation results     │
 │  │                                                           │
