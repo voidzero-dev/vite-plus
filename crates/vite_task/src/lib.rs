@@ -23,9 +23,7 @@ use std::sync::Arc;
 use vite_path::AbsolutePathBuf;
 
 use clap::{Parser, Subcommand};
-use serde::Serialize;
 
-use crate::cache::{CachedTask, TaskCacheKey};
 use vite_str::Str;
 
 use crate::schedule::ExecutionPlan;
@@ -292,42 +290,11 @@ pub async fn main<
 
     let task_graph = workspace.build_task_subgraph(tasks, task_args.clone(), recursive_run)?;
 
-    let debug = resolve_bool_flag(args.debug, args.no_debug);
-    if debug {
-        #[derive(Serialize)]
-        struct CacheEntry {
-            cache_key: TaskCacheKey,
-            cached_task: Option<CachedTask>,
-        }
-        let cache = workspace.cache();
-        let mut task_cache_map = Vec::<CacheEntry>::new();
-        if tasks.is_empty() {
-            cache
-                .list_cache(|cache_key, cached_task| {
-                    task_cache_map.push(CacheEntry { cache_key, cached_task: Some(cached_task) });
-                    Ok(())
-                })
-                .await?;
-        } else {
-            for resolved_task in task_graph.node_weights() {
-                let cached_task = cache.get_cache(resolved_task).await?;
-                task_cache_map.push(CacheEntry {
-                    cache_key: TaskCacheKey {
-                        command_fingerprint: resolved_task.resolved_command.fingerprint.clone(),
-                        args: resolved_task.args.clone(),
-                    },
-                    cached_task,
-                });
-            }
-        }
-        let cache_debug_json = serde_json::to_string_pretty(&task_cache_map)?;
-        let _ = edit::edit(&cache_debug_json)?;
-    } else {
-        let plan = ExecutionPlan::plan(task_graph, parallel_run)?;
-        plan.execute(&mut workspace).await?;
+    let plan = ExecutionPlan::plan(task_graph, parallel_run)?;
+    plan.execute(&mut workspace).await?;
 
-        workspace.unload().await?;
-    }
+    workspace.unload().await?;
+
     Ok(())
 }
 
