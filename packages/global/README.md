@@ -14,7 +14,7 @@ Add the following lines to your `~/.npmrc` file:
 @voidzero-dev:registry=https://npm.pkg.github.com/
 ```
 
-Create a fine-grained personal access token with the `read:packages` scope, following this guide: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens
+Create a fine-grained personal access token with the `read:packages` scope. Follow this guide: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens
 
 Use this token to install the global cli:
 
