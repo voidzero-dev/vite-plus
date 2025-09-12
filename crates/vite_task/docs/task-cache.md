@@ -6,10 +6,12 @@ Vite-plus implements a sophisticated caching system to avoid re-running tasks wh
 
 The task cache system enables:
 
-- **Incremental builds**: Only run tasks when inputs have changed
-- **Shared caching**: Multiple tasks can share cache entries when appropriate
+- **Incremental builds**: Only run tasks when inputs haven't changed
+- **Shared caching**: Multiple tasks with identical commands can share cache entries
+- **Individual task run caching**: Tasks with different arguments get separate cache entries
 - **Content-based hashing**: Cache keys based on actual content, not timestamps
 - **Output replay**: Cached stdout/stderr are replayed exactly as originally produced
+- **Two-tier caching**: Command-level cache shared across tasks, with task-run associations
 
 ### Shared caching
 
@@ -291,45 +293,44 @@ pub struct StdOutput {
 │                      Cache Hit Process                       │
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
-│  1. Generate Cache Key and Task ID                           │
-│  ─────────────────────                                       │
-│    CommandCacheKey {                                         │
-│        command_fingerprint: {...},                           │
+│  1. Generate Cache Keys                                      │
+│  ──────────────────────                                      │
+│    TaskRunKey {                                              │
+│        task_id: TaskId { ... },                              │
 │        args: ["--production"]                                │
 │    }                                                         │
-│    TaskId {                                                  │
-│        task_group_name: "build",                             │
-│        package_dir: "packages/app",                          │
-│        subcommand_index: None,                               │
+│    CommandFingerprint {                                      │
+│        cwd: "packages/app",                                  │
+│        command: Parsed(...),                                 │
+│        envs_without_pass_through: {...},                     │
+│        pass_through_envs: {...}                              │
 │    }                                                         │
 │         │                                                    │
 │         ▼                                                    │
-│  2. Query SQLite Database                                    │
-│  ────────────────────────                                    │
-│    SELECT value FROM tasks WHERE key = ?                     │
+│  2. Query Command Cache                                      │
+│  ──────────────────────                                      │
+│    SELECT value FROM command_cache WHERE key = command_fp    │
 │         │                                                    │
 │         ▼                                                    │
-│  3. Deserialize CachedTask                                   │
-│  ─────────────────────────                                   │
-│    CachedTask {                                              │
-│        fingerprint: TaskFingerprint { ... },                 │
+│  3. Deserialize CommandCacheValue                            │
+│  ─────────────────────────────                               │
+│    CommandCacheValue {                                       │
+│        post_run_fingerprint: PostRunFingerprint { ... },     │
 │        std_outputs: [StdOutput, ...]                         │
 │    }                                                         │
 │         │                                                    │
 │         ▼                                                    │
-│  4. Validate Fingerprint                                     │
-│  ───────────────────────                                     │
-│    • Compare resolved_config                                 │
-│    • Check command_fingerprint                               │
-│    • Verify input file hashes                                │
+│  4. Validate Post-Run Fingerprint                           │
+│  ─────────────────────────────────                           │
+│    • Check input file hashes                                │
+│    • Detect file content changes                            │
 │         │                                                    │
 │         ▼                                                    │
-│  5. Replay Outputs                                           │
-│  ─────────────────                                           │
-│    For each StdOutput:                                       │
+│  5. Replay Outputs & Update Association                     │
+│  ──────────────────────────────────────                     │
 │    • Write to stdout/stderr                                  │
 │    • Preserve original order                                 │
-│    • Handle binary content                                   │
+│    • Update taskrun_to_command mapping                       │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -349,25 +350,26 @@ pub struct StdOutput {
 │    • Stop monitoring                                         │
 │         │                                                    │
 │         ▼                                                    │
-│  2. Generate Fingerprint                                     │
-│  ───────────────────────                                     │
+│  2. Generate Post-Run Fingerprint                           │
+│  ─────────────────────────────────                           │
 │    • Hash all accessed files                                 │
-│    • Record task configuration                               │
-│    • Include command details                                 │
+│    • Record file system access patterns                     │
 │         │                                                    │
 │         ▼                                                    │
-│  3. Create CachedTask                                        │
-│  ────────────────────                                        │
-│    CachedTask {                                              │
-│        fingerprint: generated_fingerprint,                   │
+│  3. Create CommandCacheValue                                 │
+│  ──────────────────────────                                  │
+│    CommandCacheValue {                                       │
+│        post_run_fingerprint: generated_fingerprint,          │
 │        std_outputs: captured_outputs                         │
 │    }                                                         │
 │         │                                                    │
 │         ▼                                                    │
-│  4. Store in Database                                        │
-│  ────────────────────                                        │
-│    INSERT OR REPLACE INTO tasks                              │
-│    VALUES (serialized_key, serialized_value)                 │
+│  4. Store in Database Tables                                 │
+│  ───────────────────────────                                 │
+│    INSERT OR REPLACE INTO command_cache                      │
+│    VALUES (command_fingerprint, cache_value)                 │
+│    INSERT OR REPLACE INTO taskrun_to_command                 │
+│    VALUES (task_run_key, command_fingerprint)                │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -380,37 +382,47 @@ Cache entries are automatically invalidated when:
 
 1. **Command changes**: Different command, arguments, or working directory
 2. **Package location changes**: Working directory (`cwd`) in command fingerprint changes
-3. **Environment changes**: Modified declared environment variables (pass-through envs don't affect cache)
-4. **Input files change**: Content hash differs (detected via xxHash3)
-5. **Configuration changes**: Task configuration in vite-task.json modified
+3. **Environment changes**: Modified declared environment variables (pass-through values don't affect cache)
+4. **Pass-through config changes**: Pass-through environment names added/removed from configuration
+5. **Input files change**: Content hash differs (detected via xxHash3)
 6. **File structure changes**: Files added, removed, or type changed
+7. **Built-in task location**: Built-in tasks run from different directories get separate caches
 
 ### Fingerprint Mismatch Detection
 
 ```rust
-// Fingerprint validation during cache lookup
-fn validate_fingerprint(
-    cached: &TaskFingerprint,
-    current: &TaskFingerprint,
-) -> Result<(), FingerprintMismatchReason> {
-    // Check configuration
-    if cached.resolved_config != current.resolved_config {
-        return Err(FingerprintMismatchReason::ConfigChanged);
-    }
+// Two-level fingerprint validation during cache lookup
+pub async fn try_hit(
+    &self,
+    task: &ResolvedTask,
+    fs: &impl FileSystem,
+    base_dir: &AbsolutePath,
+) -> Result<Result<CommandCacheValue, CacheMiss>, Error> {
+    let task_run_key = TaskRunKey { task_id: task.id(), args: task.args.clone() };
+    let command_fingerprint = &task.resolved_command.fingerprint;
     
-    // Check command
-    if cached.command_fingerprint != current.command_fingerprint {
-        return Err(FingerprintMismatchReason::CommandChanged);
-    }
-    
-    // Check input files
-    for (path, fingerprint) in &current.inputs {
-        if cached.inputs.get(path) != Some(fingerprint) {
-            return Err(FingerprintMismatchReason::InputsChanged);
+    if let Some(cache_value) = self.get_command_cache_by_command_fingerprint(command_fingerprint).await? {
+        // Command fingerprint matches, validate post-run fingerprint
+        if let Some(post_run_mismatch) = cache_value.post_run_fingerprint.validate(fs, base_dir)? {
+            Ok(Err(CacheMiss::FingerprintMismatch(
+                FingerprintMismatch::PostRunFingerprintMismatch(post_run_mismatch),
+            )))
+        } else {
+            // Cache hit, update association
+            self.upsert_taskrun_to_command(&task_run_key, command_fingerprint).await?;
+            Ok(Ok(cache_value))
         }
+    } else if let Some(old_command_fp) = self.get_command_fingerprint_by_task_run_key(&task_run_key).await? {
+        // Task run exists but command fingerprint changed
+        Ok(Err(CacheMiss::FingerprintMismatch(
+            FingerprintMismatch::CommandFingerprintMismatch(
+                command_fingerprint.diff(&old_command_fp),
+            ),
+        )))
+    } else {
+        // No cache found
+        Ok(Err(CacheMiss::NotFound))
     }
-    
-    Ok(())
 }
 ```
 
@@ -573,37 +585,57 @@ When a task hits cache, outputs are replayed exactly:
 
 ## Implementation Examples
 
-### Example: Cache Key for Named Package
+### Example: Task Run Key and Command Fingerprint
 
 ```rust
 // Task: app#build --production
-CommandCacheKey {
-    command_fingerprint: CommandFingerprint {
-        cwd: RelativePathBuf::from("packages/app"),  // Package location relative to workspace root
-        command: TaskCommand::ShellScript("tsc && rollup -c".into()),
-        envs_without_pass_through: hashmap! {
-            "NODE_ENV".into() => "production".into()
+TaskRunKey {
+    task_id: TaskId {
+        task_group_id: TaskGroupId {
+            task_group_name: "build".into(),
+            is_builtin: false,
+            config_path: RelativePathBuf::from("packages/app"),
         },
+        subcommand_index: None,
     },
     args: vec!["--production"].into(),
 }
+
+CommandFingerprint {
+    cwd: RelativePathBuf::from("packages/app"),
+    command: TaskCommand::ShellScript("tsc && rollup -c".into()),
+    envs_without_pass_through: btreemap! {
+        "NODE_ENV".into() => "production".into()
+    },
+    pass_through_envs: btreeset! { "PATH".into(), "HOME".into() },
+}
 ```
 
-### Example: Cache Key for Nameless Package
+### Example: Built-in Task Cache Key
 
 ```rust
-// Task in packages/frontend (no name in package.json)
-CommandCacheKey {
-    command_fingerprint: CommandFingerprint {
-        cwd: RelativePathBuf::from("packages/frontend"),  // Package location relative to workspace root
-        command: TaskCommand::Parsed(TaskParsedCommand {
-            program: "webpack".into(),
-            args: vec!["--mode".into(), "production".into()].into(),
-            envs: HashMap::new(),
-        }),
-        envs_without_pass_through: HashMap::new(),
+// Built-in task: vite-plus lint
+TaskRunKey {
+    task_id: TaskId {
+        task_group_id: TaskGroupId {
+            task_group_name: "lint".into(),
+            is_builtin: true,
+            config_path: RelativePathBuf::from("packages/frontend"), // Current working directory
+        },
+        subcommand_index: None,
     },
     args: vec![].into(),
+}
+
+CommandFingerprint {
+    cwd: RelativePathBuf::from("packages/frontend"),
+    command: TaskCommand::Parsed(TaskParsedCommand {
+        program: "/usr/local/bin/oxlint".into(),
+        args: vec![".".into()].into(),
+        envs: HashMap::new(),
+    }),
+    envs_without_pass_through: BTreeMap::new(),
+    pass_through_envs: btreeset! { "PATH".into() },
 }
 ```
 
@@ -632,10 +664,18 @@ VITE_LOG=trace vite-plus run build
 
 ### Common Cache Miss Reasons
 
-1. **ConfigChanged**: Task configuration in vite-task.json modified
-2. **CommandChanged**: Command, args, or environment variables changed
-3. **InputsChanged**: Source files modified or file structure changed
-4. **NotFound**: No cache entry exists (first run or after cache clear)
+1. **NotFound**: No cache entry exists (first run or after cache clear)
+2. **CommandFingerprintMismatch**: Command, args, environment variables, or pass-through config changed
+3. **PostRunFingerprintMismatch**: Source files modified or file structure changed
+
+#### Detailed Cache Miss Messages
+
+From the test cases, cache miss messages include:
+
+- `Cache miss: foo.txt content changed` - Input file content changed
+- `Cache miss: Command fingerprint changed: CommandFingerprintDiff { ... }` - Command changed
+- Pass-through env config change: `pass_through_envs: BTreeSetDiff { added: {}, removed: {"MY_ENV2"} }`
+- Environment value change: `envs_without_pass_through: HashMapDiff { altered: {"FOO": Some("1")}, removed: {} }`
 
 ## Best Practices
 
@@ -663,25 +703,51 @@ Ensure commands produce identical outputs for identical inputs:
 }
 ```
 
-### 2. Compound Commands for Efficiency
+### 2. Shared Caching Across Tasks
 
-Leverage compound commands for granular caching:
+Tasks with identical commands automatically share cache entries:
 
 ```json
 {
-  "tasks": {
-    "build": {
-      // Each subcommand cached independently
-      "command": "tsc && rollup -c && terser dist/bundle.js",
-      "cacheable": true
-    }
+  "scripts": {
+    "script1": "cat foo.txt",
+    "script2": "cat foo.txt"
   }
 }
 ```
 
-Benefit: If only the final minification changes, TypeScript and bundling are served from cache.
+Behavior:
 
-### 3. Disable Cache for Side Effects
+1. `vite run script1` creates command cache for `cat foo.txt`
+2. `vite run script2` hits the same command cache (shared)
+3. If `foo.txt` changes, both tasks will see cache miss on next run
+4. Cache update from either task benefits the other
+
+### 3. Individual Caching for Different Arguments
+
+Tasks with different arguments get separate cache entries:
+
+```bash
+# These create separate caches
+vite run echo -- a    # TaskRunKey with args: ["a"]
+vite run echo -- b    # TaskRunKey with args: ["b"]
+```
+
+### 4. Compound Commands for Granular Caching
+
+Leverage compound commands for per-subcommand caching:
+
+```json
+{
+  "scripts": {
+    "build": "tsc && rollup -c && terser dist/bundle.js"
+  }
+}
+```
+
+Benefit: Each `&&` separated command is cached independently. If only terser config changes, TypeScript and rollup will hit cache.
+
+### 5. Disable Cache for Side Effects
 
 ```json
 {
@@ -698,7 +764,7 @@ Benefit: If only the final minification changes, TypeScript and bundling are ser
 }
 ```
 
-### 4. File Access Patterns
+### 6. File Access Patterns
 
 The cache system automatically tracks accessed files:
 
@@ -715,6 +781,73 @@ const data = fs.readFileSync('data.txt');
 
 No need to manually specify inputs - fspy captures actual dependencies.
 
+## Cache Sharing Examples
+
+### Example 1: Shared Command Cache
+
+```bash
+# Initial run creates command cache
+> vite-plus run script1
+Cache not found
+bar
+
+# Different task, same command - hits shared cache
+> vite-plus run script2
+Cache hit, replaying
+bar
+
+# File change invalidates shared cache
+> echo baz > foo.txt
+> vite-plus run script2
+Cache miss: foo.txt content changed
+baz
+
+# Original task benefits from updated cache
+> vite-plus run script1
+Cache hit, replaying
+baz
+```
+
+### Example 2: Individual Caching by Arguments
+
+```bash
+# Different args create separate caches
+> vite-plus run echo -- a
+Cache not found
+a
+
+> vite-plus run echo -- b
+Cache not found
+b
+
+# Each argument combination has its own cache
+> vite-plus run echo -- a
+Cache hit, replaying
+a
+
+> vite-plus run echo -- b
+Cache hit, replaying
+b
+```
+
+### Example 3: Built-in Task Caching by Working Directory
+
+```bash
+# Different directories create separate caches for built-in tasks
+> cd folder1 && vite-plus lint
+Cache not found
+Found 0 warnings and 0 errors.
+
+> cd folder2 && vite-plus lint
+Cache not found  # Different cwd = different cache
+Found 0 warnings and 0 errors.
+
+# Each directory maintains its own cache
+> cd folder1 && vite-plus lint
+Cache hit, replaying
+Found 0 warnings and 0 errors.
+```
+
 ## Implementation Reference
 
 ### Core Cache Components
@@ -725,15 +858,19 @@ No need to manually specify inputs - fspy captures actual dependencies.
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
 │  crates/vite_task/src/                                       │
-│  ├── cache.rs           # Cache storage and retrieval        │
-│  │   ├── CommandCacheKey # Cache key structure               │
-│  │   ├── CachedTask     # Cached data structure              │
-│  │   └── Cache          # Main cache interface               │
+│  ├── cache.rs           # Two-tier cache storage system      │
+│  │   ├── CommandCacheValue  # Cached execution results       │
+│  │   ├── TaskRunKey        # Task run identification         │
+│  │   ├── TaskCache         # Main cache interface            │
+│  │   └── try_hit()         # Two-level cache lookup          │
 │  │                                                           │
-│  ├── fingerprint.rs     # Fingerprint generation             │
-│  │   ├── TaskFingerprint      # Complete task state          │
-│  │   ├── PathFingerprint      # File/directory state         │
-│  │   └── fingerprint_files()  # Hash file contents           │
+│  ├── fingerprint.rs     # Post-run fingerprint generation    │
+│  │   ├── PostRunFingerprint     # Input file states         │
+│  │   ├── PathFingerprint        # File/directory state       │
+│  │   └── PostRunFingerprintMismatch # Validation results     │
+│  │                                                           │
+│  ├── config/mod.rs      # Command fingerprint generation     │
+│  │   └── CommandFingerprint     # Command execution context  │
 │  │                                                           │
 │  ├── execute.rs         # Task execution with caching        │
 │  │   ├── execute_with_cache() # Main execution flow          │
@@ -741,46 +878,52 @@ No need to manually specify inputs - fspy captures actual dependencies.
 │  │   └── capture_outputs()    # Output collection            │
 │  │                                                           │
 │  └── schedule.rs        # Task scheduling and cache lookup   │
-│      └── try_hit()      # Cache hit/miss detection           │
+│      └── schedule_tasks() # Cache-aware task execution       │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Algorithms
 
-#### Cache Key Generation
+#### Task Run Key Generation
 
 ```rust
-// Simplified from actual implementation
-impl CommandCacheKey {
-    pub fn new(resolved: &ResolvedTask) -> Self {
-        Self {
-            command_fingerprint: resolved.resolved_command.fingerprint.clone(),
-            args: resolved.args.clone(),
-        }
+// Generate task run key for cache lookup
+impl TaskCache {
+    pub async fn try_hit(&self, task: &ResolvedTask) -> Result<...> {
+        let task_run_key = TaskRunKey {
+            task_id: task.id(),
+            args: task.args.clone(),
+        };
+        let command_fingerprint = &task.resolved_command.fingerprint;
+        // ... two-tier lookup logic
     }
 }
 ```
 
-#### Fingerprint Validation
+#### Post-Run Fingerprint Validation
 
 ```rust
-// Validates cached fingerprint against current state
-pub fn validate(
-    cached: &TaskFingerprint,
-    current: &TaskFingerprint,
-) -> Result<(), FingerprintMismatchReason> {
-    // Compare all components
-    if cached.resolved_config != current.resolved_config {
-        return Err(FingerprintMismatchReason::ConfigChanged);
+// Validates cached post-run fingerprint against current file system state
+impl PostRunFingerprint {
+    pub fn validate(
+        &self,
+        fs: &impl FileSystem,
+        base_dir: &AbsolutePath,
+    ) -> Result<Option<PostRunFingerprintMismatch>, Error> {
+        let input_mismatch = self.inputs.par_iter().find_map_any(|(input_path, cached_fp)| {
+            let full_path = base_dir.join(input_path);
+            let current_fp = PathFingerprint::create(&full_path, fs);
+            if cached_fp != &current_fp {
+                Some(PostRunFingerprintMismatch::InputContentChanged {
+                    path: input_path.clone(),
+                })
+            } else {
+                None
+            }
+        });
+        Ok(input_mismatch)
     }
-    if cached.command_fingerprint != current.command_fingerprint {
-        return Err(FingerprintMismatchReason::CommandChanged);
-    }
-    if cached.inputs != current.inputs {
-        return Err(FingerprintMismatchReason::InputsChanged);
-    }
-    Ok(())
 }
 ```
 
