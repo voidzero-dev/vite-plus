@@ -1,0 +1,15 @@
+> FOO=1 vite-plus run hello # create initial cache
+Cache not found
+1
+
+> FOO=2 vite-plus run hello # cache miss due to env change
+Cache miss: Command fingerprint changed: CommandFingerprintDiff { cwd: None, command: NoChange, envs_without_pass_through: HashMapDiff { altered: {"FOO": Some("1")}, removed: {} } }
+2
+
+> FOO=1 vite-plus run hello # hit cache in step 1
+Cache hit, replaying
+1
+
+> FOO=2 vite-plus run hello # hit cache in step 2
+Cache hit, replaying
+2

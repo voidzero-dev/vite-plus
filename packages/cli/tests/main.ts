@@ -13,9 +13,14 @@ process.on('exit', () => fs.rmSync(tempTmpDir, { recursive: true, force: true })
 
 const casesDir = import.meta.dirname + '/cases';
 
+const filter = process.argv[2] ?? ''; // Optional filter to run specific test cases
+
 for (const caseName of fs.readdirSync(casesDir)) {
   if (caseName.startsWith('.')) continue; // Skip hidden files like .DS_Store
-  runTestCase(caseName);
+  if (caseName.includes(filter)) {
+    console.log(caseName);
+    runTestCase(caseName);
+  }
 }
 
 interface Steps {
