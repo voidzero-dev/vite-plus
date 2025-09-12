@@ -22,7 +22,7 @@ Use this token to install the global cli:
 GITHUB_TOKEN=<your-token> npm install -g @voidzero-dev/global
 ```
 
-Use 1Password cli:
+Use 1Password CLI:
 
 ```bash
 GITHUB_TOKEN=$(op read "op://YOUR_GITHUB_TOKEN_PATH") npm install -g @voidzero-dev/global
