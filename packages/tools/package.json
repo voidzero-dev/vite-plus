@@ -1,0 +1,8 @@
+{
+  "name": "@voidzero-dev/vite-plus-tools",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "json-edit": "./src/json-edit.ts"
+  }
+}

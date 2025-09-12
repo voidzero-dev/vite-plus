@@ -105,6 +105,9 @@ importers:
       '@napi-rs/cli':
         specifier: 'catalog:'
         version: 3.1.5(@emnapi/runtime@1.4.5)(@types/node@22.18.1)
+      '@voidzero-dev/vite-plus-tools':
+        specifier: 'workspace:'
+        version: link:../tools
       tsdown:
         specifier: 'catalog:'
         version: 0.15.0(typescript@5.9.2)
@@ -207,6 +210,8 @@ importers:
       tsdown:
         specifier: 'catalog:'
         version: 0.15.0(typescript@5.9.2)
+
+  packages/tools: {}
 
 packages:
 
