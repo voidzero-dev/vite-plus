@@ -102,6 +102,15 @@ pub enum Commands {
         /// Arguments to pass to vite install
         args: Vec<String>,
     },
+    Cache {
+        #[clap(subcommand)]
+        subcmd: CacheSubcommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CacheSubcommand {
+    Clean,
 }
 
 /// Resolve boolean flag value considering both positive and negative forms.
@@ -109,6 +118,71 @@ pub enum Commands {
 /// Otherwise, returns the value of the positive form.
 const fn resolve_bool_flag(positive: bool, negative: bool) -> bool {
     if negative { false } else { positive }
+}
+
+/// Clean task cache files
+async fn clean_cache(cwd: AbsolutePathBuf) -> Result<(), Error> {
+    // Simple workspace root finding for cache clean - just walk up looking for package.json
+    let mut current_dir = cwd.as_path();
+    let workspace_root = loop {
+        let package_json = current_dir.join("package.json");
+        if package_json.exists() {
+            // Check if this directory has a workspace configuration or is the root
+            break current_dir;
+        }
+        
+        match current_dir.parent() {
+            Some(parent) => current_dir = parent,
+            None => {
+                // If we can't find a workspace root, use current directory
+                break cwd.as_path();
+            }
+        }
+    };
+    
+    let cache_path = if let Ok(env_cache_path) = std::env::var("VITE_CACHE_PATH") {
+        AbsolutePathBuf::new(env_cache_path.into()).expect("Cache path should be absolute")
+    } else {
+        match AbsolutePathBuf::new(workspace_root.to_path_buf()) {
+            Some(workspace_root_buf) => workspace_root_buf.join("node_modules/.vite/task-cache.db"),
+            None => {
+                // Fallback to current directory if we can't resolve workspace root
+                cwd.join("node_modules/.vite/task-cache.db")
+            }
+        }
+    };
+
+    let mut files_removed = false;
+
+    // Remove main database file
+    if cache_path.as_path().exists() {
+        tracing::info!("Removing cache file: {}", cache_path.as_path().display());
+        std::fs::remove_file(cache_path.as_path())?;
+        files_removed = true;
+    }
+
+    // Remove WAL and SHM files (SQLite auxiliary files)
+    let wal_path = cache_path.with_extension("db-wal");
+    if wal_path.as_path().exists() {
+        tracing::info!("Removing WAL file: {}", wal_path.as_path().display());
+        std::fs::remove_file(wal_path.as_path())?;
+        files_removed = true;
+    }
+
+    let shm_path = cache_path.with_extension("db-shm");
+    if shm_path.as_path().exists() {
+        tracing::info!("Removing SHM file: {}", shm_path.as_path().display());
+        std::fs::remove_file(shm_path.as_path())?;
+        files_removed = true;
+    }
+
+    if files_removed {
+        tracing::info!("Cache cleaned successfully");
+    } else {
+        tracing::info!("No cache files found to clean");
+    }
+    
+    Ok(())
 }
 
 /// Automatically run install command
@@ -271,6 +345,14 @@ pub async fn main<
         Some(Commands::Install { args }) => {
             install::InstallCommand::builder(cwd).build().execute(&args).await?;
             return Ok(());
+        }
+        Some(Commands::Cache { subcmd }) => {
+            match subcmd {
+                CacheSubcommand::Clean => {
+                    clean_cache(cwd).await?;
+                    return Ok(());
+                }
+            }
         }
         None => {
             let workspace = Workspace::load(cwd, false)?;
@@ -782,6 +864,24 @@ mod tests {
             assert_eq!(args, &vec!["--watch".to_string(), "--mode=development".to_string()]);
         } else {
             panic!("Expected Build command");
+        }
+    }
+
+    #[test]
+    fn test_cache_clean_command_parsing() {
+        // Test that cache clean command is parsed correctly
+        let args = Args::try_parse_from(&["vite-plus", "cache", "clean"]).unwrap();
+        
+        assert!(args.task.is_none());
+        assert!(args.task_args.is_empty());
+        if let Some(Commands::Cache { subcmd }) = &args.commands {
+            match subcmd {
+                CacheSubcommand::Clean => {
+                    // This is expected
+                }
+            }
+        } else {
+            panic!("Expected Cache command");
         }
     }
 
