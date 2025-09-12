@@ -1,0 +1,12 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite-plus lint",
+    "vite-plus run lint # lint script should have different cache from builtin lint",
+    "echo 'console.log(1);' > a.js",
+    "vite-plus lint",
+    "vite-plus run lint"
+  ]
+}
