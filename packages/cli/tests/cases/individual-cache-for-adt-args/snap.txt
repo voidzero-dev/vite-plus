@@ -2,6 +2,14 @@
 Cache not found
 a
 
-> vite-plus run echo -- b
+> vite-plus run echo -- b # should create separate caches for different args
 Cache not found
+b
+
+> vite-plus run echo -- a # should hit the cache created in step 1
+Cache hit, replaying
+a
+
+> vite-plus run echo -- b # should hit the cache created in step 2
+Cache hit, replaying
 b
