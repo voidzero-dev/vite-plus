@@ -206,12 +206,12 @@ impl Workspace {
         Ok(())
     }
 
+    /// Resolve a task configuration into a ResolvedTask when building the task graph.
     fn resolve_task(
         user_task_config: impl Into<TaskConfig>,
         package_info: &PackageInfo,
         name: Str,
         subcommand_index: Option<usize>,
-        task_args: Arc<[Str]>,
         base_dir: &AbsolutePath,
     ) -> Result<ResolvedTask, Error> {
         let resolved_config = ResolvedTaskConfig {
@@ -219,14 +219,15 @@ impl Workspace {
             config: user_task_config.into(),
         };
 
-        let resolved_command = resolved_config.resolve_command(base_dir, &task_args)?;
+        let resolved_command = resolved_config.resolve_command(base_dir, &[])?;
         Ok(ResolvedTask {
             name: TaskName {
                 task_group_name: name,
                 package_name: package_info.package_json.name.clone().into(),
                 subcommand_index,
             },
-            args: task_args,
+            // additional args are not part of full task graph, they will be added when constructing subgraph for execution
+            args: Arc::default(),
             resolved_command,
             resolved_config,
             is_builtin: false,
@@ -402,7 +403,6 @@ impl Workspace {
                         package_info,
                         task_group_name.clone(),
                         None,
-                        Arc::default(),
                         base_dir,
                     )?;
 
@@ -488,7 +488,6 @@ impl Workspace {
                             package_info,
                             script_name.into(),
                             if is_last { None } else { Some(index) },
-                            Arc::default(),
                             base_dir,
                         )?;
                         let task_id = resolved_task.id();
@@ -505,7 +504,6 @@ impl Workspace {
                         package_info,
                         script_name.into(),
                         None,
-                        Arc::default(),
                         base_dir,
                     )?;
                     task_graph_builder.add_task_with_deps(resolved_task, HashSet::default())?;
