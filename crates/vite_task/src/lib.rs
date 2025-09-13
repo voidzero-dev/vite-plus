@@ -26,7 +26,7 @@ use clap::{Parser, Subcommand};
 
 use vite_str::Str;
 
-use crate::schedule::ExecutionPlan;
+use crate::{cache::TaskCache, schedule::ExecutionPlan};
 
 pub(crate) use vite_error::Error;
 
@@ -100,6 +100,19 @@ pub enum Commands {
         /// Arguments to pass to vite install
         args: Vec<String>,
     },
+    /// Manage the task cache
+    Cache {
+        #[clap(subcommand)]
+        subcmd: CacheSubcommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CacheSubcommand {
+    /// Clean up all the cache
+    Clean,
+    /// View the cache entries in json for debugging purpose
+    View,
 }
 
 /// Resolve boolean flag value considering both positive and negative forms.
@@ -268,6 +281,19 @@ pub async fn main<
         }
         Some(Commands::Install { args }) => {
             install::InstallCommand::builder(cwd).build().execute(&args).await?;
+            return Ok(());
+        }
+        Some(Commands::Cache { subcmd }) => {
+            let cache_path = Workspace::get_cache_path(&cwd)?;
+            match subcmd {
+                CacheSubcommand::Clean => {
+                    std::fs::remove_dir_all(&cache_path)?;
+                }
+                CacheSubcommand::View => {
+                    let cache = TaskCache::load_from_path(&cache_path)?;
+                    cache.list(std::io::stdout()).await?;
+                }
+            }
             return Ok(());
         }
         None => {

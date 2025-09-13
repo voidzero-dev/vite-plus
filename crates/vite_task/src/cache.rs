@@ -1,6 +1,7 @@
 use diff::Diff;
 use rusqlite::config::DbConfig;
 use std::fmt::Display;
+use std::io::Write;
 use std::sync::Arc;
 use vite_path::AbsolutePath;
 
@@ -100,7 +101,7 @@ impl TaskCache {
                         "CREATE TABLE taskrun_to_command (key BLOB PRIMARY KEY, value BLOB);",
                         (),
                     )?;
-                    conn.execute("PRAGMA user_version = 2", ())?;
+                    conn.execute("PRAGMA user_version = 1", ())?;
                 }
                 1 => break, // current version
                 2.. => return Err(Error::UnrecognizedDbVersion(user_version)),
@@ -237,5 +238,26 @@ impl TaskCache {
         command_fingerprint: &CommandFingerprint,
     ) -> Result<(), Error> {
         self.upsert("taskrun_to_command", task_run_key, command_fingerprint).await
+    }
+
+    async fn list_table<K: Decode<()> + Serialize, V: Decode<()> + Serialize>(&self, table: &str, out: &mut impl Write) -> Result<(), Error> {
+        let conn = self.conn.lock().await;
+        let mut select_stmt = conn.prepare_cached(&format!("SELECT key, value FROM {}", table))?;
+        let mut rows = select_stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            let key_blob: Vec<u8> = row.get(0)?;
+            let value_blob: Vec<u8> = row.get(1)?;
+            let (key, _) = decode_from_slice::<K, _>(&key_blob, BINCODE_CONFIG)?;
+            let (value, _) = decode_from_slice::<V, _>(&value_blob, BINCODE_CONFIG)?;
+            writeln!(out, "{} => {}", serde_json::to_string_pretty(&key)?, serde_json::to_string_pretty(&value)?)?;
+        }
+        Ok(())
+    }
+    pub async fn list(&self, mut out: impl Write) -> Result<(), Error> {
+        out.write_all(b"------- taskrun_to_command -------\n")?;
+        self.list_table::<TaskRunKey, CommandFingerprint>("taskrun_to_command", &mut out).await?;
+        out.write_all(b"------- command_cache -------\n")?;
+        self.list_table::<CommandFingerprint, CommandCacheValue>("command_cache", &mut out).await?;
+        Ok(())
     }
 }
