@@ -34,7 +34,7 @@ fn bench_workspace_load(c: &mut Criterion) {
 
     // Benchmark load with cache verification
     group.bench_function("load_with_cache_path", |b| {
-        let cache_path = fixture_path.join("node_modules/.vite/task-cache.db");
+        let cache_path = fixture_path.join("node_modules/.vite/task-cache");
         b.iter(|| {
             let workspace = black_box(
                 Workspace::load_with_cache_path(

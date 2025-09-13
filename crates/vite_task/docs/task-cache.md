@@ -492,15 +492,15 @@ stmt.execute(params![key_bytes, value_bytes])?;
 
 ## Configuration
 
-### Cache File Location
+### Cache Location
 
-The cache database location can be configured via environment variable:
+The cache location can be configured via environment variable:
 
 ```bash
 # Custom cache location
-VITE_CACHE_PATH=/tmp/vite-cache.db vite-plus run build
+VITE_CACHE_PATH=/tmp/vite-cache vite-plus run build
 
-# Default: .vite/cache.db in workspace root
+# Default: node_modules/.vite/task-cache in workspace root
 vite-plus run build
 ```
 

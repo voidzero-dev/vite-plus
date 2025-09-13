@@ -79,9 +79,13 @@ impl Display for FingerprintMismatch {
 }
 
 impl TaskCache {
-    pub fn load_from_file(path: impl AsRef<AbsolutePath>) -> Result<Self, Error> {
+    pub fn load_from_path(path: impl AsRef<AbsolutePath>) -> Result<Self, Error> {
         let path = path.as_ref();
-        let conn = Connection::open(path.as_path())?;
+        tracing::info!("Creating task cache directory at {:?}", path);
+        std::fs::create_dir_all(path)?;
+
+        let db_path = path.join("cache.db");
+        let conn = Connection::open(db_path.as_path())?;
         conn.execute_batch("PRAGMA journal_mode=WAL; BEGIN EXCLUSIVE;")?;
         loop {
             let user_version: u32 = conn.query_one("PRAGMA user_version", (), |row| row.get(0))?;
@@ -98,14 +102,8 @@ impl TaskCache {
                     )?;
                     conn.execute("PRAGMA user_version = 2", ())?;
                 }
-                1 => {
-                    // internal versions during dev, we just rebuild the whole cache
-                    conn.set_db_config(DbConfig::SQLITE_DBCONFIG_RESET_DATABASE, true)?;
-                    conn.execute("VACUUM", ())?;
-                    conn.set_db_config(DbConfig::SQLITE_DBCONFIG_RESET_DATABASE, false)?;
-                }
-                2 => break, // current version
-                3.. => return Err(Error::UnrecognizedDbVersion(user_version)),
+                1 => break, // current version
+                2.. => return Err(Error::UnrecognizedDbVersion(user_version)),
             }
         }
         conn.execute_batch("COMMIT")?;

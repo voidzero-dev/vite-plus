@@ -7,7 +7,7 @@ where
 {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
     let cache_path =
-        AbsolutePath::new(temp_dir.path()).unwrap().join(&format!("vite-test-{}.db", test_name));
+        AbsolutePath::new(temp_dir.path()).unwrap().join(&format!("vite-test-{}", test_name));
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(cache_path)));
 

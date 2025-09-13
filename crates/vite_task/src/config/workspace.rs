@@ -81,17 +81,11 @@ impl Workspace {
             if let Ok(env_cache_path) = std::env::var("VITE_CACHE_PATH") {
                 AbsolutePathBuf::new(env_cache_path.into()).expect("Cache path should be absolute")
             } else {
-                workspace_root.join("node_modules/.vite/task-cache.db")
+                workspace_root.join("node_modules/.vite/task-cache")
             }
         });
 
-        if !cache_path.as_path().exists()
-            && let Some(cache_dir) = cache_path.as_path().parent()
-        {
-            tracing::info!("Creating task cache directory at {}", cache_dir.display());
-            std::fs::create_dir_all(cache_dir)?;
-        }
-        let task_cache = TaskCache::load_from_file(&cache_path)?;
+        let task_cache = TaskCache::load_from_path(&cache_path)?;
 
         let package_json_path = workspace_root.join("package.json");
         let package_json = if package_json_path.as_path().exists() {
@@ -141,7 +135,7 @@ impl Workspace {
             if let Ok(env_cache_path) = std::env::var("VITE_CACHE_PATH") {
                 AbsolutePathBuf::new(env_cache_path.into()).expect("Cache path should be absolute")
             } else {
-                workspace_root.join("node_modules/.vite/task-cache.db")
+                workspace_root.join("node_modules/.vite/task-cache")
             }
         });
 
@@ -151,7 +145,7 @@ impl Workspace {
             tracing::info!("Creating task cache directory at {}", cache_dir.display());
             std::fs::create_dir_all(cache_dir)?;
         }
-        let task_cache = TaskCache::load_from_file(&cache_path)?;
+        let task_cache = TaskCache::load_from_path(&cache_path)?;
 
         // Build the complete task graph
         let mut task_graph_builder = TaskGraphBuilder::default();
