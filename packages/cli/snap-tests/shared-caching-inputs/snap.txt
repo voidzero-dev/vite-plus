@@ -7,7 +7,6 @@ Cache hit, replaying
 bar
 
 > echo baz > foo.txt # change the input file to invalidate the cache
-
 > vite-plus run script2 # script2 should report a cache miss, and update the cache
 Cache miss: foo.txt content changed
 baz

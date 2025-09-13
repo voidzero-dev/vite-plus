@@ -10,8 +10,6 @@ success
 Cache not found
 failure
 
-
 [1]> vite-plus run script2 # script2 should be failure and not cache
 Cache not found
 failure
-

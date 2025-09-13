@@ -7,13 +7,11 @@ Cache hit, replaying
 hello
 
 > vite-plus cache clean # clean the cache
-
 > vite-plus run hello # cache miss after clean
 Cache not found
 hello
 
 > cd subfolder && vite-plus cache clean # cache can be located and cleaned from subfolder
-
 > vite-plus run hello # cache miss after clean
 Cache not found
 hello

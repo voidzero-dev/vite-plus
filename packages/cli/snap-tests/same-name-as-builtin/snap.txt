@@ -8,7 +8,6 @@ Cache not found
 lint script
 
 > echo 'console.log(1);' > a.js
-
 > vite-plus lint
 Cache miss: a.js content changed
 Found 0 warnings and 0 errors.
