@@ -1,3 +1,8 @@
 [default.extend-words]
 ratatui = "ratatui"
 PUNICODE = "PUNICODE"
+
+[files]
+extend-exclude = [
+  "**/snap-tests/**/snap.txt",
+]

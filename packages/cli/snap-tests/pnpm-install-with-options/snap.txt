@@ -1,0 +1,50 @@
+> vite-plus install --help | head -n 20 # print help message
+Cache not found
+Version <semver> (compiled to binary; bundled Node.js v<semver>)
+Usage: pnpm install [options]
+
+Alias: i
+
+Installs all dependencies of the project in the current working directory. When executed inside a workspace, installs all dependencies of all projects.
+
+Options:
+      --[no-]color                      Controls colors in the output. By
+                                        default, output is always colored when
+                                        it goes directly to a terminal
+      --[no-]frozen-lockfile            Don't generate a lockfile and fail if an
+                                        update is needed. This setting is on by
+                                        default in CI environments, so use
+                                        --no-frozen-lockfile if you need to
+                                        disable it for some reason
+      --[no-]verify-store-integrity     If false, doesn't check whether packages
+                                        in the store were mutated
+      --aggregate-output                Aggregate output from child processes
+
+> vite-plus install --prod # https://pnpm.io/cli/install#--prod--p
+Cache not found
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
++ tslib <semver>
+
+devDependencies: skipped
+
+Done in <variable>ms using pnpm v<semver>
+
+> ls node_modules
+tslib
+
+> vite-plus install --prod # install again hit cache
+Cache hit, replaying
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
++ tslib <semver>
+
+devDependencies: skipped
+
+Done in <variable>ms using pnpm v<semver>

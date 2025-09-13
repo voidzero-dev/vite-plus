@@ -1,0 +1,11 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite-plus install --help # print help message",
+    "vite-plus install --production # https://docs.npmjs.com/cli/v10/commands/npm-install",
+    "ls node_modules",
+    "vite-plus install --production # install again hit cache"
+  ]
+}

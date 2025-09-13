@@ -91,9 +91,12 @@ pub enum Commands {
         /// Arguments to pass to vite test
         args: Vec<String>,
     },
+    /// Install command.
+    /// It will be passed to the package manager's install command currently.
+    #[command(disable_help_flag = true, alias = "i")]
     Install {
-        #[clap(last = true)]
         /// Arguments to pass to vite install
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
     Dev {

@@ -1,0 +1,32 @@
+> vite-plus i # install shortcut
+Cache not found
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
++ tslib <semver>
+
+Done in <variable>ms using pnpm v<semver>
+
+> vite-plus i # install shortcut hit cache
+Cache hit, replaying
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
++ tslib <semver>
+
+Done in <variable>ms using pnpm v<semver>
+
+> vite-plus install # install command still hit cache
+Cache hit, replaying
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
++ tslib <semver>
+
+Done in <variable>ms using pnpm v<semver>
