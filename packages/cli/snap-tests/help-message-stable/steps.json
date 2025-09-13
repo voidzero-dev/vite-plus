@@ -1,0 +1,9 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite-plus --help",
+    "vite-plus run --help"
+  ]
+}
