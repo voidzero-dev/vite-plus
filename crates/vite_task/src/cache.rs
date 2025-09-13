@@ -240,7 +240,11 @@ impl TaskCache {
         self.upsert("taskrun_to_command", task_run_key, command_fingerprint).await
     }
 
-    async fn list_table<K: Decode<()> + Serialize, V: Decode<()> + Serialize>(&self, table: &str, out: &mut impl Write) -> Result<(), Error> {
+    async fn list_table<K: Decode<()> + Serialize, V: Decode<()> + Serialize>(
+        &self,
+        table: &str,
+        out: &mut impl Write,
+    ) -> Result<(), Error> {
         let conn = self.conn.lock().await;
         let mut select_stmt = conn.prepare_cached(&format!("SELECT key, value FROM {}", table))?;
         let mut rows = select_stmt.query([])?;
@@ -249,7 +253,12 @@ impl TaskCache {
             let value_blob: Vec<u8> = row.get(1)?;
             let (key, _) = decode_from_slice::<K, _>(&key_blob, BINCODE_CONFIG)?;
             let (value, _) = decode_from_slice::<V, _>(&value_blob, BINCODE_CONFIG)?;
-            writeln!(out, "{} => {}", serde_json::to_string_pretty(&key)?, serde_json::to_string_pretty(&value)?)?;
+            writeln!(
+                out,
+                "{} => {}",
+                serde_json::to_string_pretty(&key)?,
+                serde_json::to_string_pretty(&value)?
+            )?;
         }
         Ok(())
     }
