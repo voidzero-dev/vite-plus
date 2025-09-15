@@ -1,0 +1,5 @@
+{
+  "commands": [
+    "vp new my-project singlerepo # create singlerepo"
+  ]
+}

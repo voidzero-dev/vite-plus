@@ -3,9 +3,15 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "scripts": {},
+  "scripts": {
+    "ready": "vite run lint && vite run test && vite run prepublishOnly",
+    "dev": "vite run website#dev",
+    "lint": "vite lint --type-aware",
+    "test": "vite test --run",
+    "prepublishOnly": "vite run -r build"
+  },
   "devDependencies": {
-    "multiplexer": "workspace:*",
-    "@voidzero-dev/vite-plus": "workspace:*"
+    "@voidzero-dev/vite-plus": "catalog:",
+    "vitest": "catalog:"
   }
 }

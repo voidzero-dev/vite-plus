@@ -5,6 +5,8 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
   return output
     // semver version
     .replaceAll(/ (v)?\d+\.\d+\.\d+(?:-.*)?/g, ' $1<semver>')
+    // datet
+    .replaceAll(/\d{2}:\d{2}:\d{2}/g, '<date>')
     // oxlint
     .replaceAll(/\d+(?:\.\d+)?s|\d+ms/g, '<variable>ms')
     .replaceAll(/with \d+ rules/g, 'with <variable> rules')

@@ -4,9 +4,6 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "allowImportingTsExtensions": true,
-    "esModuleInterop": true,
-    "paths": {
-      "@scripts/*": ["./scripts/*"]
-    }
+    "esModuleInterop": true
   }
 }

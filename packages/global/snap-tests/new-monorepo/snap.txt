@@ -1,0 +1,77 @@
+> vp new -h # show help
+
+vite new - Create a new Vite+ project
+
+Usage:
+  vite new [project-name] [project-type] [options]
+  vite new --app <path>    Add an app to existing monorepo
+  vite new --lib <path>    Add a library to existing monorepo
+
+Arguments:
+  project-name    Name of the project to create
+  project-type    Type of project: monorepo, mono, singlerepo, single
+
+Options:
+  --monorepo, -m      Create a monorepo project
+  --singlerepo, -s    Create a singlerepo project
+  --app <path>        Add an app package to existing monorepo
+  --lib <path>        Add a library package to existing monorepo
+  --help, -h          Show this help message
+
+Examples:
+  vite new                        Interactive mode (prompts for all options)
+  vite new my-project             Create project with prompts for type
+  vite new my-project monorepo   Create monorepo without prompts
+  vite new my-project -s          Create singlerepo using flag
+  vite new --app apps/my-app     Add app to current monorepo
+  vite new --lib packages/utils  Add library to current monorepo
+
+Notes:
+  - MonoRepo is the default when prompted (press Enter to select)
+  - Press Ctrl+C to exit during prompts
+
+
+> vp new my-project monorepo # create monorepo
+
+Creating monorepo project: my-project...
+✅ Successfully created monorepo project: my-project
+
+Next steps:
+  cd my-project
+  vite run ready
+  vite dev
+
+To add new packages to your monorepo:
+  vite new --app apps/my-app
+  vite new --lib packages/my-lib
+
+> cd my-project && vp new --app apps/my-app # add app
+Creating new app at apps/my-app...
+✅ Successfully created app at apps/my-app
+
+Next steps:
+  vite run ready
+
+> cd my-project && ls apps
+my-app
+website
+
+> cd my-project && vp new --lib packages/my-lib # add lib
+Creating new library at packages/my-lib...
+✅ Successfully created library at packages/my-lib
+
+Next steps:
+  vite run ready
+
+> cd my-project && ls packages
+my-lib
+
+> cd my-project && vp new --lib tools/my-tool # add lib new not exists tools directory
+Creating new library at tools/my-tool...
+✅ Successfully created library at tools/my-tool
+
+Next steps:
+  vite run ready
+
+> cd my-project && ls tools
+my-tool
