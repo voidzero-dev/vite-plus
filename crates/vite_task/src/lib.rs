@@ -7,6 +7,7 @@ mod fingerprint;
 mod fmt;
 mod fs;
 mod install;
+mod lib_cmd;
 mod lint;
 mod maybe_str;
 mod schedule;
@@ -97,6 +98,11 @@ pub enum Commands {
         /// Arguments to pass to vite test
         args: Vec<String>,
     },
+    Lib {
+        #[clap(last = true)]
+        /// Arguments to pass to tsdown
+        args: Vec<String>,
+    },
     /// Install command.
     /// It will be passed to the package manager's install command currently.
     #[command(disable_help_flag = true, alias = "i")]
@@ -167,6 +173,10 @@ pub struct CliOptions<
         Box<dyn Future<Output = Result<ResolveCommandResult, Error>>>,
     >,
     TestFn: Fn() -> Test = Box<dyn Fn() -> Test>,
+    Lib: Future<Output = Result<ResolveCommandResult, Error>> = Pin<
+        Box<dyn Future<Output = Result<ResolveCommandResult, Error>>>,
+    >,
+    LibFn: Fn() -> Lib = Box<dyn Fn() -> Lib>,
     ResolveUniversalViteConfig: Future<Output = Result<String, Error>> = Pin<
         Box<dyn Future<Output = Result<String, Error>>>,
     >,
@@ -178,6 +188,7 @@ pub struct CliOptions<
     pub fmt: FmtFn,
     pub vite: ViteFn,
     pub test: TestFn,
+    pub lib: LibFn,
     pub resolve_universal_vite_config: ResolveUniversalViteConfigFn,
 }
 
@@ -231,6 +242,8 @@ pub async fn main<
     ViteFn: Fn() -> Vite,
     Test: Future<Output = Result<ResolveCommandResult, Error>>,
     TestFn: Fn() -> Test,
+    Lib: Future<Output = Result<ResolveCommandResult, Error>>,
+    LibFn: Fn() -> Lib,
     ResolveUniversalViteConfig: Future<Output = Result<String, Error>>,
     ResolveUniversalViteConfigFn: Fn(String) -> ResolveUniversalViteConfig,
 >(
@@ -246,6 +259,8 @@ pub async fn main<
             ViteFn,
             Test,
             TestFn,
+            Lib,
+            LibFn,
             ResolveUniversalViteConfig,
             ResolveUniversalViteConfigFn,
         >,
@@ -350,6 +365,13 @@ pub async fn main<
             let test_fn =
                 options.map(|o| o.test).expect("test command requires CliOptions to be provided");
             let summary = test::test(test_fn, &mut workspace, args).await?;
+            workspace.unload().await?;
+            summary
+        }
+        Commands::Lib { args } => {
+            let mut workspace = Workspace::partial_load(cwd)?;
+            let lib_fn = options.map(|o| o.lib).expect("lib command requires CliOptions to be provided");
+            let summary = lib_cmd::lib(lib_fn, &mut workspace, args).await?;
             workspace.unload().await?;
             summary
         }
@@ -511,6 +533,26 @@ mod tests {
             assert_eq!(args, &vec!["--watch".to_string(), "--coverage".to_string()]);
         } else {
             panic!("Expected Test command");
+        }
+    }
+
+    #[test]
+    fn test_args_lib_command() {
+        let args = Args::try_parse_from(&["vite-plus", "lib"]).unwrap();
+        assert_eq!(args.task, None);
+        assert!(args.task_args.is_empty());
+        assert!(matches!(args.commands, Commands::Lib { .. }));
+    }
+
+    #[test]
+    fn test_args_lib_command_with_args() {
+        let args = Args::try_parse_from(&["vite-plus", "lib", "--", "--watch", "--outdir", "dist"]).unwrap();
+        assert_eq!(args.task, None);
+        assert!(args.task_args.is_empty());
+        if let Commands::Lib { args } = &args.commands {
+            assert_eq!(args, &vec!["--watch".to_string(), "--outdir".to_string(), "dist".to_string()]);
+        } else {
+            panic!("Expected Lib command");
         }
     }
 
