@@ -1,9 +1,6 @@
 packages:
   - docs
   - packages/*
-  - packages/global/templates/*
-  - packages/global/templates/monorepo/apps/*
-  - packages/global/templates/monorepo/packages/*
 
 catalog:
   "@napi-rs/cli": ^3.1.5

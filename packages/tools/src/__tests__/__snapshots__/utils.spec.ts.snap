@@ -1,5 +1,10 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`replaceUnstableOutput > replace date 1`] = `
+"Start at  <date>
+<date>"
+`;
+
 exports[`replaceUnstableOutput > replace unstable cwd 1`] = `"<cwd>/foo.txt"`;
 
 exports[`replaceUnstableOutput > replace unstable pnpm install output 1`] = `

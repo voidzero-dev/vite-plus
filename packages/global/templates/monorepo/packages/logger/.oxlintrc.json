@@ -1,6 +1,0 @@
-{
-  "extends": ["../../.oxlintrc.json"],
-  "rules": {
-    "no-eval": "error"
-  }
-}

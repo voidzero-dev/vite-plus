@@ -1,0 +1,9 @@
+> vp new my-project singlerepo # create singlerepo
+
+Creating singlerepo project: my-project...
+✅ Successfully created singlerepo project: my-project
+
+Next steps:
+  cd my-project
+  vite run ready
+  vite dev

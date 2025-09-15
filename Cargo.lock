@@ -4645,6 +4645,7 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "tracing",
  "vite_error",
  "vite_path",
  "vite_task",

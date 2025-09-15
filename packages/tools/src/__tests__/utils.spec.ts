@@ -17,6 +17,14 @@ v1.0.0-beta.1+build.1
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
 
+  test('replace date', () => {
+    const output = `
+Start at  15:01:23
+15:01:23
+    `;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
+
   test('replace unstable pnpm install output', () => {
     const outputs = [
       `
