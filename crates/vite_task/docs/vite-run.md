@@ -13,7 +13,7 @@ Vite-plus run has two modes:
 > - Precedence rules for command resolution
 > - Handling of edge cases with task arguments and flags
 >
-> This documentation describes the current behavior, should be updated when the Implicit Mode RFC is done.
+> This documentation describes the current behavior and should be updated when the Implicit Mode RFC is done.
 
 With implicit mode, `vite` will run the task in the current package. It can't accept more than on task. The first argument will be treated as the task name; the args following the command will be treated as the task args and bypass to the task.
 
