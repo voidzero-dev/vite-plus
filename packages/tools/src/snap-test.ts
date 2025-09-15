@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import cp from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -11,7 +13,7 @@ fs.mkdirSync(tempTmpDir, { recursive: true });
 // Clean up the temporary directory on exit
 process.on('exit', () => fs.rmSync(tempTmpDir, { recursive: true, force: true }));
 
-const casesDir = import.meta.dirname + '/cases';
+const casesDir = path.resolve('snap-tests');
 
 const filter = process.argv[2] ?? ''; // Optional filter to run specific test cases
 
@@ -60,8 +62,7 @@ function runTestCase(name: string) {
   fs.writeFileSync(`${casesDir}/${name}/snap.txt`, newSnapContent);
 }
 
-
 function replaceUnstableOutput(output: string) {
-  return output.replace(/\d+(?:\.\d+)?s|\d+ms/, "<variable>ms")
-    .replace(/with \d+ rules using \d+ threads/, "with <variable> rules using <variable> threads");
+  return output.replace(/\d+(?:\.\d+)?s|\d+ms/, '<variable>ms')
+    .replace(/with \d+ rules using \d+ threads/, 'with <variable> rules using <variable> threads');
 }

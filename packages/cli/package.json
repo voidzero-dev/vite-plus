@@ -22,7 +22,7 @@
     "build": "pnpm run build:binding && pnpm run build:ts",
     "build:binding": "napi build --package-json-path ../package.json --cwd binding --platform --release --esm",
     "build:ts": "tsdown",
-    "test": "node tests/main.ts"
+    "test": "snap-test"
   },
   "files": [
     "bin",
