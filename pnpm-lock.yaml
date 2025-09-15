@@ -133,6 +133,9 @@ importers:
       '@voidzero-dev/vite-plus':
         specifier: workspace:*
         version: link:../cli
+      '@voidzero-dev/vite-plus-tools':
+        specifier: 'workspace:'
+        version: link:../tools
       tsdown:
         specifier: 'catalog:'
         version: 0.15.0(typescript@5.9.2)

@@ -139,13 +139,11 @@ jobs:
         run: pnpm install
 
       - name: Build CLI
-        run: |
-          pnpm run --filter=@voidzero-dev/vite-plus build
-          cp packages/cli/binding/*.node packages/cli/dist
+        run: pnpm run bootstrap-cli
 
       - name: Run CLI E2E tests
         run: |
-          pnpm run --filter=@voidzero-dev/vite-plus test
+          pnpm run --filter=@voidzero-dev/vite-plus --filter=@voidzero-dev/global test
           git diff --exit-code
 
   install-e2e-test:

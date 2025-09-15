@@ -18,7 +18,8 @@
   ],
   "scripts": {
     "dev": "tsdown --watch",
-    "build": "tsdown"
+    "build": "tsdown",
+    "test": "snap-test"
   },
   "dependencies": {
     "oxlint": "catalog:",
@@ -27,7 +28,8 @@
   },
   "devDependencies": {
     "tsdown": "catalog:",
-    "@voidzero-dev/vite-plus": "workspace:*"
+    "@voidzero-dev/vite-plus": "workspace:*",
+    "@voidzero-dev/vite-plus-tools": "workspace:"
   },
   "engines": {
     "node": ">=20.11.0"

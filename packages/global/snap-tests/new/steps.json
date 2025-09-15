@@ -1,0 +1,5 @@
+{
+  "commands": [
+    "vp new || echo vp new test placeholder"
+  ]
+}
