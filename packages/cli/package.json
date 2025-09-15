@@ -31,6 +31,7 @@
   "dependencies": {
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
     "rolldown-vite": "catalog:",
     "vitest": "catalog:"
   },
