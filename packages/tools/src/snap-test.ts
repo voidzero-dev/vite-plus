@@ -44,10 +44,8 @@ function runTestCase(name: string) {
   };
   env['PATH'] = [
     ...env['PATH']!.split(path.delimiter),
-    // Extend PATH to include the CLI's bin directory
-    path.join(path.dirname(import.meta.dirname), 'bin'),
-    // Also include node_modules/.bin for local dev dependencies
-    path.join(path.dirname(import.meta.dirname), 'node_modules/.bin'),
+    // Extend PATH to include the package's bin directory
+    path.join(path.dirname(import.meta.dirname), 'bin')
   ].join(path.delimiter);
 
   const newSnap: string[] = [];
