@@ -18,6 +18,8 @@ export interface CliOptions {
   vite: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
   /** Resolver function for the test tool (vitest) */
   test: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
+  /** Resolver function for the lib tool (tsdown) */
+  lib: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
   /** Optional working directory override */
   cwd?: string
   /** Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side */

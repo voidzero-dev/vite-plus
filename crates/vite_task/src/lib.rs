@@ -98,9 +98,11 @@ pub enum Commands {
         /// Arguments to pass to vite test
         args: Vec<String>,
     },
+    /// Lib command.
+    #[command(disable_help_flag = true)]
     Lib {
-        #[clap(last = true)]
         /// Arguments to pass to tsdown
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
     /// Install command.
@@ -370,7 +372,8 @@ pub async fn main<
         }
         Commands::Lib { args } => {
             let mut workspace = Workspace::partial_load(cwd)?;
-            let lib_fn = options.map(|o| o.lib).expect("lib command requires CliOptions to be provided");
+            let lib_fn =
+                options.map(|o| o.lib).expect("lib command requires CliOptions to be provided");
             let summary = lib_cmd::lib(lib_fn, &mut workspace, args).await?;
             workspace.unload().await?;
             summary
@@ -546,11 +549,15 @@ mod tests {
 
     #[test]
     fn test_args_lib_command_with_args() {
-        let args = Args::try_parse_from(&["vite-plus", "lib", "--", "--watch", "--outdir", "dist"]).unwrap();
+        let args = Args::try_parse_from(&["vite-plus", "lib", "--", "--watch", "--outdir", "dist"])
+            .unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
         if let Commands::Lib { args } = &args.commands {
-            assert_eq!(args, &vec!["--watch".to_string(), "--outdir".to_string(), "dist".to_string()]);
+            assert_eq!(
+                args,
+                &vec!["--watch".to_string(), "--outdir".to_string(), "dist".to_string()]
+            );
         } else {
             panic!("Expected Lib command");
         }

@@ -1,6 +1,6 @@
 [2]> vite-plus command-not-exists # should exit with non-zero code
 error: 'vite-plus' requires a subcommand but one was not provided
-  [subcommands: run, lint, fmt, build, test, install, i, dev, cache, help]
+  [subcommands: run, lint, fmt, build, test, lib, install, i, dev, cache, help]
 
 Usage: vite-plus [OPTIONS] [TASK] [-- <TASK_ARGS>...] <COMMAND>
 

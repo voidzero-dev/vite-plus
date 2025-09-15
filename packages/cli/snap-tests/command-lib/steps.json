@@ -1,0 +1,10 @@
+{
+  "env": {
+  },
+  "commands": [
+    "vite-plus lib -h # should print the help message",
+    "vite-plus lib src/index.ts # should build the library",
+    "ls dist # should have the library",
+    "vite-plus lib src/index.ts # should hit cache"
+  ]
+}

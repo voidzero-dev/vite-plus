@@ -45,6 +45,8 @@ pub struct CliOptions {
     pub vite: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     /// Resolver function for the test tool (vitest)
     pub test: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    /// Resolver function for the lib tool (tsdown)
+    pub lib: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     /// Optional working directory override
     pub cwd: Option<String>,
     /// Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side
@@ -105,6 +107,7 @@ pub async fn run(options: CliOptions) -> Result<()> {
     let fmt = options.fmt;
     let vite = options.vite;
     let test = options.test;
+    let lib = options.lib;
     let resolve_universal_vite_config = options.resolve_universal_vite_config;
     // Call the Rust core with wrapped resolver functions
     let result = vite_task::main(
@@ -156,6 +159,17 @@ pub async fn run(options: CliOptions) -> Result<()> {
 
                 Ok(resolved.into())
             },
+            // Wrap the lib resolver to be callable from Rust
+            lib: || async {
+                let resolved = lib
+                    .call_async(Ok(()))
+                    .await
+                    .map_err(js_error_to_lib_error)?
+                    .await
+                    .map_err(js_error_to_lib_error)?;
+
+                Ok(resolved.into())
+            },
             resolve_universal_vite_config: |cwd: String| async {
                 let resolved = resolve_universal_vite_config
                     .call_async(Ok(cwd))
@@ -203,6 +217,11 @@ fn js_error_to_vite_error(err: napi::Error) -> Error {
 /// Convert JavaScript errors to Rust test errors
 fn js_error_to_test_error(err: napi::Error) -> Error {
     Error::TestFailed { status: err.status.to_string().into(), reason: err.to_string().into() }
+}
+
+/// Convert JavaScript errors to Rust lib errors
+fn js_error_to_lib_error(err: napi::Error) -> Error {
+    Error::LibFailed { status: err.status.to_string().into(), reason: err.to_string().into() }
 }
 
 /// Convert JavaScript errors to Rust resolve universal vite config errors

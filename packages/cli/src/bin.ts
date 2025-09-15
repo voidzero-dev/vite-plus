@@ -12,6 +12,7 @@
 import { run } from '../binding/index.js';
 import { fmt } from './fmt.js';
 import { resolveConfig } from './index.js';
+import { lib } from './lib.js';
 import { lint } from './lint.js';
 import { test } from './test.js';
 import { vite } from './vite.js';
@@ -33,6 +34,7 @@ async function resolveUniversalViteConfig(err: null | Error, viteConfigCwd: stri
 // These functions will be called from Rust when needed
 run({
   lint, // Resolves oxlint binary for linting
+  lib, // Resolves tsdown binary for lib bundling
   fmt, // Resolves oxfmt binary for formatting
   vite, // Resolves vite binary for build/dev commands
   test, // Resolves vitest binary for test commands

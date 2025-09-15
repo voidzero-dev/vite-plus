@@ -134,6 +134,9 @@ importers:
       rolldown-vite:
         specifier: 'catalog:'
         version: 7.1.10(@types/node@24.4.0)(esbuild@0.25.8)(jiti@2.5.1)(yaml@2.8.1)
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.15.1(typescript@5.9.2)
       vitest:
         specifier: 'catalog:'
         version: 3.2.4(@types/node@24.4.0)(esbuild@0.25.8)(jiti@2.5.1)(yaml@2.8.1)

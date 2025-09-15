@@ -23,5 +23,7 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
     // ignore pnpm warn
     .replaceAll(/WARN\s+Skip\s+adding .+?\n/g, '')
     .replaceAll(/Scope: all \d+ workspace projects/g, 'Scope: all <variable> workspace projects')
-    .replaceAll(/\++\n/g, '+<repeat>\n');
+    .replaceAll(/\++\n/g, '+<repeat>\n')
+    // replace size for tsdown
+    .replaceAll(/ \d+(\.\d+)? ([km]B)/g, ' <variable> $2');
 }

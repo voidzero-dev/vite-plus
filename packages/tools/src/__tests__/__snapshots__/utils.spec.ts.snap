@@ -5,6 +5,15 @@ exports[`replaceUnstableOutput > replace date 1`] = `
 <date>"
 `;
 
+exports[`replaceUnstableOutput > replace tsdown output 1`] = `
+"ℹ tsdown v<semver> powered by rolldown v<semver>
+ℹ entry: src/index.ts
+ℹ Build start
+ℹ dist/index.js  <variable> kB │ gzip: <variable> kB
+ℹ 1 files, total: <variable> kB
+✔ Build complete in <variable>ms"
+`;
+
 exports[`replaceUnstableOutput > replace unstable cwd 1`] = `"<cwd>/foo.txt"`;
 
 exports[`replaceUnstableOutput > replace unstable pnpm install output 1`] = `

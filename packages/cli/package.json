@@ -34,6 +34,7 @@
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
     "rolldown-vite": "catalog:",
+    "tsdown": "catalog:",
     "vitest": "catalog:"
   },
   "devDependencies": {

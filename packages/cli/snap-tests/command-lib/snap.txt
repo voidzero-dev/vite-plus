@@ -1,0 +1,81 @@
+> vite-plus lib -h # should print the help message
+CI environment detected. Using default package manager: pnpm
+Cache not found
+Already up to date
+
+Done in <variable>ms using pnpm v<semver>
+Cache not found
+tsdown/0.15.1
+
+Usage:
+  $ tsdown [...files]
+
+Commands:
+  [...files]  Bundle files
+  migrate     Migrate from tsup to tsdown
+
+For more info, run any command with the `--help` flag:
+  $ tsdown --help
+  $ tsdown migrate --help
+
+Options:
+  -c, --config <filename>   Use a custom config file 
+  --config-loader <loader>  Config loader to use: auto, native, unconfig (default: auto)
+  --no-config               Disable config file (default: true)
+  -f, --format <format>     Bundle format: esm, cjs, iife, umd (default: esm)
+  --clean                   Clean output directory, --no-clean to disable 
+  --external <module>       Mark dependencies as external 
+  --minify                  Minify output 
+  --debug [feat]            Show debug logs 
+  --target <target>         Bundle target, e.g "es2015", "esnext" 
+  -l, --logLevel <level>    Set log level: info, warn, error, silent 
+  --fail-on-warn            Fail on warnings (default: true)
+  -d, --out-dir <dir>       Output directory (default: dist)
+  --treeshake               Tree-shake bundle (default: true)
+  --sourcemap               Generate source map (default: false)
+  --shims                   Enable cjs and esm shims  (default: false)
+  --platform <platform>     Target platform (default: node)
+  --dts                     Generate dts files 
+  --publint                 Enable publint (default: false)
+  --attw                    Enable Are the types wrong integration (default: false)
+  --unused                  Enable unused dependencies check (default: false)
+  -w, --watch [path]        Watch mode 
+  --ignore-watch <path>     Ignore custom paths in watch mode 
+  --from-vite [vitest]      Reuse config from Vite or Vitest 
+  --report                  Size report (default: true)
+  --env.* <value>           Define compile-time env variables 
+  --on-success <command>    Command to run on success 
+  --copy <dir>              Copy files to output dir 
+  --public-dir <dir>        Alias for --copy, deprecated 
+  --tsconfig <tsconfig>     Set tsconfig path 
+  --unbundle                Unbundle mode 
+  -W, --workspace [dir]     Enable workspace mode 
+  -F, --filter <pattern>    Filter workspace packages, e.g. /regex/ or substring 
+  --exports                 Generate export-related metadata for package.json (experimental) 
+  -h, --help                Display this message 
+  -v, --version             Display version number 
+
+> vite-plus lib src/index.ts # should build the library
+Cache not found
+ℹ tsdown v<semver> powered by rolldown v<semver>
+ℹ entry: src/index.ts
+ℹ Build start
+ℹ dist/index.js  <variable> kB │ gzip: <variable> kB
+ℹ 1 files, total: <variable> kB
+✔ Build complete in <variable>ms
+
+> ls dist # should have the library
+index.js
+
+> vite-plus lib src/index.ts # should hit cache
+Cache miss:  content changed
+Already up to date
+
+Done in <variable>ms using pnpm v<semver>
+Cache hit, replaying
+ℹ tsdown v<semver> powered by rolldown v<semver>
+ℹ entry: src/index.ts
+ℹ Build start
+ℹ dist/index.js  <variable> kB │ gzip: <variable> kB
+ℹ 1 files, total: <variable> kB
+✔ Build complete in <variable>ms

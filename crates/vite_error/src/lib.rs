@@ -107,6 +107,9 @@ pub enum Error {
     #[error("Test failed")]
     TestFailed { status: Str, reason: Str },
 
+    #[error("Lib failed")]
+    LibFailed { status: Str, reason: Str },
+
     #[error("Resolve universal vite config failed")]
     ResolveUniversalViteConfigFailed { status: Str, reason: Str },
 

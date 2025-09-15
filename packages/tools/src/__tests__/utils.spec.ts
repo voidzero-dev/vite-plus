@@ -66,4 +66,16 @@ Done in 171ms using pnpm v10.16.1
     const output = `${cwd}/foo.txt`;
     expect(replaceUnstableOutput(output.trim(), cwd)).toMatchSnapshot();
   });
+
+  test('replace tsdown output', () => {
+    const output = `
+ℹ tsdown v0.15.1 powered by rolldown v0.15.1
+ℹ entry: src/index.ts
+ℹ Build start
+ℹ dist/index.js  0.15 kB │ gzip: 0.12 kB
+ℹ 1 files, total: 0.15 kB
+✔ Build complete in 100ms
+    `;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
 });
