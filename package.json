@@ -32,5 +32,10 @@
     "*.rs": [
       "cargo fmt --"
     ]
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:rolldown-vite@7.1.9"
+    }
   }
 }
