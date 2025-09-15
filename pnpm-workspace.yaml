@@ -23,3 +23,4 @@ catalog:
   tsdown: ^0.15.0
   typescript: ^5.9.2
   vitest: ^3.2.4
+  vitepress: v2.0.0-alpha.12
