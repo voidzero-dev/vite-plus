@@ -394,6 +394,10 @@ pub async fn execute_task(
                 // ignore accesses outside the workspace
                 continue;
             };
+            if relative_path.as_path().strip_prefix(".git").is_ok() {
+                // temp workaround for oxlint reading inside .git
+                continue;
+            }
             match access.mode {
                 AccessMode::Read => {
                     path_reads.entry(relative_path).or_insert(PathRead { read_dir_entries: false });
