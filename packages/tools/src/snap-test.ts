@@ -45,7 +45,7 @@ function runTestCase(name: string) {
   env['PATH'] = [
     ...env['PATH']!.split(path.delimiter),
     // Extend PATH to include the package's bin directory
-    path.join(path.dirname(import.meta.dirname), 'bin')
+    path.resolve('bin')
   ].join(path.delimiter);
 
   const newSnap: string[] = [];
