@@ -191,7 +191,6 @@ impl RealFileSystem {
 #[derive(Debug, Default)]
 pub struct CachedFileSystem<FS = RealFileSystem> {
     underlying: FS,
-    #[expect(dead_code)]
     cache: DashMap<AbsolutePathBuf, PathFingerprint>,
 }
 
