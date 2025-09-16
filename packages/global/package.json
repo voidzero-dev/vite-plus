@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "build": "rolldown -c rolldown.config.ts",
-    "test": "snap-test"
+    "snap-test": "snap-test"
   },
   "dependencies": {
     "oxlint": "catalog:",

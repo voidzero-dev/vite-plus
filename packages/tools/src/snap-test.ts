@@ -10,6 +10,8 @@ import { promisify } from 'node:util';
 
 const exec = promisify(cp.exec);
 
+import { replaceUnstableOutput } from './utils.ts';
+
 // Create a unique temporary directory for testing
 const tempTmpDir = `${tmpdir()}/vite-plus-test-${randomUUID()}`;
 fs.mkdirSync(tempTmpDir, { recursive: true });
@@ -65,19 +67,19 @@ async function runTestCase(name: string) {
       const { stdout, stderr } = await exec(command, { env, cwd: caseTmpDir, encoding: 'utf-8' });
       newSnap.push(`> ${command}`);
       if (stdout) {
-        newSnap.push(replaceUnstableOutput(stdout));
+        newSnap.push(replaceUnstableOutput(stdout, caseTmpDir));
       }
       if (stderr) {
-        newSnap.push(replaceUnstableOutput(stderr));
+        newSnap.push(replaceUnstableOutput(stderr, caseTmpDir));
       }
     } catch (error) {
       // add error exit code to the command
       newSnap.push(`[${error.code}]> ${command}`);
       if (error.stdout) {
-        newSnap.push(replaceUnstableOutput(error.stdout));
+        newSnap.push(replaceUnstableOutput(error.stdout, caseTmpDir));
       }
       if (error.stderr) {
-        newSnap.push(replaceUnstableOutput(error.stderr));
+        newSnap.push(replaceUnstableOutput(error.stderr, caseTmpDir));
       }
     }
   }
@@ -85,10 +87,4 @@ async function runTestCase(name: string) {
 
   await fsPromises.writeFile(`${casesDir}/${name}/snap.txt`, newSnapContent);
   console.log('%s finished', name);
-}
-
-function replaceUnstableOutput(output: string) {
-  return output.replaceAll(/\d+(?:\.\d+)?s|\d+ms/g, '<variable>ms')
-    .replaceAll(/with \d+ rules/g, 'with <variable> rules')
-    .replaceAll(/using \d+ threads/g, 'using <variable> threads');
 }

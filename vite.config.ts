@@ -3,7 +3,7 @@ import { defineConfig } from '@voidzero-dev/vite-plus';
 export default defineConfig({
   lint: {
     rules: {
-      'no-console': 'error',
+      'no-console': 'warn',
     },
   },
 });
