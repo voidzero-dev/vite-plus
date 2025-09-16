@@ -32,8 +32,6 @@ impl AsFd for NotifyListener {
 }
 
 const SECCOMP_IOCTL_NOTIF_SEND: libc::c_ulong = 3222806785;
-const SECCOMP_IOCTL_NOTIF_RECV: libc::c_ulong = 3226476800;
-const SECCOMP_IOCTL_NOTIF_ID_VALID: libc::c_ulong = 1074274562;
 
 impl NotifyListener {
     pub fn send_continue(

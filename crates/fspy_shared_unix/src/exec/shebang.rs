@@ -2,8 +2,6 @@ use std::path::Path;
 
 use bstr::{BString, ByteSlice};
 
-use crate::open_exec::open_executable;
-
 #[derive(Debug, Clone)]
 pub struct Shebang {
     pub interpreter: BString,
@@ -61,8 +59,10 @@ pub fn parse_shebang(
                 if arg.is_empty() { None } else { Some(arg.as_bstr().to_owned()) }
             })
             .collect()
+    } else if arguments_buf.is_empty() {
+        vec![]
     } else {
-        if arguments_buf.is_empty() { vec![] } else { vec![arguments_buf.to_owned()] }
+        vec![arguments_buf.to_owned()]
     };
 
     Ok(Some(Shebang { interpreter: interpreter.as_bstr().to_owned(), arguments }))

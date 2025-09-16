@@ -66,12 +66,12 @@ pub fn cmd_shim(relative_file: &str) -> String {
             node "%~dp0\{relative_file}" %*
         )
         "#,
-        relative_file = relative_file.replace("/", "\\")
+        relative_file = relative_file.replace('/', "\\")
     }
-    .replace("\n", "\r\n") // replace \n to \r\n for windows
+    .replace('\n', "\r\n") // replace \n to \r\n for windows
 }
 
-/// PowerShell shim.
+/// `PowerShell` shim.
 pub fn pwsh_shim(relative_file: &str) -> String {
     formatdoc! {
         r#"

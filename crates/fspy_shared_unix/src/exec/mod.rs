@@ -3,12 +3,11 @@ mod shebang;
 mod which;
 
 use std::{
-    ffi::{CStr, OsStr, OsString},
-    io,
+    ffi::{CStr, OsStr},
     iter::once,
     mem::replace,
-    os::unix::ffi::{OsStrExt, OsStringExt},
-    path::{Path, PathBuf, absolute},
+    os::unix::ffi::OsStrExt,
+    path::Path,
 };
 
 use bstr::{BStr, BString, ByteSlice};

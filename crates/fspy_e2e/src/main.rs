@@ -72,10 +72,10 @@ async fn main() {
     let config: Config = toml::from_slice(&config).unwrap();
     let spy = fspy::Spy::global().unwrap();
     for (name, case) in config.cases {
-        if let Some(filter) = &filter {
-            if !name.contains(filter) {
-                continue;
-            }
+        if let Some(filter) = &filter
+            && !name.contains(filter)
+        {
+            continue;
         }
         println!("Running case `{}` in dir `{}`", name, case.dir);
         let mut cmd = spy.new_command(case.cmd[0].clone());

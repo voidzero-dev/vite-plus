@@ -47,7 +47,7 @@ struct WorkspaceMemberGlobs {
     workspaces: Vec<Str>,
 }
 impl WorkspaceMemberGlobs {
-    fn new(workspaces: Vec<Str>) -> Self {
+    const fn new(workspaces: Vec<Str>) -> Self {
         Self { workspaces }
     }
 
@@ -62,7 +62,7 @@ impl WorkspaceMemberGlobs {
         let mut all = Vec::<Str>::new();
         for mut pattern in self.workspaces {
             pattern.push_str(if pattern.ends_with('/') { "package.json" } else { "/package.json" });
-            if pattern.starts_with("!") {
+            if pattern.starts_with('!') {
                 has_negated = true;
             } else {
                 inclusions.push(pattern.clone());
@@ -83,10 +83,10 @@ impl WorkspaceMemberGlobs {
                     continue;
                 }
 
-                if let Some(glob_patterns) = glob_patterns.as_ref() {
-                    if !glob_patterns.is_match(entry.to_candidate_path().as_ref()) {
-                        continue;
-                    }
+                if let Some(glob_patterns) = glob_patterns.as_ref()
+                    && !glob_patterns.is_match(entry.to_candidate_path().as_ref())
+                {
+                    continue;
                 }
                 package_json_paths.insert(AbsolutePathBuf::new(entry.into_path()).unwrap());
             }
@@ -198,7 +198,7 @@ pub fn get_package_graph(
         };
 
         has_root_package = has_root_package || package_path.as_str().is_empty();
-        graph_builder.add_package(package_path.into(), package_json)?;
+        graph_builder.add_package(package_path, package_json)?;
     }
     // try add the root package anyway if the member globs do not include it.
     if !has_root_package {

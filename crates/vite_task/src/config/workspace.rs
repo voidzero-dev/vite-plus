@@ -90,7 +90,7 @@ impl Workspace {
             Self::determine_current_package_path(&cwd)?;
 
         let cache_path =
-            cache_path.unwrap_or_else(|| Self::get_cache_path_of_workspace(&workspace_root));
+            cache_path.unwrap_or_else(|| Self::get_cache_path_of_workspace(workspace_root));
 
         if !cache_path.as_path().exists()
             && let Some(cache_dir) = cache_path.as_path().parent()
@@ -130,9 +130,9 @@ impl Workspace {
         let (workspace_root, cwd, current_package_path) =
             Self::determine_current_package_path(&cwd)?;
 
-        let package_graph = vite_package_manager::get_package_graph(&workspace_root)?;
+        let package_graph = vite_package_manager::get_package_graph(workspace_root)?;
         // Load vite-task.json files for all packages
-        let packages_with_task_jsons = Self::load_vite_task_jsons(&package_graph, &workspace_root)?;
+        let packages_with_task_jsons = Self::load_vite_task_jsons(&package_graph, workspace_root)?;
 
         // Find root package.json
         let mut package_json = None;
@@ -175,7 +175,7 @@ impl Workspace {
             &package_graph,
             &package_path_to_node,
             &mut task_graph_builder,
-            &workspace_root,
+            workspace_root,
         )?;
 
         // Add topological dependencies if enabled
@@ -208,7 +208,7 @@ impl Workspace {
         Ok(())
     }
 
-    /// Resolve a task configuration into a ResolvedTask when building the task graph.
+    /// Resolve a task configuration into a `ResolvedTask` when building the task graph.
     fn resolve_task(
         user_task_config: impl Into<TaskConfig>,
         package_info: &PackageInfo,
@@ -313,7 +313,7 @@ impl Workspace {
                     let task_id_to_match = TaskId {
                         task_group_id: TaskGroupId {
                             task_group_name: task_request.clone(),
-                            config_path: package.path.clone().into(),
+                            config_path: package.path.clone(),
                             is_builtin: false,
                         },
                         // Starts with the main command only. The subcommands before the main command will be included later as dependencies.
@@ -460,16 +460,13 @@ impl Workspace {
                                         is_builtin: false,
                                         config_path: package_graph[dep_package_node_index]
                                             .path
-                                            .clone()
-                                            .into(),
+                                            .clone(),
                                     },
                                     subcommand_index: None, // Always points to the main task
                                 })
                             } else {
                                 // contains multiple '#'
-                                Err(Error::AmbiguousTaskRequest {
-                                    task_request: task_request.clone(),
-                                })
+                                Err(Error::AmbiguousTaskRequest { task_request })
                             }
                         })
                         .collect::<Result<HashSet<_>, Error>>()?;

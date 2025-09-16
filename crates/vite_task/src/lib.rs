@@ -119,7 +119,7 @@ const fn resolve_bool_flag(positive: bool, negative: bool) -> bool {
 /// Automatically run install command
 async fn auto_install(workspace_root: &AbsolutePathBuf) -> Result<(), Error> {
     // Skip if we're already running inside a vite_task execution to prevent nested installs
-    if std::env::var("VITE_TASK_EXECUTION_ENV").map_or(false, |v| v == "1") {
+    if std::env::var("VITE_TASK_EXECUTION_ENV").is_ok_and(|v| v == "1") {
         tracing::debug!("Skipping auto-install: already running inside vite_task execution");
         return Ok(());
     }
@@ -274,7 +274,7 @@ pub async fn main<
             return Ok(());
         }
         Some(Commands::Install { args }) => {
-            install::InstallCommand::builder(cwd).build().execute(&args).await?;
+            install::InstallCommand::builder(cwd).build().execute(args).await?;
             return Ok(());
         }
         Some(Commands::Cache { subcmd }) => {

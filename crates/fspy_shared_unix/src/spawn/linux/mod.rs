@@ -2,13 +2,11 @@ mod elf;
 
 use std::{ffi::OsStr, os::unix::ffi::OsStrExt as _, path::Path};
 
-use bstr::ByteSlice;
 use fspy_seccomp_unotify::{payload::SeccompPayload, target::install_target};
-use fspy_shared::ipc::PathAccess;
 use memmap2::Mmap;
 
 use crate::{
-    exec::{Exec, ExecResolveConfig, ensure_env},
+    exec::{Exec, ensure_env},
     open_exec::open_executable,
     payload::{EncodedPayload, PAYLOAD_ENV_NAME},
 };

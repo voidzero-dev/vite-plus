@@ -2,7 +2,7 @@
 use std::ffi::OsString;
 #[cfg(unix)]
 use std::sync::Arc;
-use std::{borrow::Cow, ffi::OsStr, fmt::Debug, mem::MaybeUninit, path::Path};
+use std::{borrow::Cow, ffi::OsStr, fmt::Debug, path::Path};
 
 use allocator_api2::alloc::Allocator;
 #[cfg(unix)]
@@ -109,7 +109,7 @@ impl<'a> NativeStr<'a> {
 
 impl<'a> From<&'a BStr> for NativeStr<'a> {
     fn from(value: &'a BStr) -> Self {
-        Self::from_bytes(&value)
+        Self::from_bytes(value)
     }
 }
 
@@ -171,6 +171,7 @@ impl NativeString {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
     use super::*;
 
     #[cfg(windows)]

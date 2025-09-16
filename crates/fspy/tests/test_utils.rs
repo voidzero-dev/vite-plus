@@ -28,6 +28,7 @@ pub fn assert_contains(
         .unwrap();
 }
 
+#[macro_export]
 macro_rules! track_child {
     ($body: block) => {{
         const ID: &str =
@@ -46,11 +47,11 @@ macro_rules! track_child {
                 ::std::process::exit(0);
             }
         }
-        $crate::test_utils::spawn_with_id(ID)
+        $crate::test_utils::_spawn_with_id(ID)
     }};
 }
 
-pub async fn spawn_with_id(id: &str) -> io::Result<PathAccessIterable> {
+pub async fn _spawn_with_id(id: &str) -> io::Result<PathAccessIterable> {
     let mut command = fspy::Spy::global()?.new_command(::std::env::current_exe()?);
     command.arg(id);
     let TrackedChild { mut tokio_child, accesses_future } = command.spawn().await?;
@@ -60,5 +61,3 @@ pub async fn spawn_with_id(id: &str) -> io::Result<PathAccessIterable> {
     assert!(status.success());
     Ok(accesses)
 }
-
-pub(crate) use track_child;

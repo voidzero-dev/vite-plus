@@ -1,11 +1,10 @@
 use std::{
-    ffi::{CStr, OsString},
+    ffi::OsString,
     io,
     mem::{MaybeUninit, transmute},
     os::{fd::RawFd, raw::c_void},
 };
 
-use arrayvec::ArrayVec;
 use bytes::BufMut;
 use libc::{pid_t, seccomp_notif};
 use tokio::io::ReadBuf;

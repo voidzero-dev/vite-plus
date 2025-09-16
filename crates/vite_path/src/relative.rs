@@ -24,9 +24,9 @@ use vite_str::Str;
 #[derive(RefCastCustom, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct RelativePath(str);
-impl AsRef<RelativePath> for RelativePath {
-    fn as_ref(&self) -> &RelativePath {
-        &self
+impl AsRef<Self> for RelativePath {
+    fn as_ref(&self) -> &Self {
+        self
     }
 }
 
@@ -40,20 +40,23 @@ impl RelativePath {
     #[ref_cast_custom]
     unsafe fn assume_portable(path: &str) -> &Self;
 
-    pub fn as_str(&self) -> &str {
+    #[must_use]
+    pub const fn as_str(&self) -> &str {
         &self.0
     }
 
+    #[must_use]
     pub fn as_path(&self) -> &Path {
         Path::new(self.as_str())
     }
 
+    #[must_use]
     pub fn to_relative_path_buf(&self) -> RelativePathBuf {
         RelativePathBuf(self.0.into())
     }
 
     /// Creates an owned [`RelativePathBuf`] with `rel_path` adjoined to `self`.
-    pub fn join<P: AsRef<RelativePath>>(&self, rel_path: P) -> RelativePathBuf {
+    pub fn join<P: AsRef<Self>>(&self, rel_path: P) -> RelativePathBuf {
         let mut absolute_path_buf = self.to_relative_path_buf();
         absolute_path_buf.push(rel_path);
         absolute_path_buf
@@ -62,9 +65,9 @@ impl RelativePath {
     /// Returns a path that, when joined onto `base`, yields `self`.
     ///
     /// If `base` is not a prefix of `self`, returns [`None`].
-    pub fn strip_prefix<P: AsRef<RelativePath>>(&self, base: P) -> Option<&RelativePath> {
+    pub fn strip_prefix<P: AsRef<Self>>(&self, base: P) -> Option<&Self> {
         let stripped_path = Path::new(self.as_str()).strip_prefix(base.as_ref().as_path()).ok()?;
-        Some(unsafe { RelativePath::assume_portable(stripped_path.to_str().unwrap()) })
+        Some(unsafe { Self::assume_portable(stripped_path.to_str().unwrap()) })
     }
 }
 
@@ -114,6 +117,7 @@ impl Diff for RelativePathBuf {
 }
 
 impl RelativePathBuf {
+    #[must_use]
     pub fn empty() -> Self {
         Self("".into())
     }
@@ -170,6 +174,7 @@ impl RelativePathBuf {
         Ok(Self(path_str))
     }
 
+    #[must_use]
     pub fn as_relative_path(&self) -> &RelativePath {
         unsafe { RelativePath::assume_portable(&self.0) }
     }
@@ -178,8 +183,8 @@ impl RelativePathBuf {
 impl<'a, Context> Decode<Context> for RelativePathBuf {
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
         let path_str = Str::decode(decoder)?;
-        RelativePathBuf::new(path_str.as_str())
-            .map_err(|err| DecodeError::OtherString(format!("{}: {}", err, path_str)))
+        Self::new(path_str.as_str())
+            .map_err(|err| DecodeError::OtherString(format!("{err}: {path_str}")))
     }
 }
 

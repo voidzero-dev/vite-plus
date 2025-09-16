@@ -186,29 +186,26 @@ fn js_error_to_test_error(err: napi::Error) -> Error {
 fn parse_args() -> Args {
     // ArgsOs [node, vite-plus, ...]
     let mut raw_args = std::env::args_os().skip(2);
-    if let Some(first) = raw_args.next() {
-        if let Some(first) = first.to_str()
-            && BUILTIN_COMMANDS.contains(&first)
-        {
-            let forwarded_args = raw_args
-                .map(|a| {
-                    a.into_string().unwrap_or_else(|os_str| os_str.to_string_lossy().into_owned())
-                })
-                .collect();
-            return Args {
-                task: None,
-                task_args: vec![],
-                commands: Some(match first {
-                    "lint" => Commands::Lint { args: forwarded_args },
-                    "fmt" => Commands::Fmt { args: forwarded_args },
-                    "build" => Commands::Build { args: forwarded_args },
-                    "test" => Commands::Test { args: forwarded_args },
-                    _ => unreachable!(),
-                }),
-                debug: false,
-                no_debug: true,
-            };
-        }
+    if let Some(first) = raw_args.next()
+        && let Some(first) = first.to_str()
+        && BUILTIN_COMMANDS.contains(&first)
+    {
+        let forwarded_args = raw_args
+            .map(|a| a.into_string().unwrap_or_else(|os_str| os_str.to_string_lossy().into_owned()))
+            .collect();
+        return Args {
+            task: None,
+            task_args: vec![],
+            commands: Some(match first {
+                "lint" => Commands::Lint { args: forwarded_args },
+                "fmt" => Commands::Fmt { args: forwarded_args },
+                "build" => Commands::Build { args: forwarded_args },
+                "test" => Commands::Test { args: forwarded_args },
+                _ => unreachable!(),
+            }),
+            debug: false,
+            no_debug: true,
+        };
     }
     // Parse CLI arguments (skip first arg which is the node binary)
     Args::parse_from(std::env::args_os().skip(1))

@@ -1,7 +1,4 @@
-use std::{
-    ffi::CStr,
-    ptr::{null, null_mut},
-};
+use std::{ffi::CStr, ptr::null};
 
 use bstr::{BStr, BString, ByteSlice};
 use fspy_shared_unix::exec::Exec;

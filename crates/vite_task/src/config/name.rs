@@ -31,7 +31,7 @@ impl Display for TaskName {
         if let Some(package_name) = &self.package_name
             && !package_name.is_empty()
         {
-            write!(f, "{}#", package_name)?;
+            write!(f, "{package_name}#")?;
         }
         write!(f, "{}", self.task_group_name)?;
         if let Some(subcommand_index) = self.subcommand_index {

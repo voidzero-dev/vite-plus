@@ -1,5 +1,3 @@
-use phf::phf_set;
-
 use crate::fixture::{Fixture, fixture};
 
 pub const COREUTILS_BINARY: Fixture = fixture!("coreutils");

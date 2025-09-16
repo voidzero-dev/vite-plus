@@ -14,9 +14,9 @@ use crate::relative::{FromPathError, InvalidPathDataError, RelativePathBuf};
 #[derive(RefCastCustom, Debug, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct AbsolutePath(Path);
-impl AsRef<AbsolutePath> for AbsolutePath {
-    fn as_ref(&self) -> &AbsolutePath {
-        &self
+impl AsRef<Self> for AbsolutePath {
+    fn as_ref(&self) -> &Self {
+        self
     }
 }
 
@@ -42,11 +42,13 @@ impl AbsolutePath {
     pub(crate) unsafe fn assume_absolute(abs_path: &Path) -> &Self;
 
     /// Gets the underlying [`Path`]
-    pub fn as_path(&self) -> &Path {
+    #[must_use]
+    pub const fn as_path(&self) -> &Path {
         &self.0
     }
 
     /// Converts `self` to an owned [`AbsolutePathBuf`].
+    #[must_use]
     pub fn to_absolute_path_buf(&self) -> AbsolutePathBuf {
         unsafe { AbsolutePathBuf::assume_absolute(self.0.to_path_buf()) }
     }
@@ -56,7 +58,7 @@ impl AbsolutePath {
     /// If `base` is not a prefix of `self`, returns [`None`].
     ///
     /// If the stripped path is not a valid `RelativePath`. Returns an error with the reason and the stripped path.
-    pub fn strip_prefix<P: AsRef<AbsolutePath>>(
+    pub fn strip_prefix<P: AsRef<Self>>(
         &self,
         base: P,
     ) -> Result<Option<RelativePathBuf>, StripPrefixError<'_>> {
@@ -83,9 +85,10 @@ impl AbsolutePath {
     }
 
     /// Returns the parent directory of `self`, or `None` if `self` is the root.
-    pub fn parent(&self) -> Option<&AbsolutePath> {
+    #[must_use]
+    pub fn parent(&self) -> Option<&Self> {
         let parent_path = self.0.parent()?;
-        Some(unsafe { AbsolutePath::assume_absolute(parent_path) })
+        Some(unsafe { Self::assume_absolute(parent_path) })
     }
 
     /// Creates an owned [`AbsolutePathBuf`] like `self` but with the extension added.
@@ -129,22 +132,25 @@ impl AsRef<Path> for AbsolutePath {
 pub struct AbsolutePathBuf(PathBuf);
 
 impl From<AbsolutePathBuf> for Arc<AbsolutePath> {
-    fn from(path: AbsolutePathBuf) -> Arc<AbsolutePath> {
+    fn from(path: AbsolutePathBuf) -> Self {
         let arc: Arc<Path> = path.0.into();
         let arc_raw = Arc::into_raw(arc) as *const AbsolutePath;
-        unsafe { Arc::from_raw(arc_raw) }
+        unsafe { Self::from_raw(arc_raw) }
     }
 }
 
 impl AbsolutePathBuf {
+    #[must_use]
     pub fn new(path: PathBuf) -> Option<Self> {
         if path.is_absolute() { Some(unsafe { Self::assume_absolute(path) }) } else { None }
     }
 
-    pub unsafe fn assume_absolute(abs_path: PathBuf) -> Self {
+    #[must_use]
+    pub const unsafe fn assume_absolute(abs_path: PathBuf) -> Self {
         Self(abs_path)
     }
 
+    #[must_use]
     pub fn as_absolute_path(&self) -> &AbsolutePath {
         unsafe { AbsolutePath::assume_absolute(self.0.as_path()) }
     }
@@ -156,6 +162,7 @@ impl AbsolutePathBuf {
         self.0.push(path.as_ref());
     }
 
+    #[must_use]
     pub fn into_path_buf(self) -> PathBuf {
         self.0
     }

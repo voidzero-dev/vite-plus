@@ -39,9 +39,9 @@ pub enum PackageManagerType {
 impl fmt::Display for PackageManagerType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PackageManagerType::Pnpm => write!(f, "pnpm"),
-            PackageManagerType::Yarn => write!(f, "yarn"),
-            PackageManagerType::Npm => write!(f, "npm"),
+            Self::Pnpm => write!(f, "pnpm"),
+            Self::Yarn => write!(f, "yarn"),
+            Self::Npm => write!(f, "npm"),
         }
     }
 }
@@ -77,7 +77,8 @@ impl PackageManagerBuilder {
         Self { package_manager_type: None, cwd: cwd.as_ref().to_absolute_path_buf() }
     }
 
-    pub fn package_manager_type(mut self, package_manager_type: PackageManagerType) -> Self {
+    #[must_use]
+    pub const fn package_manager_type(mut self, package_manager_type: PackageManagerType) -> Self {
         self.package_manager_type = Some(package_manager_type);
         self
     }
@@ -132,10 +133,12 @@ impl PackageManager {
         PackageManagerBuilder::new(workspace_root)
     }
 
+    #[must_use]
     pub fn get_bin_prefix(&self) -> AbsolutePathBuf {
         self.install_dir.join("bin")
     }
 
+    #[must_use]
     pub fn resolve_command(&self) -> ResolveCommandResult {
         ResolveCommandResult {
             bin_path: self.bin_name.to_string(),
@@ -154,8 +157,8 @@ pub struct PackageRoot<'a> {
 
 /// Find the package root directory from the current working directory. `original_cwd` must be absolute.
 ///
-/// If the package.json file is not found, will return PackageJsonNotFound error.
-pub fn find_package_root<'a>(original_cwd: &'a AbsolutePath) -> Result<PackageRoot<'a>, Error> {
+/// If the package.json file is not found, will return `PackageJsonNotFound` error.
+pub fn find_package_root(original_cwd: &AbsolutePath) -> Result<PackageRoot<'_>, Error> {
     let mut cwd = original_cwd;
     loop {
         // Check for package.json
@@ -206,8 +209,8 @@ pub struct WorkspaceRoot<'a> {
 ///
 /// If the workspace file is not found, but a package is found, `workspace_file` will be `NonWorkspacePackage` with the `package.json` File.
 ///
-/// If neither workspace nor package is found, will return PackageJsonNotFound error.
-pub fn find_workspace_root<'a>(original_cwd: &'a AbsolutePath) -> Result<WorkspaceRoot<'a>, Error> {
+/// If neither workspace nor package is found, will return `PackageJsonNotFound` error.
+pub fn find_workspace_root(original_cwd: &AbsolutePath) -> Result<WorkspaceRoot<'_>, Error> {
     let mut cwd = original_cwd;
 
     loop {
@@ -264,22 +267,20 @@ fn get_package_manager_type_and_version(
     let package_json_path = workspace_root.path.join("package.json");
     if let Some(file) = open_exists_file(&package_json_path)? {
         let package_json: PackageJson = serde_json::from_reader(BufReader::new(&file))?;
-        if !package_json.package_manager.is_empty() {
-            if let Some((name, version)) = package_json.package_manager.split_once('@') {
-                // check if the version is a valid semver
-                semver::Version::parse(version).map_err(|_| {
-                    Error::PackageManagerVersionInvalid {
-                        name: name.into(),
-                        version: version.into(),
-                        package_json_path: package_json_path.to_absolute_path_buf(),
-                    }
-                })?;
-                match name {
-                    "pnpm" => return Ok((PackageManagerType::Pnpm, version.into())),
-                    "yarn" => return Ok((PackageManagerType::Yarn, version.into())),
-                    "npm" => return Ok((PackageManagerType::Npm, version.into())),
-                    _ => return Err(Error::UnsupportedPackageManager(name.into())),
-                }
+        if !package_json.package_manager.is_empty()
+            && let Some((name, version)) = package_json.package_manager.split_once('@')
+        {
+            // check if the version is a valid semver
+            semver::Version::parse(version).map_err(|_| Error::PackageManagerVersionInvalid {
+                name: name.into(),
+                version: version.into(),
+                package_json_path: package_json_path.to_absolute_path_buf(),
+            })?;
+            match name {
+                "pnpm" => return Ok((PackageManagerType::Pnpm, version.into())),
+                "yarn" => return Ok((PackageManagerType::Yarn, version.into())),
+                "npm" => return Ok((PackageManagerType::Npm, version.into())),
+                _ => return Err(Error::UnsupportedPackageManager(name.into())),
             }
         }
     }
@@ -364,7 +365,7 @@ async fn get_latest_version(package_manager_type: PackageManagerType) -> Result<
 }
 
 /// Download the package manager and extract it to the cache directory.
-/// Return the install directory, e.g. $CACHE_DIR/vite/package_manager/pnpm/10.0.0/pnpm
+/// Return the install directory, e.g. $`CACHE_DIR/vite/package_manager/pnpm/10.0.0/pnpm`
 async fn download_package_manager(
     package_manager_type: PackageManagerType,
     package_name: &str,
@@ -374,7 +375,7 @@ async fn download_package_manager(
     let cache_dir = get_cache_dir()?;
     let bin_name = package_manager_type.to_string();
     // $CACHE_DIR/vite/package_manager/pnpm/10.0.0
-    let target_dir = cache_dir.join(format!("package_manager/{}/{}", bin_name, version));
+    let target_dir = cache_dir.join(format!("package_manager/{bin_name}/{version}"));
     let install_dir = target_dir.join(&bin_name);
 
     // If all shims are already exists, return the target directory
@@ -382,8 +383,8 @@ async fn download_package_manager(
     let bin_prefix = install_dir.join("bin");
     let bin_file = bin_prefix.join(&bin_name);
     if is_exists_file(&bin_file)?
-        && is_exists_file(&bin_file.with_extension("cmd"))?
-        && is_exists_file(&bin_file.with_extension("ps1"))?
+        && is_exists_file(bin_file.with_extension("cmd"))?
+        && is_exists_file(bin_file.with_extension("ps1"))?
     {
         return Ok(install_dir);
     }
@@ -451,12 +452,12 @@ async fn remove_dir_all_force(path: impl AsRef<Path>) -> Result<(), std::io::Err
 ///
 /// Will automatically create `{cli_name}.cjs`, `{cli_name}.cmd`, `{cli_name}.ps1` files for the package manager.
 /// Example:
-/// - $bin_prefix/pnpm -> $bin_prefix/pnpm.cjs
-/// - $bin_prefix/pnpm.cmd -> $bin_prefix/pnpm.cjs
-/// - $bin_prefix/pnpm.ps1 -> $bin_prefix/pnpm.cjs
-/// - $bin_prefix/pnpx -> $bin_prefix/pnpx.cjs
-/// - $bin_prefix/pnpx.cmd -> $bin_prefix/pnpx.cjs
-/// - $bin_prefix/pnpx.ps1 -> $bin_prefix/pnpx.cjs
+/// - $`bin_prefix/pnpm` -> $`bin_prefix/pnpm.cjs`
+/// - $`bin_prefix/pnpm.cmd` -> $`bin_prefix/pnpm.cjs`
+/// - $`bin_prefix/pnpm.ps1` -> $`bin_prefix/pnpm.cjs`
+/// - $`bin_prefix/pnpx` -> $`bin_prefix/pnpx.cjs`
+/// - $`bin_prefix/pnpx.cmd` -> $`bin_prefix/pnpx.cjs`
+/// - $`bin_prefix/pnpx.ps1` -> $`bin_prefix/pnpx.cjs`
 async fn create_shim_files(
     package_manager_type: PackageManagerType,
     bin_prefix: impl AsRef<AbsolutePath>,
@@ -484,11 +485,11 @@ async fn create_shim_files(
     let bin_prefix = bin_prefix.as_ref();
     for (bin_name, js_bin_basename) in bin_names {
         // try .cjs first
-        let mut js_bin_name = format!("{}.cjs", js_bin_basename);
-        if !is_exists_file(&bin_prefix.join(&js_bin_name))? {
+        let mut js_bin_name = format!("{js_bin_basename}.cjs");
+        if !is_exists_file(bin_prefix.join(&js_bin_name))? {
             // fallback to .js
-            js_bin_name = format!("{}.js", js_bin_basename);
-            if !is_exists_file(&bin_prefix.join(&js_bin_name))? {
+            js_bin_name = format!("{js_bin_basename}.js");
+            if !is_exists_file(bin_prefix.join(&js_bin_name))? {
                 continue;
             }
         }
@@ -506,7 +507,7 @@ async fn set_package_manager_field(
     version: &str,
 ) -> Result<(), Error> {
     let package_json_path = package_json_path.as_ref();
-    let package_manager_value = format!("{}@{}", package_manager_type, version);
+    let package_manager_value = format!("{package_manager_type}@{version}");
     let mut package_json = if is_exists_file(package_json_path)? {
         let content = tokio::fs::read(&package_json_path).await?;
         serde_json::from_slice(&content)?

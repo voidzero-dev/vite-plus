@@ -50,10 +50,12 @@ impl Diff for Str {
 }
 
 impl Str {
+    #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         Self(CompactString::with_capacity(capacity))
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }

@@ -14,7 +14,9 @@ mod os_impl;
 mod arena;
 mod command;
 
-use std::{env::temp_dir, ffi::OsStr, fs::create_dir, io, sync::OnceLock};
+#[cfg(not(target_os = "linux"))]
+use std::{env::temp_dir, fs::create_dir};
+use std::{ffi::OsStr, io, sync::OnceLock};
 
 pub use command::Command;
 pub use fspy_shared::ipc::{AccessMode, PathAccess};
@@ -44,7 +46,7 @@ impl Spy {
 
     pub fn global() -> io::Result<&'static Self> {
         static GLOBAL_SPY: OnceLock<Spy> = OnceLock::new();
-        GLOBAL_SPY.get_or_try_init(|| Self::new())
+        GLOBAL_SPY.get_or_try_init(Self::new)
     }
 
     pub fn new_command<S: AsRef<OsStr>>(&self, program: S) -> Command {

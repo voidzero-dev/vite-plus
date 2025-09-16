@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use vite_str::Str;
 
-#[derive(Copy, Clone, Debug, Serialize, PartialEq)]
+#[derive(Copy, Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum DependencyType {
     Normal,

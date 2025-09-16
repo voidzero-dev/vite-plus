@@ -83,7 +83,7 @@ impl ExecutionPlan {
         let command = step.resolved_command.fingerprint.command.clone();
         let cwd = step.resolved_command.fingerprint.cwd.clone();
         let display_command: Option<String> =
-            if step.is_builtin { None } else { Some(format!("~/{}$ {}", cwd, command)) };
+            if step.is_builtin { None } else { Some(format!("~/{cwd}$ {command}")) };
         let ignore_replay = step.ignore_replay;
 
         // TODO: this should be replaced by something like `--json-output` when structured logging is implemented.
@@ -114,7 +114,7 @@ impl ExecutionPlan {
             }
             Some(CacheMiss::FingerprintMismatch(mismatch)) => {
                 if is_in_cli_test {
-                    println!("{}: {}", "Cache miss", mismatch);
+                    println!("Cache miss: {mismatch}");
                 } else {
                     println!("{}: {}", "Cache miss".style(Style::new().yellow()), mismatch);
                     if let Some(display_command) = display_command {

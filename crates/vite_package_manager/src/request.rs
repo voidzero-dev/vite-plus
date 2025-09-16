@@ -35,7 +35,7 @@ impl HttpClient {
     ///
     /// * `max_times` - Maximum number of retry attempts
     /// * `min_delay` - Minimum delay in milliseconds for exponential backoff
-    pub fn with_config(max_times: usize, min_delay: u64) -> Self {
+    pub const fn with_config(max_times: usize, min_delay: u64) -> Self {
         Self { max_times, min_delay }
     }
 
@@ -45,7 +45,7 @@ impl HttpClient {
                 ExponentialBuilder::default()
                     .with_jitter()
                     .with_min_delay(Duration::from_millis(self.min_delay))
-                    .with_max_times(self.max_times as usize),
+                    .with_max_times(self.max_times),
             )
             .await?;
 
@@ -123,10 +123,10 @@ fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Resu
     let target_dir = target_dir.as_ref();
     tracing::debug!("Extract tgz: {:?} to {:?}", tgz_file, target_dir);
 
-    let file = std::fs::File::open(&tgz_file)?;
+    let file = std::fs::File::open(tgz_file)?;
     let tar_stream = GzDecoder::new(file);
     let mut archive = Archive::new(tar_stream);
-    archive.unpack(&target_dir)?;
+    archive.unpack(target_dir)?;
 
     tracing::debug!("Extract tgz finished");
 
@@ -489,7 +489,7 @@ mod tests {
 
         #[derive(serde::Deserialize)]
         struct TestData {
-            field: String,
+            _field: String,
         }
 
         let result: Result<TestData, _> = client.get_json(&url).await;

@@ -49,10 +49,8 @@ pub struct PathWrite;
 #[derive(Debug)]
 pub struct ExecutedTask {
     pub std_outputs: Arc<[StdOutput]>,
-    #[expect(dead_code)]
     pub exit_status: ExitStatus,
     pub path_reads: HashMap<RelativePathBuf, PathRead>,
-    #[expect(dead_code)]
     pub path_writes: HashMap<RelativePathBuf, PathWrite>,
 }
 
@@ -122,7 +120,7 @@ pub struct TaskEnvs {
 
 fn resolve_envs_with_patterns(patterns: &[&str]) -> Result<HashMap<Str, Arc<OsStr>>, Error> {
     let patterns = GlobPatternSet::new(patterns.iter().filter(|pattern| {
-        if pattern.starts_with("!") {
+        if pattern.starts_with('!') {
             // FIXME: use better way to print warning log
             // Or parse and validate TaskConfig in command parsing phase
             tracing::warn!(
@@ -240,8 +238,8 @@ impl TaskEnvs {
         let all_patterns: Vec<&str> = DEFAULT_PASSTHROUGH_ENVS
             .iter()
             .copied()
-            .chain(task.config.pass_through_envs.iter().map(|s| s.as_ref()))
-            .chain(task.config.envs.iter().map(|s| s.as_ref()))
+            .chain(task.config.pass_through_envs.iter().map(std::convert::AsRef::as_ref))
+            .chain(task.config.envs.iter().map(std::convert::AsRef::as_ref))
             .collect();
         let mut all_envs = resolve_envs_with_patterns(&all_patterns)?;
 
@@ -249,9 +247,9 @@ impl TaskEnvs {
         let mut envs_without_pass_through = HashMap::<Str, Str>::new();
         if !task.config.envs.is_empty() {
             let envs_without_pass_through_patterns =
-                GlobPatternSet::new(task.config.envs.iter().filter(|s| !s.starts_with("!")))?;
+                GlobPatternSet::new(task.config.envs.iter().filter(|s| !s.starts_with('!')))?;
             let sensitive_patterns = GlobPatternSet::new(SENSITIVE_PATTERNS)?;
-            for (name, value) in all_envs.iter() {
+            for (name, value) in &all_envs {
                 if !envs_without_pass_through_patterns.is_match(name) {
                     continue;
                 }
@@ -275,22 +273,20 @@ impl TaskEnvs {
         // Automatically add FORCE_COLOR environment variable if not already set
         // This enables color output in subprocesses when color is supported
         // TODO: will remove this temporarily until we have a better solution
-        if !all_envs.contains_key("FORCE_COLOR") {
-            if let Some(support) = on(Stream::Stdout) {
-                let force_color_value = if support.has_16m {
-                    "3" // True color (16 million colors)
-                } else if support.has_256 {
-                    "2" // 256 colors
-                } else if support.has_basic {
-                    "1" // Basic ANSI colors
-                } else {
-                    "0" // No color support
-                };
-                all_envs.insert(
-                    "FORCE_COLOR".into(),
-                    Arc::<OsStr>::from(OsStr::new(force_color_value)),
-                );
-            }
+        if !all_envs.contains_key("FORCE_COLOR")
+            && let Some(support) = on(Stream::Stdout)
+        {
+            let force_color_value = if support.has_16m {
+                "3" // True color (16 million colors)
+            } else if support.has_256 {
+                "2" // 256 colors
+            } else if support.has_basic {
+                "1" // Basic ANSI colors
+            } else {
+                "0" // No color support
+            };
+            all_envs
+                .insert("FORCE_COLOR".into(), Arc::<OsStr>::from(OsStr::new(force_color_value)));
         }
 
         // Add VITE_TASK_EXECUTION_ENV to indicate we're running inside vite_task

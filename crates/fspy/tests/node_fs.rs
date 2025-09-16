@@ -3,7 +3,6 @@ mod test_utils;
 use std::{
     env::{current_dir, vars_os},
     io,
-    path::Path,
 };
 
 use fspy::{AccessMode, PathAccessIterable, TrackedChild};

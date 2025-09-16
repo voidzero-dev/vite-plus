@@ -3,13 +3,13 @@ mod test_utils;
 use std::{
     env::current_dir,
     fs::{File, OpenOptions},
-    io::{self, Stdin},
+    io,
     path::Path,
     process::Stdio,
 };
 
-use fspy::{AccessMode, Command};
-use test_utils::{assert_contains, track_child};
+use fspy::AccessMode;
+use test_utils::assert_contains;
 
 #[tokio::test]
 async fn open_read() -> io::Result<()> {

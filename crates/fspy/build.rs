@@ -1,6 +1,5 @@
 use std::{
     env::{self, current_dir},
-    ffi::{OsStr, OsString},
     fs,
     io::Read,
     path::Path,
@@ -89,7 +88,7 @@ fn fetch_macos_binaries() -> anyhow::Result<()> {
         .1;
     // let downloads = [(zsh_url.as_str(), "bin/zsh", zsh_hash)];
     for (url, path_in_targz, expected_hash) in downloads.iter().copied() {
-        let filename = path_in_targz.split('/').rev().next().unwrap();
+        let filename = path_in_targz.split('/').next_back().unwrap();
         let download_path = out_dir.join(filename);
         let hash_path = out_dir.join(format!("{}.hash", filename));
 

@@ -103,7 +103,7 @@ impl ResolvedTask {
         if !task_request.contains('#') {
             return current_package_path == Some(&self.resolved_config.config_dir)
                 && self.name.task_group_name == task_request;
-        };
+        }
 
         task_request.get(..package_name.len()) == Some(package_name)
             && task_request.get(package_name.len()..=package_name.len()) == Some("#")
@@ -230,8 +230,8 @@ pub struct CommandFingerprint {
     /// Environment variables that affect caching (excludes pass-through envs)
     pub envs_without_pass_through: BTreeMap<Str, Str>, // using BTreeMap to have a stable order in cache db
 
-    /// even though value changes to pass_through_envs shouldn't invalidate the cache,
-    /// The names should still be fingerprinted so that the cache can be invalidated if the pass_through_envs config changes
+    /// even though value changes to `pass_through_envs` shouldn't invalidate the cache,
+    /// The names should still be fingerprinted so that the cache can be invalidated if the `pass_through_envs` config changes
     pub pass_through_envs: BTreeSet<Str>, // using BTreeSet to have a stable order in cache db
 }
 

@@ -13,7 +13,7 @@ pub static NPM_REGISTRY: LazyLock<String> = LazyLock::new(|| {
 /// Get the tgz url of a npm package
 pub fn get_npm_package_tgz_url(name: &str, version: &str) -> String {
     // convert `@scope/name` to `name`
-    let filename = name.split('/').last().unwrap_or(name);
+    let filename = name.split('/').next_back().unwrap_or(name);
     format!("{}/{}/-/{}-{}.tgz", NPM_REGISTRY.clone(), name, filename, version)
 }
 
