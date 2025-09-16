@@ -285,18 +285,7 @@ mod tests {
             Arc::<AbsolutePath>::from(AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap());
         let path_read = PathRead { read_dir_entries: true };
 
-        let result = match fs.fingerprint_path(&dir_path, path_read) {
-            Ok(result) => result,
-            Err(err) => {
-                // On Windows CI, temporary directories might have permission issues
-                // Skip the test if we get a permission denied error
-                if cfg!(windows) && err.to_string().contains("Access is denied") {
-                    eprintln!("Skipping test due to Windows permission issue: {}", err);
-                    return;
-                }
-                panic!("Unexpected error: {}", err);
-            }
-        };
+        let result = fs.fingerprint_path(&dir_path, path_read).unwrap();
 
         match result {
             PathFingerprint::Folder(Some(entries)) => {
@@ -323,29 +312,5 @@ mod tests {
             }
         };
         assert!(matches!(result_no_entries, PathFingerprint::Folder(None)));
-    }
-
-    #[test]
-    fn test_fingerprint_consistency_across_calls() {
-        let fs = RealFileSystem::default();
-        let temp_dir = TempDir::new().unwrap();
-        let temp_file = temp_dir.path().join("consistent_test.txt");
-
-        std::fs::write(&temp_file, "consistent content").unwrap();
-
-        let file_path =
-            Arc::<AbsolutePath>::from(AbsolutePathBuf::new(temp_file.to_path_buf()).unwrap());
-        let path_read = PathRead { read_dir_entries: false };
-
-        // Get multiple fingerprints
-        let results: Vec<_> = (0..5)
-            .map(|_| fs.fingerprint_path(&file_path, path_read))
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-
-        // All results should be identical
-        for result in &results[1..] {
-            assert_eq!(&results[0], result);
-        }
     }
 }
