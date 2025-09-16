@@ -258,7 +258,9 @@ pub enum FromPathError {
 
 #[cfg(test)]
 mod tests {
-    use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
+
+    #[cfg(windows)]
+    use std::os::windows::ffi::OsStringExt as _;
 
     use assert2::let_assert;
 
@@ -271,9 +273,26 @@ mod tests {
                 RelativePathBuf::new(if cfg!(windows) { "C:\\Users" } else { "/home" })
         );
     }
+
+    #[cfg(unix)]
     #[test]
     fn non_utf8() {
+        use std::{ffi::OsStr};
+        use std::os::unix::ffi::OsStrExt as _;
+
         let non_utf8_path = Path::new(OsStr::from_bytes(&[0xC0]));
+        let_assert!(
+            Err(FromPathError::InvalidPathData(InvalidPathDataError::NonUtf8)) =
+                RelativePathBuf::new(non_utf8_path),
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn non_utf8() {
+        use std::ffi::OsString;
+        // ill-formed UTF-16: X<high surrogate>Y
+        let non_utf8_path = OsString::from_wide(&[0x0058, 0xD800, 0x0059]);
         let_assert!(
             Err(FromPathError::InvalidPathData(InvalidPathDataError::NonUtf8)) =
                 RelativePathBuf::new(non_utf8_path),

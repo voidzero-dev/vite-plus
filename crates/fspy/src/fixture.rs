@@ -1,11 +1,8 @@
-#[cfg(target_os = "macos")]
 use std::{
     fs::{self, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
 };
-
-#[cfg(target_os = "macos")]
 pub struct Fixture {
     pub name: &'static str,
     pub content: &'static [u8],
@@ -24,10 +21,8 @@ macro_rules! fixture {
     };
 }
 
-#[cfg(target_os = "macos")]
 pub use fixture;
 
-#[cfg(target_os = "macos")]
 impl Fixture {
     pub const fn new(name: &'static str, content: &'static [u8], hash: &'static str) -> Self {
         Self { name, content, hash }
