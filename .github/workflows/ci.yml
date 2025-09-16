@@ -50,7 +50,7 @@ jobs:
 
       - run: cargo check --all-targets --all-features
         env:
-          RUSTFLAGS: "-D warnings"
+          RUSTFLAGS: "-D warnings --cfg tokio_unstable" # also update .cargo/config.toml
 
       - run: cargo test
 
