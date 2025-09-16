@@ -1,5 +1,5 @@
 {
   "commands": [
-    "vp new || echo vp new test placeholder"
+    "echo vp new test placeholder"
   ]
 }

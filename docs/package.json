@@ -8,6 +8,8 @@
     "preview": "vitepress preview"
   },
   "devDependencies": {
-    "vitepress": "catalog:"
+    "vue": "catalog:",
+    "vitepress": "catalog:",
+    "oxc-minify": "catalog:"
   }
 }

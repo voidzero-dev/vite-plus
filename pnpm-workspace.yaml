@@ -16,6 +16,7 @@ catalog:
   oxfmt: ^0.1.0
   oxlint: ^1.15.0
   oxlint-tsgolint: ^0.2.0
+  oxc-minify: ^0.82.1
   react: ^19.1.0
   react-dom: ^19.1.0
   rolldown: ^1.0.0-beta.38
@@ -24,6 +25,7 @@ catalog:
   typescript: ^5.9.2
   vitepress: 2.0.0-alpha.12
   vitest: ^3.2.4
+  vue: ^3.5.21
 
 minimumReleaseAge: 1440
 
