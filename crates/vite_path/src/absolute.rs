@@ -202,8 +202,6 @@ impl Deref for AbsolutePathBuf {
 mod tests {
     use std::path::Path;
 
-    
-
     use super::*;
 
     #[test]

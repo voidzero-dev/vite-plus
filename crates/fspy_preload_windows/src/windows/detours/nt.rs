@@ -8,8 +8,8 @@ use winapi::{
     shared::{
         minwindef::HFILE,
         ntdef::{
-            BOOLEAN, HANDLE, NTSTATUS, PHANDLE, PLARGE_INTEGER,
-            POBJECT_ATTRIBUTES, PUNICODE_STRING, PVOID, ULONG,
+            BOOLEAN, HANDLE, NTSTATUS, PHANDLE, PLARGE_INTEGER, POBJECT_ATTRIBUTES,
+            PUNICODE_STRING, PVOID, ULONG,
         },
     },
     um::winnt::{ACCESS_MASK, GENERIC_READ},

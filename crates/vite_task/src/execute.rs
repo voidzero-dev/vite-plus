@@ -746,8 +746,6 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn test_windows_env_case_insensitive() {
-        
-
         use crate::{
             collections::HashSet,
             config::{ResolvedTaskConfig, TaskCommand, TaskConfig},

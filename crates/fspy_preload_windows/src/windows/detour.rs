@@ -1,10 +1,4 @@
-use std::{
-    cell::UnsafeCell,
-    ffi::CStr,
-    mem::transmute_copy,
-    os::raw::c_void,
-    ptr::null_mut,
-};
+use std::{cell::UnsafeCell, ffi::CStr, mem::transmute_copy, os::raw::c_void, ptr::null_mut};
 
 use ms_detours::{DetourAttach, DetourDetach};
 use winapi::{
