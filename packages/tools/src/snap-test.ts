@@ -88,6 +88,7 @@ async function runTestCase(name: string) {
 }
 
 function replaceUnstableOutput(output: string) {
-  return output.replace(/\d+(?:\.\d+)?s|\d+ms/, '<variable>ms')
-    .replace(/with \d+ rules using \d+ threads/, 'with <variable> rules using <variable> threads');
+  return output.replaceAll(/\d+(?:\.\d+)?s|\d+ms/g, '<variable>ms')
+    .replaceAll(/with \d+ rules/g, 'with <variable> rules')
+    .replaceAll(/using \d+ threads/g, 'using <variable> threads');
 }

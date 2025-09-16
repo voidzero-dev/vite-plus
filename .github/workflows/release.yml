@@ -90,7 +90,7 @@ jobs:
           merge-multiple: true
 
       - name: Build
-        run: vite run @voidzero-dev/vite-plus#build:ts @voidzero-dev/global#build
+        run: vite run @voidzero-dev/vite-plus#build @voidzero-dev/global#build
 
       # Download again because `@voidzero-dev/global#build` will cleanup the dist dir first
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
