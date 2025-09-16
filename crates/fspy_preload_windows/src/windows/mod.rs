@@ -4,7 +4,7 @@ pub(crate) mod detour;
 mod detours;
 mod winapi_utils;
 
-use std::{env::current_exe, slice};
+use std::slice;
 
 use client::{Client, set_global_client};
 use detours::DETOURS;

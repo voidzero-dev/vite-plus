@@ -1,20 +1,17 @@
 use std::{
-    cell::{SyncUnsafeCell, UnsafeCell},
-    ffi::{CStr, c_char},
+    cell::UnsafeCell,
+    ffi::CStr,
     mem::transmute_copy,
-    os::{raw::c_void, windows::raw::HANDLE},
+    os::raw::c_void,
     ptr::null_mut,
 };
 
 use ms_detours::{DetourAttach, DetourDetach};
 use winapi::{
     shared::minwindef::HMODULE,
-    um::{
-        fileapi::CreateFileW,
-        libloaderapi::{GetProcAddress, LoadLibraryA},
-    },
+    um::libloaderapi::{GetProcAddress, LoadLibraryA},
 };
-use winsafe::{HINSTANCE, SysResult};
+use winsafe::SysResult;
 
 use crate::windows::winapi_utils::ck_long;
 

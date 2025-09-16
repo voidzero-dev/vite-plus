@@ -202,7 +202,7 @@ impl Deref for AbsolutePathBuf {
 mod tests {
     use std::path::Path;
 
-    use assert2::let_assert;
+    
 
     use super::*;
 

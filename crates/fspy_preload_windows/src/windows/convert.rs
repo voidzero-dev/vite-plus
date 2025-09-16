@@ -1,4 +1,4 @@
-use fspy_shared::ipc::{AccessMode, NativeStr};
+use fspy_shared::ipc::AccessMode;
 use widestring::{U16CStr, U16CString, U16Str};
 use winapi::{
     shared::ntdef::{HANDLE, POBJECT_ATTRIBUTES},

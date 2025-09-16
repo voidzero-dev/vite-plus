@@ -228,7 +228,7 @@ mod tests {
     fn test_from_wide() {
         use std::os::windows::ffi::OsStrExt;
 
-        use bincode::{borrow_decode_from_slice, config, decode_from_slice, encode_to_vec};
+        use bincode::{borrow_decode_from_slice, config, encode_to_vec};
 
         let wide_str: &[u16] = &[528, 491];
         let native_str = NativeStr::from_wide(wide_str);

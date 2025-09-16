@@ -536,7 +536,7 @@ fn format_path_env(bin_prefix: impl AsRef<Path>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::{env, fs, process::Command};
+    use std::fs;
 
     use tempfile::{TempDir, tempdir};
 

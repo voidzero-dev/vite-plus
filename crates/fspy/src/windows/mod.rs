@@ -1,13 +1,10 @@
 use std::{
-    convert::Infallible,
-    env::temp_dir,
     ffi::{CStr, c_char, c_void},
-    fs::{File, OpenOptions, create_dir},
-    io, mem,
+    fs::OpenOptions,
+    io,
     os::windows::{ffi::OsStrExt, io::AsRawHandle, process::ChildExt as _},
     path::Path,
-    ptr::{null, null_mut},
-    str::from_utf8,
+    ptr::null_mut,
     sync::Arc,
 };
 
@@ -41,7 +38,7 @@ use crate::{
     TrackedChild,
     arena::PathAccessArena,
     command::Command,
-    fixture::{Fixture, fixture},
+    fixture::Fixture,
 };
 
 const PRELOAD_CDYLIB_BINARY: &[u8] = include_bytes!(env!("CARGO_CDYLIB_FILE_FSPY_PRELOAD_WINDOWS"));
@@ -125,7 +122,7 @@ impl SpyInner {
     }
 }
 
-pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild> {
+pub(crate) async fn spawn_impl(command: Command) -> io::Result<TrackedChild> {
     let asni_dll_path_with_nul = Arc::clone(&command.spy_inner.asni_dll_path_with_nul);
     let mut command = command.into_tokio_command();
 

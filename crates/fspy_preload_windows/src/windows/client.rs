@@ -1,16 +1,8 @@
 use std::{
     cell::SyncUnsafeCell,
     ffi::{CStr, c_void},
-    fs::OpenOptions,
-    hint::black_box,
     mem::MaybeUninit,
-    os::windows::io::{AsHandle, AsRawHandle, OwnedHandle, RawHandle},
-    ptr::{null, null_mut},
-    sync::{
-        Mutex, RwLock,
-        mpsc::{self, Receiver, Sender},
-    },
-    thread::JoinHandle,
+    ptr::null_mut,
 };
 
 use bincode::{borrow_decode_from_slice, encode_into_std_write, encode_to_vec};

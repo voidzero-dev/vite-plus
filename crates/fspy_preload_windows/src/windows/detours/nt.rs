@@ -1,20 +1,18 @@
-use std::{cell::Cell, ffi::CStr, ops::Deref, slice, sync::LazyLock};
+use std::cell::Cell;
 
-use arrayvec::ArrayVec;
 use fspy_shared::ipc::{AccessMode, NativeStr, PathAccess};
 use ntapi::ntioapi::{
     FILE_INFORMATION_CLASS, NtQueryDirectoryFile, NtQueryFullAttributesFile,
     NtQueryInformationByName, PFILE_BASIC_INFORMATION, PFILE_NETWORK_OPEN_INFORMATION,
     PIO_APC_ROUTINE, PIO_STATUS_BLOCK,
 };
-use smallvec::SmallVec;
-use widestring::{U16CStr, U16CString, U16Str};
+use widestring::{U16CStr, U16CString};
 use winapi::{
     shared::{
-        minwindef::{BOOL, DWORD, HFILE, MAX_PATH, UINT},
+        minwindef::HFILE,
         ntdef::{
-            BOOLEAN, HANDLE, LPCSTR, LPCWSTR, NTSTATUS, PHANDLE, PLARGE_INTEGER,
-            POBJECT_ATTRIBUTES, PUNICODE_STRING, PVOID, ULONG, UNICODE_STRING,
+            BOOLEAN, HANDLE, NTSTATUS, PHANDLE, PLARGE_INTEGER,
+            POBJECT_ATTRIBUTES, PUNICODE_STRING, PVOID, ULONG,
         },
     },
     um::winnt::{ACCESS_MASK, GENERIC_READ},
@@ -24,7 +22,7 @@ use crate::windows::{
     client::global_client,
     convert::{ToAbsolutePath, ToAccessMode},
     detour::{Detour, DetourAny},
-    winapi_utils::{access_mask_to_mode, combine_paths, get_path_name, get_u16_str},
+    winapi_utils::{combine_paths, get_path_name, get_u16_str},
 };
 
 unsafe fn to_path_access<F: FnOnce(PathAccess<'_>)>(

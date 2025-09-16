@@ -746,7 +746,7 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn test_windows_env_case_insensitive() {
-        use std::path::Path;
+        
 
         use crate::{
             collections::HashSet,
