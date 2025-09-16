@@ -820,7 +820,7 @@ mod tests {
         // Verify default pass-through envs are present
         let all_envs = result1.all_envs;
         assert!(all_envs.contains_key("VSCODE_VAR"));
-        assert!(all_envs.contains_key("Path"));
+        assert!(all_envs.contains_key("Path") || all_envs.contains_key("PATH"));
         assert!(all_envs.contains_key("app1_name"));
         assert!(all_envs.contains_key("app1_name"));
 
