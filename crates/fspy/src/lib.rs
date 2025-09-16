@@ -17,8 +17,7 @@ mod command;
 use std::{env::temp_dir, ffi::OsStr, fs::create_dir, io, sync::OnceLock};
 
 pub use command::Command;
-pub use fspy_shared::ipc::AccessMode;
-pub use fspy_shared::ipc::PathAccess;
+pub use fspy_shared::ipc::{AccessMode, PathAccess};
 use futures_util::future::BoxFuture;
 pub use os_impl::PathAccessIterable;
 use os_impl::SpyInner;
@@ -37,14 +36,17 @@ impl Spy {
         let _ = create_dir(&tmp_dir);
         Ok(Self(SpyInner::init_in(&tmp_dir)?))
     }
+
     #[cfg(target_os = "linux")]
     pub fn new() -> io::Result<Self> {
         Ok(Self(SpyInner::init()?))
     }
+
     pub fn global() -> io::Result<&'static Self> {
         static GLOBAL_SPY: OnceLock<Spy> = OnceLock::new();
         GLOBAL_SPY.get_or_try_init(|| Self::new())
     }
+
     pub fn new_command<S: AsRef<OsStr>>(&self, program: S) -> Command {
         Command {
             program: program.as_ref().to_os_string(),

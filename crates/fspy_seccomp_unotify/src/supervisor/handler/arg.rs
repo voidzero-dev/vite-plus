@@ -56,6 +56,7 @@ impl CStrPtr {
             return Ok(());
         }
     }
+
     pub fn read_with_buf<const BUF_SIZE: usize, R, F: FnOnce(&[u8]) -> io::Result<R>>(
         &self,
         f: F,

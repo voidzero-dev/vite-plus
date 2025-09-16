@@ -12,6 +12,10 @@ use vite_package_manager::{
 use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePath, RelativePathBuf};
 use vite_str::Str;
 
+use super::{
+    ResolvedTask, ResolvedTaskConfig, TaskCommand, TaskConfig, TaskGraphBuilder, TaskId,
+    ViteTaskJson,
+};
 use crate::{
     Error,
     cache::TaskCache,
@@ -19,11 +23,6 @@ use crate::{
     collections::{HashMap, HashSet},
     config::{TaskGroupId, name::TaskName},
     fs::CachedFileSystem,
-};
-
-use super::{
-    ResolvedTask, ResolvedTaskConfig, TaskCommand, TaskConfig, TaskGraphBuilder, TaskId,
-    ViteTaskJson,
 };
 
 #[derive(Debug)]

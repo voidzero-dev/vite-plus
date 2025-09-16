@@ -1,8 +1,6 @@
-use vite_path::current_dir;
-
 use clap::Parser as _;
-
 use vite_error::Error;
+use vite_path::current_dir;
 use vite_task::{Args, CliOptions, init_tracing};
 
 #[tokio::main]

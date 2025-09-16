@@ -1,8 +1,6 @@
-use std::env;
-use std::sync::LazyLock;
+use std::{env, sync::LazyLock};
 
 use directories::BaseDirs;
-
 use vite_error::Error;
 use vite_path::{AbsolutePathBuf, current_dir};
 

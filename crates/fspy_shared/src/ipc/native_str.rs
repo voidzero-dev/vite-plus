@@ -2,8 +2,7 @@
 use std::ffi::OsString;
 #[cfg(unix)]
 use std::sync::Arc;
-use std::{borrow::Cow, fmt::Debug};
-use std::{ffi::OsStr, mem::MaybeUninit, path::Path};
+use std::{borrow::Cow, ffi::OsStr, fmt::Debug, mem::MaybeUninit, path::Path};
 
 use allocator_api2::alloc::Allocator;
 #[cfg(unix)]
@@ -50,6 +49,7 @@ impl<'a> NativeStr<'a> {
             is_wide: self.is_wide,
         }
     }
+
     pub fn from_bytes(bytes: &'a [u8]) -> Self {
         Self {
             #[cfg(windows)]
@@ -78,9 +78,9 @@ impl<'a> NativeStr<'a> {
 
     #[cfg(windows)]
     pub fn to_os_string(&self) -> OsString {
-        use bytemuck::allocation::pod_collect_to_vec;
-        use bytemuck::try_cast_slice;
         use std::os::windows::ffi::OsStringExt;
+
+        use bytemuck::{allocation::pod_collect_to_vec, try_cast_slice};
         use winsafe::{
             MultiByteToWideChar,
             co::{CP, MBC},
@@ -155,6 +155,7 @@ impl<'a> From<&'a std::path::Path> for NativeString {
 #[cfg(unix)]
 impl std::ops::Deref for NativeString {
     type Target = OsStr;
+
     fn deref(&self) -> &Self::Target {
         self.as_os_str()
     }

@@ -2,10 +2,6 @@ mod fs;
 mod shebang;
 mod which;
 
-use bstr::{BStr, BString, ByteSlice};
-use fspy_shared::ipc::{AccessMode, PathAccess};
-use nix::unistd::{AccessFlags, access};
-
 use std::{
     ffi::{CStr, OsStr, OsString},
     io,
@@ -15,6 +11,9 @@ use std::{
     path::{Path, PathBuf, absolute},
 };
 
+use bstr::{BStr, BString, ByteSlice};
+use fspy_shared::ipc::{AccessMode, PathAccess};
+use nix::unistd::{AccessFlags, access};
 use shebang::{ParseShebangOptions, parse_shebang};
 
 use crate::open_exec::open_executable;
@@ -40,6 +39,7 @@ impl<'a> ExecResolveConfig<'a> {
     pub fn search_path_disabled() -> Self {
         Self { search_path: None, shebang_options: Default::default() }
     }
+
     /// execlp/execvp/execvP/execvpe
     /// `custom_path` allows a customized path to be searched like in execvP (macOS extension)
     pub fn search_path_enabled(custom_path: Option<&'a BStr>) -> Self {

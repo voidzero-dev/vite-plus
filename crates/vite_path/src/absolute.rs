@@ -1,4 +1,3 @@
-use ref_cast::{RefCastCustom, ref_cast_custom};
 use std::{
     ffi::OsStr,
     fmt::Display,
@@ -6,6 +5,8 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+
+use ref_cast::{RefCastCustom, ref_cast_custom};
 
 use crate::relative::{FromPathError, InvalidPathDataError, RelativePathBuf};
 
@@ -139,9 +140,11 @@ impl AbsolutePathBuf {
     pub fn new(path: PathBuf) -> Option<Self> {
         if path.is_absolute() { Some(unsafe { Self::assume_absolute(path) }) } else { None }
     }
+
     pub unsafe fn assume_absolute(abs_path: PathBuf) -> Self {
         Self(abs_path)
     }
+
     pub fn as_absolute_path(&self) -> &AbsolutePath {
         unsafe { AbsolutePath::assume_absolute(self.0.as_path()) }
     }
@@ -192,8 +195,9 @@ impl Deref for AbsolutePathBuf {
 mod tests {
     use std::path::Path;
 
-    use super::*;
     use assert2::let_assert;
+
+    use super::*;
 
     #[test]
     fn non_absolute() {

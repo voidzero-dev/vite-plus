@@ -2,20 +2,21 @@ use std::{
     ffi::OsStr,
     fs::File,
     hash::Hasher as _,
-    io::{self, Read},
+    io::{self, BufRead, Read},
     sync::Arc,
 };
 
-use crate::Error;
-use crate::{execute::PathRead, fingerprint::PathFingerprint};
 use dashmap::DashMap;
-use std::io::BufRead;
 #[cfg(unix)]
 use vite_path::AbsolutePath;
 use vite_str::Str;
 
-use crate::collections::HashMap;
-use crate::fingerprint::DirEntryKind;
+use crate::{
+    Error,
+    collections::HashMap,
+    execute::PathRead,
+    fingerprint::{DirEntryKind, PathFingerprint},
+};
 pub trait FileSystem: Sync {
     fn fingerprint_path(
         &self,

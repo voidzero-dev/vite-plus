@@ -1,8 +1,8 @@
-use crate::open_exec::open_executable;
-
 use std::path::Path;
 
 use bstr::{BString, ByteSlice};
+
+use crate::open_exec::open_executable;
 
 #[derive(Debug, Clone)]
 pub struct Shebang {

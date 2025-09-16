@@ -1,14 +1,16 @@
-use crate::{
-    exec::{Exec, ensure_env},
-    payload::{EncodedPayload, PAYLOAD_ENV_NAME},
-};
-use bstr::ByteSlice;
-use phf::{Set, phf_set};
 use std::{
     convert::Infallible,
     ffi::OsStr,
     os::unix::ffi::{OsStrExt, OsStringExt},
     path::{Path, absolute},
+};
+
+use bstr::ByteSlice;
+use phf::{Set, phf_set};
+
+use crate::{
+    exec::{Exec, ensure_env},
+    payload::{EncodedPayload, PAYLOAD_ENV_NAME},
 };
 
 pub struct PreExec(Infallible);

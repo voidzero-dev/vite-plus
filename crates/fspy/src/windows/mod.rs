@@ -11,7 +11,6 @@ use std::{
     sync::Arc,
 };
 
-use crate::{TrackedChild, arena::PathAccessArena, command::Command};
 use bincode::borrow_decode_from_slice;
 use const_format::formatcp;
 use fspy_shared::{
@@ -25,7 +24,6 @@ use tokio::{
     net::windows::named_pipe::{NamedPipeServer, PipeMode, ServerOptions},
 };
 // use detours_sys2::{DetourAttach,};
-
 use winapi::{
     shared::minwindef::{FALSE, TRUE},
     um::{
@@ -39,7 +37,12 @@ use winapi::{
 use winsafe::co::{CP, WC};
 use xxhash_rust::const_xxh3::xxh3_128;
 
-use crate::fixture::{Fixture, fixture};
+use crate::{
+    TrackedChild,
+    arena::PathAccessArena,
+    command::Command,
+    fixture::{Fixture, fixture},
+};
 
 const PRELOAD_CDYLIB_BINARY: &[u8] = include_bytes!(env!("CARGO_CDYLIB_FILE_FSPY_PRELOAD_WINDOWS"));
 const INTERPOSE_CDYLIB: Fixture = Fixture {

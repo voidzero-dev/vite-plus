@@ -1,5 +1,4 @@
-use std::path::Path;
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 
 use backon::{ExponentialBuilder, Retryable};
 use flate2::read::GzDecoder;
@@ -7,8 +6,7 @@ use futures_util::stream::StreamExt;
 use reqwest::Response;
 use serde::de::DeserializeOwned;
 use tar::Archive;
-use tokio::fs;
-use tokio::io::AsyncWriteExt;
+use tokio::{fs, io::AsyncWriteExt};
 
 use crate::Error;
 
@@ -178,11 +176,12 @@ pub async fn download_and_extract_tgz(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
 
     use httpmock::prelude::*;
     use tempfile::TempDir;
+
+    use super::*;
 
     /// Helper function to create a mock package tar.gz that mimics npm package structure
     fn create_mock_package_tgz() -> Vec<u8> {

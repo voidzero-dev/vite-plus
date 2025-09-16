@@ -68,6 +68,7 @@ impl DetourGuard {
         }
         Self { active }
     }
+
     pub fn active(&self) -> bool {
         self.active
     }

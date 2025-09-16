@@ -1,5 +1,6 @@
-use color_eyre::Result;
 use std::sync::LazyLock;
+
+use color_eyre::Result;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 

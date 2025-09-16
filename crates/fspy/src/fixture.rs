@@ -28,6 +28,7 @@ impl Fixture {
     pub const fn new(name: &'static str, content: &'static [u8], hash: &'static str) -> Self {
         Self { name, content, hash }
     }
+
     pub fn write_to(&self, dir: impl AsRef<Path>, suffix: &str) -> io::Result<PathBuf> {
         let dir = dir.as_ref();
         let path = dir.join(format!("{}_{}{}", self.name, self.hash, suffix));

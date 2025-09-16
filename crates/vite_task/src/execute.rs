@@ -472,8 +472,10 @@ mod tests {
 
     #[test]
     fn test_force_color_auto_detection() {
-        use crate::collections::HashSet;
-        use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
+        use crate::{
+            collections::HashSet,
+            config::{ResolvedTaskConfig, TaskCommand, TaskConfig},
+        };
 
         let task_config = TaskConfig {
             command: TaskCommand::ShellScript("echo test".into()),
@@ -533,8 +535,10 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn test_task_envs_stable_ordering() {
-        use crate::collections::HashSet;
-        use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
+        use crate::{
+            collections::HashSet,
+            config::{ResolvedTaskConfig, TaskCommand, TaskConfig},
+        };
 
         // Create a task config with multiple envs in a HashSet
         let mut envs = HashSet::new();
@@ -652,8 +656,10 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn test_unix_env_case_sensitive() {
-        use crate::collections::HashSet;
-        use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
+        use crate::{
+            collections::HashSet,
+            config::{ResolvedTaskConfig, TaskCommand, TaskConfig},
+        };
 
         // Test that Unix environment variable matching is case-sensitive
         // Unix env vars are case-sensitive, so PATH and path are different
@@ -716,9 +722,12 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn test_windows_env_case_insensitive() {
-        use crate::collections::HashSet;
-        use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
         use std::path::Path;
+
+        use crate::{
+            collections::HashSet,
+            config::{ResolvedTaskConfig, TaskCommand, TaskConfig},
+        };
 
         // Create a task config with multiple envs in a HashSet
         let mut envs = HashSet::new();

@@ -1,11 +1,11 @@
 use std::sync::Arc;
-use vite_path::AbsolutePath;
 
 use futures_core::future::BoxFuture;
 use futures_util::future::FutureExt as _;
 use owo_colors::{OwoColorize, Style};
 use petgraph::{algo::toposort, stable_graph::StableDiGraph};
 use tokio::io::AsyncWriteExt as _;
+use vite_path::AbsolutePath;
 
 use crate::{
     Error,
@@ -208,7 +208,6 @@ async fn get_cached_or_execute<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use crate::{
         Workspace,
         test_utils::{get_fixture_path, with_unique_cache_path},

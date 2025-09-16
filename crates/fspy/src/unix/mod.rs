@@ -9,19 +9,6 @@ mod syscall_handler;
 mod macos_fixtures;
 
 #[cfg(target_os = "macos")]
-use fspy_shared::ipc::NativeString;
-#[cfg(target_os = "macos")]
-use fspy_shared_unix::payload::Fixtures;
-use fspy_shared_unix::{
-    exec::ExecResolveConfig,
-    payload::{Payload, encode_payload},
-    spawn::handle_exec,
-};
-use memmap2::Mmap;
-
-#[cfg(target_os = "linux")]
-use fspy_seccomp_unotify::supervisor::supervise;
-#[cfg(target_os = "macos")]
 use std::path::Path;
 use std::{
     cell::RefCell,
@@ -44,21 +31,29 @@ use std::{
     },
 };
 
-#[cfg(target_os = "linux")]
-use syscall_handler::SyscallHandler;
-
 use bincode::{borrow_decode_from_slice, error::DecodeError};
 use bumpalo::Bump;
-use passfd::{FdPassingExt as _, tokio::FdPassingExt as _};
-
-use tokio::{net::UnixStream, process::Child as TokioChild};
-
+#[cfg(target_os = "linux")]
+use fspy_seccomp_unotify::supervisor::supervise;
+#[cfg(target_os = "macos")]
+use fspy_shared::ipc::NativeString;
 use fspy_shared::ipc::{BINCODE_CONFIG, PathAccess};
+#[cfg(target_os = "macos")]
+use fspy_shared_unix::payload::Fixtures;
+use fspy_shared_unix::{
+    exec::ExecResolveConfig,
+    payload::{Payload, encode_payload},
+    spawn::handle_exec,
+};
 use futures_util::{FutureExt, future::try_join};
+use memmap2::Mmap;
 use nix::fcntl::{FcntlArg, FdFlag, OFlag, fcntl};
-
 #[cfg(target_os = "linux")]
 use nix::sys::memfd::{MFdFlags, memfd_create};
+use passfd::{FdPassingExt as _, tokio::FdPassingExt as _};
+#[cfg(target_os = "linux")]
+use syscall_handler::SyscallHandler;
+use tokio::{net::UnixStream, process::Child as TokioChild};
 
 use crate::{Command, TrackedChild, arena::PathAccessArena};
 
@@ -90,9 +85,10 @@ impl SpyInner {
 
     #[cfg(target_os = "macos")]
     pub fn init_in(dir: &Path) -> io::Result<Self> {
-        use crate::fixture::Fixture;
         use const_format::formatcp;
         use xxhash_rust::const_xxh3::xxh3_128;
+
+        use crate::fixture::Fixture;
         let coreutils_path = macos_fixtures::COREUTILS_BINARY.write_to(&dir, "")?;
         let bash_path = macos_fixtures::OILS_BINARY.write_to(&dir, "")?;
 

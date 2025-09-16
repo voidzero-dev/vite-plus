@@ -1,9 +1,8 @@
 use std::path::Path;
-use tokio::fs::write;
 
 use indoc::formatdoc;
 use pathdiff::diff_paths;
-
+use tokio::fs::write;
 use vite_error::Error;
 
 /// Write cmd/sh/pwsh shim files.
@@ -110,9 +109,10 @@ pub fn pwsh_shim(relative_file: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::TempDir;
     use tokio::fs::read_to_string;
+
+    use super::*;
 
     fn format_shim(shim: &str) -> String {
         shim.replace(" ", "·")

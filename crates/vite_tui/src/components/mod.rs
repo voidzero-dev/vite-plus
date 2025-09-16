@@ -1,15 +1,14 @@
 mod tasks_list;
 mod tasks_pane;
 
-pub use tasks_list::TasksList;
-pub use tasks_pane::TasksPane;
-
 use color_eyre::Result;
 use crossterm::event::{KeyEvent, MouseEvent};
 use ratatui::{
     Frame,
     layout::{Rect, Size},
 };
+pub use tasks_list::TasksList;
+pub use tasks_pane::TasksPane;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{action::Action, tui::Event};

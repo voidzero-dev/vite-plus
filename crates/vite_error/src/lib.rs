@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use std::{ffi::OsString, path::Path};
+use std::{ffi::OsString, path::Path, sync::Arc};
 
 use petgraph::graph::NodeIndex;
 use thiserror::Error;
-use vite_path::AbsolutePath;
-use vite_path::relative::InvalidPathDataError;
-use vite_path::{AbsolutePathBuf, RelativePathBuf, absolute::StripPrefixError};
+use vite_path::{
+    AbsolutePath, AbsolutePathBuf, RelativePathBuf, absolute::StripPrefixError,
+    relative::InvalidPathDataError,
+};
 use vite_str::Str;
 
 #[derive(Error, Debug)]

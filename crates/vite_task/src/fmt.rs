@@ -2,9 +2,9 @@ use std::future::Future;
 
 use petgraph::stable_graph::StableGraph;
 
-use crate::config::ResolvedTask;
-use crate::schedule::ExecutionPlan;
-use crate::{Error, ResolveCommandResult, Workspace};
+use crate::{
+    Error, ResolveCommandResult, Workspace, config::ResolvedTask, schedule::ExecutionPlan,
+};
 
 #[tracing::instrument(skip(resolve_fmt_command, workspace))]
 pub async fn fmt<Fmt: Future<Output = Result<ResolveCommandResult, Error>>, FmtFn: Fn() -> Fmt>(

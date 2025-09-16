@@ -151,8 +151,9 @@ mod tests {
 
     #[test]
     fn test_combine_path() {
-        use super::combine_paths;
         use widestring::u16cstr;
+
+        use super::combine_paths;
 
         let path1 = u16cstr!("C:\\foo");
         let path2 = u16cstr!("bar\\baz");

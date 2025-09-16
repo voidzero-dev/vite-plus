@@ -27,14 +27,13 @@ use bincode::{
     enc::write::SizeWriter, encode_into_slice, encode_into_std_write, encode_into_writer,
 };
 use bstr::BStr;
+use convert::{ToAbsolutePath, ToAccessMode};
 use fspy_shared::ipc::{AccessMode, BINCODE_CONFIG, NativeStr, NativeString, PathAccess};
 use fspy_shared_unix::{
     exec::ExecResolveConfig,
     payload::{EncodedPayload, decode_payload_from_env},
     spawn::{PreExec, handle_exec},
 };
-
-use convert::{ToAbsolutePath, ToAccessMode};
 use libc::{off_t, pthread_atfork};
 use memmap2::{Mmap, MmapMut};
 use nix::{
@@ -102,6 +101,7 @@ impl Client {
             posix_spawn_file_actions: OnceLock::new(),
         }
     }
+
     fn new_shm(&self) -> io::Result<ShmCursor> {
         let shm_name = format!(
             "/fspy_shm_{}_{}",
@@ -224,6 +224,7 @@ impl Client {
         attrp: *const libc::posix_spawnattr_t,
     ) -> nix::Result<()> {
         use core::mem::zeroed;
+
         use libc::c_short;
         let cloexec_default = if attrp.is_null() {
             false

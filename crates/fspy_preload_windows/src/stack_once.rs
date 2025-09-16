@@ -9,6 +9,7 @@ impl StackOnceToken {
     pub const fn new(active: &'static LocalKey<Cell<bool>>) -> StackOnceToken {
         Self { active }
     }
+
     pub fn try_enter(&self) -> Option<StackOnceGuard> {
         if self.active.get() {
             None

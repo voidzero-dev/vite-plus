@@ -1,19 +1,23 @@
-use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::{BufReader, Seek, SeekFrom};
-use std::path::Path;
-use std::{env, fmt};
+use std::{
+    collections::HashMap,
+    env, fmt,
+    fs::{self, File},
+    io::{BufReader, Seek, SeekFrom},
+    path::Path,
+};
 
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use tokio::fs::remove_dir_all;
-
-use crate::config::{get_cache_dir, get_npm_package_tgz_url, get_npm_package_version_url};
-use crate::request::{HttpClient, download_and_extract_tgz};
-use crate::shim;
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 use vite_str::Str;
+
+use crate::{
+    config::{get_cache_dir, get_npm_package_tgz_url, get_npm_package_version_url},
+    request::{HttpClient, download_and_extract_tgz},
+    shim,
+};
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
@@ -531,12 +535,11 @@ fn format_path_env(bin_prefix: impl AsRef<Path>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::env;
-    use std::fs;
-    use std::process::Command;
+    use std::{env, fs, process::Command};
 
     use tempfile::{TempDir, tempdir};
+
+    use super::*;
 
     fn create_temp_dir() -> TempDir {
         tempdir().expect("Failed to create temp directory")

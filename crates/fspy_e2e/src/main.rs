@@ -31,9 +31,11 @@ impl AccessCollector {
     pub fn new(dir: PathBuf) -> Self {
         Self { dir, accesses: BTreeMap::new() }
     }
+
     pub fn iter(&self) -> impl Iterator<Item = (&str, AccessMode)> {
         self.accesses.iter().map(|(k, v)| (k.as_str(), *v))
     }
+
     pub fn add(&mut self, access: PathAccess) {
         let path = PathBuf::from(access.path.to_cow_os_str().to_os_string());
         if let Ok(relative_path) = path.strip_prefix(&self.dir) {

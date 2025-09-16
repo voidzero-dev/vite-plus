@@ -13,14 +13,13 @@
 //! 4. JavaScript resolves the tool path and returns it to Rust
 //! 5. Rust executes the tool with the resolved path
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use vite_path::current_dir;
+use std::{collections::HashMap, sync::Arc};
 
 use clap::Parser as _;
 use napi::{anyhow, bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
 use vite_error::Error;
+use vite_path::current_dir;
 use vite_task::{Args, CliOptions as ViteTaskCliOptions, Commands, ResolveCommandResult};
 
 /// Module initialization - sets up tracing for debugging

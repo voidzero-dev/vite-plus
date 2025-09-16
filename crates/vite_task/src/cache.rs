@@ -1,22 +1,21 @@
-use diff::Diff;
-use rusqlite::config::DbConfig;
-use std::fmt::Display;
-use std::io::Write;
-use std::sync::Arc;
-use vite_path::AbsolutePath;
+use std::{fmt::Display, io::Write, sync::Arc};
 
 // use bincode::config::{Configuration, standard};
 use bincode::{Decode, Encode, decode_from_slice, encode_to_vec};
-use rusqlite::{Connection, OptionalExtension as _};
+use diff::Diff;
+use rusqlite::{Connection, OptionalExtension as _, config::DbConfig};
 use serde::Serialize;
 use tokio::sync::Mutex;
-
-use crate::Error;
-use crate::config::{CommandFingerprint, CommandFingerprintDiff, ResolvedTask, TaskId};
-use crate::execute::{ExecutedTask, StdOutput};
-use crate::fingerprint::{PostRunFingerprint, PostRunFingerprintMismatch};
-use crate::fs::FileSystem;
+use vite_path::AbsolutePath;
 use vite_str::Str;
+
+use crate::{
+    Error,
+    config::{CommandFingerprint, CommandFingerprintDiff, ResolvedTask, TaskId},
+    execute::{ExecutedTask, StdOutput},
+    fingerprint::{PostRunFingerprint, PostRunFingerprintMismatch},
+    fs::FileSystem,
+};
 
 /// Command cache value, for validating post-run fingerprint after the command fingerprint is matched,
 /// and replaying the std outputs if validated.
@@ -194,12 +193,14 @@ impl TaskCache {
         let (value, _) = decode_from_slice::<V, _>(&value_blob, BINCODE_CONFIG)?;
         Ok(Some(value))
     }
+
     async fn get_command_cache_by_command_fingerprint(
         &self,
         command_fingerprint: &CommandFingerprint,
     ) -> Result<Option<CommandCacheValue>, Error> {
         self.get_key_by_value("command_cache", command_fingerprint).await
     }
+
     async fn get_command_fingerprint_by_task_run_key(
         &self,
         task_run_key: &TaskRunKey,
@@ -262,6 +263,7 @@ impl TaskCache {
         }
         Ok(())
     }
+
     pub async fn list(&self, mut out: impl Write) -> Result<(), Error> {
         out.write_all(b"------- taskrun_to_command -------\n")?;
         self.list_table::<TaskRunKey, CommandFingerprint>("taskrun_to_command", &mut out).await?;

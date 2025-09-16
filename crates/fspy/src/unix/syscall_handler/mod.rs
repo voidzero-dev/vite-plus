@@ -1,11 +1,12 @@
 use std::{io, os::unix::ffi::OsStrExt};
 
-use crate::arena::PathAccessArena;
 use fspy_seccomp_unotify::{
     impl_handler,
     supervisor::handler::arg::{CStrPtr, Fd, Ignored},
 };
 use fspy_shared::ipc::{AccessMode, NativeStr, PathAccess};
+
+use crate::arena::PathAccessArena;
 
 const PATH_MAX: usize = libc::PATH_MAX as usize;
 
@@ -23,6 +24,7 @@ impl SyscallHandler {
         })?;
         Ok(())
     }
+
     fn getdents64(&mut self, (fd,): (Fd,)) -> io::Result<()> {
         let path = fd.get_path()?;
         self.arena.add(PathAccess {

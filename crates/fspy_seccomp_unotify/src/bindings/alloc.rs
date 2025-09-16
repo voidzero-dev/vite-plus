@@ -1,4 +1,3 @@
-use super::get_notif_sizes;
 use std::{
     alloc::{self, Layout},
     cmp::max,
@@ -6,6 +5,8 @@ use std::{
     ptr::NonNull,
     sync::LazyLock,
 };
+
+use super::get_notif_sizes;
 
 #[derive(Debug)]
 struct BufSizes {
@@ -43,6 +44,7 @@ impl<T> Alloced<T> {
         let ptr = NonNull::new(ptr).unwrap();
         Self { ptr: ptr.cast(), layout }
     }
+
     pub(crate) fn zeroed(&mut self) -> &mut T {
         unsafe { self.ptr.cast::<u8>().write_bytes(0, self.layout.size()) };
         unsafe { self.ptr.as_mut() }

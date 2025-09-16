@@ -1,9 +1,9 @@
+use std::os::{fd::RawFd, unix::ffi::OsStringExt};
+
 use base64::{Engine as _, prelude::BASE64_STANDARD_NO_PAD};
 use bincode::{Decode, Encode, config::standard};
 use bstr::BString;
 use fspy_shared::ipc::NativeString;
-
-use std::os::{fd::RawFd, unix::ffi::OsStringExt};
 
 #[derive(Debug, Encode, Decode)]
 pub struct Payload {

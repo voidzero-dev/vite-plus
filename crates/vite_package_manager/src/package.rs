@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-
 use vite_str::Str;
 
 #[derive(Copy, Clone, Debug, Serialize, PartialEq)]

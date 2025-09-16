@@ -1,7 +1,11 @@
 use std::{
+    borrow::Cow,
     env::current_dir,
-    ffi::{CStr, OsStr},
-    os::{fd::BorrowedFd, unix::ffi::OsStrExt as _},
+    ffi::{CStr, CString, OsStr, OsString},
+    os::{
+        fd::{BorrowedFd, RawFd},
+        unix::ffi::{OsStrExt as _, OsStringExt as _},
+    },
     path::PathBuf,
 };
 
@@ -10,13 +14,7 @@ use bstr::BString;
 use bstr::{BStr, ByteSlice};
 use fspy_shared::ipc::{AccessMode, NativeStr};
 use libc::{c_char, c_int};
-use nix::fcntl::FcntlArg;
-use nix::unistd::getcwd;
-use std::{
-    borrow::Cow,
-    ffi::{CString, OsString},
-    os::{fd::RawFd, unix::ffi::OsStringExt as _},
-};
+use nix::{fcntl::FcntlArg, unistd::getcwd};
 
 #[cfg(target_os = "linux")]
 fn get_fd_path(fd: RawFd) -> nix::Result<Option<PathBuf>> {

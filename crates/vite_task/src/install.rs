@@ -1,5 +1,8 @@
-use std::io::{self, IsTerminal, Write};
-use std::{env, iter};
+use std::{
+    env,
+    io::{self, IsTerminal, Write},
+    iter,
+};
 
 use crossterm::{
     cursor,
@@ -9,12 +12,12 @@ use crossterm::{
     terminal,
 };
 use petgraph::stable_graph::StableGraph;
-
-use crate::config::ResolvedTask;
-use crate::schedule::ExecutionPlan;
-use crate::{Error, ResolveCommandResult, Workspace};
 use vite_package_manager::package_manager::{PackageManager, PackageManagerType};
 use vite_path::AbsolutePathBuf;
+
+use crate::{
+    Error, ResolveCommandResult, Workspace, config::ResolvedTask, schedule::ExecutionPlan,
+};
 
 /// Install command.
 ///
@@ -318,10 +321,12 @@ fn simple_text_prompt() -> Result<PackageManagerType, Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use serial_test::serial;
     use std::{fs, path::PathBuf};
+
+    use serial_test::serial;
     use tempfile::TempDir;
+
+    use super::*;
 
     /// Helper struct to safely manage environment variables in tests
     /// This struct ensures that environment variables are properly restored

@@ -1,8 +1,3 @@
-use crate::{
-    TrackedChild,
-    os_impl::{self, spawn_impl},
-};
-
 use std::{
     collections::HashMap,
     ffi::{OsStr, OsString},
@@ -14,6 +9,11 @@ use std::{
 #[cfg(unix)]
 use fspy_shared_unix::exec::Exec;
 use tokio::process::Command as TokioCommand;
+
+use crate::{
+    TrackedChild,
+    os_impl::{self, spawn_impl},
+};
 
 #[derive(Debug)]
 pub struct Command {
@@ -34,11 +34,12 @@ pub struct Command {
 impl Command {
     #[cfg(unix)]
     pub fn get_exec(&self) -> Exec {
-        use bstr::{BString, ByteSlice as _};
         use std::{
             iter::once,
             os::unix::ffi::{OsStrExt, OsStringExt},
         };
+
+        use bstr::{BString, ByteSlice as _};
         let arg0 =
             BString::from(self.arg0.clone().unwrap_or_else(|| self.program.clone()).into_vec());
         Exec {
@@ -77,14 +78,17 @@ impl Command {
         self.envs.remove(key.as_ref());
         self
     }
+
     pub fn stderr<T: Into<Stdio>>(&mut self, cfg: T) -> &mut Command {
         self.stderr = Some(cfg.into());
         self
     }
+
     pub fn stdout<T: Into<Stdio>>(&mut self, cfg: T) -> &mut Command {
         self.stdout = Some(cfg.into());
         self
     }
+
     pub fn stdin<T: Into<Stdio>>(&mut self, cfg: T) -> &mut Command {
         self.stdin = Some(cfg.into());
         self
@@ -111,6 +115,7 @@ impl Command {
         );
         self
     }
+
     pub fn current_dir<P: AsRef<Path>>(&mut self, dir: P) -> &mut Command {
         self.cwd = Some(dir.as_ref().to_owned());
         self

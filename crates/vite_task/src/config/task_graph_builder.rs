@@ -1,8 +1,3 @@
-use crate::{
-    Error,
-    collections::{HashMap, HashSet},
-};
-
 use bincode::{Decode, Encode};
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 use serde::Serialize;
@@ -10,6 +5,10 @@ use vite_path::RelativePathBuf;
 use vite_str::Str;
 
 use super::ResolvedTask;
+use crate::{
+    Error,
+    collections::{HashMap, HashSet},
+};
 
 /// Uniquely identifies a task group, which is a script in `package.json`, or an entry in `vite-task.json`.
 ///

@@ -15,11 +15,10 @@ use bincode::{
     impl_borrow_decode,
 };
 use compact_str::CompactString;
-use diff::Diff;
-use serde::{Deserialize, Serialize};
-
 #[doc(hidden)] // for `format` macro only
 pub use compact_str::format_compact;
+use diff::Diff;
+use serde::{Deserialize, Serialize};
 
 #[macro_export]
 macro_rules! format {
@@ -54,15 +53,19 @@ impl Str {
     pub fn with_capacity(capacity: usize) -> Self {
         Self(CompactString::with_capacity(capacity))
     }
+
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
+
     pub fn push(&mut self, ch: char) {
         self.0.push(ch);
     }
+
     pub fn pop(&mut self) -> Option<char> {
         self.0.pop()
     }
+
     pub fn push_str(&mut self, s: &str) {
         self.0.push_str(s);
     }
@@ -166,8 +169,9 @@ impl PartialEq<str> for Str {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use bincode::{config::standard, decode_from_slice, encode_to_vec};
+
+    use super::*;
 
     #[test]
     fn test_str_encode_decode() {

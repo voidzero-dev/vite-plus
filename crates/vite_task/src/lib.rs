@@ -16,21 +16,15 @@ mod vite;
 #[cfg(test)]
 mod test_utils;
 
-use std::collections::HashMap;
-use std::pin::Pin;
-use std::sync::Arc;
-
-use vite_path::AbsolutePathBuf;
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use clap::{Parser, Subcommand};
-
+pub(crate) use vite_error::Error;
+use vite_path::AbsolutePathBuf;
 use vite_str::Str;
 
-use crate::{cache::TaskCache, schedule::ExecutionPlan};
-
-pub(crate) use vite_error::Error;
-
 pub use crate::config::Workspace;
+use crate::{cache::TaskCache, schedule::ExecutionPlan};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -357,8 +351,9 @@ pub fn init_tracing() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use clap::Parser;
+
+    use super::*;
 
     #[test]
     fn test_args_basic_task() {

@@ -6,18 +6,17 @@ mod os_specific;
 #[path = "./macos.rs"]
 mod os_specific;
 
+use bstr::ByteSlice;
+use fspy_shared::ipc::{AccessMode, PathAccess};
 #[doc(hidden)]
 #[cfg(target_os = "macos")]
 pub use os_specific::COREUTILS_FUNCTIONS as COREUTILS_FUNCTIONS_FOR_TEST;
-
-use bstr::ByteSlice;
-use fspy_shared::ipc::{AccessMode, PathAccess};
-
-use crate::exec::ExecResolveConfig;
-
-use crate::{exec::Exec, payload::EncodedPayload};
-
 pub use os_specific::PreExec;
+
+use crate::{
+    exec::{Exec, ExecResolveConfig},
+    payload::EncodedPayload,
+};
 
 pub fn handle_exec(
     command: &mut Exec,

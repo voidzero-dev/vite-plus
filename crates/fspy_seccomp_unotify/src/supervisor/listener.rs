@@ -1,16 +1,17 @@
-use libc::{seccomp_notif, seccomp_notif_resp};
 use std::{
     io,
     ops::Deref,
     os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd},
 };
+
+use libc::{seccomp_notif, seccomp_notif_resp};
+use tokio::io::unix::AsyncFd;
 use tracing::trace;
 
 use crate::bindings::{
     alloc::{Alloced, alloc_seccomp_notif},
     notif_recv,
 };
-use tokio::io::unix::AsyncFd;
 
 pub struct NotifyListener {
     async_fd: AsyncFd<OwnedFd>,
@@ -19,6 +20,7 @@ pub struct NotifyListener {
 
 impl TryFrom<OwnedFd> for NotifyListener {
     type Error = io::Error;
+
     fn try_from(value: OwnedFd) -> Result<Self, Self::Error> {
         Ok(Self { async_fd: AsyncFd::new(value)?, notif_buf: alloc_seccomp_notif() })
     }
@@ -56,6 +58,7 @@ impl NotifyListener {
         };
         Ok(())
     }
+
     pub async fn next(&mut self) -> io::Result<Option<&seccomp_notif>> {
         loop {
             let mut ready_guard = self.async_fd.readable().await?;

@@ -6,14 +6,13 @@ use_small_heuristics = "Max"
 
 # Use field initialize shorthand if possible
 use_field_init_shorthand = true
-
 reorder_modules = true
 
 # All unstable features that we wish for
 # unstable_features = true
 # Provide a cleaner impl order
-# reorder_impl_items = true
+reorder_impl_items = true
 # Provide a cleaner import sort order
-# group_imports = "StdExternalCrate"
+group_imports = "StdExternalCrate"
 # Group "use" statements by crate
-# imports_granularity = "Crate"
+imports_granularity = "Crate"

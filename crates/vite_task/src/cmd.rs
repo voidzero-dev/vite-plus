@@ -1,5 +1,4 @@
-use std::collections::BTreeMap;
-use std::fmt::Display;
+use std::{collections::BTreeMap, fmt::Display};
 
 use bincode::{Decode, Encode};
 use brush_parser::{
@@ -13,7 +12,6 @@ use brush_parser::{
 };
 use diff::Diff;
 use serde::Serialize;
-
 use vite_str::Str;
 
 /// "FOO=BAR program arg1 arg2"

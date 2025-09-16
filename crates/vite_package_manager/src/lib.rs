@@ -6,8 +6,7 @@ mod shim;
 
 use std::{fs, io};
 
-use petgraph::Graph;
-use petgraph::graph::NodeIndex;
+use petgraph::{Graph, graph::NodeIndex};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
 use vite_error::Error;
@@ -16,9 +15,9 @@ use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 use vite_str::Str;
 use wax::Glob;
 
-pub use crate::package::{DependencyType, PackageJson};
-pub use crate::package_manager::{
-    WorkspaceFile, WorkspaceRoot, find_package_root, find_workspace_root,
+pub use crate::{
+    package::{DependencyType, PackageJson},
+    package_manager::{WorkspaceFile, WorkspaceRoot, find_package_root, find_workspace_root},
 };
 
 /// The workspace configuration for pnpm.
@@ -221,11 +220,12 @@ pub fn get_package_graph(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::{collections::HashSet, fs};
+
     use petgraph::visit::EdgeRef;
-    use std::collections::HashSet;
-    use std::fs;
     use tempfile::TempDir;
+
+    use super::*;
 
     #[test]
     fn test_get_package_graph_single_package() {

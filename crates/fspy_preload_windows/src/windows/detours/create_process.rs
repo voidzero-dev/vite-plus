@@ -1,10 +1,5 @@
 use std::ffi::CStr;
 
-use crate::windows::{
-    client::global_client,
-    detour::{Detour, DetourAny},
-};
-
 use fspy_shared::ipc::{AccessMode, NativeStr, PathAccess};
 use ms_detours::{DetourCreateProcessWithDllExA, DetourCreateProcessWithDllExW};
 use widestring::U16CStr;
@@ -22,6 +17,11 @@ use winapi::{
         winbase::CREATE_SUSPENDED,
         winnt::{LPCWSTR, LPWSTR},
     },
+};
+
+use crate::windows::{
+    client::global_client,
+    detour::{Detour, DetourAny},
 };
 
 static DETOUR_CREATE_PROCESS_W: Detour<

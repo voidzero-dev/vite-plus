@@ -1,6 +1,5 @@
 mod test_utils;
 
-use fspy::{AccessMode, Command};
 use std::{
     env::current_dir,
     fs::{File, OpenOptions},
@@ -8,6 +7,8 @@ use std::{
     path::Path,
     process::Stdio,
 };
+
+use fspy::{AccessMode, Command};
 use test_utils::{assert_contains, track_child};
 
 #[tokio::test]

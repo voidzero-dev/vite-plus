@@ -29,12 +29,15 @@ impl<T: Copy> Detour<T> {
     pub const unsafe fn new(symbol_name: &'static CStr, target: T, new: T) -> Self {
         Detour { symbol_name, target: UnsafeCell::new(unsafe { transmute_copy(&target) }), new }
     }
+
     pub const unsafe fn dynamic(symbol_name: &'static CStr, new: T) -> Self {
         Detour { symbol_name, target: UnsafeCell::new(null_mut()), new }
     }
+
     pub fn real(&self) -> &T {
         unsafe { &(*self.target.get().cast::<T>()) }
     }
+
     pub const fn as_any(&'static self) -> DetourAny
     where
         T: Copy,
@@ -91,6 +94,7 @@ impl DetourAny {
         ck_long(unsafe { DetourAttach(self.target, *self.new) })?;
         Ok(())
     }
+
     pub unsafe fn detach(&self) -> SysResult<()> {
         if unsafe { *self.target }.is_null() {
             // dynamic symbol not found, skip detaching
