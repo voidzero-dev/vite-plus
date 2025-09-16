@@ -151,13 +151,26 @@ impl Command {
 
     /// Resolve program name to full path using `PATH` and cwd.
     pub fn resolve_program(&mut self) -> io::Result<()> {
+        eprintln!("resolving program: {:?}", self.program);
+        let mut path_env: Option<&OsStr> = None;
+        for (env_name, env_value) in &self.envs {
+            let Some(env_name) = env_name.to_str() else {
+                continue;
+            };
+            if env_name.eq_ignore_ascii_case("path") {
+                path_env = Some(env_value.as_ref());
+                break;
+            }
+        }
+
         self.program = which::which_in(
             self.program.as_os_str(),
-            self.envs.get(OsStr::new("PATH")),
+            path_env,
             if let Some(cwd) = &self.cwd { cwd.clone() } else { std::env::current_dir()? },
         )
         .map_err(|err| io::Error::new(io::ErrorKind::NotFound, err))?
         .into_os_string();
+        eprintln!("resolving program after: {:?}", self.program);
         Ok(())
     }
 

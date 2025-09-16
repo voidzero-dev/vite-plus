@@ -393,7 +393,7 @@ pub async fn execute_task(
                     Some(RelativePathBuf::new(stripped_path).map_err(|err| {
                         Error::InvalidRelativePath {
                             path: stripped_path.into(),
-                            invalid_path_data_error: err,
+                            reason: err,
                         }
                     }))
                 })
