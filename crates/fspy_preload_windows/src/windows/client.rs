@@ -90,7 +90,7 @@ impl<'a> Client<'a> {
         self.messages.insert(buf);
     }
 
-    pub fn sender(&self) -> Option<PathAccessSender> {
+    pub fn sender(&self) -> Option<PathAccessSender<'_>> {
         let guard = PATH_ACCESS_ONCE.try_enter()?;
         Some(PathAccessSender { messages: &self.messages, _once_guard: guard })
     }

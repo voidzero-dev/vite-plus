@@ -14,11 +14,11 @@ use fspy_shared::{
     ipc::{BINCODE_CONFIG, PathAccess},
     windows::{PAYLOAD_ID, Payload},
 };
-use futures_util::{FutureExt, Stream, stream::try_unfold};
+use futures_util::FutureExt;
 use ms_detours::{DetourCopyPayloadToProcess, DetourUpdateProcessWithDll};
 use tokio::{
     io::AsyncReadExt,
-    net::windows::named_pipe::{NamedPipeServer, PipeMode, ServerOptions},
+    net::windows::named_pipe::{PipeMode, ServerOptions},
 };
 // use detours_sys2::{DetourAttach,};
 use winapi::{
@@ -34,19 +34,14 @@ use winapi::{
 use winsafe::co::{CP, WC};
 use xxhash_rust::const_xxh3::xxh3_128;
 
-use crate::{
-    TrackedChild,
-    arena::PathAccessArena,
-    command::Command,
-    fixture::Fixture,
-};
+use crate::{TrackedChild, arena::PathAccessArena, command::Command, fixture::Fixture};
 
 const PRELOAD_CDYLIB_BINARY: &[u8] = include_bytes!(env!("CARGO_CDYLIB_FILE_FSPY_PRELOAD_WINDOWS"));
-const INTERPOSE_CDYLIB: Fixture = Fixture {
-    name: "fsyp_preload",
-    content: PRELOAD_CDYLIB_BINARY,
-    hash: formatcp!("{:x}", xxh3_128(PRELOAD_CDYLIB_BINARY)),
-};
+const INTERPOSE_CDYLIB: Fixture = Fixture::new(
+    "fsyp_preload",
+    PRELOAD_CDYLIB_BINARY,
+    formatcp!("{:x}", xxh3_128(PRELOAD_CDYLIB_BINARY)),
+);
 
 fn luid() -> io::Result<u64> {
     let mut luid = unsafe { std::mem::zeroed::<winapi::um::winnt::LUID>() };
@@ -55,19 +50,6 @@ fn luid() -> io::Result<u64> {
         return Err(io::Error::last_os_error());
     }
     Ok((u64::from(luid.HighPart as u32)) << 32 | u64::from(luid.LowPart))
-}
-
-fn named_pipe_server_stream(
-    opts: ServerOptions,
-    addr: String,
-) -> io::Result<impl Stream<Item = io::Result<NamedPipeServer>>> {
-    let server = opts.clone().first_pipe_instance(true).create(&addr)?;
-    Ok(try_unfold((opts, server, addr), |(opts, mut server, addr)| async move {
-        server.connect().await?;
-        let connected_client = server;
-        server = opts.create(&addr)?;
-        io::Result::Ok(Some((connected_client, (opts, server, addr))))
-    }))
 }
 
 pub struct PathAccessIterable {

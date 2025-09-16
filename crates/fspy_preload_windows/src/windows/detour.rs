@@ -27,6 +27,7 @@ impl<T: Copy> Detour<T> {
         Detour { symbol_name, target: UnsafeCell::new(unsafe { transmute_copy(&target) }), new }
     }
 
+    #[expect(dead_code)]
     pub const unsafe fn dynamic(symbol_name: &'static CStr, new: T) -> Self {
         Detour { symbol_name, target: UnsafeCell::new(null_mut()), new }
     }
