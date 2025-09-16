@@ -9,6 +9,7 @@ pub struct Fixture {
     pub hash: &'static str,
 }
 
+#[cfg(target_os = "macos")]
 #[doc(hidden)]
 #[macro_export]
 macro_rules! fixture {
@@ -21,6 +22,7 @@ macro_rules! fixture {
     };
 }
 
+#[cfg(target_os = "macos")]
 pub use fixture;
 
 impl Fixture {
