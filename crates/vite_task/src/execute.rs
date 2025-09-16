@@ -791,11 +791,11 @@ mod tests {
 
         // Resolve envs multiple times
         let result1 =
-            TaskEnvs::resolve(AbsolutePath::new("/tmp").unwrap(), &resolved_task_config).unwrap();
+            TaskEnvs::resolve(AbsolutePath::new("C:\\tmp").unwrap(), &resolved_task_config).unwrap();
         let result2 =
-            TaskEnvs::resolve(AbsolutePath::new("/tmp").unwrap(), &resolved_task_config).unwrap();
+            TaskEnvs::resolve(AbsolutePath::new("C:\\tmp").unwrap(), &resolved_task_config).unwrap();
         let result3 =
-            TaskEnvs::resolve(AbsolutePath::new("/tmp").unwrap(), &resolved_task_config).unwrap();
+            TaskEnvs::resolve(AbsolutePath::new("C:\\tmp").unwrap(), &resolved_task_config).unwrap();
 
         // Convert to sorted vecs for comparison
         let mut envs1: Vec<_> = result1.envs_without_pass_through.iter().collect();
