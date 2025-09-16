@@ -288,6 +288,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(windows))]
     fn with_extension() {
         let abs_path = AbsolutePath::new(Path::new("/home/foo/bar")).unwrap();
         let abs_path_with_extension = abs_path.with_extension("txt");
@@ -296,5 +297,16 @@ mod tests {
         assert_eq!(abs_path_with_extension.as_path().as_os_str(), "/home/foo/bar.tgz");
         // abs_path is not changed
         assert_eq!(abs_path.as_path().as_os_str(), "/home/foo/bar");
+    }
+    #[test]
+    #[cfg(windows)]
+    fn with_extension() {
+        let abs_path = AbsolutePath::new(Path::new("C:\\home\\foo\\bar")).unwrap();
+        let abs_path_with_extension = abs_path.with_extension("txt");
+        assert_eq!(abs_path_with_extension.as_path().as_os_str(), "C:\\home\\foo\\bar.txt");
+        let abs_path_with_extension = abs_path.with_extension("txt").with_extension("tgz");
+        assert_eq!(abs_path_with_extension.as_path().as_os_str(), "C:\\home\\foo\\bar.tgz");
+        // abs_path is not changed
+        assert_eq!(abs_path.as_path().as_os_str(), "C:\\home\\foo\\bar");
     }
 }
