@@ -58,7 +58,7 @@ jobs:
       - uses: oxc-project/setup-node@f42e3bda950c7454575e78ee4eaac880a077700c # v1.0.0
 
       - name: Build
-        run: pnpm --filter=@voidzero-dev/vite-plus build:binding --target ${{ matrix.target }} -x
+        run: pnpm --filter=@voidzero-dev/vite-plus build --target ${{ matrix.target }} -x
         env:
           XWIN_CACHE_DIR: ${{ github.workspace }}/.xwin-cache
 
