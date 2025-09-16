@@ -3,7 +3,9 @@ use std::{ffi::OsString, path::Path, sync::Arc};
 use petgraph::graph::NodeIndex;
 use thiserror::Error;
 use vite_path::{
-    absolute::StripPrefixError, relative::{FromPathError, InvalidPathDataError}, AbsolutePath, AbsolutePathBuf, RelativePathBuf
+    AbsolutePath, AbsolutePathBuf, RelativePathBuf,
+    absolute::StripPrefixError,
+    relative::{FromPathError, InvalidPathDataError},
 };
 use vite_str::Str;
 
@@ -113,9 +115,7 @@ pub enum Error {
     )]
     StripPathError { stripped_path: Box<Path>, invalid_path_data_error: InvalidPathDataError },
 
-    #[error(
-        "The path ({path:?}) is not a valid relative path because: {reason}"
-    )]
+    #[error("The path ({path:?}) is not a valid relative path because: {reason}")]
     InvalidRelativePath { path: Box<Path>, reason: FromPathError },
 
     #[error("The package at {package_path:?} is outside the workspace at {workspace_root:?}")]

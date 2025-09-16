@@ -129,7 +129,10 @@ impl RealFileSystem {
     }
 
     #[cfg(windows)]
-    fn process_directory(path: &std::path::Path, path_read: PathRead) -> Result<PathFingerprint, Error> {
+    fn process_directory(
+        path: &std::path::Path,
+        path_read: PathRead,
+    ) -> Result<PathFingerprint, Error> {
         let dir_entries: Option<HashMap<Str, DirEntryKind>> = if path_read.read_dir_entries {
             let mut dir_entries = HashMap::<Str, DirEntryKind>::new();
             let dir_iter = std::fs::read_dir(path)?;
