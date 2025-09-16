@@ -21,6 +21,8 @@ macro_rules! fixture {
     };
 }
 
+pub use fixture;
+
 impl Fixture {
     pub const fn new(name: &'static str, content: &'static [u8], hash: &'static str) -> Self {
         Self { name, content, hash }

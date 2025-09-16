@@ -274,6 +274,8 @@ mod tests {
     fn strip_prefix_invalid_relative() {
         use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
 
+        use assert2::let_assert;
+
         let mut abs_path = b"/home/".to_vec();
         abs_path.push(0xC0);
         let abs_path = AbsolutePath::new(Path::new(OsStr::from_bytes(&abs_path))).unwrap();
