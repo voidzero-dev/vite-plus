@@ -384,11 +384,22 @@ pub async fn execute_task(
         let mut path_reads = HashMap::<RelativePathBuf, PathRead>::new();
         let mut path_writes = HashMap::<RelativePathBuf, PathWrite>::new();
         for access in path_accesses.iter() {
-            let path = access.path.to_cow_os_str();
-            let Some(path) = AbsolutePath::new(&path) else {
-                continue;
-            };
-            let Some(relative_path) = path.strip_prefix(base_dir)? else {
+            let relative_path = access
+                .path
+                .strip_path_prefix(base_dir, |strip_result| {
+                    let Ok(stripped_path) = strip_result else {
+                        return None;
+                    };
+                    Some(RelativePathBuf::new(stripped_path).map_err(|err| {
+                        Error::InvalidRelativePath {
+                            path: stripped_path.into(),
+                            invalid_path_data_error: err,
+                        }
+                    }))
+                })
+                .transpose()?;
+
+            let Some(relative_path) = relative_path else {
                 // ignore accesses outside the workspace
                 continue;
             };

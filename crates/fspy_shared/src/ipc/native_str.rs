@@ -2,7 +2,12 @@
 use std::ffi::OsString;
 #[cfg(unix)]
 use std::sync::Arc;
-use std::{borrow::Cow, ffi::OsStr, fmt::Debug, path::Path};
+use std::{
+    borrow::Cow,
+    ffi::OsStr,
+    fmt::Debug,
+    path::{Path, StripPrefixError},
+};
 
 use allocator_api2::alloc::Allocator;
 #[cfg(unix)]
@@ -104,6 +109,41 @@ impl<'a> NativeStr<'a> {
         return Cow::Owned(self.to_os_string());
         #[cfg(unix)]
         return Cow::Borrowed(self.as_os_str());
+    }
+
+    pub fn strip_path_prefix<P: AsRef<Path>, R, F: FnOnce(Result<&Path, StripPrefixError>) -> R>(
+        &self,
+        base: P,
+        f: F,
+    ) -> R {
+        let me = self.to_cow_os_str();
+        let me = strip_windows_path_prefix(&me);
+        let base = strip_windows_path_prefix(base.as_ref().as_os_str());
+        f(Path::new(me).strip_prefix(base))
+    }
+}
+
+/// Strip the `\\?\`, `\\.\`, `\??\` prefix from a Windows path, if present.
+/// Does nothing on non-Windows platforms.
+///
+/// \\?\ and \\.\ are used to enable long paths and access to device paths.
+/// \??\ is used in Nt* calls.
+/// The resulting path is not necessarily valid or points to the same location,
+/// but it's good enough for sanitizing paths in `NativeStr::strip_path_prefix`.
+fn strip_windows_path_prefix(p: &OsStr) -> &OsStr {
+    #[cfg(windows)]
+    {
+        use os_str_bytes::OsStrBytesExt as _;
+        for prefix in [r"\\?\", r"\\.\", r"\??\"] {
+            if let Some(stripped) = p.strip_prefix(prefix) {
+                return stripped;
+            }
+        }
+        p
+    }
+    #[cfg(not(windows))]
+    {
+        p
     }
 }
 

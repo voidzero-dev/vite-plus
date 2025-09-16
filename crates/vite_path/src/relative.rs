@@ -277,8 +277,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn non_utf8() {
-        use std::{ffi::OsStr};
-        use std::os::unix::ffi::OsStrExt as _;
+        use std::{ffi::OsStr, os::unix::ffi::OsStrExt as _};
 
         let non_utf8_path = Path::new(OsStr::from_bytes(&[0xC0]));
         let_assert!(
@@ -306,6 +305,13 @@ mod tests {
             Err(FromPathError::InvalidPathData(InvalidPathDataError::BackslashInComponent)) =
                 RelativePathBuf::new("foo\\bar")
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn backslash_in_component() {
+        let_assert!(Ok(path) = RelativePathBuf::new("foo\\bar"));
+        assert_eq!(path.as_str(), "foo/bar");
     }
 
     #[cfg(windows)]

@@ -110,6 +110,11 @@ pub enum Error {
     )]
     StripPathError { stripped_path: Box<Path>, invalid_path_data_error: InvalidPathDataError },
 
+    #[error(
+        "The path ({path:?}) is not a valid relative path because: {invalid_path_data_error}"
+    )]
+    InvalidRelativePath { path: Box<Path>, invalid_path_data_error: InvalidPathDataError },
+
     #[error("The package at {package_path:?} is outside the workspace at {workspace_root:?}")]
     PackageOutsideWorkspace { package_path: AbsolutePathBuf, workspace_root: AbsolutePathBuf },
 
