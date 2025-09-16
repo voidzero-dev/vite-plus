@@ -101,6 +101,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.2
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/node@24.4.0)(esbuild@0.25.8)(jiti@2.5.1)(yaml@2.8.1)
 
   docs:
     devDependencies:

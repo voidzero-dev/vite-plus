@@ -119,9 +119,12 @@ jobs:
       - name: Build CLI
         run: pnpm run bootstrap-cli
 
+      - name: Run CLI lint
+        run: pnpm lint
+
       - name: Run CLI E2E tests
         run: |
-          pnpm run --filter=@voidzero-dev/vite-plus --filter=@voidzero-dev/global test
+          pnpm test
           git diff --exit-code
 
   install-e2e-test:

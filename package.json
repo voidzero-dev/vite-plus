@@ -10,7 +10,7 @@
     "install-global-cli": "npm install -g ./packages/global",
     "typecheck": "tsc -b tsconfig.json",
     "lint": "vite lint",
-    "test": "pnpm -r test",
+    "test": "vite test && pnpm -r snap-test",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -22,7 +22,8 @@
     "lint-staged": "^16.1.6",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "lint-staged": {
     "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
