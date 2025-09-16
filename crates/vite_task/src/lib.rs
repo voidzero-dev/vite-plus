@@ -281,7 +281,12 @@ pub async fn main<
                 )
                 .await?;
                 let resolved_vite_config: Option<ResolvedUniversalViteConfig> = vite_config
-                    .map(|vite_config| serde_json::from_str(&vite_config))
+                    .map(|vite_config| {
+                        serde_json::from_str(&vite_config).map_err(|err| {
+                            tracing::error!("Failed to parse vite config: {vite_config}");
+                            err
+                        })
+                    })
                     .transpose()?;
                 let lint_config = resolved_vite_config.and_then(|c| c.lint);
                 if let Some(lint_config) = lint_config {

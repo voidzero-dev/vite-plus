@@ -1,0 +1,11 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "# Test that lint picks up workspace root config",
+    "vite-plus lint",
+    "# Test that fmt picks up workspace root config - specify file",
+    "vite-plus fmt packages/app-b/index.js --check"
+  ]
+}

@@ -2,6 +2,7 @@ use std::{collections::HashMap, future::Future, process::ExitStatus};
 
 use petgraph::stable_graph::StableGraph;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{
     Error, ResolveCommandResult, Workspace, config::ResolvedTask, schedule::ExecutionPlan,
@@ -9,7 +10,7 @@ use crate::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FmtConfig {
-    pub rules: HashMap<String, String>,
+    pub rules: HashMap<String, Value>,
 }
 
 #[tracing::instrument(skip(resolve_fmt_command, workspace))]

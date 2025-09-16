@@ -1,0 +1,49 @@
+> # Test that lint picks up workspace root config
+[1]> vite-plus lint
+Cache not found
+
+  x eslint(no-console): Unexpected console statement.
+   ,-[packages/app-a/index.js:1:1]
+ 1 | console.log('Hello from app-a');
+   : ^^^^^^^^^^^
+ 2 | debugger;
+   `----
+  help: Delete this console statement.
+
+  ! eslint(no-debugger): `debugger` statement is not allowed
+   ,-[packages/app-a/index.js:2:1]
+ 1 | console.log('Hello from app-a');
+ 2 | debugger;
+   : ^^^^^^^^^
+   `----
+  help: Remove the debugger statement
+
+  x eslint(no-console): Unexpected console statement.
+   ,-[packages/app-b/index.js:2:5]
+ 1 | function formatCode() {
+ 2 |     console.log('Formatting with workspace config');
+   :     ^^^^^^^^^^^
+ 3 |             return true;
+   `----
+  help: Delete this console statement.
+
+  ! eslint(no-unused-vars): Function 'formatCode' is declared but never used.
+   ,-[packages/app-b/index.js:1:10]
+ 1 | function formatCode() {
+   :          ^^^^^|^^^^
+   :               `-- 'formatCode' is declared here
+ 2 |     console.log('Formatting with workspace config');
+   `----
+  help: Consider removing this declaration.
+
+Found 2 warnings and 2 errors.
+Finished in <variable>ms on 3 files with <variable> rules using <variable> threads.
+
+> # Test that fmt picks up workspace root config - specify file
+[1]> vite-plus fmt packages/app-b/index.js --check
+Cache not found
+Checking formatting...
+packages/app-b/index.js (<variable>ms)
+
+Format issues found in above 1 files. Run without `--check` to fix.
+Finished in 3ms on 1 files using 16 threads.

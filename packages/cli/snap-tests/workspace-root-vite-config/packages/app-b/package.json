@@ -1,0 +1,7 @@
+{
+  "name": "app-b",
+  "version": "0.0.0",
+  "scripts": {
+    "test": "echo 'Testing app-b with workspace config'"
+  }
+}
