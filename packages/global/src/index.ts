@@ -55,5 +55,6 @@ if (args[0] === 'new') {
   });
 } else {
   // Delegate all other commands to vite-plus CLI
+  // @ts-ignore no types for vite-plus/bin
   import('@voidzero-dev/vite-plus/bin');
 }

@@ -13,6 +13,9 @@
     },
     "./bin": {
       "import": "./dist/bin.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts"
     }
   },
   "engines": {

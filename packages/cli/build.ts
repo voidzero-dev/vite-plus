@@ -59,8 +59,12 @@ const { options } = parseJsonSourceFileConfigFileContent(tsconfig, sys, projectD
 
 const host = createCompilerHost(options);
 
+const srcDir = join(projectDir, 'src');
 const program = createProgram({
-  rootNames: [join(projectDir, 'src', 'index.ts')],
+  rootNames: [
+    join(srcDir, 'index.ts'),
+    join(srcDir, 'client.ts'),
+  ],
   options: {
     ...options,
     emitDeclarationOnly: true,

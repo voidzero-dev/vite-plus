@@ -9,7 +9,7 @@
     "copy-bindings": "cp -r ./packages/cli/binding/*.node ./packages/cli/dist && cp -r ./packages/cli/binding/*.node ./packages/global/dist",
     "install-global-cli": "npm install -g ./packages/global",
     "typecheck": "tsc -b tsconfig.json",
-    "lint": "vite lint",
+    "lint": "vite lint && vite run typecheck",
     "test": "vite test && pnpm -r snap-test",
     "prepare": "husky"
   },

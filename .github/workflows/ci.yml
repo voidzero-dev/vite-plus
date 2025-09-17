@@ -146,6 +146,7 @@ jobs:
         run: |
           pnpm test
           git diff --exit-code
+
   install-e2e-test:
     name: vite install E2E test
     # FIXME: Error: spawnSync esbuild ENOTSOCK
