@@ -111,8 +111,8 @@ jobs:
 
       - name: Publish
         run: |
-          echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
-          echo "@voidzero-dev:registry=https://npm.pkg.github.com/" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> ${NPM_CONFIG_USERCONFIG}
+          echo "@voidzero-dev:registry=https://npm.pkg.github.com/" >> ${NPM_CONFIG_USERCONFIG}
           pnpm publish --filter=./packages/global --registry https://npm.pkg.github.com --no-git-checks
           pnpm publish --filter=./packages/cli --registry https://npm.pkg.github.com --no-git-checks
         env:

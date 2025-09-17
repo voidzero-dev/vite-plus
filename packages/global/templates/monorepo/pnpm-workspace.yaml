@@ -1,5 +1,7 @@
 packages:
   - apps/*
+  - packages/*
+  - tools/*
 
 catalog:
   "@types/node": ^24.5.0

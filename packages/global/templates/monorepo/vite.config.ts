@@ -1,3 +1,7 @@
 import { defineConfig } from '@voidzero-dev/vite-plus';
 
-export default defineConfig({});
+export default defineConfig({
+  test: {
+    projects: ['apps/*', 'packages/*', 'tools/*'],
+  },
+});
