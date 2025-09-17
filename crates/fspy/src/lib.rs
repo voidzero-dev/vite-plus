@@ -1,6 +1,9 @@
 #![cfg_attr(target_os = "windows", feature(windows_process_extensions_main_thread_handle))]
 #![feature(once_cell_try)]
 
+// Windows and macOS both need to persist the injected DLL/shared library somewhere in the filesystem.
+// Linux doesn't need this. Instead we use `memfd_create` to create an in-memory shared library.
+#[cfg(not(target_os = "linux"))]
 mod fixture;
 
 #[cfg(unix)]

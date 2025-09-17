@@ -33,8 +33,8 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          # - os: windows-latest
-          #   target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
           - os: macos-latest
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
@@ -50,7 +50,7 @@ jobs:
 
       - run: cargo check --all-targets --all-features
         env:
-          RUSTFLAGS: "-D warnings"
+          RUSTFLAGS: "-D warnings --cfg tokio_unstable" # also update .cargo/config.toml
 
       - run: cargo test
 
@@ -111,7 +111,13 @@ jobs:
 
   cli-e2e-test:
     name: CLI E2E test
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # - os: windows-latest
+          - os: macos-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:

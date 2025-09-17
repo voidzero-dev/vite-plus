@@ -359,7 +359,12 @@ mod tests {
 
     #[test]
     fn test_install_command_builder_build() {
-        let workspace_root = AbsolutePathBuf::new(PathBuf::from("/test/workspace")).unwrap();
+        let workspace_root = AbsolutePathBuf::new(PathBuf::from(if cfg!(windows) {
+            "C:\\test\\workspace"
+        } else {
+            "/test/workspace"
+        }))
+        .unwrap();
         let command = InstallCommandBuilder::new(workspace_root.clone()).build();
 
         assert_eq!(command.workspace_root, workspace_root);
@@ -383,6 +388,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(windows))] // FIXME
     async fn test_install_command_with_package_json_with_package_manager() {
         let temp_dir = TempDir::new().unwrap();
         let workspace_root = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();

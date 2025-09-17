@@ -1,20 +1,15 @@
-use std::{cell::Cell, ffi::CStr, ops::Deref, slice, sync::LazyLock};
-
-use arrayvec::ArrayVec;
 use fspy_shared::ipc::{AccessMode, NativeStr, PathAccess};
 use ntapi::ntioapi::{
     FILE_INFORMATION_CLASS, NtQueryDirectoryFile, NtQueryFullAttributesFile,
     NtQueryInformationByName, PFILE_BASIC_INFORMATION, PFILE_NETWORK_OPEN_INFORMATION,
     PIO_APC_ROUTINE, PIO_STATUS_BLOCK,
 };
-use smallvec::SmallVec;
-use widestring::{U16CStr, U16CString, U16Str};
 use winapi::{
     shared::{
-        minwindef::{BOOL, DWORD, HFILE, MAX_PATH, UINT},
+        minwindef::HFILE,
         ntdef::{
-            BOOLEAN, HANDLE, LPCSTR, LPCWSTR, NTSTATUS, PHANDLE, PLARGE_INTEGER,
-            POBJECT_ATTRIBUTES, PUNICODE_STRING, PVOID, ULONG, UNICODE_STRING,
+            BOOLEAN, HANDLE, NTSTATUS, PHANDLE, PLARGE_INTEGER, POBJECT_ATTRIBUTES,
+            PUNICODE_STRING, PVOID, ULONG,
         },
     },
     um::winnt::{ACCESS_MASK, GENERIC_READ},
@@ -24,63 +19,7 @@ use crate::windows::{
     client::global_client,
     convert::{ToAbsolutePath, ToAccessMode},
     detour::{Detour, DetourAny},
-    winapi_utils::{access_mask_to_mode, combine_paths, get_path_name, get_u16_str},
 };
-
-unsafe fn to_path_access<F: FnOnce(PathAccess<'_>)>(
-    mode: AccessMode,
-    object_attributes: POBJECT_ATTRIBUTES,
-    f: F,
-) {
-    let filename_str = unsafe { get_u16_str(&*(*object_attributes).ObjectName) };
-    let filename_slice = filename_str.as_slice();
-    let is_absolute = (filename_slice.get(0) == Some(&b'\\'.into())
-        && filename_slice.get(1) == Some(&b'\\'.into())) // \\...
-        || filename_slice.get(1) == Some(&b':'.into()); // C:...
-    if is_absolute {
-        let Ok(mut root_dir) = (unsafe { get_path_name((*object_attributes).RootDirectory) })
-        else {
-            return;
-        };
-        let root_dir_cstr = {
-            root_dir.push(0);
-            unsafe { U16CStr::from_ptr_str(root_dir.as_ptr()) }
-        };
-        let filename_cstr = U16CString::from_ustr_truncate(filename_str);
-        let abs_path = combine_paths(root_dir_cstr, filename_cstr.as_ucstr()).unwrap();
-        f(PathAccess { mode, path: NativeStr::from_wide(abs_path.to_u16_str().as_slice()) })
-    } else {
-        f(PathAccess { mode, path: NativeStr::from_wide(filename_slice) })
-    }
-}
-
-thread_local! { pub static IS_DETOURING: Cell<bool> = const { Cell::new(false) }; }
-
-struct DetourGuard {
-    active: bool,
-}
-
-impl DetourGuard {
-    pub fn new() -> Self {
-        let active = !IS_DETOURING.get();
-        if active {
-            IS_DETOURING.set(true);
-        }
-        Self { active }
-    }
-
-    pub fn active(&self) -> bool {
-        self.active
-    }
-}
-
-impl Drop for DetourGuard {
-    fn drop(&mut self) {
-        if self.active {
-            IS_DETOURING.set(false);
-        }
-    }
-}
 
 static DETOUR_NT_CREATE_FILE: Detour<
     unsafe extern "system" fn(
@@ -135,12 +74,12 @@ static DETOUR_NT_CREATE_FILE: Detour<
 
 static DETOUR_NT_OPEN_FILE: Detour<
     unsafe extern "system" fn(
-        FileHandle: PHANDLE,
-        DesiredAccess: ACCESS_MASK,
-        ObjectAttributes: POBJECT_ATTRIBUTES,
-        IoStatusBlock: PIO_STATUS_BLOCK,
-        ShareAccess: ULONG,
-        OpenOptions: ULONG,
+        file_handle: PHANDLE,
+        desired_access: ACCESS_MASK,
+        object_attributes: POBJECT_ATTRIBUTES,
+        io_status_block: PIO_STATUS_BLOCK,
+        share_access: ULONG,
+        open_options: ULONG,
     ) -> HFILE,
 > = unsafe {
     Detour::new(c"NtOpenFile", ntapi::ntioapi::NtOpenFile, {

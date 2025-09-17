@@ -8,7 +8,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-const exec = promisify(cp.exec);
+const cpExec = promisify(cp.exec);
+const exec = async (command: string, options: cp.ExecOptionsWithStringEncoding) => cpExec(
+  command,
+  process.platform === 'win32' ? { ...options, shell: 'pwsh.exe' } : options
+);
 
 import { replaceUnstableOutput } from './utils.ts';
 
@@ -54,6 +58,12 @@ async function runTestCase(name: string) {
     // set CI=true make sure snap-tests are stable on GitHub Actions
     CI: 'true',
   };
+
+  // Sometimes on Windows, the PATH variable is named 'Path'
+  if ("Path" in env && !("PATH" in env)) {
+    env['PATH'] = env["Path"];
+    delete env["Path"];
+  }
   env['PATH'] = [
     // Extend PATH to include the package's bin directory
     path.resolve('bin'),

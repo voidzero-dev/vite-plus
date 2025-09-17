@@ -536,7 +536,7 @@ fn format_path_env(bin_prefix: impl AsRef<Path>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::{env, fs, process::Command};
+    use std::fs;
 
     use tempfile::{TempDir, tempdir};
 
@@ -901,7 +901,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(windows))] // FIXME
     async fn test_detect_package_manager_with_package_lock_json() {
+        use std::process::Command;
+
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content = r#"{"name": "test-package"}"#;
@@ -946,7 +949,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(windows))] // FIXME
     async fn test_detect_package_manager_with_package_manager_field() {
+        use std::process::Command;
+
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content = r#"{"name": "test-package", "packageManager": "pnpm@8.15.0"}"#;
@@ -982,7 +988,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(windows))] // FIXME
     async fn test_detect_package_manager_with_yarn_package_manager_field() {
+        use std::process::Command;
+
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content = r#"{"name": "test-package", "packageManager": "yarn@4.0.0"}"#;

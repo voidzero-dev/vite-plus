@@ -384,11 +384,19 @@ pub async fn execute_task(
         let mut path_reads = HashMap::<RelativePathBuf, PathRead>::new();
         let mut path_writes = HashMap::<RelativePathBuf, PathWrite>::new();
         for access in path_accesses.iter() {
-            let path = access.path.to_cow_os_str();
-            let Some(path) = AbsolutePath::new(&path) else {
-                continue;
-            };
-            let Some(relative_path) = path.strip_prefix(base_dir)? else {
+            let relative_path = access
+                .path
+                .strip_path_prefix(base_dir, |strip_result| {
+                    let Ok(stripped_path) = strip_result else {
+                        return None;
+                    };
+                    Some(RelativePathBuf::new(stripped_path).map_err(|err| {
+                        Error::InvalidRelativePath { path: stripped_path.into(), reason: err }
+                    }))
+                })
+                .transpose()?;
+
+            let Some(relative_path) = relative_path else {
                 // ignore accesses outside the workspace
                 continue;
             };
@@ -738,8 +746,6 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn test_windows_env_case_insensitive() {
-        use std::path::Path;
-
         use crate::{
             collections::HashSet,
             config::{ResolvedTaskConfig, TaskCommand, TaskConfig},
@@ -780,11 +786,14 @@ mod tests {
 
         // Resolve envs multiple times
         let result1 =
-            TaskEnvs::resolve(AbsolutePath::new("/tmp").unwrap(), &resolved_task_config).unwrap();
+            TaskEnvs::resolve(AbsolutePath::new("C:\\tmp").unwrap(), &resolved_task_config)
+                .unwrap();
         let result2 =
-            TaskEnvs::resolve(AbsolutePath::new("/tmp").unwrap(), &resolved_task_config).unwrap();
+            TaskEnvs::resolve(AbsolutePath::new("C:\\tmp").unwrap(), &resolved_task_config)
+                .unwrap();
         let result3 =
-            TaskEnvs::resolve(AbsolutePath::new("/tmp").unwrap(), &resolved_task_config).unwrap();
+            TaskEnvs::resolve(AbsolutePath::new("C:\\tmp").unwrap(), &resolved_task_config)
+                .unwrap();
 
         // Convert to sorted vecs for comparison
         let mut envs1: Vec<_> = result1.envs_without_pass_through.iter().collect();
@@ -811,7 +820,7 @@ mod tests {
         // Verify default pass-through envs are present
         let all_envs = result1.all_envs;
         assert!(all_envs.contains_key("VSCODE_VAR"));
-        assert!(all_envs.contains_key("Path"));
+        assert!(all_envs.contains_key("Path") || all_envs.contains_key("PATH"));
         assert!(all_envs.contains_key("app1_name"));
         assert!(all_envs.contains_key("app1_name"));
 

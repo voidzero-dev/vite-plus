@@ -3,8 +3,9 @@ use std::{ffi::OsString, path::Path, sync::Arc};
 use petgraph::graph::NodeIndex;
 use thiserror::Error;
 use vite_path::{
-    AbsolutePath, AbsolutePathBuf, RelativePathBuf, absolute::StripPrefixError,
-    relative::InvalidPathDataError,
+    AbsolutePath, AbsolutePathBuf, RelativePathBuf,
+    absolute::StripPrefixError,
+    relative::{FromPathError, InvalidPathDataError},
 };
 use vite_str::Str;
 
@@ -44,6 +45,10 @@ pub enum Error {
     #[cfg(unix)]
     #[error("Unsupported file type: {0:?}")]
     UnsupportedFileType(nix::dir::Type),
+
+    #[cfg(windows)]
+    #[error("Unsupported file type: {0:?}")]
+    UnsupportedFileType(std::fs::FileType),
 
     #[error(transparent)]
     Utf8Error(#[from] bstr::Utf8Error),
@@ -109,6 +114,9 @@ pub enum Error {
         "The stripped path ({stripped_path:?}) is not a valid relative path because: {invalid_path_data_error}"
     )]
     StripPathError { stripped_path: Box<Path>, invalid_path_data_error: InvalidPathDataError },
+
+    #[error("The path ({path:?}) is not a valid relative path because: {reason}")]
+    InvalidRelativePath { path: Box<Path>, reason: FromPathError },
 
     #[error("The package at {package_path:?} is outside the workspace at {workspace_root:?}")]
     PackageOutsideWorkspace { package_path: AbsolutePathBuf, workspace_root: AbsolutePathBuf },

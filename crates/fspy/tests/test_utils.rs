@@ -1,4 +1,7 @@
-use std::{ffi::OsStr, io, path::Path};
+use std::{
+    io,
+    path::{Path, PathBuf, StripPrefixError},
+};
 
 use fspy::{AccessMode, PathAccessIterable, TrackedChild};
 
@@ -11,19 +14,15 @@ pub fn assert_contains(
     accesses
         .iter()
         .find(|access| {
-            let path = access.path.to_cow_os_str();
-            let mut path: &OsStr = path.as_ref();
-            if cfg!(windows) {
-                let mut path_bytes = path.as_encoded_bytes();
-                for prefix in [br#"\\.\"#, br#"\\?\"#, br#"\??\"#] {
-                    if let Some(stripped_path_bytes) = path_bytes.strip_prefix(prefix) {
-                        path_bytes = stripped_path_bytes;
-                        break;
-                    }
-                }
-                path = unsafe { OsStr::from_encoded_bytes_unchecked(path_bytes) };
-            }
-            Path::new(path) == expected_path && access.mode == expected_mode
+            let Ok(stripped) =
+                access.path.strip_path_prefix::<_, Result<PathBuf, StripPrefixError>, _>(
+                    expected_path,
+                    |strip_result| strip_result.map(Path::to_path_buf),
+                )
+            else {
+                return false;
+            };
+            stripped.as_os_str().is_empty() && access.mode == expected_mode
         })
         .unwrap();
 }

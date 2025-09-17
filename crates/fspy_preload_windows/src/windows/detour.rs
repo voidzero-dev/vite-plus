@@ -1,20 +1,11 @@
-use std::{
-    cell::{SyncUnsafeCell, UnsafeCell},
-    ffi::{CStr, c_char},
-    mem::transmute_copy,
-    os::{raw::c_void, windows::raw::HANDLE},
-    ptr::null_mut,
-};
+use std::{cell::UnsafeCell, ffi::CStr, mem::transmute_copy, os::raw::c_void, ptr::null_mut};
 
 use ms_detours::{DetourAttach, DetourDetach};
 use winapi::{
     shared::minwindef::HMODULE,
-    um::{
-        fileapi::CreateFileW,
-        libloaderapi::{GetProcAddress, LoadLibraryA},
-    },
+    um::libloaderapi::{GetProcAddress, LoadLibraryA},
 };
-use winsafe::{HINSTANCE, SysResult};
+use winsafe::SysResult;
 
 use crate::windows::winapi_utils::ck_long;
 
@@ -30,6 +21,7 @@ impl<T: Copy> Detour<T> {
         Detour { symbol_name, target: UnsafeCell::new(unsafe { transmute_copy(&target) }), new }
     }
 
+    #[expect(dead_code)]
     pub const unsafe fn dynamic(symbol_name: &'static CStr, new: T) -> Self {
         Detour { symbol_name, target: UnsafeCell::new(null_mut()), new }
     }
