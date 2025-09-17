@@ -363,7 +363,6 @@ pub async fn main<
             workspace.unload().await?;
             summary
         }
-        Some(Commands::Cache { subcmd }) => {
         Commands::Cache { subcmd } => {
             let cache_path = Workspace::get_cache_path(&cwd)?;
             match subcmd {
