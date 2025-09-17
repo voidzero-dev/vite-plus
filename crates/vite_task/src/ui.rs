@@ -71,7 +71,7 @@ impl Display for PreExecutionStatus {
 }
 
 impl Display for ExecutionSummary {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // TODO: Implement meaningful display logic for ExecutionSummary.
         // This implementation is intentionally left empty for now.
         Ok(())
