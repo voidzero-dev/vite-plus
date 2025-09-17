@@ -11,14 +11,7 @@ async fn main() -> Result<(), Error> {
     let result = vite_task::main(current_dir()?, args, None::<CliOptions>).await;
 
     match result {
-        Ok(Some(exit_status)) => {
-            // Exit with the exit status of the first failed task
-            std::process::exit(exit_status.code().unwrap_or(1))
-        }
-        Ok(None) => {
-            // Success case - no failed tasks
-            Ok(())
-        }
+        Ok(exit_status) => std::process::exit(exit_status.code().unwrap_or(1)),
         Err(err) => {
             tracing::error!("Error: {}", err);
             match err {

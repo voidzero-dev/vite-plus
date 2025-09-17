@@ -2,15 +2,14 @@ use std::{process::ExitStatus, sync::Arc};
 
 use futures_core::future::BoxFuture;
 use futures_util::future::FutureExt as _;
-use owo_colors::{OwoColorize, Style};
 use petgraph::{algo::toposort, stable_graph::StableDiGraph};
 use tokio::io::AsyncWriteExt as _;
-use vite_path::AbsolutePath;
+use vite_path::{AbsolutePath, RelativePathBuf};
 
 use crate::{
     Error,
     cache::{CacheMiss, CommandCacheValue, TaskCache},
-    config::{ResolvedTask, Workspace},
+    config::{DisplayOptions, ResolvedTask, TaskCommand, Workspace},
     execute::{OutputKind, execute_task},
     fs::FileSystem,
 };
@@ -22,8 +21,16 @@ pub struct ExecutionPlan {
     // task_graph: Graph<TaskNode, ()>,
 }
 
-/// Status of a task execution before it runs
-pub enum PreExecutionStatus {
+/// Status of a task before execution
+#[derive(Debug)]
+pub struct PreExecutionStatus {
+    pub command: TaskCommand,
+    pub cwd: RelativePathBuf,
+    pub cache_status: CacheStatus,
+    pub display_options: DisplayOptions,
+}
+#[derive(Debug)]
+pub enum CacheStatus {
     /// Cache miss with reason.
     ///
     /// The task will be executed.
@@ -32,12 +39,17 @@ pub enum PreExecutionStatus {
     CacheHit,
 }
 
-/// Status of a task execution after it runs
-pub enum PostExecutionStatus {
-    /// Cache hit, replayed
-    CacheHitReplay,
-    /// Cache miss with reason and exit status of the executed task
-    CacheMiss { reason: CacheMiss, exit_status: ExitStatus },
+/// Status of a task execution
+#[derive(Debug)]
+pub struct ExecutionStatus {
+    pub pre_execution_status: PreExecutionStatus,
+    pub exit_status: ExitStatus,
+}
+
+/// Summary of all task executions
+#[derive(Debug)]
+pub struct ExecutionSummary {
+    pub execution_statuses: Vec<ExecutionStatus>,
 }
 
 impl ExecutionPlan {
@@ -86,42 +98,30 @@ impl ExecutionPlan {
     /// 3. If cache miss: execute the task and cache the result
     ///
     /// Returns:
-    /// - `Ok(None)` if all tasks succeeded
-    /// - `Ok(Some(exit_status))` if any task failed (contains the first failure's exit status)
+    /// - `Ok(ExecutionSummary)` containing execution status of all tasks (some may fail with non-zero exit code)
     /// - `Err(_)` for other errors (network, filesystem, etc.)
     #[tracing::instrument(skip(self, workspace))]
-    pub async fn execute(self, workspace: &mut Workspace) -> Result<Option<ExitStatus>, Error> {
-        let mut first_failed_exit_status = None;
+    pub async fn execute(self, workspace: &mut Workspace) -> Result<ExecutionSummary, Error> {
+        let mut execution_statuses = Vec::<ExecutionStatus>::with_capacity(self.steps.len());
         for step in self.steps {
-            let exit_status = Self::execute_resolved_task(step, workspace).await?;
-            if let Some(exit_status) = exit_status
-                && !exit_status.success()
-                && first_failed_exit_status.is_none()
-            {
-                first_failed_exit_status = Some(exit_status);
-            }
+            execution_statuses.push(Self::execute_resolved_task(step, workspace).await?);
         }
-        // Return the exit status of the first failed task, or None if all succeeded
-        Ok(first_failed_exit_status)
+        Ok(ExecutionSummary { execution_statuses })
     }
 
     pub async fn execute_resolved_task(
         step: ResolvedTask,
         workspace: &mut Workspace,
-    ) -> anyhow::Result<Option<ExitStatus>> {
+    ) -> anyhow::Result<ExecutionStatus> {
         tracing::debug!("Executing task {}", step.display_name());
 
         let command = step.resolved_command.fingerprint.command.clone();
         let cwd = step.resolved_command.fingerprint.cwd.clone();
-        let display_command: Option<String> =
-            if step.is_builtin { None } else { Some(format!("~/{cwd}$ {command}")) };
-        let ignore_replay = step.ignore_replay;
 
-        // TODO: this should be replaced by something like `--json-output` when structured logging is implemented.
-        let is_in_cli_test = std::env::var_os("VITE_PLUS_CLI_TEST").is_some();
+        let display_options = step.display_options;
 
         // Check cache and prepare execution
-        let (cache_miss, execute_or_replay) = get_cached_or_execute(
+        let (cache_status, execute_or_replay) = get_cached_or_execute(
             step,
             &mut workspace.task_cache,
             &workspace.fs,
@@ -129,55 +129,14 @@ impl ExecutionPlan {
         )
         .await?;
 
-        // Print cache status
-        match cache_miss {
-            Some(CacheMiss::NotFound) => {
-                tracing::debug!("{}", "Cache not found".style(Style::new().yellow()));
-                if is_in_cli_test {
-                    println!("Cache not found");
-                } else if let Some(display_command) = display_command {
-                    println!(
-                        "{} {}",
-                        "►".style(Style::new().bright_blue()),
-                        display_command.style(Style::new().cyan())
-                    );
-                }
-            }
-            Some(CacheMiss::FingerprintMismatch(mismatch)) => {
-                if is_in_cli_test {
-                    println!("Cache miss: {mismatch}");
-                } else {
-                    println!("{}: {}", "Cache miss".style(Style::new().yellow()), mismatch);
-                    if let Some(display_command) = display_command {
-                        println!(
-                            "{} {}",
-                            "►".style(Style::new().bright_blue()),
-                            display_command.style(Style::new().cyan())
-                        );
-                    }
-                }
-            }
-            None => {
-                if !ignore_replay {
-                    if is_in_cli_test {
-                        println!("Cache hit, replaying");
-                    } else {
-                        println!("{}", "Cache hit, replaying".style(Style::new().green()));
-                        if let Some(display_command) = display_command {
-                            println!(
-                                "{} {}",
-                                "►".style(Style::new().bright_green()),
-                                display_command.style(Style::new().dimmed())
-                            );
-                        }
-                    }
-                }
-            }
-        }
+        let pre_execution_status =
+            PreExecutionStatus { command, cwd, cache_status, display_options };
+
+        println!("{}", pre_execution_status);
 
         // Execute or replay the task
         let exit_status = execute_or_replay.await?;
-        Ok(exit_status)
+        Ok(ExecutionStatus { pre_execution_status, exit_status })
     }
 }
 
@@ -188,14 +147,14 @@ async fn get_cached_or_execute<'a>(
     cache: &'a mut TaskCache,
     fs: &'a impl FileSystem,
     base_dir: &'a AbsolutePath,
-) -> Result<(Option<CacheMiss>, BoxFuture<'a, Result<Option<ExitStatus>, Error>>), Error> {
+) -> Result<(CacheStatus, BoxFuture<'a, Result<ExitStatus, Error>>), Error> {
     Ok(match cache.try_hit(&task, fs, base_dir).await? {
         Ok(cache_task) => (
-            None,
+            CacheStatus::CacheHit,
             ({
                 async move {
-                    if task.ignore_replay {
-                        return Ok(None);
+                    if task.display_options.ignore_replay {
+                        return Ok(ExitStatus::default());
                     }
                     // replay
                     let std_outputs = Arc::clone(&cache_task.std_outputs);
@@ -215,13 +174,13 @@ async fn get_cached_or_execute<'a>(
                             }
                         }
                     }
-                    Ok(None)
+                    Ok(ExitStatus::default())
                 }
                 .boxed()
             }),
         ),
         Err(cache_miss) => (
-            Some(cache_miss),
+            CacheStatus::CacheMiss(cache_miss),
             async move {
                 let skip_cache = task.resolved_command.fingerprint.command.need_skip_cache();
                 let executed_task = execute_task(&task.resolved_command, base_dir).await?;
@@ -230,7 +189,7 @@ async fn get_cached_or_execute<'a>(
                     let cached_task = CommandCacheValue::create(executed_task, fs, base_dir)?;
                     cache.update(&task, cached_task).await?;
                 }
-                Ok(Some(exit_status))
+                Ok(exit_status)
             }
             .boxed(),
         ),

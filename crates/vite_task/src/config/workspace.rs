@@ -21,7 +21,7 @@ use crate::{
     cache::TaskCache,
     cmd::try_parse_as_and_list,
     collections::{HashMap, HashSet},
-    config::{TaskGroupId, name::TaskName},
+    config::{DisplayOptions, TaskGroupId, name::TaskName},
     fs::CachedFileSystem,
 };
 
@@ -237,8 +237,7 @@ impl Workspace {
             args: Arc::default(),
             resolved_command,
             resolved_config,
-            is_builtin: false,
-            ignore_replay: false,
+            display_options: DisplayOptions::default(),
         })
     }
 

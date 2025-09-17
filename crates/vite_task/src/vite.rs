@@ -3,7 +3,9 @@ use std::{future::Future, iter, process::ExitStatus};
 use petgraph::stable_graph::StableGraph;
 
 use crate::{
-    Error, ResolveCommandResult, Workspace, config::ResolvedTask, schedule::ExecutionPlan,
+    Error, ResolveCommandResult, Workspace,
+    config::ResolvedTask,
+    schedule::{ExecutionPlan, ExecutionSummary},
 };
 
 pub async fn create_vite<
@@ -14,7 +16,7 @@ pub async fn create_vite<
     resolve_vite_command: ViteFn,
     workspace: &mut Workspace,
     args: &Vec<String>,
-) -> Result<Option<ExitStatus>, Error> {
+) -> Result<ExecutionSummary, Error> {
     let resolved_task = ResolvedTask::resolve_from_builtin(
         workspace,
         resolve_vite_command,

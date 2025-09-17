@@ -170,14 +170,7 @@ pub async fn run(options: CliOptions) -> Result<()> {
     .await;
 
     match result {
-        Ok(Some(exit_status)) => {
-            // Exit with the exit status of the first failed task
-            std::process::exit(exit_status.code().unwrap_or(1))
-        }
-        Ok(None) => {
-            // Success case - no failed tasks
-            // Continue to Ok(()) return
-        }
+        Ok(exit_status) => std::process::exit(exit_status.code().unwrap_or(1)),
         Err(e) => {
             match e {
                 // Standard exit code for Ctrl+C
@@ -234,13 +227,13 @@ fn parse_args() -> Args {
         return Args {
             task: None,
             task_args: vec![],
-            commands: Some(match first {
+            commands: match first {
                 "lint" => Commands::Lint { args: forwarded_args },
                 "fmt" => Commands::Fmt { args: forwarded_args },
                 "build" => Commands::Build { args: forwarded_args },
                 "test" => Commands::Test { args: forwarded_args },
                 _ => unreachable!(),
-            }),
+            },
             debug: false,
             no_debug: true,
         };

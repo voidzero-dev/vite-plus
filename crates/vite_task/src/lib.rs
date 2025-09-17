@@ -11,12 +11,13 @@ mod lint;
 mod maybe_str;
 mod schedule;
 mod test;
+mod ui;
 mod vite;
 
 #[cfg(test)]
 mod test_utils;
 
-use std::{collections::HashMap, pin::Pin, sync::Arc};
+use std::{collections::HashMap, pin::Pin, process::ExitStatus, sync::Arc};
 
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -26,7 +27,12 @@ use vite_path::AbsolutePathBuf;
 use vite_str::Str;
 
 pub use crate::config::Workspace;
-use crate::{cache::TaskCache, fmt::FmtConfig, lint::LintConfig, schedule::ExecutionPlan};
+use crate::{
+    cache::TaskCache,
+    fmt::FmtConfig,
+    lint::LintConfig,
+    schedule::{ExecutionPlan, ExecutionSummary},
+};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -38,7 +44,7 @@ pub struct Args {
     pub task_args: Vec<Str>,
 
     #[clap(subcommand)]
-    pub commands: Option<Commands>,
+    pub commands: Commands,
 
     /// Display cache for debugging.
     #[clap(short, long)]
@@ -244,9 +250,9 @@ pub async fn main<
             ResolveUniversalViteConfigFn,
         >,
     >,
-) -> Result<Option<std::process::ExitStatus>, Error> {
+) -> Result<std::process::ExitStatus, Error> {
     // Auto-install dependencies if needed, but skip for install command itself, or if `VITE_DISABLE_AUTO_INSTALL=1` is set.
-    if !matches!(args.commands, Some(Commands::Install { .. }))
+    if !matches!(args.commands, Commands::Install { .. })
         && std::env::var_os("VITE_DISABLE_AUTO_INSTALL") != Some("1".into())
     {
         auto_install(&cwd).await?;
@@ -254,8 +260,8 @@ pub async fn main<
 
     let mut recursive_run = false;
     let mut parallel_run = false;
-    let (tasks, mut workspace, task_args) = match &mut args.commands {
-        Some(Commands::Run {
+    let summary: ExecutionSummary = match &mut args.commands {
+        Commands::Run {
             tasks,
             recursive,
             no_recursive,
@@ -265,7 +271,7 @@ pub async fn main<
             no_topological,
             task_args,
             ..
-        }) => {
+        } => {
             recursive_run = resolve_bool_flag(*recursive, *no_recursive);
             parallel_run = resolve_bool_flag(*parallel, *no_parallel);
             // Note: topological dependencies are always included in the pre-built task graph
@@ -277,81 +283,85 @@ pub async fn main<
             } else {
                 recursive_run
             };
-            let workspace = Workspace::load(cwd, topological_run)?;
-            (tasks, workspace, Arc::<[Str]>::from(task_args.clone()))
+            let mut workspace = Workspace::load(cwd, topological_run)?;
+
+            let task_graph = workspace.build_task_subgraph(
+                tasks,
+                Arc::<[Str]>::from(task_args.clone()),
+                recursive_run,
+            )?;
+
+            let plan = ExecutionPlan::plan(task_graph, parallel_run)?;
+            let summary = plan.execute(&mut workspace).await?;
+            workspace.unload().await?;
+            summary
         }
-        Some(Commands::Lint { args }) => {
+        Commands::Lint { args } => {
             let mut workspace = Workspace::partial_load(cwd)?;
-            if let Some(lint_fn) = options.as_ref().map(|o| &o.lint) {
-                let vite_config = read_vite_config_from_workspace_root(
-                    &workspace.workspace_dir,
-                    options.as_ref().map(|o| &o.resolve_universal_vite_config),
-                )
-                .await?;
-                let resolved_vite_config: Option<ResolvedUniversalViteConfig> = vite_config
-                    .map(|vite_config| {
-                        serde_json::from_str(&vite_config).map_err(|err| {
-                            tracing::error!("Failed to parse vite config: {vite_config}");
-                            err
-                        })
+            let lint_fn =
+                options.as_ref().map(|o| &o.lint).expect("lint command requires CliOptions");
+
+            let vite_config = read_vite_config_from_workspace_root(
+                &workspace.workspace_dir,
+                options.as_ref().map(|o| &o.resolve_universal_vite_config),
+            )
+            .await?;
+            let resolved_vite_config: Option<ResolvedUniversalViteConfig> = vite_config
+                .map(|vite_config| {
+                    serde_json::from_str(&vite_config).map_err(|err| {
+                        tracing::error!("Failed to parse vite config: {vite_config}");
+                        err
                     })
-                    .transpose()?;
-                let lint_config = resolved_vite_config.and_then(|c| c.lint);
-                if let Some(lint_config) = lint_config {
-                    let oxlint_config_path = workspace.cache_path().join(".oxlintrc.json");
-                    write(&oxlint_config_path, serde_json::to_string(&lint_config)?).await?;
-                    args.extend_from_slice(&[
-                        "--config".to_string(),
-                        oxlint_config_path.as_path().to_string_lossy().into_owned(),
-                    ]);
-                }
-                let exit_status = lint::lint(lint_fn, &mut workspace, args).await?;
-                workspace.unload().await?;
-                return Ok(exit_status);
+                })
+                .transpose()?;
+            let lint_config = resolved_vite_config.and_then(|c| c.lint);
+            if let Some(lint_config) = lint_config {
+                let oxlint_config_path = workspace.cache_path().join(".oxlintrc.json");
+                write(&oxlint_config_path, serde_json::to_string(&lint_config)?).await?;
+                args.extend_from_slice(&[
+                    "--config".to_string(),
+                    oxlint_config_path.as_path().to_string_lossy().into_owned(),
+                ]);
             }
-            return Ok(None);
+            let summary = lint::lint(lint_fn, &mut workspace, args).await?;
+            workspace.unload().await?;
+            summary
         }
-        Some(Commands::Fmt { args }) => {
+        Commands::Fmt { args } => {
             let mut workspace = Workspace::partial_load(cwd)?;
-            if let Some(fmt_fn) = options.map(|o| o.fmt) {
-                let exit_status = fmt::fmt(fmt_fn, &mut workspace, args).await?;
-                workspace.unload().await?;
-                return Ok(exit_status);
-            }
-            return Ok(None);
+            let fmt_fn = options.map(|o| o.fmt).expect("fmt command requires CliOptions");
+
+            let summary = fmt::fmt(fmt_fn, &mut workspace, args).await?;
+            workspace.unload().await?;
+            summary
         }
-        Some(Commands::Build { args }) => {
+        Commands::Build { args } => {
             let mut workspace = Workspace::partial_load(cwd)?;
-            if let Some(vite_fn) = options.map(|o| o.vite) {
-                let exit_status = vite::create_vite("build", vite_fn, &mut workspace, args).await?;
-                workspace.unload().await?;
-                return Ok(exit_status);
-            }
-            return Ok(None);
+            let vite_fn = options.map(|o| o.vite).expect("build command requires CliOptions");
+
+            let summary = vite::create_vite("build", vite_fn, &mut workspace, args).await?;
+            workspace.unload().await?;
+            summary
         }
-        Some(Commands::Test { args }) => {
+        Commands::Test { args } => {
             let mut workspace = Workspace::partial_load(cwd)?;
-            if let Some(test_fn) = options.map(|o| o.test) {
-                let exit_status = test::test(test_fn, &mut workspace, args).await?;
-                workspace.unload().await?;
-                return Ok(exit_status);
-            }
-            return Ok(None);
+            let test_fn = options.map(|o| o.test).expect("test command requires CliOptions");
+            let summary = test::test(test_fn, &mut workspace, args).await?;
+            workspace.unload().await?;
+            summary
         }
-        Some(Commands::Install { args }) => {
-            let exit_status = install::InstallCommand::builder(cwd).build().execute(args).await?;
-            return Ok(exit_status);
+        Commands::Install { args } => {
+            install::InstallCommand::builder(cwd).build().execute(args).await?
         }
-        Some(Commands::Dev { args }) => {
+        Commands::Dev { args } => {
             let mut workspace = Workspace::partial_load(cwd)?;
-            if let Some(vite_fn) = options.map(|o| o.vite) {
-                let exit_status = vite::create_vite("dev", vite_fn, &mut workspace, args).await?;
-                workspace.unload().await?;
-                return Ok(exit_status);
-            }
-            return Ok(None);
+            let vite_fn = options.map(|o| o.vite).expect("dev command requires CliOptions");
+            let summary = vite::create_vite("dev", vite_fn, &mut workspace, args).await?;
+            workspace.unload().await?;
+            summary
         }
         Some(Commands::Cache { subcmd }) => {
+        Commands::Cache { subcmd } => {
             let cache_path = Workspace::get_cache_path(&cwd)?;
             match subcmd {
                 CacheSubcommand::Clean => {
@@ -362,25 +372,20 @@ pub async fn main<
                     cache.list(std::io::stdout()).await?;
                 }
             }
-            return Ok(None);
-        }
-        None => {
-            let workspace = Workspace::load(cwd, false)?;
-            // in implicit mode, vite-plus will run the task in the current package, replace the `pnpm/yarn/npm run` command.
-            let Some(task) = args.task else {
-                return Ok(None);
-            };
-            (&mut vec![task], workspace, Arc::<[Str]>::from(args.task_args))
+            return Ok(ExitStatus::default());
         }
     };
 
-    let task_graph = workspace.build_task_subgraph(tasks, task_args.clone(), recursive_run)?;
+    println!("{}", &summary);
 
-    let plan = ExecutionPlan::plan(task_graph, parallel_run)?;
-    let exit_status = plan.execute(&mut workspace).await?;
-
-    workspace.unload().await?;
-    Ok(exit_status)
+    // Return the first non-zero exit status, or zero if all succeeded
+    Ok(summary
+        .execution_statuses
+        .iter()
+        .find_map(
+            |status| if !status.exit_status.success() { Some(status.exit_status) } else { None },
+        )
+        .unwrap_or_default())
 }
 
 pub fn init_tracing() {
@@ -441,7 +446,7 @@ mod tests {
         let args = Args::try_parse_from(&["vite-plus", "build"]).unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
-        assert!(matches!(args.commands, Some(Commands::Build { .. })));
+        assert!(matches!(args.commands, Commands::Build { .. }));
         assert!(!args.debug);
     }
 
@@ -450,7 +455,7 @@ mod tests {
         let args = Args::try_parse_from(&["vite-plus", "fmt"]).unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
-        assert!(matches!(args.commands, Some(Commands::Fmt { .. })));
+        assert!(matches!(args.commands, Commands::Fmt { .. }));
         assert!(!args.debug);
     }
 
@@ -467,7 +472,7 @@ mod tests {
         .unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
-        if let Some(Commands::Fmt { args }) = &args.commands {
+        if let Commands::Fmt { args } = &args.commands {
             assert_eq!(
                 args,
                 &vec!["--check".to_string(), "--ignore-path".to_string(), ".gitignore".to_string()]
@@ -478,22 +483,11 @@ mod tests {
     }
 
     #[test]
-    fn test_args_with_task_args() {
-        // Now "test" is a dedicated command, so let's use a different task name for implicit mode
-        let args =
-            Args::try_parse_from(&["vite-plus", "develop", "--", "--watch", "--verbose"]).unwrap();
-        assert_eq!(args.task, Some("develop".into()));
-        assert_eq!(args.task_args, vec!["--watch", "--verbose"]);
-        assert!(args.commands.is_none());
-        assert!(!args.debug);
-    }
-
-    #[test]
     fn test_args_test_command() {
         let args = Args::try_parse_from(&["vite-plus", "test"]).unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
-        assert!(matches!(args.commands, Some(Commands::Test { .. })));
+        assert!(matches!(args.commands, Commands::Test { .. }));
         assert!(!args.debug);
     }
 
@@ -503,7 +497,7 @@ mod tests {
             Args::try_parse_from(&["vite-plus", "test", "--", "--watch", "--coverage"]).unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
-        if let Some(Commands::Test { args }) = &args.commands {
+        if let Commands::Test { args } = &args.commands {
             assert_eq!(args, &vec!["--watch".to_string(), "--coverage".to_string()]);
         } else {
             panic!("Expected Test command");
@@ -514,7 +508,7 @@ mod tests {
     fn test_args_debug_flag() {
         let args = Args::try_parse_from(&["vite-plus", "--debug", "build"]).unwrap();
         assert_eq!(args.task, None);
-        assert!(matches!(args.commands, Some(Commands::Build { .. })));
+        assert!(matches!(args.commands, Commands::Build { .. }));
         assert!(args.debug);
     }
 
@@ -522,7 +516,7 @@ mod tests {
     fn test_args_debug_flag_short() {
         let args = Args::try_parse_from(&["vite-plus", "-d", "build"]).unwrap();
         assert_eq!(args.task, None);
-        assert!(matches!(args.commands, Some(Commands::Build { .. })));
+        assert!(matches!(args.commands, Commands::Build { .. }));
         assert!(args.debug);
     }
 
@@ -536,7 +530,7 @@ mod tests {
 
         // Test run command with --no-recursive
         let args = Args::try_parse_from(&["vite-plus", "run", "--no-recursive", "build"]).unwrap();
-        if let Some(Commands::Run { recursive, no_recursive, .. }) = args.commands {
+        if let Commands::Run { recursive, no_recursive, .. } = args.commands {
             assert!(!recursive);
             assert!(no_recursive);
             assert_eq!(resolve_bool_flag(recursive, no_recursive), false);
@@ -546,7 +540,7 @@ mod tests {
 
         // Test run command with --no-parallel
         let args = Args::try_parse_from(&["vite-plus", "run", "--no-parallel", "build"]).unwrap();
-        if let Some(Commands::Run { parallel, no_parallel, .. }) = args.commands {
+        if let Commands::Run { parallel, no_parallel, .. } = args.commands {
             assert!(!parallel);
             assert!(no_parallel);
             assert_eq!(resolve_bool_flag(parallel, no_parallel), false);
@@ -557,7 +551,7 @@ mod tests {
         // Test run command with --no-topological
         let args =
             Args::try_parse_from(&["vite-plus", "run", "--no-topological", "build"]).unwrap();
-        if let Some(Commands::Run { topological, no_topological, .. }) = args.commands {
+        if let Commands::Run { topological, no_topological, .. } = args.commands {
             assert_eq!(topological, None);
             assert!(no_topological);
             // no_topological takes precedence
@@ -572,9 +566,8 @@ mod tests {
 
         // Test recursive with topological default behavior
         let args = Args::try_parse_from(&["vite-plus", "run", "--recursive", "build"]).unwrap();
-        if let Some(Commands::Run {
-            recursive, no_recursive, topological, no_topological, ..
-        }) = args.commands
+        if let Commands::Run { recursive, no_recursive, topological, no_topological, .. } =
+            args.commands
         {
             assert!(recursive);
             assert!(!no_recursive);
@@ -589,9 +582,8 @@ mod tests {
         let args =
             Args::try_parse_from(&["vite-plus", "run", "--recursive", "--no-topological", "build"])
                 .unwrap();
-        if let Some(Commands::Run {
-            recursive, no_recursive, topological, no_topological, ..
-        }) = args.commands
+        if let Commands::Run { recursive, no_recursive, topological, no_topological, .. } =
+            args.commands
         {
             assert!(recursive);
             assert!(!no_recursive);
@@ -604,20 +596,11 @@ mod tests {
     }
 
     #[test]
-    fn test_args_no_task() {
-        let args = Args::try_parse_from(&["vite-plus"]).unwrap();
-        assert!(args.task.is_none());
-        assert!(args.task_args.is_empty());
-        assert!(args.commands.is_none());
-        assert!(!args.debug);
-    }
-
-    #[test]
     fn test_args_run_command_basic() {
         let args = Args::try_parse_from(&["vite-plus", "run", "build", "test"]).unwrap();
         assert!(args.task.is_none());
 
-        if let Some(Commands::Run {
+        if let Commands::Run {
             tasks,
             task_args,
             recursive,
@@ -625,7 +608,7 @@ mod tests {
             parallel,
             topological,
             ..
-        }) = args.commands
+        } = args.commands
         {
             assert_eq!(tasks, vec!["build", "test"]);
             assert!(task_args.is_empty());
@@ -644,7 +627,7 @@ mod tests {
             Args::try_parse_from(&["vite-plus", "run", "--recursive", "--sequential", "build"])
                 .unwrap();
 
-        if let Some(Commands::Run { tasks, recursive, sequential, parallel, .. }) = args.commands {
+        if let Commands::Run { tasks, recursive, sequential, parallel, .. } = args.commands {
             assert_eq!(tasks, vec!["build"]);
             assert!(recursive);
             assert!(sequential);
@@ -659,7 +642,7 @@ mod tests {
         let args =
             Args::try_parse_from(&["vite-plus", "run", "--parallel", "build", "test"]).unwrap();
 
-        if let Some(Commands::Run { tasks, parallel, sequential, .. }) = args.commands {
+        if let Commands::Run { tasks, parallel, sequential, .. } = args.commands {
             assert_eq!(tasks, vec!["build", "test"]);
             assert!(parallel);
             assert!(!sequential);
@@ -681,7 +664,7 @@ mod tests {
         ])
         .unwrap();
 
-        if let Some(Commands::Run { tasks, task_args, .. }) = args.commands {
+        if let Commands::Run { tasks, task_args, .. } = args.commands {
             assert_eq!(tasks, vec!["build", "test"]);
             assert_eq!(task_args, vec!["--watch", "--verbose"]);
         } else {
@@ -701,7 +684,7 @@ mod tests {
         ])
         .unwrap();
 
-        if let Some(Commands::Run { tasks, recursive, sequential, parallel, .. }) = args.commands {
+        if let Commands::Run { tasks, recursive, sequential, parallel, .. } = args.commands {
             assert_eq!(tasks, vec!["build"]);
             assert!(recursive);
             assert!(sequential);
@@ -716,7 +699,7 @@ mod tests {
         let args = Args::try_parse_from(&["vite-plus", "--debug", "run", "build"]).unwrap();
 
         assert!(args.debug);
-        if let Some(Commands::Run { tasks, .. }) = args.commands {
+        if let Commands::Run { tasks, .. } = args.commands {
             assert_eq!(tasks, vec!["build"]);
         } else {
             panic!("Expected Run command");
@@ -727,7 +710,7 @@ mod tests {
     fn test_args_run_short_flags() {
         let args = Args::try_parse_from(&["vite-plus", "run", "-r", "-s", "-p", "build"]).unwrap();
 
-        if let Some(Commands::Run { tasks, recursive, sequential, parallel, .. }) = args.commands {
+        if let Commands::Run { tasks, recursive, sequential, parallel, .. } = args.commands {
             assert_eq!(tasks, vec!["build"]);
             assert!(recursive);
             assert!(sequential);
@@ -753,7 +736,7 @@ mod tests {
     fn test_args_run_empty_tasks() {
         let args = Args::try_parse_from(&["vite-plus", "run"]).unwrap();
 
-        if let Some(Commands::Run { tasks, .. }) = args.commands {
+        if let Commands::Run { tasks, .. } = args.commands {
             assert!(tasks.is_empty(), "Tasks should be empty when none provided");
         } else {
             panic!("Expected Run command");
@@ -776,7 +759,7 @@ mod tests {
         // "test" is now a dedicated command
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
-        if let Some(Commands::Test { args }) = &args.commands {
+        if let Commands::Test { args } = &args.commands {
             assert_eq!(
                 args,
                 &vec![
@@ -807,7 +790,7 @@ mod tests {
         ])
         .unwrap();
 
-        if let Some(Commands::Run { tasks, task_args, recursive, .. }) = args.commands {
+        if let Commands::Run { tasks, task_args, recursive, .. } = args.commands {
             assert_eq!(tasks, vec!["build", "test"]);
             assert_eq!(task_args, vec!["--env", "production", "--output-dir", "dist"]);
             assert!(recursive);
@@ -837,7 +820,7 @@ mod tests {
         // Verify args1: explicit mode with run subcommand
         assert!(args1.task.is_none());
         assert!(args1.task_args.is_empty()); // Top-level task_args should be empty
-        if let Some(Commands::Run { tasks, task_args, .. }) = &args1.commands {
+        if let Commands::Run { tasks, task_args, .. } = &args1.commands {
             assert_eq!(tasks, &vec!["build"]);
             assert_eq!(task_args, &vec!["--watch", "--mode=production"]);
         } else {
@@ -847,7 +830,7 @@ mod tests {
         // Verify args2: now maps to Build command instead of implicit mode
         assert_eq!(args2.task, None);
         assert!(args2.task_args.is_empty()); // Build command captures args directly, not via task_args
-        if let Some(Commands::Build { args }) = &args2.commands {
+        if let Commands::Build { args } = &args2.commands {
             assert_eq!(args, &vec!["--watch".to_string(), "--mode=development".to_string()]);
         } else {
             panic!("Expected Build command");
