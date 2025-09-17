@@ -1,4 +1,4 @@
-import { scaffold, type ScaffoldOptions } from './scaffold.ts';
+import { scaffold, type ScaffoldOptions } from './scaffold.js';
 
 // Parse command line arguments to intercept 'new' command
 const args = process.argv.slice(2);

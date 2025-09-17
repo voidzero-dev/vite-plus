@@ -1,9 +1,18 @@
 import { copyFile } from 'node:fs/promises';
-import { parse } from 'node:path';
+import { join, parse } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { NapiCli } from '@napi-rs/cli';
 import { build } from 'rolldown';
+import {
+  createCompilerHost,
+  createProgram,
+  formatDiagnostics,
+  parseJsonSourceFileConfigFileContent,
+  readJsonConfigFile,
+  sys,
+} from 'typescript';
 
 const { values: { target, x } } = parseArgs({
   options: {
@@ -40,4 +49,28 @@ await build({
 
 if (output) {
   await copyFile(output.path, `./dist/${parse(output.path).base}`);
+}
+
+const projectDir = join(fileURLToPath(import.meta.url), '..');
+
+const tsconfig = readJsonConfigFile(join(projectDir, 'tsconfig.json'), sys.readFile);
+
+const { options } = parseJsonSourceFileConfigFileContent(tsconfig, sys, projectDir);
+
+const host = createCompilerHost(options);
+
+const program = createProgram({
+  rootNames: [join(projectDir, 'src', 'index.ts')],
+  options: {
+    ...options,
+    emitDeclarationOnly: true,
+  },
+  host,
+});
+
+const { diagnostics } = program.emit();
+
+if (diagnostics.length > 0) {
+  console.error(formatDiagnostics(diagnostics, host));
+  process.exit(1);
 }

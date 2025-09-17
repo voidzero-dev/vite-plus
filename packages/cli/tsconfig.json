@@ -5,7 +5,8 @@
     "moduleResolution": "NodeNext",
     "composite": true,
     "outDir": "./dist",
-    "noEmit": true,
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
     "rootDir": "./src"
   },
   "include": ["src"],
