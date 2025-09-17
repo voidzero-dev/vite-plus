@@ -22,6 +22,24 @@ pub struct ExecutionPlan {
     // task_graph: Graph<TaskNode, ()>,
 }
 
+/// Status of a task execution before it runs
+pub enum PreExecutionStatus {
+    /// Cache miss with reason.
+    ///
+    /// The task will be executed.
+    CacheMiss(CacheMiss),
+    /// Cache hit, will replay
+    CacheHit,
+}
+
+/// Status of a task execution after it runs
+pub enum PostExecutionStatus {
+    /// Cache hit, replayed
+    CacheHitReplay,
+    /// Cache miss with reason and exit status of the executed task
+    CacheMiss { reason: CacheMiss, exit_status: ExitStatus },
+}
+
 impl ExecutionPlan {
     /// Creates an execution plan from the task dependency graph.
     ///
