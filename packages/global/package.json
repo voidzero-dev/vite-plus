@@ -22,12 +22,12 @@
     "snap-test": "snap-test"
   },
   "dependencies": {
+    "@voidzero-dev/vite-plus": "workspace:*",
     "oxlint": "catalog:",
     "rolldown-vite": "catalog:",
     "vitest": "catalog:"
   },
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "workspace:*",
     "@voidzero-dev/vite-plus-tools": "workspace:",
     "rolldown": "catalog:"
   },
