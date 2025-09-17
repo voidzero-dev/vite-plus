@@ -376,7 +376,7 @@ pub async fn main<
         }
     };
 
-    println!("{}", &summary);
+    print!("{}", &summary);
 
     // Return the first non-zero exit status, or zero if all succeeded
     Ok(summary

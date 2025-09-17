@@ -132,7 +132,7 @@ impl ExecutionPlan {
         let pre_execution_status =
             PreExecutionStatus { command, cwd, cache_status, display_options };
 
-        println!("{}", pre_execution_status);
+        print!("{}", pre_execution_status);
 
         // Execute or replay the task
         let exit_status = execute_or_replay.await?;
