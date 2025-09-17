@@ -3,6 +3,8 @@ name: Release
 on:
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   build-rust:
     runs-on: ubuntu-latest
@@ -17,8 +19,10 @@ jobs:
           # - aarch64-pc-windows-msvc
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
-      - uses: oxc-project/setup-rust@cd82e1efec7fef815e2c23d296756f31c7cdc03d # v1.0.0
+      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.2
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: release
@@ -55,7 +59,7 @@ jobs:
         if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
         run: rustup target add aarch64-unknown-linux-musl
 
-      - uses: oxc-project/setup-node@f42e3bda950c7454575e78ee4eaac880a077700c # v1.0.0
+      - uses: oxc-project/setup-node@376ec3eb2d5cad9c200e276b7e760cad6b646d05 # main
 
       - name: Build
         run: pnpm --filter=@voidzero-dev/vite-plus build --target ${{ matrix.target }} -x
@@ -85,8 +89,10 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
-      - uses: oxc-project/setup-node@4c31090ef1282f7c654edf77357894fc80ef5236 # v1.0.2
+      - uses: oxc-project/setup-node@376ec3eb2d5cad9c200e276b7e760cad6b646d05 # main
 
       - name: Bootstrap
         run: pnpm bootstrap-cli:ci
