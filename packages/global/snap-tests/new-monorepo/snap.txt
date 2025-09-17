@@ -39,7 +39,7 @@ Creating monorepo project: my-project...
 Next steps:
   cd my-project
   vite run ready
-  vite dev
+  vite run dev
 
 To add new packages to your monorepo:
   vite new --app apps/my-app
@@ -50,7 +50,8 @@ Creating new app at apps/my-app...
 ✅ Successfully created app at apps/my-app
 
 Next steps:
-  vite run ready
+  cd apps/my-app
+  vite run dev
 
 > cd my-project && ls apps
 my-app

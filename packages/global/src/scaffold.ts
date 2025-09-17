@@ -179,9 +179,9 @@ export async function scaffold(options: ScaffoldOptions = {}) {
 
       console.log(`✅ Successfully created app at ${options.app}`);
       console.log('\nNext steps:');
-      // console.log(`  cd ${path.relative(process.cwd(), targetPath)}`);
-      console.log('  vite run ready');
-      // console.log('  vite dev');
+      console.log(`  cd ${path.relative(process.cwd(), targetPath)}`);
+      // console.log('  vite run ready');
+      console.log('  vite run dev');
     }
 
     if (options.lib) {
@@ -244,7 +244,7 @@ export async function scaffold(options: ScaffoldOptions = {}) {
   console.log('\nNext steps:');
   console.log(`  cd ${projectName}`);
   console.log('  vite run ready');
-  console.log('  vite dev');
+  console.log('  vite run dev');
 
   if (projectType === 'monorepo') {
     console.log('\nTo add new packages to your monorepo:');
