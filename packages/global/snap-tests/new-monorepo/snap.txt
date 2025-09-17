@@ -38,6 +38,7 @@ Creating monorepo project: my-project...
 
 Next steps:
   cd my-project
+  git init
   vite run ready
   vite run dev
 

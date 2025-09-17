@@ -243,6 +243,8 @@ export async function scaffold(options: ScaffoldOptions = {}) {
   console.log(`✅ Successfully created ${projectType} project: ${projectName}`);
   console.log('\nNext steps:');
   console.log(`  cd ${projectName}`);
+  // TODO: need git init avoid oxlint scan node_modules
+  console.log('  git init');
   console.log('  vite run ready');
   console.log('  vite run dev');
 
