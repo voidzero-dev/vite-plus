@@ -44,7 +44,24 @@ pub enum CacheStatus {
 pub struct ExecutionStatus {
     #[expect(dead_code)]
     pub pre_execution_status: PreExecutionStatus,
-    pub exit_status: ExitStatus,
+    /// `Ok` variant means the task was executed (or replayed), no matter the exit status is zero or non-zero.
+    ///
+    /// `Err(_)` means the task doesn't have a exit status at all, e.g. skipped due to failed direct or indirect dependency.
+    ///
+    /// For example, for three tasks declared as: "false && echo foo && echo bar",
+    /// their execution_result in order would be:
+    /// - `Ok(ExitStatus(1))`
+    /// - `Err(SkippedDueToFailedDependency)`
+    /// - `Err(SkippedDueToFailedDependency)`
+    pub execution_result: Result<ExitStatus, ExecutionFailure>,
+}
+
+#[derive(Debug)]
+pub enum ExecutionFailure {
+    /// this task was skipped because one of its dependencies failed
+    #[expect(dead_code)]
+    SkippedDueToFailedDependency,
+    // TODO: UserCancelled when implementing tui/webui
 }
 
 /// Summary of all task executions
@@ -110,7 +127,7 @@ impl ExecutionPlan {
         Ok(ExecutionSummary { execution_statuses })
     }
 
-    pub async fn execute_resolved_task(
+    async fn execute_resolved_task(
         step: ResolvedTask,
         workspace: &mut Workspace,
     ) -> anyhow::Result<ExecutionStatus> {
@@ -137,7 +154,7 @@ impl ExecutionPlan {
 
         // Execute or replay the task
         let exit_status = execute_or_replay.await?;
-        Ok(ExecutionStatus { pre_execution_status, exit_status })
+        Ok(ExecutionStatus { pre_execution_status, execution_result: Ok(exit_status) })
     }
 }
 

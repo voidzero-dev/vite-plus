@@ -384,9 +384,17 @@ pub async fn main<
     Ok(summary
         .execution_statuses
         .iter()
-        .find_map(
-            |status| if !status.exit_status.success() { Some(status.exit_status) } else { None },
-        )
+        .find_map(|status| {
+            // Err(ExecutionFailure) can be skipped because currently the only variant of `ExecutionFailure` is
+            // `SkippedDueToFailedDependency`, which means there must be at least one task with non-zero exit status.
+            if let Ok(exit_status) = status.execution_result
+                && !exit_status.success()
+            {
+                Some(exit_status)
+            } else {
+                None
+            }
+        })
         .unwrap_or_default())
 }
 
