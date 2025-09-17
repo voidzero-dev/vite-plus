@@ -37,6 +37,7 @@ pub struct Workspace {
     pub(crate) task_cache: TaskCache,
     pub(crate) fs: CachedFileSystem,
     pub(crate) package_graph: Graph<PackageInfo, DependencyType>,
+    #[expect(unused)]
     pub(crate) package_json: PackageJson,
     pub(crate) task_graph: StableDiGraph<ResolvedTask, ()>,
 }
