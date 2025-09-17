@@ -183,7 +183,6 @@ pub async fn run(options: CliOptions) -> Result<()> {
             }
         }
     }
-    Ok(())
 }
 
 /// Convert JavaScript errors to Rust lint errors

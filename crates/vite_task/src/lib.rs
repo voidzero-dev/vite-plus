@@ -258,8 +258,6 @@ pub async fn main<
         auto_install(&cwd).await?;
     }
 
-    let mut recursive_run = false;
-    let mut parallel_run = false;
     let summary: ExecutionSummary = match &mut args.commands {
         Commands::Run {
             tasks,
@@ -272,8 +270,8 @@ pub async fn main<
             task_args,
             ..
         } => {
-            recursive_run = resolve_bool_flag(*recursive, *no_recursive);
-            parallel_run = resolve_bool_flag(*parallel, *no_parallel);
+            let recursive_run = resolve_bool_flag(*recursive, *no_recursive);
+            let parallel_run = resolve_bool_flag(*parallel, *no_parallel);
             // Note: topological dependencies are always included in the pre-built task graph
             // This flag now mainly affects execution order in the execution plan
             let topological_run = if *no_topological {

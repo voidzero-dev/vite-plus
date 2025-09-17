@@ -42,6 +42,7 @@ pub enum CacheStatus {
 /// Status of a task execution
 #[derive(Debug)]
 pub struct ExecutionStatus {
+    #[expect(dead_code)]
     pub pre_execution_status: PreExecutionStatus,
     pub exit_status: ExitStatus,
 }

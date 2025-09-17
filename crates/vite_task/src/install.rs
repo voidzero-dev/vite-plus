@@ -2,7 +2,6 @@ use std::{
     env,
     io::{self, IsTerminal, Write},
     iter,
-    process::ExitStatus,
 };
 
 use crossterm::{

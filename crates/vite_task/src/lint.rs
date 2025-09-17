@@ -1,4 +1,4 @@
-use std::{collections::HashMap, future::Future, process::ExitStatus};
+use std::{collections::HashMap, future::Future};
 
 use petgraph::stable_graph::StableGraph;
 use serde::{Deserialize, Serialize};
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     Error, ResolveCommandResult, Workspace,
     config::ResolvedTask,
-    schedule::{ExecutionPlan, ExecutionStatus, ExecutionSummary},
+    schedule::{ExecutionPlan, ExecutionSummary},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
