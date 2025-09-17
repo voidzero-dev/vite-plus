@@ -96,6 +96,11 @@ pub enum Commands {
         /// Arguments to pass to vite install
         args: Vec<String>,
     },
+    Dev {
+        #[clap(last = true)]
+        /// Arguments to pass to vite dev
+        args: Vec<String>,
+    },
     /// Manage the task cache
     Cache {
         #[clap(subcommand)]
@@ -334,6 +339,15 @@ pub async fn main<
             let exit_status = install::InstallCommand::builder(cwd).build().execute(args).await?;
             return Ok(exit_status);
         }
+        Some(Commands::Dev { args }) => {
+            let mut workspace = Workspace::partial_load(cwd)?;
+            if let Some(vite_fn) = options.map(|o| o.vite) {
+                let exit_status = vite::create_vite("dev", vite_fn, &mut workspace, args).await?;
+                workspace.unload().await?;
+                return Ok(exit_status);
+            }
+            return Ok(None);
+        }
         Some(Commands::Cache { subcmd }) => {
             let cache_path = Workspace::get_cache_path(&cwd)?;
             match subcmd {
@@ -472,8 +486,8 @@ mod tests {
     fn test_args_with_task_args() {
         // Now "test" is a dedicated command, so let's use a different task name for implicit mode
         let args =
-            Args::try_parse_from(&["vite-plus", "dev", "--", "--watch", "--verbose"]).unwrap();
-        assert_eq!(args.task, Some("dev".into()));
+            Args::try_parse_from(&["vite-plus", "develop", "--", "--watch", "--verbose"]).unwrap();
+        assert_eq!(args.task, Some("develop".into()));
         assert_eq!(args.task_args, vec!["--watch", "--verbose"]);
         assert!(args.commands.is_none());
         assert!(!args.debug);

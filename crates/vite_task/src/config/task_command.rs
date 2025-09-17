@@ -41,8 +41,8 @@ impl From<TaskCommand> for TaskConfig {
 }
 
 impl TaskCommand {
-    pub fn is_vite(&self) -> bool {
-        matches!(self, Self::Parsed(parsed_command) if parsed_command.program == "vite")
+    pub fn need_skip_cache(&self) -> bool {
+        matches!(self, Self::Parsed(parsed_command) if parsed_command.program == "vite" || (parsed_command.program.ends_with("vite.js") && parsed_command.args.first() == Some(&("dev".into()))))
     }
 }
 

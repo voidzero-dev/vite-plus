@@ -205,10 +205,10 @@ async fn get_cached_or_execute<'a>(
         Err(cache_miss) => (
             Some(cache_miss),
             async move {
-                let is_vite = task.resolved_command.fingerprint.command.is_vite();
+                let skip_cache = task.resolved_command.fingerprint.command.need_skip_cache();
                 let executed_task = execute_task(&task.resolved_command, base_dir).await?;
                 let exit_status = executed_task.exit_status;
-                if !is_vite && exit_status.success() {
+                if !skip_cache && exit_status.success() {
                     let cached_task = CommandCacheValue::create(executed_task, fs, base_dir)?;
                     cache.update(&task, cached_task).await?;
                 }

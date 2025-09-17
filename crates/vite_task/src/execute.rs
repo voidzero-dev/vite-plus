@@ -335,8 +335,8 @@ pub async fn execute_task(
             cmd
         }
         TaskCommand::Parsed(task_parsed_command) => {
-            if resolved_command.fingerprint.command.is_vite() {
-                let mut child = tokio::process::Command::new("vite")
+            if resolved_command.fingerprint.command.need_skip_cache() {
+                let mut child = tokio::process::Command::new(&task_parsed_command.program)
                     .args(&task_parsed_command.args)
                     .envs(&resolved_command.all_envs)
                     .envs(&task_parsed_command.envs)
