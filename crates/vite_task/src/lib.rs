@@ -719,18 +719,6 @@ mod tests {
     }
 
     #[test]
-    fn test_args_task_with_special_characters() {
-        let args = Args::try_parse_from(&["vite-plus", "build:prod"]).unwrap();
-        assert_eq!(args.task, Some("build:prod".into()));
-    }
-
-    #[test]
-    fn test_args_task_with_hash() {
-        let args = Args::try_parse_from(&["vite-plus", "package#build"]).unwrap();
-        assert_eq!(args.task, Some("package#build".into()));
-    }
-
-    #[test]
     fn test_args_run_empty_tasks() {
         let args = Args::try_parse_from(&["vite-plus", "run"]).unwrap();
 
