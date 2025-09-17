@@ -296,8 +296,10 @@ pub async fn main<
         }
         Commands::Lint { args } => {
             let mut workspace = Workspace::partial_load(cwd)?;
-            let lint_fn =
-                options.as_ref().map(|o| &o.lint).expect("lint command requires CliOptions");
+            let lint_fn = options
+                .as_ref()
+                .map(|o| &o.lint)
+                .expect("lint command requires CliOptions to be provided");
 
             let vite_config = read_vite_config_from_workspace_root(
                 &workspace.workspace_dir,
@@ -327,7 +329,8 @@ pub async fn main<
         }
         Commands::Fmt { args } => {
             let mut workspace = Workspace::partial_load(cwd)?;
-            let fmt_fn = options.map(|o| o.fmt).expect("fmt command requires CliOptions");
+            let fmt_fn =
+                options.map(|o| o.fmt).expect("fmt command requires CliOptions to be provided");
 
             let summary = fmt::fmt(fmt_fn, &mut workspace, args).await?;
             workspace.unload().await?;
@@ -335,7 +338,8 @@ pub async fn main<
         }
         Commands::Build { args } => {
             let mut workspace = Workspace::partial_load(cwd)?;
-            let vite_fn = options.map(|o| o.vite).expect("build command requires CliOptions");
+            let vite_fn =
+                options.map(|o| o.vite).expect("build command requires CliOptions to be provided");
 
             let summary = vite::create_vite("build", vite_fn, &mut workspace, args).await?;
             workspace.unload().await?;
@@ -343,7 +347,8 @@ pub async fn main<
         }
         Commands::Test { args } => {
             let mut workspace = Workspace::partial_load(cwd)?;
-            let test_fn = options.map(|o| o.test).expect("test command requires CliOptions");
+            let test_fn =
+                options.map(|o| o.test).expect("test command requires CliOptions to be provided");
             let summary = test::test(test_fn, &mut workspace, args).await?;
             workspace.unload().await?;
             summary
