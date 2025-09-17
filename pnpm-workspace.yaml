@@ -1,25 +1,40 @@
 packages:
   - docs
   - packages/*
-  - packages/global/templates/*
-  - packages/global/templates/monorepo/apps/*
-  - packages/global/templates/monorepo/packages/*
 
 catalog:
   "@napi-rs/cli": ^3.1.5
   "@oxc-node/cli": ^0.0.32
   "@oxc-node/core": ^0.0.32
-  "@types/node": ^22.18.1
+  "@types/node": ^24.4.0
   "@types/react": ^19.1.8
   "@types/react-dom": ^19.1.6
   next: ^15.4.3
-  oxfmt: ^0.1.0
-  oxlint: ^1.14.0
+  oxfmt: ^0.2.0
+  oxlint: ^1.15.0
   oxlint-tsgolint: ^0.2.0
+  oxc-minify: ^0.82.1
   react: ^19.1.0
   react-dom: ^19.1.0
-  rolldown: ^1.0.0-beta.36
-  rolldown-vite: ^7.1.8
-  tsdown: ^0.15.0
+  rolldown: ^1.0.0-beta.38
+  rolldown-vite: ^7.1.10
+  tsdown: ^0.15.1
   typescript: ^5.9.2
+  vitepress: 2.0.0-alpha.12
   vitest: ^3.2.4
+  vue: ^3.5.21
+
+minimumReleaseAge: 1440
+
+minimumReleaseAgeExclude:
+  - "@oxc-project/types"
+  - "@rolldown/pluginutils"
+  - oxfmt
+  - oxlint
+  - oxlint-tsgolint
+  - rolldown
+  - rolldown-vite
+  - tsdown
+  - vite
+  - vitepress
+  - vitest

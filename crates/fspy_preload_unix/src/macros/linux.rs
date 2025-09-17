@@ -34,13 +34,13 @@ macro_rules! intercept {
     };
 }
 
-use std::ffi::CString;
-
 pub(crate) use intercept;
 
 #[cfg(test)]
 #[doc(hidden)]
 pub(crate) fn symbol_exists(name: &str) -> bool {
+    use std::ffi::CString;
+
     let name = CString::new(name).unwrap();
     !unsafe { libc::dlsym(libc::RTLD_DEFAULT, name.as_ptr().cast()) }.is_null()
 }

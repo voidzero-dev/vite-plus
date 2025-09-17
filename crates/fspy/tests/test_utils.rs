@@ -1,4 +1,7 @@
-use std::{ffi::OsStr, io, path::Path};
+use std::{
+    io,
+    path::{Path, PathBuf, StripPrefixError},
+};
 
 use fspy::{AccessMode, PathAccessIterable, TrackedChild};
 
@@ -11,23 +14,20 @@ pub fn assert_contains(
     accesses
         .iter()
         .find(|access| {
-            let path = access.path.to_cow_os_str();
-            let mut path: &OsStr = path.as_ref();
-            if cfg!(windows) {
-                let mut path_bytes = path.as_encoded_bytes();
-                for prefix in [br#"\\.\"#, br#"\\?\"#, br#"\??\"#] {
-                    if let Some(stripped_path_bytes) = path_bytes.strip_prefix(prefix) {
-                        path_bytes = stripped_path_bytes;
-                        break;
-                    }
-                }
-                path = unsafe { OsStr::from_encoded_bytes_unchecked(path_bytes) };
-            }
-            Path::new(path) == expected_path && access.mode == expected_mode
+            let Ok(stripped) =
+                access.path.strip_path_prefix::<_, Result<PathBuf, StripPrefixError>, _>(
+                    expected_path,
+                    |strip_result| strip_result.map(Path::to_path_buf),
+                )
+            else {
+                return false;
+            };
+            stripped.as_os_str().is_empty() && access.mode == expected_mode
         })
         .unwrap();
 }
 
+#[macro_export]
 macro_rules! track_child {
     ($body: block) => {{
         const ID: &str =
@@ -46,11 +46,11 @@ macro_rules! track_child {
                 ::std::process::exit(0);
             }
         }
-        $crate::test_utils::spawn_with_id(ID)
+        $crate::test_utils::_spawn_with_id(ID)
     }};
 }
 
-pub async fn spawn_with_id(id: &str) -> io::Result<PathAccessIterable> {
+pub async fn _spawn_with_id(id: &str) -> io::Result<PathAccessIterable> {
     let mut command = fspy::Spy::global()?.new_command(::std::env::current_exe()?);
     command.arg(id);
     let TrackedChild { mut tokio_child, accesses_future } = command.spawn().await?;
@@ -60,5 +60,3 @@ pub async fn spawn_with_id(id: &str) -> io::Result<PathAccessIterable> {
     assert!(status.success());
     Ok(accesses)
 }
-
-pub(crate) use track_child;

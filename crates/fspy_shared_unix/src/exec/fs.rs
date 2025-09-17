@@ -1,5 +1,3 @@
-use std::path::Path;
-
 // pub trait FileSystem {
 //     fn peek_executable(&self, path: &Path, buf: &mut [u8]) -> nix::Result<usize>;
 // }

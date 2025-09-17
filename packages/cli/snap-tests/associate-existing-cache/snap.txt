@@ -1,0 +1,12 @@
+> vite-plus run script1 # create the cache for 'echo hello'
+Cache not found
+hello
+
+> vite-plus run script2 # script2 has the same command as script1, should hit and associate the cache
+Cache hit, replaying
+hello
+
+> json-edit package.json '_.scripts.script2 = "echo world"' # update the command of script2
+> vite-plus run script2 # should report cache miss due to command mismatch with the cache associated in step 2
+Cache miss: Command fingerprint changed: CommandFingerprintDiff { cwd: None, command: Parsed(TaskParsedCommandDiff { envs: BTreeMapDiff { altered: {}, removed: {} }, program: None, args: [Altered { index: 0, changes: [Some("hello")] }] }), envs_without_pass_through: BTreeMapDiff { altered: {}, removed: {} }, pass_through_envs: BTreeSetDiff { added: {}, removed: {} } }
+world

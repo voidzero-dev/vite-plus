@@ -28,6 +28,23 @@ Use 1Password CLI:
 GITHUB_TOKEN=$(op read "op://YOUR_GITHUB_TOKEN_PATH") npm install -g @voidzero-dev/global
 ```
 
+## Get Started
+
+### Scaffolding your first Vite+ project
+
+Use the `vite new` command to start, it will ask you a few questions to help you scaffold your project, supports both `MonoRepo` and `SingleRepo`.
+
+```bash
+vite new
+```
+
+If you select `Monorepo`, you can add new `app` or `lib` to your project.
+
+```bash
+vite new --app apps/website
+vite new --lib packages/utils
+```
+
 ## Overview
 
 ```bash

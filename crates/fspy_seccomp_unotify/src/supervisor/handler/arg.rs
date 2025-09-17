@@ -1,11 +1,10 @@
 use std::{
-    ffi::{CStr, OsString},
+    ffi::OsString,
     io,
     mem::{MaybeUninit, transmute},
     os::{fd::RawFd, raw::c_void},
 };
 
-use arrayvec::ArrayVec;
 use bytes::BufMut;
 use libc::{pid_t, seccomp_notif};
 use tokio::io::ReadBuf;
@@ -56,6 +55,7 @@ impl CStrPtr {
             return Ok(());
         }
     }
+
     pub fn read_with_buf<const BUF_SIZE: usize, R, F: FnOnce(&[u8]) -> io::Result<R>>(
         &self,
         f: F,

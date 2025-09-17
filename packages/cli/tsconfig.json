@@ -6,6 +6,7 @@
     "composite": true,
     "outDir": "./dist",
     "noEmit": false,
+    "allowImportingTsExtensions": false,
     "rootDir": "./src"
   },
   "include": ["src"],

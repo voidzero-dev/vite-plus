@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "bin": {
-    "json-edit": "./src/json-edit.ts"
+    "json-edit": "./src/json-edit.ts",
+    "snap-test": "./src/snap-test.ts"
   }
 }

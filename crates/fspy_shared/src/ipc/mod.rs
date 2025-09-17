@@ -3,7 +3,6 @@ pub mod shm;
 
 use bincode::{BorrowDecode, Encode, config::Configuration};
 pub use native_str::NativeStr;
-
 #[cfg(unix)]
 pub use native_str::NativeString;
 
@@ -28,6 +27,7 @@ impl<'a> PathAccess<'a> {
     pub fn read(path: impl Into<NativeStr<'a>>) -> Self {
         Self { mode: AccessMode::Read, path: path.into() }
     }
+
     pub fn read_dir(path: impl Into<NativeStr<'a>>) -> Self {
         Self { mode: AccessMode::ReadDir, path: path.into() }
     }

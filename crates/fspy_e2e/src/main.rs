@@ -31,9 +31,11 @@ impl AccessCollector {
     pub fn new(dir: PathBuf) -> Self {
         Self { dir, accesses: BTreeMap::new() }
     }
+
     pub fn iter(&self) -> impl Iterator<Item = (&str, AccessMode)> {
         self.accesses.iter().map(|(k, v)| (k.as_str(), *v))
     }
+
     pub fn add(&mut self, access: PathAccess) {
         let path = PathBuf::from(access.path.to_cow_os_str().to_os_string());
         if let Ok(relative_path) = path.strip_prefix(&self.dir) {
@@ -70,10 +72,10 @@ async fn main() {
     let config: Config = toml::from_slice(&config).unwrap();
     let spy = fspy::Spy::global().unwrap();
     for (name, case) in config.cases {
-        if let Some(filter) = &filter {
-            if !name.contains(filter) {
-                continue;
-            }
+        if let Some(filter) = &filter
+            && !name.contains(filter)
+        {
+            continue;
         }
         println!("Running case `{}` in dir `{}`", name, case.dir);
         let mut cmd = spy.new_command(case.cmd[0].clone());

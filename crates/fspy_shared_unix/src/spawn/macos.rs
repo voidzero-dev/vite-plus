@@ -1,14 +1,16 @@
-use crate::{
-    exec::{Exec, ensure_env},
-    payload::{EncodedPayload, PAYLOAD_ENV_NAME},
-};
-use bstr::ByteSlice;
-use phf::{Set, phf_set};
 use std::{
     convert::Infallible,
     ffi::OsStr,
     os::unix::ffi::{OsStrExt, OsStringExt},
     path::{Path, absolute},
+};
+
+use bstr::ByteSlice;
+use phf::{Set, phf_set};
+
+use crate::{
+    exec::{Exec, ensure_env},
+    payload::{EncodedPayload, PAYLOAD_ENV_NAME},
 };
 
 pub struct PreExec(Infallible);
@@ -63,7 +65,7 @@ pub fn handle_exec(
         ensure_env(
             &mut command.envs,
             DYLD_INSERT_LIBRARIES,
-            &encoded_payload.payload.preload_path.as_bytes(),
+            encoded_payload.payload.preload_path.as_bytes(),
         )?;
         ensure_env(&mut command.envs, PAYLOAD_ENV_NAME, &encoded_payload.encoded_string)?;
     } else {

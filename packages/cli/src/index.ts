@@ -1,5 +1,7 @@
 import {
   defineConfig as defineViteConfig,
+  resolveConfig as resolveViteConfig,
+  type ResolvedConfig,
   type UserConfig,
   type UserConfigExport,
   type UserConfigFn,
@@ -8,20 +10,77 @@ import {
 } from 'rolldown-vite';
 import { type ViteUserConfig } from 'vitest/config';
 
-type ExtendsConfig<T> = T extends UserConfig ? T & { extends?: string; test?: ViteUserConfig['test'] }
-  : T extends Promise<UserConfig> ? Promise<UserConfig & { extends?: string; test?: ViteUserConfig['test'] }>
-  : T extends UserConfigFnObject ? T & { extends?: string; test?: ViteUserConfig['test'] }
-  : T extends UserConfigFnPromise ? Promise<UserConfig & { extends?: string; test?: ViteUserConfig['test'] }>
-  : T extends UserConfigFn ? T & { extends?: string; test?: ViteUserConfig['test'] }
+// replace it with the real oxlint config in the future
+export type LintConfig = {
+  rules: {
+    [key: string]: string;
+  };
+};
+
+export type FmtConfig = {
+  rules: {
+    [key: string]: string;
+  };
+};
+
+type ExtendsConfig<T> = T extends UserConfig ? T & {
+    extends?: string;
+    test?: ViteUserConfig['test'];
+    lint?: LintConfig;
+    fmt?: FmtConfig;
+  }
+  : T extends Promise<UserConfig> ? Promise<
+      UserConfig & {
+        extends?: string;
+        test?: ViteUserConfig['test'];
+        lint?: LintConfig;
+        fmt?: FmtConfig;
+      }
+    >
+  : T extends UserConfigFnObject ? T & {
+      extends?: string;
+      test?: ViteUserConfig['test'];
+      lint?: LintConfig;
+      fmt?: FmtConfig;
+    }
+  : T extends UserConfigFnPromise ? Promise<
+      UserConfig & {
+        extends?: string;
+        test?: ViteUserConfig['test'];
+        lint?: LintConfig;
+        fmt?: FmtConfig;
+      }
+    >
+  : T extends UserConfigFn ? T & {
+      extends?: string;
+      test?: ViteUserConfig['test'];
+      lint?: LintConfig;
+      fmt?: FmtConfig;
+    }
   : T extends UserConfigExport ? UserConfigExport
   : T;
 
+type UniversalResolvedConfig = ResolvedConfig & {
+  lint?: LintConfig;
+  fmt?: FmtConfig;
+};
+
 function defineConfig(
-  config: UserConfig & { extends?: string; test?: ViteUserConfig['test'] },
+  config: UserConfig & {
+    extends?: string;
+    test?: ViteUserConfig['test'];
+    lint?: LintConfig;
+    fmt?: FmtConfig;
+  },
 ): UserConfig;
 function defineConfig(
   config: Promise<
-    UserConfig & { extends?: string; test?: ViteUserConfig['test'] }
+    UserConfig & {
+      extends?: string;
+      test?: ViteUserConfig['test'];
+      lint?: LintConfig;
+      fmt?: FmtConfig;
+    }
   >,
 ): Promise<UserConfig>;
 function defineConfig(
@@ -38,4 +97,19 @@ function defineConfig(
   return defineViteConfig(config);
 }
 
-export { defineConfig };
+function resolveConfig(
+  config: UserConfig & {
+    extends?: string;
+    test?: ViteUserConfig['test'];
+    lint?: LintConfig;
+    fmt?: FmtConfig;
+  },
+  command: 'build' | 'serve',
+  defaultMode?: string,
+  defaultNodeEnv?: string,
+  isPreview?: boolean,
+): Promise<UniversalResolvedConfig> {
+  return resolveViteConfig(config, command, defaultMode, defaultNodeEnv, isPreview);
+}
+
+export { defineConfig, resolveConfig };

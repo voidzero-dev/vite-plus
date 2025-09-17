@@ -1,7 +1,4 @@
-use std::{
-    ffi::CStr,
-    ptr::{null, null_mut},
-};
+use std::{ffi::CStr, ptr::null};
 
 use bstr::{BStr, BString, ByteSlice};
 use fspy_shared_unix::exec::Exec;
@@ -32,10 +29,12 @@ impl RawExec {
         }
         str_vec
     }
+
     pub fn to_c_str<R>(mut s: BString, f: impl FnOnce(*const libc::c_char) -> R) -> R {
         s.push(0);
         f(s.as_ptr().cast())
     }
+
     fn to_c_str_array<R>(
         mut strs: Vec<BString>,
         f: impl FnOnce(*const *const libc::c_char) -> R,
@@ -66,6 +65,7 @@ impl RawExec {
 
         Exec { program, args, envs }
     }
+
     pub fn from_exec<R>(cmd: Exec, f: impl FnOnce(RawExec) -> R) -> R {
         let envs: Vec<BString> = cmd
             .envs

@@ -1,20 +1,14 @@
 mod with_argv;
 
-use std::{
-    ffi::{CStr, CString},
-    ops::Deref,
-};
+#[cfg(target_os = "linux")]
+use std::ffi::CString;
 
 use fspy_shared_unix::exec::ExecResolveConfig;
 use libc::{c_char, c_int};
 use with_argv::with_argv;
 
 use crate::{
-    client::{
-        convert::{PathAt, ToAbsolutePath},
-        global_client,
-        raw_exec::RawExec,
-    },
+    client::{global_client, raw_exec::RawExec},
     macros::intercept,
 };
 
@@ -122,7 +116,10 @@ unsafe extern "C" fn execvp(prog: *const c_char, argv: *const *const c_char) -> 
 
 #[cfg(target_os = "linux")]
 mod linux_only {
+    use std::ops::Deref;
+
     use super::*;
+    use crate::client::convert::{PathAt, ToAbsolutePath};
 
     intercept!(execvpe(64): unsafe extern "C" fn(
         prog: *const libc::c_char,

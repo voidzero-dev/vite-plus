@@ -1657,6 +1657,7 @@ dependencies = [
  "libc",
  "ms-detours",
  "nix 0.30.1",
+ "os_str_bytes",
  "phf",
  "winapi",
  "winsafe 0.0.24",
@@ -2858,6 +2859,15 @@ name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+
+[[package]]
+name = "os_str_bytes"
+version = "7.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63eceb7b5d757011a87d08eb2123db15d87fb0c281f65d101ce30a1e96c3ad5c"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "ouroboros"
@@ -4645,6 +4655,7 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "tracing",
  "vite_error",
  "vite_path",
  "vite_task",

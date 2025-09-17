@@ -1,8 +1,7 @@
-use std::{cell::RefCell, path::Path};
-
-use crate::PathAccess;
 use allocator_api2::vec::Vec;
 use bumpalo::Bump;
+
+use crate::PathAccess;
 
 #[ouroboros::self_referencing]
 #[derive(Debug)]

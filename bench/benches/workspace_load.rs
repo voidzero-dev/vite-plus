@@ -1,5 +1,6 @@
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::{hint::black_box, path::PathBuf};
+
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use vite_path::AbsolutePathBuf;
 use vite_task::Workspace;
 

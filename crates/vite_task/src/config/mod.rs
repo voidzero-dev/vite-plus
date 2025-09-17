@@ -14,9 +14,12 @@ use bincode::{Decode, Encode};
 use compact_str::ToCompactString;
 use diff::Diff;
 use serde::{Deserialize, Serialize};
+pub use task_command::*;
+pub use task_graph_builder::*;
 use vite_error::Error;
 use vite_path::{self, RelativePath, RelativePathBuf};
 use vite_str::Str;
+pub use workspace::*;
 
 use crate::{
     ResolveCommandResult,
@@ -25,10 +28,6 @@ use crate::{
     config::name::TaskName,
     execute::TaskEnvs,
 };
-
-pub use task_command::*;
-pub use task_graph_builder::*;
-pub use workspace::*;
 
 #[derive(Encode, Decode, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Diff)]
 #[diff(attr(#[derive(Debug)]))]
@@ -104,7 +103,7 @@ impl ResolvedTask {
         if !task_request.contains('#') {
             return current_package_path == Some(&self.resolved_config.config_dir)
                 && self.name.task_group_name == task_request;
-        };
+        }
 
         task_request.get(..package_name.len()) == Some(package_name)
             && task_request.get(package_name.len()..=package_name.len()) == Some("#")
@@ -231,19 +230,20 @@ pub struct CommandFingerprint {
     /// Environment variables that affect caching (excludes pass-through envs)
     pub envs_without_pass_through: BTreeMap<Str, Str>, // using BTreeMap to have a stable order in cache db
 
-    /// even though value changes to pass_through_envs shouldn't invalidate the cache,
-    /// The names should still be fingerprinted so that the cache can be invalidated if the pass_through_envs config changes
+    /// even though value changes to `pass_through_envs` shouldn't invalidate the cache,
+    /// The names should still be fingerprinted so that the cache can be invalidated if the `pass_through_envs` config changes
     pub pass_through_envs: BTreeSet<Str>, // using BTreeSet to have a stable order in cache db
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::test_utils::{get_fixture_path, with_unique_cache_path};
-
     use petgraph::stable_graph::StableDiGraph;
 
     use super::*;
-    use crate::Error;
+    use crate::{
+        Error,
+        test_utils::{get_fixture_path, with_unique_cache_path},
+    };
 
     #[test]
     fn test_recursive_topological_build() {

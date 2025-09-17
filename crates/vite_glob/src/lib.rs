@@ -1,8 +1,7 @@
 use std::path::Path;
 
-use wax::{Glob, Pattern};
-
 use vite_error::Error;
+use wax::{Glob, Pattern};
 
 /// If there are no negated patterns, it will follow the first match wins semantics.
 /// Otherwise, it will follow the last match wins semantics.

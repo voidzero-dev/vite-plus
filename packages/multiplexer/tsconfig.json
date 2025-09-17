@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "composite": true,
-    "noEmit": false,
+    "noEmit": true,
     "outDir": "./dist"
   },
   "include": ["src"],

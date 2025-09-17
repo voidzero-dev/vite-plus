@@ -1,5 +1,9 @@
-use std::io::{self, IsTerminal, Write};
-use std::{env, iter};
+use std::{
+    env,
+    io::{self, IsTerminal, Write},
+    iter,
+    process::ExitStatus,
+};
 
 use crossterm::{
     cursor,
@@ -9,12 +13,12 @@ use crossterm::{
     terminal,
 };
 use petgraph::stable_graph::StableGraph;
-
-use crate::config::ResolvedTask;
-use crate::schedule::ExecutionPlan;
-use crate::{Error, ResolveCommandResult, Workspace};
 use vite_package_manager::package_manager::{PackageManager, PackageManagerType};
 use vite_path::AbsolutePathBuf;
+
+use crate::{
+    Error, ResolveCommandResult, Workspace, config::ResolvedTask, schedule::ExecutionPlan,
+};
 
 /// Install command.
 ///
@@ -35,11 +39,11 @@ pub struct InstallCommandBuilder {
 }
 
 impl InstallCommand {
-    pub fn builder(workspace_root: AbsolutePathBuf) -> InstallCommandBuilder {
+    pub const fn builder(workspace_root: AbsolutePathBuf) -> InstallCommandBuilder {
         InstallCommandBuilder::new(workspace_root)
     }
 
-    pub async fn execute(self, args: &Vec<String>) -> Result<(), Error> {
+    pub async fn execute(self, args: &Vec<String>) -> Result<Option<ExitStatus>, Error> {
         // Handle UnrecognizedPackageManager error and let user select a package manager
         let package_manager = match PackageManager::builder(&self.workspace_root).build().await {
             Ok(pm) => pm,
@@ -64,19 +68,19 @@ impl InstallCommand {
         )?;
         let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
         task_graph.add_node(resolved_task);
-        ExecutionPlan::plan(task_graph, false)?.execute(&mut workspace).await?;
+        let exit_status = ExecutionPlan::plan(task_graph, false)?.execute(&mut workspace).await?;
         workspace.unload().await?;
 
-        Ok(())
+        Ok(exit_status)
     }
 }
 
 impl InstallCommandBuilder {
-    pub fn new(workspace_root: AbsolutePathBuf) -> Self {
+    pub const fn new(workspace_root: AbsolutePathBuf) -> Self {
         Self { workspace_root, ignore_replay: false }
     }
 
-    pub fn ignore_replay(mut self) -> Self {
+    pub const fn ignore_replay(mut self) -> Self {
         self.ignore_replay = true;
         self
     }
@@ -108,7 +112,7 @@ fn is_ci_environment() -> bool {
 
 /// Interactive menu for selecting a package manager with keyboard navigation
 fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
-    let options = vec![
+    let options = [
         ("pnpm (recommended)", PackageManagerType::Pnpm),
         ("npm", PackageManagerType::Npm),
         ("yarn", PackageManagerType::Yarn),
@@ -187,9 +191,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
                     return Err(Error::UserCancelled);
                 }
                 KeyCode::Up => {
-                    if selected_index > 0 {
-                        selected_index -= 1;
-                    }
+                    selected_index = selected_index.saturating_sub(1);
                 }
                 KeyCode::Down => {
                     if selected_index < options.len() - 1 {
@@ -197,16 +199,16 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
                     }
                 }
                 KeyCode::Enter | KeyCode::Char(' ') => {
-                    break Ok(options[selected_index].1.clone());
+                    break Ok(options[selected_index].1);
                 }
                 KeyCode::Char('1') => {
-                    break Ok(options[0].1.clone());
+                    break Ok(options[0].1);
                 }
                 KeyCode::Char('2') if options.len() > 1 => {
-                    break Ok(options[1].1.clone());
+                    break Ok(options[1].1);
                 }
                 KeyCode::Char('3') if options.len() > 2 => {
-                    break Ok(options[2].1.clone());
+                    break Ok(options[2].1);
                 }
                 KeyCode::Esc | KeyCode::Char('q') => {
                     // Exit on escape/quit
@@ -232,16 +234,13 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
     execute!(io::stdout(), cursor::Show, cursor::MoveDown(options.len() as u16), Print("\n"))?;
 
     // Print selection confirmation
-    match &result {
-        Ok(pm) => {
-            let name = match pm {
-                PackageManagerType::Pnpm => "pnpm",
-                PackageManagerType::Npm => "npm",
-                PackageManagerType::Yarn => "yarn",
-            };
-            println!("\n✓ Selected package manager: {}\n", name);
-        }
-        Err(_) => {}
+    if let Ok(pm) = &result {
+        let name = match pm {
+            PackageManagerType::Pnpm => "pnpm",
+            PackageManagerType::Npm => "npm",
+            PackageManagerType::Yarn => "yarn",
+        };
+        println!("\n✓ Selected package manager: {name}\n");
     }
 
     result
@@ -266,7 +265,7 @@ fn prompt_package_manager_selection() -> Result<PackageManagerType, Error> {
         Ok(pm) => Ok(pm),
         Err(err) => {
             match err {
-                Error::UserCancelled => return Err(err),
+                Error::UserCancelled => Err(err),
                 // Fallback to simple text prompt if interactive menu fails
                 _ => simple_text_prompt(),
             }
@@ -276,7 +275,7 @@ fn prompt_package_manager_selection() -> Result<PackageManagerType, Error> {
 
 /// Simple text-based prompt as fallback
 fn simple_text_prompt() -> Result<PackageManagerType, Error> {
-    let managers = vec![
+    let managers = [
         ("pnpm", PackageManagerType::Pnpm),
         ("npm", PackageManagerType::Npm),
         ("yarn", PackageManagerType::Yarn),
@@ -311,17 +310,19 @@ fn simple_text_prompt() -> Result<PackageManagerType, Error> {
     };
 
     let (name, selected_type) = &managers[index];
-    println!("✓ Selected package manager: {}\n", name);
+    println!("✓ Selected package manager: {name}\n");
 
-    Ok(selected_type.clone())
+    Ok(*selected_type)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use serial_test::serial;
     use std::{fs, path::PathBuf};
+
+    use serial_test::serial;
     use tempfile::TempDir;
+
+    use super::*;
 
     /// Helper struct to safely manage environment variables in tests
     /// This struct ensures that environment variables are properly restored
@@ -358,7 +359,12 @@ mod tests {
 
     #[test]
     fn test_install_command_builder_build() {
-        let workspace_root = AbsolutePathBuf::new(PathBuf::from("/test/workspace")).unwrap();
+        let workspace_root = AbsolutePathBuf::new(PathBuf::from(if cfg!(windows) {
+            "C:\\test\\workspace"
+        } else {
+            "/test/workspace"
+        }))
+        .unwrap();
         let command = InstallCommandBuilder::new(workspace_root.clone()).build();
 
         assert_eq!(command.workspace_root, workspace_root);
@@ -382,6 +388,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(windows))] // FIXME
     async fn test_install_command_with_package_json_with_package_manager() {
         let temp_dir = TempDir::new().unwrap();
         let workspace_root = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();

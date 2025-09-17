@@ -1,54 +1,38 @@
 pub mod convert;
 pub mod raw_exec;
 
-use core::panic;
 use std::{
-    borrow::Cow,
-    cell::{Ref, RefCell},
-    ffi::CStr,
+    cell::RefCell,
     fmt::Debug,
     io,
-    ops::DerefMut as _,
-    os::{
-        fd::{AsRawFd, RawFd},
-        unix::ffi::OsStrExt,
-    },
-    ptr::null,
+    os::fd::AsRawFd,
     sync::{
-        LazyLock, OnceLock,
-        atomic::{AtomicU8, AtomicU16, AtomicUsize, Ordering, fence},
+        OnceLock,
+        atomic::{AtomicU8, AtomicUsize, Ordering, fence},
     },
-    thread::{AccessError, panicking},
-    time::{Instant, SystemTime},
 };
 
 use anyhow::Context;
-use bincode::{
-    enc::write::SizeWriter, encode_into_slice, encode_into_std_write, encode_into_writer,
-};
-use bstr::BStr;
-use fspy_shared::ipc::{AccessMode, BINCODE_CONFIG, NativeStr, NativeString, PathAccess};
+use bincode::{enc::write::SizeWriter, encode_into_slice, encode_into_writer};
+use convert::{ToAbsolutePath, ToAccessMode};
+use fspy_shared::ipc::{BINCODE_CONFIG, PathAccess};
 use fspy_shared_unix::{
     exec::ExecResolveConfig,
-    payload::{EncodedPayload, decode_payload_from_env},
+    payload::EncodedPayload,
     spawn::{PreExec, handle_exec},
 };
-
-use convert::{ToAbsolutePath, ToAccessMode};
-use libc::{off_t, pthread_atfork};
-use memmap2::{Mmap, MmapMut};
+use libc::off_t;
+use memmap2::MmapMut;
 use nix::{
     fcntl::OFlag,
     sys::{
         mman::{shm_open, shm_unlink},
         stat::Mode,
     },
-    time::{ClockId, clock_gettime},
-    unistd::{Pid, ftruncate, getpid},
+    unistd::{ftruncate, getpid},
 };
 use passfd::FdPassingExt;
 use raw_exec::RawExec;
-use thread_local::ThreadLocal;
 
 #[derive(Debug)]
 struct ShmCursor {
@@ -68,7 +52,7 @@ impl ShmCursor {
 }
 
 thread_local! {
-    static SHM_CURSOR: RefCell<Option<ShmCursor>> = RefCell::new(None);
+    static SHM_CURSOR: RefCell<Option<ShmCursor>> = const { RefCell::new(None) };
 }
 
 pub struct Client {
@@ -93,7 +77,10 @@ impl Debug for Client {
 const SHM_CHUNK_SIZE: off_t = 256 * 1024;
 
 impl Client {
+    #[cfg(not(test))]
     fn from_env() -> Self {
+        use fspy_shared_unix::payload::decode_payload_from_env;
+
         let encoded_payload = decode_payload_from_env().unwrap();
         Self {
             shm_id: AtomicUsize::new(0),
@@ -102,6 +89,7 @@ impl Client {
             posix_spawn_file_actions: OnceLock::new(),
         }
     }
+
     fn new_shm(&self) -> io::Result<ShmCursor> {
         let shm_name = format!(
             "/fspy_shm_{}_{}",
@@ -161,11 +149,11 @@ impl Client {
             return Ok(());
         };
         let mut size_writer = SizeWriter::default();
-        encode_into_writer(&path_access, &mut size_writer, BINCODE_CONFIG)?;
+        encode_into_writer(path_access, &mut size_writer, BINCODE_CONFIG)?;
 
         self.with_shm_buf(1 + size_writer.bytes_written, |buf| {
             let data_buf = &mut buf[1..];
-            let written_size = encode_into_slice(&path_access, data_buf, BINCODE_CONFIG)?;
+            let written_size = encode_into_slice(path_access, data_buf, BINCODE_CONFIG)?;
             debug_assert_eq!(written_size, size_writer.bytes_written);
 
             let flag_ptr = buf.as_mut_ptr().cast::<u8>();
@@ -224,6 +212,7 @@ impl Client {
         attrp: *const libc::posix_spawnattr_t,
     ) -> nix::Result<()> {
         use core::mem::zeroed;
+
         use libc::c_short;
         let cloexec_default = if attrp.is_null() {
             false
@@ -296,6 +285,8 @@ pub unsafe fn handle_open(path: impl ToAbsolutePath, mode: impl ToAccessMode) {
 #[cfg(not(test))]
 #[ctor::ctor]
 fn init_client() {
+    use libc::pthread_atfork;
+
     CLIENT.set(Client::from_env()).unwrap();
     unsafe extern "C" fn reset_shm_atfork() {
         let Some(client) = global_client() else {

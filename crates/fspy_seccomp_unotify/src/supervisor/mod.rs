@@ -2,20 +2,16 @@ pub mod handler;
 mod listener;
 
 use std::{
-    io::{self, IoSliceMut},
-    os::fd::{AsFd, AsRawFd, FromRawFd, IntoRawFd, OwnedFd, RawFd},
+    io::{self},
+    os::fd::{AsRawFd, FromRawFd, OwnedFd},
 };
 
 pub use handler::SeccompNotifyHandler;
 use listener::NotifyListener;
-use nix::{
-    cmsg_space,
-    fcntl::{FcntlArg, FdFlag, fcntl},
-    sys::socket::{ControlMessageOwned, MsgFlags, recvmsg},
-};
+use nix::fcntl::{FcntlArg, FdFlag, fcntl};
 use passfd::tokio::FdPassingExt;
 use seccompiler::{BpfProgram, SeccompAction, SeccompFilter};
-use tokio::{io::Interest, net::UnixStream, task::JoinSet};
+use tokio::{net::UnixStream, task::JoinSet};
 use tracing::{Level, span};
 
 use crate::{

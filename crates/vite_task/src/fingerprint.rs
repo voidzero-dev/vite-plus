@@ -103,13 +103,14 @@ impl PostRunFingerprint {
 
 #[cfg(test)]
 mod tests {
+    use vite_path::RelativePathBuf;
+    use vite_str::Str;
+
     use crate::{
         cmd::TaskParsedCommand,
         collections::HashSet,
         config::{CommandFingerprint, ResolvedTaskConfig, TaskCommand, TaskConfig},
     };
-    use vite_path::RelativePathBuf;
-    use vite_str::Str;
 
     #[test]
     fn test_command_fingerprint_stable_with_multiple_envs() {
@@ -205,8 +206,10 @@ mod tests {
             let bytes = encode_to_vec(&fingerprint, config).unwrap();
 
             // Create a hash of the serialized bytes to verify stability
-            use std::collections::hash_map::DefaultHasher;
-            use std::hash::{Hash, Hasher};
+            use std::{
+                collections::hash_map::DefaultHasher,
+                hash::{Hash, Hasher},
+            };
 
             let mut hasher = DefaultHasher::new();
             bytes.hash(&mut hasher);

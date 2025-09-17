@@ -3,6 +3,8 @@ name: Release
 on:
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   build-rust:
     runs-on: ubuntu-latest
@@ -17,24 +19,13 @@ jobs:
           # - aarch64-pc-windows-msvc
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@4305c38b25d97ef35a8ad1f985ccf2d2242004f2 # stable
-        env:
-          CARGO_INCREMENTAL: "1"
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0
-        if: ${{ runner.os != 'Windows' }}
         with:
-          save-if: ${{ github.ref_name == 'main' }}
-          shared-key: ${{ matrix.target }}
+          persist-credentials: false
 
-      - name: Cache xwin
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
-        if: ${{ contains(matrix.target, 'windows') }}
+      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.2
         with:
-          path: ${{ github.workspace }}/.xwin-cache
-          key: ${{ matrix.target }}-xwin
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: release
 
       - uses: mlugg/setup-zig@8d6198c65fb0feaa111df26e6b467fea8345e46f # v2.0.5
         with:
@@ -68,19 +59,10 @@ jobs:
         if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
         run: rustup target add aarch64-unknown-linux-musl
 
-      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: .node-version
-          registry-url: "https://registry.npmjs.org"
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
 
       - name: Build
-        run: pnpm --filter=@voidzero-dev/vite-plus build:binding --target ${{ matrix.target }} -x
+        run: pnpm --filter=@voidzero-dev/vite-plus build --target ${{ matrix.target }} -x
         env:
           XWIN_CACHE_DIR: ${{ github.workspace }}/.xwin-cache
 
@@ -91,6 +73,14 @@ jobs:
           path: ./packages/cli/binding/*.node
           if-no-files-found: error
 
+      - name: Upload cli dist
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
+        with:
+          name: cli
+          path: ./packages/cli/dist
+          if-no-files-found: error
+
   Release:
     runs-on: ubuntu-latest
     needs: build-rust
@@ -99,50 +89,50 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
-      - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version-file: .node-version
-          cache: "pnpm"
+          persist-credentials: false
 
-      - name: Install dependencies
-        run: pnpm install
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
 
       - name: Bootstrap
         run: pnpm bootstrap-cli:ci
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          path: packages/global/dist
-          pattern: bindings-*
+          path: packages/cli/dist
+          pattern: cli
           merge-multiple: true
 
-      - name: Build
-        run: vite run @voidzero-dev/vite-plus#build:ts @voidzero-dev/global#build
-
-      # Download again because `@voidzero-dev/global#build` will cleanup the dist dir first
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: packages/global/dist
           pattern: bindings-*
           merge-multiple: true
 
-      - name: Copy *.node to cli/dist
-        run: |
-          cp -r packages/global/dist/*.node packages/cli/dist
-          ls -alh packages/cli/dist
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: packages/cli/dist
+          pattern: bindings-*
+          merge-multiple: true
 
       - name: Set version
         run: |
           sed -i 's/"version": "0.0.0"/"version": "0.0.0-${{ github.sha }}"/' packages/global/package.json
           sed -i 's/"version": "0.0.0"/"version": "0.0.0-${{ github.sha }}"/' packages/cli/package.json
 
+      # Setup node correctly for publishing to github registry
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@voidzero-dev"
+          package-manager-cache: false
+
+      - run: npm install -g npm@latest # For trusted publishing support
+
       - name: Publish
         run: |
-          echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
-          echo "@voidzero-dev:registry=https://npm.pkg.github.com/" >> ~/.npmrc
           pnpm publish --filter=./packages/global --registry https://npm.pkg.github.com --no-git-checks
           pnpm publish --filter=./packages/cli --registry https://npm.pkg.github.com --no-git-checks
         env:
-          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

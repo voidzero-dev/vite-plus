@@ -1,30 +1,31 @@
 #![cfg(target_os = "linux")]
 
+use std::{
+    env::{current_dir, set_current_dir},
+    error::Error,
+    ffi::{CString, OsStr, OsString},
+    io,
+    os::unix::ffi::{OsStrExt, OsStringExt},
+    time::Duration,
+};
+
 use assertables::assert_contains;
-use fspy_seccomp_unotify::supervisor::Supervisor;
-use nix::fcntl::{AT_FDCWD, OFlag, openat};
-use nix::sys::stat::Mode;
-use tokio::time::timeout;
-
-use std::env::{current_dir, set_current_dir};
-use std::error::Error;
-use std::ffi::OsString;
-use std::ffi::{CString, OsStr};
-use std::io;
-use std::os::unix::ffi::{OsStrExt, OsStringExt};
-use std::time::Duration;
-use test_log::test;
-use tracing::{Level, span, trace};
-
 use fspy_seccomp_unotify::{
     impl_handler,
     supervisor::{
+        Supervisor,
         handler::arg::{CStrPtr, Fd},
         supervise,
     },
     target::install_target,
 };
-use tokio::{process::Command, task::spawn_blocking};
+use nix::{
+    fcntl::{AT_FDCWD, OFlag, openat},
+    sys::stat::Mode,
+};
+use test_log::test;
+use tokio::{process::Command, task::spawn_blocking, time::timeout};
+use tracing::{Level, span, trace};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum Syscall {

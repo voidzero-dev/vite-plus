@@ -1,22 +1,15 @@
+#[cfg(target_os = "linux")]
+use std::ffi::CString;
 use std::{
-    env::current_dir,
     ffi::{CStr, OsStr},
-    os::{fd::BorrowedFd, unix::ffi::OsStrExt as _},
+    os::{fd::RawFd, unix::ffi::OsStrExt as _},
     path::PathBuf,
 };
 
-#[cfg(target_os = "linux")]
-use bstr::BString;
 use bstr::{BStr, ByteSlice};
-use fspy_shared::ipc::{AccessMode, NativeStr};
+use fspy_shared::ipc::AccessMode;
 use libc::{c_char, c_int};
-use nix::fcntl::FcntlArg;
 use nix::unistd::getcwd;
-use std::{
-    borrow::Cow,
-    ffi::{CString, OsString},
-    os::{fd::RawFd, unix::ffi::OsStringExt as _},
-};
 
 #[cfg(target_os = "linux")]
 fn get_fd_path(fd: RawFd) -> nix::Result<Option<PathBuf>> {
@@ -61,27 +54,6 @@ impl ToAbsolutePath for Fd {
     ) -> nix::Result<R> {
         let path = get_fd_path(self.0)?;
         f(path.as_ref().map(|p| p.as_os_str().as_bytes().as_bstr()))
-    }
-}
-
-pub struct MaybeRelative<'a>(pub NativeStr<'a>);
-impl ToAbsolutePath for MaybeRelative<'_> {
-    unsafe fn to_absolute_path<R, F: FnOnce(Option<&BStr>) -> nix::Result<R>>(
-        self,
-        f: F,
-    ) -> nix::Result<R> {
-        let pathname = self.0.as_os_str().as_bytes();
-        if pathname.first().copied() == Some(b'/') {
-            f(Some(pathname.as_bstr()))
-        } else {
-            let Some(mut abs_path) = get_fd_path(libc::AT_FDCWD)? else {
-                return f(None);
-            };
-            if !pathname.is_empty() {
-                abs_path.push(OsStr::from_bytes(pathname));
-            }
-            f(Some(abs_path.as_os_str().as_bytes().as_bstr()))
-        }
     }
 }
 

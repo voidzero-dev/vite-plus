@@ -3,7 +3,7 @@ mod test_utils;
 use std::{env::current_dir, io, path::Path, process::Stdio};
 
 use fspy::AccessMode;
-use test_utils::{assert_contains, track_child};
+use test_utils::assert_contains;
 use tokio::fs::OpenOptions;
 
 #[tokio::test]

@@ -1,13 +1,7 @@
-use std::{
-    io::{self, IoSlice},
-    os::fd::AsRawFd,
-};
+use std::os::fd::AsRawFd;
 
 use libc::sock_filter;
-use nix::sys::{
-    prctl::set_no_new_privs,
-    socket::{ControlMessage, MsgFlags, sendmsg},
-};
+use nix::sys::prctl::set_no_new_privs;
 use passfd::FdPassingExt;
 
 use crate::{bindings::install_unotify_filter, payload::SeccompPayload};

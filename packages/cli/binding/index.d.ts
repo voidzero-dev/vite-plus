@@ -20,6 +20,8 @@ export interface CliOptions {
   test: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
   /** Optional working directory override */
   cwd?: string
+  /** Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side */
+  resolveUniversalViteConfig: ((err: Error | null, arg: string) => Promise<string>)
 }
 
 /**

@@ -1,10 +1,5 @@
 use std::ffi::CStr;
 
-use crate::windows::{
-    client::global_client,
-    detour::{Detour, DetourAny},
-};
-
 use fspy_shared::ipc::{AccessMode, NativeStr, PathAccess};
 use ms_detours::{DetourCreateProcessWithDllExA, DetourCreateProcessWithDllExW};
 use widestring::U16CStr;
@@ -22,6 +17,11 @@ use winapi::{
         winbase::CREATE_SUSPENDED,
         winnt::{LPCWSTR, LPWSTR},
     },
+};
+
+use crate::windows::{
+    client::global_client,
+    detour::{Detour, DetourAny},
 };
 
 static DETOUR_CREATE_PROCESS_W: Detour<
@@ -81,7 +81,7 @@ static DETOUR_CREATE_PROCESS_W: Detour<
                 }
             }
 
-            unsafe extern "system" fn CreateProcessWithPayloadW(
+            unsafe extern "system" fn create_process_with_payload_w(
                 lp_application_name: LPCWSTR,
                 lp_command_line: LPWSTR,
                 lp_process_attributes: LPSECURITY_ATTRIBUTES,
@@ -140,7 +140,7 @@ static DETOUR_CREATE_PROCESS_W: Detour<
                     lp_startup_info,
                     lp_process_information,
                     client.asni_dll_path().as_ptr().cast(),
-                    Some(CreateProcessWithPayloadW),
+                    Some(create_process_with_payload_w),
                 )
             }
         }
@@ -203,7 +203,7 @@ static DETOUR_CREATE_PROCESS_A: Detour<
                 }
             }
 
-            unsafe extern "system" fn CreateProcessWithPayloadA(
+            unsafe extern "system" fn create_process_with_payload_a(
                 lp_application_name: LPCSTR,
                 lp_command_line: LPSTR,
                 lp_process_attributes: LPSECURITY_ATTRIBUTES,
@@ -262,7 +262,7 @@ static DETOUR_CREATE_PROCESS_A: Detour<
                     lp_startup_info,
                     lp_process_information,
                     client.asni_dll_path().as_ptr().cast(),
-                    Some(CreateProcessWithPayloadA),
+                    Some(create_process_with_payload_a),
                 )
             }
         }

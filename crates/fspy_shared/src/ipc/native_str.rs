@@ -2,8 +2,12 @@
 use std::ffi::OsString;
 #[cfg(unix)]
 use std::sync::Arc;
-use std::{borrow::Cow, fmt::Debug};
-use std::{ffi::OsStr, mem::MaybeUninit, path::Path};
+use std::{
+    borrow::Cow,
+    ffi::OsStr,
+    fmt::Debug,
+    path::{Path, StripPrefixError},
+};
 
 use allocator_api2::alloc::Allocator;
 #[cfg(unix)]
@@ -50,6 +54,7 @@ impl<'a> NativeStr<'a> {
             is_wide: self.is_wide,
         }
     }
+
     pub fn from_bytes(bytes: &'a [u8]) -> Self {
         Self {
             #[cfg(windows)]
@@ -78,9 +83,9 @@ impl<'a> NativeStr<'a> {
 
     #[cfg(windows)]
     pub fn to_os_string(&self) -> OsString {
-        use bytemuck::allocation::pod_collect_to_vec;
-        use bytemuck::try_cast_slice;
         use std::os::windows::ffi::OsStringExt;
+
+        use bytemuck::{allocation::pod_collect_to_vec, try_cast_slice};
         use winsafe::{
             MultiByteToWideChar,
             co::{CP, MBC},
@@ -105,11 +110,46 @@ impl<'a> NativeStr<'a> {
         #[cfg(unix)]
         return Cow::Borrowed(self.as_os_str());
     }
+
+    pub fn strip_path_prefix<P: AsRef<Path>, R, F: FnOnce(Result<&Path, StripPrefixError>) -> R>(
+        &self,
+        base: P,
+        f: F,
+    ) -> R {
+        let me = self.to_cow_os_str();
+        let me = strip_windows_path_prefix(&me);
+        let base = strip_windows_path_prefix(base.as_ref().as_os_str());
+        f(Path::new(me).strip_prefix(base))
+    }
+}
+
+/// Strip the `\\?\`, `\\.\`, `\??\` prefix from a Windows path, if present.
+/// Does nothing on non-Windows platforms.
+///
+/// \\?\ and \\.\ are used to enable long paths and access to device paths.
+/// \??\ is used in Nt* calls.
+/// The resulting path is not necessarily valid or points to the same location,
+/// but it's good enough for sanitizing paths in `NativeStr::strip_path_prefix`.
+fn strip_windows_path_prefix(p: &OsStr) -> &OsStr {
+    #[cfg(windows)]
+    {
+        use os_str_bytes::OsStrBytesExt as _;
+        for prefix in [r"\\?\", r"\\.\", r"\??\"] {
+            if let Some(stripped) = p.strip_prefix(prefix) {
+                return stripped;
+            }
+        }
+        p
+    }
+    #[cfg(not(windows))]
+    {
+        p
+    }
 }
 
 impl<'a> From<&'a BStr> for NativeStr<'a> {
     fn from(value: &'a BStr) -> Self {
-        Self::from_bytes(&value)
+        Self::from_bytes(value)
     }
 }
 
@@ -155,6 +195,7 @@ impl<'a> From<&'a std::path::Path> for NativeString {
 #[cfg(unix)]
 impl std::ops::Deref for NativeString {
     type Target = OsStr;
+
     fn deref(&self) -> &Self::Target {
         self.as_os_str()
     }
@@ -170,6 +211,7 @@ impl NativeString {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
     use super::*;
 
     #[cfg(windows)]
@@ -186,7 +228,7 @@ mod tests {
     fn test_from_wide() {
         use std::os::windows::ffi::OsStrExt;
 
-        use bincode::{borrow_decode_from_slice, config, decode_from_slice, encode_to_vec};
+        use bincode::{borrow_decode_from_slice, config, encode_to_vec};
 
         let wide_str: &[u16] = &[528, 491];
         let native_str = NativeStr::from_wide(wide_str);

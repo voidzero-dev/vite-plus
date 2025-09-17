@@ -1,16 +1,8 @@
 use std::{
     cell::SyncUnsafeCell,
     ffi::{CStr, c_void},
-    fs::OpenOptions,
-    hint::black_box,
     mem::MaybeUninit,
-    os::windows::io::{AsHandle, AsRawHandle, OwnedHandle, RawHandle},
-    ptr::{null, null_mut},
-    sync::{
-        Mutex, RwLock,
-        mpsc::{self, Receiver, Sender},
-    },
-    thread::JoinHandle,
+    ptr::null_mut,
 };
 
 use bincode::{borrow_decode_from_slice, encode_into_std_write, encode_to_vec};
@@ -83,6 +75,7 @@ impl<'a> Client<'a> {
 
         Self { payload, messages: DashSet::with_capacity(1024) }
     }
+
     pub fn finish(&self) {
         for msg in self.messages.iter() {
             unsafe { write_pipe_message(self.payload.pipe_handle as _, &msg) };
@@ -96,10 +89,12 @@ impl<'a> Client<'a> {
 
         self.messages.insert(buf);
     }
-    pub fn sender(&self) -> Option<PathAccessSender> {
+
+    pub fn sender(&self) -> Option<PathAccessSender<'_>> {
         let guard = PATH_ACCESS_ONCE.try_enter()?;
         Some(PathAccessSender { messages: &self.messages, _once_guard: guard })
     }
+
     pub unsafe fn prepare_child_process(&self, child_handle: HANDLE) -> BOOL {
         let mut payload = self.payload;
 
@@ -131,6 +126,7 @@ impl<'a> Client<'a> {
             )
         }
     }
+
     pub fn asni_dll_path(&self) -> &'a CStr {
         unsafe { CStr::from_bytes_with_nul_unchecked(self.payload.asni_dll_path_with_nul) }
     }

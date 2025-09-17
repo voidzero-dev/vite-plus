@@ -1,0 +1,7 @@
+> vite-plus run check -- --foo # get NO_COLOR=true from default env
+Cache not found
+NO_COLOR=true, CI=true
+
+> NO_COLOR=false vite-plus run check -- --bar # get NO_COLOR=false from custom env
+Cache not found
+NO_COLOR=false, CI=true

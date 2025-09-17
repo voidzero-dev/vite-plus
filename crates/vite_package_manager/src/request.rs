@@ -1,5 +1,4 @@
-use std::path::Path;
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 
 use backon::{ExponentialBuilder, Retryable};
 use flate2::read::GzDecoder;
@@ -7,8 +6,7 @@ use futures_util::stream::StreamExt;
 use reqwest::Response;
 use serde::de::DeserializeOwned;
 use tar::Archive;
-use tokio::fs;
-use tokio::io::AsyncWriteExt;
+use tokio::{fs, io::AsyncWriteExt};
 
 use crate::Error;
 
@@ -27,7 +25,7 @@ impl Default for HttpClient {
 
 impl HttpClient {
     /// Create a new HTTP client with default settings (3 retries, 500ms min delay)
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self::with_config(3, 500)
     }
 
@@ -37,7 +35,7 @@ impl HttpClient {
     ///
     /// * `max_times` - Maximum number of retry attempts
     /// * `min_delay` - Minimum delay in milliseconds for exponential backoff
-    pub fn with_config(max_times: usize, min_delay: u64) -> Self {
+    pub const fn with_config(max_times: usize, min_delay: u64) -> Self {
         Self { max_times, min_delay }
     }
 
@@ -47,7 +45,7 @@ impl HttpClient {
                 ExponentialBuilder::default()
                     .with_jitter()
                     .with_min_delay(Duration::from_millis(self.min_delay))
-                    .with_max_times(self.max_times as usize),
+                    .with_max_times(self.max_times),
             )
             .await?;
 
@@ -125,10 +123,10 @@ fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Resu
     let target_dir = target_dir.as_ref();
     tracing::debug!("Extract tgz: {:?} to {:?}", tgz_file, target_dir);
 
-    let file = std::fs::File::open(&tgz_file)?;
+    let file = std::fs::File::open(tgz_file)?;
     let tar_stream = GzDecoder::new(file);
     let mut archive = Archive::new(tar_stream);
-    archive.unpack(&target_dir)?;
+    archive.unpack(target_dir)?;
 
     tracing::debug!("Extract tgz finished");
 
@@ -178,11 +176,12 @@ pub async fn download_and_extract_tgz(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
 
     use httpmock::prelude::*;
     use tempfile::TempDir;
+
+    use super::*;
 
     /// Helper function to create a mock package tar.gz that mimics npm package structure
     fn create_mock_package_tgz() -> Vec<u8> {
@@ -490,7 +489,7 @@ mod tests {
 
         #[derive(serde::Deserialize)]
         struct TestData {
-            field: String,
+            _field: String,
         }
 
         let result: Result<TestData, _> = client.get_json(&url).await;

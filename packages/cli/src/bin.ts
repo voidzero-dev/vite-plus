@@ -10,16 +10,31 @@
  */
 
 import { run } from '../binding/index.js';
-import { fmt } from './fmt.ts';
-import { lint } from './lint.ts';
-import { test } from './test.ts';
-import { vite } from './vite.ts';
+import { fmt } from './fmt.js';
+import { resolveConfig } from './index.js';
+import { lint } from './lint.js';
+import { test } from './test.js';
+import { vite } from './vite.js';
+
+async function resolveUniversalViteConfig(err: null | Error, viteConfigCwd: string) {
+  if (err) {
+    throw err;
+  }
+
+  const config = await resolveConfig({ root: viteConfigCwd }, 'build');
+
+  return Promise.resolve(JSON.stringify({
+    lint: config.lint,
+    fmt: config.fmt,
+  }));
+}
 
 // Initialize the CLI with tool resolvers
 // These functions will be called from Rust when needed
 run({
   lint, // Resolves oxlint binary for linting
-  fmt,  // Resolves oxfmt binary for formatting
+  fmt, // Resolves oxfmt binary for formatting
   vite, // Resolves vite binary for build/dev commands
   test, // Resolves vitest binary for test commands
+  resolveUniversalViteConfig,
 });

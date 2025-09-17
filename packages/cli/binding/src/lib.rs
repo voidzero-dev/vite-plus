@@ -13,14 +13,13 @@
 //! 4. JavaScript resolves the tool path and returns it to Rust
 //! 5. Rust executes the tool with the resolved path
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use vite_path::current_dir;
+use std::{collections::HashMap, sync::Arc};
 
 use clap::Parser as _;
 use napi::{anyhow, bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
 use vite_error::Error;
+use vite_path::current_dir;
 use vite_task::{Args, CliOptions as ViteTaskCliOptions, Commands, ResolveCommandResult};
 
 /// Module initialization - sets up tracing for debugging
@@ -48,6 +47,8 @@ pub struct CliOptions {
     pub test: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     /// Optional working directory override
     pub cwd: Option<String>,
+    /// Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side
+    pub resolve_universal_vite_config: Arc<ThreadsafeFunction<String, Promise<String>>>,
 }
 
 /// Result returned by JavaScript resolver functions.
@@ -104,8 +105,9 @@ pub async fn run(options: CliOptions) -> Result<()> {
     let fmt = options.fmt;
     let vite = options.vite;
     let test = options.test;
+    let resolve_universal_vite_config = options.resolve_universal_vite_config;
     // Call the Rust core with wrapped resolver functions
-    if let Err(e) = vite_task::main(
+    let result = vite_task::main(
         cwd,
         args,
         Some(ViteTaskCliOptions {
@@ -154,12 +156,39 @@ pub async fn run(options: CliOptions) -> Result<()> {
 
                 Ok(resolved.into())
             },
+            resolve_universal_vite_config: |cwd: String| async {
+                let resolved = resolve_universal_vite_config
+                    .call_async(Ok(cwd))
+                    .await
+                    .map_err(js_error_to_resolve_universal_vite_config_error)?
+                    .await
+                    .map_err(js_error_to_resolve_universal_vite_config_error)?;
+                Ok(resolved)
+            },
         }),
     )
-    .await
-    {
-        // Convert Rust errors to NAPI errors for JavaScript
-        return Err(anyhow::Error::from(e).into());
+    .await;
+
+    match result {
+        Ok(Some(exit_status)) => {
+            // Exit with the exit status of the first failed task
+            std::process::exit(exit_status.code().unwrap_or(1))
+        }
+        Ok(None) => {
+            // Success case - no failed tasks
+            // Continue to Ok(()) return
+        }
+        Err(e) => {
+            match e {
+                // Standard exit code for Ctrl+C
+                Error::UserCancelled => std::process::exit(130),
+                _ => {
+                    // Convert Rust errors to NAPI errors for JavaScript
+                    tracing::error!("Rust error: {:?}", e);
+                    return Err(anyhow::Error::from(e).into());
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -184,32 +213,37 @@ fn js_error_to_test_error(err: napi::Error) -> Error {
     Error::TestFailed { status: err.status.to_string().into(), reason: err.to_string().into() }
 }
 
+/// Convert JavaScript errors to Rust resolve universal vite config errors
+fn js_error_to_resolve_universal_vite_config_error(err: napi::Error) -> Error {
+    Error::ResolveUniversalViteConfigFailed {
+        status: err.status.to_string().into(),
+        reason: err.to_string().into(),
+    }
+}
+
 fn parse_args() -> Args {
     // ArgsOs [node, vite-plus, ...]
     let mut raw_args = std::env::args_os().skip(2);
-    if let Some(first) = raw_args.next() {
-        if let Some(first) = first.to_str()
-            && BUILTIN_COMMANDS.contains(&first)
-        {
-            let forwarded_args = raw_args
-                .map(|a| {
-                    a.into_string().unwrap_or_else(|os_str| os_str.to_string_lossy().into_owned())
-                })
-                .collect();
-            return Args {
-                task: None,
-                task_args: vec![],
-                commands: Some(match first {
-                    "lint" => Commands::Lint { args: forwarded_args },
-                    "fmt" => Commands::Fmt { args: forwarded_args },
-                    "build" => Commands::Build { args: forwarded_args },
-                    "test" => Commands::Test { args: forwarded_args },
-                    _ => unreachable!(),
-                }),
-                debug: false,
-                no_debug: true,
-            };
-        }
+    if let Some(first) = raw_args.next()
+        && let Some(first) = first.to_str()
+        && BUILTIN_COMMANDS.contains(&first)
+    {
+        let forwarded_args = raw_args
+            .map(|a| a.into_string().unwrap_or_else(|os_str| os_str.to_string_lossy().into_owned()))
+            .collect();
+        return Args {
+            task: None,
+            task_args: vec![],
+            commands: Some(match first {
+                "lint" => Commands::Lint { args: forwarded_args },
+                "fmt" => Commands::Fmt { args: forwarded_args },
+                "build" => Commands::Build { args: forwarded_args },
+                "test" => Commands::Test { args: forwarded_args },
+                _ => unreachable!(),
+            }),
+            debug: false,
+            no_debug: true,
+        };
     }
     // Parse CLI arguments (skip first arg which is the node binary)
     Args::parse_from(std::env::args_os().skip(1))

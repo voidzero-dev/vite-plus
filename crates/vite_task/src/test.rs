@@ -1,11 +1,10 @@
-use std::future::Future;
-use std::iter;
+use std::{future::Future, iter, process::ExitStatus};
 
 use petgraph::stable_graph::StableGraph;
 
-use crate::config::ResolvedTask;
-use crate::schedule::ExecutionPlan;
-use crate::{Error, ResolveCommandResult, Workspace};
+use crate::{
+    Error, ResolveCommandResult, Workspace, config::ResolvedTask, schedule::ExecutionPlan,
+};
 
 pub async fn test<
     Test: Future<Output = Result<ResolveCommandResult, Error>>,
@@ -14,7 +13,7 @@ pub async fn test<
     resolve_test_command: TestFn,
     workspace: &mut Workspace,
     args: &Vec<String>,
-) -> Result<(), Error> {
+) -> Result<Option<ExitStatus>, Error> {
     let resolved_task = ResolvedTask::resolve_from_builtin(
         workspace,
         resolve_test_command,
@@ -24,6 +23,5 @@ pub async fn test<
     .await?;
     let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
     task_graph.add_node(resolved_task);
-    ExecutionPlan::plan(task_graph, false)?.execute(workspace).await?;
-    Ok(())
+    ExecutionPlan::plan(task_graph, false)?.execute(workspace).await
 }

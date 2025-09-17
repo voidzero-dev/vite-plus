@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "script1": "echo 'success'",
+    "script2": "node failure.js"
+  }
+}

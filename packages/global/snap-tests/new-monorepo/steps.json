@@ -1,0 +1,12 @@
+{
+  "commands": [
+    "vp new -h # show help",
+    "vp new my-project monorepo # create monorepo",
+    "cd my-project && vp new --app apps/my-app # add app",
+    "cd my-project && ls apps",
+    "cd my-project && vp new --lib packages/my-lib # add lib",
+    "cd my-project && ls packages",
+    "cd my-project && vp new --lib tools/my-tool # add lib new not exists tools directory",
+    "cd my-project && ls tools"
+  ]
+}

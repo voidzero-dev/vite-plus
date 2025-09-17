@@ -3,11 +3,10 @@ mod test_utils;
 use std::{
     env::{current_dir, vars_os},
     io,
-    path::Path,
 };
-use test_utils::assert_contains;
 
 use fspy::{AccessMode, PathAccessIterable, TrackedChild};
+use test_utils::assert_contains;
 
 async fn track_node_script(script: &str) -> io::Result<PathAccessIterable> {
     let mut command = fspy::Spy::global()?.new_command("node");

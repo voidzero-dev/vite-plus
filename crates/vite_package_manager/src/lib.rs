@@ -6,8 +6,7 @@ mod shim;
 
 use std::{fs, io};
 
-use petgraph::Graph;
-use petgraph::graph::NodeIndex;
+use petgraph::{Graph, graph::NodeIndex};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
 use vite_error::Error;
@@ -16,9 +15,9 @@ use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 use vite_str::Str;
 use wax::Glob;
 
-pub use crate::package::{DependencyType, PackageJson};
-pub use crate::package_manager::{
-    WorkspaceFile, WorkspaceRoot, find_package_root, find_workspace_root,
+pub use crate::{
+    package::{DependencyType, PackageJson},
+    package_manager::{WorkspaceFile, WorkspaceRoot, find_package_root, find_workspace_root},
 };
 
 /// The workspace configuration for pnpm.
@@ -48,7 +47,7 @@ struct WorkspaceMemberGlobs {
     workspaces: Vec<Str>,
 }
 impl WorkspaceMemberGlobs {
-    fn new(workspaces: Vec<Str>) -> Self {
+    const fn new(workspaces: Vec<Str>) -> Self {
         Self { workspaces }
     }
 
@@ -63,7 +62,7 @@ impl WorkspaceMemberGlobs {
         let mut all = Vec::<Str>::new();
         for mut pattern in self.workspaces {
             pattern.push_str(if pattern.ends_with('/') { "package.json" } else { "/package.json" });
-            if pattern.starts_with("!") {
+            if pattern.starts_with('!') {
                 has_negated = true;
             } else {
                 inclusions.push(pattern.clone());
@@ -84,10 +83,10 @@ impl WorkspaceMemberGlobs {
                     continue;
                 }
 
-                if let Some(glob_patterns) = glob_patterns.as_ref() {
-                    if !glob_patterns.is_match(entry.to_candidate_path().as_ref()) {
-                        continue;
-                    }
+                if let Some(glob_patterns) = glob_patterns.as_ref()
+                    && !glob_patterns.is_match(entry.to_candidate_path().as_ref())
+                {
+                    continue;
                 }
                 package_json_paths.insert(AbsolutePathBuf::new(entry.into_path()).unwrap());
             }
@@ -199,7 +198,7 @@ pub fn get_package_graph(
         };
 
         has_root_package = has_root_package || package_path.as_str().is_empty();
-        graph_builder.add_package(package_path.into(), package_json)?;
+        graph_builder.add_package(package_path, package_json)?;
     }
     // try add the root package anyway if the member globs do not include it.
     if !has_root_package {
@@ -221,11 +220,12 @@ pub fn get_package_graph(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::{collections::HashSet, fs};
+
     use petgraph::visit::EdgeRef;
-    use std::collections::HashSet;
-    use std::fs;
     use tempfile::TempDir;
+
+    use super::*;
 
     #[test]
     fn test_get_package_graph_single_package() {

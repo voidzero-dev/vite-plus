@@ -1,0 +1,43 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`replaceUnstableOutput > replace date 1`] = `
+"Start at  <date>
+<date>"
+`;
+
+exports[`replaceUnstableOutput > replace unstable cwd 1`] = `"<cwd>/foo.txt"`;
+
+exports[`replaceUnstableOutput > replace unstable pnpm install output 1`] = `
+"Scope: all <variable> workspace projects
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+devDependencies:
++ @voidzero-dev/vite-plus <semver>
++ vitest <semver>"
+`;
+
+exports[`replaceUnstableOutput > replace unstable pnpm install output 2`] = `
+"Scope: all <variable> workspace projects
+Lockfile is up to date, resolution step is skipped
+Already up to date
+
+╭ Warning ───────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                            │
+│   Ignored build scripts: esbuild.                                                          │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.   │
+│                                                                                            │
+╰────────────────────────────────────────────────────────────────────────────────────────────╯
+
+Done in <variable>ms using pnpm v<semver>"
+`;
+
+exports[`replaceUnstableOutput > replace unstable semver version 1`] = `
+"v1.0.0
+v1.0.0-beta.1
+v1.0.0-beta.1+build.1
+1.0.0
+1.0.0-beta.1
+1.0.0-beta.1+build.1"
+`;

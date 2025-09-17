@@ -1,6 +1,9 @@
 #![cfg_attr(target_os = "windows", feature(windows_process_extensions_main_thread_handle))]
 #![feature(once_cell_try)]
 
+// Windows and macOS both need to persist the injected DLL/shared library somewhere in the filesystem.
+// Linux doesn't need this. Instead we use `memfd_create` to create an in-memory shared library.
+#[cfg(not(target_os = "linux"))]
 mod fixture;
 
 #[cfg(unix)]
@@ -14,11 +17,12 @@ mod os_impl;
 mod arena;
 mod command;
 
-use std::{env::temp_dir, ffi::OsStr, fs::create_dir, io, sync::OnceLock};
+#[cfg(not(target_os = "linux"))]
+use std::{env::temp_dir, fs::create_dir};
+use std::{ffi::OsStr, io, sync::OnceLock};
 
 pub use command::Command;
-pub use fspy_shared::ipc::AccessMode;
-pub use fspy_shared::ipc::PathAccess;
+pub use fspy_shared::ipc::{AccessMode, PathAccess};
 use futures_util::future::BoxFuture;
 pub use os_impl::PathAccessIterable;
 use os_impl::SpyInner;
@@ -37,14 +41,17 @@ impl Spy {
         let _ = create_dir(&tmp_dir);
         Ok(Self(SpyInner::init_in(&tmp_dir)?))
     }
+
     #[cfg(target_os = "linux")]
     pub fn new() -> io::Result<Self> {
         Ok(Self(SpyInner::init()?))
     }
+
     pub fn global() -> io::Result<&'static Self> {
         static GLOBAL_SPY: OnceLock<Spy> = OnceLock::new();
-        GLOBAL_SPY.get_or_try_init(|| Self::new())
+        GLOBAL_SPY.get_or_try_init(Self::new)
     }
+
     pub fn new_command<S: AsRef<OsStr>>(&self, program: S) -> Command {
         Command {
             program: program.as_ref().to_os_string(),

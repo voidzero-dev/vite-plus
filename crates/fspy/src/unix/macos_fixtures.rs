@@ -1,5 +1,3 @@
-use phf::phf_set;
-
 use crate::fixture::{Fixture, fixture};
 
 pub const COREUTILS_BINARY: Fixture = fixture!("coreutils");
@@ -9,8 +7,9 @@ pub const OILS_BINARY: Fixture = fixture!("oils-for-unix");
 mod tests {
     use std::{process::Command, str::from_utf8};
 
-    use super::*;
     use fspy_shared_unix::spawn::COREUTILS_FUNCTIONS_FOR_TEST;
+
+    use super::*;
 
     #[test]
     fn coreutils_functions() {

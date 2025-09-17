@@ -78,10 +78,11 @@ pub fn which<R>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::cell::RefCell;
 
     use bstr::{B, BStr};
-    use std::cell::RefCell;
+
+    use super::*;
 
     #[test]
     fn test_concat() {

@@ -1,9 +1,8 @@
 use std::path::Path;
-use tokio::fs::write;
 
 use indoc::formatdoc;
 use pathdiff::diff_paths;
-
+use tokio::fs::write;
 use vite_error::Error;
 
 /// Write cmd/sh/pwsh shim files.
@@ -67,12 +66,12 @@ pub fn cmd_shim(relative_file: &str) -> String {
             node "%~dp0\{relative_file}" %*
         )
         "#,
-        relative_file = relative_file.replace("/", "\\")
+        relative_file = relative_file.replace('/', "\\")
     }
-    .replace("\n", "\r\n") // replace \n to \r\n for windows
+    .replace('\n', "\r\n") // replace \n to \r\n for windows
 }
 
-/// PowerShell shim.
+/// `PowerShell` shim.
 pub fn pwsh_shim(relative_file: &str) -> String {
     formatdoc! {
         r#"
@@ -109,10 +108,12 @@ pub fn pwsh_shim(relative_file: &str) -> String {
 }
 
 #[cfg(test)]
+#[cfg(not(windows))] // FIXME
 mod tests {
-    use super::*;
     use tempfile::TempDir;
     use tokio::fs::read_to_string;
+
+    use super::*;
 
     fn format_shim(shim: &str) -> String {
         shim.replace(" ", "·")

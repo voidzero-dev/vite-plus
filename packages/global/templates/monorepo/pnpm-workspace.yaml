@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+  - tools/*
+
+catalog:
+  "@types/node": ^24.5.0
+  "@voidzero-dev/vite-plus": latest
+  bumpp: ^10.1.0
+  vite: npm:@voidzero-dev/vite-plus
+  vitest: ^3.2.4
+  typescript: ^5.9.2
+  tsdown: ^0.15.1

@@ -1,3 +1,6 @@
 [toolchain]
+# Needed nightly features:
+# - cargo `Z-bindeps` to build and embed preload shared libraries as dependencies of fspy
+# - `windows_process_extensions_main_thread_handle` to get the main thread handle for Detours injection
 channel = "nightly-2025-08-05"
 profile = "default"

@@ -16,21 +16,17 @@ mod vite;
 #[cfg(test)]
 mod test_utils;
 
-use std::collections::HashMap;
-use std::pin::Pin;
-use std::sync::Arc;
-
-use vite_path::AbsolutePathBuf;
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use clap::{Parser, Subcommand};
-
+use serde::{Deserialize, Serialize};
+use tokio::fs::write;
+pub(crate) use vite_error::Error;
+use vite_path::AbsolutePathBuf;
 use vite_str::Str;
 
-use crate::{cache::TaskCache, schedule::ExecutionPlan};
-
-pub(crate) use vite_error::Error;
-
 pub use crate::config::Workspace;
+use crate::{cache::TaskCache, fmt::FmtConfig, lint::LintConfig, schedule::ExecutionPlan};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -125,17 +121,18 @@ const fn resolve_bool_flag(positive: bool, negative: bool) -> bool {
 /// Automatically run install command
 async fn auto_install(workspace_root: &AbsolutePathBuf) -> Result<(), Error> {
     // Skip if we're already running inside a vite_task execution to prevent nested installs
-    if std::env::var("VITE_TASK_EXECUTION_ENV").map_or(false, |v| v == "1") {
+    if std::env::var("VITE_TASK_EXECUTION_ENV").is_ok_and(|v| v == "1") {
         tracing::debug!("Skipping auto-install: already running inside vite_task execution");
         return Ok(());
     }
 
     tracing::debug!("Running install automatically...");
-    crate::install::InstallCommand::builder(workspace_root.clone())
+    let _exit_status = crate::install::InstallCommand::builder(workspace_root.clone())
         .ignore_replay()
         .build()
         .execute(&vec![])
         .await?;
+    // For auto-install, we don't propagate exit failures to avoid breaking the main command
     Ok(())
 }
 
@@ -156,16 +153,29 @@ pub struct CliOptions<
         Box<dyn Future<Output = Result<ResolveCommandResult, Error>>>,
     >,
     TestFn: Fn() -> Test = Box<dyn Fn() -> Test>,
+    ResolveUniversalViteConfig: Future<Output = Result<String, Error>> = Pin<
+        Box<dyn Future<Output = Result<String, Error>>>,
+    >,
+    ResolveUniversalViteConfigFn: Fn(String) -> ResolveUniversalViteConfig = Box<
+        dyn Fn(String) -> ResolveUniversalViteConfig,
+    >,
 > {
     pub lint: LintFn,
     pub fmt: FmtFn,
     pub vite: ViteFn,
     pub test: TestFn,
+    pub resolve_universal_vite_config: ResolveUniversalViteConfigFn,
 }
 
 pub struct ResolveCommandResult {
     pub bin_path: String,
     pub envs: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolvedUniversalViteConfig {
+    pub lint: Option<LintConfig>,
+    pub fmt: Option<FmtConfig>,
 }
 
 /// Main entry point for vite-plus task execution.
@@ -207,11 +217,26 @@ pub async fn main<
     ViteFn: Fn() -> Vite,
     Test: Future<Output = Result<ResolveCommandResult, Error>>,
     TestFn: Fn() -> Test,
+    ResolveUniversalViteConfig: Future<Output = Result<String, Error>>,
+    ResolveUniversalViteConfigFn: Fn(String) -> ResolveUniversalViteConfig,
 >(
     cwd: AbsolutePathBuf,
-    args: Args,
-    options: Option<CliOptions<Lint, LintFn, Fmt, FmtFn, Vite, ViteFn, Test, TestFn>>,
-) -> Result<(), Error> {
+    mut args: Args,
+    options: Option<
+        CliOptions<
+            Lint,
+            LintFn,
+            Fmt,
+            FmtFn,
+            Vite,
+            ViteFn,
+            Test,
+            TestFn,
+            ResolveUniversalViteConfig,
+            ResolveUniversalViteConfigFn,
+        >,
+    >,
+) -> Result<Option<std::process::ExitStatus>, Error> {
     // Auto-install dependencies if needed, but skip for install command itself, or if `VITE_DISABLE_AUTO_INSTALL=1` is set.
     if !matches!(args.commands, Some(Commands::Install { .. }))
         && std::env::var_os("VITE_DISABLE_AUTO_INSTALL") != Some("1".into())
@@ -221,7 +246,7 @@ pub async fn main<
 
     let mut recursive_run = false;
     let mut parallel_run = false;
-    let (tasks, mut workspace, task_args) = match &args.commands {
+    let (tasks, mut workspace, task_args) = match &mut args.commands {
         Some(Commands::Run {
             tasks,
             recursive,
@@ -249,39 +274,65 @@ pub async fn main<
         }
         Some(Commands::Lint { args }) => {
             let mut workspace = Workspace::partial_load(cwd)?;
-            if let Some(lint_fn) = options.map(|o| o.lint) {
-                lint::lint(lint_fn, &mut workspace, args).await?;
+            if let Some(lint_fn) = options.as_ref().map(|o| &o.lint) {
+                let vite_config = read_vite_config_from_workspace_root(
+                    &workspace.workspace_dir,
+                    options.as_ref().map(|o| &o.resolve_universal_vite_config),
+                )
+                .await?;
+                let resolved_vite_config: Option<ResolvedUniversalViteConfig> = vite_config
+                    .map(|vite_config| {
+                        serde_json::from_str(&vite_config).map_err(|err| {
+                            tracing::error!("Failed to parse vite config: {vite_config}");
+                            err
+                        })
+                    })
+                    .transpose()?;
+                let lint_config = resolved_vite_config.and_then(|c| c.lint);
+                if let Some(lint_config) = lint_config {
+                    let oxlint_config_path = workspace.cache_path().join(".oxlintrc.json");
+                    write(&oxlint_config_path, serde_json::to_string(&lint_config)?).await?;
+                    args.extend_from_slice(&[
+                        "--config".to_string(),
+                        oxlint_config_path.as_path().to_string_lossy().into_owned(),
+                    ]);
+                }
+                let exit_status = lint::lint(lint_fn, &mut workspace, args).await?;
                 workspace.unload().await?;
+                return Ok(exit_status);
             }
-            return Ok(());
+            return Ok(None);
         }
         Some(Commands::Fmt { args }) => {
             let mut workspace = Workspace::partial_load(cwd)?;
             if let Some(fmt_fn) = options.map(|o| o.fmt) {
-                fmt::fmt(fmt_fn, &mut workspace, args).await?;
+                let exit_status = fmt::fmt(fmt_fn, &mut workspace, args).await?;
                 workspace.unload().await?;
+                return Ok(exit_status);
             }
-            return Ok(());
+            return Ok(None);
         }
         Some(Commands::Build { args }) => {
             let mut workspace = Workspace::partial_load(cwd)?;
             if let Some(vite_fn) = options.map(|o| o.vite) {
-                vite::create_vite("build", vite_fn, &mut workspace, args).await?;
+                let exit_status = vite::create_vite("build", vite_fn, &mut workspace, args).await?;
                 workspace.unload().await?;
+                return Ok(exit_status);
             }
-            return Ok(());
+            return Ok(None);
         }
         Some(Commands::Test { args }) => {
             let mut workspace = Workspace::partial_load(cwd)?;
             if let Some(test_fn) = options.map(|o| o.test) {
-                test::test(test_fn, &mut workspace, args).await?;
+                let exit_status = test::test(test_fn, &mut workspace, args).await?;
                 workspace.unload().await?;
+                return Ok(exit_status);
             }
-            return Ok(());
+            return Ok(None);
         }
         Some(Commands::Install { args }) => {
-            install::InstallCommand::builder(cwd).build().execute(&args).await?;
-            return Ok(());
+            let exit_status = install::InstallCommand::builder(cwd).build().execute(args).await?;
+            return Ok(exit_status);
         }
         Some(Commands::Cache { subcmd }) => {
             let cache_path = Workspace::get_cache_path(&cwd)?;
@@ -290,24 +341,24 @@ pub async fn main<
                     std::fs::remove_dir_all(&cache_path)?;
                 }
                 CacheSubcommand::View => {
-                    let cache = TaskCache::load_from_path(&cache_path)?;
+                    let cache = TaskCache::load_from_path(cache_path)?;
                     cache.list(std::io::stdout()).await?;
                 }
             }
-            return Ok(());
+            return Ok(None);
         }
         None => {
             let workspace = Workspace::load(cwd, false)?;
             // in implicit mode, vite-plus will run the task in the current package, replace the `pnpm/yarn/npm run` command.
             let Some(task) = args.task else {
-                return Ok(());
+                return Ok(None);
             };
             let name = &workspace.package_json.name;
             if name.is_empty() {
                 return Err(Error::EmptyPackageName(workspace.workspace_dir));
             }
             (
-                &vec![if task.contains('#') { task } else { format!("{name}#{task}").into() }],
+                &mut vec![if task.contains('#') { task } else { format!("{name}#{task}").into() }],
                 workspace,
                 Arc::<[Str]>::from(args.task_args),
             )
@@ -317,11 +368,10 @@ pub async fn main<
     let task_graph = workspace.build_task_subgraph(tasks, task_args.clone(), recursive_run)?;
 
     let plan = ExecutionPlan::plan(task_graph, parallel_run)?;
-    plan.execute(&mut workspace).await?;
+    let exit_status = plan.execute(&mut workspace).await?;
 
     workspace.unload().await?;
-
-    Ok(())
+    Ok(exit_status)
 }
 
 pub fn init_tracing() {
@@ -355,10 +405,27 @@ pub fn init_tracing() {
     });
 }
 
+async fn read_vite_config_from_workspace_root<
+    ResolveUniversalViteConfig: Future<Output = Result<String, Error>>,
+    ResolveUniversalViteConfigFn: Fn(String) -> ResolveUniversalViteConfig,
+>(
+    workspace_root: &AbsolutePathBuf,
+    resolve_universal_vite_config: Option<&ResolveUniversalViteConfigFn>,
+) -> Result<Option<String>, Error> {
+    if let Some(resolve_universal_vite_config) = resolve_universal_vite_config {
+        let vite_config =
+            resolve_universal_vite_config(workspace_root.as_path().to_string_lossy().to_string())
+                .await?;
+        return Ok(Some(vite_config));
+    }
+    Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::*;
     use clap::Parser;
+
+    use super::*;
 
     #[test]
     fn test_args_basic_task() {

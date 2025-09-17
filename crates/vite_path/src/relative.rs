@@ -3,18 +3,18 @@
 //! ## Why not use crate `relative-path`
 //! `relative-path::RelativePath` allows backslashes in its components, which is valid in unix systems but not portable to Windows.
 
-use diff::Diff;
-use serde::{Deserialize, Serialize};
-use std::fmt::Display;
 use std::{
     borrow::Borrow,
+    fmt::Display,
     ops::Deref,
     path::{Component, Path},
 };
-use vite_str::Str;
 
 use bincode::{Decode, Encode, de::Decoder, error::DecodeError};
+use diff::Diff;
 use ref_cast::{RefCastCustom, ref_cast_custom};
+use serde::{Deserialize, Serialize};
+use vite_str::Str;
 
 /// A relative path with additional guarantees to make it portable:
 ///
@@ -24,9 +24,9 @@ use ref_cast::{RefCastCustom, ref_cast_custom};
 #[derive(RefCastCustom, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct RelativePath(str);
-impl AsRef<RelativePath> for RelativePath {
-    fn as_ref(&self) -> &RelativePath {
-        &self
+impl AsRef<Self> for RelativePath {
+    fn as_ref(&self) -> &Self {
+        self
     }
 }
 
@@ -39,17 +39,24 @@ impl AsRef<Path> for RelativePath {
 impl RelativePath {
     #[ref_cast_custom]
     unsafe fn assume_portable(path: &str) -> &Self;
-    pub fn as_str(&self) -> &str {
+
+    #[must_use]
+    pub const fn as_str(&self) -> &str {
         &self.0
     }
+
+    #[must_use]
     pub fn as_path(&self) -> &Path {
         Path::new(self.as_str())
     }
+
+    #[must_use]
     pub fn to_relative_path_buf(&self) -> RelativePathBuf {
         RelativePathBuf(self.0.into())
     }
+
     /// Creates an owned [`RelativePathBuf`] with `rel_path` adjoined to `self`.
-    pub fn join<P: AsRef<RelativePath>>(&self, rel_path: P) -> RelativePathBuf {
+    pub fn join<P: AsRef<Self>>(&self, rel_path: P) -> RelativePathBuf {
         let mut absolute_path_buf = self.to_relative_path_buf();
         absolute_path_buf.push(rel_path);
         absolute_path_buf
@@ -58,9 +65,9 @@ impl RelativePath {
     /// Returns a path that, when joined onto `base`, yields `self`.
     ///
     /// If `base` is not a prefix of `self`, returns [`None`].
-    pub fn strip_prefix<P: AsRef<RelativePath>>(&self, base: P) -> Option<&RelativePath> {
+    pub fn strip_prefix<P: AsRef<Self>>(&self, base: P) -> Option<&Self> {
         let stripped_path = Path::new(self.as_str()).strip_prefix(base.as_ref().as_path()).ok()?;
-        Some(unsafe { RelativePath::assume_portable(stripped_path.to_str().unwrap()) })
+        Some(unsafe { Self::assume_portable(stripped_path.to_str().unwrap()) })
     }
 }
 
@@ -95,18 +102,22 @@ impl PartialEq<&RelativePath> for RelativePathBuf {
 
 impl Diff for RelativePathBuf {
     type Repr = Option<Str>;
+
     fn diff(&self, other: &Self) -> Self::Repr {
         self.0.diff(&other.0)
     }
+
     fn apply(&mut self, diff: &Self::Repr) {
         self.0.apply(diff);
     }
+
     fn identity() -> Self {
         Self(Str::identity())
     }
 }
 
 impl RelativePathBuf {
+    #[must_use]
     pub fn empty() -> Self {
         Self("".into())
     }
@@ -163,6 +174,7 @@ impl RelativePathBuf {
         Ok(Self(path_str))
     }
 
+    #[must_use]
     pub fn as_relative_path(&self) -> &RelativePath {
         unsafe { RelativePath::assume_portable(&self.0) }
     }
@@ -171,8 +183,8 @@ impl RelativePathBuf {
 impl<'a, Context> Decode<Context> for RelativePathBuf {
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
         let path_str = Str::decode(decoder)?;
-        RelativePathBuf::new(path_str.as_str())
-            .map_err(|err| DecodeError::OtherString(format!("{}: {}", err, path_str)))
+        Self::new(path_str.as_str())
+            .map_err(|err| DecodeError::OtherString(format!("{err}: {path_str}")))
     }
 }
 
@@ -180,6 +192,7 @@ bincode::impl_borrow_decode!(RelativePathBuf);
 
 impl TryFrom<&Path> for RelativePathBuf {
     type Error = FromPathError;
+
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
         Self::new(path)
     }
@@ -187,6 +200,7 @@ impl TryFrom<&Path> for RelativePathBuf {
 
 impl TryFrom<&str> for RelativePathBuf {
     type Error = FromPathError;
+
     fn try_from(path: &str) -> Result<Self, Self::Error> {
         let path = Path::new(path);
         Self::try_from(path)
@@ -214,6 +228,7 @@ impl Borrow<RelativePath> for RelativePathBuf {
 }
 impl ToOwned for RelativePath {
     type Owned = RelativePathBuf;
+
     fn to_owned(&self) -> Self::Owned {
         self.to_relative_path_buf()
     }
@@ -243,7 +258,9 @@ pub enum FromPathError {
 
 #[cfg(test)]
 mod tests {
-    use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
+
+    #[cfg(windows)]
+    use std::os::windows::ffi::OsStringExt as _;
 
     use assert2::let_assert;
 
@@ -256,9 +273,25 @@ mod tests {
                 RelativePathBuf::new(if cfg!(windows) { "C:\\Users" } else { "/home" })
         );
     }
+
+    #[cfg(unix)]
     #[test]
     fn non_utf8() {
+        use std::{ffi::OsStr, os::unix::ffi::OsStrExt as _};
+
         let non_utf8_path = Path::new(OsStr::from_bytes(&[0xC0]));
+        let_assert!(
+            Err(FromPathError::InvalidPathData(InvalidPathDataError::NonUtf8)) =
+                RelativePathBuf::new(non_utf8_path),
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn non_utf8() {
+        use std::ffi::OsString;
+        // ill-formed UTF-16: X<high surrogate>Y
+        let non_utf8_path = OsString::from_wide(&[0x0058, 0xD800, 0x0059]);
         let_assert!(
             Err(FromPathError::InvalidPathData(InvalidPathDataError::NonUtf8)) =
                 RelativePathBuf::new(non_utf8_path),
@@ -272,6 +305,13 @@ mod tests {
             Err(FromPathError::InvalidPathData(InvalidPathDataError::BackslashInComponent)) =
                 RelativePathBuf::new("foo\\bar")
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn backslash_in_component() {
+        let_assert!(Ok(path) = RelativePathBuf::new("foo\\bar"));
+        assert_eq!(path.as_str(), "foo/bar");
     }
 
     #[cfg(windows)]

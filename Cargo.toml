@@ -60,6 +60,7 @@ httpmock = "0.7"
 indoc = "2.0.5"
 itertools = "0.14.0"
 nix = { version = "0.30.1", features = ["dir"] }
+os_str_bytes = "7.1.1"
 owo-colors = "4.1.0"
 passfd = { git = "https://github.com/polachok/passfd", rev = "d55881752c16aced1a49a75f9c428d38d3767213", default-features = false }
 pathdiff = "0.2.3"

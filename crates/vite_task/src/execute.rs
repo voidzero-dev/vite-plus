@@ -49,10 +49,8 @@ pub struct PathWrite;
 #[derive(Debug)]
 pub struct ExecutedTask {
     pub std_outputs: Arc<[StdOutput]>,
-    #[expect(dead_code)]
     pub exit_status: ExitStatus,
     pub path_reads: HashMap<RelativePathBuf, PathRead>,
-    #[expect(dead_code)]
     pub path_writes: HashMap<RelativePathBuf, PathWrite>,
 }
 
@@ -122,7 +120,7 @@ pub struct TaskEnvs {
 
 fn resolve_envs_with_patterns(patterns: &[&str]) -> Result<HashMap<Str, Arc<OsStr>>, Error> {
     let patterns = GlobPatternSet::new(patterns.iter().filter(|pattern| {
-        if pattern.starts_with("!") {
+        if pattern.starts_with('!') {
             // FIXME: use better way to print warning log
             // Or parse and validate TaskConfig in command parsing phase
             tracing::warn!(
@@ -179,6 +177,7 @@ const DEFAULT_PASSTHROUGH_ENVS: &[&str] = &[
     "TERM_PROGRAM",
     "DISPLAY",
     "FORCE_COLOR",
+    "NO_COLOR",
     // Temporary directories
     "TMP",
     "TEMP",
@@ -240,8 +239,8 @@ impl TaskEnvs {
         let all_patterns: Vec<&str> = DEFAULT_PASSTHROUGH_ENVS
             .iter()
             .copied()
-            .chain(task.config.pass_through_envs.iter().map(|s| s.as_ref()))
-            .chain(task.config.envs.iter().map(|s| s.as_ref()))
+            .chain(task.config.pass_through_envs.iter().map(std::convert::AsRef::as_ref))
+            .chain(task.config.envs.iter().map(std::convert::AsRef::as_ref))
             .collect();
         let mut all_envs = resolve_envs_with_patterns(&all_patterns)?;
 
@@ -249,9 +248,9 @@ impl TaskEnvs {
         let mut envs_without_pass_through = HashMap::<Str, Str>::new();
         if !task.config.envs.is_empty() {
             let envs_without_pass_through_patterns =
-                GlobPatternSet::new(task.config.envs.iter().filter(|s| !s.starts_with("!")))?;
+                GlobPatternSet::new(task.config.envs.iter().filter(|s| !s.starts_with('!')))?;
             let sensitive_patterns = GlobPatternSet::new(SENSITIVE_PATTERNS)?;
-            for (name, value) in all_envs.iter() {
+            for (name, value) in &all_envs {
                 if !envs_without_pass_through_patterns.is_match(name) {
                     continue;
                 }
@@ -275,22 +274,21 @@ impl TaskEnvs {
         // Automatically add FORCE_COLOR environment variable if not already set
         // This enables color output in subprocesses when color is supported
         // TODO: will remove this temporarily until we have a better solution
-        if !all_envs.contains_key("FORCE_COLOR") {
-            if let Some(support) = on(Stream::Stdout) {
-                let force_color_value = if support.has_16m {
-                    "3" // True color (16 million colors)
-                } else if support.has_256 {
-                    "2" // 256 colors
-                } else if support.has_basic {
-                    "1" // Basic ANSI colors
-                } else {
-                    "0" // No color support
-                };
-                all_envs.insert(
-                    "FORCE_COLOR".into(),
-                    Arc::<OsStr>::from(OsStr::new(force_color_value)),
-                );
-            }
+        if !all_envs.contains_key("FORCE_COLOR")
+            && !all_envs.contains_key("NO_COLOR")
+            && let Some(support) = on(Stream::Stdout)
+        {
+            let force_color_value = if support.has_16m {
+                "3" // True color (16 million colors)
+            } else if support.has_256 {
+                "2" // 256 colors
+            } else if support.has_basic {
+                "1" // Basic ANSI colors
+            } else {
+                "0" // No color support
+            };
+            all_envs
+                .insert("FORCE_COLOR".into(), Arc::<OsStr>::from(OsStr::new(force_color_value)));
         }
 
         // Add VITE_TASK_EXECUTION_ENV to indicate we're running inside vite_task
@@ -386,14 +384,26 @@ pub async fn execute_task(
         let mut path_reads = HashMap::<RelativePathBuf, PathRead>::new();
         let mut path_writes = HashMap::<RelativePathBuf, PathWrite>::new();
         for access in path_accesses.iter() {
-            let path = access.path.to_cow_os_str();
-            let Some(path) = AbsolutePath::new(&path) else {
-                continue;
-            };
-            let Some(relative_path) = path.strip_prefix(base_dir)? else {
+            let relative_path = access
+                .path
+                .strip_path_prefix(base_dir, |strip_result| {
+                    let Ok(stripped_path) = strip_result else {
+                        return None;
+                    };
+                    Some(RelativePathBuf::new(stripped_path).map_err(|err| {
+                        Error::InvalidRelativePath { path: stripped_path.into(), reason: err }
+                    }))
+                })
+                .transpose()?;
+
+            let Some(relative_path) = relative_path else {
                 // ignore accesses outside the workspace
                 continue;
             };
+            if relative_path.as_path().strip_prefix(".git").is_ok() {
+                // temp workaround for oxlint reading inside .git
+                continue;
+            }
             match access.mode {
                 AccessMode::Read => {
                     path_reads.entry(relative_path).or_insert(PathRead { read_dir_entries: false });
@@ -428,10 +438,11 @@ pub async fn execute_task(
 
     let outputs = outputs.into_inner().unwrap();
     tracing::debug!(
-        "executed task finished, path_reads: {}, path_writes: {}, outputs: {}",
+        "executed task finished, path_reads: {}, path_writes: {}, outputs: {}, exit_status: {}",
         path_reads.len(),
         path_writes.len(),
-        outputs.len()
+        outputs.len(),
+        exit_status
     );
 
     // let input_paths = gather_inputs(task, base_dir)?;
@@ -468,8 +479,10 @@ mod tests {
 
     #[test]
     fn test_force_color_auto_detection() {
-        use crate::collections::HashSet;
-        use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
+        use crate::{
+            collections::HashSet,
+            config::{ResolvedTaskConfig, TaskCommand, TaskConfig},
+        };
 
         let task_config = TaskConfig {
             command: TaskCommand::ShellScript("echo test".into()),
@@ -524,13 +537,32 @@ mod tests {
         unsafe {
             std::env::remove_var("FORCE_COLOR");
         }
+
+        // Test when NO_COLOR is already set - should not be overridden
+        unsafe {
+            std::env::set_var("NO_COLOR", "1");
+        }
+
+        let result3 = TaskEnvs::resolve(base_dir, &resolved_task_config).unwrap();
+        assert!(result3.all_envs.contains_key("NO_COLOR"));
+        let no_color_value = result3.all_envs.get("NO_COLOR").unwrap();
+        assert_eq!(no_color_value.to_str().unwrap(), "1");
+        // FORCE_COLOR should not be automatically added since NO_COLOR is set
+        assert!(!result3.all_envs.contains_key("FORCE_COLOR"));
+
+        // Clean up
+        unsafe {
+            std::env::remove_var("NO_COLOR");
+        }
     }
 
     #[test]
     #[cfg(unix)]
     fn test_task_envs_stable_ordering() {
-        use crate::collections::HashSet;
-        use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
+        use crate::{
+            collections::HashSet,
+            config::{ResolvedTaskConfig, TaskCommand, TaskConfig},
+        };
 
         // Create a task config with multiple envs in a HashSet
         let mut envs = HashSet::new();
@@ -648,8 +680,10 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn test_unix_env_case_sensitive() {
-        use crate::collections::HashSet;
-        use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
+        use crate::{
+            collections::HashSet,
+            config::{ResolvedTaskConfig, TaskCommand, TaskConfig},
+        };
 
         // Test that Unix environment variable matching is case-sensitive
         // Unix env vars are case-sensitive, so PATH and path are different
@@ -712,9 +746,10 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn test_windows_env_case_insensitive() {
-        use crate::collections::HashSet;
-        use crate::config::{ResolvedTaskConfig, TaskCommand, TaskConfig};
-        use std::path::Path;
+        use crate::{
+            collections::HashSet,
+            config::{ResolvedTaskConfig, TaskCommand, TaskConfig},
+        };
 
         // Create a task config with multiple envs in a HashSet
         let mut envs = HashSet::new();
@@ -751,11 +786,14 @@ mod tests {
 
         // Resolve envs multiple times
         let result1 =
-            TaskEnvs::resolve(AbsolutePath::new("/tmp").unwrap(), &resolved_task_config).unwrap();
+            TaskEnvs::resolve(AbsolutePath::new("C:\\tmp").unwrap(), &resolved_task_config)
+                .unwrap();
         let result2 =
-            TaskEnvs::resolve(AbsolutePath::new("/tmp").unwrap(), &resolved_task_config).unwrap();
+            TaskEnvs::resolve(AbsolutePath::new("C:\\tmp").unwrap(), &resolved_task_config)
+                .unwrap();
         let result3 =
-            TaskEnvs::resolve(AbsolutePath::new("/tmp").unwrap(), &resolved_task_config).unwrap();
+            TaskEnvs::resolve(AbsolutePath::new("C:\\tmp").unwrap(), &resolved_task_config)
+                .unwrap();
 
         // Convert to sorted vecs for comparison
         let mut envs1: Vec<_> = result1.envs_without_pass_through.iter().collect();
@@ -782,7 +820,7 @@ mod tests {
         // Verify default pass-through envs are present
         let all_envs = result1.all_envs;
         assert!(all_envs.contains_key("VSCODE_VAR"));
-        assert!(all_envs.contains_key("Path"));
+        assert!(all_envs.contains_key("Path") || all_envs.contains_key("PATH"));
         assert!(all_envs.contains_key("app1_name"));
         assert!(all_envs.contains_key("app1_name"));
 

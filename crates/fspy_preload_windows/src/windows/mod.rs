@@ -4,16 +4,15 @@ pub(crate) mod detour;
 mod detours;
 mod winapi_utils;
 
-use std::{env::current_exe, slice};
+use std::slice;
 
+use client::{Client, set_global_client};
 use detours::DETOURS;
 use fspy_shared::windows::PAYLOAD_ID;
 use ms_detours::{
     DetourFindPayloadEx, DetourIsHelperProcess, DetourRestoreAfterWith, DetourTransactionBegin,
     DetourTransactionCommit, DetourUpdateThread,
 };
-use winapi_utils::{ck, ck_long};
-
 use winapi::{
     shared::minwindef::{BOOL, DWORD, FALSE, HINSTANCE, TRUE},
     um::{
@@ -21,9 +20,8 @@ use winapi::{
         winnt::{self},
     },
 };
+use winapi_utils::{ck, ck_long};
 use winsafe::SetLastError;
-
-use client::{Client, set_global_client};
 
 use crate::windows::{client::global_client, detour::AttachContext};
 

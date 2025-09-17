@@ -1,0 +1,16 @@
+{
+  "name": "vite-typescript-starter",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "ready": "vite lint --type-aware && vite build",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vite": "npm:@voidzero-dev/vite-plus@latest"
+  }
+}

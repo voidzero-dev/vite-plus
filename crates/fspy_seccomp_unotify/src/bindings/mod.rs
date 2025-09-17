@@ -1,7 +1,6 @@
 pub mod alloc;
 
 use alloc::Alloced;
-use libc::{SECCOMP_GET_NOTIF_SIZES, seccomp_notif, syscall};
 use std::{
     mem::zeroed,
     os::{
@@ -9,6 +8,8 @@ use std::{
         raw::c_int,
     },
 };
+
+use libc::{SECCOMP_GET_NOTIF_SIZES, seccomp_notif, syscall};
 
 unsafe fn seccomp(
     operation: libc::c_uint,

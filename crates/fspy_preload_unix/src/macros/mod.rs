@@ -6,4 +6,4 @@ mod os_impl;
 #[path = "./linux.rs"]
 mod os_impl;
 
-pub use os_impl::*;
+pub(crate) use os_impl::*;
