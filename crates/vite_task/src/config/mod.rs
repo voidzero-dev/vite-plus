@@ -63,7 +63,6 @@ pub struct ViteTaskJson {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-
 pub struct DisplayOptions {
     // Whether to hide the command ("~> echo hello") before the execution.
     pub hide_command: bool,
