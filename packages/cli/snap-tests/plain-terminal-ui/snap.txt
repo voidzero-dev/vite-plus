@@ -2,35 +2,126 @@
 ► ~/$ node hello.mjs
 foo undefined
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Task Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1/1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 > vite-plus run hello # hit cache
-Cache hit, replaying
-► ~/$ node hello.mjs
+✓ Cache hit
+↻ ~/$ node hello.mjs
 foo undefined
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Task Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1/1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache hit - output replayed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > echo bar > input.txt
 > vite-plus run hello # input changed
-Cache miss because input changed: input.txt
+⚡ Cache miss: input 'input.txt' changed
 ► ~/$ node hello.mjs
 bar undefined
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Task Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1/1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache miss: input file 'input.txt' was modified
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 > FOO=bar vite-plus run hello # env changed
-Cache miss because command changed
+⚡ Cache miss: command changed
 ► ~/$ node hello.mjs
 bar bar
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Task Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1/1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache miss: environment variable(s) removed: "FOO"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 > vite-plus run hello # env removed
-Cache hit, replaying
-► ~/$ node hello.mjs
+✓ Cache hit
+↻ ~/$ node hello.mjs
 bar undefined
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Task Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1/1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache hit - output replayed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > json-edit vite-task.json "_.tasks.hello.passThroughEnvs=['PTE']"
 > vite-plus run hello # passThroughEnvs changed
-Cache miss because command changed
+⚡ Cache miss: command changed
 ► ~/$ node hello.mjs
 bar undefined
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Task Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1/1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache miss: pass-through env(s) removed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 > json-edit vite-task.json "_.tasks.hello.cwd='subfolder'"
 > vite-plus run hello # subfolder changed
-Cache miss because command changed
+⚡ Cache miss: command changed
 ► ~/subfolder$ node hello.mjs
 hello from subfolder
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Task Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1/1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache miss: working directory changed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

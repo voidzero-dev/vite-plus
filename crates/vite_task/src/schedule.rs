@@ -4,12 +4,12 @@ use futures_core::future::BoxFuture;
 use futures_util::future::FutureExt as _;
 use petgraph::{algo::toposort, stable_graph::StableDiGraph};
 use tokio::io::AsyncWriteExt as _;
-use vite_path::{AbsolutePath, RelativePathBuf};
+use vite_path::AbsolutePath;
 
 use crate::{
     Error,
     cache::{CacheMiss, CommandCacheValue, TaskCache},
-    config::{DisplayOptions, ResolvedTask, TaskCommand, Workspace},
+    config::{DisplayOptions, ResolvedTask, Workspace},
     execute::{OutputKind, execute_task},
     fs::FileSystem,
 };
