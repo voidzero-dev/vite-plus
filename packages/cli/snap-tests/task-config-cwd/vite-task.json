@@ -1,7 +1,7 @@
 {
   "tasks": {
     "hello": {
-      "command": "node a.mjs",
+      "command": "node a.js",
       "cwd": "subfolder",
       "cacheable": true
     }

@@ -57,9 +57,9 @@ impl RelativePath {
 
     /// Creates an owned [`RelativePathBuf`] with `rel_path` adjoined to `self`.
     pub fn join<P: AsRef<Self>>(&self, rel_path: P) -> RelativePathBuf {
-        let mut absolute_path_buf = self.to_relative_path_buf();
-        absolute_path_buf.push(rel_path);
-        absolute_path_buf
+        let mut relative_path_buf = self.to_relative_path_buf();
+        relative_path_buf.push(rel_path);
+        relative_path_buf
     }
 
     /// Returns a path that, when joined onto `base`, yields `self`.
@@ -131,7 +131,9 @@ impl RelativePathBuf {
         if rel_path_str.is_empty() {
             return;
         }
-        self.0.push('/');
+        if !self.as_str().is_empty() {
+            self.0.push('/');
+        }
         self.0.push_str(rel_path_str);
     }
 
@@ -357,6 +359,13 @@ mod tests {
         let rel_path = RelativePathBuf::new("foo/bar").unwrap();
         let joined_path = rel_path.as_relative_path().join(RelativePathBuf::new("baz").unwrap());
         assert_eq!(joined_path.as_str(), "foo/bar/baz")
+    }
+
+    #[test]
+    fn join_empty() {
+        let rel_path = RelativePathBuf::new("").unwrap();
+        let joined_path = rel_path.as_relative_path().join(RelativePathBuf::new("baz").unwrap());
+        assert_eq!(joined_path.as_str(), "baz")
     }
 
     #[test]
