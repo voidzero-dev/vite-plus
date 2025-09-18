@@ -100,7 +100,6 @@ jobs:
 
       - name: Print help for built-in commands
         run: |
-          cp packages/cli/binding/*.node packages/cli/dist
           export PATH="$PATH:$(pwd)/packages/cli/bin"
           vite-plus -h
           vite-plus run -h
