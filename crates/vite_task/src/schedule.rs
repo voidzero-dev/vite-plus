@@ -24,8 +24,7 @@ pub struct ExecutionPlan {
 /// Status of a task before execution
 #[derive(Debug)]
 pub struct PreExecutionStatus {
-    pub command: TaskCommand,
-    pub cwd: RelativePathBuf,
+    pub task: ResolvedTask,
     pub cache_status: CacheStatus,
     pub display_options: DisplayOptions,
 }
@@ -132,23 +131,18 @@ impl ExecutionPlan {
         workspace: &mut Workspace,
     ) -> anyhow::Result<ExecutionStatus> {
         tracing::debug!("Executing task {}", step.display_name());
-
-        let command = step.resolved_command.fingerprint.command.clone();
-        let cwd = step.resolved_command.fingerprint.cwd.clone();
-
         let display_options = step.display_options;
 
         // Check cache and prepare execution
         let (cache_status, execute_or_replay) = get_cached_or_execute(
-            step,
+            step.clone(),
             &mut workspace.task_cache,
             &workspace.fs,
             &workspace.workspace_dir,
         )
         .await?;
 
-        let pre_execution_status =
-            PreExecutionStatus { command, cwd, cache_status, display_options };
+        let pre_execution_status = PreExecutionStatus { task: step, cache_status, display_options };
 
         print!("{}", pre_execution_status);
 

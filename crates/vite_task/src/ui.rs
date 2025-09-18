@@ -3,7 +3,8 @@ use std::{fmt::Display, sync::LazyLock};
 use owo_colors::{Style, Styled};
 
 use crate::{
-    cache::CacheMiss,
+    cache::{CacheMiss, FingerprintMismatch},
+    fingerprint::PostRunFingerprintMismatch,
     schedule::{CacheStatus, ExecutionSummary, PreExecutionStatus},
 };
 
@@ -28,7 +29,11 @@ impl Display for PreExecutionStatus {
         let display_command: Option<String> = if self.display_options.hide_command {
             None
         } else {
-            Some(format!("~/{}$ {}", self.cwd, self.command))
+            Some(format!(
+                "~/{}$ {}",
+                &self.task.resolved_command.fingerprint.cwd,
+                &self.task.resolved_command.fingerprint.command
+            ))
         };
 
         if *IS_IN_CLI_TEST {
@@ -62,7 +67,22 @@ impl Display for PreExecutionStatus {
                 }
             }
             CacheStatus::CacheMiss(CacheMiss::FingerprintMismatch(mismatch)) => {
-                writeln!(f, "{}: {}", "Cache miss".style(Style::new().yellow()), mismatch)?;
+                writeln!(
+                    f,
+                    "{}",
+                    format_args!(
+                        "{} {}",
+                        "Cache miss because",
+                        match mismatch {
+                            FingerprintMismatch::CommandFingerprintMismatch(_) =>
+                                format!("command changed"),
+                            FingerprintMismatch::PostRunFingerprintMismatch(
+                                PostRunFingerprintMismatch::InputContentChanged { path },
+                            ) => format!("input changed: {}", path),
+                        }
+                    )
+                    .style(Style::new().yellow())
+                )?;
                 if let Some(display_command) = display_command {
                     writeln!(
                         f,
@@ -93,6 +113,7 @@ impl Display for PreExecutionStatus {
 /// Displayed after all tasks have been executed
 impl Display for ExecutionSummary {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for execution_status in &self.execution_statuses {}
         // TODO: Implement meaningful display logic for ExecutionSummary.
         // This implementation is intentionally left empty for now.
         Ok(())
