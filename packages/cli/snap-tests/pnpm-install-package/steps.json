@@ -3,7 +3,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "# vite-plus install --help | head -n 20 # print help message (thread 'tokio-runtime-worker' panicked at library/std/src/io/stdio.rs:1165:9)",
+    "vite-plus install --help | head -n 20 # print help message (thread 'tokio-runtime-worker' panicked at library/std/src/io/stdio.rs:1165:9)",
     "vite-plus install # install the dependencies in package.json",
     "vite-plus install -D tslib@2.8.1 # install tslib@2.8.1",
     "cat package.json # add tslib@2.8.1 to package.json",

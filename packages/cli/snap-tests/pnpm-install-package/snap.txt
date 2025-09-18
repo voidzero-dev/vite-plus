@@ -1,4 +1,25 @@
-> # vite-plus install --help | head -n 20 # print help message (thread 'tokio-runtime-worker' panicked at library/std/src/io/stdio.rs:1165:9)
+> vite-plus install --help | head -n 20 # print help message (thread 'tokio-runtime-worker' panicked at library/std/src/io/stdio.rs:1165:9)
+Cache not found
+Version <semver> (compiled to binary; bundled Node.js v<semver>)
+Usage: pnpm install [options]
+
+Alias: i
+
+Installs all dependencies of the project in the current working directory. When executed inside a workspace, installs all dependencies of all projects.
+
+Options:
+      --[no-]color                      Controls colors in the output. By
+                                        default, output is always colored when
+                                        it goes directly to a terminal
+      --[no-]frozen-lockfile            Don't generate a lockfile and fail if an
+                                        update is needed. This setting is on by
+                                        default in CI environments, so use
+                                        --no-frozen-lockfile if you need to
+                                        disable it for some reason
+      --[no-]verify-store-integrity     If false, doesn't check whether packages
+                                        in the store were mutated
+      --aggregate-output                Aggregate output from child processes
+
 > vite-plus install # install the dependencies in package.json
 Cache not found
 Already up to date

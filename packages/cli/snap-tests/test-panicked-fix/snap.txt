@@ -1,0 +1,43 @@
+> vite-plus install --help | head -n 20 # print help message and no panicked
+Cache not found
+Version <semver> (compiled to binary; bundled Node.js v<semver>)
+Usage: pnpm install [options]
+
+Alias: i
+
+Installs all dependencies of the project in the current working directory. When executed inside a workspace, installs all dependencies of all projects.
+
+Options:
+      --[no-]color                      Controls colors in the output. By
+                                        default, output is always colored when
+                                        it goes directly to a terminal
+      --[no-]frozen-lockfile            Don't generate a lockfile and fail if an
+                                        update is needed. This setting is on by
+                                        default in CI environments, so use
+                                        --no-frozen-lockfile if you need to
+                                        disable it for some reason
+      --[no-]verify-store-integrity     If false, doesn't check whether packages
+                                        in the store were mutated
+      --aggregate-output                Aggregate output from child processes
+
+> vite-plus lint --help | head -n 20 # print help message and no panicked
+Cache not found
+Usage: [-c=<./.oxlintrc.json>] [PATH]...
+
+Basic Configuration
+    -c, --config=<./.oxlintrc.json>  Oxlint configuration file (experimental)
+                              * only `.json` extension is supported
+                              * you can use comments in configuration files.
+                              * tries to be compatible with the ESLint v8's format
+        --tsconfig=<./tsconfig.json>  TypeScript `tsconfig.json` path for reading path alias and
+                              project references for import plugin
+        --init                Initialize oxlint configuration with default values
+
+Allowing / Denying Multiple Lints
+   Accumulate rules and categories from left to right on the command-line.
+   For example `-D correctness -A no-debugger` or `-A all -D no-debugger`.
+   The categories are:
+   * `correctness` - code that is outright wrong or useless (default).
+   * `suspicious`  - code that is most likely wrong or useless.
+   * `pedantic`    - lints which are rather strict or have occasional false positives.
+   * `style`       - code that should be written in a more idiomatic way.

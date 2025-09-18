@@ -1,0 +1,6 @@
+{
+  "name": "test-panicked-fix",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.17.0"
+}
