@@ -64,10 +64,10 @@ pub struct ViteTaskJson {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DisplayOptions {
-    // Whether to hide the command ("~> echo hello") before the execution.
+    /// Whether to hide the command ("~> echo hello") before the execution.
     pub hide_command: bool,
 
-    // Whether to hide this task in the summary after all executions.
+    /// Whether to hide this task in the summary after all executions.
     pub hide_summary: bool,
 
     /// If true, the task will not be replayed from the cache.
