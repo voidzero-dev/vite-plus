@@ -296,55 +296,75 @@ impl Display for ExecutionSummary {
                         CacheMiss::FingerprintMismatch(mismatch) => {
                             match mismatch {
                                 FingerprintMismatch::CommandFingerprintMismatch(diff) => {
-                                    // Parse the diff to provide a human-readable description
+                                    // Read diff fields directly
                                     let mut changes = Vec::new();
 
                                     // Check cwd changes
-                                    let cwd_str = format!("{:?}", diff.cwd);
-                                    if cwd_str.contains("Some") {
+                                    if diff.cwd.is_some() {
                                         changes.push("working directory changed".to_string());
                                     }
 
                                     // Check command changes
-                                    let cmd_str = format!("{:?}", diff.command);
-                                    if !cmd_str.contains("NoChange") {
+                                    // Based on debug output, NoChange is shown when command hasn't changed
+                                    // We'll use Debug formatting to check this for now
+                                    let cmd_debug = format!("{:?}", diff.command);
+                                    if !cmd_debug.contains("NoChange") {
                                         changes.push("command changed".to_string());
                                     }
 
                                     // Check environment variable changes
-                                    let env_str = format!("{:?}", diff.envs_without_pass_through);
-                                    if env_str.contains("removed")
-                                        && !env_str.contains("removed: {}")
-                                    {
-                                        // Extract removed env vars if any
-                                        if let Some(start) = env_str.find("removed: {") {
-                                            if let Some(end) = env_str[start..].find('}') {
-                                                let removed_vars =
-                                                    &env_str[start + 10..start + end];
-                                                if !removed_vars.is_empty() {
-                                                    changes.push(format!(
-                                                        "environment variable(s) removed: {}",
-                                                        removed_vars
-                                                    ));
-                                                }
-                                            }
-                                        }
+                                    // envs_without_pass_through.removed is a BTreeSet
+                                    if !diff.envs_without_pass_through.removed.is_empty() {
+                                        let removed_vars: Vec<String> = diff
+                                            .envs_without_pass_through
+                                            .removed
+                                            .iter()
+                                            .map(|k| format!("'{}'", k))
+                                            .collect();
+                                        changes.push(format!(
+                                            "environment variable(s) removed: {}",
+                                            removed_vars.join(", ")
+                                        ));
                                     }
-                                    if env_str.contains("altered")
-                                        && !env_str.contains("altered: {}")
-                                    {
-                                        changes.push("environment variable(s) changed".to_string());
+                                    // envs_without_pass_through.altered is a BTreeMap with keys and values
+                                    if !diff.envs_without_pass_through.altered.is_empty() {
+                                        let altered_vars: Vec<String> = diff
+                                            .envs_without_pass_through
+                                            .altered
+                                            .keys()
+                                            .map(|k| format!("'{}'", k))
+                                            .collect();
+                                        changes.push(format!(
+                                            "environment variable(s) changed: {}",
+                                            altered_vars.join(", ")
+                                        ));
                                     }
 
                                     // Check pass-through env changes
-                                    let pte_str = format!("{:?}", diff.pass_through_envs);
-                                    if pte_str.contains("added") && !pte_str.contains("added: {}") {
-                                        changes.push("pass-through env(s) added".to_string());
+                                    // pass_through_envs is a BTreeSetDiff with added and removed fields
+                                    if !diff.pass_through_envs.added.is_empty() {
+                                        let added_vars: Vec<String> = diff
+                                            .pass_through_envs
+                                            .added
+                                            .iter()
+                                            .map(|k| format!("'{}'", k))
+                                            .collect();
+                                        changes.push(format!(
+                                            "pass-through env(s) added: {}",
+                                            added_vars.join(", ")
+                                        ));
                                     }
-                                    if pte_str.contains("removed")
-                                        && !pte_str.contains("removed: {}")
-                                    {
-                                        changes.push("pass-through env(s) removed".to_string());
+                                    if !diff.pass_through_envs.removed.is_empty() {
+                                        let removed_vars: Vec<String> = diff
+                                            .pass_through_envs
+                                            .removed
+                                            .iter()
+                                            .map(|k| format!("'{}'", k))
+                                            .collect();
+                                        changes.push(format!(
+                                            "pass-through env(s) removed: {}",
+                                            removed_vars.join(", ")
+                                        ));
                                     }
 
                                     if changes.is_empty() {

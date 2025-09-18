@@ -67,7 +67,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] hello ✓
-      → Cache miss: environment variable(s) removed: "FOO"
+      → Cache miss: environment variable(s) removed: 'FOO'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite-plus run hello # env removed
@@ -104,7 +104,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] hello ✓
-      → Cache miss: pass-through env(s) removed
+      → Cache miss: pass-through env(s) removed: 'PTE'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > json-edit vite-task.json "_.tasks.hello.cwd='subfolder'"
