@@ -1,12 +1,28 @@
-use std::fmt::Display;
+use std::{fmt::Display, sync::LazyLock};
 
-use owo_colors::{OwoColorize as _, Style};
+use owo_colors::{Style, Styled};
 
 use crate::{
     cache::CacheMiss,
     schedule::{CacheStatus, ExecutionSummary, PreExecutionStatus},
 };
 
+// TODO: this should be replaced by something like `--json-output` when structured logging is implemented.
+static IS_IN_CLI_TEST: LazyLock<bool> =
+    LazyLock::new(|| std::env::var_os("VITE_PLUS_CLI_TEST") == Some("1".into()));
+
+/// Wrap of `OwoColorize` that ignores style if `NO_COLOR` is set.
+trait ColorizeExt {
+    fn style(&self, style: Style) -> Styled<&Self>;
+}
+impl<T: owo_colors::OwoColorize> ColorizeExt for T {
+    fn style(&self, style: Style) -> Styled<&Self> {
+        static NO_COLOR: LazyLock<bool> = LazyLock::new(|| std::env::var_os("NO_COLOR").is_some());
+        owo_colors::OwoColorize::style(self, if *NO_COLOR { Style::new() } else { style })
+    }
+}
+
+/// Displayed before the task is executed
 impl Display for PreExecutionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let display_command: Option<String> = if self.display_options.hide_command {
@@ -15,16 +31,28 @@ impl Display for PreExecutionStatus {
             Some(format!("~/{}$ {}", self.cwd, self.command))
         };
 
-        // TODO: this should be replaced by something like `--json-output` when structured logging is implemented.
-        let is_in_cli_test = std::env::var_os("VITE_PLUS_CLI_TEST").is_some();
+        if *IS_IN_CLI_TEST {
+            match &self.cache_status {
+                CacheStatus::CacheMiss(CacheMiss::NotFound) => {
+                    writeln!(f, "Cache not found")?;
+                }
+                CacheStatus::CacheMiss(CacheMiss::FingerprintMismatch(mismatch)) => {
+                    writeln!(f, "Cache miss: {mismatch}")?;
+                }
+                CacheStatus::CacheHit => {
+                    if !self.display_options.ignore_replay {
+                        writeln!(f, "Cache hit, replaying")?;
+                    }
+                }
+            }
+            return Ok(());
+        }
 
         // Print cache status
         match &self.cache_status {
             CacheStatus::CacheMiss(CacheMiss::NotFound) => {
                 tracing::debug!("{}", "Cache not found".style(Style::new().yellow()));
-                if is_in_cli_test {
-                    writeln!(f, "Cache not found")?;
-                } else if let Some(display_command) = display_command {
+                if let Some(display_command) = display_command {
                     writeln!(
                         f,
                         "{} {}",
@@ -34,34 +62,26 @@ impl Display for PreExecutionStatus {
                 }
             }
             CacheStatus::CacheMiss(CacheMiss::FingerprintMismatch(mismatch)) => {
-                if is_in_cli_test {
-                    writeln!(f, "Cache miss: {mismatch}")?;
-                } else {
-                    writeln!(f, "{}: {}", "Cache miss".style(Style::new().yellow()), mismatch)?;
-                    if let Some(display_command) = display_command {
-                        writeln!(
-                            f,
-                            "{} {}",
-                            "►".style(Style::new().bright_blue()),
-                            display_command.style(Style::new().cyan())
-                        )?;
-                    }
+                writeln!(f, "{}: {}", "Cache miss".style(Style::new().yellow()), mismatch)?;
+                if let Some(display_command) = display_command {
+                    writeln!(
+                        f,
+                        "{} {}",
+                        "►".style(Style::new().bright_blue()),
+                        display_command.style(Style::new().cyan())
+                    )?;
                 }
             }
             CacheStatus::CacheHit => {
                 if !self.display_options.ignore_replay {
-                    if is_in_cli_test {
-                        writeln!(f, "Cache hit, replaying")?;
-                    } else {
-                        writeln!(f, "{}", "Cache hit, replaying".style(Style::new().green()))?;
-                        if let Some(display_command) = display_command {
-                            writeln!(
-                                f,
-                                "{} {}",
-                                "►".style(Style::new().bright_green()),
-                                display_command.style(Style::new().dimmed())
-                            )?;
-                        }
+                    writeln!(f, "{}", "Cache hit, replaying".style(Style::new().green()))?;
+                    if let Some(display_command) = display_command {
+                        writeln!(
+                            f,
+                            "{} {}",
+                            "►".style(Style::new().bright_green()),
+                            display_command.style(Style::new().dimmed())
+                        )?;
                     }
                 }
             }
@@ -70,6 +90,7 @@ impl Display for PreExecutionStatus {
     }
 }
 
+/// Displayed after all tasks have been executed
 impl Display for ExecutionSummary {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // TODO: Implement meaningful display logic for ExecutionSummary.

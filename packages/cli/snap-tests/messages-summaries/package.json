@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "hello": "echo Hello, world!"
+  }
+}

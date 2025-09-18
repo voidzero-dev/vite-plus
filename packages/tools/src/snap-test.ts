@@ -54,12 +54,15 @@ async function runTestCase(name: string) {
 
   const env = {
     ...process.env,
-    ...steps.env,
-    // Indicate CLI is running in test mode
+    // Indicate CLI is running in test mode, so that it prints more detailed outputs.
     VITE_PLUS_CLI_TEST: '1',
     NO_COLOR: 'true',
     // set CI=true make sure snap-tests are stable on GitHub Actions
     CI: 'true',
+
+    // A test case can override/unset environment variables above.
+    // For example, VITE_PLUS_CLI_TEST/CI can be unset to test the real-world outputs.
+    ...steps.env,
   };
 
   // Sometimes on Windows, the PATH variable is named 'Path'

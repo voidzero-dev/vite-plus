@@ -1,0 +1,8 @@
+{
+  "env": {
+    "VITE_PLUS_CLI_TEST": "0"
+  },
+  "commands": [
+    "vite-plus run hello"
+  ]
+}

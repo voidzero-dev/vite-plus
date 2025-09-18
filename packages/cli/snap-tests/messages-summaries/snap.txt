@@ -1,0 +1,7 @@
+> vite-plus run hello
+CI environment detected. Using default package manager: pnpm
+Already up to date
+
+Done in <variable>ms using pnpm v<semver>
+► ~/$ echo Hello, 'world'\!''
+Hello, world!
