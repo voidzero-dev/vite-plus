@@ -98,7 +98,7 @@ pub enum Commands {
         /// Arguments to pass to vite test
         args: Vec<String>,
     },
-    /// Lib command.
+    /// Lib command, build a library
     #[command(disable_help_flag = true)]
     Lib {
         /// Arguments to pass to tsdown

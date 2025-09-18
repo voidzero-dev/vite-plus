@@ -18,7 +18,7 @@ const require = createRequire(import.meta.url);
  * Resolves the Tsdown binary path and environment variables.
  *
  * @returns Promise containing:
- *   - binPath: Absolute path to the Tsdown CLI entry point (tsdown.mjs)
+ *   - binPath: Absolute path to the Tsdown CLI entry point
  *   - envs: Environment variables to set when executing Tsdown
  *
  * Tsdown is a tool that provides a library for building JavaScript/TypeScript libraries.
@@ -39,7 +39,7 @@ export async function lib(): Promise<{
       // Provide Node.js runtime information for oxfmt's telemetry/compatibility
       JS_RUNTIME_VERSION: process.versions.node,
       JS_RUNTIME_NAME: process.release.name,
-      // Indicate that vite-plus is the package manager invoking oxfmt
+      // Indicate that vite-plus is the package manager invoking tsdown
       NODE_PACKAGE_MANAGER: 'vite-plus',
     },
   };
