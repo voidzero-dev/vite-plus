@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "failed_dep": "false && echo 1 && echo 2"
+  }
+}

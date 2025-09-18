@@ -1,0 +1,21 @@
+{
+  "env": {
+    "VITE_PLUS_CLI_TEST": "0"
+  },
+  "commands": [
+    "FOO=foo vite-plus run hello",
+    "FOO=foo vite-plus run hello # hit cache",
+
+    "echo bar > input.txt",
+    "vite-plus run hello # input changed",
+
+    "FOO=bar vite-plus run hello # env changed",
+    "vite-plus run hello # env removed",
+
+    "json-edit vite-task.json \"_.tasks.hello.passThroughEnvs=['PTE']\"",
+    "vite-plus run hello # passThroughEnvs changed",
+
+    "json-edit vite-task.json \"_.tasks.hello.cwd='subfolder'\"",
+    "vite-plus run hello # subfolder changed"
+  ]
+}

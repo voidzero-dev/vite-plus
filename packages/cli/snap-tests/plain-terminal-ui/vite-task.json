@@ -1,0 +1,9 @@
+{
+  "tasks": {
+    "hello": {
+      "command": "node hello.mjs",
+      "envs": ["FOO"],
+      "cacheable": true
+    }
+  }
+}
