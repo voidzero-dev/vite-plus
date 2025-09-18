@@ -31,7 +31,7 @@ const { task } = await cli.build({
   packageJsonPath: '../package.json',
   cwd: 'binding',
   platform: true,
-  release: true,
+  release: process.env.VITE_PLUS_CLI_DEBUG !== '1',
   esm: true,
   target,
   crossCompile: x,
