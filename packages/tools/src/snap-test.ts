@@ -28,15 +28,17 @@ const casesDir = path.resolve('snap-tests');
 
 const filter = process.argv[2] ?? ''; // Optional filter to run specific test cases
 
-const tasks: Promise<void>[] = [];
+// const tasks: Promise<void>[] = [];
 for (const caseName of fs.readdirSync(casesDir)) {
   if (caseName.startsWith('.')) continue; // Skip hidden files like .DS_Store
   if (caseName.includes(filter)) {
-    tasks.push(runTestCase(caseName));
+    // FIXME: parallel run will cause [Error: Broken pipe (os error 32)] { code: 'GenericFailure' }
+    // tasks.push(runTestCase(caseName));
+    await runTestCase(caseName);
   }
 }
 
-await Promise.all(tasks);
+// await Promise.all(tasks);
 
 interface Steps {
   env: Record<string, string>;
