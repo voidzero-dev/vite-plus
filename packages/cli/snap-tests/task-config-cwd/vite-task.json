@@ -1,0 +1,9 @@
+{
+  "tasks": {
+    "hello": {
+      "command": "node a.mjs",
+      "cwd": "subfolder",
+      "cacheable": true
+    }
+  }
+}
