@@ -33,7 +33,7 @@ type VitePlusConfig = {
 
 type ExtendsConfig<T> = T extends UserConfig ? T & VitePlusConfig
   : T extends Promise<UserConfig> ? Promise<UserConfig & VitePlusConfig>
-  : T extends UserConfigFnObject ? (env: ConfigEnv) => T & VitePlusConfig
+  : T extends UserConfigFnObject ? (env: ConfigEnv) => UserConfig & VitePlusConfig
   : T extends UserConfigFnPromise ? Promise<
       UserConfig & {
         extends?: string;
