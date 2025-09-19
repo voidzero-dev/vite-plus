@@ -1,13 +1,11 @@
 use std::{fmt::Display, sync::LazyLock};
 
-use compact_str::CompactStringExt;
-use diff::Diff;
 use itertools::Itertools;
 use owo_colors::{Style, Styled};
+use vite_path::RelativePath;
 
 use crate::{
     cache::{CacheMiss, FingerprintMismatch},
-    config::TaskCommandDiff,
     fingerprint::PostRunFingerprintMismatch,
     schedule::{CacheStatus, ExecutionFailure, ExecutionSummary, PreExecutionStatus},
 };
@@ -79,7 +77,7 @@ impl Display for PreExecutionStatus {
                         PostRunFingerprintMismatch::InputContentChanged { path },
                     ) => {
                         // Show just the filename for brevity
-                        format!("input '{}' was modified", path)
+                        format!("content of input '{}' changed", path)
                     }
                 };
                 writeln!(
@@ -273,10 +271,13 @@ impl Display for ExecutionSummary {
                                     if previous_command_fingerprint.cwd
                                         != current_command_fingerprint.cwd
                                     {
+                                        fn display_cwd(cwd: &RelativePath) -> &str {
+                                            if cwd.as_str().is_empty() { "." } else { cwd.as_str() }
+                                        }
                                         changes.push(format!(
-                                            "working directory changed from {} to {}",
-                                            &previous_command_fingerprint.cwd,
-                                            &current_command_fingerprint.cwd
+                                            "working directory changed from '{}' to '{}'",
+                                            display_cwd(&previous_command_fingerprint.cwd),
+                                            display_cwd(&current_command_fingerprint.cwd)
                                         ));
                                     }
 
@@ -349,7 +350,7 @@ impl Display for ExecutionSummary {
                                     writeln!(
                                         f,
                                         "{}",
-                                        format!("input file '{}' was modified", path)
+                                        format!("content of input '{}' changed", path)
                                             .style(Style::new().yellow())
                                     )?;
                                 }

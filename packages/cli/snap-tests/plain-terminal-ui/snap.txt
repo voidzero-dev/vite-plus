@@ -70,7 +70,7 @@ Task Details:
       → Cache miss: env BAR=1 added
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> BAR=1 vite-plus run hello # env removed
+> vite-plus run hello # env removed
 $ node hello.mjs (✗ cache miss: command changed, executing)
 input_content undefined
 
@@ -85,5 +85,62 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] root-package#hello ✓
-      → Cache miss: env FOO=2 removed
+      → Cache miss: env BAR=1 removed; env FOO=2 removed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> echo bar > input.txt
+> vite-plus run hello # input changed
+$ node hello.mjs (✗ cache miss: content of input 'input.txt' was changed, executing)
+bar undefined
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Task Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] root-package#hello ✓
+      → Cache miss: content of input 'input.txt' was changed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> json-edit vite-task.json "_.tasks.hello.passThroughEnvs=['PTE']"
+> vite-plus run hello # passThroughEnvs changed
+$ node hello.mjs (✗ cache miss: command changed, executing)
+bar undefined
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Task Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] root-package#hello ✓
+      → Cache miss: pass-through env configuration changed from [""] to ["PTE"]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> json-edit vite-task.json "_.tasks.hello.cwd='subfolder'"
+> vite-plus run hello # cwd changed
+$ node hello.mjs (✗ cache miss: command changed, executing)
+hello from subfolder
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Task Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] root-package#hello ✓
+      → Cache miss: working directory changed from '.' to 'subfolder'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

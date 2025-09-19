@@ -2,7 +2,6 @@ use std::{fmt::Display, io::Write, sync::Arc};
 
 // use bincode::config::{Configuration, standard};
 use bincode::{Decode, Encode, decode_from_slice, encode_to_vec};
-use diff::Diff;
 use rusqlite::{Connection, OptionalExtension as _};
 use serde::Serialize;
 use tokio::sync::Mutex;
@@ -11,7 +10,7 @@ use vite_str::Str;
 
 use crate::{
     Error,
-    config::{CommandFingerprint, CommandFingerprintDiff, ResolvedTask, TaskId},
+    config::{CommandFingerprint, ResolvedTask, TaskId},
     execute::{ExecutedTask, StdOutput},
     fingerprint::{PostRunFingerprint, PostRunFingerprintMismatch},
     fs::FileSystem,

@@ -40,7 +40,6 @@ pub enum CacheStatus {
 /// Status of a task execution
 #[derive(Debug)]
 pub struct ExecutionStatus {
-    #[expect(dead_code)]
     pub pre_execution_status: PreExecutionStatus,
     /// `Ok` variant means the task was executed (or replayed), no matter the exit status is zero or non-zero.
     ///
