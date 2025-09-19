@@ -1,15 +1,71 @@
 > FOO=1 vite-plus run hello # create initial cache
-Cache not found
+$ node -p process.env.FOO
 1
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > FOO=2 vite-plus run hello # cache miss due to env change
-Cache miss: Command fingerprint changed: CommandFingerprintDiff { cwd: None, command: NoChange, envs_without_pass_through: BTreeMapDiff { altered: {"FOO": Some("1")}, removed: {} }, pass_through_envs: BTreeSetDiff { added: {}, removed: {} } }
+$ node -p process.env.FOO (✗ cache miss: envs changed, executing)
 2
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache miss: env FOO value changed from '1' to '2'
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > FOO=1 vite-plus run hello # hit cache created in step 1
-Cache hit, replaying
+$ node -p process.env.FOO (✓ cache hit, replaying)
 1
 
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache hit - output replayed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 > FOO=2 vite-plus run hello # hit cache created in step 2
-Cache hit, replaying
+$ node -p process.env.FOO (✓ cache hit, replaying)
 2
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache hit - output replayed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

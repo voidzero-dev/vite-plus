@@ -1,20 +1,22 @@
 > cd folder1 && vite-plus lint
-Cache not found
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
+
 > cd folder2 && vite-plus lint # should create different cache even though the package is the same
-Cache not found
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+
 
 > echo 'console.log(1);' > folder2/a.js
 > cd folder1 && vite-plus lint
-Cache hit, replaying
+✓ cache hit, replaying
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
+
 > cd folder2 && vite-plus lint
-Cache miss: folder2/a.js content changed
+✗ cache miss: content of input 'folder2/a.js' changed, executing
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+

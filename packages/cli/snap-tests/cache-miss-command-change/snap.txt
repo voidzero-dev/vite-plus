@@ -1,17 +1,67 @@
 > vite-plus run hello # create caches for 'echo foo' and 'echo bar'
-Cache not found
+$ echo foo
 foo
-Cache not found
+
+$ echo bar
 bar
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  2 tasks • 0 cache hits • 2 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello(subcommand 0) ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [2] hello ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > json-edit package.json '_.scripts.hello = "echo baz && echo bar"' # update the first subcommand
 > vite-plus run hello # should report cache miss of the first subcommand, and hit cache of the second subcommand
-Cache miss: Command fingerprint changed: CommandFingerprintDiff { cwd: None, command: Parsed(TaskParsedCommandDiff { envs: BTreeMapDiff { altered: {}, removed: {} }, program: None, args: [Altered { index: 0, changes: [Some("foo")] }] }), envs_without_pass_through: BTreeMapDiff { altered: {}, removed: {} }, pass_through_envs: BTreeSetDiff { added: {}, removed: {} } }
+$ echo baz (✗ cache miss: command changed, executing)
 baz
-Cache hit, replaying
+
+$ echo bar (✓ cache hit, replaying)
 bar
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  2 tasks • 1 cache hits • 1 cache misses 
+Performance:  50% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello(subcommand 0) ✓
+      → Cache miss: command changed from echo foo to echo baz
+  ·······················································
+  [2] hello ✓
+      → Cache hit - output replayed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > json-edit package.json '_.scripts.hello = "echo bar"' # remove the first subcommand, now the second subcommand becomes the first
 > vite-plus run hello # can still hit cache even the subcommand index changed
-Cache hit, replaying
+$ echo bar (✓ cache hit, replaying)
 bar
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache hit - output replayed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

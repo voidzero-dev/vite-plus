@@ -1,12 +1,54 @@
 > MY_ENV=1 vite-plus run hello
-Cache not found
+$ node -p process.env.MY_ENV
 1
 
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 > MY_ENV=2 vite-plus run hello # MY_ENV is pass-through. should hit the cache created in step 1
-Cache hit, replaying
+$ node -p process.env.MY_ENV (✓ cache hit, replaying)
 1
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache hit - output replayed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > json-edit vite-task.json '_.tasks.hello.passThroughEnvs.push("MY_ENV2")' # add a new pass through env
 > MY_ENV=2 vite-plus run hello # cache should be invalidated because passThroughEnvs config changed
-Cache miss: Command fingerprint changed: CommandFingerprintDiff { cwd: None, command: NoChange, envs_without_pass_through: BTreeMapDiff { altered: {}, removed: {} }, pass_through_envs: BTreeSetDiff { added: {}, removed: {"MY_ENV2"} } }
+$ node -p process.env.MY_ENV (✗ cache miss: envs changed, executing)
 2
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello ✓
+      → Cache miss: pass-through env configuration changed from ["MY_ENV"] to ["MY_ENV, MY_ENV2"]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

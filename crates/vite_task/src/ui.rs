@@ -10,10 +10,6 @@ use crate::{
     schedule::{CacheStatus, ExecutionFailure, ExecutionSummary, PreExecutionStatus},
 };
 
-// TODO: this should be replaced by something like `--json-output` when structured logging is implemented.
-static IS_IN_CLI_TEST: LazyLock<bool> =
-    LazyLock::new(|| std::env::var_os("VITE_PLUS_CLI_TEST") == Some("1".into()));
-
 /// Wrap of `OwoColorize` that ignores style if `NO_COLOR` is set.
 trait ColorizeExt {
     fn style(&self, style: Style) -> Styled<&Self>;
@@ -35,23 +31,6 @@ impl Display for PreExecutionStatus {
             Some(display_command.style(Style::new().cyan()))
         };
 
-        if *IS_IN_CLI_TEST {
-            match &self.cache_status {
-                CacheStatus::CacheMiss(CacheMiss::NotFound) => {
-                    writeln!(f, "Cache not found")?;
-                }
-                CacheStatus::CacheMiss(CacheMiss::FingerprintMismatch(mismatch)) => {
-                    writeln!(f, "Cache miss: {mismatch}")?;
-                }
-                CacheStatus::CacheHit => {
-                    if !self.display_options.ignore_replay {
-                        writeln!(f, "Cache hit, replaying")?;
-                    }
-                }
-            }
-            return Ok(());
-        }
-
         // Print cache status with improved, shorter messages
         match &self.cache_status {
             CacheStatus::CacheMiss(CacheMiss::NotFound) => {
@@ -63,39 +42,61 @@ impl Display for PreExecutionStatus {
             }
             CacheStatus::CacheMiss(CacheMiss::FingerprintMismatch(mismatch)) => {
                 if let Some(display_command) = &display_command {
-                    write!(f, "{}", display_command)?;
+                    write!(f, "{} ", display_command)?;
                 }
 
+                let current = &self.task.resolved_command.fingerprint;
                 // Short, precise message about cache miss
                 let reason = match mismatch {
-                    FingerprintMismatch::CommandFingerprintMismatch(_diff) => {
+                    FingerprintMismatch::CommandFingerprintMismatch(previous) => {
                         // For now, just say "command changed" for any command fingerprint mismatch
                         // The detailed analysis will be in the summary
-                        format!("command changed")
+                        if previous.command != current.command {
+                            format!("command changed")
+                        } else if previous.cwd != current.cwd {
+                            format!("working directory changed")
+                        } else if previous.envs_without_pass_through
+                            != current.envs_without_pass_through
+                            || previous.pass_through_envs != current.pass_through_envs
+                        {
+                            format!("envs changed")
+                        } else {
+                            format!("command configuration changed")
+                        }
                     }
                     FingerprintMismatch::PostRunFingerprintMismatch(
                         PostRunFingerprintMismatch::InputContentChanged { path },
                     ) => {
-                        // Show just the filename for brevity
                         format!("content of input '{}' changed", path)
                     }
                 };
                 writeln!(
                     f,
                     "{}",
-                    format_args!(" (✗ cache miss: {}, executing)", reason)
-                        .style(Style::new().yellow().dimmed())
+                    format_args!(
+                        "{}{}{}",
+                        if display_command.is_some() { "(" } else { "" },
+                        format_args!("✗ cache miss: {}, executing", reason),
+                        if display_command.is_some() { ")" } else { "" },
+                    )
+                    .style(Style::new().yellow().dimmed())
                 )?;
             }
             CacheStatus::CacheHit => {
                 if !self.display_options.ignore_replay {
-                    if let Some(display_command) = display_command {
-                        write!(f, "{}", display_command)?;
+                    if let Some(display_command) = &display_command {
+                        write!(f, "{} ", display_command)?;
                     }
                     writeln!(
                         f,
                         "{}",
-                        " (✓ cache hit, replaying)".style(Style::new().green().dimmed()),
+                        format_args!(
+                            "{}{}{}",
+                            if display_command.is_some() { "(" } else { "" },
+                            "✓ cache hit, replaying",
+                            if display_command.is_some() { ")" } else { "" },
+                        )
+                        .style(Style::new().green().dimmed())
                     )?;
                 }
             }
@@ -107,12 +108,16 @@ impl Display for PreExecutionStatus {
 /// Displayed after all tasks have been executed
 impl Display for ExecutionSummary {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if *IS_IN_CLI_TEST {
-            // No summary in test mode
-            return Ok(());
-        }
-
-        if self.execution_statuses.is_empty() {
+        // if *IS_IN_CLI_TEST {
+        //     // No summary in test mode
+        //     return Ok(());
+        // }
+        if self
+            .execution_statuses
+            .iter()
+            .all(|status| status.pre_execution_status.task.is_builtin())
+        {
+            // No summary for empty status or built-in tasks
             return Ok(());
         }
 
@@ -145,9 +150,8 @@ impl Display for ExecutionSummary {
         )?;
         writeln!(
             f,
-            "{} {}",
-            "📊",
-            "Task Execution Summary".style(Style::new().bold().bright_white())
+            "{}",
+            "     Vite+ Task Runner • Execution Summary".style(Style::new().bold().bright_white())
         )?;
         writeln!(
             f,

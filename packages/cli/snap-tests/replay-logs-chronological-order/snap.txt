@@ -1,5 +1,5 @@
 > vite-plus run build 2>&1 # initial run, create the cache
-Cache not found
+$ node build.js
 [build.js] --------------------------------
 [build.js] start
 [echo.js] --------------------------------
@@ -93,9 +93,23 @@ Cache not found
 [echo.js] 30303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030
 [echo.js] --------------------------------
 [build.js] main process end
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] @test/replay-logs-chronological-order#build ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite-plus run build 2>&1 # should hit the cache
-Cache hit, replaying
+$ node build.js (✓ cache hit, replaying)
 [build.js] --------------------------------
 [build.js] start
 [echo.js] --------------------------------
@@ -189,9 +203,23 @@ Cache hit, replaying
 [echo.js] 30303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030
 [echo.js] --------------------------------
 [build.js] main process end
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] @test/replay-logs-chronological-order#build ✓
+      → Cache hit - output replayed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite-plus run build 2>&1 # should hit the cache and make sure the replay order is chronological
-Cache hit, replaying
+$ node build.js (✓ cache hit, replaying)
 [build.js] --------------------------------
 [build.js] start
 [echo.js] --------------------------------
@@ -286,8 +314,22 @@ Cache hit, replaying
 [echo.js] --------------------------------
 [build.js] main process end
 
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] @test/replay-logs-chronological-order#build ✓
+      → Cache hit - output replayed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 > vite-plus run build 2>&1 # should hit the cache and make sure the replay order is chronological again
-Cache hit, replaying
+$ node build.js (✓ cache hit, replaying)
 [build.js] --------------------------------
 [build.js] start
 [echo.js] --------------------------------
@@ -382,8 +424,22 @@ Cache hit, replaying
 [echo.js] --------------------------------
 [build.js] main process end
 
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] @test/replay-logs-chronological-order#build ✓
+      → Cache hit - output replayed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 > vite-plus run build 2>&1 # should hit the cache and make sure the replay order is chronological again
-Cache hit, replaying
+$ node build.js (✓ cache hit, replaying)
 [build.js] --------------------------------
 [build.js] start
 [echo.js] --------------------------------
@@ -477,3 +533,17 @@ Cache hit, replaying
 [echo.js] 30303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030
 [echo.js] --------------------------------
 [build.js] main process end
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:  1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] @test/replay-logs-chronological-order#build ✓
+      → Cache hit - output replayed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

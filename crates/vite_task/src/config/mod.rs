@@ -93,9 +93,13 @@ impl ResolvedTask {
             task_group_id: TaskGroupId {
                 task_group_name: self.name.task_group_name.clone(),
                 config_path: self.resolved_config.config_dir.clone(),
-                is_builtin: self.name.package_name.is_none(),
+                is_builtin: self.is_builtin(),
             },
         }
+    }
+
+    pub fn is_builtin(&self) -> bool {
+        self.name.package_name.is_none()
     }
 
     pub fn matches(&self, task_request: &str, current_package_path: Option<&RelativePath>) -> bool {

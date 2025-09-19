@@ -1,5 +1,4 @@
 > vite-plus install --help # print help message
-Cache not found
 Install a package
 
 Usage:
@@ -21,12 +20,13 @@ aliases: add, i, in, ins, inst, insta, instal, isnt, isnta, isntal, isntall
 
 Run "npm help install" for more info
 
+
 > vite-plus install --production # https://docs.npmjs.com/cli/v10/commands/npm-install
-Cache not found
 
 added 1 package, and audited 2 packages in <variable>ms
 
 found 0 vulnerabilities
+
 
 npm warn config production Use `--omit=dev` instead.
 
@@ -35,10 +35,11 @@ npm warn config production Use `--omit=dev` instead.
 tslib
 
 > vite-plus install --production # install again hit cache
-Cache hit, replaying
+✓ cache hit, replaying
 
 added 1 package, and audited 2 packages in <variable>ms
 
 found 0 vulnerabilities
+
 
 npm warn config production Use `--omit=dev` instead.
