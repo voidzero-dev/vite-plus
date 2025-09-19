@@ -208,6 +208,8 @@ const DEFAULT_PASSTHROUGH_ENVS: &[&str] = &[
     "COMPOSE_*",
     // Token patterns
     "*_TOKEN",
+    // oxc specific
+    "OXLINT_*",
 ];
 
 const SENSITIVE_PATTERNS: &[&str] = &[
@@ -605,6 +607,7 @@ mod tests {
             std::env::set_var("APP1_NAME", "app1_value");
             std::env::set_var("APP2_NAME", "app2_value");
             std::env::set_var("APP1_PASSWORD", "app1_password");
+            std::env::set_var("OXLINT_TSGOLINT_PATH", "/path/to/oxlint_tsgolint");
         }
 
         // Resolve envs multiple times
@@ -654,6 +657,7 @@ mod tests {
         assert!(all_envs.contains_key("APP1_PASSWORD"));
         assert!(all_envs.contains_key("APP1_TOKEN"));
         assert!(all_envs.contains_key("APP2_TOKEN"));
+        assert!(all_envs.contains_key("OXLINT_TSGOLINT_PATH"));
 
         // VITE_TASK_EXECUTION_ENV should always be added automatically
         assert!(all_envs.contains_key("VITE_TASK_EXECUTION_ENV"));
@@ -674,6 +678,7 @@ mod tests {
             std::env::remove_var("APP1_PASSWORD");
             std::env::remove_var("APP1_TOKEN");
             std::env::remove_var("APP2_TOKEN");
+            std::env::remove_var("OXLINT_TSGOLINT_PATH");
         }
     }
 

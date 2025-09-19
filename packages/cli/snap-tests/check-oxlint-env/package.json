@@ -1,0 +1,9 @@
+{
+  "name": "check-oxlint-env",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "check": "node check.js",
+    "check-nested": "vite run check"
+  }
+}

@@ -31,9 +31,10 @@ export async function lint(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
+  const paths = [process.cwd(), dirname(fileURLToPath(import.meta.url))];
   // Resolve the oxlint binary directly (it's a native executable)
   const binPath = require.resolve('oxlint/bin/oxlint', {
-    paths: [process.cwd(), dirname(fileURLToPath(import.meta.url))],
+    paths,
   });
 
   return {
@@ -45,6 +46,9 @@ export async function lint(): Promise<{
       JS_RUNTIME_NAME: process.release.name,
       // Indicate that vite-plus is the package manager invoking oxlint
       NODE_PACKAGE_MANAGER: 'vite-plus',
+      OXLINT_TSGOLINT_PATH: require.resolve('oxlint-tsgolint/bin/tsgolint.js', {
+        paths,
+      }),
     },
   };
 }
