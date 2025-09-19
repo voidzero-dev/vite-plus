@@ -1,16 +1,28 @@
 {
-  "name": "vite-plus-template-monorepo",
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "tools/*"
+  ],
   "scripts": {
     "ready": "vite run lint && vite run test && vite run prepublishOnly",
     "dev": "vite run website#dev",
     "lint": "vite lint --type-aware",
-    "test": "vite test",
+    "test": "vite test --passWithNoTests",
     "prepublishOnly": "vite run -r build"
   },
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "catalog:"
+    "vite": "catalog:"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "catalog:"
+    }
+  },
+  "resolutions": {
+    "vite": "catalog:"
   }
 }

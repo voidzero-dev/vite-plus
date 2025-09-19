@@ -1,79 +1,92 @@
 > vp new -h # show help
+Usage: vite new [OPTION]... [DIRECTORY]
 
-vite new - Create a new Vite+ project
-
-Usage:
-  vite new [project-name] [project-type] [options]
-  vite new --app <path>    Add an app to existing monorepo
-  vite new --lib <path>    Add a library to existing monorepo
-
-Arguments:
-  project-name    Name of the project to create
-  project-type    Type of project: monorepo, mono, singlerepo, single
+Create a new Vite+ project in TypeScript.
+With no arguments, start the CLI in interactive mode.
 
 Options:
-  --monorepo, -m      Create a monorepo project
-  --singlerepo, -s    Create a singlerepo project
-  --app <path>        Add an app package to existing monorepo
-  --lib <path>        Add a library package to existing monorepo
-  --help, -h          Show this help message
+  --monorepo                 create a monorepo project
+  --app                      add an app to existing monorepo, e.g.: vite new --app apps/website
+  --lib                      add a library to existing monorepo, e.g.: vite new --lib packages/utils
+  -t, --template NAME        use a specific template
+  --pm NAME                  use a specific package manager, e.g.: vite new --pm pnpm
+  --git                      init git repository
+  --overwrite                overwrite existing files
 
-Examples:
-  vite new                        Interactive mode (prompts for all options)
-  vite new my-project             Create project with prompts for type
-  vite new my-project monorepo   Create monorepo without prompts
-  vite new my-project -s          Create singlerepo using flag
-  vite new --app apps/my-app     Add app to current monorepo
-  vite new --lib packages/utils  Add library to current monorepo
+Available templates:
+vanilla-ts     vanilla
+vue-ts         vue
+react-ts       react
+react-swc-ts   react-swc
+preact-ts      preact
+lit-ts         lit
+svelte-ts      svelte
+solid-ts       solid
+qwik-ts        qwik
 
-Notes:
-  - MonoRepo is the default when prompted (press Enter to select)
-  - Press Ctrl+C to exit during prompts
+> vp new --template vanilla-ts --monorepo --pm pnpm --git false --overwrite hello-vite-plus # create monorepo
+│
+◇  Scaffolding project in hello-vite-plus/apps/website...
+│
+└  Done. Now run:
 
-
-> vp new my-project monorepo # create monorepo
-
-Creating monorepo project: my-project...
-✅ Successfully created monorepo project: my-project
-
-Next steps:
-  cd my-project
-  git init
+  cd hello-vite-plus
   vite run ready
   vite run dev
 
-To add new packages to your monorepo:
+  To add new packages to your monorepo:
+
   vite new --app apps/my-app
   vite new --lib packages/my-lib
 
-> cd my-project && vp new --app apps/my-app # add app
-Creating new app at apps/my-app...
-✅ Successfully created app at apps/my-app
 
-Next steps:
+> cd hello-vite-plus && ls # check files
+README.md
+apps
+package.json
+pnpm-workspace.yaml
+tsconfig.json
+vite.config.ts
+
+> cd hello-vite-plus && vp new --app --template vanilla-ts apps/my-app # add app
+│
+◇  Scaffolding project in apps/my-app...
+│
+└  Done. Now run:
+
   cd apps/my-app
+  vite run ready
   vite run dev
 
-> cd my-project && ls apps
+
+> cd hello-vite-plus && ls apps
 my-app
 website
 
-> cd my-project && vp new --lib packages/my-lib # add lib
-Creating new library at packages/my-lib...
-✅ Successfully created library at packages/my-lib
+> cd hello-vite-plus && vp new --lib packages/my-lib # add lib
+│
+◇  Scaffolding project in packages/my-lib...
+│
+└  Done. Now run:
 
-Next steps:
+  cd packages/my-lib
   vite run ready
+  vite run dev
 
-> cd my-project && ls packages
+
+> cd hello-vite-plus && ls packages
 my-lib
 
-> cd my-project && vp new --lib tools/my-tool # add lib new not exists tools directory
-Creating new library at tools/my-tool...
-✅ Successfully created library at tools/my-tool
+> cd hello-vite-plus && vp new --lib tools/my-tool # add lib new not exists tools directory
+│
+◇  Scaffolding project in tools/my-tool...
+│
+└  Done. Now run:
 
-Next steps:
+  cd tools/my-tool
   vite run ready
+  vite run dev
 
-> cd my-project && ls tools
+
+> cd hello-vite-plus && ls tools
 my-tool

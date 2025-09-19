@@ -3,17 +3,23 @@ packages:
   - packages/*
 
 catalog:
+  "@clack/prompts": ^0.11.0
   "@napi-rs/cli": ^3.1.5
   "@oxc-node/cli": ^0.0.32
   "@oxc-node/core": ^0.0.32
   "@types/node": ^24.4.0
   "@types/react": ^19.1.8
   "@types/react-dom": ^19.1.6
+  "@types/cross-spawn": ^6.0.6
+  create-vite: ^7.1.1
+  cross-spawn: ^7.0.5
   next: ^15.4.3
   oxfmt: ^0.2.0
   oxlint: ^1.15.0
   oxlint-tsgolint: ^0.2.0
   oxc-minify: ^0.82.1
+  picocolors: ^1.1.1
+  mri: ^1.2.0
   react: ^19.1.0
   react-dom: ^19.1.0
   rolldown: ^1.0.0-beta.38

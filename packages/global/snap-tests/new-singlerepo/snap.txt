@@ -1,10 +1,22 @@
-> vp new my-project singlerepo # create singlerepo
+> vp new --template vanilla-ts --monorepo false --pm pnpm --git false --overwrite hello-vite-plus # create singlerepo
+│
+◇  Scaffolding project in hello-vite-plus...
+│
+└  Done. Now run:
 
-Creating singlerepo project: my-project...
-✅ Successfully created singlerepo project: my-project
-
-Next steps:
-  cd my-project
-  git init
+  cd hello-vite-plus
   vite run ready
   vite run dev
+
+  To add new packages to your monorepo:
+
+  vite new --app apps/my-app
+  vite new --lib packages/my-lib
+
+
+> cd hello-vite-plus && ls # check files
+index.html
+package.json
+public
+src
+tsconfig.json

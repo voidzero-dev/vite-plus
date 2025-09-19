@@ -23,13 +23,19 @@
   },
   "dependencies": {
     "@voidzero-dev/vite-plus": "workspace:*",
+    "create-vite": "catalog:",
+    "cross-spawn": "catalog:",
     "oxlint": "catalog:",
     "rolldown-vite": "catalog:",
     "vitest": "catalog:"
   },
   "devDependencies": {
+    "@clack/prompts": "catalog:",
+    "@types/cross-spawn": "catalog:",
     "@voidzero-dev/vite-plus-tools": "workspace:",
-    "rolldown": "catalog:"
+    "rolldown": "catalog:",
+    "picocolors": "catalog:",
+    "mri": "catalog:"
   },
   "engines": {
     "node": ">=20.11.0"

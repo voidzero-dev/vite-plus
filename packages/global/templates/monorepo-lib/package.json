@@ -1,5 +1,6 @@
 {
   "name": "tsdown-starter",
+  "private": true,
   "version": "0.0.0",
   "description": "A starter for creating a TypeScript package.",
   "type": "module",
@@ -27,6 +28,7 @@
     "access": "public"
   },
   "scripts": {
+    "ready": "vite run build && vite run test",
     "build": "tsdown",
     "dev": "tsdown --watch",
     "test": "vite test",

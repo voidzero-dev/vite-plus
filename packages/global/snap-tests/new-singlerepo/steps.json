@@ -1,5 +1,6 @@
 {
   "commands": [
-    "vp new my-project singlerepo # create singlerepo"
+    "vp new --template vanilla-ts --monorepo false --pm pnpm --git false --overwrite hello-vite-plus # create singlerepo",
+    "cd hello-vite-plus && ls # check files"
   ]
 }
