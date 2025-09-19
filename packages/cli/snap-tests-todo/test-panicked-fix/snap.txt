@@ -18,3 +18,10 @@ Allowing / Denying Multiple Lints
    * `suspicious`  - code that is most likely wrong or useless.
    * `pedantic`    - lints which are rather strict or have occasional false positives.
    * `style`       - code that should be written in a more idiomatic way.
+   * `nursery`     - new lints that are still under development.
+
+
+thread 'tokio-runtime-worker' panicked at library/std/src/io/stdio.rs:1165:9:
+failed printing to stdout: Broken pipe (os error 32)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[vite+] run error: [Error: Panic in async function] { code: 'GenericFailure' }
