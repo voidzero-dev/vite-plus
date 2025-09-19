@@ -1,8 +1,9 @@
-use std::{io::Write as _, process::ExitStatus, sync::Arc};
+use std::{process::ExitStatus, sync::Arc};
 
 use futures_core::future::BoxFuture;
 use futures_util::future::FutureExt as _;
 use petgraph::{algo::toposort, stable_graph::StableDiGraph};
+use tokio::io::AsyncWriteExt as _;
 use vite_path::AbsolutePath;
 
 use crate::{
@@ -169,19 +170,19 @@ async fn get_cached_or_execute<'a>(
                     }
                     // replay
                     let std_outputs = Arc::clone(&cache_task.std_outputs);
-                    let mut stdout = std::io::stdout().lock();
-                    let mut stderr = std::io::stderr().lock();
+                    let mut stdout = tokio::io::stdout();
+                    let mut stderr = tokio::io::stderr();
                     for output_section in std_outputs.as_ref() {
                         match output_section.kind {
                             OutputKind::StdOut => {
-                                stdout.write_all(&output_section.content)?;
+                                stdout.write_all(&output_section.content).await?;
                                 // flush stdout to ensure the output is displayed in the correct order
-                                stdout.flush()?;
+                                stdout.flush().await?;
                             }
                             OutputKind::StdErr => {
-                                stderr.write_all(&output_section.content)?;
+                                stderr.write_all(&output_section.content).await?;
                                 // flush stderr too
-                                stderr.flush()?;
+                                stderr.flush().await?;
                             }
                         }
                     }
