@@ -16,7 +16,8 @@ trait ColorizeExt {
 }
 impl<T: owo_colors::OwoColorize> ColorizeExt for T {
     fn style(&self, style: Style) -> Styled<&Self> {
-        static NO_COLOR: LazyLock<bool> = LazyLock::new(|| std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()));
+        static NO_COLOR: LazyLock<bool> =
+            LazyLock::new(|| std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()));
         owo_colors::OwoColorize::style(self, if *NO_COLOR { Style::new() } else { style })
     }
 }
