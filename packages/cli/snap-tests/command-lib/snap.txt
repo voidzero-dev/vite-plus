@@ -1,10 +1,4 @@
 > vite-plus lib -h # should print the help message
-CI environment detected. Using default package manager: pnpm
-Cache not found
-Already up to date
-
-Done in <variable>ms using pnpm v<semver>
-Cache not found
 tsdown/0.15.1
 
 Usage:
@@ -55,27 +49,25 @@ Options:
   -h, --help                Display this message 
   -v, --version             Display version number 
 
+
 > vite-plus lib src/index.ts # should build the library
-Cache not found
 ℹ tsdown v<semver> powered by rolldown v<semver>
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.js  <variable> kB │ gzip: <variable> kB
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
+
 
 > ls dist # should have the library
 index.js
 
 > vite-plus lib src/index.ts # should hit cache
-Cache miss:  content changed
-Already up to date
-
-Done in <variable>ms using pnpm v<semver>
-Cache hit, replaying
+✓ cache hit, replaying
 ℹ tsdown v<semver> powered by rolldown v<semver>
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.js  <variable> kB │ gzip: <variable> kB
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
+
