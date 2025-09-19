@@ -1,1 +1,1 @@
-foo
+input_content

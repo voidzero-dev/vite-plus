@@ -1,9 +1,13 @@
 use std::{fmt::Display, sync::LazyLock};
 
+use compact_str::CompactStringExt;
+use diff::Diff;
+use itertools::Itertools;
 use owo_colors::{Style, Styled};
 
 use crate::{
     cache::{CacheMiss, FingerprintMismatch},
+    config::TaskCommandDiff,
     fingerprint::PostRunFingerprintMismatch,
     schedule::{CacheStatus, ExecutionFailure, ExecutionSummary, PreExecutionStatus},
 };
@@ -26,14 +30,11 @@ impl<T: owo_colors::OwoColorize> ColorizeExt for T {
 /// Displayed before the task is executed
 impl Display for PreExecutionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let display_command: Option<String> = if self.display_options.hide_command {
+        let display_command = format!("$ {}", &self.task.resolved_command.fingerprint.command);
+        let display_command: Option<Styled<&String>> = if self.display_options.hide_command {
             None
         } else {
-            Some(format!(
-                "~/{}$ {}",
-                &self.task.resolved_command.fingerprint.cwd,
-                &self.task.resolved_command.fingerprint.command
-            ))
+            Some(display_command.style(Style::new().cyan()))
         };
 
         if *IS_IN_CLI_TEST {
@@ -58,82 +59,46 @@ impl Display for PreExecutionStatus {
             CacheStatus::CacheMiss(CacheMiss::NotFound) => {
                 // No message for "Cache not found" as requested
                 tracing::debug!("{}", "Cache not found".style(Style::new().yellow()));
-                if let Some(display_command) = display_command {
-                    writeln!(
-                        f,
-                        "{} {}",
-                        "►".style(Style::new().bright_blue().bold()),
-                        display_command.style(Style::new().cyan())
-                    )?;
+                if let Some(display_command) = &display_command {
+                    writeln!(f, "{}", display_command)?;
                 }
             }
             CacheStatus::CacheMiss(CacheMiss::FingerprintMismatch(mismatch)) => {
+                if let Some(display_command) = &display_command {
+                    write!(f, "{}", display_command)?;
+                }
+
                 // Short, precise message about cache miss
                 let reason = match mismatch {
                     FingerprintMismatch::CommandFingerprintMismatch(_diff) => {
                         // For now, just say "command changed" for any command fingerprint mismatch
                         // The detailed analysis will be in the summary
-                        "command changed"
+                        format!("command changed")
                     }
                     FingerprintMismatch::PostRunFingerprintMismatch(
                         PostRunFingerprintMismatch::InputContentChanged { path },
                     ) => {
                         // Show just the filename for brevity
-                        return writeln!(
-                            f,
-                            "{} {} {}",
-                            "⚡".style(Style::new().yellow()),
-                            "Cache miss:".style(Style::new().yellow()),
-                            format!("input '{}' changed", path)
-                                .style(Style::new().yellow().dimmed())
-                        )
-                        .and_then(|_| {
-                            if let Some(display_command) = display_command {
-                                writeln!(
-                                    f,
-                                    "{} {}",
-                                    "►".style(Style::new().bright_blue().bold()),
-                                    display_command.style(Style::new().cyan())
-                                )
-                            } else {
-                                Ok(())
-                            }
-                        });
+                        format!("input '{}' was modified", path)
                     }
                 };
-
                 writeln!(
                     f,
-                    "{} {} {}",
-                    "⚡".style(Style::new().yellow()),
-                    "Cache miss:".style(Style::new().yellow()),
-                    reason.style(Style::new().yellow().dimmed())
+                    "{}",
+                    format_args!(" (✗ cache miss: {}, executing)", reason)
+                        .style(Style::new().yellow().dimmed())
                 )?;
-                if let Some(display_command) = display_command {
-                    writeln!(
-                        f,
-                        "{} {}",
-                        "►".style(Style::new().bright_blue().bold()),
-                        display_command.style(Style::new().cyan())
-                    )?;
-                }
             }
             CacheStatus::CacheHit => {
                 if !self.display_options.ignore_replay {
+                    if let Some(display_command) = display_command {
+                        write!(f, "{}", display_command)?;
+                    }
                     writeln!(
                         f,
-                        "{} {}",
-                        "✓".style(Style::new().green().bold()),
-                        "Cache hit".style(Style::new().green())
+                        "{}",
+                        " (✓ cache hit, replaying)".style(Style::new().green().dimmed()),
                     )?;
-                    if let Some(display_command) = display_command {
-                        writeln!(
-                            f,
-                            "{} {}",
-                            "↻".style(Style::new().green()),
-                            display_command.style(Style::new().dimmed())
-                        )?;
-                    }
                 }
             }
         }
@@ -198,7 +163,7 @@ impl Display for ExecutionSummary {
             f,
             "{}  {} {} {} {}",
             "Statistics:".style(Style::new().bold()),
-            format!("{}/{} tasks", total, total).style(Style::new().bright_white()),
+            format!("{} tasks", total).style(Style::new().bright_white()),
             format!("• {} cache hits", cache_hits).style(Style::new().green()),
             format!("• {} cache misses", cache_misses).style(Style::new().yellow()),
             if failed > 0 {
@@ -276,94 +241,91 @@ impl Display for ExecutionSummary {
                 CacheStatus::CacheHit => {
                     writeln!(
                         f,
-                        "      {} {}",
-                        "→".style(Style::new().green()),
-                        "Cache hit - output replayed".style(Style::new().green().dimmed())
+                        "      {}",
+                        "→ Cache hit - output replayed".style(Style::new().green()),
                     )?;
                 }
                 CacheStatus::CacheMiss(miss) => {
-                    write!(f, "      {} Cache miss: ", "→".style(Style::new().yellow()))?;
+                    write!(f, "      {}", "→ Cache miss: ".style(Style::new().yellow()))?;
 
                     match miss {
                         CacheMiss::NotFound => {
                             writeln!(
                                 f,
                                 "{}",
-                                "no previous cache entry found"
-                                    .style(Style::new().yellow().dimmed())
+                                "no previous cache entry found".style(Style::new().yellow())
                             )?;
                         }
                         CacheMiss::FingerprintMismatch(mismatch) => {
                             match mismatch {
-                                FingerprintMismatch::CommandFingerprintMismatch(diff) => {
+                                FingerprintMismatch::CommandFingerprintMismatch(
+                                    previous_command_fingerprint,
+                                ) => {
+                                    let current_command_fingerprint = &status
+                                        .pre_execution_status
+                                        .task
+                                        .resolved_command
+                                        .fingerprint;
                                     // Read diff fields directly
                                     let mut changes = Vec::new();
 
                                     // Check cwd changes
-                                    if diff.cwd.is_some() {
-                                        changes.push("working directory changed".to_string());
-                                    }
-
-                                    // Check command changes
-                                    // Based on debug output, NoChange is shown when command hasn't changed
-                                    // We'll use Debug formatting to check this for now
-                                    let cmd_debug = format!("{:?}", diff.command);
-                                    if !cmd_debug.contains("NoChange") {
-                                        changes.push("command changed".to_string());
-                                    }
-
-                                    // Check environment variable changes
-                                    // envs_without_pass_through.removed is a BTreeSet
-                                    if !diff.envs_without_pass_through.removed.is_empty() {
-                                        let removed_vars: Vec<String> = diff
-                                            .envs_without_pass_through
-                                            .removed
-                                            .iter()
-                                            .map(|k| format!("'{}'", k))
-                                            .collect();
+                                    if previous_command_fingerprint.cwd
+                                        != current_command_fingerprint.cwd
+                                    {
                                         changes.push(format!(
-                                            "environment variable(s) removed: {}",
-                                            removed_vars.join(", ")
-                                        ));
-                                    }
-                                    // envs_without_pass_through.altered is a BTreeMap with keys and values
-                                    if !diff.envs_without_pass_through.altered.is_empty() {
-                                        let altered_vars: Vec<String> = diff
-                                            .envs_without_pass_through
-                                            .altered
-                                            .keys()
-                                            .map(|k| format!("'{}'", k))
-                                            .collect();
-                                        changes.push(format!(
-                                            "environment variable(s) changed: {}",
-                                            altered_vars.join(", ")
+                                            "working directory changed from {} to {}",
+                                            &previous_command_fingerprint.cwd,
+                                            &current_command_fingerprint.cwd
                                         ));
                                     }
 
-                                    // Check pass-through env changes
-                                    // pass_through_envs is a BTreeSetDiff with added and removed fields
-                                    if !diff.pass_through_envs.added.is_empty() {
-                                        let added_vars: Vec<String> = diff
-                                            .pass_through_envs
-                                            .added
-                                            .iter()
-                                            .map(|k| format!("'{}'", k))
-                                            .collect();
+                                    if previous_command_fingerprint.command
+                                        != current_command_fingerprint.command
+                                    {
                                         changes.push(format!(
-                                            "pass-through env(s) added: {}",
-                                            added_vars.join(", ")
+                                            "command changed from {} to {}",
+                                            &previous_command_fingerprint.command,
+                                            &current_command_fingerprint.command
                                         ));
                                     }
-                                    if !diff.pass_through_envs.removed.is_empty() {
-                                        let removed_vars: Vec<String> = diff
-                                            .pass_through_envs
-                                            .removed
-                                            .iter()
-                                            .map(|k| format!("'{}'", k))
-                                            .collect();
+
+                                    if previous_command_fingerprint.pass_through_envs
+                                        != current_command_fingerprint.pass_through_envs
+                                    {
                                         changes.push(format!(
-                                            "pass-through env(s) removed: {}",
-                                            removed_vars.join(", ")
+                                            "pass-through env configuration changed from [{:?}] to [{:?}]",
+                                            previous_command_fingerprint.pass_through_envs.iter().join(", "), 
+                                            current_command_fingerprint.pass_through_envs.iter().join(", ")
+                                        ));
+                                    }
+
+                                    let mut previous_envs = previous_command_fingerprint
+                                        .envs_without_pass_through
+                                        .clone();
+                                    let current_envs =
+                                        &current_command_fingerprint.envs_without_pass_through;
+
+                                    for (key, current_value) in current_envs {
+                                        if let Some(previous_env_value) = previous_envs.remove(key)
+                                        {
+                                            if &previous_env_value != current_value {
+                                                changes.push(format!(
+                                                    "env {} value changed from '{}' to '{}'",
+                                                    key, previous_env_value, current_value,
+                                                ));
+                                            }
+                                        } else {
+                                            changes.push(format!(
+                                                "env {}={} added",
+                                                key, current_value,
+                                            ));
+                                        }
+                                    }
+                                    for (key, previous_value) in previous_envs {
+                                        changes.push(format!(
+                                            "env {}={} removed",
+                                            key, previous_value
                                         ));
                                     }
 
@@ -371,16 +333,13 @@ impl Display for ExecutionSummary {
                                         writeln!(
                                             f,
                                             "{}",
-                                            "configuration changed"
-                                                .style(Style::new().yellow().dimmed())
+                                            "configuration changed".style(Style::new().yellow())
                                         )?;
                                     } else {
                                         writeln!(
                                             f,
                                             "{}",
-                                            changes
-                                                .join("; ")
-                                                .style(Style::new().yellow().dimmed())
+                                            changes.join("; ").style(Style::new().yellow())
                                         )?;
                                     }
                                 }
@@ -391,7 +350,7 @@ impl Display for ExecutionSummary {
                                         f,
                                         "{}",
                                         format!("input file '{}' was modified", path)
-                                            .style(Style::new().yellow().dimmed())
+                                            .style(Style::new().yellow())
                                     )?;
                                 }
                             }

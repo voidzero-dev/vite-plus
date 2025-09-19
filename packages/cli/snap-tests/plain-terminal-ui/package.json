@@ -1,5 +1,6 @@
 {
+  "name": "root-package",
   "scripts": {
-    "failed_dep": "false && echo 1 && echo 2"
+    "my-task": "echo foo && vite lint"
   }
 }

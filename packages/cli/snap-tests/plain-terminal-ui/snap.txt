@@ -1,127 +1,89 @@
-> vite-plus run hello
-► ~/$ node hello.mjs
-foo undefined
+> FOO=1 vite-plus run hello
+$ node hello.mjs
+input_content 1
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 Task Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1/1 tasks • 0 cache hits • 1 cache misses 
+Statistics:  1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello ✓
+  [1] root-package#hello ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite-plus run hello # hit cache
-✓ Cache hit
-↻ ~/$ node hello.mjs
-foo undefined
+> FOO=1 vite-plus run hello # hit cache
+$ node hello.mjs (✓ cache hit, replaying)
+input_content 1
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 Task Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1/1 tasks • 1 cache hits • 0 cache misses 
+Statistics:  1 tasks • 1 cache hits • 0 cache misses 
 Performance:  100% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello ✓
+  [1] root-package#hello ✓
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> echo bar > input.txt
-> vite-plus run hello # input changed
-⚡ Cache miss: input 'input.txt' changed
-► ~/$ node hello.mjs
-bar undefined
+> FOO=2 vite-plus run hello # env changed
+$ node hello.mjs (✗ cache miss: command changed, executing)
+input_content 2
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 Task Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1/1 tasks • 0 cache hits • 1 cache misses 
+Statistics:  1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello ✓
-      → Cache miss: input file 'input.txt' was modified
+  [1] root-package#hello ✓
+      → Cache miss: env FOO value changed from '1' to '2'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> FOO=bar vite-plus run hello # env changed
-⚡ Cache miss: command changed
-► ~/$ node hello.mjs
-bar bar
+> FOO=2 BAR=1 vite-plus run hello # env added
+$ node hello.mjs (✗ cache miss: command changed, executing)
+input_content 2
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 Task Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1/1 tasks • 0 cache hits • 1 cache misses 
+Statistics:  1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello ✓
-      → Cache miss: environment variable(s) removed: 'FOO'
+  [1] root-package#hello ✓
+      → Cache miss: env BAR=1 added
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite-plus run hello # env removed
-✓ Cache hit
-↻ ~/$ node hello.mjs
-bar undefined
+> BAR=1 vite-plus run hello # env removed
+$ node hello.mjs (✗ cache miss: command changed, executing)
+input_content undefined
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 Task Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Statistics:  1/1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate
-
-Task Details:
-────────────────────────────────────────────────
-  [1] hello ✓
-      → Cache hit - output replayed
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-> json-edit vite-task.json "_.tasks.hello.passThroughEnvs=['PTE']"
-> vite-plus run hello # passThroughEnvs changed
-⚡ Cache miss: command changed
-► ~/$ node hello.mjs
-bar undefined
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 Task Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1/1 tasks • 0 cache hits • 1 cache misses 
+Statistics:  1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello ✓
-      → Cache miss: pass-through env(s) removed: 'PTE'
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-> json-edit vite-task.json "_.tasks.hello.cwd='subfolder'"
-> vite-plus run hello # subfolder changed
-⚡ Cache miss: command changed
-► ~/subfolder$ node hello.mjs
-hello from subfolder
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 Task Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Statistics:  1/1 tasks • 0 cache hits • 1 cache misses 
-Performance:  0% cache hit rate
-
-Task Details:
-────────────────────────────────────────────────
-  [1] hello ✓
-      → Cache miss: working directory changed
+  [1] root-package#hello ✓
+      → Cache miss: env FOO=2 removed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
