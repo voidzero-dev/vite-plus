@@ -1,5 +1,4 @@
 > vite-plus install --help | head -n 20 # print help message
-Cache not found
 Version <semver> (compiled to binary; bundled Node.js v<semver>)
 Usage: pnpm install [options]
 
@@ -21,7 +20,6 @@ Options:
       --aggregate-output                Aggregate output from child processes
 
 > vite-plus install --prod # https://pnpm.io/cli/install#--prod--p
-Cache not found
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -32,12 +30,13 @@ dependencies:
 devDependencies: skipped
 
 Done in <variable>ms using pnpm v<semver>
+
 
 > ls node_modules
 tslib
 
 > vite-plus install --prod # install again hit cache
-Cache hit, replaying
+✓ cache hit, replaying
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -48,3 +47,4 @@ dependencies:
 devDependencies: skipped
 
 Done in <variable>ms using pnpm v<semver>
+

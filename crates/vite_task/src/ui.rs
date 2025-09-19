@@ -151,7 +151,7 @@ impl Display for ExecutionSummary {
         writeln!(
             f,
             "{}",
-            "     Vite+ Task Runner • Execution Summary".style(Style::new().bold().bright_white())
+            "    Vite+ Task Runner • Execution Summary".style(Style::new().bold().bright_white())
         )?;
         writeln!(
             f,

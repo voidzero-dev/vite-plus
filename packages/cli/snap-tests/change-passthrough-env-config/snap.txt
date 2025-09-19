@@ -4,7 +4,7 @@ $ node -p process.env.MY_ENV
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-     Vite+ Task Runner • Execution Summary
+    Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Statistics:  1 tasks • 0 cache hits • 1 cache misses 
@@ -22,7 +22,7 @@ $ node -p process.env.MY_ENV (✓ cache hit, replaying)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-     Vite+ Task Runner • Execution Summary
+    Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Statistics:  1 tasks • 1 cache hits • 0 cache misses 
@@ -41,7 +41,7 @@ $ node -p process.env.MY_ENV (✗ cache miss: envs changed, executing)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-     Vite+ Task Runner • Execution Summary
+    Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Statistics:  1 tasks • 0 cache hits • 1 cache misses 
