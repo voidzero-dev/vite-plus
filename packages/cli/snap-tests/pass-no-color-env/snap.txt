@@ -1,4 +1,4 @@
-> vite-plus run check -- --foo # get NO_COLOR=true from default env
+> vite run check -- --foo # get NO_COLOR=true from default env
 $ node check.js --foo
 NO_COLOR=true, CI=true
 
@@ -16,7 +16,7 @@ Task Details:
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> NO_COLOR=false vite-plus run check -- --bar # get NO_COLOR=false from custom env
+> NO_COLOR=false vite run check -- --bar # get NO_COLOR=false from custom env
 $ node check.js --bar
 NO_COLOR=false, CI=true
 

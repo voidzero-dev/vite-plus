@@ -3,9 +3,9 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite-plus run script1 # script1 run, create the cache and should be success",
-    "vite-plus run script1 # script1 should hit the updated cache",
-    "vite-plus run script2 # script2 should be failure and not cache",
-    "vite-plus run script2 # script2 should be failure and not cache"
+    "vite run script1 # script1 run, create the cache and should be success",
+    "vite run script1 # script1 should hit the updated cache",
+    "vite run script2 # script2 should be failure and not cache",
+    "vite run script2 # script2 should be failure and not cache"
   ]
 }

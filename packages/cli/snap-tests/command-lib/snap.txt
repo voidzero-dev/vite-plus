@@ -1,4 +1,4 @@
-> vite-plus lib -h # should print the help message
+> vite lib -h # should print the help message
 tsdown/0.15.1
 
 Usage:
@@ -50,7 +50,7 @@ Options:
   -v, --version             Display version number 
 
 
-> vite-plus lib src/index.ts # should build the library
+> vite lib src/index.ts # should build the library
 ℹ tsdown v<semver> powered by rolldown v<semver>
 ℹ entry: src/index.ts
 ℹ Build start
@@ -62,7 +62,7 @@ Options:
 > ls dist # should have the library
 index.js
 
-> vite-plus lib src/index.ts # should hit cache
+> vite lib src/index.ts # should hit cache
 ✓ cache hit, replaying
 ℹ tsdown v<semver> powered by rolldown v<semver>
 ℹ entry: src/index.ts

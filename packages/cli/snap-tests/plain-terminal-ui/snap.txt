@@ -1,4 +1,4 @@
-> FOO=1 vite-plus run hello
+> FOO=1 vite run hello
 $ node hello.mjs
 input_content 1
 
@@ -16,7 +16,7 @@ Task Details:
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> FOO=1 vite-plus run hello # hit cache
+> FOO=1 vite run hello # hit cache
 $ node hello.mjs (✓ cache hit, replaying)
 input_content 1
 
@@ -34,7 +34,7 @@ Task Details:
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> FOO=2 vite-plus run hello # env changed
+> FOO=2 vite run hello # env changed
 $ node hello.mjs (✗ cache miss: envs changed, executing)
 input_content 2
 
@@ -52,7 +52,7 @@ Task Details:
       → Cache miss: env FOO value changed from '1' to '2'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> FOO=2 BAR=1 vite-plus run hello # env added
+> FOO=2 BAR=1 vite run hello # env added
 $ node hello.mjs (✗ cache miss: envs changed, executing)
 input_content 2
 
@@ -70,7 +70,7 @@ Task Details:
       → Cache miss: env BAR=1 added
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite-plus run hello # env removed
+> vite run hello # env removed
 $ node hello.mjs (✗ cache miss: envs changed, executing)
 input_content undefined
 
@@ -89,7 +89,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > echo bar > input.txt
-> vite-plus run hello # input changed
+> vite run hello # input changed
 $ node hello.mjs (✗ cache miss: content of input 'input.txt' changed, executing)
 bar undefined
 
@@ -108,7 +108,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > json-edit vite-task.json "_.tasks.hello.passThroughEnvs=['PTE']"
-> vite-plus run hello # passThroughEnvs changed
+> vite run hello # passThroughEnvs changed
 $ node hello.mjs (✗ cache miss: envs changed, executing)
 bar undefined
 
@@ -127,7 +127,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > json-edit vite-task.json "_.tasks.hello.cwd='subfolder'"
-> vite-plus run hello # cwd changed
+> vite run hello # cwd changed
 $ node hello.mjs (✗ cache miss: working directory changed, executing)
 hello from subfolder
 

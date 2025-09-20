@@ -1,4 +1,4 @@
-# `vite-plus install`
+# `vite install`
 
 ## Overview
 

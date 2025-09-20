@@ -3,10 +3,10 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite-plus run build 2>&1 # initial run, create the cache",
-    "vite-plus run build 2>&1 # should hit the cache",
-    "vite-plus run build 2>&1 # should hit the cache and make sure the replay order is chronological",
-    "vite-plus run build 2>&1 # should hit the cache and make sure the replay order is chronological again",
-    "vite-plus run build 2>&1 # should hit the cache and make sure the replay order is chronological again"
+    "vite run build 2>&1 # initial run, create the cache",
+    "vite run build 2>&1 # should hit the cache",
+    "vite run build 2>&1 # should hit the cache and make sure the replay order is chronological",
+    "vite run build 2>&1 # should hit the cache and make sure the replay order is chronological again",
+    "vite run build 2>&1 # should hit the cache and make sure the replay order is chronological again"
   ]
 }

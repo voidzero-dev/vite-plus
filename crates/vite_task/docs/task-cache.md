@@ -498,10 +498,10 @@ The cache location can be configured via environment variable:
 
 ```bash
 # Custom cache location
-VITE_CACHE_PATH=/tmp/vite-cache vite-plus run build
+VITE_CACHE_PATH=/tmp/vite-cache vite run build
 
 # Default: node_modules/.vite/task-cache in workspace root
-vite-plus run build
+vite run build
 ```
 
 ### Task-Level Cache Control
@@ -614,7 +614,7 @@ CommandFingerprint {
 ### Example: Built-in Task Cache Key
 
 ```rust
-// Built-in task: vite-plus lint
+// Built-in task: vite lint
 TaskRunKey {
     task_id: TaskId {
         task_group_id: TaskGroupId {
@@ -645,10 +645,10 @@ CommandFingerprint {
 
 ```bash
 # Enable debug logging
-VITE_LOG=debug vite-plus run build
+VITE_LOG=debug vite run build
 
 # Show cache operations
-VITE_LOG=trace vite-plus run build
+VITE_LOG=trace vite run build
 ```
 
 ### Debug Output Examples
@@ -787,23 +787,23 @@ No need to manually specify inputs - fspy captures actual dependencies.
 
 ```bash
 # Initial run creates command cache
-> vite-plus run script1
+> vite run script1
 Cache not found
 bar
 
 # Different task, same command - hits shared cache
-> vite-plus run script2
+> vite run script2
 Cache hit, replaying
 bar
 
 # File change invalidates shared cache
 > echo baz > foo.txt
-> vite-plus run script2
+> vite run script2
 Cache miss: foo.txt content changed
 baz
 
 # Original task benefits from updated cache
-> vite-plus run script1
+> vite run script1
 Cache hit, replaying
 baz
 ```
@@ -812,20 +812,20 @@ baz
 
 ```bash
 # Different args create separate caches
-> vite-plus run echo -- a
+> vite run echo -- a
 Cache not found
 a
 
-> vite-plus run echo -- b
+> vite run echo -- b
 Cache not found
 b
 
 # Each argument combination has its own cache
-> vite-plus run echo -- a
+> vite run echo -- a
 Cache hit, replaying
 a
 
-> vite-plus run echo -- b
+> vite run echo -- b
 Cache hit, replaying
 b
 ```
@@ -834,16 +834,16 @@ b
 
 ```bash
 # Different directories create separate caches for built-in tasks
-> cd folder1 && vite-plus lint
+> cd folder1 && vite lint
 Cache not found
 Found 0 warnings and 0 errors.
 
-> cd folder2 && vite-plus lint
+> cd folder2 && vite lint
 Cache not found  # Different cwd = different cache
 Found 0 warnings and 0 errors.
 
 # Each directory maintains its own cache
-> cd folder1 && vite-plus lint
+> cd folder1 && vite lint
 Cache hit, replaying
 Found 0 warnings and 0 errors.
 ```

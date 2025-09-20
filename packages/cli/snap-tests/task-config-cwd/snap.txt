@@ -1,4 +1,4 @@
-> vite-plus run hello
+> vite run hello
 $ node a.js
 hello from subfolder
 

@@ -3,9 +3,9 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite-plus run script1 # create the cache for 'echo hello'",
-    "vite-plus run script2 # script2 has the same command as script1, should hit and associate the cache",
+    "vite run script1 # create the cache for 'echo hello'",
+    "vite run script2 # script2 has the same command as script1, should hit and associate the cache",
     "json-edit package.json '_.scripts.script2 = \"echo world\"' # update the command of script2",
-    "vite-plus run script2 # should report cache miss due to command mismatch with the cache associated in step 2"
+    "vite run script2 # should report cache miss due to command mismatch with the cache associated in step 2"
   ]
 }

@@ -1,4 +1,4 @@
-> vite-plus lint --help | head -n 20 # print help message and no panicked
+> vite lint --help | head -n 20 # print help message and no panicked
 Usage: [-c=<./.oxlintrc.json>] [PATH]...
 
 Basic Configuration

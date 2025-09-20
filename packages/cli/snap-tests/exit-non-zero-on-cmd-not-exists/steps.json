@@ -3,6 +3,6 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite-plus command-not-exists # should exit with non-zero code"
+    "vite command-not-exists # should exit with non-zero code"
   ]
 }

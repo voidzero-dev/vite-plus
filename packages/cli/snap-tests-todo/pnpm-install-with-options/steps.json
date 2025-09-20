@@ -3,9 +3,9 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite-plus install --help | head -n 20 # print help message",
-    "vite-plus install --prod # https://pnpm.io/cli/install#--prod--p",
+    "vite install --help | head -n 20 # print help message",
+    "vite install --prod # https://pnpm.io/cli/install#--prod--p",
     "ls node_modules",
-    "vite-plus install --prod # install again hit cache"
+    "vite install --prod # install again hit cache"
   ]
 }

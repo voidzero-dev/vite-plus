@@ -275,9 +275,9 @@ module.exports = { ${pkg.name.replace('-', '_')} };
       private: true,
       workspaces: ['packages/*'],
       scripts: {
-        'build:all': 'vite-plus run build',
-        'test:all': 'vite-plus run test',
-        'lint:all': 'vite-plus run lint',
+        'build:all': 'vite run build',
+        'test:all': 'vite run test',
+        'lint:all': 'vite run lint',
       },
       devDependencies: {
         '@voidzero-dev/vite-plus': '*',

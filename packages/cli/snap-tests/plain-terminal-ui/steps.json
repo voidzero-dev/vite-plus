@@ -4,20 +4,20 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "FOO=1 vite-plus run hello",
-    "FOO=1 vite-plus run hello # hit cache",
+    "FOO=1 vite run hello",
+    "FOO=1 vite run hello # hit cache",
 
-    "FOO=2 vite-plus run hello # env changed",
-    "FOO=2 BAR=1 vite-plus run hello # env added",
-    "vite-plus run hello # env removed",
+    "FOO=2 vite run hello # env changed",
+    "FOO=2 BAR=1 vite run hello # env added",
+    "vite run hello # env removed",
 
     "echo bar > input.txt",
-    "vite-plus run hello # input changed",
+    "vite run hello # input changed",
 
     "json-edit vite-task.json \"_.tasks.hello.passThroughEnvs=['PTE']\"",
-    "vite-plus run hello # passThroughEnvs changed",
+    "vite run hello # passThroughEnvs changed",
 
     "json-edit vite-task.json \"_.tasks.hello.cwd='subfolder'\"",
-    "vite-plus run hello # cwd changed"
+    "vite run hello # cwd changed"
   ]
 }

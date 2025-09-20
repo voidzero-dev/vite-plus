@@ -3,8 +3,8 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite-plus i # install shortcut",
-    "vite-plus i # install shortcut hit cache",
-    "vite-plus install # install command still hit cache"
+    "vite i # install shortcut",
+    "vite i # install shortcut hit cache",
+    "vite install # install command still hit cache"
   ]
 }

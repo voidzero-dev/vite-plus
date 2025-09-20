@@ -4,8 +4,8 @@
   },
   "commands": [
     "# Test that lint picks up workspace root config",
-    "# vite-plus lint",
+    "# vite lint",
     "# Test that fmt picks up workspace root config - specify file",
-    "vite-plus fmt packages/app-b/index.js --check"
+    "vite fmt packages/app-b/index.js --check"
   ]
 }

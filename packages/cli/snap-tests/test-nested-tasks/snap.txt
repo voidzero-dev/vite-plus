@@ -1,6 +1,6 @@
-> vite run hello # create the cache for 'echo hello'
-$ echo hello
-hello
+> vite run script1 # simple task
+$ echo 'hello vite'
+hello vite
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -12,13 +12,14 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello ✓
+  [1] script1 ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite run hello # hit the cache
-$ echo hello (✓ cache hit, replaying)
-hello
+> vite run script2 # nested task should work
+$ vite run script1
+$ echo 'hello vite' (✓ cache hit, replaying)
+hello vite
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -30,15 +31,10 @@ Performance:  100% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello ✓
+  [1] script1 ✓
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite cache clean # clean the cache
-> vite run hello # cache miss after clean
-$ echo hello
-hello
-
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
@@ -49,25 +45,6 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello ✓
-      → Cache miss: no previous cache entry found
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-> cd subfolder && vite cache clean # cache can be located and cleaned from subfolder
-> vite run hello # cache miss after clean
-$ echo hello
-hello
-
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Vite+ Task Runner • Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Statistics:  1 tasks • 0 cache hits • 1 cache misses 
-Performance:  0% cache hit rate
-
-Task Details:
-────────────────────────────────────────────────
-  [1] hello ✓
+  [1] script2 ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

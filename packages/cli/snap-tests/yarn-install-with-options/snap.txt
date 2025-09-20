@@ -1,4 +1,4 @@
-> vite-plus install --help # print help message
+> vite install --help # print help message
 
   Usage: yarn install [flags]
 
@@ -65,7 +65,7 @@
 
 
 
-> vite-plus install --prod # https://classic.yarnpkg.com/en/docs/cli/install#toc-yarn-install-production-true-false
+> vite install --prod # https://classic.yarnpkg.com/en/docs/cli/install#toc-yarn-install-production-true-false
 yarn install v<semver>
 info No lockfile found.
 [1/4] Resolving packages...
@@ -79,7 +79,7 @@ Done in <variable>ms.
 > ls node_modules
 tslib
 
-> vite-plus install --prod # install again hit cache
+> vite install --prod # install again hit cache
 ✓ cache hit, replaying
 yarn install v<semver>
 info No lockfile found.

@@ -3,9 +3,9 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "FOO=1 vite-plus run hello # create initial cache",
-    "FOO=2 vite-plus run hello # cache miss due to env change",
-    "FOO=1 vite-plus run hello # hit cache created in step 1",
-    "FOO=2 vite-plus run hello # hit cache created in step 2"
+    "FOO=1 vite run hello # create initial cache",
+    "FOO=2 vite run hello # cache miss due to env change",
+    "FOO=1 vite run hello # hit cache created in step 1",
+    "FOO=2 vite run hello # hit cache created in step 2"
   ]
 }

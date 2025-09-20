@@ -4,8 +4,8 @@
   },
   "commands": [
     "mkdir .git",
-    "vite-plus lint",
+    "vite lint",
     "echo hello > .git/foo.txt",
-    "vite-plus lint # changes inside .git should not invalidate cache"
+    "vite lint # changes inside .git should not invalidate cache"
   ]
 }

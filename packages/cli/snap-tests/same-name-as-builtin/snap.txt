@@ -1,9 +1,9 @@
-> vite-plus lint
+> vite lint
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
 
-> vite-plus run lint # lint script should have different cache from builtin lint
+> vite run lint # lint script should have different cache from builtin lint
 $ echo lint script
 lint script
 
@@ -22,13 +22,13 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > echo 'console.log(1);' > a.js
-> vite-plus lint
+> vite lint
 ✗ cache miss: content of input 'a.js' changed, executing
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
 
-> vite-plus run lint
+> vite run lint
 $ echo lint script (✓ cache hit, replaying)
 lint script
 

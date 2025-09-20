@@ -3,6 +3,6 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite-plus run hello"
+    "vite run hello"
   ]
 }

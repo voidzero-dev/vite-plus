@@ -1,4 +1,4 @@
-> vite-plus run script1 # initial run, create the cache
+> vite run script1 # initial run, create the cache
 $ cat foo.txt
 bar
 
@@ -16,7 +16,7 @@ Task Details:
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite-plus run script2 # script2 has the same command as script1, should hit the cache
+> vite run script2 # script2 has the same command as script1, should hit the cache
 $ cat foo.txt (✓ cache hit, replaying)
 bar
 
@@ -35,7 +35,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > echo baz > foo.txt # change the input file to invalidate the cache
-> vite-plus run script2 # script2 should report a cache miss, and update the cache
+> vite run script2 # script2 should report a cache miss, and update the cache
 $ cat foo.txt (✗ cache miss: content of input 'foo.txt' changed, executing)
 baz
 
@@ -53,7 +53,7 @@ Task Details:
       → Cache miss: content of input 'foo.txt' changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite-plus run script1 # script1 should hit the updated cache
+> vite run script1 # script1 should hit the updated cache
 $ cat foo.txt (✓ cache hit, replaying)
 baz
 

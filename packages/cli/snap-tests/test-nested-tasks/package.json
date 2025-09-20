@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "script1": "echo 'hello vite'",
+    "script2": "vite run script1"
+  }
+}

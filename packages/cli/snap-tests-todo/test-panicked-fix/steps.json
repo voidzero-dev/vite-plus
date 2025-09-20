@@ -3,6 +3,6 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite-plus lint --help | head -n 20 # print help message and no panicked"
+    "vite lint --help | head -n 20 # print help message and no panicked"
   ]
 }

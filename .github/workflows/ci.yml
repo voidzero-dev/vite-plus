@@ -101,12 +101,12 @@ jobs:
       - name: Print help for built-in commands
         run: |
           export PATH="$PATH:$(pwd)/packages/cli/bin"
-          vite-plus -h
-          vite-plus run -h
-          vite-plus lint -h
-          vite-plus test -h
-          vite-plus build -h
-          vite-plus fmt -h
+          vite -h
+          vite run -h
+          vite lint -h
+          vite test -h
+          vite build -h
+          vite fmt -h
 
   cli-e2e-test:
     name: CLI E2E test

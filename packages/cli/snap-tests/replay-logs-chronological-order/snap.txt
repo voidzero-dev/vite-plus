@@ -1,4 +1,4 @@
-> vite-plus run build 2>&1 # initial run, create the cache
+> vite run build 2>&1 # initial run, create the cache
 $ node build.js
 [build.js] --------------------------------
 [build.js] start
@@ -108,7 +108,7 @@ Task Details:
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite-plus run build 2>&1 # should hit the cache
+> vite run build 2>&1 # should hit the cache
 $ node build.js (✓ cache hit, replaying)
 [build.js] --------------------------------
 [build.js] start
@@ -218,7 +218,7 @@ Task Details:
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite-plus run build 2>&1 # should hit the cache and make sure the replay order is chronological
+> vite run build 2>&1 # should hit the cache and make sure the replay order is chronological
 $ node build.js (✓ cache hit, replaying)
 [build.js] --------------------------------
 [build.js] start
@@ -328,7 +328,7 @@ Task Details:
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite-plus run build 2>&1 # should hit the cache and make sure the replay order is chronological again
+> vite run build 2>&1 # should hit the cache and make sure the replay order is chronological again
 $ node build.js (✓ cache hit, replaying)
 [build.js] --------------------------------
 [build.js] start
@@ -438,7 +438,7 @@ Task Details:
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite-plus run build 2>&1 # should hit the cache and make sure the replay order is chronological again
+> vite run build 2>&1 # should hit the cache and make sure the replay order is chronological again
 $ node build.js (✓ cache hit, replaying)
 [build.js] --------------------------------
 [build.js] start

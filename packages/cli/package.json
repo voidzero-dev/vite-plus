@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "type": "module",
   "bin": {
-    "vite": "./bin/vite-plus",
-    "vite-plus": "./bin/vite-plus"
+    "vite": "./bin/vite",
+    "vite-plus": "./bin/vite"
   },
   "exports": {
     ".": {

@@ -1,4 +1,4 @@
-> vite-plus run hello # create caches for 'echo foo' and 'echo bar'
+> vite run hello # create caches for 'echo foo' and 'echo bar'
 $ echo foo
 foo
 
@@ -23,7 +23,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > json-edit package.json '_.scripts.hello = "echo baz && echo bar"' # update the first subcommand
-> vite-plus run hello # should report cache miss of the first subcommand, and hit cache of the second subcommand
+> vite run hello # should report cache miss of the first subcommand, and hit cache of the second subcommand
 $ echo baz (✗ cache miss: command changed, executing)
 baz
 
@@ -48,7 +48,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > json-edit package.json '_.scripts.hello = "echo bar"' # remove the first subcommand, now the second subcommand becomes the first
-> vite-plus run hello # can still hit cache even the subcommand index changed
+> vite run hello # can still hit cache even the subcommand index changed
 $ echo bar (✓ cache hit, replaying)
 bar
 

@@ -3,7 +3,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite-plus run check -- --foo # get NO_COLOR=true from default env",
-    "NO_COLOR=false vite-plus run check -- --bar # get NO_COLOR=false from custom env"
+    "vite run check -- --foo # get NO_COLOR=true from default env",
+    "NO_COLOR=false vite run check -- --bar # get NO_COLOR=false from custom env"
   ]
 }

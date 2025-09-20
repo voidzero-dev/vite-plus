@@ -1,4 +1,4 @@
-> vite-plus i # install shortcut
+> vite i # install shortcut
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -9,7 +9,7 @@ dependencies:
 Done in <variable>ms using pnpm v<semver>
 
 
-> vite-plus i # install shortcut hit cache
+> vite i # install shortcut hit cache
 ✓ cache hit, replaying
 Packages: +<variable>
 +<repeat>
@@ -21,7 +21,7 @@ dependencies:
 Done in <variable>ms using pnpm v<semver>
 
 
-> vite-plus install # install command still hit cache
+> vite install # install command still hit cache
 ✓ cache hit, replaying
 Packages: +<variable>
 +<repeat>

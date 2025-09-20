@@ -35,7 +35,7 @@ The positive and negative forms of a flag are mutually exclusive. You cannot use
 
 ```bash
 # This will result in an error
-vite-plus run --recursive --no-recursive build
+vite run --recursive --no-recursive build
 ```
 
 ### Precedence
@@ -44,7 +44,7 @@ When only the negative form is used, it takes precedence and explicitly sets the
 
 ```bash
 # Explicitly disable topological ordering
-vite-plus run build -r --no-topological
+vite run build -r --no-topological
 ```
 
 ### Default Values
@@ -54,23 +54,23 @@ The negative flags are particularly useful for overriding default behaviors:
 - `--recursive` with `--no-topological`: By default, recursive runs enable topological ordering. Use `--no-topological` to disable it:
   ```bash
   # Recursive run WITHOUT topological ordering
-  vite-plus run build -r --no-topological
+  vite run build -r --no-topological
   ```
 
 ## Examples
 
 ```bash
 # Run with debugging disabled (useful if debug is enabled by default in config)
-vite-plus --no-debug build
+vite --no-debug build
 
 # Recursive build without topological ordering
-vite-plus run build --recursive --no-topological
+vite run build --recursive --no-topological
 
 # Explicitly disable parallel execution
-vite-plus run build --no-parallel
+vite run build --no-parallel
 
 # Run tests sequentially, not in parallel
-vite-plus run test --no-parallel
+vite run test --no-parallel
 ```
 
 ## Implementation Details

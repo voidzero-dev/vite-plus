@@ -3,9 +3,9 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite-plus lib -h # should print the help message",
-    "vite-plus lib src/index.ts # should build the library",
+    "vite lib -h # should print the help message",
+    "vite lib src/index.ts # should build the library",
     "ls dist # should have the library",
-    "vite-plus lib src/index.ts # should hit cache"
+    "vite lib src/index.ts # should hit cache"
   ]
 }

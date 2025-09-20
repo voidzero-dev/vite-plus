@@ -3,9 +3,9 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite-plus run echo -- a",
-    "vite-plus run echo -- b # should create separate caches for different args",
-    "vite-plus run echo -- a # should hit the cache created in step 1",
-    "vite-plus run echo -- b # should hit the cache created in step 2"
+    "vite run echo -- a",
+    "vite run echo -- b # should create separate caches for different args",
+    "vite run echo -- a # should hit the cache created in step 1",
+    "vite run echo -- b # should hit the cache created in step 2"
   ]
 }

@@ -3,11 +3,11 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite-plus run hello # create the cache for 'echo hello'",
-    "vite-plus run hello # hit the cache",
-    "vite-plus cache clean # clean the cache",
-    "vite-plus run hello # cache miss after clean",
-    "cd subfolder && vite-plus cache clean # cache can be located and cleaned from subfolder",
-    "vite-plus run hello # cache miss after clean"
+    "vite run hello # create the cache for 'echo hello'",
+    "vite run hello # hit the cache",
+    "vite cache clean # clean the cache",
+    "vite run hello # cache miss after clean",
+    "cd subfolder && vite cache clean # cache can be located and cleaned from subfolder",
+    "vite run hello # cache miss after clean"
   ]
 }
