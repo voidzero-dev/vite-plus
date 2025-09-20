@@ -16,6 +16,7 @@ const {
   cyan,
   green,
   greenBright,
+  gray,
   magenta,
   red,
   redBright,
@@ -346,6 +347,35 @@ const TEMPLATES = FRAMEWORKS.map((f) => f.variants.map((v) => v.name)).reduce(
   [],
 );
 
+// refactor from https://github.com/Gugustinette/create-tsdown/blob/main/src/options/index.ts#L51
+type LibraryTemplate = {
+  name: string;
+  display: string;
+};
+
+const LIBRARY_TEMPLATES: LibraryTemplate[] = [
+  {
+    name: 'default',
+    display: 'Default',
+  },
+  {
+    name: 'minimal',
+    display: 'Minimal',
+  },
+  {
+    name: 'react',
+    display: 'React',
+  },
+  {
+    name: 'vue',
+    display: 'Vue',
+  },
+  {
+    name: 'solid',
+    display: 'Solid',
+  },
+];
+
 const defaultTargetDir = 'vite-plus-project';
 
 async function init() {
@@ -481,38 +511,57 @@ async function init() {
   // 4. Choose a framework and variant
   let template = argTemplate;
   let hasInvalidArgTemplate = false;
-  if (argTemplate && !TEMPLATES.includes(argTemplate)) {
-    template = undefined;
-    hasInvalidArgTemplate = true;
+  if (argTemplate) {
+    if (argCreateLib && !LIBRARY_TEMPLATES.some((t) => t.name === argTemplate)) {
+      template = undefined;
+      hasInvalidArgTemplate = true;
+    } else if (argCreateApp && !TEMPLATES.includes(argTemplate)) {
+      template = undefined;
+      hasInvalidArgTemplate = true;
+    }
   }
-  if (!template && !argCreateLib) {
-    const framework = await prompts.select({
-      message: hasInvalidArgTemplate
-        ? `"${argTemplate}" isn't a valid template. Please choose from below: `
-        : 'Select a framework:',
-      options: FRAMEWORKS.map((framework) => {
-        const frameworkColor = framework.color;
-        return {
-          label: frameworkColor(framework.display || framework.name),
-          value: framework,
-        };
-      }),
-    });
-    if (prompts.isCancel(framework)) return cancel();
+  if (!template) {
+    if (argCreateLib) {
+      const libraryTemplate = await prompts.select({
+        message: 'Select a library template:',
+        options: LIBRARY_TEMPLATES.map((template) => {
+          return {
+            label: template.display || template.name,
+            value: template.name,
+          };
+        }),
+      });
+      if (prompts.isCancel(libraryTemplate)) return cancel();
+      template = libraryTemplate;
+    } else {
+      const framework = await prompts.select({
+        message: hasInvalidArgTemplate
+          ? `"${argTemplate}" isn't a valid template. Please choose from below: `
+          : 'Select a framework:',
+        options: FRAMEWORKS.map((framework) => {
+          const frameworkColor = framework.color;
+          return {
+            label: frameworkColor(framework.display || framework.name),
+            value: framework,
+          };
+        }),
+      });
+      if (prompts.isCancel(framework)) return cancel();
 
-    const variant = await prompts.select({
-      message: 'Select a variant:',
-      options: framework.variants.map((variant) => {
-        const variantColor = variant.color;
-        return {
-          label: variantColor(variant.display || variant.name),
-          value: variant.name,
-        };
-      }),
-    });
-    if (prompts.isCancel(variant)) return cancel();
+      const variant = await prompts.select({
+        message: 'Select a variant:',
+        options: framework.variants.map((variant) => {
+          const variantColor = variant.color;
+          return {
+            label: variantColor(variant.display || variant.name),
+            value: variant.name,
+          };
+        }),
+      });
+      if (prompts.isCancel(variant)) return cancel();
 
-    template = variant;
+      template = variant;
+    }
   }
 
   if (argCreateMonorepo) {
@@ -531,11 +580,36 @@ async function init() {
 
   // 5. Create project
   if (argCreateLib) {
-    prompts.log.step(`Scaffolding library in ${appOrLibName}...`);
-    // create a library project
-    initMonorepoLib(root, packageName);
+    prompts.log.step(`Scaffolding library with ${green(template)} in ${appOrLibName}...`);
+    // use create-tsdown to create a library project
+    const createTsdownBin = fileURLToPath(import.meta.resolve('create-tsdown/run'));
+    const createTsdownArgs = [
+      createTsdownBin,
+      '--overwrite',
+      '--template',
+      template,
+      '--name',
+      targetDir,
+    ];
+    const command = `create-tsdown ${createTsdownArgs.slice(1).join(' ')}`;
+    prompts.log.info(gray(`$ ${command} ...`));
+    const { status, stderr, stdout } = spawn.sync('node', createTsdownArgs, {
+      stdio: 'pipe',
+      cwd,
+    });
+    if (status && status > 0) {
+      prompts.log.error(stderr.toString());
+      prompts.log.error(stdout.toString());
+      process.exit(status);
+    }
+    // fix "Duplicated package name: react-components-starter or tsdown-starter" name to user input
+    editFile(path.join(root, 'package.json'), (content) => {
+      const pkg = JSON.parse(content);
+      pkg.name = path.basename(root);
+      return JSON.stringify(pkg, null, 2) + '\n';
+    });
   } else {
-    prompts.log.step(`Scaffolding project with ${template} in ${appOrLibName}...`);
+    prompts.log.step(`Scaffolding project with ${green(template)} in ${appOrLibName}...`);
     // use create-vite to create a app project
     const createViteBin = fileURLToPath(import.meta.resolve('create-vite/index.js'));
     const { customCommand } = FRAMEWORKS.flatMap((f) => f.variants).find((v) => v.name === template) ?? {};
@@ -549,9 +623,11 @@ async function init() {
         createViteBin,
         '--overwrite',
         '--template',
-        template!,
+        template,
         appName,
       ];
+      const command = `create-vite ${createViteArgs.slice(1).join(' ')}`;
+      prompts.log.info(gray(`$ ${command} ...`));
       const { status } = spawn.sync('node', createViteArgs, {
         stdio: 'inherit',
         cwd,
@@ -564,7 +640,7 @@ async function init() {
         createViteBin,
         '--overwrite',
         '--template',
-        template!,
+        template,
         targetDir,
       ];
       const { status, stderr, stdout } = spawn.sync('node', createViteArgs, {
@@ -576,9 +652,9 @@ async function init() {
         process.exit(status);
       }
     }
-
-    await fixPackageJsonForVitePlus(root, selectedPackageManager, isMonorepo);
   }
+
+  await fixPackageJsonForVitePlus(root, selectedPackageManager, isMonorepo);
 
   // first init, ask user to init git
   if (!isCreateAppOrLib) {
@@ -599,12 +675,12 @@ async function init() {
   }
 
   let doneMessage = '';
-  doneMessage += `Done. Now run:\n`;
+  doneMessage += `Done. Now run:`;
   if (rawRoot !== cwd) {
-    doneMessage += `\n  cd ${cdProjectName.includes(' ') ? `"${cdProjectName}"` : cdProjectName}`;
+    doneMessage += green(`\n  cd ${cdProjectName.includes(' ') ? `"${cdProjectName}"` : cdProjectName}`);
   }
-  doneMessage += `\n  vite run ready`;
-  doneMessage += `\n  vite run dev`;
+  doneMessage += green(`\n  vite run ready`);
+  doneMessage += green(`\n  vite run dev`);
 
   if (argCreateMonorepo) {
     doneMessage += `\n\n  To add new packages to your monorepo:\n`;
@@ -711,20 +787,6 @@ async function initMonorepo(rootProjectDir: string, packageManager: string) {
   renameFiles(rootProjectDir);
 }
 
-function initMonorepoLib(projectDir: string, projectName: string) {
-  const templateDir = path.resolve(
-    pkgRoot,
-    'templates/monorepo-lib',
-  );
-  copyDir(templateDir, projectDir);
-  editFile(path.join(projectDir, 'package.json'), (content) => {
-    const pkg = JSON.parse(content);
-    pkg.name = projectName;
-    return JSON.stringify(pkg, null, 2) + '\n';
-  });
-  renameFiles(projectDir);
-}
-
 const RENAME_FILES: Record<string, string> = {
   _gitignore: '.gitignore',
 };
@@ -762,6 +824,13 @@ async function fixPackageJsonForVitePlus(projectDir: string, selectedPackageMana
     if (pkg.scripts?.dev === 'vite') {
       pkg.scripts.dev = 'vite dev';
     }
+    // fix tsdown build and dev command
+    if (pkg.scripts?.build === 'tsdown') {
+      pkg.scripts.build = 'vite lib';
+    }
+    if (pkg.scripts?.dev === 'tsdown --watch') {
+      pkg.scripts.dev = 'vite lib --watch';
+    }
     // try to add ready script
     if (!pkg.scripts?.ready) {
       pkg.scripts.ready = 'vite lint --type-aware && vite run build && vite test --passWithNoTests';
@@ -773,7 +842,11 @@ async function fixPackageJsonForVitePlus(projectDir: string, selectedPackageMana
     return JSON.stringify(pkg, null, 2) + '\n';
   });
 
-  if (!isMonorepo) {
+  if (isMonorepo) {
+    // remove .github, .vscode directories
+    fs.rmSync(path.join(projectDir, '.github'), { recursive: true, force: true });
+    fs.rmSync(path.join(projectDir, '.vscode'), { recursive: true, force: true });
+  } else {
     await setPackageManager(projectDir, selectedPackageManager);
     // copy .npmrc file to install vite-plus
     if (selectedPackageManager === 'yarn') {

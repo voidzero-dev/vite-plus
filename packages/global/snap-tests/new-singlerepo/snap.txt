@@ -4,7 +4,6 @@
 ◇  Scaffolding project with vanilla-ts in hello-vite-plus...
 │
 └  Done. Now run:
-
   cd hello-vite-plus
   vite run ready
   vite run dev

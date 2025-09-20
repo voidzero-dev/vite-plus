@@ -19,10 +19,12 @@
   },
   "pnpm": {
     "overrides": {
-      "vite": "catalog:"
+      "vite": "catalog:",
+      "tsdown": "catalog:"
     }
   },
   "resolutions": {
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "tsdown": "catalog:"
   }
 }

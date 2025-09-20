@@ -30,7 +30,6 @@ qwik-ts        qwik
 ◇  Scaffolding project with vanilla-ts in hello-vite-plus/apps/website...
 │
 └  Done. Now run:
-
   cd hello-vite-plus
   vite run ready
   vite run dev
@@ -55,7 +54,6 @@ vite.config.ts
 ◇  Scaffolding project with vanilla-ts in apps/my-app...
 │
 └  Done. Now run:
-
   cd apps/my-app
   vite run ready
   vite run dev
@@ -65,13 +63,14 @@ vite.config.ts
 my-app
 website
 
-> cd hello-vite-plus && vp new --lib packages/my-lib # add lib
+> cd hello-vite-plus && vp new --lib packages/my-lib --template react # add lib
 ┌  Vite+ - The Unified Toolchain for the Web
 │
-◇  Scaffolding library in packages/my-lib...
+◇  Scaffolding library with react in packages/my-lib...
+│
+●  $ create-tsdown --overwrite --template react --name packages/my-lib ...
 │
 └  Done. Now run:
-
   cd packages/my-lib
   vite run ready
   vite run dev
@@ -80,13 +79,14 @@ website
 > cd hello-vite-plus && ls packages
 my-lib
 
-> cd hello-vite-plus && vp new --lib tools/my-tool # add lib new not exists tools directory
+> cd hello-vite-plus && vp new --lib tools/my-tool --template default # add lib new not exists tools directory
 ┌  Vite+ - The Unified Toolchain for the Web
 │
-◇  Scaffolding library in tools/my-tool...
+◇  Scaffolding library with default in tools/my-tool...
+│
+●  $ create-tsdown --overwrite --template default --name tools/my-tool ...
 │
 └  Done. Now run:
-
   cd tools/my-tool
   vite run ready
   vite run dev

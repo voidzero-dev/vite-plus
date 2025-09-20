@@ -8,6 +8,7 @@ export default defineConfig({
     'oxlint',
     /rolldown-vite/,
     'create-vite',
+    'create-tsdown',
     // FIXME: Calling `require` for "child_process" in an environment that doesn't expose the `require` function
     'cross-spawn',
     // FIXME: will lost colors if not external
