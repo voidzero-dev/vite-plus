@@ -369,6 +369,8 @@ async function init() {
 
   const cancel = () => prompts.cancel('Operation cancelled');
 
+  prompts.intro(`${blueBright('Vite+')} - The Unified Toolchain for the Web`);
+
   // --app and --lib should inside monorepo
   if (isCreateAppOrLib) {
     const monorepoRoot = findMonorepoRoot();
@@ -525,37 +527,63 @@ async function init() {
   const rawRoot = path.join(cwd, rawTargetDir);
   const cdProjectName = path.relative(cwd, rawRoot);
   const appOrLibName = path.relative(cwd, root);
-  prompts.log.step(`Scaffolding project in ${appOrLibName}...`);
+  const isMonorepo = argCreateMonorepo ?? isCreateAppOrLib;
 
   // 5. Create project
   if (argCreateLib) {
+    prompts.log.step(`Scaffolding library in ${appOrLibName}...`);
     // create a library project
     initMonorepoLib(root, packageName);
   } else {
+    prompts.log.step(`Scaffolding project with ${template} in ${appOrLibName}...`);
     // use create-vite to create a app project
     const createViteBin = fileURLToPath(import.meta.resolve('create-vite/index.js'));
-    const { status, stderr, stdout } = spawn.sync('node', [
-      createViteBin,
-      '--template',
-      template!,
-      targetDir,
-    ], {
-      // stdio: 'inherit',
-      stdio: 'pipe',
-    });
-    if (status && status > 0) {
-      console.error(stderr.toString());
-      console.error(stdout.toString());
-      process.exit(status);
+    const { customCommand } = FRAMEWORKS.flatMap((f) => f.variants).find((v) => v.name === template) ?? {};
+    if (customCommand) {
+      // print the custom command
+      const cwd = path.dirname(root);
+      fs.mkdirSync(cwd, { recursive: true });
+      const appName = isMonorepo ? path.basename(targetDir) : targetDir;
+      prompts.log.info(customCommand.replace('TARGET_DIR', appName) + ' ...');
+      const createViteArgs = [
+        createViteBin,
+        '--overwrite',
+        '--template',
+        template!,
+        appName,
+      ];
+      const { status } = spawn.sync('node', createViteArgs, {
+        stdio: 'inherit',
+        cwd,
+      });
+      if (status && status > 0) {
+        process.exit(status);
+      }
+    } else {
+      const createViteArgs = [
+        createViteBin,
+        '--overwrite',
+        '--template',
+        template!,
+        targetDir,
+      ];
+      const { status, stderr, stdout } = spawn.sync('node', createViteArgs, {
+        stdio: 'pipe',
+      });
+      if (status && status > 0) {
+        prompts.log.error(stderr.toString());
+        prompts.log.error(stdout.toString());
+        process.exit(status);
+      }
     }
 
-    await fixPackageJsonForVitePlus(root, selectedPackageManager, argCreateMonorepo ?? isCreateAppOrLib);
+    await fixPackageJsonForVitePlus(root, selectedPackageManager, isMonorepo);
   }
 
   // first init, ask user to init git
   if (!isCreateAppOrLib) {
     const initGit = typeof argGit === 'boolean' ? argGit : await prompts.confirm({
-      message: `Init git? (git init ${cdProjectName})`,
+      message: `Initialize git repository? (git init ${cdProjectName})`,
       initialValue: true,
     });
     if (prompts.isCancel(initGit)) return cancel();
@@ -578,7 +606,7 @@ async function init() {
   doneMessage += `\n  vite run ready`;
   doneMessage += `\n  vite run dev`;
 
-  if (!isCreateAppOrLib) {
+  if (argCreateMonorepo) {
     doneMessage += `\n\n  To add new packages to your monorepo:\n`;
     doneMessage += `\n  vite new --app apps/my-app`;
     doneMessage += `\n  vite new --lib packages/my-lib`;
@@ -738,6 +766,10 @@ async function fixPackageJsonForVitePlus(projectDir: string, selectedPackageMana
     if (!pkg.scripts?.ready) {
       pkg.scripts.ready = 'vite lint --type-aware && vite run build && vite test --passWithNoTests';
     }
+    // fix empty pkg.name
+    if (!pkg.name) {
+      pkg.name = path.basename(projectDir);
+    }
     return JSON.stringify(pkg, null, 2) + '\n';
   });
 
@@ -749,6 +781,11 @@ async function fixPackageJsonForVitePlus(projectDir: string, selectedPackageMana
     } else {
       copy(path.join(pkgRoot, 'templates/config/.npmrc'), path.join(projectDir, '.npmrc'));
     }
+  }
+
+  // remove package-lock.json when package manager is not npm
+  if (selectedPackageManager !== 'npm') {
+    fs.rmSync(path.join(projectDir, 'package-lock.json'), { force: true });
   }
 }
 

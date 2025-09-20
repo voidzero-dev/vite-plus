@@ -25,8 +25,9 @@ solid-ts       solid
 qwik-ts        qwik
 
 > vp new --template vanilla-ts --monorepo --pm pnpm --git false --overwrite hello-vite-plus # create monorepo
+┌  Vite+ - The Unified Toolchain for the Web
 │
-◇  Scaffolding project in hello-vite-plus/apps/website...
+◇  Scaffolding project with vanilla-ts in hello-vite-plus/apps/website...
 │
 └  Done. Now run:
 
@@ -49,8 +50,9 @@ tsconfig.json
 vite.config.ts
 
 > cd hello-vite-plus && vp new --app --template vanilla-ts apps/my-app # add app
+┌  Vite+ - The Unified Toolchain for the Web
 │
-◇  Scaffolding project in apps/my-app...
+◇  Scaffolding project with vanilla-ts in apps/my-app...
 │
 └  Done. Now run:
 
@@ -64,8 +66,9 @@ my-app
 website
 
 > cd hello-vite-plus && vp new --lib packages/my-lib # add lib
+┌  Vite+ - The Unified Toolchain for the Web
 │
-◇  Scaffolding project in packages/my-lib...
+◇  Scaffolding library in packages/my-lib...
 │
 └  Done. Now run:
 
@@ -78,8 +81,9 @@ website
 my-lib
 
 > cd hello-vite-plus && vp new --lib tools/my-tool # add lib new not exists tools directory
+┌  Vite+ - The Unified Toolchain for the Web
 │
-◇  Scaffolding project in tools/my-tool...
+◇  Scaffolding library in tools/my-tool...
 │
 └  Done. Now run:
 
