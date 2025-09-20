@@ -29,8 +29,8 @@
   },
   "scripts": {
     "ready": "vite run build && vite run test",
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build": "vite lib",
+    "dev": "vite lib --watch",
     "test": "vite test",
     "typecheck": "tsc --noEmit",
     "release": "bumpp && npm publish"

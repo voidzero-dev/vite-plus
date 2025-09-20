@@ -7,17 +7,17 @@ A starter for creating a TypeScript package.
 - Install dependencies:
 
 ```bash
-npm install
+vite install
 ```
 
 - Run the unit tests:
 
 ```bash
-npm run test
+vite run test
 ```
 
 - Build the library:
 
 ```bash
-npm run build
+vite run build
 ```
