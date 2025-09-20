@@ -195,6 +195,9 @@ impl ResolvedTask {
                 // built-in tasks don't show the actual command.
                 // For example, `vite lint`'s actual command is the path to the bundled oxlint,
                 // We don't want to show that to the user.
+                //
+                // When `vite lint` is run as the script of a user-defined task, the script itself
+                // will be displayed as the command.
                 hide_command: true,
                 hide_summary: false,
                 ignore_replay,
