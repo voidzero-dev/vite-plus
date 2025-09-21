@@ -755,6 +755,7 @@ async function initMonorepo(rootProjectDir: string, packageManager: string) {
     'templates/monorepo',
   );
   copyDir(templateDir, rootProjectDir);
+  renameFiles(rootProjectDir);
   if (packageManager === 'pnpm') {
     // remove workspaces field
     editFile(path.join(rootProjectDir, 'package.json'), (content) => {
@@ -784,11 +785,12 @@ async function initMonorepo(rootProjectDir: string, packageManager: string) {
   }
 
   await setPackageManager(rootProjectDir, packageManager);
-  renameFiles(rootProjectDir);
 }
 
 const RENAME_FILES: Record<string, string> = {
   _gitignore: '.gitignore',
+  _npmrc: '.npmrc',
+  '_yarnrc.yml': '.yarnrc.yml',
 };
 
 function renameFiles(projectDir: string) {

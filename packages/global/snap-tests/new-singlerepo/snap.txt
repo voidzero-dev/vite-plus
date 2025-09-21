@@ -9,7 +9,11 @@
   vite run dev
 
 
-> cd hello-vite-plus && ls # check files
+> cd hello-vite-plus && ls -a . # check files
+.
+..
+.gitignore
+.npmrc
 index.html
 package.json
 public

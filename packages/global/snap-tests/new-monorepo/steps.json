@@ -2,12 +2,12 @@
   "commands": [
     "vp new -h # show help",
     "vp new --template vanilla-ts --monorepo --pm pnpm --git false --overwrite hello-vite-plus # create monorepo",
-    "cd hello-vite-plus && ls # check files",
+    "cd hello-vite-plus && ls -a . # check files",
     "cd hello-vite-plus && vp new --app --template vanilla-ts apps/my-app # add app",
-    "cd hello-vite-plus && ls apps",
+    "cd hello-vite-plus && ls -a apps",
     "cd hello-vite-plus && vp new --lib packages/my-lib --template react # add lib",
-    "cd hello-vite-plus && ls packages",
+    "cd hello-vite-plus && ls -a packages",
     "cd hello-vite-plus && vp new --lib tools/my-tool --template default # add lib new not exists tools directory",
-    "cd hello-vite-plus && ls tools"
+    "cd hello-vite-plus && ls -a tools"
   ]
 }

@@ -40,7 +40,11 @@ qwik-ts        qwik
   vite new --lib packages/my-lib
 
 
-> cd hello-vite-plus && ls # check files
+> cd hello-vite-plus && ls -a . # check files
+.
+..
+.gitignore
+.npmrc
 README.md
 apps
 package.json
@@ -59,7 +63,9 @@ vite.config.ts
   vite run dev
 
 
-> cd hello-vite-plus && ls apps
+> cd hello-vite-plus && ls -a apps
+.
+..
 my-app
 website
 
@@ -76,7 +82,9 @@ website
   vite run dev
 
 
-> cd hello-vite-plus && ls packages
+> cd hello-vite-plus && ls -a packages
+.
+..
 my-lib
 
 > cd hello-vite-plus && vp new --lib tools/my-tool --template default # add lib new not exists tools directory
@@ -92,5 +100,7 @@ my-lib
   vite run dev
 
 
-> cd hello-vite-plus && ls tools
+> cd hello-vite-plus && ls -a tools
+.
+..
 my-tool
