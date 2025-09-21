@@ -44,6 +44,20 @@ impl TaskCommand {
     pub fn need_skip_cache(&self) -> bool {
         matches!(self, Self::Parsed(parsed_command) if parsed_command.program == "vite" || (parsed_command.program.ends_with("vite.js") && parsed_command.args.first() == Some(&("dev".into()))))
     }
+
+    // Whether the command starts a inner runner.
+    pub fn has_inner_runner(&self) -> bool {
+        let Self::Parsed(parsed_command) = self else {
+            return false;
+        };
+        if parsed_command.program != "vite" {
+            return false;
+        }
+        let Some(subcommand) = parsed_command.args.first() else {
+            return false;
+        };
+        matches!(subcommand.as_str(), "run" | "lint" | "fmt" | "build" | "test")
+    }
 }
 
 #[derive(Encode, Decode, Debug, Serialize, PartialEq, Eq, Diff, Clone)]

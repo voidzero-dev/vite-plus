@@ -1,0 +1,6 @@
+{
+  "name": "root-package",
+  "scripts": {
+    "hello": "vite lint"
+  }
+}

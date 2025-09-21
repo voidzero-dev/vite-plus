@@ -26,8 +26,14 @@ impl<T: owo_colors::OwoColorize> ColorizeExt for T {
 impl Display for PreExecutionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let display_command = format!("$ {}", &self.task.resolved_command.fingerprint.command);
+        let outer_command =
+            format!("$ {}", std::env::var("VITE_OUTER_COMMAND").unwrap_or_default());
         let display_command: Option<Styled<&String>> = if self.display_options.hide_command {
-            None
+            if outer_command != "$ " {
+                Some(outer_command.style(Style::new().cyan()))
+            } else {
+                None
+            }
         } else {
             Some(display_command.style(Style::new().cyan()))
         };

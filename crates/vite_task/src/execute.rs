@@ -342,6 +342,14 @@ pub async fn execute_task(
                     .args(&task_parsed_command.args)
                     .envs(&resolved_command.all_envs)
                     .envs(&task_parsed_command.envs)
+                    .env(
+                        "VITE_OUTER_COMMAND",
+                        if resolved_command.fingerprint.command.has_inner_runner() {
+                            resolved_command.fingerprint.command.to_string()
+                        } else {
+                            "".to_string()
+                        },
+                    )
                     .current_dir(base_dir.join(&resolved_command.fingerprint.cwd))
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())

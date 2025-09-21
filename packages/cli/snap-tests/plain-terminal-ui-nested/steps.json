@@ -1,0 +1,10 @@
+{
+  "env": {
+    "VITE_PLUS_CLI_TEST": "0",
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite run hello",
+    "vite run hello # report cache hit from the inner runner of `vite lint`"
+  ]
+}

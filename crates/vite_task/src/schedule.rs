@@ -141,9 +141,13 @@ impl ExecutionPlan {
         )
         .await?;
 
+        let has_inner_runner = step.resolved_config.config.command.has_inner_runner();
         let pre_execution_status = PreExecutionStatus { task: step, cache_status, display_options };
 
-        print!("{}", pre_execution_status);
+        // The inner runner is expected to display the command and the cache status. The outer runner will skip displaying them.
+        if !has_inner_runner {
+            print!("{}", pre_execution_status);
+        }
 
         // Execute or replay the task
         let exit_status = execute_or_replay.await?;

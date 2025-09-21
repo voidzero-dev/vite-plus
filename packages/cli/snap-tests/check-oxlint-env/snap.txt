@@ -18,7 +18,6 @@ Task Details:
 
 > rm -rf node_modules # clean cache
 > OXLINT_TSGOLINT_PATH=/path/to/oxlint_tsgolint2 vite run check-nested # get OXLINT_TSGOLINT_PATH env in nested task
-$ vite run check
 $ node check.js
 OXLINT_TSGOLINT_PATH=/path/to/oxlint_tsgolint2
 
