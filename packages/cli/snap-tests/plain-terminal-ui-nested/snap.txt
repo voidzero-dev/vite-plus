@@ -1,7 +1,12 @@
 > vite run hello
+$ vite lint ./src
+Found 0 warnings and 0 errors.
+Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+
+
 $ vite lint
 Found 0 warnings and 0 errors.
-Finished in <variable>ms on 0 files with <variable> rules using <variable> threads.
+Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
 
 
 
@@ -9,19 +14,28 @@ Finished in <variable>ms on 0 files with <variable> rules using <variable> threa
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Statistics:  2 tasks • 0 cache hits • 2 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello ✓
+  [1] root-package#hello(subcommand 0) ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [2] root-package#hello ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite run hello # report cache hit from the inner runner of `vite lint`
-$ vite lint (✓ cache hit, replaying)
+> echo 'console.log(123)' > a.ts
+> vite run hello # report cache status from the inner runner
+$ vite lint ./src (✓ cache hit, replaying)
 Found 0 warnings and 0 errors.
-Finished in <variable>ms on 0 files with <variable> rules using <variable> threads.
+Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+
+
+$ vite lint (✗ cache miss: content of input 'a.ts' changed, executing)
+Found 0 warnings and 0 errors.
+Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
 
 
 
@@ -29,11 +43,14 @@ Finished in <variable>ms on 0 files with <variable> rules using <variable> threa
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Statistics:  2 tasks • 0 cache hits • 2 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello ✓
+  [1] root-package#hello(subcommand 0) ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [2] root-package#hello ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

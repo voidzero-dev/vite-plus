@@ -5,6 +5,7 @@
   },
   "commands": [
     "vite run hello",
-    "vite run hello # report cache hit from the inner runner of `vite lint`"
+    "echo 'console.log(123)' > a.ts",
+    "vite run hello # report cache status from the inner runner"
   ]
 }
