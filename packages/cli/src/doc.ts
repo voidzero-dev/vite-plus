@@ -41,10 +41,10 @@ export async function doc(): Promise<{
     binPath,
     // TODO: provide envs inference API
     envs: {
-      // Provide Node.js runtime information for oxfmt's telemetry/compatibility
+      // Provide Node.js runtime information for telemetry/compatibility
       JS_RUNTIME_VERSION: process.versions.node,
       JS_RUNTIME_NAME: process.release.name,
-      // Indicate that vite-plus is the package manager invoking tsdown
+      // Indicate that vite-plus is the package manager
       NODE_PACKAGE_MANAGER: 'vite-plus',
     },
   };
