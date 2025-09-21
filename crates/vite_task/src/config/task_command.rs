@@ -14,7 +14,6 @@ use crate::{Error, cmd::TaskParsedCommand, execute::TaskEnvs};
 #[serde(untagged)]
 pub enum TaskCommand {
     ShellScript(Str),
-    #[serde(skip_deserializing)]
     Parsed(TaskParsedCommand),
 }
 
@@ -60,7 +59,7 @@ impl TaskCommand {
     }
 }
 
-#[derive(Encode, Decode, Debug, Serialize, PartialEq, Eq, Diff, Clone)]
+#[derive(Encode, Decode, Debug, Serialize, Deserialize, PartialEq, Eq, Diff, Clone)]
 #[diff(attr(#[derive(Debug)]))]
 pub struct ResolvedTaskConfig {
     pub config_dir: RelativePathBuf,

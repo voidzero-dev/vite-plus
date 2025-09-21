@@ -19,10 +19,10 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello(subcommand 0) ✓
+  [1] lint ✓
       → Cache miss: no previous cache entry found
   ·······················································
-  [2] root-package#hello ✓
+  [2] lint ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -43,14 +43,14 @@ Finished in <variable>ms on 2 files with <variable> rules using <variable> threa
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  2 tasks • 0 cache hits • 2 cache misses 
-Performance:  0% cache hit rate
+Statistics:  2 tasks • 1 cache hits • 1 cache misses 
+Performance:  50% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello(subcommand 0) ✓
-      → Cache miss: no previous cache entry found
+  [1] lint ✓
+      → Cache hit - output replayed
   ·······················································
-  [2] root-package#hello ✓
-      → Cache miss: no previous cache entry found
+  [2] lint ✓
+      → Cache miss: content of input 'a.ts' changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -62,7 +62,7 @@ pub struct ViteTaskJson {
     pub(crate) tasks: HashMap<Str, TaskConfigWithDeps>,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct DisplayOptions {
     /// Whether to hide the command ("~> echo hello") before the execution.
     pub hide_command: bool,
@@ -77,7 +77,7 @@ pub struct DisplayOptions {
 }
 
 /// A resolved task, ready to hit the cache or be executed
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResolvedTask {
     pub name: TaskName,
     pub args: Arc<[Str]>,
@@ -206,7 +206,7 @@ impl ResolvedTask {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ResolvedTaskCommand {
     pub fingerprint: CommandFingerprint,
     pub all_envs: HashMap<Str, Arc<OsStr>>,
@@ -245,7 +245,7 @@ impl std::fmt::Debug for ResolvedTaskCommand {
 /// - The resolver provides envs which become part of the fingerprint
 /// - If resolver provides different envs between runs, cache breaks
 /// - Each built-in task type must have unique task name to avoid cache collision
-#[derive(Encode, Decode, Debug, Serialize, PartialEq, Eq, Diff, Clone)]
+#[derive(Encode, Decode, Debug, Serialize, Deserialize, PartialEq, Eq, Diff, Clone)]
 #[diff(attr(#[derive(Debug)]))]
 pub struct CommandFingerprint {
     pub cwd: RelativePathBuf,

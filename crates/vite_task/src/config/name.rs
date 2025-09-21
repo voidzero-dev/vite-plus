@@ -1,12 +1,13 @@
 use std::fmt::Display;
 
+use serde::{Deserialize, Serialize};
 use vite_str::Str;
 
 /// For displaying and filtering tasks.
 ///
 /// Not suitable for uniquely identifying tasks as `package_name` isn't unique (may be duplicated and empty).
 /// See `TaskId` for the unique identifier of a task.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskName {
     /// The name of the script containing this task.
     /// For example, in script `"build": "echo A && echo B"`,

@@ -119,14 +119,6 @@ impl Display for ExecutionSummary {
         //     // No summary in test mode
         //     return Ok(());
         // }
-        if self
-            .execution_statuses
-            .iter()
-            .all(|status| status.pre_execution_status.task.is_builtin())
-        {
-            // No summary for empty status or built-in tasks
-            return Ok(());
-        }
 
         // Calculate statistics
         let total = self.execution_statuses.len();
@@ -142,7 +134,7 @@ impl Display for ExecutionSummary {
             }
 
             match &status.execution_result {
-                Ok(exit_status) if !exit_status.success() => failed += 1,
+                Ok(exit_status) if *exit_status != 0 => failed += 1,
                 Err(ExecutionFailure::SkippedDueToFailedDependency) => skipped += 1,
                 _ => {}
             }
@@ -222,7 +214,7 @@ impl Display for ExecutionSummary {
 
             // Execution result icon and status
             match &status.execution_result {
-                Ok(exit_status) if exit_status.success() => {
+                Ok(exit_status) if *exit_status == 0 => {
                     write!(f, " {}", "✓".style(Style::new().green().bold()))?;
                 }
                 Ok(exit_status) => {
@@ -230,8 +222,7 @@ impl Display for ExecutionSummary {
                         f,
                         " {} {}",
                         "✗".style(Style::new().red().bold()),
-                        format!("(exit code: {})", exit_status.code().unwrap_or(-1))
-                            .style(Style::new().red())
+                        format!("(exit code: {})", exit_status).style(Style::new().red())
                     )?;
                 }
                 Err(ExecutionFailure::SkippedDueToFailedDependency) => {

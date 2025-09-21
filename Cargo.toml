@@ -92,6 +92,7 @@ tracing-error = "0.2.1"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "serde"] }
 tui-term = "0.2.0"
 twox-hash = "2.1.1"
+uuid = "1.18.1"
 vite_error = { path = "crates/vite_error" }
 vite_glob = { path = "crates/vite_glob" }
 vite_package_manager = { path = "crates/vite_package_manager" }

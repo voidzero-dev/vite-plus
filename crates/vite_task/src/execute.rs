@@ -2,8 +2,9 @@ use std::{
     collections::hash_map::Entry,
     env::{join_paths, split_paths},
     ffi::OsStr,
+    path::PathBuf,
     process::{ExitStatus, Stdio},
-    sync::{Arc, Mutex},
+    sync::{Arc, LazyLock, Mutex},
 };
 
 use bincode::{Decode, Encode};
@@ -314,7 +315,17 @@ impl TaskEnvs {
     }
 }
 
+pub static CURRENT_EXECUTION_ID: LazyLock<Option<String>> =
+    LazyLock::new(|| std::env::var("VITE_TASK_EXECUTION_ID").ok());
+
+pub static EXECUTION_SUMMARY_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    std::env::var("VITE_TASK_EXECUTION_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| tempfile::tempdir().unwrap().keep())
+});
+
 pub async fn execute_task(
+    execution_id: &str,
     resolved_command: &ResolvedTaskCommand,
     base_dir: &AbsolutePath,
 ) -> Result<ExecutedTask, Error> {
@@ -350,6 +361,8 @@ pub async fn execute_task(
                             "".to_string()
                         },
                     )
+                    .env("VITE_TASK_EXECUTION_ID", execution_id)
+                    .env("VITE_TASK_EXECUTION_DIR", EXECUTION_SUMMARY_DIR.as_os_str())
                     .current_dir(base_dir.join(&resolved_command.fingerprint.cwd))
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())

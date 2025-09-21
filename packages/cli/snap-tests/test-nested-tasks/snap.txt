@@ -21,6 +21,7 @@ $ echo 'hello vite' (✓ cache hit, replaying)
 hello vite
 
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -32,18 +33,4 @@ Task Details:
 ────────────────────────────────────────────────
   [1] script1 ✓
       → Cache hit - output replayed
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Vite+ Task Runner • Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Statistics:  1 tasks • 0 cache hits • 1 cache misses 
-Performance:  0% cache hit rate
-
-Task Details:
-────────────────────────────────────────────────
-  [1] script2 ✓
-      → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

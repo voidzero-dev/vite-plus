@@ -11,11 +11,11 @@ use brush_parser::{
     unquote_str,
 };
 use diff::Diff;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use vite_str::Str;
 
 /// "FOO=BAR program arg1 arg2"
-#[derive(Encode, Decode, Serialize, Debug, PartialEq, Eq, Diff, Clone)]
+#[derive(Encode, Decode, Serialize, Deserialize, Debug, PartialEq, Eq, Diff, Clone)]
 #[diff(attr(#[derive(Debug)]))]
 pub struct TaskParsedCommand {
     pub envs: BTreeMap<Str, Str>,

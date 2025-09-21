@@ -3,7 +3,9 @@ use std::{process::ExitStatus, sync::Arc};
 use futures_core::future::BoxFuture;
 use futures_util::future::FutureExt as _;
 use petgraph::{algo::toposort, stable_graph::StableDiGraph};
+use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt as _;
+use uuid::Uuid;
 use vite_path::AbsolutePath;
 
 use crate::{
@@ -22,13 +24,13 @@ pub struct ExecutionPlan {
 }
 
 /// Status of a task before execution
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PreExecutionStatus {
     pub task: ResolvedTask,
     pub cache_status: CacheStatus,
     pub display_options: DisplayOptions,
 }
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum CacheStatus {
     /// Cache miss with reason.
     ///
@@ -39,8 +41,10 @@ pub enum CacheStatus {
 }
 
 /// Status of a task execution
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ExecutionStatus {
+    /// For identifying the task with inner runner and associating the inner summary
+    pub execution_id: String,
     pub pre_execution_status: PreExecutionStatus,
     /// `Ok` variant means the task was executed (or replayed), no matter the exit status is zero or non-zero.
     ///
@@ -51,19 +55,18 @@ pub struct ExecutionStatus {
     /// - `Ok(ExitStatus(1))`
     /// - `Err(SkippedDueToFailedDependency)`
     /// - `Err(SkippedDueToFailedDependency)`
-    pub execution_result: Result<ExitStatus, ExecutionFailure>,
+    pub execution_result: Result<i32, ExecutionFailure>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ExecutionFailure {
     /// this task was skipped because one of its dependencies failed
-    #[expect(dead_code)]
     SkippedDueToFailedDependency,
     // TODO: UserCancelled when implementing tui/webui
 }
 
 /// Summary of all task executions
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ExecutionSummary {
     pub execution_statuses: Vec<ExecutionStatus>,
 }
@@ -132,8 +135,11 @@ impl ExecutionPlan {
         tracing::debug!("Executing task {}", step.display_name());
         let display_options = step.display_options;
 
+        let execution_id = Uuid::new_v4().to_string();
+
         // Check cache and prepare execution
         let (cache_status, execute_or_replay) = get_cached_or_execute(
+            &execution_id,
             step.clone(),
             &mut workspace.task_cache,
             &workspace.fs,
@@ -152,13 +158,18 @@ impl ExecutionPlan {
         // Execute or replay the task
         let exit_status = execute_or_replay.await?;
         println!();
-        Ok(ExecutionStatus { pre_execution_status, execution_result: Ok(exit_status) })
+        Ok(ExecutionStatus {
+            execution_id,
+            pre_execution_status,
+            execution_result: Ok(exit_status.code().unwrap_or(1)),
+        })
     }
 }
 
 /// Replay the cached task if fingerprint matches. Otherwise execute the task.
 /// Returns (cache miss reason, function to replay or execute)
 async fn get_cached_or_execute<'a>(
+    execution_id: &'a str,
     task: ResolvedTask,
     cache: &'a mut TaskCache,
     fs: &'a impl FileSystem,
@@ -199,7 +210,8 @@ async fn get_cached_or_execute<'a>(
             CacheStatus::CacheMiss(cache_miss),
             async move {
                 let skip_cache = task.resolved_command.fingerprint.command.need_skip_cache();
-                let executed_task = execute_task(&task.resolved_command, base_dir).await?;
+                let executed_task =
+                    execute_task(execution_id, &task.resolved_command, base_dir).await?;
                 let exit_status = executed_task.exit_status;
                 if !skip_cache && exit_status.success() {
                     let cached_task = CommandCacheValue::create(executed_task, fs, base_dir)?;

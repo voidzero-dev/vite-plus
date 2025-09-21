@@ -30,9 +30,10 @@ use vite_str::Str;
 pub use crate::config::Workspace;
 use crate::{
     cache::TaskCache,
+    execute::{CURRENT_EXECUTION_ID, EXECUTION_SUMMARY_DIR},
     fmt::FmtConfig,
     lint::LintConfig,
-    schedule::{ExecutionPlan, ExecutionSummary},
+    schedule::{ExecutionPlan, ExecutionStatus, ExecutionSummary},
 };
 
 #[derive(Parser, Debug)]
@@ -275,7 +276,7 @@ pub async fn main<
         auto_install(&cwd).await?;
     }
 
-    let summary: ExecutionSummary = match &mut args.commands {
+    let mut summary: ExecutionSummary = match &mut args.commands {
         Commands::Run {
             tasks,
             recursive,
@@ -403,16 +404,54 @@ pub async fn main<
         }
     };
 
-    print!("{}", &summary);
+    let execution_summary_dir = EXECUTION_SUMMARY_DIR.as_path();
+    if let Some(current_execution_id) = &*CURRENT_EXECUTION_ID {
+        // We are in the inner runner, writing summary to EXECUTION_SUMMARY_DIR
+        let summary_path = execution_summary_dir.join(current_execution_id);
+        let summary_json = serde_json::to_string_pretty(&summary)?;
+        std::fs::write(summary_path, summary_json)?;
+    } else {
+        // We are in the outer runner, restoring summaries from EXECUTION_SUMMARY_DIR
+        loop {
+            // keep trying to restore until no more summaries can be restored
+            let mut next_restored_statuses: Vec<ExecutionStatus> = vec![];
+            let mut has_newly_restored = false;
+            for status in &summary.execution_statuses {
+                let summary_path = execution_summary_dir.join(&status.execution_id);
+                let Ok(summary_json) = std::fs::read_to_string(summary_path) else {
+                    next_restored_statuses.push(status.clone());
+                    continue;
+                };
+                has_newly_restored = true;
+                let inner_summary: ExecutionSummary = serde_json::from_str(&summary_json).unwrap();
+                next_restored_statuses.extend(inner_summary.execution_statuses);
+            }
+            summary.execution_statuses = next_restored_statuses;
+            if !has_newly_restored {
+                break;
+            }
+        }
+
+        let _ = std::fs::remove_dir_all(&execution_summary_dir);
+        if matches!(&args.commands, Commands::Run { .. }) {
+            print!("{}", &summary);
+        }
+    }
 
     // Return the first non-zero exit status, or zero if all succeeded
     Ok(summary
         .execution_statuses
         .iter()
         .find_map(|status| {
+            #[cfg(unix)]
+            use std::os::unix::process::ExitStatusExt;
+            #[cfg(windows)]
+            use std::os::windows::process::ExitStatusExt;
+
             // Err(ExecutionFailure) can be skipped because currently the only variant of `ExecutionFailure` is
             // `SkippedDueToFailedDependency`, which means there must be at least one task with non-zero exit status.
             if let Ok(exit_status) = status.execution_result
+                && let exit_status = ExitStatus::from_raw(exit_status as _)
                 && !exit_status.success()
             {
                 Some(exit_status)

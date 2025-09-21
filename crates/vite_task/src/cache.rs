@@ -3,7 +3,7 @@ use std::{fmt::Display, io::Write, sync::Arc};
 // use bincode::config::{Configuration, standard};
 use bincode::{Decode, Encode, decode_from_slice, encode_to_vec};
 use rusqlite::{Connection, OptionalExtension as _};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
@@ -51,13 +51,13 @@ pub struct TaskRunKey {
 
 const BINCODE_CONFIG: bincode::config::Configuration = bincode::config::standard();
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum CacheMiss {
     NotFound,
     FingerprintMismatch(FingerprintMismatch),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum FingerprintMismatch {
     /// Found the cache entry of the same task run, but the command fingerprint mismatches
     /// this happens when the command itself or an env changes.

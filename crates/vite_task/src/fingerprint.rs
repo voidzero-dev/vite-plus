@@ -36,7 +36,7 @@ pub enum PathFingerprint {
     Folder(Option<HashMap<Str, DirEntryKind>>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum PostRunFingerprintMismatch {
     InputContentChanged { path: RelativePathBuf },
 }
