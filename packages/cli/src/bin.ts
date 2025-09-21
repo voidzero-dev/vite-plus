@@ -10,6 +10,7 @@
  */
 
 import { run } from '../binding/index.js';
+import { doc } from './doc.js';
 import { fmt } from './fmt.js';
 import { resolveConfig } from './index.js';
 import { lib } from './lib.js';
@@ -38,6 +39,7 @@ run({
   fmt, // Resolves oxfmt binary for formatting
   vite, // Resolves vite binary for build/dev commands
   test, // Resolves vitest binary for test commands
+  doc, // Resolves vitepress binary for doc commands
   resolveUniversalViteConfig,
 }).catch((err) => {
   console.error('[vite+] run error:', err);

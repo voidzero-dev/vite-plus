@@ -2,6 +2,7 @@ mod cache;
 mod cmd;
 mod collections;
 mod config;
+mod doc;
 mod execute;
 mod fingerprint;
 mod fmt;
@@ -119,6 +120,12 @@ pub enum Commands {
         /// Arguments to pass to vite dev
         args: Vec<String>,
     },
+    /// Doc command, build a documentation
+    Doc {
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+        /// Arguments to pass to vitepress
+        args: Vec<String>,
+    },
     /// Manage the task cache
     Cache {
         #[clap(subcommand)]
@@ -180,6 +187,10 @@ pub struct CliOptions<
         Box<dyn Future<Output = Result<ResolveCommandResult, Error>>>,
     >,
     LibFn: Fn() -> Lib = Box<dyn Fn() -> Lib>,
+    Doc: Future<Output = Result<ResolveCommandResult, Error>> = Pin<
+        Box<dyn Future<Output = Result<ResolveCommandResult, Error>>>,
+    >,
+    DocFn: Fn() -> Doc = Box<dyn Fn() -> Doc>,
     ResolveUniversalViteConfig: Future<Output = Result<String, Error>> = Pin<
         Box<dyn Future<Output = Result<String, Error>>>,
     >,
@@ -192,6 +203,7 @@ pub struct CliOptions<
     pub vite: ViteFn,
     pub test: TestFn,
     pub lib: LibFn,
+    pub doc: DocFn,
     pub resolve_universal_vite_config: ResolveUniversalViteConfigFn,
 }
 
@@ -247,6 +259,8 @@ pub async fn main<
     TestFn: Fn() -> Test,
     Lib: Future<Output = Result<ResolveCommandResult, Error>>,
     LibFn: Fn() -> Lib,
+    Doc: Future<Output = Result<ResolveCommandResult, Error>>,
+    DocFn: Fn() -> Doc,
     ResolveUniversalViteConfig: Future<Output = Result<String, Error>>,
     ResolveUniversalViteConfigFn: Fn(String) -> ResolveUniversalViteConfig,
 >(
@@ -264,6 +278,8 @@ pub async fn main<
             TestFn,
             Lib,
             LibFn,
+            Doc,
+            DocFn,
             ResolveUniversalViteConfig,
             ResolveUniversalViteConfigFn,
         >,
@@ -386,6 +402,13 @@ pub async fn main<
             let mut workspace = Workspace::partial_load(cwd)?;
             let vite_fn = options.map(|o| o.vite).expect("dev command requires CliOptions");
             let summary = vite::create_vite("dev", vite_fn, &mut workspace, args).await?;
+            workspace.unload().await?;
+            summary
+        }
+        Commands::Doc { args } => {
+            let mut workspace = Workspace::partial_load(cwd)?;
+            let doc_fn = options.map(|o| o.doc).expect("doc command requires CliOptions");
+            let summary = doc::doc(doc_fn, &mut workspace, args).await?;
             workspace.unload().await?;
             summary
         }
@@ -826,6 +849,31 @@ mod tests {
             assert!(tasks.is_empty(), "Tasks should be empty when none provided");
         } else {
             panic!("Expected Run command");
+        }
+    }
+
+    #[test]
+    fn test_args_doc_command() {
+        let args = Args::try_parse_from(&["vite-plus", "doc"]).unwrap();
+        assert_eq!(args.task, None);
+        assert!(args.task_args.is_empty());
+        assert!(matches!(args.commands, Commands::Doc { .. }));
+        assert!(!args.debug);
+    }
+
+    #[test]
+    fn test_args_doc_command_with_args() {
+        let args =
+            Args::try_parse_from(&["vite-plus", "doc", "build", "--host", "0.0.0.0"]).unwrap();
+        assert_eq!(args.task, None);
+        assert!(args.task_args.is_empty());
+        if let Commands::Doc { args } = &args.commands {
+            assert_eq!(
+                args,
+                &vec!["build".to_string(), "--host".to_string(), "0.0.0.0".to_string()]
+            );
+        } else {
+            panic!("Expected Doc command");
         }
     }
 

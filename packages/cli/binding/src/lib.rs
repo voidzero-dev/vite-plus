@@ -47,6 +47,8 @@ pub struct CliOptions {
     pub test: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     /// Resolver function for the lib tool (tsdown)
     pub lib: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    /// Resolver function for the doc tool (vitepress)
+    pub doc: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     /// Optional working directory override
     pub cwd: Option<String>,
     /// Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side
@@ -73,7 +75,7 @@ impl From<JsCommandResolvedResult> for ResolveCommandResult {
     }
 }
 
-static BUILTIN_COMMANDS: &[&str] = &["lint", "fmt", "build", "test"];
+static BUILTIN_COMMANDS: &[&str] = &["lint", "fmt", "build", "test", "doc"];
 
 /// Main entry point for the CLI, called from JavaScript.
 ///
@@ -108,6 +110,7 @@ pub async fn run(options: CliOptions) -> Result<()> {
     let vite = options.vite;
     let test = options.test;
     let lib = options.lib;
+    let doc = options.doc;
     let resolve_universal_vite_config = options.resolve_universal_vite_config;
     // Call the Rust core with wrapped resolver functions
     let result = vite_task::main(
@@ -170,6 +173,17 @@ pub async fn run(options: CliOptions) -> Result<()> {
 
                 Ok(resolved.into())
             },
+            // Wrap the doc resolver to be callable from Rust
+            doc: || async {
+                let resolved = doc
+                    .call_async(Ok(()))
+                    .await
+                    .map_err(js_error_to_doc_error)?
+                    .await
+                    .map_err(js_error_to_doc_error)?;
+
+                Ok(resolved.into())
+            },
             resolve_universal_vite_config: |cwd: String| async {
                 let resolved = resolve_universal_vite_config
                     .call_async(Ok(cwd))
@@ -224,6 +238,11 @@ fn js_error_to_lib_error(err: napi::Error) -> Error {
     Error::LibFailed { status: err.status.to_string().into(), reason: err.to_string().into() }
 }
 
+/// Convert JavaScript errors to Rust doc errors
+fn js_error_to_doc_error(err: napi::Error) -> Error {
+    Error::DocFailed { status: err.status.to_string().into(), reason: err.to_string().into() }
+}
+
 /// Convert JavaScript errors to Rust resolve universal vite config errors
 fn js_error_to_resolve_universal_vite_config_error(err: napi::Error) -> Error {
     Error::ResolveUniversalViteConfigFailed {
@@ -250,6 +269,7 @@ fn parse_args() -> Args {
                 "fmt" => Commands::Fmt { args: forwarded_args },
                 "build" => Commands::Build { args: forwarded_args },
                 "test" => Commands::Test { args: forwarded_args },
+                "doc" => Commands::Doc { args: forwarded_args },
                 _ => unreachable!(),
             },
             debug: false,

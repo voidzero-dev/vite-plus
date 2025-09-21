@@ -140,6 +140,9 @@ importers:
       tsdown:
         specifier: 'catalog:'
         version: 0.15.1(typescript@5.9.2)
+      vitepress:
+        specifier: 'catalog:'
+        version: 2.0.0-alpha.12(@types/node@24.4.0)(esbuild@0.25.8)(jiti@2.5.1)(oxc-minify@0.82.3)(postcss@8.5.6)(typescript@5.9.2)(yaml@2.8.1)
       vitest:
         specifier: 'catalog:'
         version: 3.2.4(@types/node@24.4.0)(esbuild@0.25.8)(jiti@2.5.1)(yaml@2.8.1)

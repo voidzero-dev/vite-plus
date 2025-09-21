@@ -110,6 +110,9 @@ pub enum Error {
     #[error("Lib failed")]
     LibFailed { status: Str, reason: Str },
 
+    #[error("Doc failed, reason: {reason}")]
+    DocFailed { status: Str, reason: Str },
+
     #[error("Resolve universal vite config failed")]
     ResolveUniversalViteConfigFailed { status: Str, reason: Str },
 

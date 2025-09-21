@@ -10,6 +10,7 @@ Commands:
   lib      Lib command, build a library
   install  Install command. It will be passed to the package manager's install command currently
   dev      
+  doc      Doc command, build a documentation
   cache    Manage the task cache
   help     Print this message or the help of the given subcommand(s)
 
