@@ -11,6 +11,7 @@
     "typecheck": "tsc -b tsconfig.json",
     "lint": "vite lint && vite run typecheck",
     "test": "vite test && pnpm -r snap-test",
+    "doc": "vite run vite-docs#dev",
     "prepare": "husky"
   },
   "devDependencies": {
