@@ -1,0 +1,12 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite lib -h # lib help message",
+    "vite fmt -h # fmt help message",
+    "vite lint -h # lint help message",
+    "vite build -h # build help message",
+    "vite test -h # test help message"
+  ]
+}

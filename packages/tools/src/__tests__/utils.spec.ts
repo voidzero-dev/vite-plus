@@ -7,12 +7,15 @@ import { replaceUnstableOutput } from '../utils.ts';
 describe('replaceUnstableOutput', () => {
   test('replace unstable semver version', () => {
     const output = `
-v1.0.0
-v1.0.0-beta.1
-v1.0.0-beta.1+build.1
-1.0.0
-1.0.0-beta.1
-1.0.0-beta.1+build.1
+foo v1.0.0
+ v1.0.0-beta.1
+ v1.0.0-beta.1+build.1
+ 1.0.0
+ 1.0.0-beta.1
+ 1.0.0-beta.1+build.1
+tsdown/0.15.1
+vitest/3.2.4
+foo/v100.1.1000
     `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });

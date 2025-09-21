@@ -8,11 +8,7 @@
  * Used for: `vite-plus lib` command
  */
 
-import { createRequire } from 'node:module';
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const require = createRequire(import.meta.url);
+import { DEFAULT_ENVS, resolve } from './utils.js';
 
 /**
  * Resolves the Tsdown binary path and environment variables.
@@ -28,19 +24,13 @@ export async function lib(): Promise<{
   envs: Record<string, string>;
 }> {
   // Resolve the Tsdown CLI module directly
-  const binPath = require.resolve('tsdown/run', {
-    paths: [process.cwd(), dirname(fileURLToPath(import.meta.url))],
-  });
+  const binPath = resolve('tsdown/run');
 
   return {
     binPath,
     // TODO: provide envs inference API
     envs: {
-      // Provide Node.js runtime information for oxfmt's telemetry/compatibility
-      JS_RUNTIME_VERSION: process.versions.node,
-      JS_RUNTIME_NAME: process.release.name,
-      // Indicate that vite-plus is the package manager invoking tsdown
-      NODE_PACKAGE_MANAGER: 'vite-plus',
+      ...DEFAULT_ENVS,
     },
   };
 }

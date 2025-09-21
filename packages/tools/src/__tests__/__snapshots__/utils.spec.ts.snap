@@ -43,10 +43,13 @@ Done in <variable>ms using pnpm v<semver>"
 `;
 
 exports[`replaceUnstableOutput > replace unstable semver version 1`] = `
-"v1.0.0
-v1.0.0-beta.1
-v1.0.0-beta.1+build.1
-1.0.0
-1.0.0-beta.1
-1.0.0-beta.1+build.1"
+"foo v<semver>
+ v<semver>
+ v<semver>
+ <semver>
+ <semver>
+ <semver>
+tsdown/<semver>
+vitest/<semver>
+foo/v<semver>"
 `;

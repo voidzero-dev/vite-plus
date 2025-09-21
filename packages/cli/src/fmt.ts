@@ -11,11 +11,7 @@
  * provides high-performance code formatting capabilities.
  */
 
-import { createRequire } from 'node:module';
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const require = createRequire(import.meta.url);
+import { DEFAULT_ENVS, resolve } from './utils.js';
 
 /**
  * Resolves the oxfmt binary path and environment variables.
@@ -32,19 +28,13 @@ export async function fmt(): Promise<{
   envs: Record<string, string>;
 }> {
   // Resolve the oxfmt binary directly (it's a native executable)
-  const binPath = require.resolve('oxfmt/bin/oxfmt', {
-    paths: [process.cwd(), dirname(fileURLToPath(import.meta.url))],
-  });
+  const binPath = resolve('oxfmt/bin/oxfmt');
 
   return {
     binPath,
     // TODO: provide envs inference API
     envs: {
-      // Provide Node.js runtime information for oxfmt's telemetry/compatibility
-      JS_RUNTIME_VERSION: process.versions.node,
-      JS_RUNTIME_NAME: process.release.name,
-      // Indicate that vite-plus is the package manager invoking oxfmt
-      NODE_PACKAGE_MANAGER: 'vite-plus',
+      ...DEFAULT_ENVS,
     },
   };
 }

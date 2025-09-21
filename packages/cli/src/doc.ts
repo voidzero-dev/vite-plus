@@ -9,11 +9,8 @@
  * Used for: `vite doc` command
  */
 
-import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const require = createRequire(import.meta.url);
+import { DEFAULT_ENVS, resolve } from './utils.js';
 
 /**
  * Resolves the VitePress binary path and environment variables.
@@ -29,23 +26,15 @@ export async function doc(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
-  const paths = [process.cwd(), dirname(fileURLToPath(import.meta.url))];
-
   // VitePress's CLI binary is located at bin/vitepress.js relative to the package root
-  const pkgJsonPath = require.resolve('vitepress/package.json', {
-    paths,
-  });
+  const pkgJsonPath = resolve('vitepress/package.json');
   const binPath = join(dirname(pkgJsonPath), 'bin', 'vitepress.js');
 
   return {
     binPath,
     // TODO: provide envs inference API
     envs: {
-      // Provide Node.js runtime information for telemetry/compatibility
-      JS_RUNTIME_VERSION: process.versions.node,
-      JS_RUNTIME_NAME: process.release.name,
-      // Indicate that vite-plus is the package manager
-      NODE_PACKAGE_MANAGER: 'vite-plus',
+      ...DEFAULT_ENVS,
     },
   };
 }

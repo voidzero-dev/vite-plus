@@ -9,11 +9,8 @@
  * Used for: `vite-plus build` and potentially `vite-plus dev` commands
  */
 
-import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const require = createRequire(import.meta.url);
+import { DEFAULT_ENVS, resolve } from './utils.js';
 
 /**
  * Resolves the Vite binary path and environment variables.
@@ -30,21 +27,15 @@ export async function vite(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
-  const resolvePaths = [process.cwd(), dirname(fileURLToPath(import.meta.url))];
-  
   let pkgJsonPath: string;
   try {
     // First try to resolve vite package.json
-    pkgJsonPath = require.resolve('vite/package.json', {
-      paths: resolvePaths,
-    });
+    pkgJsonPath = resolve('vite/package.json');
   } catch {
     // Fallback to rolldown-vite package.json (for direct rolldown-vite installations)
-    pkgJsonPath = require.resolve('rolldown-vite/package.json', {
-      paths: resolvePaths,
-    });
+    pkgJsonPath = resolve('rolldown-vite/package.json');
   }
-  
+
   // Vite's CLI binary is located at bin/vite.js relative to the package root
   const binPath = join(dirname(pkgJsonPath), 'bin', 'vite.js');
 
@@ -53,8 +44,11 @@ export async function vite(): Promise<{
     // Pass through source map debugging environment variable if set
     envs: process.env.DEBUG_DISABLE_SOURCE_MAP
       ? {
+        ...DEFAULT_ENVS,
         DEBUG_DISABLE_SOURCE_MAP: process.env.DEBUG_DISABLE_SOURCE_MAP,
       }
-      : {},
+      : {
+        ...DEFAULT_ENVS,
+      },
   };
 }

@@ -11,11 +11,7 @@
  * provides ESLint-compatible linting with significantly better performance.
  */
 
-import { createRequire } from 'node:module';
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const require = createRequire(import.meta.url);
+import { DEFAULT_ENVS, resolve } from './utils.js';
 
 /**
  * Resolves the oxlint binary path and environment variables.
@@ -31,24 +27,15 @@ export async function lint(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
-  const paths = [process.cwd(), dirname(fileURLToPath(import.meta.url))];
   // Resolve the oxlint binary directly (it's a native executable)
-  const binPath = require.resolve('oxlint/bin/oxlint', {
-    paths,
-  });
+  const binPath = resolve('oxlint/bin/oxlint');
 
   return {
     binPath,
     // TODO: provide envs inference API
     envs: {
-      // Provide Node.js runtime information for oxlint's telemetry/compatibility
-      JS_RUNTIME_VERSION: process.versions.node,
-      JS_RUNTIME_NAME: process.release.name,
-      // Indicate that vite-plus is the package manager invoking oxlint
-      NODE_PACKAGE_MANAGER: 'vite-plus',
-      OXLINT_TSGOLINT_PATH: require.resolve('oxlint-tsgolint/bin/tsgolint.js', {
-        paths,
-      }),
+      ...DEFAULT_ENVS,
+      OXLINT_TSGOLINT_PATH: resolve('oxlint-tsgolint/bin/tsgolint.js'),
     },
   };
 }

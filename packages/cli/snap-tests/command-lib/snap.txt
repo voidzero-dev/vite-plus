@@ -1,5 +1,5 @@
 > vite lib -h # should print the help message
-tsdown/0.15.1
+tsdown/<semver>
 
 Usage:
   $ tsdown [...files]

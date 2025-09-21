@@ -8,11 +8,7 @@
  * Used for: `vite-plus test` command
  */
 
-import { createRequire } from 'node:module';
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const require = createRequire(import.meta.url);
+import { DEFAULT_ENVS, resolve } from './utils.js';
 
 /**
  * Resolves the Vitest binary path and environment variables.
@@ -29,17 +25,18 @@ export async function test(): Promise<{
   envs: Record<string, string>;
 }> {
   // Resolve the Vitest CLI module directly
-  const binPath = require.resolve('vitest/vitest.mjs', {
-    paths: [process.cwd(), dirname(fileURLToPath(import.meta.url))],
-  });
+  const binPath = resolve('vitest/vitest.mjs');
 
   return {
     binPath,
     // Pass through source map debugging environment variable if set
     envs: process.env.DEBUG_DISABLE_SOURCE_MAP
       ? {
+        ...DEFAULT_ENVS,
         DEBUG_DISABLE_SOURCE_MAP: process.env.DEBUG_DISABLE_SOURCE_MAP,
       }
-      : {},
+      : {
+        ...DEFAULT_ENVS,
+      },
   };
 }
