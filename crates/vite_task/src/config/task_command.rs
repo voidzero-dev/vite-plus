@@ -56,7 +56,7 @@ impl TaskCommand {
         let Some(subcommand) = parsed_command.args.first() else {
             return false;
         };
-        matches!(subcommand.as_str(), "run" | "lint" | "fmt" | "build" | "test")
+        matches!(subcommand.as_str(), "run" | "lint" | "fmt" | "build" | "test" | "lib")
     }
 }
 
