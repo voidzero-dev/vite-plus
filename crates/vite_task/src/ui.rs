@@ -22,21 +22,23 @@ impl<T: owo_colors::OwoColorize> ColorizeExt for T {
     }
 }
 
+const COMMAND_STYLE: Style = Style::new().cyan();
+
 /// Displayed before the task is executed
 impl Display for PreExecutionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let display_command = format!("$ {}", &self.task.resolved_command.fingerprint.command);
-        let outer_command =
-            format!("$ {}", std::env::var("VITE_OUTER_COMMAND").unwrap_or_default());
-        let display_command: Option<Styled<&String>> = if self.display_options.hide_command {
-            if outer_command != "$ " {
-                Some(outer_command.style(Style::new().cyan()))
+        let display_command: Option<String> = if self.display_options.hide_command {
+            if let Ok(outer_command) = std::env::var("VITE_OUTER_COMMAND") {
+                Some(outer_command)
             } else {
                 None
             }
         } else {
-            Some(display_command.style(Style::new().cyan()))
+            Some(self.task.resolved_command.fingerprint.command.to_string())
         };
+
+        let display_command = display_command.map(|cmd| format!("$ {}", cmd));
+        let display_command = display_command.as_ref().map(|cmd| cmd.style(COMMAND_STYLE));
 
         // Print cache status with improved, shorter messages
         match &self.cache_status {
