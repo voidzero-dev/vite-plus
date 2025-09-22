@@ -94,6 +94,10 @@ impl FileSystem for RealFileSystem {
     }
 }
 
+fn should_ignore_entry(name: &[u8]) -> bool {
+    matches!(name, b"." | b".." | b".DS_Store") || name.eq_ignore_ascii_case(b"dist")
+}
+
 impl RealFileSystem {
     #[cfg(unix)]
     fn process_directory_unix(fd: File, path_read: PathRead) -> Result<PathFingerprint, Error> {
@@ -116,7 +120,7 @@ impl RealFileSystem {
                     }
                 };
                 let filename: &[u8] = entry.file_name().to_bytes();
-                if matches!(filename, b"." | b".." | b".DS_Store") {
+                if should_ignore_entry(filename) {
                     continue;
                 }
                 dir_entries.insert(filename.to_str()?.into(), entry_kind);
@@ -142,7 +146,7 @@ impl RealFileSystem {
                 let file_name = entry.file_name();
 
                 // Skip special entries (same as Unix version)
-                if file_name == "." || file_name == ".." || file_name == ".DS_Store" {
+                if should_ignore_entry(file_name.as_encoded_bytes()) {
                     continue;
                 }
 
