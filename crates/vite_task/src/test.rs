@@ -1,4 +1,4 @@
-use std::{future::Future, iter};
+use std::future::Future;
 
 use petgraph::stable_graph::StableGraph;
 
@@ -20,7 +20,7 @@ pub async fn test<
         workspace,
         resolve_test_command,
         "test",
-        iter::once("test").chain(args.iter().map(std::string::String::as_str)),
+        args.iter().map(std::string::String::as_str),
     )
     .await?;
     let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
