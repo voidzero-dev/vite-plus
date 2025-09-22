@@ -128,7 +128,7 @@ Task Details:
 
 > json-edit vite-task.json "_.tasks.hello.cwd='subfolder'"
 > vite run hello # cwd changed
-$ node hello.mjs (✗ cache miss: working directory changed, executing)
+~/subfolder$ node hello.mjs (✗ cache miss: working directory changed, executing)
 hello from subfolder
 
 

@@ -24,20 +24,31 @@ impl<T: owo_colors::OwoColorize> ColorizeExt for T {
 
 const COMMAND_STYLE: Style = Style::new().cyan();
 
+impl PreExecutionStatus {
+    fn display_command(&self) -> Option<String> {
+        let display_command = if self.display_options.hide_command {
+            if let Ok(outer_command) = std::env::var("VITE_OUTER_COMMAND") {
+                outer_command
+            } else {
+                return None;
+            }
+        } else {
+            self.task.resolved_command.fingerprint.command.to_string()
+        };
+
+        let cwd = self.task.resolved_command.fingerprint.cwd.as_str();
+        Some(format!(
+            "{}$ {}",
+            if cwd.is_empty() { format_args!("") } else { format_args!("~/{}", cwd) },
+            display_command
+        ))
+    }
+}
+
 /// Displayed before the task is executed
 impl Display for PreExecutionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let display_command: Option<String> = if self.display_options.hide_command {
-            if let Ok(outer_command) = std::env::var("VITE_OUTER_COMMAND") {
-                Some(outer_command)
-            } else {
-                None
-            }
-        } else {
-            Some(self.task.resolved_command.fingerprint.command.to_string())
-        };
-
-        let display_command = display_command.map(|cmd| format!("$ {}", cmd));
+        let display_command = self.display_command();
         let display_command = display_command.as_ref().map(|cmd| cmd.style(COMMAND_STYLE));
 
         // Print cache status with improved, shorter messages

@@ -1,5 +1,5 @@
 > vite run hello
-$ node a.js
+~/subfolder$ node a.js
 hello from subfolder
 
 
