@@ -8,7 +8,7 @@ catalog:
   "@voidzero-dev/vite-plus": latest
   bumpp: ^10.1.0
   happy-dom: ^18.0.1
-  vite: npm:@voidzero-dev/vite-plus
+  vite: npm:@voidzero-dev/vite-plus@latest
   vitest: ^3.2.4
   typescript: ^5.9.2
   tsdown: ^0.15.1

@@ -21,6 +21,11 @@
     "overrides": {
       "vite": "catalog:",
       "tsdown": "catalog:"
+    },
+    "peerDependencyRules": {
+      "allowAny": [
+        "vite"
+      ]
     }
   },
   "resolutions": {

@@ -814,12 +814,27 @@ async function fixPackageJsonForVitePlus(projectDir: string, selectedPackageMana
             ...pkg.pnpm?.overrides,
             vite: viteVersion,
           },
+          peerDependencyRules: {
+            ...pkg.pnpm?.peerDependencyRules,
+            allowAny: [
+              ...pkg.pnpm?.peerDependencyRules?.allowAny ?? [],
+              'vite',
+            ],
+          },
         };
       } else {
         pkg.resolutions = {
           ...pkg.resolutions,
           vite: viteVersion,
         };
+      }
+    } else {
+      // change deps version to catalog
+      const names = ['@types/node', 'bumpp', 'happy-dom', 'vitest', 'typescript', 'tsdown', 'vite'];
+      for (const name of names) {
+        if (pkg.devDependencies?.[name]) {
+          pkg.devDependencies[name] = `catalog:`;
+        }
       }
     }
     // fix vite dev command
