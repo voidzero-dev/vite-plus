@@ -12,7 +12,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello ✓
+  [1] root-package#hello: $ node hello.mjs  ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -30,7 +30,7 @@ Performance:  100% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello ✓
+  [1] root-package#hello: $ node hello.mjs  ✓
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -48,7 +48,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello ✓
+  [1] root-package#hello: $ node hello.mjs  ✓
       → Cache miss: env FOO value changed from '1' to '2'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -66,7 +66,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello ✓
+  [1] root-package#hello: $ node hello.mjs  ✓
       → Cache miss: env BAR=1 added
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -84,7 +84,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello ✓
+  [1] root-package#hello: $ node hello.mjs  ✓
       → Cache miss: env BAR=1 removed; env FOO=2 removed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -103,7 +103,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello ✓
+  [1] root-package#hello: $ node hello.mjs  ✓
       → Cache miss: content of input 'input.txt' changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -122,7 +122,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello ✓
+  [1] root-package#hello: $ node hello.mjs  ✓
       → Cache miss: pass-through env configuration changed from [""] to ["PTE"]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -141,6 +141,6 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello ✓
+  [1] root-package#hello: ~/subfolder$ node hello.mjs  ✓
       → Cache miss: working directory changed from '.' to 'subfolder'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

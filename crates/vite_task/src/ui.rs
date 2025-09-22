@@ -225,6 +225,10 @@ impl Display for ExecutionSummary {
                 task_name.style(Style::new().bright_white().bold())
             )?;
 
+            if let Some(display_command) = status.pre_execution_status.display_command() {
+                write!(f, ": {}", display_command.style(COMMAND_STYLE))?;
+            }
+
             // Execution result icon and status
             match &status.execution_result {
                 Ok(exit_status) if *exit_status == 0 => {
