@@ -26,7 +26,7 @@ $ node -p process.env.MY_ENV (✓ cache hit, replaying)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Statistics:  1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate
+Performance:  100% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────

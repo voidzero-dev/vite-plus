@@ -44,7 +44,7 @@ a
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Statistics:  1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate
+Performance:  100% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
@@ -62,7 +62,7 @@ b
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Statistics:  1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate
+Performance:  100% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::LazyLock};
+use std::{fmt::Display, sync::LazyLock, time::Duration};
 
 use itertools::Itertools;
 use owo_colors::{Style, Styled};
@@ -191,11 +191,25 @@ impl Display for ExecutionSummary {
         let cache_rate =
             if total > 0 { (cache_hits as f64 / total as f64 * 100.0) as u32 } else { 0 };
 
-        writeln!(
+        let total_duration = self
+            .execution_statuses
+            .iter()
+            .map(|status| {
+                if let CacheStatus::CacheHit { original_duration } =
+                    &status.pre_execution_status.cache_status
+                {
+                    *original_duration
+                } else {
+                    Duration::ZERO
+                }
+            })
+            .sum::<std::time::Duration>();
+
+        write!(
             f,
-            "{}  {}% cache hit rate",
+            "{}  {} cache hit rate",
             "Performance:".style(Style::new().bold()),
-            cache_rate.to_string().style(if cache_rate >= 75 {
+            format_args!("{}%", cache_rate).style(if cache_rate >= 75 {
                 Style::new().green().bold()
             } else if cache_rate >= 50 {
                 CACHE_MISS_STYLE
@@ -203,6 +217,14 @@ impl Display for ExecutionSummary {
                 Style::new().red()
             })
         )?;
+        if total_duration > Duration::ZERO {
+            write!(
+                f,
+                ", {:.2?} saved in total",
+                total_duration.style(Style::new().green().bold())
+            )?;
+        }
+        writeln!(f)?;
         writeln!(f)?;
 
         // Detailed task results

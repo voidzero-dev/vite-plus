@@ -44,7 +44,7 @@ Finished in <variable>ms on 2 files with <variable> rules using <variable> threa
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Statistics:  2 tasks • 1 cache hits • 1 cache misses 
-Performance:  50% cache hit rate
+Performance:  50% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
