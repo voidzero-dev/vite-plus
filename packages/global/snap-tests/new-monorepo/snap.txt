@@ -24,7 +24,7 @@ svelte-ts      svelte
 solid-ts       solid
 qwik-ts        qwik
 
-[1]> vp new --template vanilla-ts --monorepo --pm pnpm --git false --overwrite hello-vite-plus # create monorepo
+> vp new --template vanilla-ts --monorepo --pm pnpm --git false --overwrite hello-vite-plus # create monorepo
 
  ██╗   ██╗ ██╗ ████████╗ ███████╗
  ██║   ██║ ██║ ╚══██╔══╝ ██╔════╝   ██╗
@@ -34,35 +34,65 @@ qwik-ts        qwik
    ╚═══╝   ╚═╝    ╚═╝    ╚══════╝
 
 ┌  Vite+ - The Unified Toolchain for the Web
+│
+◇  Scaffolding project with vanilla-ts in hello-vite-plus/apps/website...
+│
+└  Done. Now run:
 
-[vite+] Failed to initialize project: Error: ENOENT: no such file or directory, stat '/Users/patr0nus/code/vite-plus/packages/global/templates/monorepo/apps/next/node_modules/@types/react'
-    at Object.statSync (node:fs:1739:25)
-    at copy (file:///Users/patr0nus/code/vite-plus/packages/global/dist/new-BeWk4K4V.js:1819:9)
-    at copyDir (file:///Users/patr0nus/code/vite-plus/packages/global/dist/new-BeWk4K4V.js:1833:3)
-    at copy (file:///Users/patr0nus/code/vite-plus/packages/global/dist/new-BeWk4K4V.js:1819:38)
-    at copyDir (file:///Users/patr0nus/code/vite-plus/packages/global/dist/new-BeWk4K4V.js:1833:3)
-    at copy (file:///Users/patr0nus/code/vite-plus/packages/global/dist/new-BeWk4K4V.js:1819:38)
-    at copyDir (file:///Users/patr0nus/code/vite-plus/packages/global/dist/new-BeWk4K4V.js:1833:3)
-    at copy (file:///Users/patr0nus/code/vite-plus/packages/global/dist/new-BeWk4K4V.js:1819:38)
-    at copyDir (file:///Users/patr0nus/code/vite-plus/packages/global/dist/new-BeWk4K4V.js:1833:3)
-    at copy (file:///Users/patr0nus/code/vite-plus/packages/global/dist/new-BeWk4K4V.js:1819:38) {
-  errno: -2,
-  code: 'ENOENT',
-  syscall: 'stat',
-  path: '/Users/patr0nus/code/vite-plus/packages/global/templates/monorepo/apps/next/node_modules/@types/react'
-}
+   cd hello-vite-plus
+   vite run ready
+   vite run dev
+
+   To add new packages to your monorepo:
+
+   vite new --app apps/my-app
+   vite new --lib packages/my-lib
+
 
 > cd hello-vite-plus && ls -a . # check files
-_gitignore
-_npmrc
-_yarnrc.yml
 .
 ..
-apps
+.gitignore
+.npmrc
 README.md
+apps
+package.json
+pnpm-workspace.yaml
+tsconfig.json
+vite.config.ts
 
-[1]> cd hello-vite-plus && cat package.json # check package.json
-cat: package.json: No such file or directory
+> cd hello-vite-plus && cat package.json # check package.json
+{
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "ready": "vite fmt && vite run lint && vite run test && vite run prepublishOnly",
+    "dev": "vite run website#dev",
+    "lint": "vite lint --type-aware",
+    "test": "vite test --passWithNoTests",
+    "prepublishOnly": "vite run -r build"
+  },
+  "devDependencies": {
+    "vite": "catalog:"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "catalog:",
+      "tsdown": "catalog:"
+    },
+    "peerDependencyRules": {
+      "allowAny": [
+        "vite"
+      ]
+    }
+  },
+  "resolutions": {
+    "vite": "catalog:",
+    "tsdown": "catalog:"
+  },
+  "packageManager": "pnpm@<semver>"
+}
 
 > cd hello-vite-plus && vp new --app --template vanilla-ts apps/my-app # add app
 
@@ -75,15 +105,20 @@ cat: package.json: No such file or directory
 
 ┌  Vite+ - The Unified Toolchain for the Web
 │
-■  Not in a monorepo. The --app and --lib flags can only be used inside a monorepo.
+◇  Scaffolding project with vanilla-ts in apps/my-app...
 │
-└  Run `vite new` to create a monorepo first.
+└  Done. Now run:
+
+   cd apps/my-app
+   vite run ready
+   vite run dev
 
 
 > cd hello-vite-plus && ls -a apps
 .
 ..
-next
+my-app
+website
 
 > cd hello-vite-plus && vp new --lib packages/my-lib --template react # add lib
 
@@ -96,13 +131,22 @@ next
 
 ┌  Vite+ - The Unified Toolchain for the Web
 │
-■  Not in a monorepo. The --app and --lib flags can only be used inside a monorepo.
-│
-└  Run `vite new` to create a monorepo first.
+◇  Scaffolding library with react in packages/my-lib...
+[?25l│
+◒  $ create-tsdown --overwrite --template react --name packages/my-lib...
+[999D[J◇  $ create-tsdown --overwrite --template react --name packages/my-lib succeeded
+[?25h│
+└  Done. Now run:
+
+   cd packages/my-lib
+   vite run ready
+   vite run dev
 
 
-[1]> cd hello-vite-plus && ls -a packages
-ls: packages: No such file or directory
+> cd hello-vite-plus && ls -a packages
+.
+..
+my-lib
 
 > cd hello-vite-plus && vp new --lib tools/my-tool --template default # add lib new not exists tools directory
 
@@ -115,10 +159,19 @@ ls: packages: No such file or directory
 
 ┌  Vite+ - The Unified Toolchain for the Web
 │
-■  Not in a monorepo. The --app and --lib flags can only be used inside a monorepo.
-│
-└  Run `vite new` to create a monorepo first.
+◇  Scaffolding library with default in tools/my-tool...
+[?25l│
+◒  $ create-tsdown --overwrite --template default --name tools/my-tool...
+[999D[J◇  $ create-tsdown --overwrite --template default --name tools/my-tool succeeded
+[?25h│
+└  Done. Now run:
+
+   cd tools/my-tool
+   vite run ready
+   vite run dev
 
 
-[1]> cd hello-vite-plus && ls -a tools
-ls: tools: No such file or directory
+> cd hello-vite-plus && ls -a tools
+.
+..
+my-tool
