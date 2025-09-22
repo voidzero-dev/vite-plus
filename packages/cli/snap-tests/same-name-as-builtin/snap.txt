@@ -17,7 +17,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] lint: $ echo lint script  ✓
+  [1] lint: $ echo lint script ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -42,6 +42,6 @@ Performance:  100% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] lint: $ echo lint script  ✓
+  [1] lint: $ echo lint script ✓
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

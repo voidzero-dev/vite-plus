@@ -12,7 +12,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello: $ node -p process.env.MY_ENV  ✓
+  [1] hello: $ node -p process.env.MY_ENV ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -30,7 +30,7 @@ Performance:  100% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello: $ node -p process.env.MY_ENV  ✓
+  [1] hello: $ node -p process.env.MY_ENV ✓
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -49,6 +49,6 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello: $ node -p process.env.MY_ENV  ✓
+  [1] hello: $ node -p process.env.MY_ENV ✓
       → Cache miss: pass-through env configuration changed from ["MY_ENV"] to ["MY_ENV, MY_ENV2"]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

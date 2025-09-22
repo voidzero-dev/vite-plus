@@ -14,6 +14,7 @@ use crate::{
     config::{DisplayOptions, ResolvedTask, Workspace},
     execute::{OutputKind, execute_task},
     fs::FileSystem,
+    ui::get_display_command,
 };
 
 #[derive(Debug)]
@@ -26,6 +27,7 @@ pub struct ExecutionPlan {
 /// Status of a task before execution
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PreExecutionStatus {
+    pub display_command: Option<String>,
     pub task: ResolvedTask,
     pub cache_status: CacheStatus,
     pub display_options: DisplayOptions,
@@ -148,7 +150,12 @@ impl ExecutionPlan {
         .await?;
 
         let has_inner_runner = step.resolved_config.config.command.has_inner_runner();
-        let pre_execution_status = PreExecutionStatus { task: step, cache_status, display_options };
+        let pre_execution_status = PreExecutionStatus {
+            display_command: get_display_command(display_options, &step),
+            task: step,
+            cache_status,
+            display_options,
+        };
 
         // The inner runner is expected to display the command and the cache status. The outer runner will skip displaying them.
         if !has_inner_runner {

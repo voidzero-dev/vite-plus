@@ -6,6 +6,7 @@ use vite_path::RelativePath;
 
 use crate::{
     cache::{CacheMiss, FingerprintMismatch},
+    config::{DisplayOptions, ResolvedTask},
     fingerprint::PostRunFingerprintMismatch,
     schedule::{CacheStatus, ExecutionFailure, ExecutionSummary, PreExecutionStatus},
 };
@@ -23,39 +24,37 @@ impl<T: owo_colors::OwoColorize> ColorizeExt for T {
 }
 
 const COMMAND_STYLE: Style = Style::new().cyan();
+const CACHE_MISS_STYLE: Style = Style::new().purple();
 
-impl PreExecutionStatus {
-    fn display_command(&self) -> Option<String> {
-        let display_command = if self.display_options.hide_command {
-            if let Ok(outer_command) = std::env::var("VITE_OUTER_COMMAND") {
-                outer_command
-            } else {
-                return None;
-            }
+pub fn get_display_command(display_options: DisplayOptions, task: &ResolvedTask) -> Option<String> {
+    let display_command = if display_options.hide_command {
+        if let Ok(outer_command) = std::env::var("VITE_OUTER_COMMAND") {
+            outer_command
         } else {
-            self.task.resolved_command.fingerprint.command.to_string()
-        };
+            return None;
+        }
+    } else {
+        task.resolved_command.fingerprint.command.to_string()
+    };
 
-        let cwd = self.task.resolved_command.fingerprint.cwd.as_str();
-        Some(format!(
-            "{}$ {}",
-            if cwd.is_empty() { format_args!("") } else { format_args!("~/{}", cwd) },
-            display_command
-        ))
-    }
+    let cwd = task.resolved_command.fingerprint.cwd.as_str();
+    Some(format!(
+        "{}$ {}",
+        if cwd.is_empty() { format_args!("") } else { format_args!("~/{}", cwd) },
+        display_command
+    ))
 }
 
 /// Displayed before the task is executed
 impl Display for PreExecutionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let display_command = self.display_command();
-        let display_command = display_command.as_ref().map(|cmd| cmd.style(COMMAND_STYLE));
+        let display_command = self.display_command.as_ref().map(|cmd| cmd.style(COMMAND_STYLE));
 
         // Print cache status with improved, shorter messages
         match &self.cache_status {
             CacheStatus::CacheMiss(CacheMiss::NotFound) => {
                 // No message for "Cache not found" as requested
-                tracing::debug!("{}", "Cache not found".style(Style::new().yellow()));
+                tracing::debug!("{}", "Cache not found".style(CACHE_MISS_STYLE));
                 if let Some(display_command) = &display_command {
                     writeln!(f, "{}", display_command)?;
                 }
@@ -99,7 +98,7 @@ impl Display for PreExecutionStatus {
                         format_args!("✗ cache miss: {}, executing", reason),
                         if display_command.is_some() { ")" } else { "" },
                     )
-                    .style(Style::new().yellow().dimmed())
+                    .style(CACHE_MISS_STYLE.dimmed())
                 )?;
             }
             CacheStatus::CacheHit => {
@@ -179,7 +178,7 @@ impl Display for ExecutionSummary {
             "Statistics:".style(Style::new().bold()),
             format!("{} tasks", total).style(Style::new().bright_white()),
             format!("• {} cache hits", cache_hits).style(Style::new().green()),
-            format!("• {} cache misses", cache_misses).style(Style::new().yellow()),
+            format!("• {} cache misses", cache_misses).style(CACHE_MISS_STYLE),
             if failed > 0 {
                 format!("• {} failed", failed).style(Style::new().red()).to_string()
             } else if skipped > 0 {
@@ -199,7 +198,7 @@ impl Display for ExecutionSummary {
             cache_rate.to_string().style(if cache_rate >= 75 {
                 Style::new().green().bold()
             } else if cache_rate >= 50 {
-                Style::new().yellow()
+                CACHE_MISS_STYLE
             } else {
                 Style::new().red()
             })
@@ -225,7 +224,7 @@ impl Display for ExecutionSummary {
                 task_name.style(Style::new().bright_white().bold())
             )?;
 
-            if let Some(display_command) = status.pre_execution_status.display_command() {
+            if let Some(display_command) = &status.pre_execution_status.display_command {
                 write!(f, ": {}", display_command.style(COMMAND_STYLE))?;
             }
 
@@ -263,14 +262,14 @@ impl Display for ExecutionSummary {
                     )?;
                 }
                 CacheStatus::CacheMiss(miss) => {
-                    write!(f, "      {}", "→ Cache miss: ".style(Style::new().yellow()))?;
+                    write!(f, "      {}", "→ Cache miss: ".style(CACHE_MISS_STYLE))?;
 
                     match miss {
                         CacheMiss::NotFound => {
                             writeln!(
                                 f,
                                 "{}",
-                                "no previous cache entry found".style(Style::new().yellow())
+                                "no previous cache entry found".style(CACHE_MISS_STYLE)
                             )?;
                         }
                         CacheMiss::FingerprintMismatch(mismatch) => {
@@ -353,13 +352,13 @@ impl Display for ExecutionSummary {
                                         writeln!(
                                             f,
                                             "{}",
-                                            "configuration changed".style(Style::new().yellow())
+                                            "configuration changed".style(CACHE_MISS_STYLE)
                                         )?;
                                     } else {
                                         writeln!(
                                             f,
                                             "{}",
-                                            changes.join("; ").style(Style::new().yellow())
+                                            changes.join("; ").style(CACHE_MISS_STYLE)
                                         )?;
                                     }
                                 }
@@ -370,7 +369,7 @@ impl Display for ExecutionSummary {
                                         f,
                                         "{}",
                                         format!("content of input '{}' changed", path)
-                                            .style(Style::new().yellow())
+                                            .style(CACHE_MISS_STYLE)
                                     )?;
                                 }
                             }

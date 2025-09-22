@@ -12,7 +12,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] script1: $ echo hello  ✓
+  [1] script1: $ echo hello ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -30,7 +30,7 @@ Performance:  100% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] script2: $ echo hello  ✓
+  [1] script2: $ echo hello ✓
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -49,6 +49,6 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] script2: $ echo world  ✓
+  [1] script2: $ echo world ✓
       → Cache miss: command changed from echo hello to echo world
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

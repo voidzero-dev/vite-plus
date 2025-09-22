@@ -19,10 +19,10 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] lint ✓
+  [1] lint: $ vite lint ./src ✓
       → Cache miss: no previous cache entry found
   ·······················································
-  [2] lint ✓
+  [2] lint: $ vite lint ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -48,9 +48,9 @@ Performance:  50% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] lint ✓
+  [1] lint: $ vite lint ./src ✓
       → Cache hit - output replayed
   ·······················································
-  [2] lint ✓
+  [2] lint: $ vite lint ✓
       → Cache miss: content of input 'a.ts' changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

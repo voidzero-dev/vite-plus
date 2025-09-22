@@ -104,7 +104,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] @test/replay-logs-chronological-order#build: $ node build.js  ✓
+  [1] @test/replay-logs-chronological-order#build: $ node build.js ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -214,7 +214,7 @@ Performance:  100% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] @test/replay-logs-chronological-order#build: $ node build.js  ✓
+  [1] @test/replay-logs-chronological-order#build: $ node build.js ✓
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -324,7 +324,7 @@ Performance:  100% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] @test/replay-logs-chronological-order#build: $ node build.js  ✓
+  [1] @test/replay-logs-chronological-order#build: $ node build.js ✓
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -434,7 +434,7 @@ Performance:  100% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] @test/replay-logs-chronological-order#build: $ node build.js  ✓
+  [1] @test/replay-logs-chronological-order#build: $ node build.js ✓
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -544,6 +544,6 @@ Performance:  100% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] @test/replay-logs-chronological-order#build: $ node build.js  ✓
+  [1] @test/replay-logs-chronological-order#build: $ node build.js ✓
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

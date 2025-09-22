@@ -12,7 +12,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] script1: $ echo success  ✓
+  [1] script1: $ echo success ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -30,7 +30,7 @@ Performance:  100% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] script1: $ echo success  ✓
+  [1] script1: $ echo success ✓
       → Cache hit - output replayed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -48,7 +48,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] script2: $ node failure.js  ✗ (exit code: 1)
+  [1] script2: $ node failure.js ✗ (exit code: 1)
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -66,6 +66,6 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] script2: $ node failure.js  ✗ (exit code: 1)
+  [1] script2: $ node failure.js ✗ (exit code: 1)
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
