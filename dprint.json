@@ -9,6 +9,9 @@
   },
   "toml": {
   },
+  "yaml": {
+    "quotes": "preferSingle"
+  },
   "excludes": [
     "pnpm-lock.yaml",
     "packages/cli/binding/index.d.ts",

@@ -4,8 +4,8 @@ packages:
   - tools/*
 
 catalog:
-  "@types/node": ^24.5.0
-  "@voidzero-dev/vite-plus": latest
+  '@types/node': ^24.5.0
+  '@voidzero-dev/vite-plus': latest
   bumpp: ^10.1.0
   happy-dom: ^18.0.1
   vite: npm:@voidzero-dev/vite-plus@latest

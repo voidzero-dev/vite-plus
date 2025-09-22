@@ -9,12 +9,12 @@ on:
   pull_request:
     types: [opened, synchronize]
     paths-ignore:
-      - "**/*.md"
+      - '**/*.md'
   push:
     branches:
       - main
     paths-ignore:
-      - "**/*.md"
+      - '**/*.md'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
@@ -50,7 +50,7 @@ jobs:
 
       - run: cargo check --all-targets --all-features
         env:
-          RUSTFLAGS: "-D warnings --cfg tokio_unstable" # also update .cargo/config.toml
+          RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
 
       - run: cargo test
 
@@ -76,6 +76,11 @@ jobs:
       - uses: crate-ci/typos@85f62a8a84f939ae994ab3763f01a0296d61a7ee # v1.36.2
         with:
           files: .
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Deduplicate dependencies
+        run: pnpm dedupe --check
 
   run:
     name: Run task
