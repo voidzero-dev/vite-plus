@@ -25,6 +25,14 @@ solid-ts       solid
 qwik-ts        qwik
 
 > vp new --template vanilla-ts --monorepo --pm pnpm --git false --overwrite hello-vite-plus # create monorepo
+
+ ██╗   ██╗ ██╗ ████████╗ ███████╗
+ ██║   ██║ ██║ ╚══██╔══╝ ██╔════╝   ██╗
+ ██║   ██║ ██║    ██║    █████╗   ██████╗
+ ╚██╗ ██╔╝ ██║    ██║    ██╔══╝    ╚██╔═╝
+  ╚████╔╝  ██║    ██║    ███████╗   ╚═╝
+   ╚═══╝   ╚═╝    ╚═╝    ╚══════╝
+
 ┌  Vite+ - The Unified Toolchain for the Web
 │
 ◇  Scaffolding project with vanilla-ts in hello-vite-plus/apps/website...
@@ -87,6 +95,14 @@ vite.config.ts
 }
 
 > cd hello-vite-plus && vp new --app --template vanilla-ts apps/my-app # add app
+
+ ██╗   ██╗ ██╗ ████████╗ ███████╗
+ ██║   ██║ ██║ ╚══██╔══╝ ██╔════╝   ██╗
+ ██║   ██║ ██║    ██║    █████╗   ██████╗
+ ╚██╗ ██╔╝ ██║    ██║    ██╔══╝    ╚██╔═╝
+  ╚████╔╝  ██║    ██║    ███████╗   ╚═╝
+   ╚═══╝   ╚═╝    ╚═╝    ╚══════╝
+
 ┌  Vite+ - The Unified Toolchain for the Web
 │
 ◇  Scaffolding project with vanilla-ts in apps/my-app...
@@ -105,6 +121,14 @@ my-app
 website
 
 > cd hello-vite-plus && vp new --lib packages/my-lib --template react # add lib
+
+ ██╗   ██╗ ██╗ ████████╗ ███████╗
+ ██║   ██║ ██║ ╚══██╔══╝ ██╔════╝   ██╗
+ ██║   ██║ ██║    ██║    █████╗   ██████╗
+ ╚██╗ ██╔╝ ██║    ██║    ██╔══╝    ╚██╔═╝
+  ╚████╔╝  ██║    ██║    ███████╗   ╚═╝
+   ╚═══╝   ╚═╝    ╚═╝    ╚══════╝
+
 ┌  Vite+ - The Unified Toolchain for the Web
 │
 ◇  Scaffolding library with react in packages/my-lib...
@@ -125,6 +149,14 @@ website
 my-lib
 
 > cd hello-vite-plus && vp new --lib tools/my-tool --template default # add lib new not exists tools directory
+
+ ██╗   ██╗ ██╗ ████████╗ ███████╗
+ ██║   ██║ ██║ ╚══██╔══╝ ██╔════╝   ██╗
+ ██║   ██║ ██║    ██║    █████╗   ██████╗
+ ╚██╗ ██╔╝ ██║    ██║    ██╔══╝    ╚██╔═╝
+  ╚████╔╝  ██║    ██║    ███████╗   ╚═╝
+   ╚═══╝   ╚═╝    ╚═╝    ╚══════╝
+
 ┌  Vite+ - The Unified Toolchain for the Web
 │
 ◇  Scaffolding library with default in tools/my-tool...

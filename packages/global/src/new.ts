@@ -399,6 +399,8 @@ async function init() {
 
   const cancel = () => prompts.cancel('Operation cancelled');
 
+  const logo = fs.readFileSync(path.join(pkgRoot, 'templates/vite-plus-logo.txt'), 'utf-8');
+  console.log(blueBright(logo));
   prompts.intro(`${blueBright('Vite+')} - The Unified Toolchain for the Web`);
 
   // --app and --lib should inside monorepo
