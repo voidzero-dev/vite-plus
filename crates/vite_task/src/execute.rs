@@ -5,6 +5,7 @@ use std::{
     path::PathBuf,
     process::{ExitStatus, Stdio},
     sync::{Arc, LazyLock, Mutex},
+    time::{Duration, Instant},
 };
 
 use bincode::{Decode, Encode};
@@ -53,6 +54,7 @@ pub struct ExecutedTask {
     pub exit_status: ExitStatus,
     pub path_reads: HashMap<RelativePathBuf, PathRead>,
     pub path_writes: HashMap<RelativePathBuf, PathWrite>,
+    pub duration: Duration,
 }
 
 /// Collects stdout/stderr into `outputs` and at the same time writes them to the real stdout/stderr
@@ -371,17 +373,24 @@ pub async fn execute_task(
                 let child_stderr = child.stderr.take().unwrap();
 
                 let outputs = Mutex::new(Vec::<StdOutput>::new());
-                let ((), (), exit_status) = try_join3(
+
+                let ((), (), (exit_status, duration)) = try_join3(
                     collect_std_outputs(&outputs, child_stdout, OutputKind::StdOut),
                     collect_std_outputs(&outputs, child_stderr, OutputKind::StdErr),
-                    async move { Ok(child.wait().await?) },
+                    async move {
+                        let start = Instant::now();
+                        let exit_status = child.wait().await?;
+                        Ok((exit_status, start.elapsed()))
+                    },
                 )
                 .await?;
+
                 return Ok(ExecutedTask {
                     std_outputs: outputs.into_inner().unwrap().into(),
                     exit_status,
                     path_reads: HashMap::new(),
                     path_writes: HashMap::new(),
+                    duration,
                 });
             }
             let mut cmd = spy.new_command(&task_parsed_command.program);
@@ -451,11 +460,15 @@ pub async fn execute_task(
         Ok::<_, Error>((path_reads, path_writes))
     };
 
-    let ((), (), (path_reads, path_writes), exit_status) = try_join4(
+    let ((), (), (path_reads, path_writes), (exit_status, duration)) = try_join4(
         collect_std_outputs(&outputs, child_stdout, OutputKind::StdOut),
         collect_std_outputs(&outputs, child_stderr, OutputKind::StdErr),
         path_accesses_fut,
-        async move { Ok(child.wait().await?) },
+        async move {
+            let start = Instant::now();
+            let exit_status = child.wait().await?;
+            Ok((exit_status, start.elapsed()))
+        },
     )
     .await?;
 
@@ -470,7 +483,7 @@ pub async fn execute_task(
 
     // let input_paths = gather_inputs(task, base_dir)?;
 
-    Ok(ExecutedTask { std_outputs: outputs.into(), exit_status, path_reads, path_writes })
+    Ok(ExecutedTask { std_outputs: outputs.into(), exit_status, path_reads, path_writes, duration })
 }
 
 #[expect(dead_code)]

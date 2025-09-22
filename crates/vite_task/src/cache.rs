@@ -1,8 +1,8 @@
-use std::{fmt::Display, io::Write, sync::Arc};
+use std::{fmt::Display, io::Write, sync::Arc, time::Duration};
 
 // use bincode::config::{Configuration, standard};
 use bincode::{Decode, Encode, decode_from_slice, encode_to_vec};
-use rusqlite::{Connection, OptionalExtension as _};
+use rusqlite::{Connection, OptionalExtension as _, config::DbConfig};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
@@ -22,6 +22,7 @@ use crate::{
 pub struct CommandCacheValue {
     pub post_run_fingerprint: PostRunFingerprint,
     pub std_outputs: Arc<[StdOutput]>,
+    pub duration: Duration,
 }
 
 impl CommandCacheValue {
@@ -31,7 +32,11 @@ impl CommandCacheValue {
         base_dir: &AbsolutePath,
     ) -> Result<Self, Error> {
         let post_run_fingerprint = PostRunFingerprint::create(&executed_task, fs, base_dir)?;
-        Ok(Self { post_run_fingerprint, std_outputs: executed_task.std_outputs })
+        Ok(Self {
+            post_run_fingerprint,
+            std_outputs: executed_task.std_outputs,
+            duration: executed_task.duration,
+        })
     }
 }
 
@@ -86,7 +91,7 @@ impl TaskCache {
 
         let db_path = path.join("cache.db");
         let conn = Connection::open(db_path.as_path())?;
-        conn.execute_batch("PRAGMA journal_mode=WAL; BEGIN EXCLUSIVE;")?;
+        conn.execute_batch("PRAGMA journal_mode=WAL;")?;
         loop {
             let user_version: u32 = conn.query_one("PRAGMA user_version", (), |row| row.get(0))?;
             match user_version {
@@ -100,13 +105,18 @@ impl TaskCache {
                         "CREATE TABLE taskrun_to_command (key BLOB PRIMARY KEY, value BLOB);",
                         (),
                     )?;
-                    conn.execute("PRAGMA user_version = 1", ())?;
+                    conn.execute("PRAGMA user_version = 2", ())?;
                 }
-                1 => break, // current version
-                2.. => return Err(Error::UnrecognizedDbVersion(user_version)),
+                1 => {
+                    // old internal db version. reset
+                    conn.set_db_config(DbConfig::SQLITE_DBCONFIG_RESET_DATABASE, true)?;
+                    conn.execute("VACUUM", ())?;
+                    conn.set_db_config(DbConfig::SQLITE_DBCONFIG_RESET_DATABASE, false)?;
+                }
+                2 => break, // current version
+                3.. => return Err(Error::UnrecognizedDbVersion(user_version)),
             }
         }
-        conn.execute_batch("COMMIT")?;
         Ok(Self { conn: Mutex::new(conn), path: cache_path })
     }
 
