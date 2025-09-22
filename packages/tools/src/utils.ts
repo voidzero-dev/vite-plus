@@ -10,7 +10,7 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
     // date
     .replaceAll(/\d{2}:\d{2}:\d{2}/g, '<date>')
     // oxlint
-    .replaceAll(/\d+(?:\.\d+)?s|\d+ms/g, '<variable>ms')
+    .replaceAll(/\d+(?:\.\d+)?(?:s|ms)/g, '<variable>ms')
     .replaceAll(/with \d+ rules/g, 'with <variable> rules')
     .replaceAll(/using \d+ threads/g, 'using <variable> threads')
     // pnpm

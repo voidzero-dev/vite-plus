@@ -31,7 +31,7 @@ Performance:  100% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] hello: $ node -p process.env.MY_ENV ✓
-      → Cache hit - output replayed
+      → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > json-edit vite-task.json '_.tasks.hello.passThroughEnvs.push("MY_ENV2")' # add a new pass through env

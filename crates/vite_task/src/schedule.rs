@@ -1,4 +1,4 @@
-use std::{process::ExitStatus, sync::Arc};
+use std::{process::ExitStatus, sync::Arc, time::Duration};
 
 use futures_core::future::BoxFuture;
 use futures_util::future::FutureExt as _;
@@ -39,7 +39,10 @@ pub enum CacheStatus {
     /// The task will be executed.
     CacheMiss(CacheMiss),
     /// Cache hit, will replay
-    CacheHit,
+    CacheHit {
+        /// Duration of the original execution
+        original_duration: Duration,
+    },
 }
 
 /// Status of a task execution
@@ -184,7 +187,7 @@ async fn get_cached_or_execute<'a>(
 ) -> Result<(CacheStatus, BoxFuture<'a, Result<ExitStatus, Error>>), Error> {
     Ok(match cache.try_hit(&task, fs, base_dir).await? {
         Ok(cache_task) => (
-            CacheStatus::CacheHit,
+            CacheStatus::CacheHit { original_duration: cache_task.duration },
             ({
                 async move {
                     if task.display_options.ignore_replay {

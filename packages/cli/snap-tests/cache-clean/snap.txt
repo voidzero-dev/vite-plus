@@ -31,7 +31,7 @@ Performance:  100% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] hello: $ echo hello ✓
-      → Cache hit - output replayed
+      → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite cache clean # clean the cache

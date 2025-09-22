@@ -31,7 +31,7 @@ Performance:  100% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] root-package#hello: $ node hello.mjs ✓
-      → Cache hit - output replayed
+      → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > FOO=2 vite run hello # env changed

@@ -49,7 +49,7 @@ Performance:  50% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] lint: $ vite lint ./src ✓
-      → Cache hit - output replayed
+      → Cache hit - output replayed - <variable>ms saved
   ·······················································
   [2] lint: $ vite lint ✓
       → Cache miss: content of input 'a.ts' changed

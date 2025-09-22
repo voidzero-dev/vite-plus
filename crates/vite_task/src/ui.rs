@@ -101,7 +101,7 @@ impl Display for PreExecutionStatus {
                     .style(CACHE_MISS_STYLE.dimmed())
                 )?;
             }
-            CacheStatus::CacheHit => {
+            CacheStatus::CacheHit { .. } => {
                 if !self.display_options.ignore_replay {
                     if let Some(display_command) = &display_command {
                         write!(f, "{} ", display_command)?;
@@ -141,7 +141,7 @@ impl Display for ExecutionSummary {
 
         for status in &self.execution_statuses {
             match &status.pre_execution_status.cache_status {
-                CacheStatus::CacheHit => cache_hits += 1,
+                CacheStatus::CacheHit { .. } => cache_hits += 1,
                 CacheStatus::CacheMiss(_) => cache_misses += 1,
             }
 
@@ -254,11 +254,12 @@ impl Display for ExecutionSummary {
 
             // Cache status details (indented)
             match &status.pre_execution_status.cache_status {
-                CacheStatus::CacheHit => {
+                CacheStatus::CacheHit { original_duration } => {
                     writeln!(
                         f,
-                        "      {}",
+                        "      {} {}",
                         "→ Cache hit - output replayed".style(Style::new().green()),
+                        format!("- {:.2?} saved", original_duration).style(Style::new().green())
                     )?;
                 }
                 CacheStatus::CacheMiss(miss) => {

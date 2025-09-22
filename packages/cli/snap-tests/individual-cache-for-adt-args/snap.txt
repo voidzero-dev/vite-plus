@@ -49,7 +49,7 @@ Performance:  100% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] echo: $ echo a ✓
-      → Cache hit - output replayed
+      → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run echo -- b # should hit the cache created in step 2
@@ -67,5 +67,5 @@ Performance:  100% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] echo: $ echo b ✓
-      → Cache hit - output replayed
+      → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

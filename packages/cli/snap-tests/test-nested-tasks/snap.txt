@@ -32,5 +32,5 @@ Performance:  100% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] script1: $ echo 'hello vite' ✓
-      → Cache hit - output replayed
+      → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -215,7 +215,7 @@ Performance:  100% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] @test/replay-logs-chronological-order#build: $ node build.js ✓
-      → Cache hit - output replayed
+      → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run build 2>&1 # should hit the cache and make sure the replay order is chronological
@@ -325,7 +325,7 @@ Performance:  100% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] @test/replay-logs-chronological-order#build: $ node build.js ✓
-      → Cache hit - output replayed
+      → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run build 2>&1 # should hit the cache and make sure the replay order is chronological again
@@ -435,7 +435,7 @@ Performance:  100% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] @test/replay-logs-chronological-order#build: $ node build.js ✓
-      → Cache hit - output replayed
+      → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run build 2>&1 # should hit the cache and make sure the replay order is chronological again
@@ -545,5 +545,5 @@ Performance:  100% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] @test/replay-logs-chronological-order#build: $ node build.js ✓
-      → Cache hit - output replayed
+      → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
