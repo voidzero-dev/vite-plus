@@ -491,22 +491,6 @@ async function init() {
   }
 
   const rawTargetDir = targetDir;
-  let selectedPackageManager = argPackageManager ?? 'pnpm';
-  if (!isCreateAppOrLib && !argPackageManager) {
-    // select a package manager
-    const packageManager = await prompts.select({
-      message: 'Select a package manager:',
-      options: [
-        { label: 'pnpm', value: 'pnpm', hint: 'recommended' },
-        { label: 'yarn', value: 'yarn' },
-        { label: 'npm', value: 'npm' },
-      ],
-      initialValue: selectedPackageManager,
-    });
-    if (prompts.isCancel(packageManager)) return cancel();
-
-    selectedPackageManager = packageManager;
-  }
 
   // 4. Choose a framework and variant
   let template = argTemplate;
@@ -564,6 +548,23 @@ async function init() {
     }
   }
 
+  let selectedPackageManager = argPackageManager ?? 'pnpm';
+  if (!isCreateAppOrLib && !argPackageManager) {
+    // select a package manager
+    const packageManager = await prompts.select({
+      message: 'Which package manager would you like to use?',
+      options: [
+        { label: 'pnpm', value: 'pnpm', hint: 'recommended' },
+        { label: 'yarn', value: 'yarn' },
+        { label: 'npm', value: 'npm' },
+      ],
+      initialValue: selectedPackageManager,
+    });
+    if (prompts.isCancel(packageManager)) return cancel();
+
+    selectedPackageManager = packageManager;
+  }
+
   if (argCreateMonorepo) {
     // init a monorepo
     await initMonorepo(path.join(cwd, targetDir), selectedPackageManager);
@@ -592,16 +593,17 @@ async function init() {
       targetDir,
     ];
     const command = `create-tsdown ${createTsdownArgs.slice(1).join(' ')}`;
-    prompts.log.info(gray(`$ ${command} ...`));
-    const { status, stderr, stdout } = spawn.sync('node', createTsdownArgs, {
-      stdio: 'pipe',
+    const spinner = prompts.spinner();
+    spinner.start(gray(`$ ${command}`));
+    const { status, stderr, stdout } = await runCommand('node', createTsdownArgs, {
       cwd,
     });
     if (status && status > 0) {
+      prompts.log.info(stdout.toString());
       prompts.log.error(stderr.toString());
-      prompts.log.error(stdout.toString());
       process.exit(status);
     }
+    spinner.stop(gray(`$ ${command} succeeded`));
     // fix "Duplicated package name: react-components-starter or tsdown-starter" name to user input
     editFile(path.join(root, 'package.json'), (content) => {
       const pkg = JSON.parse(content);
@@ -647,14 +649,29 @@ async function init() {
         stdio: 'pipe',
       });
       if (status && status > 0) {
+        prompts.log.info(stdout.toString());
         prompts.log.error(stderr.toString());
-        prompts.log.error(stdout.toString());
         process.exit(status);
       }
     }
   }
 
   await fixPackageJsonForVitePlus(root, selectedPackageManager, isMonorepo);
+
+  // install dependencies on non-CI environment
+  if (!process.env.CI) {
+    const spinner = prompts.spinner();
+    spinner.start('Installing dependencies...');
+    const { status, stderr, stdout } = await runCommand('vite', ['install'], {
+      cwd: rawRoot,
+    });
+    if (status && status > 0) {
+      prompts.log.info(stdout.toString());
+      prompts.log.error(stderr.toString());
+      process.exit(status);
+    }
+    spinner.stop('Dependencies installed');
+  }
 
   // first init, ask user to init git
   if (!isCreateAppOrLib) {
@@ -668,24 +685,24 @@ async function init() {
         stdio: 'pipe',
       });
       if (status && status > 0) {
+        prompts.log.info(stdout.toString());
         prompts.log.error(stderr.toString());
-        prompts.log.error(stdout.toString());
       }
     }
   }
 
   let doneMessage = '';
-  doneMessage += `Done. Now run:`;
+  doneMessage += `Done. Now run:\n`;
   if (rawRoot !== cwd) {
-    doneMessage += green(`\n  cd ${cdProjectName.includes(' ') ? `"${cdProjectName}"` : cdProjectName}`);
+    doneMessage += green(`\n   cd ${cdProjectName.includes(' ') ? `"${cdProjectName}"` : cdProjectName}`);
   }
-  doneMessage += green(`\n  vite run ready`);
-  doneMessage += green(`\n  vite run dev`);
+  doneMessage += green(`\n   vite run ready`);
+  doneMessage += green(`\n   vite run dev`);
 
   if (argCreateMonorepo) {
-    doneMessage += `\n\n  To add new packages to your monorepo:\n`;
-    doneMessage += `\n  vite new --app apps/my-app`;
-    doneMessage += `\n  vite new --lib packages/my-lib`;
+    doneMessage += `\n\n   To add new packages to your monorepo:\n`;
+    doneMessage += `\n   vite new --app apps/my-app`;
+    doneMessage += `\n   vite new --lib packages/my-lib`;
   }
   prompts.outro(doneMessage);
 }
@@ -961,6 +978,30 @@ function findMonorepoRoot(): string | null {
   }
 
   return null;
+}
+
+function runCommand(command: string, args: string[], options?: { cwd?: string }) {
+  const child = spawn(command, args, {
+    stdio: 'pipe',
+    cwd: options?.cwd,
+  });
+  const promise = new Promise<{ status: number; stdout: Buffer; stderr: Buffer }>((resolve, reject) => {
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    child.stdout?.on('data', (data) => {
+      stdout.push(data);
+    });
+    child.stderr?.on('data', (data) => {
+      stderr.push(data);
+    });
+    child.on('close', (code) => {
+      resolve({ status: code ?? 0, stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) });
+    });
+    child.on('error', (err) => {
+      reject(err);
+    });
+  });
+  return promise;
 }
 
 init().catch((err) => {

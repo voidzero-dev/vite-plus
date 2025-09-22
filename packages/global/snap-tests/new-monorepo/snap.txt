@@ -30,14 +30,15 @@ qwik-ts        qwik
 ◇  Scaffolding project with vanilla-ts in hello-vite-plus/apps/website...
 │
 └  Done. Now run:
-  cd hello-vite-plus
-  vite run ready
-  vite run dev
 
-  To add new packages to your monorepo:
+   cd hello-vite-plus
+   vite run ready
+   vite run dev
 
-  vite new --app apps/my-app
-  vite new --lib packages/my-lib
+   To add new packages to your monorepo:
+
+   vite new --app apps/my-app
+   vite new --lib packages/my-lib
 
 
 > cd hello-vite-plus && ls -a . # check files
@@ -91,9 +92,10 @@ vite.config.ts
 ◇  Scaffolding project with vanilla-ts in apps/my-app...
 │
 └  Done. Now run:
-  cd apps/my-app
-  vite run ready
-  vite run dev
+
+   cd apps/my-app
+   vite run ready
+   vite run dev
 
 
 > cd hello-vite-plus && ls -a apps
@@ -106,13 +108,15 @@ website
 ┌  Vite+ - The Unified Toolchain for the Web
 │
 ◇  Scaffolding library with react in packages/my-lib...
-│
-●  $ create-tsdown --overwrite --template react --name packages/my-lib ...
-│
+[?25l│
+◒  $ create-tsdown --overwrite --template react --name packages/my-lib...
+[999D[J◇  $ create-tsdown --overwrite --template react --name packages/my-lib succeeded
+[?25h│
 └  Done. Now run:
-  cd packages/my-lib
-  vite run ready
-  vite run dev
+
+   cd packages/my-lib
+   vite run ready
+   vite run dev
 
 
 > cd hello-vite-plus && ls -a packages
@@ -124,13 +128,15 @@ my-lib
 ┌  Vite+ - The Unified Toolchain for the Web
 │
 ◇  Scaffolding library with default in tools/my-tool...
-│
-●  $ create-tsdown --overwrite --template default --name tools/my-tool ...
-│
+[?25l│
+◒  $ create-tsdown --overwrite --template default --name tools/my-tool...
+[999D[J◇  $ create-tsdown --overwrite --template default --name tools/my-tool succeeded
+[?25h│
 └  Done. Now run:
-  cd tools/my-tool
-  vite run ready
-  vite run dev
+
+   cd tools/my-tool
+   vite run ready
+   vite run dev
 
 
 > cd hello-vite-plus && ls -a tools
