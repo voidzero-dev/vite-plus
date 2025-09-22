@@ -52,6 +52,39 @@ pnpm-workspace.yaml
 tsconfig.json
 vite.config.ts
 
+> cd hello-vite-plus && cat package.json # check package.json
+{
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "ready": "vite fmt && vite run lint && vite run test && vite run prepublishOnly",
+    "dev": "vite run website#dev",
+    "lint": "vite lint --type-aware",
+    "test": "vite test --passWithNoTests",
+    "prepublishOnly": "vite run -r build"
+  },
+  "devDependencies": {
+    "vite": "catalog:"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "catalog:",
+      "tsdown": "catalog:"
+    },
+    "peerDependencyRules": {
+      "allowAny": [
+        "vite"
+      ]
+    }
+  },
+  "resolutions": {
+    "vite": "catalog:",
+    "tsdown": "catalog:"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
 > cd hello-vite-plus && vp new --app --template vanilla-ts apps/my-app # add app
 ┌  Vite+ - The Unified Toolchain for the Web
 │

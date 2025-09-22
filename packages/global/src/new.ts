@@ -850,7 +850,7 @@ async function fixPackageJsonForVitePlus(projectDir: string, selectedPackageMana
     }
     // try to add ready script
     if (!pkg.scripts?.ready) {
-      pkg.scripts.ready = 'vite lint --type-aware && vite run build && vite test --passWithNoTests';
+      pkg.scripts.ready = 'vite fmt && vite lint --type-aware && vite run build && vite test --passWithNoTests';
     }
     // fix empty pkg.name
     if (!pkg.name) {

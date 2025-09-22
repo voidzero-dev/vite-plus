@@ -3,6 +3,7 @@
     "vp new -h # show help",
     "vp new --template vanilla-ts --monorepo --pm pnpm --git false --overwrite hello-vite-plus # create monorepo",
     "cd hello-vite-plus && ls -a . # check files",
+    "cd hello-vite-plus && cat package.json # check package.json",
     "cd hello-vite-plus && vp new --app --template vanilla-ts apps/my-app # add app",
     "cd hello-vite-plus && ls -a apps",
     "cd hello-vite-plus && vp new --lib packages/my-lib --template react # add lib",

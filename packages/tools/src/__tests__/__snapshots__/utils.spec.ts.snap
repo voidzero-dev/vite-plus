@@ -51,5 +51,7 @@ exports[`replaceUnstableOutput > replace unstable semver version 1`] = `
  <semver>
 tsdown/<semver>
 vitest/<semver>
-foo/v<semver>"
+foo/v<semver>
+foo@<semver>
+bar@v<semver>"
 `;

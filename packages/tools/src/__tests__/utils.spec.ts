@@ -16,6 +16,8 @@ foo v1.0.0
 tsdown/0.15.1
 vitest/3.2.4
 foo/v100.1.1000
+foo@1.0.0
+bar@v1.0.0
     `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });

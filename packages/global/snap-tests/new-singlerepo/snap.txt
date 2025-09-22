@@ -19,3 +19,32 @@ package.json
 public
 src
 tsconfig.json
+
+> cd hello-vite-plus && cat package.json # check package.json
+{
+  "name": "hello-vite-plus",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "ready": "vite fmt && vite lint --type-aware && vite run build && vite test --passWithNoTests"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3",
+    "vite": "npm:@voidzero-dev/vite-plus@latest"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus@latest"
+    },
+    "peerDependencyRules": {
+      "allowAny": [
+        "vite"
+      ]
+    }
+  },
+  "packageManager": "pnpm@<semver>"
+}
