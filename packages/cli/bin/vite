@@ -1,3 +1,7 @@
 #!/usr/bin/env node
 
+import module from 'node:module'
+if (module.enableCompileCache) {
+  module.enableCompileCache()
+}
 import '../dist/bin.js'
