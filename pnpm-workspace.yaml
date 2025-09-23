@@ -12,7 +12,7 @@ catalog:
   '@types/react': ^19.1.8
   '@types/react-dom': ^19.1.6
   create-tsdown: 0.0.3
-  create-vite: ^7.1.1
+  create-vite: ^8.0.0
   cross-spawn: ^7.0.5
   mri: ^1.2.0
   next: ^15.4.3
@@ -39,6 +39,7 @@ minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@oxc-project/*'
   - '@rolldown/*'
+  - create-vite
   - oxfmt
   - oxlint
   - oxlint-tsgolint
