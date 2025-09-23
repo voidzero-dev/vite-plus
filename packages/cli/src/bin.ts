@@ -12,7 +12,6 @@
 import { run } from '../binding/index.js';
 import { doc } from './doc.js';
 import { fmt } from './fmt.js';
-import { resolveConfig } from './index.js';
 import { lib } from './lib.js';
 import { lint } from './lint.js';
 import { test } from './test.js';
@@ -22,7 +21,7 @@ async function resolveUniversalViteConfig(err: null | Error, viteConfigCwd: stri
   if (err) {
     throw err;
   }
-
+  const { resolveConfig } = await import('./index.js');
   const config = await resolveConfig({ root: viteConfigCwd }, 'build');
 
   return Promise.resolve(JSON.stringify({
