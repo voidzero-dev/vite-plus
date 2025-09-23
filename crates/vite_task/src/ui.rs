@@ -176,7 +176,7 @@ impl Display for ExecutionSummary {
             f,
             "{}  {} {} {} {}",
             "Statistics:".style(Style::new().bold()),
-            format!("{} tasks", total).style(Style::new().bright_white()),
+            format!(" {} tasks", total).style(Style::new().bright_white()),
             format!("• {} cache hits", cache_hits).style(Style::new().green()),
             format!("• {} cache misses", cache_misses).style(CACHE_MISS_STYLE),
             if failed > 0 {

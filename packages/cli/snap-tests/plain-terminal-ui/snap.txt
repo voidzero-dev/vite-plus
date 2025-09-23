@@ -7,7 +7,7 @@ input_content 1
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
@@ -25,7 +25,7 @@ input_content 1
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1 tasks • 1 cache hits • 0 cache misses 
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
 Performance:  100% cache hit rate, <variable>ms saved in total
 
 Task Details:
@@ -43,7 +43,7 @@ input_content 2
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
@@ -61,7 +61,7 @@ input_content 2
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
@@ -79,7 +79,7 @@ input_content undefined
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
@@ -98,7 +98,7 @@ bar undefined
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
@@ -117,7 +117,7 @@ bar undefined
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
@@ -136,7 +136,7 @@ hello from subfolder
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:  1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
