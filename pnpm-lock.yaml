@@ -28,8 +28,8 @@ catalogs:
       specifier: 0.0.3
       version: 0.0.3
     create-vite:
-      specifier: ^7.1.1
-      version: 7.1.1
+      specifier: ^8.0.0
+      version: 8.0.0
     cross-spawn:
       specifier: ^7.0.5
       version: 7.0.6
@@ -168,7 +168,7 @@ importers:
         version: 0.0.3(typescript@5.9.2)
       create-vite:
         specifier: 'catalog:'
-        version: 7.1.1
+        version: 8.0.0
       cross-spawn:
         specifier: 'catalog:'
         version: 7.0.6
@@ -1701,8 +1701,8 @@ packages:
       typescript:
         optional: true
 
-  create-vite@7.1.1:
-    resolution: {integrity: sha512-9njjp5o1Sc+4XRpyARFillR+dNS0x50U8i2tB6H2KDKYAKWbntUcOOPcNJxTglAwd9nJxznq9K67kl3B/JkCZg==}
+  create-vite@8.0.0:
+    resolution: {integrity: sha512-BAzAv1azeK2dA0TAIAVp0uTfmXWNk368RDqsJFuMcGkr1RhO3T9Plr4FuzmSFhn50BgI5Yzy2cL9CLQi3dJw4A==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
@@ -3695,7 +3695,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  create-vite@7.1.1: {}
+  create-vite@8.0.0: {}
 
   cross-spawn@7.0.6:
     dependencies:
