@@ -153,6 +153,15 @@ pub enum Error {
     #[error("User cancelled by Ctrl+C")]
     UserCancelled,
 
+    #[error("Hash mismatch: expected {expected}, got {actual}")]
+    HashMismatch { expected: String, actual: String },
+
+    #[error("Invalid hash format: {0}")]
+    InvalidHashFormat(String),
+
+    #[error("Unsupported hash algorithm: {0}")]
+    UnsupportedHashAlgorithm(String),
+
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),
 }

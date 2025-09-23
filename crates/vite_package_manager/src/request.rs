@@ -5,6 +5,8 @@ use flate2::read::GzDecoder;
 use futures_util::stream::StreamExt;
 use reqwest::Response;
 use serde::de::DeserializeOwned;
+use sha1::Sha1;
+use sha2::{Digest, Sha224, Sha256, Sha512};
 use tar::Archive;
 use tokio::{fs, io::AsyncWriteExt};
 
@@ -133,23 +135,28 @@ fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Resu
     Ok(())
 }
 
-/// Download tgz file from url and extract it to the target directory.
+/// Download a tgz file from a URL and extract it to a target directory with optional hash verification.
 ///
 /// # Arguments
-///
-/// * `url` - The url of the tgz file.
+/// * `url` - The URL of the tgz file to download.
 /// * `target_dir` - The directory to extract the tgz file to.
+/// * `expected_hash` - Optional expected hash in format "algorithm.hash" (e.g., "sha512.abcd1234...")
 ///
 /// # Returns
-///
-/// * `Ok(())` - If the tgz file is downloaded and extracted successfully.
-/// * `Err(e)` - If the tgz file is not downloaded or extracted successfully.
-pub async fn download_and_extract_tgz(
+/// * `Ok(())` - If the tgz file is downloaded, verified (if hash provided) and extracted successfully.
+/// * `Err(e)` - If the tgz file is not downloaded, verified or extracted successfully.
+pub async fn download_and_extract_tgz_with_hash(
     url: &str,
     target_dir: impl AsRef<Path>,
+    expected_hash: Option<&str>,
 ) -> Result<(), Error> {
     let target_dir = target_dir.as_ref().to_path_buf();
-    tracing::debug!("Start download and extract {} to {:?}", url, target_dir);
+    tracing::debug!(
+        "Start download and extract {} to {:?}, expected hash: {:?}",
+        url,
+        target_dir,
+        expected_hash
+    );
 
     // Create target directory
     fs::create_dir_all(&target_dir).await?;
@@ -158,6 +165,11 @@ pub async fn download_and_extract_tgz(
     let tgz_file = target_dir.join("package.tgz");
     let client = HttpClient::new();
     client.download_file(url, &tgz_file).await?;
+
+    // Verify hash if provided
+    if let Some(expected_hash) = expected_hash {
+        verify_file_hash(&tgz_file, expected_hash).await?;
+    }
 
     // Extract the tgz file to the target directory
     let tgz_file_for_extract = tgz_file.clone();
@@ -169,8 +181,56 @@ pub async fn download_and_extract_tgz(
 
     // Remove the temp file
     fs::remove_file(&tgz_file).await?;
-
     tracing::debug!("Download and extract finished");
+    Ok(())
+}
+
+fn compute_hash<D: Digest>(content: &[u8]) -> String {
+    let mut hasher = D::new();
+    hasher.update(content);
+    hex::encode(hasher.finalize())
+}
+
+/// Verify the hash of a file against an expected hash.
+///
+/// # Arguments
+/// * `file_path` - Path to the file to verify
+/// * `expected_hash` - Expected hash in format "algorithm.hash" (e.g., "sha512.abcd1234...")
+///
+/// # Returns
+/// * `Ok(())` - If the file hash matches the expected hash
+/// * `Err(Error::HashMismatch)` - If the file hash doesn't match
+pub async fn verify_file_hash(
+    file_path: impl AsRef<Path>,
+    expected_hash: &str,
+) -> Result<(), Error> {
+    let file_path = file_path.as_ref();
+    let content = fs::read(file_path).await?;
+
+    // Parse the hash format (e.g., "sha512.abcd1234..." or "sha256.abcd1234...")
+    let (algorithm, expected_hex) = if let Some((algo, hash)) = expected_hash.split_once('.') {
+        (algo, hash)
+    } else {
+        return Err(Error::InvalidHashFormat(expected_hash.to_string()));
+    };
+
+    // Calculate the actual hash based on the algorithm
+    let actual_hex = match algorithm {
+        "sha512" => compute_hash::<Sha512>(&content),
+        "sha256" => compute_hash::<Sha256>(&content),
+        "sha224" => compute_hash::<Sha224>(&content),
+        "sha1" => compute_hash::<Sha1>(&content),
+        _ => return Err(Error::UnsupportedHashAlgorithm(algorithm.to_string())),
+    };
+
+    if actual_hex != expected_hex {
+        return Err(Error::HashMismatch {
+            expected: expected_hash.to_string(),
+            actual: format!("{}.{}", algorithm, actual_hex),
+        });
+    }
+
+    tracing::debug!("Hash verification successful");
     Ok(())
 }
 
@@ -442,13 +502,70 @@ mod tests {
         });
 
         let url = format!("{}/test-package.tgz", server.base_url());
-        let result = download_and_extract_tgz(&url, &target_dir).await;
+        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None).await;
         assert!(result.is_ok(), "Failed to download and extract: {:?}", result);
 
         assert!(target_dir.join("package/bin/yarn").exists());
         assert!(target_dir.join("package/bin/yarn.cmd").exists());
 
         // TempDir automatically cleans up when it goes out of scope
+    }
+
+    #[tokio::test]
+    async fn test_verify_file_hash_sha1() {
+        use tokio::io::AsyncWriteExt;
+
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.txt");
+
+        // Write test content
+        let content = b"Hello, World!";
+        let mut file = tokio::fs::File::create(&test_file).await.unwrap();
+        file.write_all(content).await.unwrap();
+
+        // Calculate expected SHA1
+        use sha1::Sha1;
+        use sha2::Digest;
+        let mut hasher = Sha1::new();
+        hasher.update(content);
+        let expected_hash = format!("sha1.{:x}", hasher.finalize());
+
+        // Test successful verification
+        let result = verify_file_hash(&test_file, &expected_hash).await;
+        assert!(result.is_ok());
+
+        // Test failed verification
+        let wrong_hash = "sha1.0000000000000000000000000000000000000000";
+        let result = verify_file_hash(&test_file, wrong_hash).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_verify_file_hash_sha224() {
+        use tokio::io::AsyncWriteExt;
+
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.txt");
+
+        // Write test content
+        let content = b"Test content for SHA224";
+        let mut file = tokio::fs::File::create(&test_file).await.unwrap();
+        file.write_all(content).await.unwrap();
+
+        // Calculate expected SHA224
+        use sha2::{Digest, Sha224};
+        let mut hasher = Sha224::new();
+        hasher.update(content);
+        let expected_hash = format!("sha224.{:x}", hasher.finalize());
+
+        // Test successful verification
+        let result = verify_file_hash(&test_file, &expected_hash).await;
+        assert!(result.is_ok());
+
+        // Test failed verification
+        let wrong_hash = "sha224.00000000000000000000000000000000000000000000000000000000";
+        let result = verify_file_hash(&test_file, wrong_hash).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]

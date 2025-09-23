@@ -13,6 +13,7 @@ backon = { workspace = true }
 directories = { workspace = true }
 flate2 = { workspace = true }
 futures-util = { workspace = true }
+hex = { workspace = true }
 indoc = { workspace = true }
 pathdiff = { workspace = true }
 petgraph = { workspace = true, features = ["serde-1"] }
@@ -23,6 +24,8 @@ serde = { workspace = true, features = ["derive"] }
 # use `preserve_order` feature to preserve the order of the fields in `package.json`
 serde_json = { workspace = true, features = ["preserve_order"] }
 serde_yml = { workspace = true }
+sha1 = { workspace = true }
+sha2 = { workspace = true }
 tar = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
