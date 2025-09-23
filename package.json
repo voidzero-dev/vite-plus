@@ -2,6 +2,9 @@
   "name": "vite-plus-monorepo",
   "private": true,
   "packageManager": "pnpm@10.17.0",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "type": "module",
   "scripts": {
     "bootstrap-cli": "pnpm --filter=@voidzero-dev/vite-plus build && pnpm --filter=@voidzero-dev/global build && pnpm copy-bindings && pnpm install-global-cli",
