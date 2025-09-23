@@ -185,6 +185,16 @@ pub async fn download_and_extract_tgz_with_hash(
     Ok(())
 }
 
+/// Computes the hash of the given content using the specified digest algorithm.
+///
+/// # Type Parameters
+/// * `D` - A type that implements the [`Digest`](sha2::Digest) trait, such as `Sha256`, `Sha512`, etc.
+///
+/// # Arguments
+/// * `content` - The byte slice to hash.
+///
+/// # Returns
+/// A hex-encoded string representing the computed digest.
 fn compute_hash<D: Digest>(content: &[u8]) -> String {
     let mut hasher = D::new();
     hasher.update(content);
