@@ -188,7 +188,7 @@ pub async fn download_and_extract_tgz_with_hash(
 /// Computes the hash of the given content using the specified digest algorithm.
 ///
 /// # Type Parameters
-/// * `D` - A type that implements the [`Digest`](sha2::Digest) trait, such as `Sha256`, `Sha512`, etc.
+/// * `D` - A type that implements the [`Digest`] trait, such as `Sha256`, `Sha512`, etc.
 ///
 /// # Arguments
 /// * `content` - The byte slice to hash.
@@ -221,7 +221,7 @@ pub async fn verify_file_hash(
     let (algorithm, expected_hex) = if let Some((algo, hash)) = expected_hash.split_once('.') {
         (algo, hash)
     } else {
-        return Err(Error::InvalidHashFormat(expected_hash.to_string()));
+        return Err(Error::InvalidHashFormat(expected_hash.into()));
     };
 
     // Calculate the actual hash based on the algorithm
@@ -230,13 +230,13 @@ pub async fn verify_file_hash(
         "sha256" => compute_hash::<Sha256>(&content),
         "sha224" => compute_hash::<Sha224>(&content),
         "sha1" => compute_hash::<Sha1>(&content),
-        _ => return Err(Error::UnsupportedHashAlgorithm(algorithm.to_string())),
+        _ => return Err(Error::UnsupportedHashAlgorithm(algorithm.into())),
     };
 
     if actual_hex != expected_hex {
         return Err(Error::HashMismatch {
-            expected: expected_hash.to_string(),
-            actual: format!("{}.{}", algorithm, actual_hex),
+            expected: expected_hash.into(),
+            actual: format!("{}.{}", algorithm, actual_hex).into(),
         });
     }
 

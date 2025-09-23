@@ -97,7 +97,7 @@ impl PackageManagerBuilder {
         if version == "latest" {
             version = get_latest_version(package_manager_type).await?;
             should_update_package_manager_field = true;
-            hash = None; // Reset hash when fetching latest
+            hash = None; // Reset hash when fetching latest since hash is version-specific
         }
 
         // handle yarn >= 2.0.0 to use `@yarnpkg/cli-dist` as package name
