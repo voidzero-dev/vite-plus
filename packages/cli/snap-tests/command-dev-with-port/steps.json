@@ -1,0 +1,8 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite dev --port 12312312312 2>&1 | grep RangeError # dev server with wrong port throw error"
+  ]
+}

@@ -223,6 +223,13 @@ async fn get_cached_or_execute<'a>(
                 let executed_task =
                     execute_task(execution_id, &task.resolved_command, base_dir).await?;
                 let exit_status = executed_task.exit_status;
+                tracing::debug!(
+                    "executed command `{}` finished, duration: {:?}, skip_cache: {}, {}",
+                    task.resolved_command.fingerprint.command,
+                    executed_task.duration,
+                    skip_cache,
+                    exit_status
+                );
                 if !skip_cache && exit_status.success() {
                     let cached_task = CommandCacheValue::create(executed_task, fs, base_dir)?;
                     cache.update(&task, cached_task).await?;

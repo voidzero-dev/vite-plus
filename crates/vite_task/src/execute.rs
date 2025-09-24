@@ -311,8 +311,6 @@ impl TaskEnvs {
         ];
         *env_path = join_paths(node_modules_bin_paths.into_iter().chain(paths))?.into();
 
-        tracing::debug!("all_envs: {:?}", all_envs);
-
         Ok(Self { all_envs, envs_without_pass_through })
     }
 }

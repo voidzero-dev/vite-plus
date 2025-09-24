@@ -116,7 +116,7 @@ pub enum Commands {
         args: Vec<String>,
     },
     Dev {
-        #[clap(last = true)]
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
         /// Arguments to pass to vite dev
         args: Vec<String>,
     },
