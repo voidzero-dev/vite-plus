@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os';
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from '@voidzero-dev/vite-plus/test';
 
 import { replaceUnstableOutput } from '../utils.ts';
 

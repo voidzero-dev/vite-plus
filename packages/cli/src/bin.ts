@@ -10,12 +10,12 @@
  */
 
 import { run } from '../binding/index.js';
-import { doc } from './doc.js';
-import { fmt } from './fmt.js';
-import { lib } from './lib.js';
-import { lint } from './lint.js';
-import { test } from './test.js';
-import { vite } from './vite.js';
+import { doc } from './resolve-doc.js';
+import { fmt } from './resolve-fmt.js';
+import { lib } from './resolve-lib.js';
+import { lint } from './resolve-lint.js';
+import { test } from './resolve-test.js';
+import { vite } from './resolve-vite.js';
 
 async function resolveUniversalViteConfig(err: null | Error, viteConfigCwd: string) {
   if (err) {

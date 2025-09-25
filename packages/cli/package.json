@@ -16,6 +16,10 @@
     },
     "./client": {
       "types": "./dist/client.d.ts"
+    },
+    "./test": {
+      "import": "./dist/test.js",
+      "types": "./dist/test.d.ts"
     }
   },
   "engines": {
