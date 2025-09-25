@@ -1,0 +1,22 @@
+> vite run hello
+$ echo -n foo
+foo
+$ echo bar
+bar
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   2 tasks • 0 cache hits • 2 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello(subcommand 0): $ echo -n foo ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [2] hello: $ echo bar ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

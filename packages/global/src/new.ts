@@ -780,6 +780,8 @@ async function initMonorepo(rootProjectDir: string, packageManager: string) {
     editFile(path.join(rootProjectDir, 'package.json'), (content) => {
       const pkg = JSON.parse(content);
       pkg.workspaces = undefined;
+      // remove resolutions field
+      pkg.resolutions = undefined;
       return JSON.stringify(pkg, null, 2) + '\n';
     });
     fs.unlinkSync(path.join(rootProjectDir, '.yarnrc.yml'));
@@ -823,7 +825,15 @@ async function fixPackageJsonForVitePlus(projectDir: string, selectedPackageMana
     const pkg = JSON.parse(content);
 
     // force to use the latest vite-plus instead of vite
-    if (!isMonorepo) {
+    if (isMonorepo) {
+      // change deps version to catalog
+      const names = ['@types/node', 'bumpp', 'happy-dom', 'vitest', 'typescript', 'tsdown', 'vite'];
+      for (const name of names) {
+        if (pkg.devDependencies?.[name]) {
+          pkg.devDependencies[name] = `catalog:`;
+        }
+      }
+    } else {
       const viteVersion = 'npm:@voidzero-dev/vite-plus@latest';
       pkg.devDependencies['vite'] = viteVersion;
       if (selectedPackageManager === 'pnpm') {
@@ -846,14 +856,6 @@ async function fixPackageJsonForVitePlus(projectDir: string, selectedPackageMana
           ...pkg.resolutions,
           vite: viteVersion,
         };
-      }
-    } else {
-      // change deps version to catalog
-      const names = ['@types/node', 'bumpp', 'happy-dom', 'vitest', 'typescript', 'tsdown', 'vite'];
-      for (const name of names) {
-        if (pkg.devDependencies?.[name]) {
-          pkg.devDependencies[name] = `catalog:`;
-        }
       }
     }
     // fix vite dev command
@@ -886,9 +888,9 @@ async function fixPackageJsonForVitePlus(projectDir: string, selectedPackageMana
     await setPackageManager(projectDir, selectedPackageManager);
     // copy .npmrc file to install vite-plus
     if (selectedPackageManager === 'yarn') {
-      copy(path.join(pkgRoot, 'templates/config/.yarnrc.yml'), path.join(projectDir, '.yarnrc.yml'));
+      copy(path.join(pkgRoot, 'templates/config/_yarnrc.yml'), path.join(projectDir, '.yarnrc.yml'));
     } else {
-      copy(path.join(pkgRoot, 'templates/config/.npmrc'), path.join(projectDir, '.npmrc'));
+      copy(path.join(pkgRoot, 'templates/config/_npmrc'), path.join(projectDir, '.npmrc'));
     }
   }
 
