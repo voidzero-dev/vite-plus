@@ -49,7 +49,6 @@ Options:
   -h, --help                Display this message 
   -v, --version             Display version number 
 
-
 > vite fmt -h # fmt help message
 Usage: [--check | --list-different] [PATH]...
 
@@ -68,7 +67,6 @@ Available positional items:
 Available options:
     -h, --help            Prints help information
     -V, --version         Prints version information
-
 
 
 > vite lint -h # lint help message
@@ -167,7 +165,6 @@ Available options:
     -V, --version             Prints version information
 
 
-
 > vite build -h # build help message
 vite/<semver>
 
@@ -196,7 +193,6 @@ Options:
   -f, --filter <filter>         [string] filter debug logs 
   -m, --mode <mode>             [string] set env mode 
   -h, --help                    Display this message 
-
 
 > vite test -h # test help message
 vitest/<semver>
@@ -288,4 +284,3 @@ Options:
   --standalone                                          Start Vitest without running tests. File filters will be ignored, tests will be running only on change (default: false) 
   --mergeReports [path]                                 Path to a blob reports directory. If this options is used, Vitest won't run any tests, it will only report previously recorded tests 
   -h, --help                                            Display this message 
-

@@ -49,7 +49,6 @@ Options:
   -h, --help                Display this message 
   -v, --version             Display version number 
 
-
 > vite lib src/index.ts # should build the library
 ℹ tsdown v<semver> powered by rolldown v<semver>
 ℹ entry: src/index.ts
@@ -57,7 +56,6 @@ Options:
 ℹ dist/index.js  <variable> kB │ gzip: <variable> kB
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
-
 
 > ls dist # should have the library
 index.js
@@ -70,4 +68,3 @@ index.js
 ℹ dist/index.js  <variable> kB │ gzip: <variable> kB
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
-

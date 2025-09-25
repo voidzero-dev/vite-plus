@@ -167,7 +167,6 @@ impl ExecutionPlan {
 
         // Execute or replay the task
         let exit_status = execute_or_replay.await?;
-        println!();
         Ok(ExecutionStatus {
             execution_id,
             pre_execution_status,

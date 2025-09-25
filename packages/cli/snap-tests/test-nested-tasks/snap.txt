@@ -2,7 +2,6 @@
 $ echo 'hello vite'
 hello vite
 
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -19,8 +18,6 @@ Task Details:
 > vite run script2 # nested task should work
 $ echo 'hello vite' (✓ cache hit, replaying)
 hello vite
-
-
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary

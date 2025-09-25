@@ -2,7 +2,6 @@
 $ node check.js --foo
 NO_COLOR=true, CI=true
 
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -19,7 +18,6 @@ Task Details:
 > NO_COLOR=false vite run check -- --bar # get NO_COLOR=false from custom env
 $ node check.js --bar
 NO_COLOR=false, CI=true
-
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
