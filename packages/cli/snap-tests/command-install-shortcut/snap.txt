@@ -8,6 +8,7 @@ dependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
+
 > vite i # install shortcut hit cache
 ✓ cache hit, replaying
 Packages: +<variable>
@@ -19,6 +20,7 @@ dependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
+
 > vite install # install command still hit cache
 ✓ cache hit, replaying
 Packages: +<variable>
@@ -29,3 +31,4 @@ dependencies:
 + tslib <semver>
 
 Done in <variable>ms using pnpm v<semver>
+

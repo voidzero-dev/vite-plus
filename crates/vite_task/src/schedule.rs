@@ -167,6 +167,9 @@ impl ExecutionPlan {
 
         // Execute or replay the task
         let exit_status = execute_or_replay.await?;
+
+        // FIXME: Print a new line to separate the tasks output, need a better solution
+        println!();
         Ok(ExecutionStatus {
             execution_id,
             pre_execution_status,

@@ -2,6 +2,7 @@
 $ cat foo.txt
 bar
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -18,6 +19,7 @@ Task Details:
 > vite run script2 # script2 has the same command as script1, should hit the cache
 $ cat foo.txt (✓ cache hit, replaying)
 bar
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
@@ -37,6 +39,7 @@ Task Details:
 $ cat foo.txt (✗ cache miss: content of input 'foo.txt' changed, executing)
 baz
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -53,6 +56,7 @@ Task Details:
 > vite run script1 # script1 should hit the updated cache
 $ cat foo.txt (✓ cache hit, replaying)
 baz
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary

@@ -2,9 +2,11 @@
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
+
 > vite run lint # lint script should have different cache from builtin lint
 $ echo lint script
 lint script
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
@@ -25,9 +27,11 @@ Task Details:
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
+
 > vite run lint
 $ echo lint script (✓ cache hit, replaying)
 lint script
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary

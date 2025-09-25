@@ -2,6 +2,7 @@
 $ node hello.mjs
 input_content 1
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -18,6 +19,7 @@ Task Details:
 > FOO=1 vite run hello # hit cache
 $ node hello.mjs (✓ cache hit, replaying)
 input_content 1
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
@@ -36,6 +38,7 @@ Task Details:
 $ node hello.mjs (✗ cache miss: envs changed, executing)
 input_content 2
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -53,6 +56,7 @@ Task Details:
 $ node hello.mjs (✗ cache miss: envs changed, executing)
 input_content 2
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -69,6 +73,7 @@ Task Details:
 > vite run hello # env removed
 $ node hello.mjs (✗ cache miss: envs changed, executing)
 input_content undefined
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
@@ -88,6 +93,7 @@ Task Details:
 $ node hello.mjs (✗ cache miss: content of input 'input.txt' changed, executing)
 bar undefined
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -106,6 +112,7 @@ Task Details:
 $ node hello.mjs (✗ cache miss: envs changed, executing)
 bar undefined
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -123,6 +130,7 @@ Task Details:
 > vite run hello # cwd changed
 ~/subfolder$ node hello.mjs (✗ cache miss: working directory changed, executing)
 hello from subfolder
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary

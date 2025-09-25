@@ -2,6 +2,7 @@
 $ node -p process.env.FOO
 1
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -18,6 +19,7 @@ Task Details:
 > FOO=2 vite run hello # cache miss due to env change
 $ node -p process.env.FOO (✗ cache miss: envs changed, executing)
 2
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
@@ -36,6 +38,7 @@ Task Details:
 $ node -p process.env.FOO (✓ cache hit, replaying)
 1
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -52,6 +55,7 @@ Task Details:
 > FOO=2 vite run hello # hit cache created in step 2
 $ node -p process.env.FOO (✓ cache hit, replaying)
 2
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary

@@ -2,6 +2,7 @@
 $ node -p process.env.MY_ENV
 1
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -18,6 +19,7 @@ Task Details:
 > MY_ENV=2 vite run hello # MY_ENV is pass-through. should hit the cache created in step 1
 $ node -p process.env.MY_ENV (✓ cache hit, replaying)
 1
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
@@ -36,6 +38,7 @@ Task Details:
 > MY_ENV=2 vite run hello # cache should be invalidated because passThroughEnvs config changed
 $ node -p process.env.MY_ENV (✗ cache miss: envs changed, executing)
 2
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
