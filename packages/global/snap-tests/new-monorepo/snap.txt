@@ -87,10 +87,6 @@ vite.config.ts
       ]
     }
   },
-  "resolutions": {
-    "vite": "catalog:",
-    "tsdown": "catalog:"
-  },
   "packageManager": "pnpm@<semver>"
 }
 
