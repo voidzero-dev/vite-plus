@@ -97,7 +97,7 @@ static BUILTIN_COMMANDS: &[&str] = &["lint", "fmt", "build", "test", "doc", "lib
 /// Errors from JavaScript resolvers are converted to specific error types
 /// (e.g., `LintFailed`, `ViteError`) to provide better error messages.
 #[napi]
-pub async fn run(options: CliOptions) -> Result<()> {
+pub async fn run(options: CliOptions) -> Result<i32> {
     let args = parse_args();
     // Use provided cwd or current directory
     let mut cwd = current_dir()?;
@@ -198,11 +198,11 @@ pub async fn run(options: CliOptions) -> Result<()> {
     .await;
 
     match result {
-        Ok(exit_status) => std::process::exit(exit_status.code().unwrap_or(1)),
+        Ok(exit_status) => Ok(exit_status.code().unwrap_or(1)),
         Err(e) => {
             match e {
                 // Standard exit code for Ctrl+C
-                Error::UserCancelled => std::process::exit(130),
+                Error::UserCancelled => Ok(130),
                 _ => {
                     // Convert Rust errors to NAPI errors for JavaScript
                     tracing::error!("Rust error: {:?}", e);

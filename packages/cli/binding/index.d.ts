@@ -63,4 +63,4 @@ export interface JsCommandResolvedResult {
  * Errors from JavaScript resolvers are converted to specific error types
  * (e.g., `LintFailed`, `ViteError`) to provide better error messages.
  */
-export declare function run(options: CliOptions): Promise<void>
+export declare function run(options: CliOptions): Promise<number>
