@@ -40,7 +40,10 @@ run({
   test, // Resolves vitest binary for test commands
   doc, // Resolves vitepress binary for doc commands
   resolveUniversalViteConfig,
-}).catch((err) => {
-  console.error('[vite+] run error:', err);
-  process.exit(1);
-});
+}).then((exitCode) => {
+  process.exit(exitCode);
+})
+  .catch((err) => {
+    console.error('[vite+] run error:', err);
+    process.exit(1);
+  });
