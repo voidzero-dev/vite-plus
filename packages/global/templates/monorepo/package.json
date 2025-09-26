@@ -8,11 +8,11 @@
     "tools/*"
   ],
   "scripts": {
-    "ready": "vite fmt && vite run lint && vite run test && vite run prepublishOnly",
+    "ready": "vite fmt && vite run lint && vite run test:all && vite run build:all",
     "dev": "vite run website#dev",
     "lint": "vite lint --type-aware",
-    "test": "vite test --passWithNoTests",
-    "prepublishOnly": "vite run -r build"
+    "test:all": "vite run -r test",
+    "build:all": "vite run -r build"
   },
   "devDependencies": {
     "vite": "catalog:"

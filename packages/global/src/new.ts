@@ -869,6 +869,9 @@ async function fixPackageJsonForVitePlus(projectDir: string, selectedPackageMana
     if (pkg.scripts?.dev === 'tsdown --watch') {
       pkg.scripts.dev = 'vite lib --watch';
     }
+    if (pkg.scripts?.test === 'vitest' || pkg.scripts?.test === 'vitest run') {
+      pkg.scripts.test = 'vite test';
+    }
     // try to add ready script
     if (!pkg.scripts?.ready) {
       pkg.scripts.ready = 'vite fmt && vite lint --type-aware && vite run build && vite test --passWithNoTests';
