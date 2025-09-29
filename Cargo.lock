@@ -466,26 +466,6 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.71.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f58bf3d7db68cfbac37cfc485a8d711e87e064c3d0fe0435b92f7a407f9d6b3"
-dependencies = [
- "bitflags 2.9.4",
- "cexpr",
- "clang-sys",
- "itertools 0.13.0",
- "log",
- "prettyplease",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash",
- "shlex",
- "syn 2.0.106",
-]
-
-[[package]]
-name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "993776b509cfb49c750f11b8f07a46fa23e0a1386ffc01fb1e7d343efc387895"
@@ -1563,7 +1543,6 @@ dependencies = [
  "futures-util",
  "libc",
  "memmap2",
- "ms-detours",
  "nix 0.30.1",
  "ouroboros",
  "passfd 0.2.0 (git+https://github.com/polachok/passfd)",
@@ -1586,7 +1565,7 @@ dependencies = [
 name = "fspy_detours_sys"
 version = "0.0.0"
 dependencies = [
- "bindgen 0.72.1",
+ "bindgen",
  "cc",
  "winapi",
 ]
@@ -1641,8 +1620,8 @@ dependencies = [
  "constcat",
  "dashmap",
  "derive-where",
+ "fspy_detours_sys",
  "fspy_shared",
- "ms-detours",
  "ntapi",
  "path-dedot",
  "ref-cast",
@@ -1684,7 +1663,6 @@ dependencies = [
  "bytemuck",
  "derive-where",
  "libc",
- "ms-detours",
  "nix 0.30.1",
  "os_str_bytes",
  "phf",
@@ -2592,17 +2570,6 @@ dependencies = [
  "log",
  "wasi 0.11.1+wasi-snapshot-preview1",
  "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "ms-detours"
-version = "4.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "787ffff01b8cccea08858cf318738c6122aa1ca9b20ed6505036fefe466c2029"
-dependencies = [
- "bindgen 0.71.1",
- "cc",
- "winapi",
 ]
 
 [[package]]

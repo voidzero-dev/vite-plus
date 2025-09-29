@@ -11,7 +11,7 @@ use fspy_shared::{
     ipc::{BINCODE_CONFIG, PathAccess},
     windows::{PAYLOAD_ID, Payload},
 };
-use ms_detours::DetourCopyPayloadToProcess;
+use fspy_detours_sys::DetourCopyPayloadToProcess;
 use ntapi::ntobapi::DUPLICATE_SAME_ACCESS;
 use smallvec::SmallVec;
 use winapi::{

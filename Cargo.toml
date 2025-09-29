@@ -49,6 +49,7 @@ directories = "6.0.0"
 edit = "0.1.5"
 flate2 = "1.0.35"
 fspy = { path = "crates/fspy" }
+fspy_detours_sys = { path = "crates/fspy_detours_sys" }
 fspy_preload_unix = { path = "crates/fspy_preload_unix", artifact = "cdylib" }
 fspy_preload_windows = { path = "crates/fspy_preload_windows", artifact = "cdylib" }
 fspy_seccomp_unotify = { path = "crates/fspy_seccomp_unotify" }

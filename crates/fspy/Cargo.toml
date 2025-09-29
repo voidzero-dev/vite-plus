@@ -51,7 +51,6 @@ const_format = { version = "0.2.34", features = ["fmt"] }
 
 
 [target.'cfg(target_os = "windows")'.dependencies]
-ms-detours = "4.0.5"
 winsafe = { version = "0.0.24", features = ["kernel"] }
 winapi = { workspace = true, features = [
     "winbase",

@@ -9,7 +9,6 @@ crate-type = ["cdylib"]
 [target.'cfg(target_os = "windows")'.dependencies]
 # windows-sys = { version = "0.59.0", features = ["Win32_Foundation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_Security", "Win32_System_LibraryLoader"] }
 winsafe = { version = "0.0.24", features = ["kernel"] }
-ms-detours = "4.0.5"
 winapi = { workspace = true, features = [
     "winerror",
     "winbase",
@@ -29,6 +28,7 @@ path-dedot = "3.1.1"
 ref-cast = "1.0.24"
 which = "7.0.3"
 fspy_shared = { workspace = true }
+fspy_detours_sys = { workspace = true }
 ntapi = "0.4.1"
 
 

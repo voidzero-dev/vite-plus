@@ -1,11 +1,12 @@
+#![cfg(windows)]
+
 use std::{env, fs};
 
 #[test]
-#[cfg(windows)]
 fn detours_bindings() {
     // https://github.com/0xC9C3/rust-ms-detours/blob/0abc7b11c038afbc2f976de88d44e5691f43bd9a/build.rs#L78
     let bindings = bindgen::Builder::default()
-        .clang_args(["-Idetours/src", "-DWIN32_LEAN_AND_MEAN"])
+        .clang_args(["-Idetours/src", "-DWIN32_LEAN_AND_MEAN", "-target", "i686-pc-windows-msvc"])
         .header_contents("wrapper.h", "#include <windows.h>\n#include <detours.h>\n")
         .allowlist_function("Detour.*")
         .blocklist_type("LP.*")
@@ -41,13 +42,14 @@ fn detours_bindings() {
         .raw_line("use winapi::shared::guiddef::*;")
         .raw_line("use winapi::shared::windef::*;")
         .layout_tests(false)
+        // Detour functions are stdcall on 32-bit Windows
+        .override_abi(bindgen::Abi::System, ".*")
         .generate()
         .expect("Unable to generate bindings");
-
     let bindings_content = bindings.to_string();
     let bindings_path = "src/generated_bindings.rs";
 
-    if env::var("FSPY_DETOURS_WRITE_BINDINGS") == Ok("1".into()) {
+    if env::var("FSPY_DETOURS_WRITE_BINDINGS").as_deref() == Ok("1") {
         fs::write(bindings_path, bindings_content).unwrap();
     } else {
         let existing_bindings_content = fs::read_to_string(bindings_path).unwrap_or_default();

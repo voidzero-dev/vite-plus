@@ -1,7 +1,7 @@
 use std::ffi::CStr;
 
 use fspy_shared::ipc::{AccessMode, NativeStr, PathAccess};
-use ms_detours::{DetourCreateProcessWithDllExA, DetourCreateProcessWithDllExW};
+use fspy_detours_sys::{DetourCreateProcessWithDllExA, DetourCreateProcessWithDllExW};
 use widestring::U16CStr;
 use winapi::{
     shared::{

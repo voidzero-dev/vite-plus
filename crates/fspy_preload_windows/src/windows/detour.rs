@@ -1,6 +1,6 @@
 use std::{cell::UnsafeCell, ffi::CStr, mem::transmute_copy, os::raw::c_void, ptr::null_mut};
 
-use ms_detours::{DetourAttach, DetourDetach};
+use fspy_detours_sys::{DetourAttach, DetourDetach};
 use winapi::{
     shared::minwindef::HMODULE,
     um::libloaderapi::{GetProcAddress, LoadLibraryA},

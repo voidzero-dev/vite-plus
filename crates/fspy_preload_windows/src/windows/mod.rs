@@ -9,7 +9,7 @@ use std::slice;
 use client::{Client, set_global_client};
 use detours::DETOURS;
 use fspy_shared::windows::PAYLOAD_ID;
-use ms_detours::{
+use fspy_detours_sys::{
     DetourFindPayloadEx, DetourIsHelperProcess, DetourRestoreAfterWith, DetourTransactionBegin,
     DetourTransactionCommit, DetourUpdateThread,
 };
