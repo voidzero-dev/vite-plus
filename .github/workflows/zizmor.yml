@@ -7,13 +7,13 @@ on:
   pull_request:
     types: [opened, synchronize]
     paths:
-      - ".github/workflows/**"
+      - '.github/workflows/**'
   push:
     branches:
       - main
-      - "renovate/**"
+      - 'renovate/**'
     paths:
-      - ".github/workflows/**"
+      - '.github/workflows/**'
 
 jobs:
   zizmor:
@@ -26,6 +26,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           persist-credentials: false
+          submodules: true
 
       - uses: taiki-e/install-action@ae97ff9daf1cd2e216671a047d80ff48461e30bb # v2.49.1
         with:
