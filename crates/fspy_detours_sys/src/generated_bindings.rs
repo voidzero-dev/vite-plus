@@ -1,4 +1,3 @@
-#![rustfmt::skip]
 use winapi::shared::minwindef::*;
 use winapi::um::winnt::*;
 use winapi::um::winnt::INT;

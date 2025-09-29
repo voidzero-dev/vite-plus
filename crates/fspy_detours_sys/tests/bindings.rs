@@ -33,7 +33,6 @@ fn detours_bindings() {
         .blocklist_type("_STARTUPINFOA")
         .blocklist_type("_STARTUPINFOW")
         .disable_header_comment()
-        .raw_line("#![rustfmt::skip]") // generated code is formatted by prettyplease, not rustfmt
         .raw_line("use winapi::shared::minwindef::*;")
         .raw_line("use winapi::um::winnt::*;")
         .raw_line("use winapi::um::winnt::INT;")
