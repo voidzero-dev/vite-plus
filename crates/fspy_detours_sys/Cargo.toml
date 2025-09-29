@@ -7,7 +7,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [build-dependencies]
-cc ={ workspace = true }
+cc = { workspace = true }
 
 [dependencies]
 winapi = { workspace = true, features = ["minwindef", "libloaderapi", "processthreadsapi", "windef"] }

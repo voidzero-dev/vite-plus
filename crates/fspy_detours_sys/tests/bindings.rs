@@ -35,7 +35,7 @@ fn detours_bindings() {
         .disable_header_comment()
         .raw_line("use winapi::shared::minwindef::*;")
         .raw_line("use winapi::um::winnt::*;")
-        .raw_line("use winapi::um::winnt::{INT};")
+        .raw_line("use winapi::um::winnt::INT;")
         .raw_line("use winapi::um::minwinbase::*;")
         .raw_line("use winapi::um::processthreadsapi::*;")
         .raw_line("use winapi::shared::guiddef::*;")
