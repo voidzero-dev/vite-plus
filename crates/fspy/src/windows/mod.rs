@@ -15,7 +15,7 @@ use fspy_shared::{
     windows::{PAYLOAD_ID, Payload},
 };
 use futures_util::FutureExt;
-use ms_detours::{DetourCopyPayloadToProcess, DetourUpdateProcessWithDll};
+use fspy_detours_sys::{DetourCopyPayloadToProcess, DetourUpdateProcessWithDll};
 use tokio::{
     io::AsyncReadExt,
     net::windows::named_pipe::{PipeMode, ServerOptions},

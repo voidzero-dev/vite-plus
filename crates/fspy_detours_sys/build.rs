@@ -1,4 +1,7 @@
 fn main() {
+    if std::env::var_os("CARGO_CFG_TARGET_OS").unwrap() != "windows" {
+        return;
+    }
     println!("cargo:rerun-if-changed=detours/src");
     // https://github.com/Berrysoft/detours/blob/c9bc2ad6e9cd8f5f7b74cfa65365d61ecc45203f/detours-sys/build.rs
     cc::Build::new()

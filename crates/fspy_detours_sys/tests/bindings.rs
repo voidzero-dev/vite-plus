@@ -4,9 +4,8 @@ use std::{env, fs};
 
 #[test]
 fn detours_bindings() {
-    // https://github.com/0xC9C3/rust-ms-detours/blob/0abc7b11c038afbc2f976de88d44e5691f43bd9a/build.rs#L78
     let bindings = bindgen::Builder::default()
-        .clang_args(["-Idetours/src", "-DWIN32_LEAN_AND_MEAN", "-target", "i686-pc-windows-msvc"])
+        .clang_args(["-Idetours/src", "-DWIN32_LEAN_AND_MEAN"])
         .header_contents("wrapper.h", "#include <windows.h>\n#include <detours.h>\n")
         .allowlist_function("Detour.*")
         .blocklist_type("LP.*")

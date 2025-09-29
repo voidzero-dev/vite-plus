@@ -1535,6 +1535,7 @@ dependencies = [
  "csv-async",
  "ctor 0.4.3",
  "flate2",
+ "fspy_detours_sys",
  "fspy_preload_unix",
  "fspy_preload_windows",
  "fspy_seccomp_unotify",

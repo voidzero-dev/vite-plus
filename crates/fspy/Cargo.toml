@@ -58,6 +58,7 @@ winapi = { workspace = true, features = [
     "handleapi",
 ] }
 fspy_preload_windows = { workspace = true }
+fspy_detours_sys = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 tempfile = "3.19.1"
