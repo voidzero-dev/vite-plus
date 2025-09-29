@@ -72,7 +72,7 @@ portable-pty = "0.9.0"
 ratatui = "0.29.0"
 rayon = "1.10.0"
 ref-cast = "1.0.24"
-reqwest = { version = "0.12", features = ["stream", "rustls-tls", "json"], default-features = false }
+reqwest = { version = "0.12", features = ["stream", "native-tls", "json"], default-features = false }
 rusqlite = "0.37.0"
 rustc-hash = "2.1.1"
 semver = "1.0.26"
