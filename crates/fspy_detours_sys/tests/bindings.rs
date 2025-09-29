@@ -41,6 +41,7 @@ fn detours_bindings() {
         .raw_line("use winapi::shared::guiddef::*;")
         .raw_line("use winapi::shared::windef::*;")
         .layout_tests(false)
+        .formatter(bindgen::Formatter::Prettyplease)
         // Detour functions are stdcall on 32-bit Windows
         .override_abi(bindgen::Abi::System, ".*")
         .generate()

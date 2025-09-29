@@ -1,11 +1,10 @@
-use winapi::{
-    shared::{guiddef::*, minwindef::*, windef::*},
-    um::{
-        minwinbase::*,
-        processthreadsapi::*,
-        winnt::{INT, *},
-    },
-};
+use winapi::shared::minwindef::*;
+use winapi::um::winnt::*;
+use winapi::um::winnt::{INT};
+use winapi::um::minwinbase::*;
+use winapi::um::processthreadsapi::*;
+use winapi::shared::guiddef::*;
+use winapi::shared::windef::*;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -13,9 +12,13 @@ pub struct _DETOUR_TRAMPOLINE {
     _unused: [u8; 0],
 }
 pub type PDETOUR_TRAMPOLINE = *mut _DETOUR_TRAMPOLINE;
-#[doc = " Binary Typedefs."]
+/// Binary Typedefs.
 pub type PF_DETOUR_BINARY_BYWAY_CALLBACK = ::std::option::Option<
-    unsafe extern "system" fn(pContext: PVOID, pszFile: LPCSTR, ppszOutFile: *mut LPCSTR) -> BOOL,
+    unsafe extern "system" fn(
+        pContext: PVOID,
+        pszFile: LPCSTR,
+        ppszOutFile: *mut LPCSTR,
+    ) -> BOOL,
 >;
 pub type PF_DETOUR_BINARY_FILE_CALLBACK = ::std::option::Option<
     unsafe extern "system" fn(
@@ -36,8 +39,9 @@ pub type PF_DETOUR_BINARY_SYMBOL_CALLBACK = ::std::option::Option<
         ppszOutSymbol: *mut LPCSTR,
     ) -> BOOL,
 >;
-pub type PF_DETOUR_BINARY_COMMIT_CALLBACK =
-    ::std::option::Option<unsafe extern "system" fn(pContext: PVOID) -> BOOL>;
+pub type PF_DETOUR_BINARY_COMMIT_CALLBACK = ::std::option::Option<
+    unsafe extern "system" fn(pContext: PVOID) -> BOOL,
+>;
 pub type PF_DETOUR_ENUMERATE_EXPORT_CALLBACK = ::std::option::Option<
     unsafe extern "system" fn(
         pContext: PVOID,
@@ -67,7 +71,7 @@ pub type PF_DETOUR_IMPORT_FUNC_CALLBACK_EX = ::std::option::Option<
 >;
 pub type PDETOUR_BINARY = *mut ::std::os::raw::c_void;
 unsafe extern "system" {
-    #[doc = " Transaction APIs."]
+    /// Transaction APIs.
     pub fn DetourTransactionBegin() -> LONG;
 }
 unsafe extern "system" {
@@ -110,7 +114,7 @@ unsafe extern "system" {
     pub fn DetourSetSystemRegionUpperBound(pSystemRegionUpperBound: PVOID) -> PVOID;
 }
 unsafe extern "system" {
-    #[doc = " Code Functions."]
+    /// Code Functions.
     pub fn DetourFindFunction(pszModule: LPCSTR, pszFunction: LPCSTR) -> PVOID;
 }
 unsafe extern "system" {
@@ -138,7 +142,7 @@ unsafe extern "system" {
     pub fn DetourIsFunctionImported(pbCode: PBYTE, pbAddress: PBYTE) -> BOOL;
 }
 unsafe extern "system" {
-    #[doc = " Loaded Binary Functions."]
+    /// Loaded Binary Functions.
     pub fn DetourGetContainingModule(pvAddr: PVOID) -> HMODULE;
 }
 unsafe extern "system" {
@@ -174,7 +178,11 @@ unsafe extern "system" {
     ) -> BOOL;
 }
 unsafe extern "system" {
-    pub fn DetourFindPayload(hModule: HMODULE, rguid: *const GUID, pcbData: *mut DWORD) -> PVOID;
+    pub fn DetourFindPayload(
+        hModule: HMODULE,
+        rguid: *const GUID,
+        pcbData: *mut DWORD,
+    ) -> PVOID;
 }
 unsafe extern "system" {
     pub fn DetourFindPayloadEx(rguid: *const GUID, pcbData: *mut DWORD) -> PVOID;
@@ -186,7 +194,7 @@ unsafe extern "system" {
     pub fn DetourFreePayload(pvData: PVOID) -> BOOL;
 }
 unsafe extern "system" {
-    #[doc = " Persistent Binary Functions."]
+    /// Persistent Binary Functions.
     pub fn DetourBinaryOpen(hFile: HANDLE) -> PDETOUR_BINARY;
 }
 unsafe extern "system" {
@@ -213,7 +221,10 @@ unsafe extern "system" {
     ) -> PVOID;
 }
 unsafe extern "system" {
-    pub fn DetourBinaryDeletePayload(pBinary: PDETOUR_BINARY, rguid: *const GUID) -> BOOL;
+    pub fn DetourBinaryDeletePayload(
+        pBinary: PDETOUR_BINARY,
+        rguid: *const GUID,
+    ) -> BOOL;
 }
 unsafe extern "system" {
     pub fn DetourBinaryPurgePayloads(pBinary: PDETOUR_BINARY) -> BOOL;
@@ -238,7 +249,7 @@ unsafe extern "system" {
     pub fn DetourBinaryClose(pBinary: PDETOUR_BINARY) -> BOOL;
 }
 unsafe extern "system" {
-    #[doc = " Create Process & Load Dll."]
+    /// Create Process & Load Dll.
     pub fn DetourFindRemotePayload(
         hProcess: HANDLE,
         rguid: *const GUID,
@@ -402,8 +413,11 @@ unsafe extern "system" {
     ) -> BOOL;
 }
 unsafe extern "system" {
-    pub fn DetourUpdateProcessWithDll(hProcess: HANDLE, rlpDlls: *mut LPCSTR, nDlls: DWORD)
-    -> BOOL;
+    pub fn DetourUpdateProcessWithDll(
+        hProcess: HANDLE,
+        rlpDlls: *mut LPCSTR,
+        nDlls: DWORD,
+    ) -> BOOL;
 }
 unsafe extern "system" {
     pub fn DetourUpdateProcessWithDllEx(
@@ -440,5 +454,10 @@ unsafe extern "system" {
     pub fn DetourIsHelperProcess() -> BOOL;
 }
 unsafe extern "system" {
-    pub fn DetourFinishHelperProcess(arg1: HWND, arg2: HINSTANCE, arg3: LPSTR, arg4: INT);
+    pub fn DetourFinishHelperProcess(
+        arg1: HWND,
+        arg2: HINSTANCE,
+        arg3: LPSTR,
+        arg4: INT,
+    );
 }
