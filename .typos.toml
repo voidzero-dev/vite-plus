@@ -5,4 +5,6 @@ PUNICODE = "PUNICODE"
 [files]
 extend-exclude = [
   "**/snap-tests/**/snap.txt",
+  "crates/fspy_detours_sys/detours",
+  "crates/fspy_detours_sys/src/generated_bindings.rs",
 ]
