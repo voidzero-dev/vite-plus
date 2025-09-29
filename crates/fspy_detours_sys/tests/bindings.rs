@@ -1,8 +1,12 @@
+use std::{env, fs};
+
 #[test]
+#[cfg(windows)]
 fn detours_bindings() {
+    // https://github.com/0xC9C3/rust-ms-detours/blob/0abc7b11c038afbc2f976de88d44e5691f43bd9a/build.rs#L78
     let bindings = bindgen::Builder::default()
-        .header("detours/src/detours.h")
-        .clang_args(["-DWIN32_LEAN_AND_MEAN"])
+        .clang_args(["-Idetours/src", "-DWIN32_LEAN_AND_MEAN"])
+        .header_contents("wrapper.h", "#include <windows.h>\n#include <detours.h>\n")
         .allowlist_function("Detour.*")
         .blocklist_type("LP.*")
         .blocklist_type("_GUID")
@@ -28,6 +32,7 @@ fn detours_bindings() {
         .blocklist_type("_PROCESS_INFORMATION")
         .blocklist_type("_STARTUPINFOA")
         .blocklist_type("_STARTUPINFOW")
+        .disable_header_comment()
         .raw_line("use winapi::shared::minwindef::*;")
         .raw_line("use winapi::um::winnt::*;")
         .raw_line("use winapi::um::winnt::{INT};")
@@ -38,4 +43,17 @@ fn detours_bindings() {
         .layout_tests(false)
         .generate()
         .expect("Unable to generate bindings");
+
+    let bindings_content = bindings.to_string();
+    let bindings_path = "src/generated_bindings.rs";
+
+    if env::var("FSPY_DETOURS_WRITE_BINDINGS") == Ok("1".into()) {
+        fs::write(bindings_path, bindings_content).unwrap();
+    } else {
+        let existing_bindings_content = fs::read_to_string(bindings_path).unwrap_or_default();
+        assert_eq!(
+            existing_bindings_content, bindings_content,
+            "Bindings are out of date. Run this test with FSPY_DETOURS_WRITE_BINDINGS=1 to update them."
+        );
+    }
 }
