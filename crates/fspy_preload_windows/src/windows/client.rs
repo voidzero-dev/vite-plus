@@ -7,11 +7,11 @@ use std::{
 
 use bincode::{borrow_decode_from_slice, encode_into_std_write, encode_to_vec};
 use dashmap::DashSet;
+use fspy_detours_sys::DetourCopyPayloadToProcess;
 use fspy_shared::{
     ipc::{BINCODE_CONFIG, PathAccess},
     windows::{PAYLOAD_ID, Payload},
 };
-use fspy_detours_sys::DetourCopyPayloadToProcess;
 use ntapi::ntobapi::DUPLICATE_SAME_ACCESS;
 use smallvec::SmallVec;
 use winapi::{

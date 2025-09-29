@@ -8,11 +8,11 @@ use std::slice;
 
 use client::{Client, set_global_client};
 use detours::DETOURS;
-use fspy_shared::windows::PAYLOAD_ID;
 use fspy_detours_sys::{
     DetourFindPayloadEx, DetourIsHelperProcess, DetourRestoreAfterWith, DetourTransactionBegin,
     DetourTransactionCommit, DetourUpdateThread,
 };
+use fspy_shared::windows::PAYLOAD_ID;
 use winapi::{
     shared::minwindef::{BOOL, DWORD, FALSE, HINSTANCE, TRUE},
     um::{

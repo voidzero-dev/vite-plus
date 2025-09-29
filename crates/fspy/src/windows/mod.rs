@@ -10,12 +10,12 @@ use std::{
 
 use bincode::borrow_decode_from_slice;
 use const_format::formatcp;
+use fspy_detours_sys::{DetourCopyPayloadToProcess, DetourUpdateProcessWithDll};
 use fspy_shared::{
     ipc::{BINCODE_CONFIG, PathAccess},
     windows::{PAYLOAD_ID, Payload},
 };
 use futures_util::FutureExt;
-use fspy_detours_sys::{DetourCopyPayloadToProcess, DetourUpdateProcessWithDll};
 use tokio::{
     io::AsyncReadExt,
     net::windows::named_pipe::{PipeMode, ServerOptions},

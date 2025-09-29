@@ -1,10 +1,11 @@
-use winapi::shared::minwindef::*;
-use winapi::um::winnt::*;
-use winapi::um::winnt::{INT};
-use winapi::um::minwinbase::*;
-use winapi::um::processthreadsapi::*;
-use winapi::shared::guiddef::*;
-use winapi::shared::windef::*;
+use winapi::{
+    shared::{guiddef::*, minwindef::*, windef::*},
+    um::{
+        minwinbase::*,
+        processthreadsapi::*,
+        winnt::{INT, *},
+    },
+};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
