@@ -37,6 +37,7 @@ backon = "1.3.0"
 bincode = "2.0.1"
 brush-parser = "0.2.18"
 bstr = "1.12.0"
+cc = "1.2.39"
 clap = "4.5.40"
 color-eyre = "0.6.5"
 compact_str = "0.9.0"
@@ -102,6 +103,7 @@ vite_path = { path = "crates/vite_path" }
 vite_str = { path = "crates/vite_str" }
 vite_task = { path = "crates/vite_task" }
 wax = "0.6.0"
+winapi = "0.3.9"
 
 napi = { version = "3.0.0", default-features = false, features = ["async", "error_anyhow"] }
 napi-build = "2"

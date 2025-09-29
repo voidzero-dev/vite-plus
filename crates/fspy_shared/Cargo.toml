@@ -11,7 +11,7 @@ allocator-api2 = { version = "0.2.21", default-features = false, features = ["st
 # stable_deref_trait = { version = "1.2.0", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-winapi = { version = "0.3.9", features = ["std"] }
+winapi = { workspace = true, features = ["std"] }
 ms-detours = "4.0.5"
 bytemuck = { version = "1.23.0", features = ["must_cast", "extern_crate_alloc"] }
 winsafe = { version = "0.0.24", features = ["kernel"] }

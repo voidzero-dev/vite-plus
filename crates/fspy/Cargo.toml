@@ -27,19 +27,17 @@ allocator-api2 = { version = "0.2.21", default-features = false, features = [
 tokio-seqpacket = "0.8.0"
 arrayvec = "0.7.6"
 nix = { version = "0.30.1", features = ["uio"] }
-fspy_seccomp_unotify = { workspace = true, features = ["supervisor"]}
-blink-alloc =  { version = "0.3.1", features = ["sync"]}
+fspy_seccomp_unotify = { workspace = true, features = ["supervisor"] }
+blink-alloc = { version = "0.3.1", features = ["sync"] }
 thread_local = "1.1.9"
 tokio = { version = "1.44.2", features = ["bytes"] }
-syscalls = { version = "0.6.18", default-features = false, features = ["std"]}
+syscalls = { version = "0.6.18", default-features = false, features = ["std"] }
 
 [target.'cfg(unix)'.dependencies]
 fspy_shared_unix = { workspace = true }
 fspy_preload_unix = { workspace = true }
 nix = { version = "0.30.1", features = ["fs", "process", "socket", "feature"] }
-passfd = { git = "https://github.com/polachok/passfd", features = [
-    "async",
-] }
+passfd = { git = "https://github.com/polachok/passfd", features = ["async"] }
 memmap2 = "0.9.7"
 # asyncfd = "0.1.2"
 
@@ -55,7 +53,7 @@ const_format = { version = "0.2.34", features = ["fmt"] }
 [target.'cfg(target_os = "windows")'.dependencies]
 ms-detours = "4.0.5"
 winsafe = { version = "0.0.24", features = ["kernel"] }
-winapi = { version = "0.3.9", features = [
+winapi = { workspace = true, features = [
     "winbase",
     "securitybaseapi",
     "handleapi",

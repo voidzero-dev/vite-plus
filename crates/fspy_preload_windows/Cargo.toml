@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 # windows-sys = { version = "0.59.0", features = ["Win32_Foundation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_Security", "Win32_System_LibraryLoader"] }
 winsafe = { version = "0.0.24", features = ["kernel"] }
 ms-detours = "4.0.5"
-winapi = { version = "0.3.9", features = [
+winapi = { workspace = true, features = [
     "winerror",
     "winbase",
     "namedpipeapi",
