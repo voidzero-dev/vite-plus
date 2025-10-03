@@ -7,28 +7,28 @@ publish = false
 crate-type = ["cdylib"]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-arrayvec = "0.7.6"
-syscalls = { version = "0.6.18", default-features = false }
+arrayvec = { workspace = true }
+const_format = { workspace = true }
 fspy_seccomp_unotify = { workspace = true, features = ["target"] }
-libc-print = "0.1.23"
-const_format = "0.2.34"
+libc-print = { workspace = true }
+syscalls = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.172"
-bstr = { version = "1.12.0", default-features = false }
-socket2 = "0.5.10"
-ctor = "0.4.2"
-thread_local = "1.1.9"
-arrayvec = "0.7.6"
-bincode = "2.0.1"
-bytemuck = { version = "1.23.0", features = ["extern_crate_alloc"] }
-derive-where = "1.4.0"
-path-dedot = "3.1.1"
-ref-cast = "1.0.24"
-which = "7.0.3"
-fspy_shared_unix = { workspace = true }
+anyhow = { workspace = true }
+arrayvec = { workspace = true }
+bincode = { workspace = true }
+bstr = { workspace = true, default-features = false }
+bytemuck = { workspace = true }
+ctor = { workspace = true }
+derive-where = { workspace = true }
 fspy_shared = { workspace = true }
-nix = { version = "0.30.1", features = ["signal", "fs", "socket", "mman", "time"] }
-memmap2 = "0.9.7"
-anyhow = "1.0.98"
+fspy_shared_unix = { workspace = true }
+libc = { workspace = true }
+memmap2 = { workspace = true }
+nix = { workspace = true, features = ["signal", "fs", "socket", "mman", "time"] }
 passfd = { workspace = true }
+path-dedot = { workspace = true }
+ref-cast = { workspace = true }
+socket2 = { workspace = true }
+thread_local = { workspace = true }
+which = { workspace = true }

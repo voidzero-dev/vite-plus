@@ -16,4 +16,4 @@ winapi = { workspace = true, features = ["minwindef", "libloaderapi", "processth
 workspace = true
 
 [dev-dependencies]
-bindgen = "0.72.1"
+bindgen = { workspace = true }

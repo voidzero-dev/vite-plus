@@ -18,4 +18,4 @@ vite_str = { workspace = true }
 workspace = true
 
 [dev-dependencies]
-assert2 = "0.3.16"
+assert2 = { workspace = true }
