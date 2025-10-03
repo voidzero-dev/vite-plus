@@ -315,7 +315,7 @@ pub async fn main<
             } else {
                 recursive_run
             };
-            let mut workspace = Workspace::load(cwd, topological_run)?;
+            let workspace = Workspace::load(cwd, topological_run)?;
 
             let task_graph = workspace.build_task_subgraph(
                 tasks,
@@ -324,12 +324,12 @@ pub async fn main<
             )?;
 
             let plan = ExecutionPlan::plan(task_graph, parallel_run)?;
-            let summary = plan.execute(&mut workspace).await?;
+            let summary = plan.execute(&workspace).await?;
             workspace.unload().await?;
             summary
         }
         Commands::Lint { args } => {
-            let mut workspace = Workspace::partial_load(cwd)?;
+            let workspace = Workspace::partial_load(cwd)?;
             let lint_fn = options
                 .as_ref()
                 .map(|o| &o.lint)
@@ -356,41 +356,41 @@ pub async fn main<
                     oxlint_config_path.as_path().to_string_lossy().into_owned(),
                 ]);
             }
-            let summary = lint::lint(lint_fn, &mut workspace, args).await?;
+            let summary = lint::lint(lint_fn, &workspace, args).await?;
             workspace.unload().await?;
             summary
         }
         Commands::Fmt { args } => {
-            let mut workspace = Workspace::partial_load(cwd)?;
+            let workspace = Workspace::partial_load(cwd)?;
             let fmt_fn =
                 options.map(|o| o.fmt).expect("fmt command requires CliOptions to be provided");
 
-            let summary = fmt::fmt(fmt_fn, &mut workspace, args).await?;
+            let summary = fmt::fmt(fmt_fn, &workspace, args).await?;
             workspace.unload().await?;
             summary
         }
         Commands::Build { args } => {
-            let mut workspace = Workspace::partial_load(cwd)?;
+            let workspace = Workspace::partial_load(cwd)?;
             let vite_fn =
                 options.map(|o| o.vite).expect("build command requires CliOptions to be provided");
 
-            let summary = vite::create_vite("build", vite_fn, &mut workspace, args).await?;
+            let summary = vite::create_vite("build", vite_fn, &workspace, args).await?;
             workspace.unload().await?;
             summary
         }
         Commands::Test { args } => {
-            let mut workspace = Workspace::partial_load(cwd)?;
+            let workspace = Workspace::partial_load(cwd)?;
             let test_fn =
                 options.map(|o| o.test).expect("test command requires CliOptions to be provided");
-            let summary = test::test(test_fn, &mut workspace, args).await?;
+            let summary = test::test(test_fn, &workspace, args).await?;
             workspace.unload().await?;
             summary
         }
         Commands::Lib { args } => {
-            let mut workspace = Workspace::partial_load(cwd)?;
+            let workspace = Workspace::partial_load(cwd)?;
             let lib_fn =
                 options.map(|o| o.lib).expect("lib command requires CliOptions to be provided");
-            let summary = lib_cmd::lib(lib_fn, &mut workspace, args).await?;
+            let summary = lib_cmd::lib(lib_fn, &workspace, args).await?;
             workspace.unload().await?;
             summary
         }
@@ -398,16 +398,16 @@ pub async fn main<
             install::InstallCommand::builder(cwd).build().execute(args).await?
         }
         Commands::Dev { args } => {
-            let mut workspace = Workspace::partial_load(cwd)?;
+            let workspace = Workspace::partial_load(cwd)?;
             let vite_fn = options.map(|o| o.vite).expect("dev command requires CliOptions");
-            let summary = vite::create_vite("dev", vite_fn, &mut workspace, args).await?;
+            let summary = vite::create_vite("dev", vite_fn, &workspace, args).await?;
             workspace.unload().await?;
             summary
         }
         Commands::Doc { args } => {
-            let mut workspace = Workspace::partial_load(cwd)?;
+            let workspace = Workspace::partial_load(cwd)?;
             let doc_fn = options.map(|o| o.doc).expect("doc command requires CliOptions");
-            let summary = doc::doc(doc_fn, &mut workspace, args).await?;
+            let summary = doc::doc(doc_fn, &workspace, args).await?;
             workspace.unload().await?;
             summary
         }

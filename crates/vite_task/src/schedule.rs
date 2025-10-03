@@ -125,7 +125,7 @@ impl ExecutionPlan {
     /// - `Ok(ExecutionSummary)` containing execution status of all tasks (some may fail with non-zero exit code)
     /// - `Err(_)` for other errors (network, filesystem, etc.)
     #[tracing::instrument(skip(self, workspace))]
-    pub async fn execute(self, workspace: &mut Workspace) -> Result<ExecutionSummary, Error> {
+    pub async fn execute(self, workspace: &Workspace) -> Result<ExecutionSummary, Error> {
         let mut execution_statuses = Vec::<ExecutionStatus>::with_capacity(self.steps.len());
         for step in self.steps {
             execution_statuses.push(Self::execute_resolved_task(step, workspace).await?);
@@ -135,7 +135,7 @@ impl ExecutionPlan {
 
     async fn execute_resolved_task(
         step: ResolvedTask,
-        workspace: &mut Workspace,
+        workspace: &Workspace,
     ) -> anyhow::Result<ExecutionStatus> {
         tracing::debug!("Executing task {}", step.display_name());
         let display_options = step.display_options;
@@ -146,7 +146,7 @@ impl ExecutionPlan {
         let (cache_status, execute_or_replay) = get_cached_or_execute(
             &execution_id,
             step.clone(),
-            &mut workspace.task_cache,
+            &workspace.task_cache,
             &workspace.fs,
             &workspace.workspace_dir,
         )
@@ -183,7 +183,7 @@ impl ExecutionPlan {
 async fn get_cached_or_execute<'a>(
     execution_id: &'a str,
     task: ResolvedTask,
-    cache: &'a mut TaskCache,
+    cache: &'a TaskCache,
     fs: &'a impl FileSystem,
     base_dir: &'a AbsolutePath,
 ) -> Result<(CacheStatus, BoxFuture<'a, Result<ExitStatus, Error>>), Error> {

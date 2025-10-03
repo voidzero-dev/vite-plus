@@ -13,7 +13,7 @@ pub async fn test<
     TestFn: Fn() -> Test,
 >(
     resolve_test_command: TestFn,
-    workspace: &mut Workspace,
+    workspace: &Workspace,
     args: &Vec<String>,
 ) -> Result<ExecutionSummary, Error> {
     let resolved_task = ResolvedTask::resolve_from_builtin(

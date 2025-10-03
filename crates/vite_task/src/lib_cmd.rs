@@ -11,7 +11,7 @@ use crate::{
 #[tracing::instrument(skip(resolve_lib_command, workspace))]
 pub async fn lib<Lib: Future<Output = Result<ResolveCommandResult, Error>>, LibFn: Fn() -> Lib>(
     resolve_lib_command: LibFn,
-    workspace: &mut Workspace,
+    workspace: &Workspace,
     args: &Vec<String>,
 ) -> Result<ExecutionSummary, Error> {
     let resolved_task =

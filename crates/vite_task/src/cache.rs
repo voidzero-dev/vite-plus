@@ -127,7 +127,7 @@ impl TaskCache {
     }
 
     pub async fn update(
-        &mut self,
+        &self,
         resolved_task: &ResolvedTask,
         cached_task: CommandCacheValue,
     ) -> Result<(), Error> {

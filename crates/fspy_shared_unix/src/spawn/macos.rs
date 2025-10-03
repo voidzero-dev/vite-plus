@@ -15,7 +15,7 @@ use crate::{
 
 pub struct PreExec(Infallible);
 impl PreExec {
-    pub fn run(&mut self) -> nix::Result<()> {
+    pub fn run(&self) -> nix::Result<()> {
         match self.0 {}
     }
 }

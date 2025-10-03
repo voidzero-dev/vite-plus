@@ -10,7 +10,7 @@ use crate::{
 
 pub async fn doc<Doc: Future<Output = Result<ResolveCommandResult, Error>>, DocFn: Fn() -> Doc>(
     resolve_doc_command: DocFn,
-    workspace: &mut Workspace,
+    workspace: &Workspace,
     args: &Vec<String>,
 ) -> Result<ExecutionSummary, Error> {
     let resolved_task =

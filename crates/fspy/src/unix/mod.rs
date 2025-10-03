@@ -175,7 +175,7 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
     let supervisor = supervise::<SyscallHandler>()?;
 
     #[cfg(target_os = "linux")]
-    let mut supervisor_pre_exec = supervisor.pre_exec;
+    let supervisor_pre_exec = supervisor.pre_exec;
 
     let payload = Payload {
         ipc_fd: shm_fd_sender.as_raw_fd(),
@@ -201,7 +201,7 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
 
     let mut exec = command.get_exec();
     let mut exec_resolve_accesses = PathAccessArena::default();
-    let mut pre_exec = handle_exec(
+    let pre_exec = handle_exec(
         &mut exec,
         ExecResolveConfig::search_path_enabled(None),
         &encoded_payload,
@@ -221,7 +221,7 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
 
             #[cfg(target_os = "linux")]
             supervisor_pre_exec.run()?;
-            if let Some(pre_exec) = &mut pre_exec {
+            if let Some(pre_exec) = pre_exec.as_ref() {
                 pre_exec.run()?;
             }
             Ok(())

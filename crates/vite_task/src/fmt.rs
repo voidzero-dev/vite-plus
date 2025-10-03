@@ -18,7 +18,7 @@ pub struct FmtConfig {
 #[tracing::instrument(skip(resolve_fmt_command, workspace))]
 pub async fn fmt<Fmt: Future<Output = Result<ResolveCommandResult, Error>>, FmtFn: Fn() -> Fmt>(
     resolve_fmt_command: FmtFn,
-    workspace: &mut Workspace,
+    workspace: &Workspace,
     args: &Vec<String>,
 ) -> Result<ExecutionSummary, Error> {
     let resolved_task =

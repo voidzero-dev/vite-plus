@@ -27,7 +27,7 @@ pub struct Supervisor<F> {
 
 pub struct PreExec(OwnedFd);
 impl PreExec {
-    pub fn run(&mut self) -> nix::Result<()> {
+    pub fn run(&self) -> nix::Result<()> {
         let mut fd_flag = FdFlag::from_bits_retain(fcntl(&self.0, FcntlArg::F_GETFD)?);
         fd_flag.remove(FdFlag::FD_CLOEXEC);
         fcntl(&self.0, FcntlArg::F_SETFD(fd_flag))?;

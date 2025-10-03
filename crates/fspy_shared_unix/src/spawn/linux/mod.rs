@@ -15,7 +15,7 @@ const LD_PRELOAD: &str = "LD_PRELOAD";
 
 pub struct PreExec(SeccompPayload);
 impl PreExec {
-    pub fn run(&mut self) -> nix::Result<()> {
+    pub fn run(&self) -> nix::Result<()> {
         install_target(&self.0)
     }
 }

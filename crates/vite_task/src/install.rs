@@ -58,7 +58,7 @@ impl InstallCommand {
             }
             Err(e) => return Err(e),
         };
-        let mut workspace = Workspace::partial_load(self.workspace_root)?;
+        let workspace = Workspace::partial_load(self.workspace_root)?;
         let resolve_command = package_manager.resolve_command();
         let resolved_task = ResolvedTask::resolve_from_builtin_with_command_result(
             &workspace,
@@ -69,7 +69,7 @@ impl InstallCommand {
         )?;
         let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
         task_graph.add_node(resolved_task);
-        let summary = ExecutionPlan::plan(task_graph, false)?.execute(&mut workspace).await?;
+        let summary = ExecutionPlan::plan(task_graph, false)?.execute(&workspace).await?;
         workspace.unload().await?;
 
         Ok(summary)

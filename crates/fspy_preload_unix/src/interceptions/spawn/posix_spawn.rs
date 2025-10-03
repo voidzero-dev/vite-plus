@@ -51,7 +51,7 @@ unsafe fn handle_posix_spawn(
                         raw_command.envp.cast(),
                     )
                 };
-                if let Some(mut pre_exec) = pre_exec {
+                if let Some(pre_exec) = pre_exec {
                     thread::scope(move |s| {
                         let call_original = AssertSend(call_original);
                         s.spawn(move || {

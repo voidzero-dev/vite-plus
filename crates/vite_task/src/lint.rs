@@ -20,7 +20,7 @@ pub async fn lint<
     LintFn: Fn() -> Lint,
 >(
     resolve_lint_command: LintFn,
-    workspace: &mut Workspace,
+    workspace: &Workspace,
     args: &Vec<String>,
 ) -> Result<ExecutionSummary, Error> {
     let resolved_task =
