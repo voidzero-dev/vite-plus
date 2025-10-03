@@ -56,7 +56,7 @@ pub struct ExecutionStatus {
     /// `Err(_)` means the task doesn't have a exit status at all, e.g. skipped due to failed direct or indirect dependency.
     ///
     /// For example, for three tasks declared as: "false && echo foo && echo bar",
-    /// their execution_result in order would be:
+    /// their `execution_result` in order would be:
     /// - `Ok(ExitStatus(1))`
     /// - `Err(SkippedDueToFailedDependency)`
     /// - `Err(SkippedDueToFailedDependency)`
@@ -162,7 +162,7 @@ impl ExecutionPlan {
 
         // The inner runner is expected to display the command and the cache status. The outer runner will skip displaying them.
         if !has_inner_runner {
-            print!("{}", pre_execution_status);
+            print!("{pre_execution_status}");
         }
 
         // Execute or replay the task

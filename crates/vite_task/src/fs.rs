@@ -81,7 +81,7 @@ impl FileSystem for RealFileSystem {
             // Is a directory on Unix - use the optimized nix implementation first
             #[cfg(unix)]
             {
-                return RealFileSystem::process_directory_unix(reader.into_inner(), path_read);
+                return Self::process_directory_unix(reader.into_inner(), path_read);
             }
             #[cfg(windows)]
             {

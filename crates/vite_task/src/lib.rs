@@ -342,9 +342,8 @@ pub async fn main<
             .await?;
             let resolved_vite_config: Option<ResolvedUniversalViteConfig> = vite_config
                 .map(|vite_config| {
-                    serde_json::from_str(&vite_config).map_err(|err| {
+                    serde_json::from_str(&vite_config).inspect_err(|_| {
                         tracing::error!("Failed to parse vite config: {vite_config}");
-                        err
                     })
                 })
                 .transpose()?;
@@ -455,7 +454,7 @@ pub async fn main<
             }
         }
 
-        let _ = std::fs::remove_dir_all(&execution_summary_dir);
+        let _ = std::fs::remove_dir_all(execution_summary_dir);
         if matches!(&args.commands, Commands::Run { .. }) {
             print!("{}", &summary);
         }

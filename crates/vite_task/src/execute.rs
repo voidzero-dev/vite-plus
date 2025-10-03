@@ -320,8 +320,7 @@ pub static CURRENT_EXECUTION_ID: LazyLock<Option<String>> =
 
 pub static EXECUTION_SUMMARY_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     std::env::var("VITE_TASK_EXECUTION_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| tempfile::tempdir().unwrap().keep())
+        .map_or_else(|_| tempfile::tempdir().unwrap().keep(), PathBuf::from)
 });
 
 pub async fn execute_task(
@@ -358,7 +357,7 @@ pub async fn execute_task(
                         if resolved_command.fingerprint.command.has_inner_runner() {
                             resolved_command.fingerprint.command.to_string()
                         } else {
-                            "".to_string()
+                            String::new()
                         },
                     )
                     .env("VITE_TASK_EXECUTION_ID", execution_id)

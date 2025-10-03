@@ -279,7 +279,7 @@ fn get_package_manager_type_and_version(
             && let Some((name, version_with_hash)) = package_json.package_manager.split_once('@')
         {
             // Parse version and optional hash (format: version+sha512.hash)
-            let (version, hash) = if let Some((ver, hash_part)) = version_with_hash.split_once("+")
+            let (version, hash) = if let Some((ver, hash_part)) = version_with_hash.split_once('+')
             {
                 (ver, Some(hash_part.into()))
             } else {

@@ -236,7 +236,7 @@ pub async fn verify_file_hash(
     if actual_hex != expected_hex {
         return Err(Error::HashMismatch {
             expected: expected_hash.into(),
-            actual: format!("{}.{}", algorithm, actual_hex).into(),
+            actual: format!("{algorithm}.{actual_hex}").into(),
         });
     }
 

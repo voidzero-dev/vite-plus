@@ -98,7 +98,7 @@ impl ResolvedTask {
         }
     }
 
-    pub fn is_builtin(&self) -> bool {
+    pub const fn is_builtin(&self) -> bool {
         self.name.package_name.is_none()
     }
 

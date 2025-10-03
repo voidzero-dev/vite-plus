@@ -40,7 +40,7 @@ pub fn get_display_command(display_options: DisplayOptions, task: &ResolvedTask)
     let cwd = task.resolved_command.fingerprint.cwd.as_str();
     Some(format!(
         "{}$ {}",
-        if cwd.is_empty() { format_args!("") } else { format_args!("~/{}", cwd) },
+        if cwd.is_empty() { format_args!("") } else { format_args!("~/{cwd}") },
         display_command
     ))
 }
@@ -56,12 +56,12 @@ impl Display for PreExecutionStatus {
                 // No message for "Cache not found" as requested
                 tracing::debug!("{}", "Cache not found".style(CACHE_MISS_STYLE));
                 if let Some(display_command) = &display_command {
-                    writeln!(f, "{}", display_command)?;
+                    writeln!(f, "{display_command}")?;
                 }
             }
             CacheStatus::CacheMiss(CacheMiss::FingerprintMismatch(mismatch)) => {
                 if let Some(display_command) = &display_command {
-                    write!(f, "{} ", display_command)?;
+                    write!(f, "{display_command} ")?;
                 }
 
                 let current = &self.task.resolved_command.fingerprint;
@@ -71,22 +71,22 @@ impl Display for PreExecutionStatus {
                         // For now, just say "command changed" for any command fingerprint mismatch
                         // The detailed analysis will be in the summary
                         if previous.command != current.command {
-                            format!("command changed")
+                            "command changed".to_string()
                         } else if previous.cwd != current.cwd {
-                            format!("working directory changed")
+                            "working directory changed".to_string()
                         } else if previous.envs_without_pass_through
                             != current.envs_without_pass_through
                             || previous.pass_through_envs != current.pass_through_envs
                         {
-                            format!("envs changed")
+                            "envs changed".to_string()
                         } else {
-                            format!("command configuration changed")
+                            "command configuration changed".to_string()
                         }
                     }
                     FingerprintMismatch::PostRunFingerprintMismatch(
                         PostRunFingerprintMismatch::InputContentChanged { path },
                     ) => {
-                        format!("content of input '{}' changed", path)
+                        format!("content of input '{path}' changed")
                     }
                 };
                 writeln!(
@@ -104,7 +104,7 @@ impl Display for PreExecutionStatus {
             CacheStatus::CacheHit { .. } => {
                 if !self.display_options.ignore_replay {
                     if let Some(display_command) = &display_command {
-                        write!(f, "{} ", display_command)?;
+                        write!(f, "{display_command} ")?;
                     }
                     writeln!(
                         f,
@@ -176,20 +176,20 @@ impl Display for ExecutionSummary {
             f,
             "{}  {} {} {} {}",
             "Statistics:".style(Style::new().bold()),
-            format!(" {} tasks", total).style(Style::new().bright_white()),
-            format!("• {} cache hits", cache_hits).style(Style::new().green()),
-            format!("• {} cache misses", cache_misses).style(CACHE_MISS_STYLE),
+            format!(" {total} tasks").style(Style::new().bright_white()),
+            format!("• {cache_hits} cache hits").style(Style::new().green()),
+            format!("• {cache_misses} cache misses").style(CACHE_MISS_STYLE),
             if failed > 0 {
-                format!("• {} failed", failed).style(Style::new().red()).to_string()
+                format!("• {failed} failed").style(Style::new().red()).to_string()
             } else if skipped > 0 {
-                format!("• {} skipped", skipped).style(Style::new().bright_black()).to_string()
+                format!("• {skipped} skipped").style(Style::new().bright_black()).to_string()
             } else {
                 String::new()
             }
         )?;
 
         let cache_rate =
-            if total > 0 { (cache_hits as f64 / total as f64 * 100.0) as u32 } else { 0 };
+            if total > 0 { (f64::from(cache_hits) / total as f64 * 100.0) as u32 } else { 0 };
 
         let total_duration = self
             .execution_statuses
@@ -209,7 +209,7 @@ impl Display for ExecutionSummary {
             f,
             "{}  {} cache hit rate",
             "Performance:".style(Style::new().bold()),
-            format_args!("{}%", cache_rate).style(if cache_rate >= 75 {
+            format_args!("{cache_rate}%").style(if cache_rate >= 75 {
                 Style::new().green().bold()
             } else if cache_rate >= 50 {
                 CACHE_MISS_STYLE
@@ -260,7 +260,7 @@ impl Display for ExecutionSummary {
                         f,
                         " {} {}",
                         "✗".style(Style::new().red().bold()),
-                        format!("(exit code: {})", exit_status).style(Style::new().red())
+                        format!("(exit code: {exit_status})").style(Style::new().red())
                     )?;
                 }
                 Err(ExecutionFailure::SkippedDueToFailedDependency) => {
@@ -281,7 +281,7 @@ impl Display for ExecutionSummary {
                         f,
                         "      {} {}",
                         "→ Cache hit - output replayed".style(Style::new().green()),
-                        format!("- {:.2?} saved", original_duration).style(Style::new().green())
+                        format!("- {original_duration:.2?} saved").style(Style::new().green())
                     )?;
                 }
                 CacheStatus::CacheMiss(miss) => {
@@ -312,7 +312,7 @@ impl Display for ExecutionSummary {
                                     if previous_command_fingerprint.cwd
                                         != current_command_fingerprint.cwd
                                     {
-                                        fn display_cwd(cwd: &RelativePath) -> &str {
+                                        const fn display_cwd(cwd: &RelativePath) -> &str {
                                             if cwd.as_str().is_empty() { "." } else { cwd.as_str() }
                                         }
                                         changes.push(format!(
@@ -353,22 +353,16 @@ impl Display for ExecutionSummary {
                                         {
                                             if &previous_env_value != current_value {
                                                 changes.push(format!(
-                                                    "env {} value changed from '{}' to '{}'",
-                                                    key, previous_env_value, current_value,
+                                                    "env {key} value changed from '{previous_env_value}' to '{current_value}'",
                                                 ));
                                             }
                                         } else {
-                                            changes.push(format!(
-                                                "env {}={} added",
-                                                key, current_value,
-                                            ));
+                                            changes
+                                                .push(format!("env {key}={current_value} added",));
                                         }
                                     }
                                     for (key, previous_value) in previous_envs {
-                                        changes.push(format!(
-                                            "env {}={} removed",
-                                            key, previous_value
-                                        ));
+                                        changes.push(format!("env {key}={previous_value} removed"));
                                     }
 
                                     if changes.is_empty() {
@@ -391,7 +385,7 @@ impl Display for ExecutionSummary {
                                     writeln!(
                                         f,
                                         "{}",
-                                        format!("content of input '{}' changed", path)
+                                        format!("content of input '{path}' changed")
                                             .style(CACHE_MISS_STYLE)
                                     )?;
                                 }

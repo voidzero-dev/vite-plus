@@ -206,7 +206,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
                 _ => {
                     // Convert Rust errors to NAPI errors for JavaScript
                     tracing::error!("Rust error: {:?}", e);
-                    return Err(anyhow::Error::from(e).into());
+                    Err(anyhow::Error::from(e).into())
                 }
             }
         }
