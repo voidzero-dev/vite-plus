@@ -148,7 +148,7 @@ impl ExecutionPlan {
             step.clone(),
             &workspace.task_cache,
             &workspace.fs,
-            &workspace.workspace_dir,
+            &workspace.root_dir,
         )
         .await?;
 

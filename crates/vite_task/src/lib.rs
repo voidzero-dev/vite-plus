@@ -336,7 +336,7 @@ pub async fn main<
                 .expect("lint command requires CliOptions to be provided");
 
             let vite_config = read_vite_config_from_workspace_root(
-                &workspace.workspace_dir,
+                &workspace.root_dir,
                 options.as_ref().map(|o| &o.resolve_universal_vite_config),
             )
             .await?;

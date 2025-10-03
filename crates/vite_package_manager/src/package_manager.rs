@@ -58,7 +58,7 @@ pub struct ResolveCommandResult {
 /// Then use `PackageManager::resolve_command()` to resolve the command result.
 #[derive(Debug)]
 pub struct PackageManager {
-    pub package_manager_type: PackageManagerType,
+    pub client: PackageManagerType,
     pub package_name: Str,
     pub version: Str,
     pub hash: Option<Str>,
@@ -69,18 +69,18 @@ pub struct PackageManager {
 
 #[derive(Debug)]
 pub struct PackageManagerBuilder {
-    package_manager_type: Option<PackageManagerType>,
+    client_override: Option<PackageManagerType>,
     cwd: AbsolutePathBuf,
 }
 
 impl PackageManagerBuilder {
     pub fn new(cwd: impl AsRef<AbsolutePath>) -> Self {
-        Self { package_manager_type: None, cwd: cwd.as_ref().to_absolute_path_buf() }
+        Self { client_override: None, cwd: cwd.as_ref().to_absolute_path_buf() }
     }
 
     #[must_use]
     pub const fn package_manager_type(mut self, package_manager_type: PackageManagerType) -> Self {
-        self.package_manager_type = Some(package_manager_type);
+        self.client_override = Some(package_manager_type);
         self
     }
 
@@ -89,7 +89,7 @@ impl PackageManagerBuilder {
     pub async fn build(self) -> Result<PackageManager, Error> {
         let workspace_root = find_workspace_root(&self.cwd)?;
         let (package_manager_type, mut version, mut hash) =
-            get_package_manager_type_and_version(&workspace_root, self.package_manager_type)?;
+            get_package_manager_type_and_version(&workspace_root, self.client_override)?;
 
         let mut package_name = package_manager_type.to_string();
         let mut should_update_package_manager_field = false;
@@ -125,7 +125,7 @@ impl PackageManagerBuilder {
         }
 
         Ok(PackageManager {
-            package_manager_type,
+            client: package_manager_type,
             package_name: package_name.into(),
             version,
             hash,

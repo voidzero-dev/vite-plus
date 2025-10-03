@@ -27,7 +27,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Workspace {
-    pub(crate) workspace_dir: AbsolutePathBuf,
+    pub(crate) root_dir: AbsolutePathBuf,
     pub(crate) cwd: RelativePathBuf,
     /// Relative path from workspace root to current package directory.
     /// Empty string ("") represents the workspace root package itself.
@@ -112,7 +112,7 @@ impl Workspace {
 
         Ok(Self {
             package_graph: Graph::new(),
-            workspace_dir: workspace_root.to_absolute_path_buf(),
+            root_dir: workspace_root.to_absolute_path_buf(),
             cwd,
             current_package_path,
             task_cache,
@@ -189,7 +189,7 @@ impl Workspace {
 
         Ok(Self {
             package_graph,
-            workspace_dir: workspace_root.to_absolute_path_buf(),
+            root_dir: workspace_root.to_absolute_path_buf(),
             cwd,
             current_package_path,
             task_cache,
@@ -208,7 +208,7 @@ impl Workspace {
     }
 
     pub async fn unload(self) -> Result<(), Error> {
-        tracing::debug!("Saving task cache {}", self.workspace_dir.as_path().display());
+        tracing::debug!("Saving task cache {}", self.root_dir.as_path().display());
         self.task_cache.save().await?;
         Ok(())
     }
@@ -371,9 +371,8 @@ impl Workspace {
             if !task_args.is_empty() {
                 // This is needed for constructing the task run key for caching, so that different args lead to different task runs.
                 updated_task.args = task_args.clone();
-                updated_task.resolved_command = updated_task
-                    .resolved_config
-                    .resolve_command(&self.workspace_dir, &task_args)?;
+                updated_task.resolved_command =
+                    updated_task.resolved_config.resolve_command(&self.root_dir, &task_args)?;
             }
 
             // Add to filtered graph
