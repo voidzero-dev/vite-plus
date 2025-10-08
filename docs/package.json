@@ -3,11 +3,12 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "vitepress dev",
-    "build": "vitepress build",
-    "preview": "vitepress preview"
+    "dev": "vite doc dev",
+    "build": "vite doc build",
+    "preview": "vite doc preview"
   },
   "devDependencies": {
+    "@voidzero-dev/vite-plus": "workspace:*",
     "vue": "catalog:",
     "vitepress": "catalog:",
     "oxc-minify": "catalog:"

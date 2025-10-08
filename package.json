@@ -15,6 +15,7 @@
     "lint": "vite lint --type-aware --threads 4",
     "test": "vite test run && pnpm -r snap-test",
     "test:unit": "vite test run",
+    "docs:dev": "vite run vite-docs#dev",
     "prepare": "husky"
   },
   "devDependencies": {

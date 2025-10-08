@@ -4,15 +4,15 @@ layout: home
 
 hero:
   name: "Vite+"
-  text: "Vite+"
-  tagline: My great project tagline
+  text: "The Unified Toolchain for the Web"
+  tagline: "dev, build, test, lint, format, monorepo caching & more in al single dependency, build for scale, speed, and sanity"
   actions:
     - theme: brand
-      text: AAA
-      link: /
+      text: Get Started
+      link: /guide/
     - theme: alt
-      text: BBB
-      link: /
+      text: GitHub
+      link: https://github.com/voidzero-dev/vite-plus
 
 features:
   - title: Feature A

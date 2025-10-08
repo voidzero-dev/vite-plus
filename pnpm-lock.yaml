@@ -316,6 +316,9 @@ importers:
 
   docs:
     devDependencies:
+      '@voidzero-dev/vite-plus':
+        specifier: workspace:*
+        version: link:../packages/cli
       oxc-minify:
         specifier: 'catalog:'
         version: 0.107.0
