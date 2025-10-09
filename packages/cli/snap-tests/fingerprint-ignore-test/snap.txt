@@ -1,0 +1,87 @@
+> vite run create-files # first run
+$ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] @test/fingerprint-ignore#create-files: $ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> vite run create-files # cache hit - no changes
+$ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js (✓ cache hit, replaying)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate, <variable>ms saved in total
+
+Task Details:
+────────────────────────────────────────────────
+  [1] @test/fingerprint-ignore#create-files: $ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js ✓
+      → Cache hit - output replayed - <variable>ms saved
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> echo 'module.exports = {modified: true}' > node_modules/pkg-a/index.js
+> vite run create-files # cache hit - index.js ignored
+$ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js (✓ cache hit, replaying)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate, <variable>ms saved in total
+
+Task Details:
+────────────────────────────────────────────────
+  [1] @test/fingerprint-ignore#create-files: $ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js ✓
+      → Cache hit - output replayed - <variable>ms saved
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> echo 'modified output' > dist/bundle.js
+> vite run create-files # cache hit - dist ignored
+$ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js (✓ cache hit, replaying)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate, <variable>ms saved in total
+
+Task Details:
+────────────────────────────────────────────────
+  [1] @test/fingerprint-ignore#create-files: $ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js ✓
+      → Cache hit - output replayed - <variable>ms saved
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> echo '{"name":"pkg-a","version":"2.0.0"}' > node_modules/pkg-a/package.json
+> vite run create-files # cache miss - package.json NOT ignored
+$ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js (✗ cache miss: content of input 'node_modules/pkg-a/package.json' changed, executing)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] @test/fingerprint-ignore#create-files: $ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js ✓
+      → Cache miss: content of input 'node_modules/pkg-a/package.json' changed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

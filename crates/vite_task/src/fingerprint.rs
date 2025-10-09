@@ -99,11 +99,7 @@ impl PostRunFingerprint {
             .par_iter()
             .filter(|(path, _)| {
                 // Filter out paths that match ignore patterns
-                if let Some(ref matcher) = ignore_matcher {
-                    !matcher.is_match(path.as_path())
-                } else {
-                    true
-                }
+                if let Some(ref matcher) = ignore_matcher { !matcher.is_match(path) } else { true }
             })
             .flat_map(|(path, path_read)| {
                 Some((|| {
@@ -113,6 +109,12 @@ impl PostRunFingerprint {
                 })())
             })
             .collect::<Result<HashMap<RelativePathBuf, PathFingerprint>, Error>>()?;
+
+        tracing::debug!(
+            "PostRunFingerprint created, got {} inputs, fingerprint_ignores: {:?}",
+            inputs.len(),
+            fingerprint_ignores
+        );
         Ok(Self { inputs })
     }
 }
@@ -153,6 +155,7 @@ mod tests {
             .into_iter()
             .collect(),
             pass_through_envs: Default::default(),
+            fingerprint_ignores: None,
         };
 
         let fingerprint2 = CommandFingerprint {
@@ -166,6 +169,7 @@ mod tests {
             .into_iter()
             .collect(),
             pass_through_envs: Default::default(),
+            fingerprint_ignores: None,
         };
 
         // Serialize both fingerprints
@@ -214,6 +218,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 pass_through_envs: Default::default(),
+                fingerprint_ignores: None,
             };
 
             // Serialize the fingerprint
@@ -295,5 +300,461 @@ mod tests {
 
         // Verify alphabetical order
         assert_eq!(keys1, vec![Str::from("A_VAR"), Str::from("M_VAR"), Str::from("Z_VAR"),]);
+    }
+
+    // Tests for PostRunFingerprint::create with fingerprint_ignores
+    mod fingerprint_ignores_tests {
+        use std::{process::ExitStatus, sync::Arc, time::Duration};
+
+        use vite_path::{AbsolutePath, RelativePathBuf};
+
+        use super::*;
+        use crate::{
+            collections::HashMap,
+            execute::{ExecutedTask, PathRead},
+            fingerprint::{PathFingerprint, PostRunFingerprint},
+            fs::FileSystem,
+        };
+
+        // Mock FileSystem for testing
+        struct MockFileSystem;
+
+        impl FileSystem for MockFileSystem {
+            fn fingerprint_path(
+                &self,
+                _path: &Arc<AbsolutePath>,
+                _read: PathRead,
+            ) -> Result<PathFingerprint, crate::Error> {
+                // Return a simple hash for testing purposes
+                Ok(PathFingerprint::FileContentHash(12345))
+            }
+        }
+
+        fn create_executed_task(paths: Vec<&str>) -> ExecutedTask {
+            let path_reads: HashMap<RelativePathBuf, PathRead> = paths
+                .into_iter()
+                .map(|p| (RelativePathBuf::new(p).unwrap(), PathRead { read_dir_entries: false }))
+                .collect();
+
+            ExecutedTask {
+                std_outputs: Arc::new([]),
+                exit_status: ExitStatus::default(),
+                path_reads,
+                path_writes: HashMap::new(),
+                duration: Duration::from_secs(1),
+            }
+        }
+
+        #[test]
+        fn test_postrun_fingerprint_no_ignores() {
+            // When fingerprint_ignores is None, all paths should be included
+            let executed_task = create_executed_task(vec![
+                "src/index.js",
+                "node_modules/pkg-a/index.js",
+                "node_modules/pkg-a/package.json",
+                "dist/bundle.js",
+            ]);
+
+            let fs = MockFileSystem;
+            let base_dir =
+                AbsolutePath::new(if cfg!(windows) { "C:\\test" } else { "/test" }).unwrap();
+
+            let fingerprint =
+                PostRunFingerprint::create(&executed_task, &fs, base_dir, None).unwrap();
+
+            // All 4 paths should be in the fingerprint
+            assert_eq!(fingerprint.inputs.len(), 4);
+            assert!(
+                fingerprint.inputs.contains_key(&RelativePathBuf::new("src/index.js").unwrap())
+            );
+            assert!(
+                fingerprint
+                    .inputs
+                    .contains_key(&RelativePathBuf::new("node_modules/pkg-a/index.js").unwrap())
+            );
+            assert!(
+                fingerprint.inputs.contains_key(
+                    &RelativePathBuf::new("node_modules/pkg-a/package.json").unwrap()
+                )
+            );
+            assert!(
+                fingerprint.inputs.contains_key(&RelativePathBuf::new("dist/bundle.js").unwrap())
+            );
+        }
+
+        #[test]
+        fn test_postrun_fingerprint_empty_ignores() {
+            // When fingerprint_ignores is Some(&[]), all paths should be included
+            let executed_task =
+                create_executed_task(vec!["src/index.js", "node_modules/pkg-a/index.js"]);
+
+            let fs = MockFileSystem;
+            let base_dir =
+                AbsolutePath::new(if cfg!(windows) { "C:\\test" } else { "/test" }).unwrap();
+
+            let fingerprint =
+                PostRunFingerprint::create(&executed_task, &fs, base_dir, Some(&[])).unwrap();
+
+            // All paths should be in the fingerprint (empty ignores = no filtering)
+            assert_eq!(fingerprint.inputs.len(), 2);
+        }
+
+        #[test]
+        fn test_postrun_fingerprint_ignore_node_modules() {
+            // Test ignoring all node_modules files
+            let executed_task = create_executed_task(vec![
+                "src/index.js",
+                "node_modules/pkg-a/index.js",
+                "node_modules/pkg-b/lib.js",
+                "package.json",
+            ]);
+
+            let fs = MockFileSystem;
+            let base_dir =
+                AbsolutePath::new(if cfg!(windows) { "C:\\test" } else { "/test" }).unwrap();
+
+            let ignore_patterns = vec![Str::from("node_modules/**/*")];
+            let fingerprint =
+                PostRunFingerprint::create(&executed_task, &fs, base_dir, Some(&ignore_patterns))
+                    .unwrap();
+
+            // Only 2 paths should remain (src/index.js and package.json)
+            assert_eq!(fingerprint.inputs.len(), 2);
+            assert!(
+                fingerprint.inputs.contains_key(&RelativePathBuf::new("src/index.js").unwrap())
+            );
+            assert!(
+                fingerprint.inputs.contains_key(&RelativePathBuf::new("package.json").unwrap())
+            );
+            assert!(
+                !fingerprint
+                    .inputs
+                    .contains_key(&RelativePathBuf::new("node_modules/pkg-a/index.js").unwrap())
+            );
+            assert!(
+                !fingerprint
+                    .inputs
+                    .contains_key(&RelativePathBuf::new("node_modules/pkg-b/lib.js").unwrap())
+            );
+        }
+
+        #[test]
+        fn test_postrun_fingerprint_negation_pattern() {
+            // Test ignoring node_modules except package.json files
+            let executed_task = create_executed_task(vec![
+                "src",
+                "src/index.js",
+                "node_modules/pkg-a",
+                "node_modules/pkg-a/index.js",
+                "node_modules/pkg-a/package.json",
+                "node_modules/pkg-b/lib.js",
+                "node_modules/pkg-b",
+                "node_modules/pkg-b/package.json",
+                "node_modules/pkg-b/node_modules/pkg-c",
+                "node_modules/pkg-b/node_modules/pkg-c/lib.js",
+                "node_modules/pkg-b/node_modules/pkg-c/package.json",
+                "project1/node_modules/pkg-d",
+                "project1/node_modules/pkg-d/lib.js",
+                "project1/node_modules/pkg-d/package.json",
+                "project1/sub1/node_modules/pkg-e",
+                "project1/sub1/node_modules/pkg-e/lib.js",
+                "project1/sub1/node_modules/pkg-e/package.json",
+            ]);
+
+            let fs = MockFileSystem;
+            let base_dir =
+                AbsolutePath::new(if cfg!(windows) { "C:\\test" } else { "/test" }).unwrap();
+
+            let ignore_patterns = vec![
+                Str::from("**/node_modules/**"),
+                Str::from("!**/node_modules/*"),
+                Str::from("!**/node_modules/**/package.json"),
+            ];
+            let fingerprint =
+                PostRunFingerprint::create(&executed_task, &fs, base_dir, Some(&ignore_patterns))
+                    .unwrap();
+
+            assert_eq!(
+                fingerprint.inputs.len(),
+                12,
+                "got {:?}",
+                fingerprint.inputs.keys().map(|k| k.to_string()).collect::<Vec<String>>()
+            );
+            assert!(
+                fingerprint.inputs.contains_key(&RelativePathBuf::new("src/index.js").unwrap())
+            );
+            assert!(
+                fingerprint
+                    .inputs
+                    .contains_key(&RelativePathBuf::new("node_modules/pkg-a").unwrap())
+            );
+            assert!(
+                fingerprint.inputs.contains_key(
+                    &RelativePathBuf::new("node_modules/pkg-a/package.json").unwrap()
+                )
+            );
+            assert!(
+                fingerprint
+                    .inputs
+                    .contains_key(&RelativePathBuf::new("node_modules/pkg-b").unwrap())
+            );
+            assert!(
+                fingerprint.inputs.contains_key(
+                    &RelativePathBuf::new("node_modules/pkg-b/package.json").unwrap()
+                )
+            );
+            assert!(fingerprint.inputs.contains_key(
+                &RelativePathBuf::new("node_modules/pkg-b/node_modules/pkg-c").unwrap()
+            ));
+            assert!(
+                fingerprint.inputs.contains_key(
+                    &RelativePathBuf::new("node_modules/pkg-b/node_modules/pkg-c/package.json")
+                        .unwrap()
+                )
+            );
+            assert!(fingerprint.inputs.contains_key(
+                &RelativePathBuf::new("project1/node_modules/pkg-d/package.json").unwrap()
+            ));
+            assert!(fingerprint.inputs.contains_key(
+                &RelativePathBuf::new("project1/sub1/node_modules/pkg-e/package.json").unwrap()
+            ));
+
+            assert!(
+                !fingerprint
+                    .inputs
+                    .contains_key(&RelativePathBuf::new("node_modules/pkg-a/index.js").unwrap())
+            );
+            assert!(
+                !fingerprint
+                    .inputs
+                    .contains_key(&RelativePathBuf::new("node_modules/pkg-b/lib.js").unwrap())
+            );
+            assert!(!fingerprint.inputs.contains_key(
+                &RelativePathBuf::new("node_modules/pkg-b/node_modules/pkg-c/lib.js").unwrap()
+            ));
+            assert!(!fingerprint.inputs.contains_key(
+                &RelativePathBuf::new("project1/node_modules/pkg-d/lib.js").unwrap()
+            ));
+            assert!(!fingerprint.inputs.contains_key(
+                &RelativePathBuf::new("project1/sub1/node_modules/pkg-e/lib.js").unwrap()
+            ));
+        }
+
+        #[test]
+        fn test_postrun_fingerprint_multiple_ignore_patterns() {
+            // Test multiple independent ignore patterns
+            let executed_task = create_executed_task(vec![
+                "src/index.js",
+                "node_modules/pkg-a/index.js",
+                "dist/bundle.js",
+                "dist/assets/main.css",
+                ".next/cache/data.json",
+                "package.json",
+            ]);
+
+            let fs = MockFileSystem;
+            let base_dir =
+                AbsolutePath::new(if cfg!(windows) { "C:\\test" } else { "/test" }).unwrap();
+
+            let ignore_patterns = vec![
+                Str::from("node_modules/**/*"),
+                Str::from("dist/**/*"),
+                Str::from(".next/**/*"),
+            ];
+            let fingerprint =
+                PostRunFingerprint::create(&executed_task, &fs, base_dir, Some(&ignore_patterns))
+                    .unwrap();
+
+            // Only src/index.js and package.json should remain
+            assert_eq!(fingerprint.inputs.len(), 2);
+            assert!(
+                fingerprint.inputs.contains_key(&RelativePathBuf::new("src/index.js").unwrap())
+            );
+            assert!(
+                fingerprint.inputs.contains_key(&RelativePathBuf::new("package.json").unwrap())
+            );
+        }
+
+        #[test]
+        fn test_postrun_fingerprint_wildcard_patterns() {
+            // Test wildcard patterns for file types
+            let executed_task = create_executed_task(vec![
+                "src/index.js",
+                "src/utils.js",
+                "src/types.ts",
+                "debug.log",
+                "error.log",
+                "README.md",
+            ]);
+
+            let fs = MockFileSystem;
+            let base_dir =
+                AbsolutePath::new(if cfg!(windows) { "C:\\test" } else { "/test" }).unwrap();
+
+            let ignore_patterns = vec![Str::from("**/*.log")];
+            let fingerprint =
+                PostRunFingerprint::create(&executed_task, &fs, base_dir, Some(&ignore_patterns))
+                    .unwrap();
+
+            // Should have 4 files (all except .log files)
+            assert_eq!(fingerprint.inputs.len(), 4);
+            assert!(!fingerprint.inputs.contains_key(&RelativePathBuf::new("debug.log").unwrap()));
+            assert!(!fingerprint.inputs.contains_key(&RelativePathBuf::new("error.log").unwrap()));
+            assert!(
+                fingerprint.inputs.contains_key(&RelativePathBuf::new("src/index.js").unwrap())
+            );
+            assert!(fingerprint.inputs.contains_key(&RelativePathBuf::new("README.md").unwrap()));
+        }
+
+        #[test]
+        fn test_postrun_fingerprint_complex_negation() {
+            // Test complex scenario with multiple negations
+            let executed_task = create_executed_task(vec![
+                "src/index.js",
+                "dist/bundle.js",
+                "dist/public/index.html",
+                "dist/public/assets/logo.png",
+                "dist/internal/config.json",
+            ]);
+
+            let fs = MockFileSystem;
+            let base_dir =
+                AbsolutePath::new(if cfg!(windows) { "C:\\test" } else { "/test" }).unwrap();
+
+            let ignore_patterns = vec![Str::from("dist/**/*"), Str::from("!dist/public/**")];
+            let fingerprint =
+                PostRunFingerprint::create(&executed_task, &fs, base_dir, Some(&ignore_patterns))
+                    .unwrap();
+
+            // Should have: src/index.js + dist/public/* files = 3 total
+            assert_eq!(fingerprint.inputs.len(), 3);
+            assert!(
+                fingerprint.inputs.contains_key(&RelativePathBuf::new("src/index.js").unwrap())
+            );
+            assert!(
+                fingerprint
+                    .inputs
+                    .contains_key(&RelativePathBuf::new("dist/public/index.html").unwrap())
+            );
+            assert!(
+                fingerprint
+                    .inputs
+                    .contains_key(&RelativePathBuf::new("dist/public/assets/logo.png").unwrap())
+            );
+            assert!(
+                !fingerprint.inputs.contains_key(&RelativePathBuf::new("dist/bundle.js").unwrap())
+            );
+            assert!(
+                !fingerprint
+                    .inputs
+                    .contains_key(&RelativePathBuf::new("dist/internal/config.json").unwrap())
+            );
+        }
+
+        #[test]
+        fn test_postrun_fingerprint_invalid_pattern() {
+            // Test that invalid glob patterns return an error
+            let executed_task = create_executed_task(vec!["src/index.js"]);
+
+            let fs = MockFileSystem;
+            let base_dir =
+                AbsolutePath::new(if cfg!(windows) { "C:\\test" } else { "/test" }).unwrap();
+
+            let ignore_patterns = vec![Str::from("[invalid")]; // Invalid glob syntax
+            let result =
+                PostRunFingerprint::create(&executed_task, &fs, base_dir, Some(&ignore_patterns));
+
+            // Should return an error for invalid pattern
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_command_fingerprint_with_fingerprint_ignores() {
+        // Test that CommandFingerprint includes fingerprint_ignores
+        use crate::{
+            cmd::TaskParsedCommand,
+            config::{CommandFingerprint, TaskCommand},
+        };
+
+        let parsed_cmd = TaskParsedCommand {
+            envs: [].into(),
+            program: "pnpm".into(),
+            args: vec!["install".into()],
+        };
+
+        let fingerprint_with_ignores = CommandFingerprint {
+            cwd: RelativePathBuf::default(),
+            command: TaskCommand::Parsed(parsed_cmd.clone()),
+            envs_without_pass_through: Default::default(),
+            pass_through_envs: Default::default(),
+            fingerprint_ignores: Some(vec![
+                Str::from("node_modules/**/*"),
+                Str::from("!node_modules/**/package.json"),
+            ]),
+        };
+
+        let fingerprint_without_ignores = CommandFingerprint {
+            cwd: RelativePathBuf::default(),
+            command: TaskCommand::Parsed(parsed_cmd.clone()),
+            envs_without_pass_through: Default::default(),
+            pass_through_envs: Default::default(),
+            fingerprint_ignores: None,
+        };
+
+        // Fingerprints should be different when fingerprint_ignores differ
+        assert_ne!(fingerprint_with_ignores, fingerprint_without_ignores);
+
+        // Serialize to verify they produce different cache keys
+        use bincode::encode_to_vec;
+        let config = bincode::config::standard();
+
+        let bytes_with = encode_to_vec(&fingerprint_with_ignores, config).unwrap();
+        let bytes_without = encode_to_vec(&fingerprint_without_ignores, config).unwrap();
+
+        assert_ne!(
+            bytes_with, bytes_without,
+            "Different fingerprint_ignores should produce different serialized bytes"
+        );
+    }
+
+    #[test]
+    fn test_command_fingerprint_ignores_order_matters() {
+        // Test that the order of fingerprint_ignores patterns matters
+        use crate::{
+            cmd::TaskParsedCommand,
+            config::{CommandFingerprint, TaskCommand},
+        };
+
+        let parsed_cmd =
+            TaskParsedCommand { envs: [].into(), program: "build".into(), args: vec![] };
+
+        let fingerprint1 = CommandFingerprint {
+            cwd: RelativePathBuf::default(),
+            command: TaskCommand::Parsed(parsed_cmd.clone()),
+            envs_without_pass_through: Default::default(),
+            pass_through_envs: Default::default(),
+            fingerprint_ignores: Some(vec![Str::from("dist/**/*"), Str::from("!dist/public/**")]),
+        };
+
+        let fingerprint2 = CommandFingerprint {
+            cwd: RelativePathBuf::default(),
+            command: TaskCommand::Parsed(parsed_cmd.clone()),
+            envs_without_pass_through: Default::default(),
+            pass_through_envs: Default::default(),
+            fingerprint_ignores: Some(vec![Str::from("!dist/public/**"), Str::from("dist/**/*")]),
+        };
+
+        // Different order should produce different fingerprints
+        // (because last-match-wins means different semantics)
+        assert_ne!(fingerprint1, fingerprint2);
+
+        use bincode::encode_to_vec;
+        let config = bincode::config::standard();
+
+        let bytes1 = encode_to_vec(&fingerprint1, config).unwrap();
+        let bytes2 = encode_to_vec(&fingerprint2, config).unwrap();
+
+        assert_ne!(bytes1, bytes2, "Different pattern order should produce different cache keys");
     }
 }

@@ -66,6 +66,7 @@ impl InstallCommand {
             iter::once("install").chain(args.iter().map(String::as_str)),
             ResolveCommandResult { bin_path: resolve_command.bin_path, envs: resolve_command.envs },
             self.ignore_replay,
+            None,
         )?;
         let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
         task_graph.add_node(resolved_task);

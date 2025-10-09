@@ -107,16 +107,16 @@ impl TaskCache {
                         "CREATE TABLE taskrun_to_command (key BLOB PRIMARY KEY, value BLOB);",
                         (),
                     )?;
-                    conn.execute("PRAGMA user_version = 2", ())?;
+                    conn.execute("PRAGMA user_version = 3", ())?;
                 }
-                1 => {
+                1..=2 => {
                     // old internal db version. reset
                     conn.set_db_config(DbConfig::SQLITE_DBCONFIG_RESET_DATABASE, true)?;
                     conn.execute("VACUUM", ())?;
                     conn.set_db_config(DbConfig::SQLITE_DBCONFIG_RESET_DATABASE, false)?;
                 }
-                2 => break, // current version
-                3.. => return Err(Error::UnrecognizedDbVersion(user_version)),
+                3 => break, // current version
+                4.. => return Err(Error::UnrecognizedDbVersion(user_version)),
             }
         }
         Ok(Self { conn: Mutex::new(conn), path: cache_path })

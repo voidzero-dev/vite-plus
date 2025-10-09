@@ -1,0 +1,18 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite run create-files # first run",
+    "vite run create-files # cache hit - no changes",
+
+    "echo 'module.exports = {modified: true}' > node_modules/pkg-a/index.js",
+    "vite run create-files # cache hit - index.js ignored",
+
+    "echo 'modified output' > dist/bundle.js",
+    "vite run create-files # cache hit - dist ignored",
+
+    "echo '{\"name\":\"pkg-a\",\"version\":\"2.0.0\"}' > node_modules/pkg-a/package.json",
+    "vite run create-files # cache miss - package.json NOT ignored"
+  ]
+}
