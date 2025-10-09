@@ -524,6 +524,7 @@ mod tests {
             inputs: HashSet::new(),
             envs: HashSet::new(),
             pass_through_envs: HashSet::new(),
+            fingerprint_ignores: None,
         };
 
         let resolved_task_config =
@@ -615,6 +616,7 @@ mod tests {
             inputs: HashSet::new(),
             envs,
             pass_through_envs: HashSet::new(),
+            fingerprint_ignores: None,
         };
 
         let resolved_task_config =
@@ -737,6 +739,7 @@ mod tests {
             inputs: HashSet::new(),
             envs,
             pass_through_envs: HashSet::new(),
+            fingerprint_ignores: None,
         };
 
         let resolved_task_config =

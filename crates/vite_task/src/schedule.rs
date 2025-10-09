@@ -233,7 +233,12 @@ async fn get_cached_or_execute<'a>(
                     exit_status
                 );
                 if !skip_cache && exit_status.success() {
-                    let cached_task = CommandCacheValue::create(executed_task, fs, base_dir)?;
+                    let cached_task = CommandCacheValue::create(
+                        executed_task,
+                        fs,
+                        base_dir,
+                        task.resolved_config.config.fingerprint_ignores.as_deref(),
+                    )?;
                     cache.update(&task, cached_task).await?;
                 }
                 Ok(exit_status)

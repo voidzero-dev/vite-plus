@@ -35,6 +35,7 @@ impl From<TaskCommand> for TaskConfig {
             inputs: Default::default(),
             envs: Default::default(),
             pass_through_envs: Default::default(),
+            fingerprint_ignores: None,
         }
     }
 }

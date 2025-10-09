@@ -30,8 +30,10 @@ impl CommandCacheValue {
         executed_task: ExecutedTask,
         fs: &impl FileSystem,
         base_dir: &AbsolutePath,
+        fingerprint_ignores: Option<&[Str]>,
     ) -> Result<Self, Error> {
-        let post_run_fingerprint = PostRunFingerprint::create(&executed_task, fs, base_dir)?;
+        let post_run_fingerprint =
+            PostRunFingerprint::create(&executed_task, fs, base_dir, fingerprint_ignores)?;
         Ok(Self {
             post_run_fingerprint,
             std_outputs: executed_task.std_outputs,

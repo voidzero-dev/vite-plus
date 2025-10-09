@@ -3,6 +3,7 @@ use std::{fmt::Display, sync::Arc};
 use bincode::{Decode, Encode};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use vite_glob::GlobPatternSet;
 use vite_path::{AbsolutePath, RelativePathBuf};
 use vite_str::Str;
 
@@ -85,10 +86,25 @@ impl PostRunFingerprint {
         executed_task: &ExecutedTask,
         fs: &impl FileSystem,
         base_dir: &AbsolutePath,
+        fingerprint_ignores: Option<&[Str]>,
     ) -> Result<Self, Error> {
+        // Build ignore matcher from patterns if provided
+        let ignore_matcher = fingerprint_ignores
+            .filter(|patterns| !patterns.is_empty())
+            .map(GlobPatternSet::new)
+            .transpose()?;
+
         let inputs = executed_task
             .path_reads
             .par_iter()
+            .filter(|(path, _)| {
+                // Filter out paths that match ignore patterns
+                if let Some(ref matcher) = ignore_matcher {
+                    !matcher.is_match(path.as_path())
+                } else {
+                    true
+                }
+            })
             .flat_map(|(path, path_read)| {
                 Some((|| {
                     let path_fingerprint =
@@ -237,6 +253,7 @@ mod tests {
             inputs: HashSet::new(),
             envs: envs.clone(),
             pass_through_envs: HashSet::new(),
+            fingerprint_ignores: None,
         };
 
         // Create resolved config

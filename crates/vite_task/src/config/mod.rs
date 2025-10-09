@@ -46,6 +46,9 @@ pub struct TaskConfig {
 
     #[serde(default)]
     pub(crate) pass_through_envs: HashSet<Str>,
+
+    #[serde(default)]
+    pub(crate) fingerprint_ignores: Option<Vec<Str>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
