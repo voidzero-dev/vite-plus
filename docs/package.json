@@ -3,7 +3,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "vite doc dev",
+    "dev": "vitepress dev",
     "build": "vite doc build",
     "preview": "vite doc preview"
   },
