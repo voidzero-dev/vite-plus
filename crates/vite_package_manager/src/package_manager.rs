@@ -153,6 +153,54 @@ impl PackageManager {
             envs: HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]),
         }
     }
+
+    #[must_use]
+    pub fn get_fingerprint_ignores(&self) -> Vec<Str> {
+        let mut ignores: Vec<Str> = vec![
+            // ignore all files by default
+            "**/*".into(),
+            // keep all package.json files except under node_modules
+            "!**/package.json".into(),
+            "!**/.npmrc".into(),
+        ];
+        match self.client {
+            PackageManagerType::Pnpm => {
+                ignores.push("!**/pnpm-workspace.yaml".into());
+                ignores.push("!**/pnpm-lock.yaml".into());
+                // https://pnpm.io/pnpmfile
+                ignores.push("!**/.pnpmfile.cjs".into());
+                ignores.push("!**/pnpmfile.cjs".into());
+                // pnpm support Plug'n'Play https://pnpm.io/blog/2020/10/17/node-modules-configuration-options-with-pnpm#plugnplay-the-strictest-configuration
+                ignores.push("!**/.pnp.cjs".into());
+            }
+            PackageManagerType::Yarn => {
+                ignores.push("!**/.yarnrc".into()); // yarn 1.x
+                ignores.push("!**/.yarnrc.yml".into()); // yarn 2.x
+                ignores.push("!**/yarn.config.cjs".into()); // yarn 2.x
+                ignores.push("!**/yarn.lock".into());
+                // .yarn/patches, .yarn/releases
+                ignores.push("!**/.yarn/**/*".into());
+                // .pnp.cjs https://yarnpkg.com/features/pnp
+                ignores.push("!**/.pnp.cjs".into());
+            }
+            PackageManagerType::Npm => {
+                ignores.push("!**/package-lock.json".into());
+                ignores.push("!**/npm-shrinkwrap.json".into());
+            }
+        }
+        // ignore all files under node_modules
+        // e.g. node_modules/mqtt/package.json
+        ignores.push("**/node_modules/**/*".into());
+        // keep the node_modules directory
+        ignores.push("!**/node_modules".into());
+        // keep the scoped directory
+        ignores.push("!**/node_modules/@*".into());
+        // ignore all patterns under nested node_modules
+        // e.g. node_modules/mqtt/node_modules/mqtt-packet/node_modules
+        ignores.push("**/node_modules/**/node_modules/**".into());
+
+        ignores
+    }
 }
 
 /// The package root directory and its package.json file.
@@ -328,9 +376,15 @@ fn get_package_manager_type_and_version(
         return Ok((PackageManagerType::Npm, version, None));
     }
 
-    // if pnpmfile.cjs exists, use pnpm@latest
-    let pnpmfile_cjs_path = workspace_root.path.join("pnpmfile.cjs");
+    // if .pnpmfile.cjs exists, use pnpm@latest
+    let pnpmfile_cjs_path = workspace_root.path.join(".pnpmfile.cjs");
     if is_exists_file(&pnpmfile_cjs_path)? {
+        return Ok((PackageManagerType::Pnpm, version, None));
+    }
+    // if legacy pnpmfile.cjs exists, use pnpm@latest
+    // https://newreleases.io/project/npm/pnpm/release/6.0.0
+    let legacy_pnpmfile_cjs_path = workspace_root.path.join("pnpmfile.cjs");
+    if is_exists_file(&legacy_pnpmfile_cjs_path)? {
         return Ok((PackageManagerType::Pnpm, version, None));
     }
 
@@ -1610,5 +1664,233 @@ mod tests {
             result.bin_name, "pnpm",
             "pnpmfile.cjs should be detected before yarn.config.cjs"
         );
+    }
+
+    // Tests for get_fingerprint_ignores method
+    mod get_fingerprint_ignores_tests {
+        use vite_glob::GlobPatternSet;
+
+        use super::*;
+
+        fn create_mock_package_manager(pm_type: PackageManagerType) -> PackageManager {
+            let temp_dir = create_temp_dir();
+            let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+            let install_dir = temp_dir_path.join("install");
+
+            PackageManager {
+                client: pm_type,
+                package_name: pm_type.to_string().into(),
+                version: "1.0.0".into(),
+                hash: None,
+                bin_name: pm_type.to_string().into(),
+                workspace_root: temp_dir_path.clone(),
+                install_dir,
+            }
+        }
+
+        #[test]
+        fn test_pnpm_fingerprint_ignores() {
+            let pm = create_mock_package_manager(PackageManagerType::Pnpm);
+            let ignores = pm.get_fingerprint_ignores();
+            let matcher = GlobPatternSet::new(&ignores).expect("Should compile patterns");
+
+            // Should ignore most files in node_modules
+            assert!(
+                matcher.is_match("node_modules/pkg-a/index.js"),
+                "Should ignore implementation files"
+            );
+            assert!(
+                matcher.is_match("foo/bar/node_modules/pkg-a/lib/util.js"),
+                "Should ignore nested files"
+            );
+            assert!(matcher.is_match("node_modules/.bin/cli"), "Should ignore binaries");
+
+            // Should NOT ignore package.json files (including in node_modules)
+            assert!(!matcher.is_match("package.json"), "Should NOT ignore root package.json");
+            assert!(
+                !matcher.is_match("packages/app/package.json"),
+                "Should NOT ignore package package.json"
+            );
+
+            // Should ignore package.json files under node_modules
+            assert!(
+                matcher.is_match("node_modules/pkg-a/package.json"),
+                "Should ignore package.json in node_modules"
+            );
+            assert!(
+                matcher.is_match("foo/bar/node_modules/pkg-a/package.json"),
+                "Should ignore package.json in node_modules"
+            );
+            assert!(
+                matcher.is_match("node_modules/@scope/pkg-a/package.json"),
+                "Should ignore package.json in node_modules"
+            );
+
+            // Should keep node_modules directories themselves
+            assert!(!matcher.is_match("node_modules"), "Should NOT ignore node_modules directory");
+            assert!(
+                !matcher.is_match("packages/app/node_modules"),
+                "Should NOT ignore nested node_modules"
+            );
+            assert!(
+                matcher.is_match("node_modules/mqtt/node_modules"),
+                "Should ignore sub node_modules under node_modules"
+            );
+            assert!(
+                matcher
+                    .is_match("node_modules/minimatch/node_modules/brace-expansion/node_modules"),
+                "Should ignore sub node_modules under node_modules"
+            );
+            assert!(
+                matcher.is_match("packages/app/node_modules/@octokit/graphql/node_modules"),
+                "Should ignore sub node_modules under node_modules"
+            );
+
+            // Should keep the root scoped directory under node_modules
+            assert!(!matcher.is_match("node_modules/@types"), "Should NOT ignore scoped directory");
+            assert!(
+                matcher.is_match("node_modules/@types/node"),
+                "Should ignore scoped sub directory"
+            );
+
+            // Pnpm-specific files should NOT be ignored
+            assert!(
+                !matcher.is_match("pnpm-workspace.yaml"),
+                "Should NOT ignore pnpm-workspace.yaml"
+            );
+            assert!(!matcher.is_match("pnpm-lock.yaml"), "Should NOT ignore pnpm-lock.yaml");
+            assert!(!matcher.is_match(".pnpmfile.cjs"), "Should NOT ignore .pnpmfile.cjs");
+            assert!(!matcher.is_match("pnpmfile.cjs"), "Should NOT ignore pnpmfile.cjs");
+            assert!(!matcher.is_match(".pnp.cjs"), "Should NOT ignore .pnp.cjs");
+            assert!(!matcher.is_match(".npmrc"), "Should NOT ignore .npmrc");
+
+            // Other package manager files should be ignored
+            assert!(matcher.is_match("yarn.lock"), "Should ignore yarn.lock");
+            assert!(matcher.is_match("package-lock.json"), "Should ignore package-lock.json");
+
+            // Regular source files should be ignored
+            assert!(matcher.is_match("src/index.js"), "Should ignore source files");
+            assert!(matcher.is_match("dist/bundle.js"), "Should ignore build outputs");
+        }
+
+        #[test]
+        fn test_yarn_fingerprint_ignores() {
+            let pm = create_mock_package_manager(PackageManagerType::Yarn);
+            let ignores = pm.get_fingerprint_ignores();
+            let matcher = GlobPatternSet::new(&ignores).expect("Should compile patterns");
+
+            // Should ignore most files in node_modules
+            assert!(
+                matcher.is_match("node_modules/react/index.js"),
+                "Should ignore implementation files"
+            );
+            assert!(
+                matcher.is_match("node_modules/react/cjs/react.production.js"),
+                "Should ignore nested files"
+            );
+
+            // Should NOT ignore package.json files (including in node_modules)
+            assert!(!matcher.is_match("package.json"), "Should NOT ignore root package.json");
+            assert!(
+                !matcher.is_match("apps/web/package.json"),
+                "Should NOT ignore app package.json"
+            );
+
+            // Should ignore package.json files under node_modules
+            assert!(
+                matcher.is_match("node_modules/react/package.json"),
+                "Should ignore package.json in node_modules"
+            );
+
+            // Should keep node_modules directories
+            assert!(!matcher.is_match("node_modules"), "Should NOT ignore node_modules directory");
+            assert!(!matcher.is_match("node_modules/@types"), "Should NOT ignore scoped packages");
+
+            // Yarn-specific files should NOT be ignored
+            assert!(!matcher.is_match(".yarnrc"), "Should NOT ignore .yarnrc");
+            assert!(!matcher.is_match(".yarnrc.yml"), "Should NOT ignore .yarnrc.yml");
+            assert!(!matcher.is_match("yarn.config.cjs"), "Should NOT ignore yarn.config.cjs");
+            assert!(!matcher.is_match("yarn.lock"), "Should NOT ignore yarn.lock");
+            assert!(
+                !matcher.is_match(".yarn/releases/yarn-4.0.0.cjs"),
+                "Should NOT ignore .yarn contents"
+            );
+            assert!(
+                !matcher.is_match(".yarn/patches/package.patch"),
+                "Should NOT ignore .yarn patches"
+            );
+            assert!(
+                !matcher.is_match(".yarn/patches/yjs-npm-13.6.21-c9f1f3397c.patch"),
+                "Should NOT ignore .yarn patches"
+            );
+            assert!(!matcher.is_match(".pnp.cjs"), "Should NOT ignore .pnp.cjs");
+            assert!(!matcher.is_match(".npmrc"), "Should NOT ignore .npmrc");
+
+            // Other package manager files should be ignored
+            assert!(matcher.is_match("pnpm-lock.yaml"), "Should ignore pnpm-lock.yaml");
+            assert!(matcher.is_match("package-lock.json"), "Should ignore package-lock.json");
+
+            // Regular source files should be ignored
+            assert!(matcher.is_match("src/components/Button.tsx"), "Should ignore source files");
+
+            // Should ignore nested node_modules
+            assert!(
+                matcher.is_match(
+                    "node_modules/@mixmark-io/domino/.yarn/plugins/@yarnpkg/plugin-version.cjs"
+                ),
+                "Should ignore sub node_modules under node_modules"
+            );
+            assert!(
+                matcher.is_match("node_modules/touch/node_modules"),
+                "Should ignore sub node_modules under node_modules"
+            );
+        }
+
+        #[test]
+        fn test_npm_fingerprint_ignores() {
+            let pm = create_mock_package_manager(PackageManagerType::Npm);
+            let ignores = pm.get_fingerprint_ignores();
+            let matcher = GlobPatternSet::new(&ignores).expect("Should compile patterns");
+
+            // Should ignore most files in node_modules
+            assert!(
+                matcher.is_match("node_modules/express/index.js"),
+                "Should ignore implementation files"
+            );
+            assert!(
+                matcher.is_match("node_modules/express/lib/application.js"),
+                "Should ignore nested files"
+            );
+
+            // Should NOT ignore package.json files (including in node_modules)
+            assert!(!matcher.is_match("package.json"), "Should NOT ignore root package.json");
+            assert!(!matcher.is_match("src/package.json"), "Should NOT ignore nested package.json");
+
+            // Should ignore package.json files under node_modules
+            assert!(
+                matcher.is_match("node_modules/express/package.json"),
+                "Should ignore package.json in node_modules"
+            );
+
+            // Should keep node_modules directories
+            assert!(!matcher.is_match("node_modules"), "Should NOT ignore node_modules directory");
+            assert!(!matcher.is_match("node_modules/@babel"), "Should NOT ignore scoped packages");
+
+            // Npm-specific files should NOT be ignored
+            assert!(!matcher.is_match("package-lock.json"), "Should NOT ignore package-lock.json");
+            assert!(
+                !matcher.is_match("npm-shrinkwrap.json"),
+                "Should NOT ignore npm-shrinkwrap.json"
+            );
+            assert!(!matcher.is_match(".npmrc"), "Should NOT ignore .npmrc");
+
+            // Other package manager files should be ignored
+            assert!(matcher.is_match("pnpm-lock.yaml"), "Should ignore pnpm-lock.yaml");
+            assert!(matcher.is_match("yarn.lock"), "Should ignore yarn.lock");
+
+            // Regular files should be ignored
+            assert!(matcher.is_match("README.md"), "Should ignore docs");
+            assert!(matcher.is_match("src/app.ts"), "Should ignore source files");
+        }
     }
 }
