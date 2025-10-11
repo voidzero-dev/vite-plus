@@ -111,5 +111,9 @@ export default defineConfig({
       { icon: 'x', link: 'https://x.com/voidzerodev' },
       { icon: 'bluesky', link: 'https://bsky.app/profile/voidzero.dev' },
     ],
+
+    outline: {
+      level: [2, 3],
+    },
   },
 });
