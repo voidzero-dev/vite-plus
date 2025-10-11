@@ -8,6 +8,7 @@ Commands:
   build    
   test     
   lib      Lib command, build a library
+  add      Add packages to dependencies
   install  Install command. It will be passed to the package manager's install command currently
   dev      
   doc      Doc command, build documentation

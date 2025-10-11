@@ -1,0 +1,5 @@
+{
+  "name": "command-add-pnpm-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.18.0"
+}

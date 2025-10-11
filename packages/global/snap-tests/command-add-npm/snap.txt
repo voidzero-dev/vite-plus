@@ -1,0 +1,93 @@
+> vp add --help # should show help
+Add packages to dependencies
+
+Usage: vp add [OPTIONS] [PACKAGES]...
+
+Arguments:
+  [PACKAGES]...  Packages to add
+
+Options:
+  -P, --save-prod
+          Save to `dependencies` (default)
+  -D, --save-dev
+          Save to `devDependencies`
+      --save-peer
+          Save to `peerDependencies` and `devDependencies`
+  -O, --save-optional
+          Save to `optionalDependencies`
+  -E, --save-exact
+          Save exact version rather than semver range (e.g., `^1.0.0` -> `1.0.0`)
+      --save-catalog-name <CATALOG_NAME>
+          Save the new dependency to the specified catalog name. Example: `vite add react --save-catalog-name react18`
+      --save-catalog
+          Save the new dependency to the default catalog
+      --filter <PATTERN>
+          Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root
+          Add to workspace root (ignore-workspace-root-check)
+      --workspace
+          Only add if package exists in workspace (pnpm-specific)
+  -g, --global
+          Install globally
+  -h, --help
+          Print help
+
+> vp add testnpm2 -D && cat package.json # should add package as dev dependencies
+Running: npm install --save-dev testnpm2
+
+added 1 package in <variable>ms
+
+{
+  "name": "command-add-npm",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+
+[2]> vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies
+error: unexpected argument '--allow-build' found
+
+  tip: to pass '--allow-build' as a value, use '-- --allow-build'
+
+Usage: vp add <PACKAGES>...
+
+For more information, try '--help'.
+
+> vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
+Running: npm install --save-peer test-vite-plus-package@<semver>
+
+added 1 package in <variable>ms
+
+{
+  "name": "command-add-npm",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "peerDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}
+
+> vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
+Running: npm install --save-optional test-vite-plus-package-optional
+
+added 1 package in <variable>ms
+
+{
+  "name": "command-add-npm",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "peerDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
