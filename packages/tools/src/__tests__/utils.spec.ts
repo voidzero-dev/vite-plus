@@ -2,9 +2,9 @@ import { tmpdir } from 'node:os';
 
 import { describe, expect, test } from '@voidzero-dev/vite-plus/test';
 
-import { replaceUnstableOutput } from '../utils.ts';
+import { isPassThroughEnv, replaceUnstableOutput } from '../utils.ts';
 
-describe('replaceUnstableOutput', () => {
+describe('replaceUnstableOutput()', () => {
   test('replace unstable semver version', () => {
     const output = `
 foo v1.0.0
@@ -82,5 +82,26 @@ Done in 171ms using pnpm v10.16.1
 ✔ Build complete in 100ms
     `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
+
+  test('replace yarn YN0013', () => {
+    const output = `
+➤ YN0000: ┌ Fetch step
+➤ YN0013: │ A package was added to the project (+ 0.7 KiB).
+➤ YN0000: └ Completed
+    `;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
+});
+
+describe('isPassThroughEnv()', () => {
+  test('should return true if env is pass-through', () => {
+    expect(isPassThroughEnv('NPM_AUTH_TOKEN')).toBe(true);
+    expect(isPassThroughEnv('PATH')).toBe(true);
+  });
+
+  test('should return false if env is not pass-through', () => {
+    expect(isPassThroughEnv('NODE_ENV')).toBe(false);
+    expect(isPassThroughEnv('API_URL')).toBe(false);
   });
 });

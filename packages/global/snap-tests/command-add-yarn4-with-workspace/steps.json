@@ -1,0 +1,13 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp add testnpm2 -D -w && cat package.json packages/app/package.json packages/utils/package.json # should add package to workspace root",
+    "vp add @vite-plus-test/utils --workspace -w && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to workspace root",
+    "vp add testnpm2 test-vite-plus-install@1.0.0 --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app",
+    "vp add @vite-plus-test/utils --workspace --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app",
+    "vp add testnpm2 test-vite-plus-install@1.0.0 --filter \"*\" --filter @vite-plus-test/utils && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages and workspace root",
+    "vp install -O test-vite-plus-package-optional --filter \"*\" && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should install packages alias for add command"
+  ]
+}

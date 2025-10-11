@@ -1,0 +1,63 @@
+> vp add --help # should show help
+Add packages to dependencies
+
+Usage: vp add [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+
+Arguments:
+  [PACKAGES]...           Packages to add
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  -P, --save-prod
+          Save to `dependencies` (default)
+  -D, --save-dev
+          Save to `devDependencies`
+      --save-peer
+          Save to `peerDependencies` and `devDependencies`
+  -O, --save-optional
+          Save to `optionalDependencies`
+  -E, --save-exact
+          Save exact version rather than semver range (e.g., `^1.0.0` -> `1.0.0`)
+      --save-catalog-name <CATALOG_NAME>
+          Save the new dependency to the specified catalog name. Example: `vite add vue --save-catalog-name vue3`
+      --save-catalog
+          Save the new dependency to the default catalog
+      --allow-build <NAMES>
+          A list of package names allowed to run postinstall
+      --filter <PATTERN>
+          Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root
+          Add to workspace root (ignore-workspace-root-check)
+      --workspace
+          Only add if package exists in workspace (pnpm-specific)
+  -g, --global
+          Install globally
+  -h, --help
+          Print help
+
+> vp add testnpm2 urllib -D -- --loglevel=verbose --verbose && cat package.json # should add package as dev dependencies
+Running: pnpm add --save-dev --loglevel=verbose --verbose testnpm2 urllib
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+devDependencies:
++ testnpm2 <semver>
++ urllib <semver>
+
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-add-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1",
+    "urllib": "^4.8.2"
+  }
+}
+
+> #vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies
+> #vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
+> #vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
+> #vp add test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support pass through arguments
+> #vp add -g testnpm2 -- --dry-run && cat package.json # support add global package with dry-run

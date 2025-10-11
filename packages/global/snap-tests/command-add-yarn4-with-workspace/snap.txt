@@ -1,0 +1,293 @@
+> vp add testnpm2 -D -w && cat package.json packages/app/package.json packages/utils/package.json # should add package to workspace root
+Running: yarn add --dev testnpm2
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0085: │ + testnpm2@npm:1.0.1
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+{
+  "name": "command-add-yarn4-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "yarn@<semver>",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "app"
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+> vp add @vite-plus-test/utils --workspace -w && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to workspace root
+Running: yarn add @vite-plus-test/utils
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+{
+  "name": "command-add-yarn4-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "yarn@<semver>",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:^"
+  }
+}
+{
+  "name": "app"
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+> vp add testnpm2 test-vite-plus-install@1.0.0 --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app
+Running: yarn workspaces foreach --all --include app add testnpm2 test-vite-plus-install@<semver>
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0085: │ + test-vite-plus-install@npm:1.0.0
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+Done in <variable>ms <variable>ms
+{
+  "name": "command-add-yarn4-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "yarn@<semver>",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:^"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+> vp add @vite-plus-test/utils --workspace --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app
+Running: yarn workspaces foreach --all --include app add @vite-plus-test/utils
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+Done in <variable>ms <variable>ms
+{
+  "name": "command-add-yarn4-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "yarn@<semver>",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:^"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:^",
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+> vp add testnpm2 test-vite-plus-install@1.0.0 --filter "*" --filter @vite-plus-test/utils && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages and workspace root
+Running: yarn workspaces foreach --all --include * --include @vite-plus-test/utils add testnpm2 test-vite-plus-install@<semver>
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+Done in <variable>ms <variable>ms
+{
+  "name": "command-add-yarn4-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "yarn@<semver>",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:^",
+    "test-vite-plus-install": "1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:^",
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "admin",
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+
+> vp install -O test-vite-plus-package-optional --filter "*" && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should install packages alias for add command
+Running: yarn workspaces foreach --all --include * add --optional test-vite-plus-package-optional
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+Done in <variable>ms <variable>ms
+{
+  "name": "command-add-yarn4-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "yarn@<semver>",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:^",
+    "test-vite-plus-install": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:^",
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "^1.0.1"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "admin",
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "^1.0.1"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}

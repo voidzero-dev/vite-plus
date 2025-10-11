@@ -1,0 +1,162 @@
+> vp add --help # should show help
+Add packages to dependencies
+
+Usage: vp add [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+
+Arguments:
+  [PACKAGES]...           Packages to add
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  -P, --save-prod
+          Save to `dependencies` (default)
+  -D, --save-dev
+          Save to `devDependencies`
+      --save-peer
+          Save to `peerDependencies` and `devDependencies`
+  -O, --save-optional
+          Save to `optionalDependencies`
+  -E, --save-exact
+          Save exact version rather than semver range (e.g., `^1.0.0` -> `1.0.0`)
+      --save-catalog-name <CATALOG_NAME>
+          Save the new dependency to the specified catalog name. Example: `vite add vue --save-catalog-name vue3`
+      --save-catalog
+          Save the new dependency to the default catalog
+      --allow-build <NAMES>
+          A list of package names allowed to run postinstall
+      --filter <PATTERN>
+          Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root
+          Add to workspace root (ignore-workspace-root-check)
+      --workspace
+          Only add if package exists in workspace (pnpm-specific)
+  -g, --global
+          Install globally
+  -h, --help
+          Print help
+
+> vp add testnpm2 -D && cat package.json # should add package as dev dependencies
+Running: pnpm add --save-dev testnpm2
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+devDependencies:
++ testnpm2 <semver>
+
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-add-pnpm9",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+
+> vp add testnpm2 test-vite-plus-install && cat package.json # should add packages to dependencies
+Running: pnpm add testnpm2 test-vite-plus-install
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
++ test-vite-plus-install <semver>
+
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-add-pnpm9",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+
+[1]> vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install # should error because allow-build is not supported at pnpm@9
+Running: pnpm add --allow-build=test-vite-plus-install testnpm2 test-vite-plus-install
+
+ ERROR  Unknown option: 'allow-build'
+For help, run: pnpm help add
+
+> vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
+Running: pnpm add --save-peer test-vite-plus-package@<semver>
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+peerDependencies:
++ test-vite-plus-package <semver>
+
+devDependencies:
++ test-vite-plus-package <semver> already in devDependencies, was not moved to dependencies.
+
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-add-pnpm9",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0",
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "peerDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  }
+}
+
+> vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
+Running: pnpm add --save-optional test-vite-plus-package-optional
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+optionalDependencies:
++ test-vite-plus-package-optional <semver>
+
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-add-pnpm9",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0",
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "peerDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+
+> vp add test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support pass through arguments
+Running: pnpm add --loglevel=warn test-vite-plus-package-optional
+{
+  "name": "command-add-pnpm9",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0",
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "peerDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}

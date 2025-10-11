@@ -1,0 +1,5 @@
+{
+  "name": "command-add-pnpm9",
+  "version": "1.0.0",
+  "packageManager": "pnpm@9.15.9"
+}

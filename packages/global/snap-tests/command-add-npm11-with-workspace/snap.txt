@@ -1,0 +1,226 @@
+> vp add testnpm2 -D -w -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add package to workspace root
+Running: npm install --include-workspace-root --save-dev --no-audit testnpm2
+
+added 3 packages in <variable>ms
+{
+  "name": "command-add-npm11-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "app"
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+> vp add @vite-plus-test/utils --workspace -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to workspace root
+Running: npm install --no-audit @vite-plus-test/utils
+
+up to date in <variable>ms
+{
+  "name": "command-add-npm11-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0"
+  }
+}
+{
+  "name": "app"
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+> vp add testnpm2 test-vite-plus-install@1.0.0 --filter app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app
+Running: npm install --workspace app --no-audit testnpm2 test-vite-plus-install@<semver>
+
+added 1 package in <variable>ms
+{
+  "name": "command-add-npm11-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+> vp add @vite-plus-test/utils --workspace --filter app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app
+Running: npm install --workspace app --no-audit @vite-plus-test/utils
+
+up to date in <variable>ms
+{
+  "name": "command-add-npm11-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0",
+    "test-vite-plus-install": "^1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+> vp add testnpm2 test-vite-plus-install@1.0.0 --filter "*" -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages except workspace root
+Running: npm install --workspace * --no-audit testnpm2 test-vite-plus-install@<semver>
+
+up to date in <variable>ms
+{
+  "name": "command-add-npm11-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0",
+    "test-vite-plus-install": "^1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+
+> vp add -E testnpm2 test-vite-plus-install@1.0.0 --filter "*" --workspace-root -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages include workspace root
+Running: npm install --workspace * --include-workspace-root --save-exact --no-audit testnpm2 test-vite-plus-install@<semver>
+
+up to date in <variable>ms
+{
+  "name": "command-add-npm11-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0",
+    "test-vite-plus-install": "1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0",
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "1.0.1"
+  }
+}
+
+> vp install test-vite-plus-package@1.0.0 --filter "*" --workspace-root -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should install packages alias for add command
+Running: npm install --workspace * --include-workspace-root --no-audit test-vite-plus-package@<semver>
+
+added 1 package in <variable>ms
+{
+  "name": "command-add-npm11-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0",
+    "test-vite-plus-install": "1.0.0",
+    "test-vite-plus-package": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "^1.0.0",
+    "test-vite-plus-install": "1.0.0",
+    "test-vite-plus-package": "^1.0.0",
+    "testnpm2": "1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "test-vite-plus-package": "^1.0.0",
+    "testnpm2": "1.0.1"
+  }
+}

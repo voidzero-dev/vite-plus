@@ -4784,6 +4784,7 @@ dependencies = [
  "hex",
  "httpmock",
  "indoc",
+ "nix 0.30.1",
  "pathdiff",
  "petgraph 0.8.3",
  "reqwest",

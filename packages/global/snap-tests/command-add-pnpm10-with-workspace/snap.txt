@@ -1,0 +1,226 @@
+> vp add testnpm2 -D -w && cat package.json # should add package to workspace root
+Running: pnpm add --workspace-root --save-dev testnpm2
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+devDependencies:
++ testnpm2 ^1.0.1
+
+Packages: +<variable>
++<repeat>
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-add-pnpm10-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+
+> vp add @vite-plus-test/utils --workspace && cat package.json # should add @vite-plus-test/utils to workspace root
+Running: pnpm add --workspace @vite-plus-test/utils
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
++ @vite-plus-test/utils workspace:*
+
+Already up to date
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-add-pnpm10-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*"
+  }
+}
+
+> vp add testnpm2 test-vite-plus-install@1.0.0 --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app
+Running: pnpm --filter app add testnpm2 test-vite-plus-install@<semver>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+.                                        |   +1 +<repeat>
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-add-pnpm10-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+> vp add @vite-plus-test/utils --workspace --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app
+Running: pnpm --filter app add --workspace @vite-plus-test/utils
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-add-pnpm10-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+> vp add -E testnpm2 test-vite-plus-install --filter "*" && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages except workspace root
+Running: pnpm --filter * add --save-exact testnpm2 test-vite-plus-install
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-add-pnpm10-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+
+> vp install test-vite-plus-package@1.0.0 --filter "*" --workspace-root --save-catalog && cat package.json packages/app/package.json packages/utils/package.json pnpm-workspace.yaml # should install packages alias for add command
+Running: pnpm --filter * add --workspace-root --save-catalog test-vite-plus-package@<semver>
+.                                        |   +1 +<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-add-pnpm10-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-package": "catalog:"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-install": "1.0.0",
+    "test-vite-plus-package": "catalog:",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "test-vite-plus-package": "catalog:",
+    "testnpm2": "^1.0.1"
+  }
+}
+packages:
+  - packages/*
+
+catalog:
+  test-vite-plus-package: <semver>
+
+> vp add --filter app test-vite-plus-package-optional --save-catalog-name v1 && cat packages/app/package.json pnpm-workspace.yaml # should add with save-catalog-name
+Running: pnpm --filter app add --save-catalog-name=v1 test-vite-plus-package-optional
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+.                                        |   +1 +<repeat>
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-install": "1.0.0",
+    "test-vite-plus-package": "catalog:",
+    "test-vite-plus-package-optional": "catalog:v1",
+    "testnpm2": "^1.0.1"
+  }
+}
+packages:
+  - packages/*
+
+catalog:
+  test-vite-plus-package: <semver>
+
+catalogs:
+  v1:
+    test-vite-plus-package-optional: ^1.0.0
+
+> vp add --filter=./packages/utils test-vite-plus-package-optional -O --save-catalog-name v2 && cat packages/utils/package.json pnpm-workspace.yaml # should add other with save-catalog-name
+Running: pnpm --filter ./packages/utils add --save-optional --save-catalog-name=v2 test-vite-plus-package-optional
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "test-vite-plus-package": "catalog:",
+    "testnpm2": "^1.0.1"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "catalog:v2"
+  }
+}
+packages:
+  - packages/*
+
+catalog:
+  test-vite-plus-package: <semver>
+
+catalogs:
+  v1:
+    test-vite-plus-package-optional: ^1.0.0
+  v2:
+    test-vite-plus-package-optional: ^1.0.0

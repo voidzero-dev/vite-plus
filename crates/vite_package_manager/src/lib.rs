@@ -1,3 +1,4 @@
+pub mod add;
 mod config;
 mod install;
 pub mod package;
@@ -17,6 +18,7 @@ use vite_str::Str;
 use wax::Glob;
 
 pub use crate::{
+    add::{AddCommandOptions, SaveDependencyType},
     package::{DependencyType, PackageJson},
     package_manager::{WorkspaceFile, WorkspaceRoot, find_package_root, find_workspace_root},
 };

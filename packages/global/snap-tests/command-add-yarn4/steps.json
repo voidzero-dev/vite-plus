@@ -1,0 +1,13 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp add --help # should show help",
+    "vp add testnpm2 -D && cat package.json # should add package as dev dependencies",
+    "vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies",
+    "vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add",
+    "vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies",
+    "vp add test-vite-plus-package-optional -- --tilde && cat package.json # support pass through arguments"
+  ]
+}

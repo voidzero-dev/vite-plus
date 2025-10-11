@@ -6,8 +6,9 @@ import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
+import { debuglog, promisify } from 'node:util';
 
+const debug = debuglog('vite-plus/snap-test');
 const cpExec = promisify(cp.exec);
 const exec = async (command: string, options: cp.ExecOptionsWithStringEncoding) =>
   cpExec(
@@ -15,7 +16,7 @@ const exec = async (command: string, options: cp.ExecOptionsWithStringEncoding) 
     process.platform === 'win32' ? { ...options, shell: 'pwsh.exe' } : options,
   );
 
-import { replaceUnstableOutput } from './utils.ts';
+import { isPassThroughEnv, replaceUnstableOutput } from './utils.ts';
 
 // Create a unique temporary directory for testing
 // On macOS, `tmpdir()` is a symlink. Resolve it so that we can replace the resolved cwd in outputs.
@@ -26,7 +27,7 @@ fs.mkdirSync(tempTmpDir, { recursive: true });
 fs.symlinkSync(
   path.resolve('node_modules'),
   path.join(tempTmpDir, 'node_modules'),
-  process.platform === 'win32' ? 'junction' : 'dir'
+  process.platform === 'win32' ? 'junction' : 'dir',
 );
 
 // Clean up the temporary directory on exit
@@ -65,8 +66,9 @@ async function runTestCase(name: string) {
   const caseTmpDir = `${tempTmpDir}/${name}`;
   await fsPromises.cp(`${casesDir}/${name}`, caseTmpDir, { recursive: true, errorOnExist: true });
 
+  const passThroughEnvs = Object.fromEntries(Object.entries(process.env).filter(([key]) => isPassThroughEnv(key)));
   const env = {
-    ...process.env,
+    ...passThroughEnvs,
     // Indicate CLI is running in test mode, so that it prints more detailed outputs.
     VITE_PLUS_CLI_TEST: '1',
     NO_COLOR: 'true',
@@ -92,6 +94,7 @@ async function runTestCase(name: string) {
   const newSnap: string[] = [];
 
   for (const command of steps.commands) {
+    debug('running command: %s, cwd: %s, env: %o', command, caseTmpDir, env);
     try {
       const { stdout, stderr } = await exec(command, { env, cwd: caseTmpDir, encoding: 'utf-8' });
       newSnap.push(`> ${command}`);

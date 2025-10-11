@@ -202,6 +202,8 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     )
     .await;
 
+    tracing::debug!("Result: {result:?}");
+
     match result {
         Ok(exit_status) => Ok(exit_status.code().unwrap_or(1)),
         Err(e) => {

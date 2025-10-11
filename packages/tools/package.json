@@ -5,5 +5,8 @@
   "bin": {
     "json-edit": "./src/json-edit.ts",
     "snap-test": "./src/snap-test.ts"
+  },
+  "devDependencies": {
+    "minimatch": "catalog:"
   }
 }

@@ -1,11 +1,11 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`replaceUnstableOutput > replace date 1`] = `
+exports[`replaceUnstableOutput() > replace date 1`] = `
 "Start at  <date>
 <date>"
 `;
 
-exports[`replaceUnstableOutput > replace tsdown output 1`] = `
+exports[`replaceUnstableOutput() > replace tsdown output 1`] = `
 "ℹ tsdown v<semver> powered by rolldown v<semver>
 ℹ entry: src/index.ts
 ℹ Build start
@@ -14,9 +14,9 @@ exports[`replaceUnstableOutput > replace tsdown output 1`] = `
 ✔ Build complete in <variable>ms"
 `;
 
-exports[`replaceUnstableOutput > replace unstable cwd 1`] = `"<cwd>/foo.txt"`;
+exports[`replaceUnstableOutput() > replace unstable cwd 1`] = `"<cwd>/foo.txt"`;
 
-exports[`replaceUnstableOutput > replace unstable pnpm install output 1`] = `
+exports[`replaceUnstableOutput() > replace unstable pnpm install output 1`] = `
 "Scope: all <variable> workspace projects
 Packages: +<variable>
 +<repeat>
@@ -27,7 +27,7 @@ devDependencies:
 + vitest <semver>"
 `;
 
-exports[`replaceUnstableOutput > replace unstable pnpm install output 2`] = `
+exports[`replaceUnstableOutput() > replace unstable pnpm install output 2`] = `
 "Scope: all <variable> workspace projects
 Lockfile is up to date, resolution step is skipped
 Already up to date
@@ -42,7 +42,7 @@ Already up to date
 Done in <variable>ms using pnpm v<semver>"
 `;
 
-exports[`replaceUnstableOutput > replace unstable semver version 1`] = `
+exports[`replaceUnstableOutput() > replace unstable semver version 1`] = `
 "foo v<semver>
  v<semver>
  v<semver>
@@ -54,4 +54,9 @@ vitest/<semver>
 foo/v<semver>
 foo@<semver>
 bar@v<semver>"
+`;
+
+exports[`replaceUnstableOutput() > replace yarn YN0013 1`] = `
+"➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed"
 `;
