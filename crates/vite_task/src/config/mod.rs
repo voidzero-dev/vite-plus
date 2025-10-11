@@ -593,11 +593,8 @@ mod tests {
                 .expect("Failed to load workspace");
 
             // Test that specifying a scoped task with recursive flag returns an error
-            let result = workspace.build_task_subgraph(
-                &["@test/core#build".into()],
-                Arc::default(),
-                true,
-            );
+            let result =
+                workspace.build_task_subgraph(&["@test/core#build".into()], Arc::default(), true);
 
             assert!(result.is_err());
             match result {
@@ -874,11 +871,8 @@ mod tests {
                 .expect("Failed to load workspace");
 
             // Test that we can't use recursive with task names containing # (would be interpreted as scope)
-            let result = workspace.build_task_subgraph(
-                &["test#integration".into()],
-                Arc::default(),
-                true,
-            );
+            let result =
+                workspace.build_task_subgraph(&["test#integration".into()], Arc::default(), true);
             assert!(result.is_err(), "Recursive run with # in task name should fail");
         })
     }
