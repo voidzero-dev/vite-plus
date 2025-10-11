@@ -270,7 +270,7 @@ mod tests {
 
             // Test build task graph
             let build_graph = workspace
-                .build_task_subgraph(&vec!["build".into()], Arc::default(), true)
+                .build_task_subgraph(&["build".into()], Arc::default(), true)
                 .expect("Failed to resolve build tasks");
 
             let plan =
