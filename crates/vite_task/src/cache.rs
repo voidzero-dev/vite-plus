@@ -107,6 +107,8 @@ impl TaskCache {
                         "CREATE TABLE taskrun_to_command (key BLOB PRIMARY KEY, value BLOB);",
                         (),
                     )?;
+                    // Bump to version 3 to invalidate cache entries due to a change in the serialized cache key content
+                    // (addition of the `fingerprint_ignores` field). No schema change was made.
                     conn.execute("PRAGMA user_version = 3", ())?;
                 }
                 1..=2 => {
