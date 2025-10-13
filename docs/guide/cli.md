@@ -511,7 +511,9 @@ vite cache view
 
 ### `vite install`
 
-Install dependencies using the detected package manager. `vite i` is alias.
+Aliases: `vite i`
+
+Install dependencies using the detected package manager.
 
 #### Usage
 
@@ -533,7 +535,9 @@ vite install --loglevel debug
 
 ### `vite update`
 
-Updates packages to their latest version based on the specified range. `vite up` and `vite upgrade` are aliases.
+Aliases: `vite up`
+
+Updates packages to their latest version based on the specified range.
 
 #### Usage
 
@@ -566,7 +570,9 @@ vite add -D @types/node
 
 ### `vite remove`
 
-Removes packages. `vite rm`, `vite uninstall` and `vite un` are aliases.
+Aliases: `vite rm`, `vite uninstall`, `vite un`
+
+Removes packages.
 
 #### Usage
 
@@ -594,23 +600,9 @@ If called without arguments, all linked dependencies will be unlinked inside the
 
 Perform an install removing older dependencies in the lockfile if a newer version can be used.
 
-### `vite prune`
+### `vite outdated`
 
-Removes unnecessary packages.
-
-### `vite pack`
-
-Pack the current package into a tarball.
-
-### `vite list`
-
-Aliases: `vite ls`
-
-List installed packages.
-
-### `vite view`
-
-View a package info from the registry.
+Shows outdated packages.
 
 ### `vite why`
 
@@ -618,17 +610,41 @@ Aliases: `vite explain`
 
 Shows all packages that depend on the specified package.
 
-### `vite outdated`
+### `vite pm <subcommand>`
 
-Shows outdated packages.
+The `vite pm` command group provides a set of utilities for working with package manager.
 
-### `vite publish`
+> package manager commands with low usage frequency will under this command group.
+
+#### `vite pm prune`
+
+Removes unnecessary packages.
+
+#### `vite pm pack`
+
+Pack the current package into a tarball.
+
+#### `vite pm list`
+
+Aliases: `vite pm ls`
+
+List installed packages.
+
+#### `vite pm view`
+
+View a package info from the registry.
+
+#### `vite pm publish`
 
 Publishes a package to the registry.
 
-### `vite owner ls`
+#### `vite pm owner`
 
-List package owners.
+Manage package owners.
+
+#### `vite pm cache`
+
+Manage the packages metadata cache.
 
 ## Others
 
