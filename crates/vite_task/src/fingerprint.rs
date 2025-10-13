@@ -99,7 +99,7 @@ impl PostRunFingerprint {
             .par_iter()
             .filter(|(path, _)| {
                 // Filter out paths that match ignore patterns
-                if let Some(ref matcher) = ignore_matcher { !matcher.is_match(path) } else { true }
+                ignore_matcher.as_ref().map_or(true, |matcher| !matcher.is_match(path))
             })
             .flat_map(|(path, path_read)| {
                 Some((|| {
