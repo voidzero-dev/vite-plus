@@ -71,7 +71,7 @@ impl Command {
                     OsString::from_vec(value.unwrap_or_default().into()),
                 )
             })
-            .collect()
+            .collect();
     }
 
     pub fn env_remove<K: AsRef<OsStr>>(&mut self, key: K) -> &mut Command {
