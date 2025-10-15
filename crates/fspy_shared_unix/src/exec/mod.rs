@@ -82,6 +82,13 @@ impl Exec {
     ///
     /// * `Ok(())` if resolution succeeds and `self` is updated with resolved paths
     /// * `Err(nix::Error)` with appropriate errno, like the exec function would return
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The program is not found in PATH (ENOENT)
+    /// - The program file cannot be accessed or read
+    /// - Shebang parsing fails due to I/O errors
     pub fn resolve(
         &mut self,
         mut on_path_access: impl FnMut(PathAccess<'_>),
@@ -134,6 +141,14 @@ impl Exec {
     }
 }
 
+/// Ensures an environment variable is set to the specified value
+///
+/// If the variable doesn't exist, it is added. If it exists with the same value,
+/// no change is made. If it exists with a different value, an error is returned.
+///
+/// # Errors
+///
+/// Returns `EINVAL` if the environment variable already exists with a different value.
 pub fn ensure_env(
     envs: &mut Vec<(BString, Option<BString>)>,
     name: impl AsRef<BStr>,

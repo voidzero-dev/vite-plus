@@ -18,6 +18,16 @@ use crate::{
     payload::EncodedPayload,
 };
 
+/// Handles exec command resolution and injection
+///
+/// Resolves the program path and prepares the command for execution with
+/// appropriate environment variables and hooks.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Program resolution fails (from `command.resolve()`)
+/// - Environment variable operations fail
 pub fn handle_exec(
     command: &mut Exec,
     config: ExecResolveConfig,

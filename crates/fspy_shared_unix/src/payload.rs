@@ -38,6 +38,14 @@ pub fn encode_payload(payload: Payload) -> EncodedPayload {
     EncodedPayload { payload, encoded_string: encoded_string.into() }
 }
 
+/// Decodes the fspy payload from the environment variable
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The environment variable is not found
+/// - The base64 decoding fails
+/// - The bincode deserialization fails
 pub fn decode_payload_from_env() -> anyhow::Result<EncodedPayload> {
     let Some(encoded_string) = std::env::var_os(PAYLOAD_ENV_NAME) else {
         anyhow::bail!("Environment variable '{}' not found", PAYLOAD_ENV_NAME);

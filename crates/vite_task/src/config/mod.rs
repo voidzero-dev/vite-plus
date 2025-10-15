@@ -261,10 +261,10 @@ impl std::fmt::Debug for ResolvedTaskCommand {
 ///
 /// # Fingerprint Ignores Impact on Cache
 ///
-/// The `fingerprint_ignores` field controls which files are tracked in PostRunFingerprint:
+/// The `fingerprint_ignores` field controls which files are tracked in `PostRunFingerprint`:
 /// - Changes to this config must invalidate the cache
 /// - Vec maintains insertion order (pattern order matters for last-match-wins semantics)
-/// - Even though ignore patterns only affect PostRunFingerprint, the config itself is part of the cache key
+/// - Even though ignore patterns only affect `PostRunFingerprint`, the config itself is part of the cache key
 #[derive(Encode, Decode, Debug, Serialize, Deserialize, PartialEq, Eq, Diff, Clone)]
 #[diff(attr(#[derive(Debug)]))]
 pub struct CommandFingerprint {

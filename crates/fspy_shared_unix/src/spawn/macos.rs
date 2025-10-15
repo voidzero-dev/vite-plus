@@ -15,6 +15,11 @@ use crate::{
 
 pub struct PreExec(Infallible);
 impl PreExec {
+    /// Runs pre-exec operations
+    ///
+    /// # Errors
+    ///
+    /// This function never returns an error as the type is `Infallible`
     pub fn run(&self) -> nix::Result<()> {
         match self.0 {}
     }
