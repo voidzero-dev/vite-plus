@@ -469,7 +469,7 @@ async fn download_package_manager(
     download_and_extract_tgz_with_hash(&tgz_url, &target_dir_tmp, expected_hash).await.map_err(
         |err| {
             // status 404 means the version is not found, convert to PackageManagerVersionNotFound error
-            if let Error::ReqwestError(e) = &err
+            if let Error::Reqwest(e) = &err
                 && let Some(status) = e.status()
                 && status == reqwest::StatusCode::NOT_FOUND
             {

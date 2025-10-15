@@ -12,13 +12,13 @@ use vite_str::Str;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
-    SqliteError(#[from] rusqlite::Error),
+    Sqlite(#[from] rusqlite::Error),
 
     #[error(transparent)]
-    BincodeEncodeError(#[from] bincode::error::EncodeError),
+    BincodeEncode(#[from] bincode::error::EncodeError),
 
     #[error(transparent)]
-    BincodeDecodeError(#[from] bincode::error::DecodeError),
+    BincodeDecode(#[from] bincode::error::DecodeError),
 
     #[error("Unrecognized db version: {0}")]
     UnrecognizedDbVersion(u32),
@@ -34,10 +34,10 @@ pub enum Error {
 
     #[cfg(unix)]
     #[error(transparent)]
-    NixError(#[from] nix::Error),
+    Nix(#[from] nix::Error),
 
     #[error(transparent)]
-    SerdeError(#[from] serde_json::Error),
+    Serde(#[from] serde_json::Error),
 
     #[error("Env value is not valid unicode: {key} = {value:?}")]
     EnvValueIsNotValidUnicode { key: Str, value: OsString },
@@ -54,10 +54,10 @@ pub enum Error {
     Utf8Error(#[from] bstr::Utf8Error),
 
     #[error(transparent)]
-    WaxBuildError(#[from] wax::BuildError),
+    WaxBuild(#[from] wax::BuildError),
 
     #[error(transparent)]
-    WaxWalkError(#[from] wax::WalkError),
+    WaxWalk(#[from] wax::WalkError),
 
     #[error("Duplicated task name: {0}")]
     DuplicatedTask(Str),
@@ -66,7 +66,7 @@ pub enum Error {
     DuplicatedPackageName { name: Str, path1: RelativePathBuf, path2: RelativePathBuf },
 
     #[error("Circular dependency found : {0:?}")]
-    CycleDependenciesError(petgraph::algo::Cycle<NodeIndex>),
+    CycleDependencies(petgraph::algo::Cycle<NodeIndex>),
 
     #[error("The package.json name is empty at {0:?}/package.json")]
     EmptyPackageName(AbsolutePathBuf),
@@ -93,7 +93,7 @@ pub enum Error {
     RecursiveRunWithScope(Str),
 
     #[error(transparent)]
-    SerdeYmlError(#[from] serde_yml::Error),
+    SerdeYml(#[from] serde_yml::Error),
 
     #[error("Lint failed, reason: {reason}")]
     LintFailed { status: Str, reason: Str },
@@ -102,7 +102,7 @@ pub enum Error {
     FmtFailed { status: Str, reason: Str },
 
     #[error("Vite failed")]
-    ViteError { status: Str, reason: Str },
+    Vite { status: Str, reason: Str },
 
     #[error("Test failed")]
     TestFailed { status: Str, reason: Str },
@@ -119,7 +119,7 @@ pub enum Error {
     #[error(
         "The stripped path ({stripped_path:?}) is not a valid relative path because: {invalid_path_data_error}"
     )]
-    StripPathError { stripped_path: Box<Path>, invalid_path_data_error: InvalidPathDataError },
+    StripPath { stripped_path: Box<Path>, invalid_path_data_error: InvalidPathDataError },
 
     #[error("The path ({path:?}) is not a valid relative path because: {reason}")]
     InvalidRelativePath { path: Box<Path>, reason: FromPathError },
@@ -142,10 +142,10 @@ pub enum Error {
     PackageManagerVersionNotFound { name: Str, version: Str, url: Str },
 
     #[error(transparent)]
-    SemverError(#[from] semver::Error),
+    Semver(#[from] semver::Error),
 
     #[error(transparent)]
-    ReqwestError(#[from] reqwest::Error),
+    Reqwest(#[from] reqwest::Error),
 
     #[error(transparent)]
     JoinError(#[from] tokio::task::JoinError),
@@ -163,12 +163,12 @@ pub enum Error {
     UnsupportedHashAlgorithm(Str),
 
     #[error(transparent)]
-    AnyhowError(#[from] anyhow::Error),
+    Anyhow(#[from] anyhow::Error),
 }
 
 impl From<StripPrefixError<'_>> for Error {
     fn from(value: StripPrefixError<'_>) -> Self {
-        Self::StripPathError {
+        Self::StripPath {
             stripped_path: Box::from(value.stripped_path),
             invalid_path_data_error: value.invalid_path_data_error,
         }

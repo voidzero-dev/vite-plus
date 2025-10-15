@@ -225,7 +225,7 @@ fn js_error_to_fmt_error(err: napi::Error) -> Error {
 
 /// Convert JavaScript errors to Rust vite errors
 fn js_error_to_vite_error(err: napi::Error) -> Error {
-    Error::ViteError { status: err.status.to_string().into(), reason: err.to_string().into() }
+    Error::Vite { status: err.status.to_string().into(), reason: err.to_string().into() }
 }
 
 /// Convert JavaScript errors to Rust test errors

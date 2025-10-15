@@ -104,7 +104,7 @@ impl ExecutionPlan {
         // or the task dependencies declaration is meaningless
         let node_indices = match toposort(&task_graph, None) {
             Ok(ok) => ok,
-            Err(err) => return Err(Error::CycleDependenciesError(err)),
+            Err(err) => return Err(Error::CycleDependencies(err)),
         };
 
         // TODO: implement parallel execution grouping
