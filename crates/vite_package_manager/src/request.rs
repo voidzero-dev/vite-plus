@@ -468,7 +468,7 @@ mod tests {
         let url = format!("{}/file.txt", server.base_url());
 
         let result = client.download_file(&url, &target_file).await;
-        assert!(result.is_ok(), "Failed to download file: {:?}", result);
+        assert!(result.is_ok(), "Failed to download file: {result:?}");
 
         // Verify file exists and has correct content
         assert!(target_file.exists());
@@ -513,7 +513,7 @@ mod tests {
 
         let url = format!("{}/test-package.tgz", server.base_url());
         let result = download_and_extract_tgz_with_hash(&url, &target_dir, None).await;
-        assert!(result.is_ok(), "Failed to download and extract: {:?}", result);
+        assert!(result.is_ok(), "Failed to download and extract: {result:?}");
 
         assert!(target_dir.join("package/bin/yarn").exists());
         assert!(target_dir.join("package/bin/yarn.cmd").exists());

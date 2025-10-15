@@ -287,6 +287,6 @@ mod tests {
             assert_order(&plan, "@test/ui#build", "@test/app#build(subcommand 0)");
             assert_order(&plan, "@test/api#build", "@test/app#build(subcommand 0)");
             assert_order(&plan, "@test/shared#build", "@test/app#build(subcommand 0)");
-        })
+        });
     }
 }

@@ -539,7 +539,7 @@ mod tests {
 
     #[test]
     fn test_args_basic_task() {
-        let args = Args::try_parse_from(&["vite-plus", "build"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "build"]).unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
         assert!(matches!(args.commands, Commands::Build { .. }));
@@ -548,7 +548,7 @@ mod tests {
 
     #[test]
     fn test_args_fmt_command() {
-        let args = Args::try_parse_from(&["vite-plus", "fmt"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "fmt"]).unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
         assert!(matches!(args.commands, Commands::Fmt { .. }));
@@ -557,7 +557,7 @@ mod tests {
 
     #[test]
     fn test_args_fmt_command_with_args() {
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "vite-plus",
             "fmt",
             "--",
@@ -580,7 +580,7 @@ mod tests {
 
     #[test]
     fn test_args_test_command() {
-        let args = Args::try_parse_from(&["vite-plus", "test"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "test"]).unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
         assert!(matches!(args.commands, Commands::Test { .. }));
@@ -590,7 +590,7 @@ mod tests {
     #[test]
     fn test_args_test_command_with_args() {
         let args =
-            Args::try_parse_from(&["vite-plus", "test", "--", "--watch", "--coverage"]).unwrap();
+            Args::try_parse_from(["vite-plus", "test", "--", "--watch", "--coverage"]).unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
         if let Commands::Test { args } = &args.commands {
@@ -602,7 +602,7 @@ mod tests {
 
     #[test]
     fn test_args_lib_command() {
-        let args = Args::try_parse_from(&["vite-plus", "lib"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "lib"]).unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
         assert!(matches!(args.commands, Commands::Lib { .. }));
@@ -610,7 +610,7 @@ mod tests {
 
     #[test]
     fn test_args_lib_command_with_args() {
-        let args = Args::try_parse_from(&["vite-plus", "lib", "--", "--watch", "--outdir", "dist"])
+        let args = Args::try_parse_from(["vite-plus", "lib", "--", "--watch", "--outdir", "dist"])
             .unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
@@ -626,7 +626,7 @@ mod tests {
 
     #[test]
     fn test_args_debug_flag() {
-        let args = Args::try_parse_from(&["vite-plus", "--debug", "build"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "--debug", "build"]).unwrap();
         assert_eq!(args.task, None);
         assert!(matches!(args.commands, Commands::Build { .. }));
         assert!(args.debug);
@@ -634,7 +634,7 @@ mod tests {
 
     #[test]
     fn test_args_debug_flag_short() {
-        let args = Args::try_parse_from(&["vite-plus", "-d", "build"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "-d", "build"]).unwrap();
         assert_eq!(args.task, None);
         assert!(matches!(args.commands, Commands::Build { .. }));
         assert!(args.debug);
@@ -643,49 +643,48 @@ mod tests {
     #[test]
     fn test_boolean_flag_negation() {
         // Test --no-debug alone
-        let args = Args::try_parse_from(&["vite-plus", "--no-debug", "build"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "--no-debug", "build"]).unwrap();
         assert!(!args.debug);
         assert!(args.no_debug);
-        assert_eq!(resolve_bool_flag(args.debug, args.no_debug), false);
+        assert!(!resolve_bool_flag(args.debug, args.no_debug));
 
         // Test run command with --no-recursive
-        let args = Args::try_parse_from(&["vite-plus", "run", "--no-recursive", "build"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "run", "--no-recursive", "build"]).unwrap();
         if let Commands::Run { recursive, no_recursive, .. } = args.commands {
             assert!(!recursive);
             assert!(no_recursive);
-            assert_eq!(resolve_bool_flag(recursive, no_recursive), false);
+            assert!(!resolve_bool_flag(recursive, no_recursive));
         } else {
             panic!("Expected Run command");
         }
 
         // Test run command with --no-parallel
-        let args = Args::try_parse_from(&["vite-plus", "run", "--no-parallel", "build"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "run", "--no-parallel", "build"]).unwrap();
         if let Commands::Run { parallel, no_parallel, .. } = args.commands {
             assert!(!parallel);
             assert!(no_parallel);
-            assert_eq!(resolve_bool_flag(parallel, no_parallel), false);
+            assert!(!resolve_bool_flag(parallel, no_parallel));
         } else {
             panic!("Expected Run command");
         }
 
         // Test run command with --no-topological
-        let args =
-            Args::try_parse_from(&["vite-plus", "run", "--no-topological", "build"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "run", "--no-topological", "build"]).unwrap();
         if let Commands::Run { topological, no_topological, .. } = args.commands {
             assert_eq!(topological, None);
             assert!(no_topological);
             // no_topological takes precedence
-            assert_eq!(no_topological, true);
+            assert!(no_topological);
         } else {
             panic!("Expected Run command");
         }
 
         // Test --debug vs --no-debug conflict (should fail)
-        let result = Args::try_parse_from(&["vite-plus", "--debug", "--no-debug", "build"]);
+        let result = Args::try_parse_from(["vite-plus", "--debug", "--no-debug", "build"]);
         assert!(result.is_err());
 
         // Test recursive with topological default behavior
-        let args = Args::try_parse_from(&["vite-plus", "run", "--recursive", "build"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "run", "--recursive", "build"]).unwrap();
         if let Commands::Run { recursive, no_recursive, topological, no_topological, .. } =
             args.commands
         {
@@ -700,7 +699,7 @@ mod tests {
 
         // Test recursive with --no-topological
         let args =
-            Args::try_parse_from(&["vite-plus", "run", "--recursive", "--no-topological", "build"])
+            Args::try_parse_from(["vite-plus", "run", "--recursive", "--no-topological", "build"])
                 .unwrap();
         if let Commands::Run { recursive, no_recursive, topological, no_topological, .. } =
             args.commands
@@ -717,7 +716,7 @@ mod tests {
 
     #[test]
     fn test_args_run_command_basic() {
-        let args = Args::try_parse_from(&["vite-plus", "run", "build", "test"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "run", "build", "test"]).unwrap();
         assert!(args.task.is_none());
 
         if let Commands::Run {
@@ -744,7 +743,7 @@ mod tests {
     #[test]
     fn test_args_run_command_with_flags() {
         let args =
-            Args::try_parse_from(&["vite-plus", "run", "--recursive", "--sequential", "build"])
+            Args::try_parse_from(["vite-plus", "run", "--recursive", "--sequential", "build"])
                 .unwrap();
 
         if let Commands::Run { tasks, recursive, sequential, parallel, .. } = args.commands {
@@ -760,7 +759,7 @@ mod tests {
     #[test]
     fn test_args_run_command_with_parallel_flag() {
         let args =
-            Args::try_parse_from(&["vite-plus", "run", "--parallel", "build", "test"]).unwrap();
+            Args::try_parse_from(["vite-plus", "run", "--parallel", "build", "test"]).unwrap();
 
         if let Commands::Run { tasks, parallel, sequential, .. } = args.commands {
             assert_eq!(tasks, vec!["build", "test"]);
@@ -773,7 +772,7 @@ mod tests {
 
     #[test]
     fn test_args_run_command_with_task_args() {
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "vite-plus",
             "run",
             "build",
@@ -794,7 +793,7 @@ mod tests {
 
     #[test]
     fn test_args_run_command_all_flags() {
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "vite-plus",
             "run",
             "--recursive",
@@ -816,7 +815,7 @@ mod tests {
 
     #[test]
     fn test_args_debug_with_run_command() {
-        let args = Args::try_parse_from(&["vite-plus", "--debug", "run", "build"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "--debug", "run", "build"]).unwrap();
 
         assert!(args.debug);
         if let Commands::Run { tasks, .. } = args.commands {
@@ -828,7 +827,7 @@ mod tests {
 
     #[test]
     fn test_args_run_short_flags() {
-        let args = Args::try_parse_from(&["vite-plus", "run", "-r", "-s", "-p", "build"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "run", "-r", "-s", "-p", "build"]).unwrap();
 
         if let Commands::Run { tasks, recursive, sequential, parallel, .. } = args.commands {
             assert_eq!(tasks, vec!["build"]);
@@ -842,7 +841,7 @@ mod tests {
 
     #[test]
     fn test_args_run_empty_tasks() {
-        let args = Args::try_parse_from(&["vite-plus", "run"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "run"]).unwrap();
 
         if let Commands::Run { tasks, .. } = args.commands {
             assert!(tasks.is_empty(), "Tasks should be empty when none provided");
@@ -853,7 +852,7 @@ mod tests {
 
     #[test]
     fn test_args_doc_command() {
-        let args = Args::try_parse_from(&["vite-plus", "doc"]).unwrap();
+        let args = Args::try_parse_from(["vite-plus", "doc"]).unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
         assert!(matches!(args.commands, Commands::Doc { .. }));
@@ -863,7 +862,7 @@ mod tests {
     #[test]
     fn test_args_doc_command_with_args() {
         let args =
-            Args::try_parse_from(&["vite-plus", "doc", "build", "--host", "0.0.0.0"]).unwrap();
+            Args::try_parse_from(["vite-plus", "doc", "build", "--host", "0.0.0.0"]).unwrap();
         assert_eq!(args.task, None);
         assert!(args.task_args.is_empty());
         if let Commands::Doc { args } = &args.commands {
@@ -878,7 +877,7 @@ mod tests {
 
     #[test]
     fn test_args_complex_task_args() {
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "vite-plus",
             "test",
             "--",
@@ -909,7 +908,7 @@ mod tests {
 
     #[test]
     fn test_args_run_complex_task_args() {
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "vite-plus",
             "run",
             "--recursive",
@@ -936,7 +935,7 @@ mod tests {
     fn test_run_command_uses_subcommand_task_args() {
         // This test verifies that the main function uses task_args from Commands::Run,
         // not from the top-level Args struct
-        let args1 = Args::try_parse_from(&[
+        let args1 = Args::try_parse_from([
             "vite-plus",
             "run",
             "build",
@@ -947,7 +946,7 @@ mod tests {
         .unwrap();
 
         let args2 =
-            Args::try_parse_from(&["vite-plus", "build", "--", "--watch", "--mode=development"])
+            Args::try_parse_from(["vite-plus", "build", "--", "--watch", "--mode=development"])
                 .unwrap();
 
         // Verify args1: explicit mode with run subcommand

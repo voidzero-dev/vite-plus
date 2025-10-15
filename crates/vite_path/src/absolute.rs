@@ -206,7 +206,7 @@ mod tests {
 
     #[test]
     fn non_absolute() {
-        assert!(AbsolutePath::new(Path::new("foo/bar")).is_none())
+        assert!(AbsolutePath::new(Path::new("foo/bar")).is_none());
     }
 
     #[test]

@@ -405,7 +405,7 @@ mod tests {
 
         let command = InstallCommandBuilder::new(workspace_root).build();
         let result = command.execute(&vec![]).await;
-        println!("result: {:?}", result);
+        println!("result: {result:?}");
         assert!(result.is_ok());
     }
 

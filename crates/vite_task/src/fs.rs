@@ -266,8 +266,7 @@ mod tests {
         // Create a test file with known content
         std::fs::write(&temp_file, "Hello, World!").unwrap();
 
-        let file_path =
-            Arc::<AbsolutePath>::from(AbsolutePathBuf::new(temp_file.to_path_buf()).unwrap());
+        let file_path = Arc::<AbsolutePath>::from(AbsolutePathBuf::new(temp_file).unwrap());
         let path_read = PathRead { read_dir_entries: false };
 
         let result = fs.fingerprint_path(&file_path, path_read).unwrap();
@@ -300,7 +299,7 @@ mod tests {
                 assert!(entries.contains_key("file2.txt"));
                 assert_eq!(entries.len(), 2);
             }
-            _ => panic!("Expected folder with entries, got: {:?}", result),
+            _ => panic!("Expected folder with entries, got: {result:?}"),
         }
 
         // Test without reading entries
@@ -311,10 +310,10 @@ mod tests {
                 // On Windows CI, temporary directories might have permission issues
                 // Skip the test if we get a permission denied error
                 if cfg!(windows) && err.to_string().contains("Access is denied") {
-                    eprintln!("Skipping test due to Windows permission issue: {}", err);
+                    eprintln!("Skipping test due to Windows permission issue: {err}");
                     return;
                 }
-                panic!("Unexpected error: {}", err);
+                panic!("Unexpected error: {err}");
             }
         };
         assert!(matches!(result_no_entries, PathFingerprint::Folder(None)));

@@ -934,7 +934,7 @@ mod tests {
         let package_json_path = temp_dir.path().join("package.json");
         let package_json: serde_json::Value =
             serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-        println!("package_json: {:?}", package_json);
+        println!("package_json: {package_json:?}");
         assert!(package_json["packageManager"].as_str().unwrap().starts_with("pnpm@"));
         // keep other fields
         assert_eq!(package_json["version"].as_str().unwrap(), "1.0.0");
@@ -967,7 +967,7 @@ mod tests {
         let package_json_path = temp_dir_path.join("package.json");
         let package_json: serde_json::Value =
             serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-        println!("package_json: {:?}", package_json);
+        println!("package_json: {package_json:?}");
         assert!(package_json["packageManager"].as_str().unwrap().starts_with("yarn@"));
         // keep other fields
         assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
@@ -993,12 +993,12 @@ mod tests {
 
         // check shim files
         let bin_prefix = result.get_bin_prefix();
-        assert!(is_exists_file(&bin_prefix.join("npm")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("npm.cmd")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("npm.ps1")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("npx")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("npx.cmd")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("npx.ps1")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("npm")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("npm.cmd")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("npm.ps1")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("npx")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("npx.cmd")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("npx.ps1")).unwrap());
 
         // run npm --version
         let mut paths =
@@ -1039,12 +1039,12 @@ mod tests {
 
         // check shim files
         let bin_prefix = result.get_bin_prefix();
-        assert!(is_exists_file(&bin_prefix.join("pnpm.cjs")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("pnpm.cmd")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("pnpm.ps1")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("pnpx.cjs")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("pnpx.cmd")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("pnpx.ps1")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("pnpm.cjs")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("pnpm.cmd")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("pnpm.ps1")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("pnpx.cjs")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("pnpx.cmd")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("pnpx.ps1")).unwrap());
 
         // run pnpm --version
         let mut paths =
@@ -1180,13 +1180,13 @@ mod tests {
 
         // check shim files
         let bin_prefix = result.get_bin_prefix();
-        assert!(is_exists_file(&bin_prefix.join("yarn.js")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("yarn")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("yarn.cmd")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("yarn.ps1")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("yarnpkg")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("yarnpkg.cmd")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("yarnpkg.ps1")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("yarn.js")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("yarn")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("yarn.cmd")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("yarn.ps1")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("yarnpkg")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("yarnpkg.cmd")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("yarnpkg.ps1")).unwrap());
 
         // run pnpm --version
         let mut paths =
@@ -1280,13 +1280,13 @@ mod tests {
 
         // check shim files
         let bin_prefix = result.get_bin_prefix();
-        assert!(is_exists_file(&bin_prefix.join("yarn.js")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("yarn")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("yarn.cmd")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("yarn.ps1")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("yarnpkg")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("yarnpkg.cmd")).unwrap());
-        assert!(is_exists_file(&bin_prefix.join("yarnpkg.ps1")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("yarn.js")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("yarn")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("yarn.cmd")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("yarn.ps1")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("yarnpkg")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("yarnpkg.cmd")).unwrap());
+        assert!(is_exists_file(bin_prefix.join("yarnpkg.ps1")).unwrap());
 
         // run yarn --version
         let mut cmd = "yarn";
@@ -1346,13 +1346,13 @@ mod tests {
 
         let result = PackageManager::builder(temp_dir_path).build().await;
         assert!(result.is_err());
-        println!("result: {:?}", result);
+        println!("result: {result:?}");
         // Check if it's the expected error type
         if let Err(Error::PackageManagerVersionNotFound { name, version, .. }) = result {
             assert_eq!(name, "yarn");
             assert_eq!(version, "10000000000.0.0");
         } else {
-            panic!("Expected PackageManagerVersionNotFound error, got {:?}", result);
+            panic!("Expected PackageManagerVersionNotFound error, got {result:?}");
         }
     }
 
@@ -1365,7 +1365,7 @@ mod tests {
         create_package_json(&temp_dir_path, package_content);
 
         let result = PackageManager::builder(temp_dir_path).build().await;
-        println!("result: {:?}", result);
+        println!("result: {result:?}");
         assert!(result.is_err());
     }
 
@@ -1402,7 +1402,7 @@ mod tests {
         let result = PackageManager::builder(temp_dir_path).build().await;
         assert!(result.is_err());
         // Check if it's the expected error type
-        if let Err(Error::UnrecognizedPackageManager) = result {
+        if matches!(result, Err(Error::UnrecognizedPackageManager)) {
             // Expected error
         } else {
             panic!("Expected UnrecognizedPackageManager error");
@@ -1474,9 +1474,9 @@ mod tests {
                 .await;
         assert!(result.is_ok());
         let target_dir = result.unwrap();
-        println!("result: {:?}", target_dir);
-        assert!(is_exists_file(&target_dir.join("bin/yarn")).unwrap());
-        assert!(is_exists_file(&target_dir.join("bin/yarn.cmd")).unwrap());
+        println!("result: {target_dir:?}");
+        assert!(is_exists_file(target_dir.join("bin/yarn")).unwrap());
+        assert!(is_exists_file(target_dir.join("bin/yarn.cmd")).unwrap());
 
         // again should skip download
         let result =
@@ -1484,8 +1484,8 @@ mod tests {
                 .await;
         assert!(result.is_ok());
         let target_dir = result.unwrap();
-        assert!(is_exists_file(&target_dir.join("bin/yarn")).unwrap());
-        assert!(is_exists_file(&target_dir.join("bin/yarn.cmd")).unwrap());
+        assert!(is_exists_file(target_dir.join("bin/yarn")).unwrap());
+        assert!(is_exists_file(target_dir.join("bin/yarn.cmd")).unwrap());
 
         remove_dir_all_force(target_dir).await.unwrap();
     }
@@ -1683,7 +1683,7 @@ mod tests {
                 version: "1.0.0".into(),
                 hash: None,
                 bin_name: pm_type.to_string().into(),
-                workspace_root: temp_dir_path.clone(),
+                workspace_root: temp_dir_path,
                 install_dir,
             }
         }

@@ -116,7 +116,7 @@ mod tests {
     use super::*;
 
     fn format_shim(shim: &str) -> String {
-        shim.replace(" ", "·")
+        shim.replace(' ', "·")
     }
 
     #[test]
@@ -402,7 +402,7 @@ mod tests {
             assert!(ps1.contains(path));
 
             let cmd = cmd_shim(path);
-            let expected_cmd_path = path.replace("/", "\\");
+            let expected_cmd_path = path.replace('/', "\\");
             assert!(cmd.contains(&expected_cmd_path));
         }
     }

@@ -115,12 +115,12 @@ mod tests {
         let file: &BStr = B("foo").as_bstr();
         let path: &BStr = B("/bin:/usr/bin").as_bstr();
         let access = mock_access(&["/bin/foo"], &[], &[]);
-        let res = which(&file, &path, access, |found| {
+        let res = which(file, path, access, |found| {
             *called.borrow_mut() = Some(found.to_owned());
             Ok(())
         });
         assert!(res.is_ok());
-        assert_eq!(&*called.borrow().as_ref().unwrap(), b"/bin/foo".as_bstr());
+        assert_eq!(called.borrow().as_ref().unwrap(), b"/bin/foo".as_bstr());
     }
 
     #[test]
@@ -128,7 +128,7 @@ mod tests {
         let file: &BStr = B("foo").as_bstr();
         let path: &BStr = B("/bin:/usr/bin").as_bstr();
         let access = mock_access(&[], &[], &[]);
-        let res = which(&file, &path, access, |_| Ok(()));
+        let res = which(file, path, access, |_| Ok(()));
         assert_eq!(res.unwrap_err(), nix::Error::ENOENT);
     }
 
@@ -137,7 +137,7 @@ mod tests {
         let file: &BStr = B("foo").as_bstr();
         let path: &BStr = B("/bin:/usr/bin").as_bstr();
         let access = mock_access(&[], &["/bin/foo", "/usr/bin/foo"], &[]);
-        let res = which(&file, &path, access, |_| Ok(()));
+        let res = which(file, path, access, |_| Ok(()));
         assert_eq!(res.unwrap_err(), nix::Error::EACCES);
     }
 
@@ -146,7 +146,7 @@ mod tests {
         let file: &BStr = B("foo").as_bstr();
         let path: &BStr = B("/usr/bin:/bin").as_bstr();
         let access = mock_access(&[], &[], &["/bin/foo"]);
-        let res = which(&file, &path, access, |_| Ok(()));
+        let res = which(file, path, access, |_| Ok(()));
         assert_eq!(res.unwrap_err(), nix::Error::ENOTDIR);
     }
 
@@ -156,12 +156,12 @@ mod tests {
         let file: &BStr = B("/usr/bin/foo").as_bstr();
         let path: &BStr = B("").as_bstr();
         let access = mock_access(&["/usr/bin/foo"], &[], &[]);
-        let res = which(&file, &path, access, |found| {
+        let res = which(file, path, access, |found| {
             *called.borrow_mut() = Some(found.to_owned());
             Ok(())
         });
         assert!(res.is_ok());
-        assert_eq!(&*called.borrow().as_ref().unwrap(), b"/usr/bin/foo".as_bstr());
+        assert_eq!(called.borrow().as_ref().unwrap(), b"/usr/bin/foo".as_bstr());
     }
 
     #[test]
@@ -169,7 +169,7 @@ mod tests {
         let file: &BStr = B("").as_bstr();
         let path: &BStr = B("/bin:/usr/bin").as_bstr();
         let access = mock_access(&[], &[], &[]);
-        let res = which(&file, &path, access, |_| Ok(()));
+        let res = which(file, path, access, |_| Ok(()));
         assert_eq!(res.unwrap_err(), nix::Error::ENOENT);
     }
 
@@ -179,7 +179,7 @@ mod tests {
         let file: &BStr = B(&long_name).as_bstr();
         let path: &BStr = B("/bin:/usr/bin").as_bstr();
         let access = mock_access(&[], &[], &[]);
-        let res = which(&file, &path, access, |_| Ok(()));
+        let res = which(file, path, access, |_| Ok(()));
         assert_eq!(res.unwrap_err(), nix::Error::ENAMETOOLONG);
     }
 
@@ -189,11 +189,11 @@ mod tests {
         let file: &BStr = B("foo").as_bstr();
         let path: &BStr = B(":/bin").as_bstr();
         let access = mock_access(&["foo"], &[], &[]);
-        let res = which(&file, &path, access, |found| {
+        let res = which(file, path, access, |found| {
             *called.borrow_mut() = Some(found.to_owned());
             Ok(())
         });
         assert!(res.is_ok());
-        assert_eq!(&*called.borrow().as_ref().unwrap(), b"foo".as_bstr());
+        assert_eq!(called.borrow().as_ref().unwrap(), b"foo".as_bstr());
     }
 }

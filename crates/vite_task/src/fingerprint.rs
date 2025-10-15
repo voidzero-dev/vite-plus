@@ -160,7 +160,7 @@ mod tests {
 
         let fingerprint2 = CommandFingerprint {
             cwd: RelativePathBuf::default(),
-            command: TaskCommand::Parsed(parsed_cmd.clone()),
+            command: TaskCommand::Parsed(parsed_cmd),
             envs_without_pass_through: [
                 ("ENV_A".into(), "a".into()),
                 ("ENV_B".into(), "b".into()),
@@ -478,7 +478,11 @@ mod tests {
                 fingerprint.inputs.len(),
                 12,
                 "got {:?}",
-                fingerprint.inputs.keys().map(|k| k.to_string()).collect::<Vec<String>>()
+                fingerprint
+                    .inputs
+                    .keys()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<String>>()
             );
             assert!(
                 fingerprint.inputs.contains_key(&RelativePathBuf::new("src/index.js").unwrap())
@@ -696,7 +700,7 @@ mod tests {
 
         let fingerprint_without_ignores = CommandFingerprint {
             cwd: RelativePathBuf::default(),
-            command: TaskCommand::Parsed(parsed_cmd.clone()),
+            command: TaskCommand::Parsed(parsed_cmd),
             envs_without_pass_through: Default::default(),
             pass_through_envs: Default::default(),
             fingerprint_ignores: None,
@@ -739,7 +743,7 @@ mod tests {
 
         let fingerprint2 = CommandFingerprint {
             cwd: RelativePathBuf::default(),
-            command: TaskCommand::Parsed(parsed_cmd.clone()),
+            command: TaskCommand::Parsed(parsed_cmd),
             envs_without_pass_through: Default::default(),
             pass_through_envs: Default::default(),
             fingerprint_ignores: Some(vec![Str::from("!dist/public/**"), Str::from("dist/**/*")]),

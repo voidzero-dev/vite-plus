@@ -326,46 +326,46 @@ mod tests {
     #[test]
     fn normalize_dots() {
         let rel_path = RelativePathBuf::new("./foo/./bar/.").unwrap();
-        assert_eq!(rel_path.as_str(), "foo/bar")
+        assert_eq!(rel_path.as_str(), "foo/bar");
     }
 
     #[test]
     fn normalize_trailing_slashes() {
         let rel_path = RelativePathBuf::new("foo/bar//").unwrap();
-        assert_eq!(rel_path.as_str(), "foo/bar")
+        assert_eq!(rel_path.as_str(), "foo/bar");
     }
     #[test]
     fn preserve_double_dots() {
         let rel_path = RelativePathBuf::new("../foo/../bar/..").unwrap();
-        assert_eq!(rel_path.as_str(), "../foo/../bar/..")
+        assert_eq!(rel_path.as_str(), "../foo/../bar/..");
     }
 
     #[test]
     fn push() {
         let mut rel_path = RelativePathBuf::new("foo/bar").unwrap();
         rel_path.push(RelativePathBuf::new(Path::new("baz")).unwrap());
-        assert_eq!(rel_path.as_str(), "foo/bar/baz")
+        assert_eq!(rel_path.as_str(), "foo/bar/baz");
     }
 
     #[test]
     fn push_empty() {
         let mut rel_path = RelativePathBuf::new("foo/bar").unwrap();
         rel_path.push(RelativePathBuf::new("").unwrap());
-        assert_eq!(rel_path.as_str(), "foo/bar")
+        assert_eq!(rel_path.as_str(), "foo/bar");
     }
 
     #[test]
     fn join() {
         let rel_path = RelativePathBuf::new("foo/bar").unwrap();
         let joined_path = rel_path.as_relative_path().join(RelativePathBuf::new("baz").unwrap());
-        assert_eq!(joined_path.as_str(), "foo/bar/baz")
+        assert_eq!(joined_path.as_str(), "foo/bar/baz");
     }
 
     #[test]
     fn join_empty() {
         let rel_path = RelativePathBuf::new("").unwrap();
         let joined_path = rel_path.as_relative_path().join(RelativePathBuf::new("baz").unwrap());
-        assert_eq!(joined_path.as_str(), "baz")
+        assert_eq!(joined_path.as_str(), "baz");
     }
 
     #[test]
@@ -373,7 +373,7 @@ mod tests {
         let rel_path = RelativePathBuf::new("foo/bar/baz").unwrap();
         let prefix = RelativePathBuf::new("foo").unwrap();
         let stripped_path = rel_path.strip_prefix(prefix).unwrap();
-        assert_eq!(stripped_path.as_str(), "bar/baz")
+        assert_eq!(stripped_path.as_str(), "bar/baz");
     }
 
     #[test]

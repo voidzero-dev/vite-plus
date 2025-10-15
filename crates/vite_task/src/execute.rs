@@ -765,14 +765,17 @@ mod tests {
         );
 
         assert_eq!(
-            envs_without_pass_through.get("TEST_VAR").map(|s| s.as_str()),
+            envs_without_pass_through.get("TEST_VAR").map(vite_str::Str::as_str),
             Some("uppercase")
         );
         assert_eq!(
-            envs_without_pass_through.get("test_var").map(|s| s.as_str()),
+            envs_without_pass_through.get("test_var").map(vite_str::Str::as_str),
             Some("lowercase")
         );
-        assert_eq!(envs_without_pass_through.get("Test_Var").map(|s| s.as_str()), Some("mixed"));
+        assert_eq!(
+            envs_without_pass_through.get("Test_Var").map(vite_str::Str::as_str),
+            Some("mixed")
+        );
 
         // Clean up
         unsafe {
