@@ -86,9 +86,9 @@ impl Exec {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - The program is not found in PATH (ENOENT)
-    /// - The program file cannot be accessed or read
-    /// - Shebang parsing fails due to I/O errors
+    /// - The program is not found in PATH (`ENOENT`)
+    /// - The program file cannot be accessed or read (`EACCES`, `EISDIR`, `EIO`)
+    /// - Shebang parsing fails due to I/O errors (`EIO`)
     pub fn resolve(
         &mut self,
         mut on_path_access: impl FnMut(PathAccess<'_>),
