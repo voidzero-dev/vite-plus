@@ -148,7 +148,7 @@ impl Exec {
 ///
 /// # Errors
 ///
-/// Returns `EINVAL` if the environment variable already exists with a different value.
+/// Returns `Err(nix::Error::EINVAL)` if the environment variable already exists with a different value.
 pub fn ensure_env(
     envs: &mut Vec<(BString, Option<BString>)>,
     name: impl AsRef<BStr>,
