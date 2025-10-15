@@ -26,8 +26,9 @@ use crate::{
 /// # Errors
 ///
 /// Returns an error if:
-/// - Program resolution fails (from `command.resolve()`)
-/// - Environment variable operations fail
+/// - Program resolution fails (see [`Exec::resolve`] error variants, such as `ENOENT` (file not found) or `EACCES` (permission denied))
+/// - Environment variable operations fail (e.g., `ensure_env` may return `EINVAL` if an existing value conflicts)
+/// - Platform-specific errors from `os_specific::handle_exec`
 pub fn handle_exec(
     command: &mut Exec,
     config: ExecResolveConfig,
