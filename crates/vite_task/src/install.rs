@@ -1,7 +1,6 @@
 use std::{
     env,
     io::{self, IsTerminal, Write},
-    iter,
 };
 
 use crossterm::{
@@ -59,11 +58,11 @@ impl InstallCommand {
             Err(e) => return Err(e),
         };
         let workspace = Workspace::partial_load(self.workspace_root)?;
-        let resolve_command = package_manager.resolve_command();
+        let resolve_command = package_manager.resolve_install_command(args);
         let resolved_task = ResolvedTask::resolve_from_builtin_with_command_result(
             &workspace,
             "install",
-            iter::once("install").chain(args.iter().map(String::as_str)),
+            resolve_command.args.iter(),
             ResolveCommandResult { bin_path: resolve_command.bin_path, envs: resolve_command.envs },
             self.ignore_replay,
             Some(package_manager.get_fingerprint_ignores()),

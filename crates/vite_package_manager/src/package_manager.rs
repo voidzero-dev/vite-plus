@@ -50,6 +50,7 @@ impl fmt::Display for PackageManagerType {
 #[derive(Debug)]
 pub struct ResolveCommandResult {
     pub bin_path: String,
+    pub args: Vec<String>,
     pub envs: HashMap<String, String>,
 }
 
@@ -144,14 +145,6 @@ impl PackageManager {
     #[must_use]
     pub fn get_bin_prefix(&self) -> AbsolutePathBuf {
         self.install_dir.join("bin")
-    }
-
-    #[must_use]
-    pub fn resolve_command(&self) -> ResolveCommandResult {
-        ResolveCommandResult {
-            bin_path: self.bin_name.to_string(),
-            envs: HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]),
-        }
     }
 
     #[must_use]
@@ -601,7 +594,7 @@ async fn set_package_manager_field(
     Ok(())
 }
 
-fn format_path_env(bin_prefix: impl AsRef<Path>) -> String {
+pub(crate) fn format_path_env(bin_prefix: impl AsRef<Path>) -> String {
     let mut paths = env::split_paths(&env::var_os("PATH").unwrap_or_default()).collect::<Vec<_>>();
     paths.insert(0, bin_prefix.as_ref().to_path_buf());
     env::join_paths(paths).unwrap().to_string_lossy().to_string()

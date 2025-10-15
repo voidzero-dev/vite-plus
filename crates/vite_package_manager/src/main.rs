@@ -8,7 +8,7 @@ async fn main() -> Result<(), Error> {
     let package_manager = PackageManager::builder(&current_dir).build().await?;
     println!("Package manager: {package_manager:#?} for {current_dir:?}");
 
-    let resolve_command = package_manager.resolve_command();
+    let resolve_command = package_manager.resolve_install_command(&vec![]);
     println!("Resolve command: {resolve_command:#?}");
 
     Ok(())

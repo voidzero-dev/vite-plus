@@ -1,4 +1,5 @@
 mod config;
+mod install;
 pub mod package;
 pub mod package_manager;
 mod request;
