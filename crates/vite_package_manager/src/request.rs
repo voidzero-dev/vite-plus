@@ -416,6 +416,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_http_client_get_json() {
+        #[derive(serde::Deserialize, Debug, PartialEq)]
+        struct PackageInfo {
+            name: String,
+            version: String,
+            description: String,
+        }
+
         let server = MockServer::start();
 
         // Create mock JSON response
@@ -434,13 +441,6 @@ mod tests {
 
         let client = HttpClient::new();
         let url = format!("{}/api/package.json", server.base_url());
-
-        #[derive(serde::Deserialize, Debug, PartialEq)]
-        struct PackageInfo {
-            name: String,
-            version: String,
-            description: String,
-        }
 
         let result: Result<PackageInfo, _> = client.get_json(&url).await;
         assert!(result.is_ok());
@@ -523,6 +523,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_file_hash_sha1() {
+        use sha1::Sha1;
+        use sha2::Digest;
         use tokio::io::AsyncWriteExt;
 
         let temp_dir = TempDir::new().unwrap();
@@ -534,8 +536,6 @@ mod tests {
         file.write_all(content).await.unwrap();
 
         // Calculate expected SHA1
-        use sha1::Sha1;
-        use sha2::Digest;
         let mut hasher = Sha1::new();
         hasher.update(content);
         let expected_hash = format!("sha1.{:x}", hasher.finalize());
@@ -552,6 +552,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_file_hash_sha224() {
+        use sha2::{Digest, Sha224};
         use tokio::io::AsyncWriteExt;
 
         let temp_dir = TempDir::new().unwrap();
@@ -563,7 +564,6 @@ mod tests {
         file.write_all(content).await.unwrap();
 
         // Calculate expected SHA224
-        use sha2::{Digest, Sha224};
         let mut hasher = Sha224::new();
         hasher.update(content);
         let expected_hash = format!("sha224.{:x}", hasher.finalize());
@@ -603,6 +603,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_http_client_json_with_invalid_response() {
+        #[derive(serde::Deserialize)]
+        struct TestData {
+            _field: String,
+        }
+
         let server = MockServer::start();
 
         // Mock response with invalid JSON
@@ -613,11 +618,6 @@ mod tests {
 
         let client = HttpClient::new();
         let url = format!("{}/invalid.json", server.base_url());
-
-        #[derive(serde::Deserialize)]
-        struct TestData {
-            _field: String,
-        }
 
         let result: Result<TestData, _> = client.get_json(&url).await;
         assert!(result.is_err(), "Expected JSON parsing to fail");

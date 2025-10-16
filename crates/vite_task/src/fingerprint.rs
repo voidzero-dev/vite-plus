@@ -132,6 +132,8 @@ mod tests {
 
     #[test]
     fn test_command_fingerprint_stable_with_multiple_envs() {
+        use bincode::{decode_from_slice, encode_to_vec};
+
         // Test that CommandFingerprint with TaskCommand::Parsed maintains stable ordering
         let parsed_cmd = TaskParsedCommand {
             envs: [
@@ -173,7 +175,6 @@ mod tests {
         };
 
         // Serialize both fingerprints
-        use bincode::{decode_from_slice, encode_to_vec};
         let config = bincode::config::standard();
 
         let bytes1 = encode_to_vec(&fingerprint1, config).unwrap();
@@ -193,6 +194,13 @@ mod tests {
 
     #[test]
     fn test_fingerprint_stability_across_runs() {
+        use std::{
+            collections::hash_map::DefaultHasher,
+            hash::{Hash, Hasher},
+        };
+
+        use bincode::encode_to_vec;
+
         // This test simulates what happens when the same task is fingerprinted
         // multiple times across different program runs
 
@@ -222,16 +230,10 @@ mod tests {
             };
 
             // Serialize the fingerprint
-            use bincode::encode_to_vec;
             let config = bincode::config::standard();
             let bytes = encode_to_vec(&fingerprint, config).unwrap();
 
             // Create a hash of the serialized bytes to verify stability
-            use std::{
-                collections::hash_map::DefaultHasher,
-                hash::{Hash, Hasher},
-            };
-
             let mut hasher = DefaultHasher::new();
             bytes.hash(&mut hasher);
             let hash = hasher.finish();
@@ -245,6 +247,8 @@ mod tests {
 
     #[test]
     fn test_task_config_with_sorted_envs() {
+        use bincode::encode_to_vec;
+
         // Test that TaskConfig produces stable fingerprints even with HashSet envs
         let mut envs = HashSet::new();
         envs.insert("VAR_3".into());
@@ -265,7 +269,6 @@ mod tests {
         let resolved = ResolvedTaskConfig { config_dir: RelativePathBuf::default(), config };
 
         // Serialize multiple times
-        use bincode::encode_to_vec;
         let bincode_config = bincode::config::standard();
 
         let bytes1 = encode_to_vec(&resolved, bincode_config).unwrap();
@@ -675,12 +678,9 @@ mod tests {
 
     #[test]
     fn test_command_fingerprint_with_fingerprint_ignores() {
-        // Test that CommandFingerprint includes fingerprint_ignores
-        use crate::{
-            cmd::TaskParsedCommand,
-            config::{CommandFingerprint, TaskCommand},
-        };
+        use bincode::encode_to_vec;
 
+        // Test that CommandFingerprint includes fingerprint_ignores
         let parsed_cmd = TaskParsedCommand {
             envs: [].into(),
             program: "pnpm".into(),
@@ -710,7 +710,6 @@ mod tests {
         assert_ne!(fingerprint_with_ignores, fingerprint_without_ignores);
 
         // Serialize to verify they produce different cache keys
-        use bincode::encode_to_vec;
         let config = bincode::config::standard();
 
         let bytes_with = encode_to_vec(&fingerprint_with_ignores, config).unwrap();
@@ -724,12 +723,9 @@ mod tests {
 
     #[test]
     fn test_command_fingerprint_ignores_order_matters() {
-        // Test that the order of fingerprint_ignores patterns matters
-        use crate::{
-            cmd::TaskParsedCommand,
-            config::{CommandFingerprint, TaskCommand},
-        };
+        use bincode::encode_to_vec;
 
+        // Test that the order of fingerprint_ignores patterns matters
         let parsed_cmd =
             TaskParsedCommand { envs: [].into(), program: "build".into(), args: vec![] };
 
@@ -753,7 +749,6 @@ mod tests {
         // (because last-match-wins means different semantics)
         assert_ne!(fingerprint1, fingerprint2);
 
-        use bincode::encode_to_vec;
         let config = bincode::config::standard();
 
         let bytes1 = encode_to_vec(&fingerprint1, config).unwrap();
