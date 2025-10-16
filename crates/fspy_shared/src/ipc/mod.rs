@@ -1,5 +1,5 @@
 mod native_str;
-pub mod shm;
+pub mod shm_io;
 
 use bincode::{BorrowDecode, Encode, config::Configuration};
 pub use native_str::NativeStr;

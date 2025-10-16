@@ -32,9 +32,53 @@ use fspy_shared_unix::{
     payload::{Payload, encode_payload},
     spawn::handle_exec,
 };
-use futures_util::{FutureExt, future::try_join};
 use memmap2::Mmap;
-use nix::fcntl::{FcntlArg, FdFlag, fcntl};
+
+#[cfg(target_os = "linux")]
+use fspy_seccomp_unotify::supervisor::supervise;
+#[cfg(target_os = "macos")]
+use std::path::Path;
+use std::{
+    cell::RefCell,
+    ffi::{CString, OsStr, OsString},
+    fs::File,
+    io::{self, Write},
+    iter,
+    mem::ManuallyDrop,
+    ops::{ControlFlow, Deref, DerefMut},
+    os::{
+        fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd},
+        unix::{
+            ffi::{OsStrExt, OsStringExt},
+            process::CommandExt,
+        },
+    },
+    sync::{
+        Arc, LazyLock,
+        atomic::{AtomicU8, AtomicU16, AtomicUsize, Ordering, fence},
+    },
+};
+
+#[cfg(target_os = "linux")]
+use syscall_handler::SyscallHandler;
+
+use bincode::{borrow_decode_from_slice, error::DecodeError};
+use bumpalo::Bump;
+use passfd::{FdPassingExt as _, tokio::FdPassingExt as _};
+
+use tokio::{io::AsyncReadExt, net::UnixStream, process::Child as TokioChild};
+
+use fspy_shared::ipc::{BINCODE_CONFIG, PathAccess, shm_io::ShmReader};
+use futures_util::{FutureExt, future::try_join};
+use nix::{
+    fcntl::{FcntlArg, FdFlag, OFlag, fcntl},
+    sys::{
+        mman::{shm_open, shm_unlink},
+        stat::Mode,
+    },
+    unistd::{ftruncate, getpid},
+};
+
 #[cfg(target_os = "linux")]
 use nix::sys::memfd::{MFdFlags, memfd_create};
 use passfd::tokio::FdPassingExt;
@@ -119,7 +163,7 @@ fn unset_fd_flag(fd: BorrowedFd<'_>, flag_to_remove: FdFlag) -> io::Result<()> {
 
 pub struct PathAccessIterable {
     arenas: Vec<PathAccessArena>,
-    shm_mmaps: Vec<Mmap>,
+    shm_reader: ShmReader<Mmap>,
 }
 
 impl PathAccessIterable {
@@ -127,26 +171,11 @@ impl PathAccessIterable {
         let accesses_in_arena =
             self.arenas.iter().flat_map(|arena| arena.borrow_accesses().iter()).copied();
 
-        let accesses_in_shm = self.shm_mmaps.iter().flat_map(|mmap| {
-            let buf = &**mmap;
-            let mut position = 0usize;
-            iter::from_fn(move || {
-                let (flag_buf, data_buf) = buf[position..].split_first()?;
-                let atomic_flag =
-                    unsafe { AtomicU8::from_ptr(std::ptr::from_ref::<u8>(flag_buf).cast_mut()) };
-                let flag = atomic_flag.load(Ordering::Acquire);
-                if flag == 0 {
-                    return None;
-                }
-                fence(Ordering::Acquire);
-                let (path_access, decoded_size) =
-                    borrow_decode_from_slice::<PathAccess<'_>, _>(data_buf, BINCODE_CONFIG)
-                        .unwrap();
-
-                position += decoded_size + 1;
-
-                Some(path_access)
-            })
+        let accesses_in_shm = self.shm_reader.iter_frames().map(|frame| {
+            let (path_access, decoded_size) =
+                borrow_decode_from_slice::<PathAccess<'_>, _>(frame, BINCODE_CONFIG).unwrap();
+            assert_eq!(decoded_size, frame.len());
+            path_access
         });
         accesses_in_shm.chain(accesses_in_arena)
     }
@@ -165,12 +194,33 @@ fn duplicate_until_safe(mut fd: OwnedFd) -> io::Result<OwnedFd> {
     Ok(fd)
 }
 
-pub async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild> {
-    let (shm_fd_sender, shm_fd_receiver) = UnixStream::pair()?;
+// Shared memory size for storing path accesses.
+// 4 GiB is large enough to store path accesses in almost any realistic scenario.
+// This doesn't allocate physical memory until it's actually used.
+const SHM_SIZE: i64 = 4 * 1024 * 1024 * 1024;
 
-    let shm_fd_sender = shm_fd_sender.into_std()?;
-    shm_fd_sender.set_nonblocking(false)?;
-    let shm_fd_sender = duplicate_until_safe(OwnedFd::from(shm_fd_sender))?;
+pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild> {
+    let (process_exit_sentinel_fd_sender, mut process_exit_sentinel_fd_receiver) =
+        UnixStream::pair()?;
+
+    static SHM_ID: AtomicUsize = AtomicUsize::new(0);
+
+    let shm_name =
+        format!("/fspy_shm_{}_{}", getpid().as_raw(), SHM_ID.fetch_add(1, Ordering::Relaxed));
+    let shm_fd = shm_open(
+        shm_name.as_str(),
+        OFlag::O_CLOEXEC | OFlag::O_RDWR | OFlag::O_CREAT | OFlag::O_EXCL,
+        Mode::empty(),
+    )?;
+    ftruncate(&shm_fd, SHM_SIZE)?;
+    shm_unlink(shm_name.as_str())?; // make the shm anonymous and `shm_fd` the only reference to the shm.
+
+    let process_exit_sentinel_fd_sender = process_exit_sentinel_fd_sender.into_std()?;
+    process_exit_sentinel_fd_sender.set_nonblocking(false)?;
+    let process_exit_sentinel_fd_sender =
+        duplicate_until_safe(OwnedFd::from(process_exit_sentinel_fd_sender))?;
+
+    let shm_fd = Arc::new(duplicate_until_safe(shm_fd)?);
 
     #[cfg(target_os = "linux")]
     let supervisor = supervise::<SyscallHandler>()?;
@@ -179,7 +229,8 @@ pub async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild> {
     let supervisor_pre_exec = supervisor.pre_exec;
 
     let payload = Payload {
-        ipc_fd: shm_fd_sender.as_raw_fd(),
+        process_exit_sentinel_fd: process_exit_sentinel_fd_sender.as_raw_fd(),
+        shm_fd: shm_fd.as_raw_fd(),
 
         #[cfg(target_os = "macos")]
         fixtures: command.spy_inner.fixtures.clone(),
@@ -215,10 +266,12 @@ pub async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild> {
     let mut tokio_command = command.into_tokio_command();
 
     unsafe {
+        let shm_fd = Arc::clone(&shm_fd);
         tokio_command.pre_exec(move || {
             #[cfg(target_os = "linux")]
             unset_fd_flag(preload_lib_memfd.as_fd(), FdFlag::FD_CLOEXEC)?;
-            unset_fd_flag(shm_fd_sender.as_fd(), FdFlag::FD_CLOEXEC)?;
+            unset_fd_flag(process_exit_sentinel_fd_sender.as_fd(), FdFlag::FD_CLOEXEC)?;
+            unset_fd_flag(shm_fd.as_fd(), FdFlag::FD_CLOEXEC)?;
 
             #[cfg(target_os = "linux")]
             supervisor_pre_exec.run()?;
@@ -230,9 +283,11 @@ pub async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild> {
     }
 
     let child = tokio_command.spawn()?;
-    // drop channel_sender in the parent process,
-    // so that channel_receiver reaches eof as soon as the last descendant process exits.
+
     drop(tokio_command);
+    let shm_fd = Arc::into_inner(shm_fd).expect(
+        "pre_exec callback's reference to shm_fd should be dropped along with tokio_command",
+    );
 
     // #[cfg(target_os = "linux")]
     let arenas_future = async move {
@@ -244,29 +299,21 @@ pub async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild> {
     };
 
     let shm_future = async move {
-        let mut shm_fds = Vec::<OwnedFd>::new();
-        loop {
-            let shm_fd = match shm_fd_receiver.recv_fd().await {
-                Ok(fd) => unsafe { OwnedFd::from_raw_fd(fd) },
-                Err(err) => {
-                    if err.kind() == io::ErrorKind::UnexpectedEof {
-                        break;
-                    }
-                    return Err(err);
-                }
-            };
-            shm_fds.push(shm_fd);
-        }
-        io::Result::Ok(shm_fds)
+        let mut read_buf = [0u8; 1];
+
+        let read_size = process_exit_sentinel_fd_receiver.read(&mut read_buf).await?;
+        // eof reached means the last descendant process has exited.
+        assert_eq!(read_size, 0, "the sentinel fd should never be written to");
+
+        let shm_mmap = unsafe { Mmap::map(&shm_fd) }?;
+        io::Result::Ok(shm_fd)
     };
 
     let accesses_future = async move {
-        let (arenas, shm_fds) = try_join(arenas_future, shm_future).await?;
-        let shm_mmaps = shm_fds
-            .into_iter()
-            .map(|fd| unsafe { Mmap::map(&fd) })
-            .collect::<io::Result<Vec<Mmap>>>()?;
-        Ok(PathAccessIterable { arenas, shm_mmaps })
+        let (arenas, shm_fd) = try_join(arenas_future, shm_future).await?;
+        let shm_mmap = unsafe { Mmap::map(&shm_fd) }?;
+        let shm_reader = ShmReader::new(shm_mmap);
+        Ok(PathAccessIterable { arenas, shm_reader })
     }
     .boxed();
 

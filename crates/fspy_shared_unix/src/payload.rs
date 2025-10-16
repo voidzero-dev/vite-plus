@@ -7,7 +7,8 @@ use fspy_shared::ipc::NativeString;
 
 #[derive(Debug, Encode, Decode)]
 pub struct Payload {
-    pub ipc_fd: RawFd,
+    pub shm_fd: RawFd,
+    pub process_exit_sentinel_fd: RawFd,
     pub preload_path: NativeString,
 
     #[cfg(target_os = "macos")]

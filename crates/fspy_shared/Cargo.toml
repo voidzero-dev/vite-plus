@@ -27,3 +27,8 @@ nix = { workspace = true }
 # [features]
 # supervisor = ["dep:tokio", "dep:passfd"]
 # target = []
+
+[dev-dependencies]
+assert2 = { workspace = true }
+ctor = { workspace = true }
+shared_memory = { workspace = true }
