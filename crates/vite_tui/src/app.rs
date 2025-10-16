@@ -27,12 +27,12 @@ pub struct App {
 }
 
 impl App {
-    /// # Errors
-    pub fn new() -> Result<Self> {
+    #[must_use]
+    pub fn new() -> Self {
         let tasks = vec!["top".to_string(), "df".to_string()];
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         let tasks_pane = tasks.iter().map(|task| (task.clone(), TasksPane::new())).collect();
-        Ok(Self {
+        Self {
             should_quit: false,
             should_suspend: false,
             last_tick_key_events: Vec::new(),
@@ -41,7 +41,7 @@ impl App {
             tasks_list: TasksList::new(tasks),
             tasks_pane,
             left_panel_area: Rect::default(),
-        })
+        }
     }
 
     /// # Errors
@@ -230,7 +230,7 @@ impl App {
                 Action::Up | Action::Down | Action::SelectTask(_) => {
                     self.tasks_list.update(action)?;
                 }
-                _ => {}
+                Action::Error(_) => {}
             }
         }
         Ok(())

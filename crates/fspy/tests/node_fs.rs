@@ -39,9 +39,9 @@ async fn read_dir_sync() -> io::Result<()> {
 #[tokio::test]
 async fn subprocess() -> io::Result<()> {
     let cmd = if cfg!(windows) {
-        r#"'cmd', ['/c', 'type hello']"#
+        r"'cmd', ['/c', 'type hello']"
     } else {
-        r#"'/bin/sh', ['-c', 'cat hello']"#
+        r"'/bin/sh', ['-c', 'cat hello']"
     };
     let accesses = track_node_script(&format!(
         "try {{ child_process.spawnSync({cmd}, {{ stdio: 'ignore' }}) }} catch {{}}"

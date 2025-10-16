@@ -65,6 +65,10 @@ impl RelativePath {
     /// Returns a path that, when joined onto `base`, yields `self`.
     ///
     /// If `base` is not a prefix of `self`, returns [`None`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the stripped path contains non-UTF-8 characters, which should not happen for valid `RelativePath` instances.
     pub fn strip_prefix<P: AsRef<Self>>(&self, base: P) -> Option<&Self> {
         let stripped_path = Path::new(self.as_str()).strip_prefix(base.as_ref().as_path()).ok()?;
         Some(unsafe { Self::assume_portable(stripped_path.to_str().unwrap()) })
@@ -75,6 +79,7 @@ impl RelativePath {
 #[derive(
     Debug, Encode, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize, Default,
 )]
+#[allow(clippy::unsafe_derive_deserialize)]
 pub struct RelativePathBuf(Str);
 
 impl AsRef<Path> for RelativePathBuf {

@@ -24,7 +24,7 @@ unsafe extern "C" fn scandir(
 
 #[cfg(target_os = "macos")]
 mod macos_only {
-    use super::*;
+    use super::{AccessMode, c_char, c_int, c_void, handle_open, intercept};
     intercept!(scandir_b: unsafe extern "C" fn (
         dirname: *const c_char,
         namelist: *mut c_void,

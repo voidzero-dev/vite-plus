@@ -71,7 +71,7 @@ pub struct JsCommandResolvedResult {
 /// Convert JavaScript result to Rust's expected format
 impl From<JsCommandResolvedResult> for ResolveCommandResult {
     fn from(value: JsCommandResolvedResult) -> Self {
-        ResolveCommandResult { bin_path: value.bin_path, envs: value.envs }
+        Self { bin_path: value.bin_path, envs: value.envs }
     }
 }
 
@@ -103,7 +103,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     let mut cwd = current_dir()?;
     if let Some(options_cwd) = options.cwd {
         cwd.push(options_cwd);
-    };
+    }
     // Extract resolver functions from options
     let lint = options.lint;
     let fmt = options.fmt;

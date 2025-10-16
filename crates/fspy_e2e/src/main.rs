@@ -28,7 +28,7 @@ struct AccessCollector {
 }
 
 impl AccessCollector {
-    pub fn new(dir: PathBuf) -> Self {
+    pub const fn new(dir: PathBuf) -> Self {
         Self { dir, accesses: BTreeMap::new() }
     }
 

@@ -8,7 +8,7 @@ pub struct Shebang {
     pub arguments: Vec<BString>,
 }
 
-fn is_whitespace(c: u8) -> bool {
+const fn is_whitespace(c: u8) -> bool {
     c == b' ' || c == b'\t'
 }
 
@@ -54,7 +54,7 @@ pub fn parse_shebang(
     let arguments: Vec<BString> = if options.split_arguments {
         arguments_buf
             .split(|ch| is_whitespace(*ch))
-            .flat_map(|arg| {
+            .filter_map(|arg| {
                 let arg = arg.trim_ascii();
                 if arg.is_empty() { None } else { Some(arg.as_bstr().to_owned()) }
             })

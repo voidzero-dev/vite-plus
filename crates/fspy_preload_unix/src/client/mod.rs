@@ -44,7 +44,7 @@ impl ShmCursor {
         let new_position = self.position.checked_add(len)?;
         if new_position > self.mmap_mut.len() {
             return None;
-        };
+        }
         let buf = &mut self.mmap_mut[self.position..new_position];
         self.position = new_position;
         Some(buf)
@@ -146,7 +146,7 @@ impl Client {
                 && (path.starts_with(b"/proc/") || path.starts_with(b"/sys/")))
         {
             return Ok(());
-        };
+        }
         let mut size_writer = SizeWriter::default();
         encode_into_writer(path_access, &mut size_writer, BINCODE_CONFIG)?;
 
@@ -224,7 +224,7 @@ impl Client {
             false
         } else {
             let mut flags = 0;
-            let ret = unsafe { libc::posix_spawnattr_getflags(attrp, &mut flags) };
+            let ret = unsafe { libc::posix_spawnattr_getflags(attrp, &raw mut flags) };
             if ret != 0 {
                 return Err(nix::Error::from_raw(ret));
             }
@@ -239,11 +239,11 @@ impl Client {
         if (*file_actions).is_null() {
             let shared_file_actions = self.posix_spawn_file_actions.get_or_init(|| {
                 let mut fa: libc::posix_spawn_file_actions_t = unsafe { zeroed() };
-                let ret = unsafe { libc::posix_spawn_file_actions_init(&mut fa) };
+                let ret = unsafe { libc::posix_spawn_file_actions_init(&raw mut fa) };
                 assert_eq!(ret, 0);
                 let ret = unsafe {
                     posix_spawn_file_actions_addinherit_np(
-                        &mut fa,
+                        &raw mut fa,
                         self.encoded_payload.payload.ipc_fd,
                     )
                 };
@@ -302,7 +302,5 @@ fn init_client() {
 
     CLIENT.set(Client::from_env()).unwrap();
     let ret = unsafe { pthread_atfork(None, None, Some(reset_shm_atfork)) };
-    if ret != 0 {
-        panic!("pthread_atfork failed: {ret}");
-    }
+    assert!((ret == 0), "pthread_atfork failed: {ret}");
 }

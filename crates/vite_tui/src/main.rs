@@ -5,7 +5,7 @@ use vite_tui::{App, logging};
 async fn main() -> Result<()> {
     logging::init()?;
 
-    let mut app = App::new()?;
+    let mut app = App::new();
     app.run().await?;
     Ok(())
 }

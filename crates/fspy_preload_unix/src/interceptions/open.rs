@@ -9,10 +9,10 @@ use crate::{
     macros::intercept,
 };
 
-fn has_mode_arg(o_flags: c_int) -> bool {
+const fn has_mode_arg(o_flags: c_int) -> bool {
     if o_flags & libc::O_CREAT != 0 {
         return true;
-    };
+    }
     #[cfg(target_os = "linux")]
     if o_flags & libc::O_TMPFILE != 0 {
         return true;

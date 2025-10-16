@@ -27,7 +27,7 @@ fn get_fd_path(fd: RawFd) -> nix::Result<Option<PathBuf>> {
 fn get_fd_path(fd: RawFd) -> nix::Result<Option<PathBuf>> {
     if fd == libc::AT_FDCWD {
         return Ok(Some(getcwd()?));
-    };
+    }
     let mut path = std::path::PathBuf::new();
     match nix::fcntl::fcntl(
         unsafe { std::os::fd::BorrowedFd::borrow_raw(fd) },

@@ -1,5 +1,3 @@
-use std::mem::{MaybeUninit, transmute};
-
 use bstr::{BStr, ByteSlice};
 use stackalloc::alloca;
 
@@ -10,12 +8,17 @@ fn concat<R>(s: &[&BStr], callback: impl FnOnce(&BStr) -> R) -> R {
         let mut pos = 0usize;
         for s in s {
             let next_pos = pos + s.len();
-            buf[pos..next_pos]
-                .copy_from_slice(unsafe { transmute::<&[u8], &[MaybeUninit<u8>]>(s.as_ref()) });
+            let bytes: &[u8] = s.as_ref();
+            let src_ptr = bytes.as_ptr();
+            let dst_ptr = buf[pos..next_pos].as_mut_ptr().cast::<u8>();
+            unsafe {
+                std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, s.len());
+            }
             pos = next_pos;
         }
         debug_assert_eq!(pos, buf.len());
-        callback(unsafe { transmute::<&[MaybeUninit<u8>], &[u8]>(buf) }.as_bstr())
+        let bytes = unsafe { std::slice::from_raw_parts(buf.as_ptr().cast::<u8>(), buf.len()) };
+        callback(bytes.as_bstr())
     })
 }
 
@@ -27,7 +30,7 @@ const NAME_MAX: usize = 255;
 ///
 /// Difference from musl:
 /// - Instead of actually calling execve, use `access_executable` to check if the file is executable, and call `callback` with the found executable.
-/// - The path limit (PATH_MAX) is not checked.
+/// - The path limit (`PATH_MAX`) is not checked.
 /// - PATH is passed as parameter instead of using the real environment variable.
 pub fn which<R>(
     file: &BStr,

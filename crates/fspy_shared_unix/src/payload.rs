@@ -32,6 +32,12 @@ pub struct EncodedPayload {
     pub encoded_string: BString,
 }
 
+/// Encodes the fspy payload into a base64 string for transmission via environment variable
+///
+/// # Panics
+///
+/// Panics if bincode serialization fails, which should never happen for valid `Payload` structs.
+#[must_use]
 pub fn encode_payload(payload: Payload) -> EncodedPayload {
     let bincode_bytes = bincode::encode_to_vec(&payload, standard()).unwrap();
     let encoded_string = BASE64_STANDARD_NO_PAD.encode(&bincode_bytes);

@@ -26,7 +26,7 @@ fn unpack_tar_gz(content: impl Read, path: &str) -> anyhow::Result<Vec<u8>> {
     for entry in archive.entries()? {
         let mut entry = entry?;
         if entry.path_bytes().as_ref() == path.as_bytes() {
-            let mut data = Vec::<u8>::with_capacity(entry.size() as usize);
+            let mut data = Vec::<u8>::with_capacity(entry.size().try_into().unwrap());
             entry.read_to_end(&mut data)?;
             return Ok(data);
         }
@@ -48,12 +48,12 @@ const MACOS_BINARY_DOWNLOADS: &[(&str, &[(&str, &str, u128)])] = &[
             (
                 "https://github.com/branchseer/oils-for-unix-binaries/releases/download/0.29.0-manual/oils-for-unix-0.29.0-aarch64-apple-darwin.tar.gz",
                 "oils-for-unix",
-                149945237112824769531360595981178091193,
+                149_945_237_112_824_769_531_360_595_981_178_091_193,
             ),
             (
                 "https://github.com/uutils/coreutils/releases/download/0.1.0/coreutils-0.1.0-aarch64-apple-darwin.tar.gz",
                 "coreutils-0.1.0-aarch64-apple-darwin/coreutils",
-                255656813290649147736009964224176006890,
+                255_656_813_290_649_147_736_009_964_224_176_006_890,
             ),
         ],
     ),
@@ -63,12 +63,12 @@ const MACOS_BINARY_DOWNLOADS: &[(&str, &[(&str, &str, u128)])] = &[
             (
                 "https://github.com/branchseer/oils-for-unix-binaries/releases/download/0.29.0-manual/oils-for-unix-0.29.0-x86_64-apple-darwin.tar.gz",
                 "oils-for-unix",
-                286203014616009968685843701528129413859,
+                286_203_014_616_009_968_685_843_701_528_129_413_859,
             ),
             (
                 "https://github.com/uutils/coreutils/releases/download/0.1.0/coreutils-0.1.0-x86_64-apple-darwin.tar.gz",
                 "coreutils-0.1.0-x86_64-apple-darwin/coreutils",
-                75344743234387926348628744659874018387,
+                75_344_743_234_387_926_348_628_744_659_874_018_387,
             ),
         ],
     ),
@@ -77,7 +77,7 @@ const MACOS_BINARY_DOWNLOADS: &[(&str, &[(&str, &str, u128)])] = &[
 fn fetch_macos_binaries() -> anyhow::Result<()> {
     if env::var("CARGO_CFG_TARGET_OS").unwrap() != "macos" {
         return Ok(());
-    };
+    }
     let out_dir = current_dir().unwrap().join(Path::new(&std::env::var_os("OUT_DIR").unwrap()));
 
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();

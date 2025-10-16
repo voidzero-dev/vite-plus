@@ -15,7 +15,7 @@ use bincode::Decode;
 use bincode::{BorrowDecode, Encode};
 use bstr::BStr;
 
-/// Similar to OsStr, but requires no copy for encode/borrow_decode
+/// Similar to `OsStr`, but requires no copy for `encode/borrow_decode`
 #[derive(Encode, BorrowDecode, Clone, Copy, PartialEq, Eq)]
 pub struct NativeStr<'a> {
     #[cfg(windows)]
@@ -55,7 +55,8 @@ impl<'a> NativeStr<'a> {
         }
     }
 
-    pub fn from_bytes(bytes: &'a [u8]) -> Self {
+    #[must_use]
+    pub const fn from_bytes(bytes: &'a [u8]) -> Self {
         Self {
             #[cfg(windows)]
             is_wide: false,
@@ -70,11 +71,13 @@ impl<'a> NativeStr<'a> {
     }
 
     #[cfg(unix)]
+    #[must_use]
     pub fn as_os_str(&self) -> &'a OsStr {
         std::os::unix::ffi::OsStrExt::from_bytes(self.data)
     }
 
     #[cfg(unix)]
+    #[must_use]
     pub fn as_bstr(&self) -> &'a BStr {
         use bstr::ByteSlice;
 
@@ -104,6 +107,7 @@ impl<'a> NativeStr<'a> {
         }
     }
 
+    #[must_use]
     pub fn to_cow_os_str(&self) -> Cow<'a, OsStr> {
         #[cfg(windows)]
         return Cow::Owned(self.to_os_string());
@@ -153,7 +157,7 @@ impl<'a> From<&'a BStr> for NativeStr<'a> {
     }
 }
 
-impl<'a> Debug for NativeStr<'a> {
+impl Debug for NativeStr<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         <OsStr as Debug>::fmt(self.to_cow_os_str().as_ref(), f)
     }
@@ -203,6 +207,7 @@ impl std::ops::Deref for NativeString {
 
 #[cfg(unix)]
 impl NativeString {
+    #[must_use]
     pub fn as_os_str(&self) -> &OsStr {
         use std::os::unix::ffi::OsStrExt as _;
         OsStr::from_bytes(&self.data)

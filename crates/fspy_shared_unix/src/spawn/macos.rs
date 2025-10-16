@@ -20,7 +20,7 @@ impl PreExec {
     /// # Errors
     ///
     /// This function never returns an error as the type is `Infallible`
-    pub fn run(&self) -> nix::Result<()> {
+    pub const fn run(&self) -> nix::Result<()> {
         match self.0 {}
     }
 }

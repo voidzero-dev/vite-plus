@@ -58,6 +58,10 @@ impl AbsolutePath {
     /// If `base` is not a prefix of `self`, returns [`None`].
     ///
     /// If the stripped path is not a valid `RelativePath`. Returns an error with the reason and the stripped path.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the stripped path contains invalid UTF-8 or other path data issues.
     pub fn strip_prefix<P: AsRef<Self>>(
         &self,
         base: P,

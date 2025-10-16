@@ -37,7 +37,7 @@ fn handle_exec(
         client.handle_exec(config, RawExec { prog, argv, envp }, |raw_command, pre_exec| {
             if let Some(pre_exec) = pre_exec {
                 pre_exec.run()?;
-            };
+            }
             Ok(execve::original()(raw_command.prog, raw_command.argv, raw_command.envp))
         })
     };

@@ -29,6 +29,10 @@ use crate::{
 /// - Program resolution fails (see [`Exec::resolve`] error variants, such as `ENOENT` (file not found) or `EACCES` (permission denied))
 /// - Environment variable operations fail (e.g., `ensure_env` may return `EINVAL` if an existing value conflicts)
 /// - Platform-specific errors from `os_specific::handle_exec`
+///
+/// # Panics
+///
+/// Panics if the current working directory cannot be determined when converting a relative path to absolute.
 pub fn handle_exec(
     command: &mut Exec,
     config: ExecResolveConfig,

@@ -35,14 +35,19 @@ pub struct ExecResolveConfig<'a> {
 
 impl<'a> ExecResolveConfig<'a> {
     /// Configuration for execve - no PATH search, direct execution
+    #[must_use]
     pub fn search_path_disabled() -> Self {
-        Self { search_path: None, shebang_options: Default::default() }
+        Self { search_path: None, shebang_options: ParseShebangOptions::default() }
     }
 
     /// execlp/execvp/execvP/execvpe
     /// `custom_path` allows a customized path to be searched like in execvP (macOS extension)
+    #[must_use]
     pub fn search_path_enabled(custom_path: Option<&'a BStr>) -> Self {
-        Self { search_path: Some(SearchPath { custom_path }), shebang_options: Default::default() }
+        Self {
+            search_path: Some(SearchPath { custom_path }),
+            shebang_options: ParseShebangOptions::default(),
+        }
     }
 }
 
@@ -95,14 +100,18 @@ impl Exec {
         config: ExecResolveConfig,
     ) -> nix::Result<()> {
         if let Some(search_path) = config.search_path {
-            let path = if let Some(custom_path) = search_path.custom_path {
-                custom_path
-            } else if let Some(path) = getenv(c"PATH") {
-                path.to_bytes().as_bstr()
-            } else {
-                // https://github.com/kraj/musl/blob/1b06420abdf46f7d06ab4067e7c51b8b63731852/src/process/execvp.c#L21
-                b"/usr/local/bin:/bin:/usr/bin".as_bstr()
-            };
+            let path = search_path.custom_path.map_or_else(
+                || {
+                    getenv(c"PATH").map_or_else(
+                        || {
+                            // https://github.com/kraj/musl/blob/1b06420abdf46f7d06ab4067e7c51b8b63731852/src/process/execvp.c#L21
+                            b"/usr/local/bin:/bin:/usr/bin".as_bstr()
+                        },
+                        |path| path.to_bytes().as_bstr(),
+                    )
+                },
+                |custom_path| custom_path,
+            );
             let program = which::which(
                 self.program.as_ref(),
                 path,
@@ -159,7 +168,7 @@ pub fn ensure_env(
     let existing_value = envs.iter().find_map(|(n, v)| if n == name { v.as_ref() } else { None });
     if let Some(existing_value) = existing_value {
         return if existing_value == value { Ok(()) } else { Err(nix::Error::EINVAL) };
-    };
+    }
     envs.push((name.to_owned(), Some(value.to_owned())));
     Ok(())
 }

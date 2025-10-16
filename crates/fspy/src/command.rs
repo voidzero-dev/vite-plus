@@ -33,6 +33,7 @@ pub struct Command {
 
 impl Command {
     #[cfg(unix)]
+    #[must_use]
     pub fn get_exec(&self) -> Exec {
         use std::{
             iter::once,
@@ -74,27 +75,27 @@ impl Command {
             .collect();
     }
 
-    pub fn env_remove<K: AsRef<OsStr>>(&mut self, key: K) -> &mut Command {
+    pub fn env_remove<K: AsRef<OsStr>>(&mut self, key: K) -> &mut Self {
         self.envs.remove(key.as_ref());
         self
     }
 
-    pub fn stderr<T: Into<Stdio>>(&mut self, cfg: T) -> &mut Command {
+    pub fn stderr<T: Into<Stdio>>(&mut self, cfg: T) -> &mut Self {
         self.stderr = Some(cfg.into());
         self
     }
 
-    pub fn stdout<T: Into<Stdio>>(&mut self, cfg: T) -> &mut Command {
+    pub fn stdout<T: Into<Stdio>>(&mut self, cfg: T) -> &mut Self {
         self.stdout = Some(cfg.into());
         self
     }
 
-    pub fn stdin<T: Into<Stdio>>(&mut self, cfg: T) -> &mut Command {
+    pub fn stdin<T: Into<Stdio>>(&mut self, cfg: T) -> &mut Self {
         self.stdin = Some(cfg.into());
         self
     }
 
-    pub fn env<K, V>(&mut self, key: K, val: V) -> &mut Command
+    pub fn env<K, V>(&mut self, key: K, val: V) -> &mut Self
     where
         K: AsRef<OsStr>,
         V: AsRef<OsStr>,
@@ -103,7 +104,7 @@ impl Command {
         self
     }
 
-    pub fn envs<I, K, V>(&mut self, vars: I) -> &mut Command
+    pub fn envs<I, K, V>(&mut self, vars: I) -> &mut Self
     where
         I: IntoIterator<Item = (K, V)>,
         K: AsRef<OsStr>,
@@ -116,17 +117,17 @@ impl Command {
         self
     }
 
-    pub fn current_dir<P: AsRef<Path>>(&mut self, dir: P) -> &mut Command {
+    pub fn current_dir<P: AsRef<Path>>(&mut self, dir: P) -> &mut Self {
         self.cwd = Some(dir.as_ref().to_owned());
         self
     }
 
-    pub fn arg<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Command {
+    pub fn arg<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Self {
         self.args.push(arg.as_ref().to_os_string());
         self
     }
 
-    pub fn args<I, S>(&mut self, args: I) -> &mut Command
+    pub fn args<I, S>(&mut self, args: I) -> &mut Self
     where
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
@@ -136,7 +137,7 @@ impl Command {
     }
 
     #[cfg(unix)]
-    pub fn arg0<S>(&mut self, arg: S) -> &mut Command
+    pub fn arg0<S>(&mut self, arg: S) -> &mut Self
     where
         S: AsRef<OsStr>,
     {

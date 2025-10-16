@@ -7,7 +7,7 @@ use wax::{Glob, Pattern};
 /// Otherwise, it will follow the last match wins semantics.
 #[derive(Debug)]
 pub struct GlobPatternSet<'a> {
-    /// (glob_pattern, match_or_not)
+    /// (`glob_pattern`, `match_or_not`)
     patterns: Vec<(Glob<'a>, bool)>,
     has_negated: bool,
 }

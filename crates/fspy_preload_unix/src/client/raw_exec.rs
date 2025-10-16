@@ -66,7 +66,7 @@ impl RawExec {
         Exec { program, args, envs }
     }
 
-    pub fn from_exec<R>(cmd: Exec, f: impl FnOnce(RawExec) -> R) -> R {
+    pub fn from_exec<R>(cmd: Exec, f: impl FnOnce(Self) -> R) -> R {
         let envs: Vec<BString> = cmd
             .envs
             .into_iter()
@@ -82,7 +82,7 @@ impl RawExec {
 
         Self::to_c_str(cmd.program, |prog| {
             Self::to_c_str_array(cmd.args, |argv| {
-                Self::to_c_str_array(envs, |envp| f(RawExec { prog, argv, envp }))
+                Self::to_c_str_array(envs, |envp| f(Self { prog, argv, envp }))
             })
         })
     }

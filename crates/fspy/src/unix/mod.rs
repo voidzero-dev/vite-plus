@@ -15,7 +15,6 @@ use std::{fs::File, io::Write, sync::Arc};
 use std::{
     io::{self},
     iter,
-    ops::Deref,
     os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd},
     sync::atomic::{AtomicU8, Ordering, fence},
 };
@@ -129,15 +128,16 @@ impl PathAccessIterable {
             self.arenas.iter().flat_map(|arena| arena.borrow_accesses().iter()).copied();
 
         let accesses_in_shm = self.shm_mmaps.iter().flat_map(|mmap| {
-            let buf = mmap.deref();
+            let buf = &**mmap;
             let mut position = 0usize;
             iter::from_fn(move || {
                 let (flag_buf, data_buf) = buf[position..].split_first()?;
-                let atomic_flag = unsafe { AtomicU8::from_ptr((flag_buf as *const u8).cast_mut()) };
+                let atomic_flag =
+                    unsafe { AtomicU8::from_ptr(std::ptr::from_ref::<u8>(flag_buf).cast_mut()) };
                 let flag = atomic_flag.load(Ordering::Acquire);
                 if flag == 0 {
                     return None;
-                };
+                }
                 fence(Ordering::Acquire);
                 let (path_access, decoded_size) =
                     borrow_decode_from_slice::<PathAccess<'_>, _>(data_buf, BINCODE_CONFIG)
@@ -165,7 +165,7 @@ fn duplicate_until_safe(mut fd: OwnedFd) -> io::Result<OwnedFd> {
     Ok(fd)
 }
 
-pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild> {
+pub async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild> {
     let (shm_fd_sender, shm_fd_receiver) = UnixStream::pair()?;
 
     let shm_fd_sender = shm_fd_sender.into_std()?;
@@ -251,9 +251,8 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
                 Err(err) => {
                     if err.kind() == io::ErrorKind::UnexpectedEof {
                         break;
-                    } else {
-                        return Err(err);
                     }
+                    return Err(err);
                 }
             };
             shm_fds.push(shm_fd);
