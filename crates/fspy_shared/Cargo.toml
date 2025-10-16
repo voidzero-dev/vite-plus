@@ -8,6 +8,8 @@ publish = false
 allocator-api2 = { workspace = true }
 bincode = { workspace = true }
 bstr = { workspace = true }
+bytemuck = { workspace = true, features = ["must_cast"] }
+memmap2 = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 bytemuck = { workspace = true }

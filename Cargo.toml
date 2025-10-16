@@ -109,6 +109,7 @@ serde_yml = "0.0.12"
 serial_test = "3.2.0"
 sha1 = "0.10.6"
 sha2 = "0.10.9"
+shared_memory = "0.12.4"
 shell-escape = "0.1.5"
 slab = "0.4.9"
 smallvec = { version = "2.0.0-alpha.11", features = ["std"] }

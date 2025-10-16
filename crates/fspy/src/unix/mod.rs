@@ -10,13 +10,13 @@ mod macos_fixtures;
 
 #[cfg(target_os = "macos")]
 use std::path::Path;
-#[cfg(target_os = "linux")]
-use std::{fs::File, io::Write, sync::Arc};
 use std::{
     io::{self},
-    iter,
-    os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd},
-    sync::atomic::{AtomicU8, Ordering, fence},
+    os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd, RawFd},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 use bincode::borrow_decode_from_slice;
@@ -24,7 +24,7 @@ use bincode::borrow_decode_from_slice;
 use fspy_seccomp_unotify::supervisor::supervise;
 #[cfg(target_os = "macos")]
 use fspy_shared::ipc::NativeString;
-use fspy_shared::ipc::{BINCODE_CONFIG, PathAccess};
+use fspy_shared::ipc::{BINCODE_CONFIG, PathAccess, shm_io::ShmReader};
 #[cfg(target_os = "macos")]
 use fspy_shared_unix::payload::Fixtures;
 use fspy_shared_unix::{
@@ -32,44 +32,8 @@ use fspy_shared_unix::{
     payload::{Payload, encode_payload},
     spawn::handle_exec,
 };
-use memmap2::Mmap;
-
-#[cfg(target_os = "linux")]
-use fspy_seccomp_unotify::supervisor::supervise;
-#[cfg(target_os = "macos")]
-use std::path::Path;
-use std::{
-    cell::RefCell,
-    ffi::{CString, OsStr, OsString},
-    fs::File,
-    io::{self, Write},
-    iter,
-    mem::ManuallyDrop,
-    ops::{ControlFlow, Deref, DerefMut},
-    os::{
-        fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd},
-        unix::{
-            ffi::{OsStrExt, OsStringExt},
-            process::CommandExt,
-        },
-    },
-    sync::{
-        Arc, LazyLock,
-        atomic::{AtomicU8, AtomicU16, AtomicUsize, Ordering, fence},
-    },
-};
-
-#[cfg(target_os = "linux")]
-use syscall_handler::SyscallHandler;
-
-use bincode::{borrow_decode_from_slice, error::DecodeError};
-use bumpalo::Bump;
-use passfd::{FdPassingExt as _, tokio::FdPassingExt as _};
-
-use tokio::{io::AsyncReadExt, net::UnixStream, process::Child as TokioChild};
-
-use fspy_shared::ipc::{BINCODE_CONFIG, PathAccess, shm_io::ShmReader};
 use futures_util::{FutureExt, future::try_join};
+use memmap2::Mmap;
 use nix::{
     fcntl::{FcntlArg, FdFlag, OFlag, fcntl},
     sys::{
@@ -78,13 +42,7 @@ use nix::{
     },
     unistd::{ftruncate, getpid},
 };
-
-#[cfg(target_os = "linux")]
-use nix::sys::memfd::{MFdFlags, memfd_create};
-use passfd::tokio::FdPassingExt;
-#[cfg(target_os = "linux")]
-use syscall_handler::SyscallHandler;
-use tokio::net::UnixStream;
+use tokio::{io::AsyncReadExt, net::UnixStream};
 
 use crate::{Command, TrackedChild, arena::PathAccessArena};
 
@@ -116,18 +74,18 @@ impl SpyInner {
 
     #[cfg(target_os = "macos")]
     pub fn init_in(dir: &Path) -> io::Result<Self> {
-        const PRELOAD_CDYLIB: Fixture = Fixture {
-            name: "fspy_preload",
-            content: PRELOAD_CDYLIB_BINARY,
-            hash: formatcp!("{:x}", xxh3_128(PRELOAD_CDYLIB_BINARY)),
-        };
-
         use const_format::formatcp;
         use xxhash_rust::const_xxh3::xxh3_128;
 
         use crate::fixture::Fixture;
         let coreutils_path = macos_fixtures::COREUTILS_BINARY.write_to(dir, "")?;
         let bash_path = macos_fixtures::OILS_BINARY.write_to(dir, "")?;
+
+        const PRELOAD_CDYLIB: Fixture = Fixture {
+            name: "fspy_preload",
+            content: PRELOAD_CDYLIB_BINARY,
+            hash: formatcp!("{:x}", xxh3_128(PRELOAD_CDYLIB_BINARY)),
+        };
 
         let preload_cdylib_path = PRELOAD_CDYLIB.write_to(dir, ".dylib")?;
         let fixtures = Fixtures {
@@ -183,9 +141,8 @@ impl PathAccessIterable {
 
 // https://github.com/nodejs/node/blob/5794e644b724c6c6cac02d306d87a4d6b78251e5/deps/uv/src/unix/core.c#L803-L808
 fn duplicate_until_safe(mut fd: OwnedFd) -> io::Result<OwnedFd> {
-    const SAFE_FD_NUM: RawFd = 17;
-
     let mut fds: Vec<OwnedFd> = vec![];
+    const SAFE_FD_NUM: RawFd = 17;
     while fd.as_raw_fd() < SAFE_FD_NUM {
         let new_fd = fd.try_clone()?;
         fds.push(fd);
@@ -305,7 +262,6 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
         // eof reached means the last descendant process has exited.
         assert_eq!(read_size, 0, "the sentinel fd should never be written to");
 
-        let shm_mmap = unsafe { Mmap::map(&shm_fd) }?;
         io::Result::Ok(shm_fd)
     };
 
