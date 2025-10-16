@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn test_concat() {
-        let s = concat(&["a".into(), "bc".into(), "".into(), "e".into()], |s| s.to_owned());
+        let s = concat(&["a".into(), "bc".into(), "".into(), "e".into()], BStr::to_owned);
         assert_eq!(s, "abce");
     }
 
