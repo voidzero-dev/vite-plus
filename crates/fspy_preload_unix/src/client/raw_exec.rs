@@ -71,7 +71,7 @@ impl RawExec {
             .envs
             .into_iter()
             .map(|(name, value)| {
-                let mut env = name.to_owned();
+                let mut env = name;
                 if let Some(value) = value {
                     env.push(b'=');
                     env.extend_from_slice(&value);
