@@ -211,6 +211,13 @@ impl Client {
         file_actions: &mut *const libc::posix_spawn_file_actions_t,
         attrp: *const libc::posix_spawnattr_t,
     ) -> nix::Result<()> {
+        unsafe extern "C" {
+            unsafe fn posix_spawn_file_actions_addinherit_np(
+                actions: *mut libc::posix_spawn_file_actions_t,
+                fd: libc::c_int,
+            ) -> libc::c_int;
+        }
+
         use core::mem::zeroed;
 
         use libc::c_short;
@@ -227,13 +234,6 @@ impl Client {
 
         if !cloexec_default {
             return Ok(());
-        }
-
-        unsafe extern "C" {
-            unsafe fn posix_spawn_file_actions_addinherit_np(
-                actions: *mut libc::posix_spawn_file_actions_t,
-                fd: libc::c_int,
-            ) -> libc::c_int;
         }
 
         // ensure ipc fd is inherited when POSIX_SPAWN_CLOEXEC_DEFAULT is set.
@@ -285,9 +285,6 @@ pub unsafe fn handle_open(path: impl ToAbsolutePath, mode: impl ToAccessMode) {
 #[cfg(not(test))]
 #[ctor::ctor]
 fn init_client() {
-    use libc::pthread_atfork;
-
-    CLIENT.set(Client::from_env()).unwrap();
     unsafe extern "C" fn reset_shm_atfork() {
         let Some(client) = global_client() else {
             return;
@@ -301,6 +298,10 @@ fn init_client() {
             shm_cursor.position = shm_cursor.mmap_mut.len();
         });
     }
+
+    use libc::pthread_atfork;
+
+    CLIENT.set(Client::from_env()).unwrap();
     let ret = unsafe { pthread_atfork(None, None, Some(reset_shm_atfork)) };
     if ret != 0 {
         panic!("pthread_atfork failed: {}", ret);

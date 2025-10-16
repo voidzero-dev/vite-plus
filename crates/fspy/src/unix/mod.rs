@@ -73,18 +73,18 @@ impl SpyInner {
 
     #[cfg(target_os = "macos")]
     pub fn init_in(dir: &Path) -> io::Result<Self> {
+        const PRELOAD_CDYLIB: Fixture = Fixture {
+            name: "fspy_preload",
+            content: PRELOAD_CDYLIB_BINARY,
+            hash: formatcp!("{:x}", xxh3_128(PRELOAD_CDYLIB_BINARY)),
+        };
+
         use const_format::formatcp;
         use xxhash_rust::const_xxh3::xxh3_128;
 
         use crate::fixture::Fixture;
         let coreutils_path = macos_fixtures::COREUTILS_BINARY.write_to(dir, "")?;
         let bash_path = macos_fixtures::OILS_BINARY.write_to(dir, "")?;
-
-        const PRELOAD_CDYLIB: Fixture = Fixture {
-            name: "fspy_preload",
-            content: PRELOAD_CDYLIB_BINARY,
-            hash: formatcp!("{:x}", xxh3_128(PRELOAD_CDYLIB_BINARY)),
-        };
 
         let preload_cdylib_path = PRELOAD_CDYLIB.write_to(dir, ".dylib")?;
         let fixtures = Fixtures {
@@ -154,8 +154,9 @@ impl PathAccessIterable {
 
 // https://github.com/nodejs/node/blob/5794e644b724c6c6cac02d306d87a4d6b78251e5/deps/uv/src/unix/core.c#L803-L808
 fn duplicate_until_safe(mut fd: OwnedFd) -> io::Result<OwnedFd> {
-    let mut fds: Vec<OwnedFd> = vec![];
     const SAFE_FD_NUM: RawFd = 17;
+
+    let mut fds: Vec<OwnedFd> = vec![];
     while fd.as_raw_fd() < SAFE_FD_NUM {
         let new_fd = fd.try_clone()?;
         fds.push(fd);

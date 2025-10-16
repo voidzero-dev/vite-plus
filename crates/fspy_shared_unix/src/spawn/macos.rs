@@ -29,6 +29,8 @@ pub fn handle_exec(
     command: &mut Exec,
     encoded_payload: &EncodedPayload,
 ) -> nix::Result<Option<PreExec>> {
+    const DYLD_INSERT_LIBRARIES: &[u8] = b"DYLD_INSERT_LIBRARIES";
+
     if command.program.first() != Some(&b'/') {
         let program =
             absolute(OsStr::from_bytes(&command.program)).expect("Failed to get absolute path");
@@ -65,7 +67,6 @@ pub fn handle_exec(
         true
     };
 
-    const DYLD_INSERT_LIBRARIES: &[u8] = b"DYLD_INSERT_LIBRARIES";
     if injectable {
         ensure_env(
             &mut command.envs,
