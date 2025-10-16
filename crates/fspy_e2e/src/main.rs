@@ -109,10 +109,10 @@ async fn main() {
         for access in accesses.iter() {
             collector.add(access);
         }
-        let snap_file = File::create(manifest_dir.join(format!("snaps/{}.txt", name))).unwrap();
+        let snap_file = File::create(manifest_dir.join(format!("snaps/{name}.txt"))).unwrap();
         let mut snap_writer = BufWriter::new(snap_file);
         for (path, mode) in collector.iter() {
-            writeln!(snap_writer, "{}: {:?}", path, mode).unwrap();
+            writeln!(snap_writer, "{path}: {mode:?}").unwrap();
         }
     }
 }

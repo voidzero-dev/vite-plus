@@ -48,7 +48,7 @@ pub fn encode_payload(payload: Payload) -> EncodedPayload {
 /// - The bincode deserialization fails
 pub fn decode_payload_from_env() -> anyhow::Result<EncodedPayload> {
     let Some(encoded_string) = std::env::var_os(PAYLOAD_ENV_NAME) else {
-        anyhow::bail!("Environment variable '{}' not found", PAYLOAD_ENV_NAME);
+        anyhow::bail!("Environment variable '{PAYLOAD_ENV_NAME}' not found");
     };
     decode_payload(encoded_string.into_vec().into())
 }

@@ -31,13 +31,13 @@ fn unpack_tar_gz(content: impl Read, path: &str) -> anyhow::Result<Vec<u8>> {
             return Ok(data);
         }
     }
-    bail!("Path {} not found in tar gz", path)
+    bail!("Path {path} not found in tar gz")
 }
 
 fn download_and_unpack_tar_gz(url: &str, path: &str) -> anyhow::Result<Vec<u8>> {
-    let resp = download(url).context(format!("Failed to get ok response from {}", url))?;
+    let resp = download(url).context(format!("Failed to get ok response from {url}"))?;
     let data = unpack_tar_gz(resp, path)
-        .context(format!("Failed to download or unpack {} out of {}", path, url))?;
+        .context(format!("Failed to download or unpack {path} out of {url}"))?;
     Ok(data)
 }
 
@@ -84,13 +84,13 @@ fn fetch_macos_binaries() -> anyhow::Result<()> {
     let downloads = MACOS_BINARY_DOWNLOADS
         .iter()
         .find(|(arch, _)| *arch == target_arch)
-        .context(format!("Unsupported macOS arch: {}", target_arch))?
+        .context(format!("Unsupported macOS arch: {target_arch}"))?
         .1;
     // let downloads = [(zsh_url.as_str(), "bin/zsh", zsh_hash)];
     for (url, path_in_targz, expected_hash) in downloads.iter().copied() {
         let filename = path_in_targz.split('/').next_back().unwrap();
         let download_path = out_dir.join(filename);
-        let hash_path = out_dir.join(format!("{}.hash", filename));
+        let hash_path = out_dir.join(format!("{filename}.hash"));
 
         let file_exists = matches!(fs::read(&download_path), Ok(existing_file_data) if xxh3_128(&existing_file_data) == expected_hash);
         if !file_exists {
@@ -102,11 +102,10 @@ fn fetch_macos_binaries() -> anyhow::Result<()> {
             let actual_hash = xxh3_128(&data);
             assert_eq!(
                 actual_hash, expected_hash,
-                "expected_hash of {} in {} needs to be updated",
-                path_in_targz, url
+                "expected_hash of {path_in_targz} in {url} needs to be updated"
             );
         }
-        fs::write(&hash_path, format!("{:x}", expected_hash))?;
+        fs::write(&hash_path, format!("{expected_hash:x}"))?;
     }
     Ok(())
     // let zsh_path = ensure_downloaded(&zsh_url);

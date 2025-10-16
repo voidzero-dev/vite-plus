@@ -127,8 +127,7 @@ impl Client {
                 *shm_buf = self.new_shm()?;
                 let buf = shm_buf.advance(len).with_context(|| {
                     format!(
-                        "The requested buf ({}) is greater than the shm chunk size ({})",
-                        len, SHM_CHUNK_SIZE
+                        "The requested buf ({len}) is greater than the shm chunk size ({SHM_CHUNK_SIZE})"
                     )
                 })?;
                 f(buf)
@@ -304,6 +303,6 @@ fn init_client() {
     CLIENT.set(Client::from_env()).unwrap();
     let ret = unsafe { pthread_atfork(None, None, Some(reset_shm_atfork)) };
     if ret != 0 {
-        panic!("pthread_atfork failed: {}", ret);
+        panic!("pthread_atfork failed: {ret}");
     }
 }

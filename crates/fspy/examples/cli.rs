@@ -48,6 +48,6 @@ async fn main() -> io::Result<()> {
     csv_writer.flush().await?;
 
     let output = tokio_child.wait().await?;
-    eprintln!("\nfspy: {} paths accessed. {}", path_count, output);
+    eprintln!("\nfspy: {path_count} paths accessed. {output}");
     Ok(())
 }
