@@ -1660,6 +1660,7 @@ dependencies = [
  "os_str_bytes",
  "phf",
  "shared_memory",
+ "uuid",
  "winapi",
  "winsafe 0.0.24",
 ]

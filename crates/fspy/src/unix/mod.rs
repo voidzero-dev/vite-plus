@@ -24,7 +24,7 @@ use bincode::borrow_decode_from_slice;
 use fspy_seccomp_unotify::supervisor::supervise;
 #[cfg(target_os = "macos")]
 use fspy_shared::ipc::NativeString;
-use fspy_shared::ipc::{BINCODE_CONFIG, PathAccess, shm_io::ShmReader};
+use fspy_shared::ipc::{BINCODE_CONFIG, PathAccess, channel::ShmReader};
 #[cfg(target_os = "macos")]
 use fspy_shared_unix::payload::Fixtures;
 use fspy_shared_unix::{

@@ -5,7 +5,7 @@ use std::{fmt::Debug, num::NonZeroUsize, sync::OnceLock};
 
 use bincode::{enc::write::SizeWriter, encode_into_slice, encode_into_writer};
 use convert::{ToAbsolutePath, ToAccessMode};
-use fspy_shared::ipc::{BINCODE_CONFIG, PathAccess, shm_io::ShmWriter};
+use fspy_shared::ipc::{BINCODE_CONFIG, PathAccess, channel::ShmWriter};
 use fspy_shared_unix::{
     exec::ExecResolveConfig,
     payload::EncodedPayload,

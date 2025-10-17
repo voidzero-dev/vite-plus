@@ -15,7 +15,7 @@ use bincode::Decode;
 use bincode::{BorrowDecode, Encode};
 use bstr::BStr;
 
-/// Similar to `OsStr`, but requires no copy for `encode/borrow_decode`
+/// Similar to `OsStr`, but requires zero-copy to construct from either asni or wide characters on Windows.
 #[derive(Encode, BorrowDecode, Clone, Copy, PartialEq, Eq)]
 pub struct NativeStr<'a> {
     #[cfg(windows)]
@@ -55,8 +55,7 @@ impl<'a> NativeStr<'a> {
         }
     }
 
-    #[must_use]
-    pub const fn from_bytes(bytes: &'a [u8]) -> Self {
+    pub fn from_bytes(bytes: &'a [u8]) -> Self {
         Self {
             #[cfg(windows)]
             is_wide: false,
@@ -71,13 +70,11 @@ impl<'a> NativeStr<'a> {
     }
 
     #[cfg(unix)]
-    #[must_use]
     pub fn as_os_str(&self) -> &'a OsStr {
         std::os::unix::ffi::OsStrExt::from_bytes(self.data)
     }
 
     #[cfg(unix)]
-    #[must_use]
     pub fn as_bstr(&self) -> &'a BStr {
         use bstr::ByteSlice;
 
@@ -107,7 +104,6 @@ impl<'a> NativeStr<'a> {
         }
     }
 
-    #[must_use]
     pub fn to_cow_os_str(&self) -> Cow<'a, OsStr> {
         #[cfg(windows)]
         return Cow::Owned(self.to_os_string());
@@ -157,16 +153,30 @@ impl<'a> From<&'a BStr> for NativeStr<'a> {
     }
 }
 
-impl Debug for NativeStr<'_> {
+impl<'a> Debug for NativeStr<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         <OsStr as Debug>::fmt(self.to_cow_os_str().as_ref(), f)
     }
 }
 
+/// Similiar to `OsString`, but can be losslessly encoded/decoded using bincode.
+/// `Encode`/`Decoded` implementations for `OsString` requires it to be valid UTF-8. This does not.
 #[cfg(unix)]
 #[derive(Encode, Decode, Clone, Hash)]
 pub struct NativeString {
     data: Arc<[u8]>,
+}
+
+impl NativeString {
+    pub fn as_os_str(&self) -> &OsStr {
+        use std::os::unix::ffi::OsStrExt as _;
+        OsStr::from_bytes(&self.data)
+    }
+
+    pub fn to_cow_os_str(&self) -> Cow<'_, OsStr> {
+        #[cfg(unix)]
+        return Cow::Borrowed(self.as_os_str());
+    }
 }
 
 #[cfg(unix)]
@@ -202,15 +212,6 @@ impl std::ops::Deref for NativeString {
 
     fn deref(&self) -> &Self::Target {
         self.as_os_str()
-    }
-}
-
-#[cfg(unix)]
-impl NativeString {
-    #[must_use]
-    pub fn as_os_str(&self) -> &OsStr {
-        use std::os::unix::ffi::OsStrExt as _;
-        OsStr::from_bytes(&self.data)
     }
 }
 
