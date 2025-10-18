@@ -55,7 +55,7 @@ impl Sender {
 }
 
 /// The unique receiver side of an IPC channel.
-/// Ownes the lock file and removes it on drop.
+/// Owns the lock file and removes it on drop.
 pub struct Receiver {
     lock_file_path: PathBuf,
     lock_file: File,

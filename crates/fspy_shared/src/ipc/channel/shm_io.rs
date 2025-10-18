@@ -626,7 +626,7 @@ mod tests {
         let shm = ShmemConf::new().size(1024 * 1024).create().unwrap();
         let shm_name = shm.get_os_id();
 
-        let childs: Vec<Child> = (0..CHILD_COUNT)
+        let children: Vec<Child> = (0..CHILD_COUNT)
             .map(|child_index| {
                 Command::new(current_exe().unwrap())
                     .env(CHILD_PROCESS_ENV, "1")
@@ -637,7 +637,7 @@ mod tests {
             })
             .collect();
 
-        for mut c in childs {
+        for mut c in children {
             let status = c.wait().unwrap();
             assert!(status.success());
         }

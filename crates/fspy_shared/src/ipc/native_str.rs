@@ -156,7 +156,7 @@ impl<'a> Debug for NativeStr<'a> {
     }
 }
 
-/// Similiar to `OsString`, but can be losslessly encoded/decoded using bincode.
+/// Similar to `OsString`, but can be losslessly encoded/decoded using bincode.
 /// `Encode`/`Decoded` implementations for `OsString` requires it to be valid UTF-8. This does not.
 #[derive(Encode, Decode, Clone, Hash)]
 pub struct NativeString {
