@@ -1,0 +1,16 @@
+[package]
+name = "fspy_test_utils"
+version = "0.0.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+rust-version.workspace = true
+
+[dependencies]
+base64 = { workspace = true }
+bincode = { workspace = true }
+ctor = { workspace = true }
+
+[lints]
+workspace = true

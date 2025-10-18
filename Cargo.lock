@@ -1647,6 +1647,7 @@ name = "fspy_shared"
 version = "0.0.0"
 dependencies = [
  "allocator-api2",
+ "anyhow",
  "assert2",
  "base64 0.22.1",
  "bincode",
@@ -1660,6 +1661,7 @@ dependencies = [
  "os_str_bytes",
  "phf",
  "shared_memory",
+ "tracing",
  "uuid",
  "winapi",
  "winsafe 0.0.24",
@@ -1680,6 +1682,15 @@ dependencies = [
  "nix 0.30.1",
  "phf",
  "stackalloc",
+]
+
+[[package]]
+name = "fspy_test_utils"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "bincode",
+ "ctor 0.4.3",
 ]
 
 [[package]]
