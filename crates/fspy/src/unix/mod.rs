@@ -42,6 +42,8 @@ use nix::{
     },
     unistd::{ftruncate, getpid},
 };
+#[cfg(target_os = "linux")]
+use syscall_handler::SyscallHandler;
 use tokio::{io::AsyncReadExt, net::UnixStream};
 
 use crate::{Command, TrackedChild, arena::PathAccessArena};
@@ -63,6 +65,10 @@ const PRELOAD_CDYLIB_BINARY: &[u8] = include_bytes!(env!("CARGO_CDYLIB_FILE_FSPY
 impl SpyInner {
     #[cfg(target_os = "linux")]
     pub fn init() -> io::Result<Self> {
+        use std::{fs::File, io::Write as _};
+
+        use nix::sys::memfd::{MFdFlags, memfd_create};
+
         let preload_lib_memfd = memfd_create("fspy_preload", MFdFlags::MFD_CLOEXEC)?;
         let mut execve_host_memfile = File::from(preload_lib_memfd);
         execve_host_memfile.write_all(PRELOAD_CDYLIB_BINARY)?;
@@ -196,8 +202,11 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
         preload_path: command.spy_inner.preload_path.clone(),
 
         #[cfg(target_os = "linux")]
-        preload_path: format!("/proc/self/fd/{}", command.spy_inner.preload_lib_memfd.as_raw_fd())
-            .into(),
+        preload_path: std::ffi::OsStr::new(&format!(
+            "/proc/self/fd/{}",
+            command.spy_inner.preload_lib_memfd.as_raw_fd()
+        ))
+        .into(),
 
         #[cfg(target_os = "linux")]
         seccomp_payload: supervisor.payload,

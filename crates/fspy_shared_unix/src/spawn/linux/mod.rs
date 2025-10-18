@@ -47,7 +47,7 @@ pub fn handle_exec(
             ensure_env(
                 &mut command.envs,
                 LD_PRELOAD,
-                encoded_payload.payload.preload_path.as_bytes(),
+                encoded_payload.payload.preload_path.as_os_str().as_bytes(),
             )?;
             ensure_env(&mut command.envs, PAYLOAD_ENV_NAME, &encoded_payload.encoded_string)?;
             Ok(None)
