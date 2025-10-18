@@ -1655,6 +1655,7 @@ dependencies = [
  "bytemuck",
  "ctor 0.4.3",
  "derive-where",
+ "fspy_test_utils",
  "libc",
  "memmap2",
  "nix 0.30.1",

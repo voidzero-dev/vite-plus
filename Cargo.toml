@@ -73,6 +73,7 @@ fspy_preload_windows = { path = "crates/fspy_preload_windows", artifact = "cdyli
 fspy_seccomp_unotify = { path = "crates/fspy_seccomp_unotify" }
 fspy_shared = { path = "crates/fspy_shared" }
 fspy_shared_unix = { path = "crates/fspy_shared_unix" }
+fspy_test_utils = { path = "crates/fspy_test_utils" }
 futures = "0.3.31"
 futures-core = "0.3.31"
 futures-util = "0.3.31"

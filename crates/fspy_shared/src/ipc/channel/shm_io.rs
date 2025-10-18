@@ -9,6 +9,7 @@ use std::{
 
 use bytemuck::must_cast;
 use memmap2::MmapRaw;
+use shared_memory::Shmem;
 
 // `ShmWriter` writes headers using atomic operations to prevent partial writes due to crashes,
 // while `ShmReader` reads headers by simple pointer dereferences.
@@ -24,6 +25,12 @@ const _: () = {
 /// A trait to borrow a raw memory region.
 pub trait AsRawSlice {
     fn as_raw_slice(&self) -> *mut [u8];
+}
+
+impl AsRawSlice for Shmem {
+    fn as_raw_slice(&self) -> *mut [u8] {
+        slice_from_raw_parts_mut(self.as_ptr(), self.len())
+    }
 }
 
 impl AsRawSlice for MmapRaw {
@@ -587,12 +594,6 @@ mod tests {
 
         // Verify that the alignment check properly caught the violation
         assert!(result.is_err(), "Should panic on misaligned pointer");
-    }
-
-    impl AsRawSlice for shared_memory::Shmem {
-        fn as_raw_slice(&self) -> *mut [u8] {
-            slice_from_raw_parts_mut(self.as_ptr(), self.len())
-        }
     }
 
     #[test]

@@ -14,6 +14,9 @@ macro_rules! command_executing {
         const ID: &str =
             ::core::concat!(::core::file!(), ":", ::core::line!(), ":", ::core::column!());
 
+        fn assert_arg_type<A>(_arg: &A, _f: impl FnOnce(A)) {}
+        assert_arg_type(&$arg, $f);
+
         // Register an initializer that runs the provided function when the process is started
         #[ctor::ctor]
         unsafe fn init() {
