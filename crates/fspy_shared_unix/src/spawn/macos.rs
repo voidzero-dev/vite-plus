@@ -52,10 +52,10 @@ pub fn handle_exec(
         } else if matches!(parent.as_os_str().as_bytes(), b"/bin" | b"/usr/bin") {
             let fixtures = &encoded_payload.payload.fixtures;
             if matches!(file_name.as_bytes(), b"sh" | b"bash") {
-                command.program = fixtures.bash_path.as_bytes().into();
+                command.program = fixtures.bash_path.as_os_str().as_bytes().into();
                 true
             } else if COREUTILS_FUNCTIONS.contains(file_name.as_bytes()) {
-                command.program = fixtures.coreutils_path.as_bytes().into();
+                command.program = fixtures.coreutils_path.as_os_str().as_bytes().into();
                 true
             } else {
                 false
@@ -71,7 +71,7 @@ pub fn handle_exec(
         ensure_env(
             &mut command.envs,
             DYLD_INSERT_LIBRARIES,
-            encoded_payload.payload.preload_path.as_bytes(),
+            encoded_payload.payload.preload_path.as_os_str().as_bytes(),
         )?;
         ensure_env(&mut command.envs, PAYLOAD_ENV_NAME, &encoded_payload.encoded_string)?;
     } else {

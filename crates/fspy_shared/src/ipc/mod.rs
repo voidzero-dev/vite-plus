@@ -3,9 +3,7 @@ mod native_str;
 pub mod shm_io;
 
 use bincode::{BorrowDecode, Encode, config::Configuration};
-pub use native_str::NativeStr;
-#[cfg(unix)]
-pub use native_str::NativeString;
+pub use native_str::{NativeStr, NativeString};
 
 pub const BINCODE_CONFIG: Configuration = bincode::config::standard();
 

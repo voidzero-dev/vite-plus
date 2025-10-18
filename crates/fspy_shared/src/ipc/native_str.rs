@@ -1,18 +1,15 @@
 #[cfg(windows)]
 use std::ffi::OsString;
-#[cfg(unix)]
-use std::sync::Arc;
 use std::{
     borrow::Cow,
     ffi::OsStr,
     fmt::Debug,
     path::{Path, StripPrefixError},
+    sync::Arc,
 };
 
 use allocator_api2::alloc::Allocator;
-#[cfg(unix)]
-use bincode::Decode;
-use bincode::{BorrowDecode, Encode};
+use bincode::{BorrowDecode, Decode, Encode};
 use bstr::BStr;
 
 /// Similar to `OsStr`, but requires zero-copy to construct from either asni or wide characters on Windows.
@@ -161,57 +158,64 @@ impl<'a> Debug for NativeStr<'a> {
 
 /// Similiar to `OsString`, but can be losslessly encoded/decoded using bincode.
 /// `Encode`/`Decoded` implementations for `OsString` requires it to be valid UTF-8. This does not.
-#[cfg(unix)]
 #[derive(Encode, Decode, Clone, Hash)]
 pub struct NativeString {
+    #[cfg(unix)]
     data: Arc<[u8]>,
+    #[cfg(windows)]
+    data: Arc<[u16]>,
 }
 
 impl NativeString {
+    #[cfg(unix)]
     pub fn as_os_str(&self) -> &OsStr {
         use std::os::unix::ffi::OsStrExt as _;
         OsStr::from_bytes(&self.data)
     }
 
+    #[cfg(windows)]
+    pub fn to_os_string(&self) -> OsString {
+        use std::os::windows::ffi::OsStringExt as _;
+        OsString::from_wide(&self.data)
+    }
+
     pub fn to_cow_os_str(&self) -> Cow<'_, OsStr> {
         #[cfg(unix)]
         return Cow::Borrowed(self.as_os_str());
+        #[cfg(windows)]
+        return Cow::Owned(self.to_os_string());
     }
 }
 
-#[cfg(unix)]
 impl<'a> Debug for NativeString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        <OsStr as Debug>::fmt(self.as_os_str(), f)
+        <OsStr as Debug>::fmt(&self.to_cow_os_str(), f)
     }
 }
 
-#[cfg(unix)]
 impl<'a> From<&'a OsStr> for NativeString {
+    #[cfg(unix)]
     fn from(value: &'a OsStr) -> Self {
-        use std::os::unix::ffi::OsStrExt;
+        use std::os::unix::ffi::OsStrExt as _;
         Self { data: value.as_bytes().into() }
     }
-}
-#[cfg(unix)]
-impl<'a> From<String> for NativeString {
-    fn from(value: String) -> Self {
-        Self { data: value.as_bytes().into() }
+
+    #[cfg(windows)]
+    fn from(value: &'a OsStr) -> Self {
+        use std::os::windows::ffi::OsStrExt as _;
+        Self { data: value.encode_wide().collect() }
     }
 }
-#[cfg(unix)]
+// #[cfg(unix)]
+// impl<'a> From<String> for NativeString {
+//     fn from(value: String) -> Self {
+//         Self { data: value.as_bytes().into() }
+//     }
+// }
+
 impl<'a> From<&'a std::path::Path> for NativeString {
     fn from(value: &'a std::path::Path) -> Self {
         value.as_os_str().into()
-    }
-}
-
-#[cfg(unix)]
-impl std::ops::Deref for NativeString {
-    type Target = OsStr;
-
-    fn deref(&self) -> &Self::Target {
-        self.as_os_str()
     }
 }
 
