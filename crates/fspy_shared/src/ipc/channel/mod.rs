@@ -71,8 +71,17 @@ pub struct Receiver {
     shm: Shmem,
 }
 
-/// Safety: `shm` is only read under the receiver lock, which is safe and free to send between threads.
+/// Safety: `shm` is only read under the receiver lock
 unsafe impl Send for Receiver {}
+
+/// Safety: `shm` is only read under the receiver lock
+unsafe impl Sync for Receiver {}
+
+/// Safety: `shm` is only written under the sender lock
+unsafe impl Send for Sender {}
+
+/// Safety: `shm` is only written using a thread-safe algorithm under the sender lock.
+unsafe impl Sync for Sender {}
 
 impl Drop for Receiver {
     fn drop(&mut self) {

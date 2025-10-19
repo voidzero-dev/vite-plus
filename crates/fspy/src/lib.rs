@@ -1,9 +1,7 @@
 #![cfg_attr(target_os = "windows", feature(windows_process_extensions_main_thread_handle))]
 #![feature(once_cell_try)]
 
-// Windows and macOS both need to persist the injected DLL/shared library somewhere in the filesystem.
-// Linux doesn't need this. Instead we use `memfd_create` to create an in-memory shared library.
-#[cfg(not(target_os = "linux"))]
+// Persist the injected DLL/shared library somewhere in the filesystem.
 mod fixture;
 
 #[cfg(unix)]
@@ -17,9 +15,7 @@ mod os_impl;
 mod arena;
 mod command;
 
-#[cfg(not(target_os = "linux"))]
-use std::{env::temp_dir, fs::create_dir};
-use std::{ffi::OsStr, io, sync::OnceLock};
+use std::{env::temp_dir, ffi::OsStr, fs::create_dir, io, sync::OnceLock};
 
 pub use command::Command;
 pub use fspy_shared::ipc::{AccessMode, PathAccess};
@@ -35,16 +31,10 @@ pub struct TrackedChild {
 
 pub struct Spy(SpyInner);
 impl Spy {
-    #[cfg(not(target_os = "linux"))]
     pub fn new() -> io::Result<Self> {
         let tmp_dir = temp_dir().join("fspy");
         let _ = create_dir(&tmp_dir);
         Ok(Self(SpyInner::init_in(&tmp_dir)?))
-    }
-
-    #[cfg(target_os = "linux")]
-    pub fn new() -> io::Result<Self> {
-        Ok(Self(SpyInner::init()?))
     }
 
     pub fn global() -> io::Result<&'static Self> {

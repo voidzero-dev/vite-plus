@@ -8,21 +8,18 @@ mod syscall_handler;
 #[cfg(target_os = "macos")]
 mod macos_fixtures;
 
-#[cfg(target_os = "macos")]
-use std::path::Path;
 use std::{
     io::{self},
     os::fd::BorrowedFd,
+    path::Path,
 };
 
 use bincode::borrow_decode_from_slice;
 #[cfg(target_os = "linux")]
 use fspy_seccomp_unotify::supervisor::supervise;
-#[cfg(target_os = "macos")]
-use fspy_shared::ipc::NativeString;
 use fspy_shared::ipc::{
-    BINCODE_CONFIG, PathAccess,
-    channel::{Receiver, ReceiverLock, channel},
+    BINCODE_CONFIG, NativeString, PathAccess,
+    channel::{ReceiverLock, channel},
 };
 #[cfg(target_os = "macos")]
 use fspy_shared_unix::payload::Fixtures;
@@ -35,48 +32,25 @@ use futures_util::FutureExt;
 use nix::fcntl::{FcntlArg, FdFlag, fcntl};
 #[cfg(target_os = "linux")]
 use syscall_handler::SyscallHandler;
-use tokio::io::AsyncReadExt as _;
 
 use crate::{Command, TrackedChild, arena::PathAccessArena};
 
 #[derive(Debug, Clone)]
 pub struct SpyInner {
-    #[cfg(target_os = "linux")]
-    preload_lib_memfd: Arc<OwnedFd>,
-
     #[cfg(target_os = "macos")]
     fixtures: Fixtures,
 
-    #[cfg(target_os = "macos")]
     preload_path: NativeString,
 }
 
 const PRELOAD_CDYLIB_BINARY: &[u8] = include_bytes!(env!("CARGO_CDYLIB_FILE_FSPY_PRELOAD_UNIX"));
 
 impl SpyInner {
-    #[cfg(target_os = "linux")]
-    pub fn init() -> io::Result<Self> {
-        use std::{fs::File, io::Write as _};
-
-        use nix::sys::memfd::{MFdFlags, memfd_create};
-
-        let preload_lib_memfd = memfd_create("fspy_preload", MFdFlags::MFD_CLOEXEC)?;
-        let mut execve_host_memfile = File::from(preload_lib_memfd);
-        execve_host_memfile.write_all(PRELOAD_CDYLIB_BINARY)?;
-
-        let preload_lib_memfd = duplicate_until_safe(OwnedFd::from(execve_host_memfile))?;
-
-        Ok(Self { preload_lib_memfd: Arc::new(preload_lib_memfd) })
-    }
-
-    #[cfg(target_os = "macos")]
     pub fn init_in(dir: &Path) -> io::Result<Self> {
         use const_format::formatcp;
         use xxhash_rust::const_xxh3::xxh3_128;
 
         use crate::fixture::Fixture;
-        let coreutils_path = macos_fixtures::COREUTILS_BINARY.write_to(dir, "")?;
-        let bash_path = macos_fixtures::OILS_BINARY.write_to(dir, "")?;
 
         const PRELOAD_CDYLIB: Fixture = Fixture {
             name: "fspy_preload",
@@ -85,11 +59,18 @@ impl SpyInner {
         };
 
         let preload_cdylib_path = PRELOAD_CDYLIB.write_to(dir, ".dylib")?;
-        let fixtures = Fixtures {
-            bash_path: bash_path.as_path().into(), //Path::new("/opt/homebrew/bin/bash"),//brush.as_path(),
-            coreutils_path: coreutils_path.as_path().into(),
-        };
-        Ok(Self { fixtures, preload_path: preload_cdylib_path.as_path().into() })
+        Ok(Self {
+            preload_path: preload_cdylib_path.as_path().into(),
+            #[cfg(target_os = "macos")]
+            fixtures: {
+                let coreutils_path = macos_fixtures::COREUTILS_BINARY.write_to(dir, "")?;
+                let bash_path = macos_fixtures::OILS_BINARY.write_to(dir, "")?;
+                Fixtures {
+                    bash_path: bash_path.as_path().into(),
+                    coreutils_path: coreutils_path.as_path().into(),
+                }
+            },
+        })
     }
 }
 
@@ -156,24 +137,13 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
         #[cfg(target_os = "macos")]
         fixtures: command.spy_inner.fixtures.clone(),
 
-        #[cfg(target_os = "macos")]
         preload_path: command.spy_inner.preload_path.clone(),
-
-        #[cfg(target_os = "linux")]
-        preload_path: std::ffi::OsStr::new(&format!(
-            "/proc/self/fd/{}",
-            command.spy_inner.preload_lib_memfd.as_raw_fd()
-        ))
-        .into(),
 
         #[cfg(target_os = "linux")]
         seccomp_payload: supervisor.payload,
     };
 
     let encoded_payload = encode_payload(payload);
-
-    #[cfg(target_os = "linux")]
-    let preload_lib_memfd = Arc::clone(&command.spy_inner.preload_lib_memfd);
 
     let mut exec = command.get_exec();
     let mut exec_resolve_accesses = PathAccessArena::default();
@@ -191,9 +161,6 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
 
     unsafe {
         tokio_command.pre_exec(move || {
-            #[cfg(target_os = "linux")]
-            unset_fd_flag(preload_lib_memfd.as_fd(), FdFlag::FD_CLOEXEC)?;
-
             #[cfg(target_os = "linux")]
             supervisor_pre_exec.run()?;
             if let Some(pre_exec) = pre_exec.as_ref() {

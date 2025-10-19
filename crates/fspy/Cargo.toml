@@ -9,6 +9,7 @@ allocator-api2 = { workspace = true, features = ["alloc"] }
 bincode = { workspace = true }
 bstr = { workspace = true, default-features = false }
 bumpalo = { workspace = true }
+const_format = { workspace = true, features = ["fmt"] }
 fspy_shared = { workspace = true }
 futures-util = { workspace = true }
 libc = { workspace = true }
@@ -18,6 +19,7 @@ slab = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["net", "process", "io-util", "sync"] }
 which = { workspace = true }
+xxhash-rust = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 arrayvec = { workspace = true }
@@ -38,10 +40,6 @@ passfd = { git = "https://github.com/polachok/passfd", features = ["async"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 phf = { workspace = true }
-
-[target.'cfg(any(target_os = "macos", windows))'.dependencies]
-const_format = { workspace = true, features = ["fmt"] }
-xxhash-rust = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 fspy_detours_sys = { workspace = true }

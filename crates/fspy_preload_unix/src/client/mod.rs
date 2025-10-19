@@ -16,9 +16,6 @@ use raw_exec::RawExec;
 pub struct Client {
     encoded_payload: EncodedPayload,
     ipc_sender: Option<Sender>,
-
-    #[cfg(target_os = "macos")]
-    posix_spawn_file_actions: OnceLock<libc::posix_spawn_file_actions_t>,
 }
 
 #[cfg(target_os = "macos")]
@@ -33,7 +30,7 @@ impl Debug for Client {
 }
 
 impl Client {
-    // #[cfg(not(test))]
+    #[cfg(not(test))]
     fn from_env() -> Self {
         use fspy_shared_unix::payload::decode_payload_from_env;
 
@@ -50,12 +47,7 @@ impl Client {
             }
         };
 
-        Self {
-            ipc_sender,
-            encoded_payload,
-            #[cfg(target_os = "macos")]
-            posix_spawn_file_actions: OnceLock::new(),
-        }
+        Self { ipc_sender, encoded_payload }
     }
 
     fn send(&self, path_access: PathAccess<'_>) -> anyhow::Result<()> {
