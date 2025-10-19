@@ -23,6 +23,8 @@ async fn main() -> io::Result<()> {
 
     let TrackedChild { mut tokio_child, accesses_future } = command.spawn().await?;
 
+    let output = tokio_child.wait().await?;
+
     let accesses = accesses_future.await?;
 
     let mut path_count = 0usize;
@@ -47,7 +49,6 @@ async fn main() -> io::Result<()> {
     }
     csv_writer.flush().await?;
 
-    let output = tokio_child.wait().await?;
     eprintln!("\nfspy: {path_count} paths accessed. {output}");
     Ok(())
 }

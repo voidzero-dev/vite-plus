@@ -457,10 +457,9 @@ pub async fn execute_task(
         Ok::<_, Error>((path_reads, path_writes))
     };
 
-    let ((), (), (path_reads, path_writes), (exit_status, duration)) = try_join4(
+    let ((), (), (exit_status, duration)) = try_join3(
         collect_std_outputs(&outputs, child_stdout, OutputKind::StdOut),
         collect_std_outputs(&outputs, child_stderr, OutputKind::StdErr),
-        path_accesses_fut,
         async move {
             let start = Instant::now();
             let exit_status = child.wait().await?;
@@ -468,6 +467,8 @@ pub async fn execute_task(
         },
     )
     .await?;
+
+    let (path_reads, path_writes) = path_accesses_fut.await?;
 
     let outputs = outputs.into_inner().unwrap();
     tracing::debug!(

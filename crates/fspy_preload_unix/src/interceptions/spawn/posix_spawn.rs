@@ -33,9 +33,6 @@ unsafe fn handle_posix_spawn(
     let client = global_client()
         .expect("posix_spawn(p) unexpectedly called before client initialized in ctor");
 
-    if let Err(errno) = unsafe { client.handle_posix_spawn_opts(&mut file_actions, attrp) } {
-        return errno as _;
-    }
     let result = unsafe {
         client.handle_exec::<c_int>(
             config,

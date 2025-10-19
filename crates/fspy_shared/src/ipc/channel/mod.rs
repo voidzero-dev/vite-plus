@@ -1,27 +1,32 @@
-/// Lock-free algorithm to read and write shared memory.
+//! Fast mpsc IPC channel implementation based on shared memory.
+
 mod shm_io;
 
 use std::{env::temp_dir, fs::File, io, num::NonZeroUsize, path::PathBuf, sync::Arc};
 
 use bincode::{Decode, Encode};
 use shared_memory::{Shmem, ShmemConf};
-pub use shm_io::{FrameMut, ShmReader, ShmWriter};
+pub use shm_io::FrameMut;
+use shm_io::{ShmReader, ShmWriter};
 use tracing::debug;
 use uuid::Uuid;
 
 use super::NativeString;
 
 /// Serializable configuration to create channel senders.
-#[derive(Encode, Decode, Clone)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub struct ChannelConf {
     lock_file_path: NativeString,
     shm_id: Arc<str>,
     shm_size: usize,
 }
 
-pub fn channel(capacity: usize) -> anyhow::Result<(ChannelConf, Receiver)> {
+pub fn channel(capacity: usize) -> io::Result<(ChannelConf, Receiver)> {
     let lock_file_path = temp_dir().join(format!("fspy_ipc_{}.lock", Uuid::new_v4()));
-    let shm = ShmemConf::new().size(capacity).create()?;
+    let shm = ShmemConf::new()
+        .size(capacity)
+        .create()
+        .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
 
     let conf = ChannelConf {
         lock_file_path: lock_file_path.as_os_str().into(),
@@ -34,10 +39,14 @@ pub fn channel(capacity: usize) -> anyhow::Result<(ChannelConf, Receiver)> {
 }
 
 impl ChannelConf {
-    pub fn sender(&self) -> anyhow::Result<Sender> {
+    pub fn sender(&self) -> io::Result<Sender> {
         let lock_file = File::open(self.lock_file_path.to_cow_os_str())?;
         lock_file.try_lock_shared()?;
-        let shm = ShmemConf::new().size(self.shm_size).os_id(&self.shm_id).open()?;
+        let shm = ShmemConf::new()
+            .size(self.shm_size)
+            .os_id(&self.shm_id)
+            .open()
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
         let writer = unsafe { ShmWriter::new(shm) };
         Ok(Sender { writer, _lock_file: lock_file })
     }
@@ -62,6 +71,9 @@ pub struct Receiver {
     shm: Shmem,
 }
 
+/// Safety: `shm` is only read under the receiver lock, which is safe and free to send between threads.
+unsafe impl Send for Receiver {}
+
 impl Drop for Receiver {
     fn drop(&mut self) {
         if let Err(err) = std::fs::remove_file(&self.lock_file_path) {
@@ -76,29 +88,34 @@ impl Receiver {
         Ok(Self { lock_file_path, lock_file, shm })
     }
 
-    // Lock the shared memory for unique read access. Blocks until all the senders have dropped (or the process owning them has exited).
-    // During the lifetime of the returned iterator, no new senders can be created (ChannelConf::sender would fail).
-    pub fn lock(&mut self) -> io::Result<ReceiverLock<'_>> {
+    /// Lock the shared memory for unique read access.
+    /// Blocks until all the senders have dropped (or processes owning them have all exited) so the shared memory can be safely read.
+    /// During the lifetime of returned `ReceiverLock`, no new senders can be created (ChannelConf::sender would fail).
+    pub fn lock(self) -> io::Result<ReceiverLock> {
         self.lock_file.lock()?;
-        let reader = ShmReader::new(unsafe { self.shm.as_slice() });
-        Ok(ReceiverLock { lock_file: &self.lock_file, reader })
+        let reader = ShmReader::new(unsafe {
+            std::slice::from_raw_parts(self.shm.as_ptr(), self.shm.len())
+        });
+        Ok(ReceiverLock { reader, receiver: self })
     }
 }
 
-pub struct ReceiverLock<'a> {
-    lock_file: &'a File,
-    reader: ShmReader<&'a [u8]>,
+pub struct ReceiverLock {
+    // The order here is important to ensure the reader is dropped before the receiver.
+    // The reader holds a reference to the shared memory owned by the receiver.
+    reader: ShmReader<&'static [u8]>,
+    receiver: Receiver,
 }
 
-impl Drop for ReceiverLock<'_> {
+impl Drop for ReceiverLock {
     fn drop(&mut self) {
-        if let Err(err) = self.lock_file.unlock() {
+        if let Err(err) = self.receiver.lock_file.unlock() {
             debug!("Failed to unlock IPC lock file: {}", err);
         }
     }
 }
-impl<'a> ReceiverLock<'a> {
-    pub fn iter_frames(&mut self) -> impl Iterator<Item = &[u8]> {
+impl<'a> ReceiverLock {
+    pub fn iter_frames(&self) -> impl Iterator<Item = &[u8]> {
         self.reader.iter_frames()
     }
 }
@@ -115,7 +132,7 @@ mod tests {
 
     #[test]
     fn smoke() {
-        let (conf, mut receiver) = channel(100).unwrap();
+        let (conf, receiver) = channel(100).unwrap();
         let mut cmd = command_executing!(conf, |conf: ChannelConf| {
             let sender = conf.sender().unwrap();
             let frame_size = NonZeroUsize::new(2).unwrap();
@@ -124,7 +141,7 @@ mod tests {
         });
         assert!(cmd.status().unwrap().success());
 
-        let mut lock = receiver.lock().unwrap();
+        let lock = receiver.lock().unwrap();
         let mut frames = lock.iter_frames();
 
         let received_frame = frames.next().unwrap();
@@ -134,19 +151,15 @@ mod tests {
     }
 
     #[test]
-    fn forbid_new_senders_while_locked() {
-        let (conf, mut receiver) = channel(42).unwrap();
-        let lock = receiver.lock().unwrap();
+    fn forbid_new_senders_after_locked() {
+        let (conf, receiver) = channel(42).unwrap();
+        let _lock = receiver.lock().unwrap();
 
         let mut cmd = command_executing!(conf, |conf: ChannelConf| {
             print!("{}", conf.sender().is_ok());
         });
         let output = cmd.output().unwrap();
         assert_eq!(B(&output.stdout), B("false"));
-
-        drop(lock);
-        let output = cmd.output().unwrap();
-        assert_eq!(B(&output.stdout), B("true"));
     }
 
     #[test]
@@ -163,7 +176,7 @@ mod tests {
 
     #[test]
     fn concurrent_senders() {
-        let (conf, mut receiver) = channel(8192).unwrap();
+        let (conf, receiver) = channel(8192).unwrap();
         for i in 0u16..200 {
             let mut cmd = command_executing!((conf.clone(), i), |(conf, i): (ChannelConf, u16)| {
                 let sender = conf.sender().unwrap();

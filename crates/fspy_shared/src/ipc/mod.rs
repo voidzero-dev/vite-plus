@@ -1,6 +1,5 @@
 pub mod channel;
 mod native_str;
-pub mod shm_io;
 
 use bincode::{BorrowDecode, Encode, config::Configuration};
 pub use native_str::{NativeStr, NativeString};

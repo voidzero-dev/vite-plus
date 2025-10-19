@@ -1,4 +1,5 @@
-/// Provides lock-free concurrent writing and reading of frames in a shared memory region.
+//! Provides lock-free concurrent writing and reading of frames in a shared memory region.
+
 use core::iter::from_fn;
 use std::{
     num::NonZeroUsize,
@@ -8,7 +9,6 @@ use std::{
 };
 
 use bytemuck::must_cast;
-use memmap2::MmapRaw;
 use shared_memory::Shmem;
 
 // `ShmWriter` writes headers using atomic operations to prevent partial writes due to crashes,
@@ -30,12 +30,6 @@ pub trait AsRawSlice {
 impl AsRawSlice for Shmem {
     fn as_raw_slice(&self) -> *mut [u8] {
         slice_from_raw_parts_mut(self.as_ptr(), self.len())
-    }
-}
-
-impl AsRawSlice for MmapRaw {
-    fn as_raw_slice(&self) -> *mut [u8] {
-        slice_from_raw_parts_mut(self.as_mut_ptr(), self.len())
     }
 }
 

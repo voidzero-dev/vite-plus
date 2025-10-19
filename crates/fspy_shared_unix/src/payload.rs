@@ -3,12 +3,12 @@ use std::os::{fd::RawFd, unix::ffi::OsStringExt};
 use base64::{Engine as _, prelude::BASE64_STANDARD_NO_PAD};
 use bincode::{Decode, Encode, config::standard};
 use bstr::BString;
-use fspy_shared::ipc::NativeString;
+use fspy_shared::ipc::{NativeString, channel::ChannelConf};
 
 #[derive(Debug, Encode, Decode)]
 pub struct Payload {
-    pub shm_fd: RawFd,
-    pub process_exit_sentinel_fd: RawFd,
+    pub ipc_channel_conf: ChannelConf,
+
     pub preload_path: NativeString,
 
     #[cfg(target_os = "macos")]

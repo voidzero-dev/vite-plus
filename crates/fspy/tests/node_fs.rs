@@ -15,9 +15,8 @@ async fn track_node_script(script: &str) -> io::Result<PathAccessIterable> {
         .envs(vars_os()) // https://github.com/jdx/mise/discussions/5968
         .arg(script);
     let TrackedChild { mut tokio_child, accesses_future } = command.spawn().await?;
-
-    let accesses = accesses_future.await?;
     let status = tokio_child.wait().await?;
+    let accesses = accesses_future.await?;
     assert!(status.success());
     Ok(accesses)
 }

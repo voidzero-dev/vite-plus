@@ -55,8 +55,8 @@ pub async fn _spawn_with_id(id: &str) -> io::Result<PathAccessIterable> {
     command.arg(id);
     let TrackedChild { mut tokio_child, accesses_future } = command.spawn().await?;
 
-    let accesses = accesses_future.await?;
     let status = tokio_child.wait().await?;
+    let accesses = accesses_future.await?;
     assert!(status.success());
     Ok(accesses)
 }

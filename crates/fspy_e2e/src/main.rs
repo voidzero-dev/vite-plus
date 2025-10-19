@@ -8,7 +8,6 @@ use std::{
 };
 
 use fspy::{AccessMode, PathAccess};
-use futures_util::future::try_join;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -89,10 +88,9 @@ async fn main() {
 
         let tracked_child = cmd.spawn().await.unwrap();
 
-        let (accesses, output) =
-            try_join(tracked_child.accesses_future, tracked_child.tokio_child.wait_with_output())
-                .await
-                .unwrap();
+        let output = tracked_child.tokio_child.wait_with_output().await.unwrap();
+        let accesses = tracked_child.accesses_future.await.unwrap();
+
         if !output.status.success() {
             eprintln!("----- stdout begin -----");
             stderr().write_all(&output.stdout).unwrap();

@@ -6,7 +6,6 @@ publish = false
 
 [dependencies]
 allocator-api2 = { workspace = true }
-anyhow = { workspace = true }
 bincode = { workspace = true }
 bstr = { workspace = true }
 bytemuck = { workspace = true, features = ["must_cast"] }
