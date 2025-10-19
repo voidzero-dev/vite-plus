@@ -26,6 +26,7 @@ macro_rules! fixture {
 pub use fixture;
 
 impl Fixture {
+    #[cfg(target_os = "macos")]
     pub const fn new(name: &'static str, content: &'static [u8], hash: &'static str) -> Self {
         Self { name, content, hash }
     }

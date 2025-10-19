@@ -120,6 +120,7 @@ impl<M: AsRawSlice> ShmWriter<M> {
     }
 
     // Unwrap `self` and return the underlying memory.
+    #[cfg(test)]
     pub fn into_memory(self) -> M {
         self.mem
     }
@@ -196,6 +197,7 @@ impl<M: AsRawSlice> ShmWriter<M> {
         })
     }
 
+    #[cfg(test)]
     pub fn append_frame(&self, frame: &[u8]) -> bool {
         let Some(frame_size) = NonZeroUsize::new(frame.len()) else {
             return false;

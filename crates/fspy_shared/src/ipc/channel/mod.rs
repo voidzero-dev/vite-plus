@@ -203,7 +203,7 @@ mod tests {
                 B(&output.stderr)
             );
         }
-        let mut lock = receiver.lock().unwrap();
+        let lock = receiver.lock().unwrap();
         let mut received_values: Vec<u16> = lock
             .iter_frames()
             .map(|frame| from_utf8(frame).unwrap().parse::<u16>().unwrap())

@@ -22,7 +22,7 @@ unsafe fn handle_posix_spawn(
     original: PosixSpawnFn,
     pid: *mut libc::pid_t,
     file: *const c_char,
-    mut file_actions: *const libc::posix_spawn_file_actions_t,
+    file_actions: *const libc::posix_spawn_file_actions_t,
     attrp: *const libc::posix_spawnattr_t,
     argv: *const *mut c_char,
     envp: *const *mut c_char,

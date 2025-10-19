@@ -1,4 +1,4 @@
-use std::os::{fd::RawFd, unix::ffi::OsStringExt};
+use std::os::unix::ffi::OsStringExt;
 
 use base64::{Engine as _, prelude::BASE64_STANDARD_NO_PAD};
 use bincode::{Decode, Encode, config::standard};

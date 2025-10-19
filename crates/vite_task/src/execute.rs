@@ -10,7 +10,7 @@ use std::{
 
 use bincode::{Decode, Encode};
 use fspy::{AccessMode, Spy, TrackedChild};
-use futures_util::future::{try_join3, try_join4};
+use futures_util::future::try_join3;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use supports_color::{Stream, on};

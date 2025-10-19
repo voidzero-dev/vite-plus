@@ -8,11 +8,7 @@ mod syscall_handler;
 #[cfg(target_os = "macos")]
 mod macos_fixtures;
 
-use std::{
-    io::{self},
-    os::fd::BorrowedFd,
-    path::Path,
-};
+use std::{io, path::Path};
 
 use bincode::borrow_decode_from_slice;
 #[cfg(target_os = "linux")]
@@ -29,7 +25,6 @@ use fspy_shared_unix::{
     spawn::handle_exec,
 };
 use futures_util::FutureExt;
-use nix::fcntl::{FcntlArg, FdFlag, fcntl};
 #[cfg(target_os = "linux")]
 use syscall_handler::SyscallHandler;
 
@@ -73,29 +68,6 @@ impl SpyInner {
         })
     }
 }
-
-fn unset_fd_flag(fd: BorrowedFd<'_>, flag_to_remove: FdFlag) -> io::Result<()> {
-    fcntl(
-        fd,
-        FcntlArg::F_SETFD({
-            let mut fd_flag = FdFlag::from_bits_retain(fcntl(fd, FcntlArg::F_GETFD)?);
-            fd_flag.remove(flag_to_remove);
-            fd_flag
-        }),
-    )?;
-    Ok(())
-}
-// fn unset_fl_flag(fd: BorrowedFd<'_>, flag_to_remove: OFlag) -> io::Result<()> {
-//     fcntl(
-//         fd,
-//         FcntlArg::F_SETFL({
-//             let mut fd_flag = OFlag::from_bits_retain(fcntl(fd, FcntlArg::F_GETFL)?);
-//             fd_flag.remove(flag_to_remove);
-//             fd_flag
-//         }),
-//     )?;
-//     Ok(())
-// }
 
 pub struct PathAccessIterable {
     arenas: Vec<PathAccessArena>,
