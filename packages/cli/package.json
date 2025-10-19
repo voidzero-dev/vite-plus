@@ -45,7 +45,9 @@
   "devDependencies": {
     "@napi-rs/cli": "catalog:",
     "@oxc-node/core": "catalog:",
+    "@vitest/browser": "catalog:",
     "@voidzero-dev/vite-plus-tools": "workspace:",
+    "playwright": "catalog:",
     "rolldown": "catalog:"
   },
   "napi": {

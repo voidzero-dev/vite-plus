@@ -40,7 +40,7 @@
     --mutex <type>[:specifier]          use a mutex to ensure only one yarn instance is executing
     --emoji [bool]                      enable emoji in output (default: true)
     -s, --silent                        skip Yarn console logs, other types of logs (script output) will be printed
-    --cwd <cwd>                         working directory to use (default: /private<cwd>)
+    --cwd <cwd>                         working directory to use (default: <cwd>)
     --proxy <host>                      
     --https-proxy <host>                
     --registry <url>                    override configuration registry

@@ -1,0 +1,42 @@
+> vite test
+
+ RUN  v<semver> <cwd>
+
+ ✓ |chromium| src/foo.test.js (1 test) <variable>ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  <date>
+   Duration  <variable>ms (transform <variable>ms, setup <variable>ms, collect <variable>ms, tests <variable>ms, environment <variable>ms, prepare <variable>ms)
+
+
+
+> echo //comment >> src/foo.js
+> vite test
+✗ cache miss: content of input 'src/foo.js' changed, executing
+
+ RUN  v<semver> <cwd>
+
+ ✓ |chromium| src/foo.test.js (1 test) <variable>ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  <date>
+   Duration  <variable>ms (transform <variable>ms, setup <variable>ms, collect <variable>ms, tests <variable>ms, environment <variable>ms, prepare <variable>ms)
+
+
+
+> echo //comment >> src/bar.js
+> vite test
+✓ cache hit, replaying
+
+ RUN  v<semver> <cwd>
+
+ ✓ |chromium| src/foo.test.js (1 test) <variable>ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  <date>
+   Duration  <variable>ms (transform <variable>ms, setup <variable>ms, collect <variable>ms, tests <variable>ms, environment <variable>ms, prepare <variable>ms)
+
+

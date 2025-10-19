@@ -9,8 +9,9 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
     .replaceAll(/([@/\s]v?)\d+\.\d+\.\d+(?:-.*)?/g, '$1<semver>')
     // date
     .replaceAll(/\d{2}:\d{2}:\d{2}/g, '<date>')
+    // duration
+    .replaceAll(/\d+(?:\.\d+)?(?:s|ms|µs)/g, '<variable>ms')
     // oxlint
-    .replaceAll(/\d+(?:\.\d+)?(?:s|ms)/g, '<variable>ms')
     .replaceAll(/with \d+ rules/g, 'with <variable> rules')
     .replaceAll(/using \d+ threads/g, 'using <variable> threads')
     // pnpm

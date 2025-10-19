@@ -18,8 +18,16 @@ const exec = async (command: string, options: cp.ExecOptionsWithStringEncoding) 
 import { replaceUnstableOutput } from './utils.ts';
 
 // Create a unique temporary directory for testing
-const tempTmpDir = `${tmpdir()}/vite-plus-test-${randomUUID()}`;
+// On macOS, `tmpdir()` is a symlink. Resolve it so that we can replace the resolved cwd in outputs.
+const tempTmpDir = `${fs.realpathSync(tmpdir())}/vite-plus-test-${randomUUID()}`;
 fs.mkdirSync(tempTmpDir, { recursive: true });
+
+// Make dependencies available in the test cases
+fs.symlinkSync(
+  path.resolve('node_modules'),
+  path.join(tempTmpDir, 'node_modules'),
+  process.platform === 'win32' ? 'junction' : 'dir'
+);
 
 // Clean up the temporary directory on exit
 process.on('exit', () => fs.rmSync(tempTmpDir, { recursive: true, force: true }));
@@ -41,16 +49,21 @@ for (const caseName of fs.readdirSync(casesDir)) {
 // await Promise.all(tasks);
 
 interface Steps {
+  ignoredPlatforms?: string[];
   env: Record<string, string>;
   commands: string[];
 }
 
 async function runTestCase(name: string) {
+  const steps: Steps = JSON.parse(await fsPromises.readFile(`${casesDir}/${name}/steps.json`, 'utf-8'));
+  if (steps.ignoredPlatforms !== undefined && steps.ignoredPlatforms.includes(process.platform)) {
+    console.log('%s skipped on platform %s', name, process.platform);
+    return;
+  }
+
   console.log('%s started', name);
   const caseTmpDir = `${tempTmpDir}/${name}`;
   await fsPromises.cp(`${casesDir}/${name}`, caseTmpDir, { recursive: true, errorOnExist: true });
-
-  const steps: Steps = JSON.parse(await fsPromises.readFile(`${caseTmpDir}/steps.json`, 'utf-8'));
 
   const env = {
     ...process.env,

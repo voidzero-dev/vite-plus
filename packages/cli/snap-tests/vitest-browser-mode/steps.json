@@ -1,0 +1,13 @@
+{
+  "ignoredPlatforms": ["linux"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite test",
+    "echo //comment >> src/foo.js",
+    "vite test",
+    "echo //comment >> src/bar.js",
+    "vite test"
+  ]
+}
