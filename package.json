@@ -2,7 +2,7 @@
   "name": "vite-plus-monorepo",
   "license": "BUSL-1.1",
   "private": true,
-  "packageManager": "pnpm@10.17.1",
+  "packageManager": "pnpm@10.19.0",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },
@@ -13,8 +13,8 @@
     "copy-bindings": "cp -r ./packages/cli/binding/*.node ./packages/cli/dist && cp -r ./packages/cli/binding/*.node ./packages/global/dist",
     "install-global-cli": "npm install -g ./packages/global",
     "typecheck": "tsc -b tsconfig.json",
-    "lint": "vite lint && vite run typecheck",
-    "test": "vite test run && pnpm -r snap-test",
+    "lint": "vite lint",
+    "test": "vite test run --config vite.config.ts && pnpm -r snap-test",
     "prepare": "husky"
   },
   "devDependencies": {

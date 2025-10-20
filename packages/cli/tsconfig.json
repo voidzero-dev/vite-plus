@@ -1,13 +1,15 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "composite": true,
     "outDir": "./dist",
     "noEmit": false,
     "allowImportingTsExtensions": false,
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "experimentalDecorators": true,
+    "customConditions": ["dev"]
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]

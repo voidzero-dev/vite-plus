@@ -20,7 +20,8 @@ Options:
   --clean                   Clean output directory, --no-clean to disable 
   --external <module>       Mark dependencies as external 
   --minify                  Minify output 
-  --debug [feat]            Show debug logs 
+  --debug                   Enable debug mode 
+  --debug-logs [feat]       Show debug logs 
   --target <target>         Bundle target, e.g "es2015", "esnext" 
   -l, --logLevel <level>    Set log level: info, warn, error, silent 
   --fail-on-warn            Fail on warnings (default: true)

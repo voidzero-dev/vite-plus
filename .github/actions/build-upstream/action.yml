@@ -1,0 +1,42 @@
+name: 'Build with Upstream Repositories'
+description: 'Builds Vite+ with the upstream repositories'
+inputs:
+  target:
+    description: 'The target platform'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Build
+      shell: bash
+      if: ${{ inputs.target == 'x86_64-unknown-linux-gnu' }}
+      run: |
+        pnpm --filter @rolldown/pluginutils build
+        pnpm --filter rolldown build-binding:release --target ${{ inputs.target }} --use-napi-cross
+        pnpm --filter rolldown build-node
+        pnpm --filter rolldown-vite build-types
+        CC="x86_64-unknown-linux-gnu-cc" pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }} --use-napi-cross
+      env:
+        TARGET_CC: clang
+
+    - name: Build
+      shell: bash
+      if: ${{ inputs.target == 'aarch64-unknown-linux-gnu' }}
+      run: |
+        pnpm --filter @rolldown/pluginutils build
+        pnpm --filter rolldown build-binding:release --target ${{ inputs.target }} --use-napi-cross
+        pnpm --filter rolldown build-node
+        pnpm --filter rolldown-vite build-types
+        pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }} --use-napi-cross
+      env:
+        TARGET_CC: clang
+
+    - name: Build
+      shell: bash
+      if: ${{ !contains(inputs.target, 'linux') }}
+      run: |
+        pnpm --filter @rolldown/pluginutils build
+        pnpm --filter rolldown build-binding:release --target ${{ inputs.target }}
+        pnpm --filter rolldown build-node
+        pnpm --filter rolldown-vite build-types
+        pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }}

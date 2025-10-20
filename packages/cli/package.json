@@ -14,19 +14,174 @@
     "./bin": {
       "import": "./dist/bin.js"
     },
-    "./client": {
-      "types": "./dist/client.d.ts"
-    },
     "./test": {
       "import": "./dist/test.js",
       "types": "./dist/test.d.ts"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts"
+    },
+    "./tsdown/run": {
+      "default": "./dist/tsdown/run.js"
+    },
+    "./vitepress": {
+      "types": "./dist/vitepress/types/index.d.ts",
+      "default": "./dist/vitepress/node/index.js"
+    },
+    "./vitepress/dist/*": "./dist/vitepress/*",
+    "./vitepress/client": {
+      "types": "./dist/vitepress/client.d.ts",
+      "default": "./dist/vitepress/client/index.js"
+    },
+    "./vitepress/theme": {
+      "types": "./dist/vitepress/theme.d.ts",
+      "default": "./dist/vitepress/client/theme-default/index.js"
+    },
+    "./vitepress/theme-without-fonts": {
+      "types": "./dist/vitepress/theme-without-fonts.d.ts",
+      "default": "./dist/vitepress/client/theme-default/without-fonts.js"
+    },
+    "./vitest": {
+      "import": {
+        "types": "./dist/vitest/dist/index.d.ts",
+        "default": "./dist/vitest/dist/index.js"
+      },
+      "require": {
+        "types": "./dist/vitest/index.d.cts",
+        "default": "./dist/vitest/index.cjs"
+      }
+    },
+    "./browser": {
+      "types": "./dist/vitest/browser/context.d.ts",
+      "default": "./dist/vitest/browser/context.js"
+    },
+    "./optional-types.js": {
+      "types": "./dist/vitest/optional-types.d.ts"
+    },
+    "./src/*": "./dist/vitest/src/*",
+    "./globals": {
+      "types": "./dist/vitest/globals.d.ts"
+    },
+    "./jsdom": {
+      "types": "./dist/vitest/jsdom.d.ts"
+    },
+    "./importMeta": {
+      "types": "./dist/vitest/importMeta.d.ts"
+    },
+    "./import-meta": {
+      "types": "./dist/vitest/import-meta.d.ts"
+    },
+    "./node": {
+      "types": "./dist/vitest/dist/node.d.ts",
+      "default": "./dist/vitest/dist/node.js"
+    },
+    "./internal/browser": {
+      "types": "./dist/vitest/dist/browser.d.ts",
+      "default": "./dist/vitest/dist/browser.js"
+    },
+    "./internal/module-runner": {
+      "types": "./dist/vitest/dist/module-runner.d.ts",
+      "default": "./dist/vitest/dist/module-runner.js"
+    },
+    "./runners": {
+      "types": "./dist/vitest/dist/runners.d.ts",
+      "default": "./dist/vitest/dist/runners.js"
+    },
+    "./suite": {
+      "types": "./dist/vitest/dist/suite.d.ts",
+      "default": "./dist/vitest/dist/suite.js"
+    },
+    "./environments": {
+      "types": "./dist/vitest/dist/environments.d.ts",
+      "default": "./dist/vitest/dist/environments.js"
+    },
+    "./config": {
+      "types": "./dist/vitest/config.d.ts",
+      "require": "./dist/vitest/dist/config.cjs",
+      "default": "./dist/vitest/dist/config.js"
+    },
+    "./coverage": {
+      "types": "./dist/vitest/coverage.d.ts",
+      "default": "./dist/vitest/dist/coverage.js"
+    },
+    "./reporters": {
+      "types": "./dist/vitest/dist/reporters.d.ts",
+      "default": "./dist/vitest/dist/reporters.js"
+    },
+    "./snapshot": {
+      "types": "./dist/vitest/dist/snapshot.d.ts",
+      "default": "./dist/vitest/dist/snapshot.js"
+    },
+    "./mocker": {
+      "types": "./dist/vitest/dist/mocker.d.ts",
+      "default": "./dist/vitest/dist/mocker.js"
+    },
+    "./worker": {
+      "types": "./dist/vitest/worker.d.ts",
+      "default": "./dist/vitest/dist/worker.js"
+    },
+    "./rolldown": {
+      "default": "./dist/rolldown/index.mjs",
+      "types": "./dist/rolldown/index.d.mts"
+    },
+    "./rolldown/config": {
+      "default": "./dist/rolldown/config.mjs",
+      "types": "./dist/rolldown/config.d.mts"
+    },
+    "./rolldown/experimental": {
+      "default": "./dist/rolldown/experimental-index.mjs",
+      "types": "./dist/rolldown/experimental-index.d.mts"
+    },
+    "./rolldown/experimental/runtime-types": {
+      "types": "./dist/rolldown/experimental-runtime-types.d.ts"
+    },
+    "./rolldown/filter": {
+      "default": "./dist/rolldown/filter-index.mjs",
+      "types": "./dist/rolldown/filter-index.d.mts"
+    },
+    "./rolldown/parallelPlugin": {
+      "default": "./dist/rolldown/parallel-plugin.mjs",
+      "types": "./dist/rolldown/parallel-plugin.d.mts"
+    },
+    "./rolldown/parseAst": {
+      "default": "./dist/rolldown/parse-ast-index.mjs",
+      "types": "./dist/rolldown/parse-ast-index.d.mts"
+    },
+    "./rolldown/pluginutils": {
+      "default": "./dist/pluginutils/index.js",
+      "types": "./dist/pluginutils/index.d.ts"
+    },
+    "./vite": {
+      "import": "./dist/vite/node/index.js",
+      "types": "./dist/vite/node/index.d.ts"
+    },
+    "./module-runner": {
+      "import": "./dist/vite/node/module-runner.js",
+      "types": "./dist/vite/node/module-runner.d.ts"
+    },
+    "./internal": {
+      "import": "./dist/vite/node/internal.js",
+      "types": "./dist/vite/node/internal.d.ts"
+    },
+    "./dist/client/*": "./dist/vite/client/*"
+  },
+  "imports": {
+    "#module-sync-enabled": {
+      "module-sync": "./dist/vite/misc/true.js",
+      "default": "./dist/vite/misc/false.js"
+    },
+    "#types/*": "./dist/vite/types/*.d.ts",
+    "#dep-types/*": "./src/types/*.d.ts",
+    "#module-evaluator": {
+      "types": "./dist/vitest/dist/module-evaluator.d.ts",
+      "default": "./dist/vitest/dist/module-evaluator.js"
     }
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
-    "build": "oxnode ./build.ts",
+    "build": "oxnode -C dev ./build.ts",
     "snap-test": "tool snap-test"
   },
   "files": [
@@ -34,22 +189,194 @@
     "dist"
   ],
   "dependencies": {
-    "oxfmt": "catalog:",
-    "oxlint": "catalog:",
-    "oxlint-tsgolint": "catalog:",
-    "rolldown-vite": "catalog:",
-    "tsdown": "catalog:",
-    "vitepress": "catalog:",
-    "vitest": "catalog:"
+    "@oxc-project/types": "=0.96.0",
+    "debug": "^4.4.3",
+    "oxfmt": "^0.9.0",
+    "oxlint": "^1.25.0",
+    "oxlint-tsgolint": "^0.4.0",
+    "postcss": "^8.5.6",
+    "lightningcss": "^1.30.2",
+    "semver": "^7.7.3",
+    "tree-kill": "^1.2.2",
+    "@docsearch/css": "^4.0.0-beta.7",
+    "@docsearch/js": "^4.0.0-beta.7",
+    "@iconify-json/simple-icons": "^1.2.47",
+    "@shikijs/core": "^3.9.2",
+    "@shikijs/transformers": "^3.9.2",
+    "@shikijs/types": "^3.9.2",
+    "@types/markdown-it": "^14.1.2",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/devtools-api": "^8.0.0",
+    "@vue/shared": "^3.5.18",
+    "@vueuse/core": "^13.6.0",
+    "@vueuse/integrations": "^13.6.0",
+    "focus-trap": "^7.6.5",
+    "mark.js": "8.11.1",
+    "minisearch": "^7.1.2",
+    "shiki": "^3.9.2",
+    "vue": "^3.5.18",
+    "es-module-lexer": "^1.7.0",
+    "expect-type": "^1.2.2",
+    "magic-string": "^0.30.19",
+    "pathe": "^2.0.3",
+    "picomatch": "^4.0.3",
+    "std-env": "^3.9.0",
+    "tinybench": "^2.9.0",
+    "tinyexec": "^0.3.2",
+    "tinyglobby": "^0.2.15",
+    "tinyrainbow": "^3.0.3",
+    "vite": "^6.0.0 || ^7.0.0",
+    "why-is-node-running": "^2.3.0",
+    "@vitest/expect": "4.0.6",
+    "@vitest/pretty-format": "4.0.6",
+    "@vitest/runner": "4.0.6",
+    "@vitest/mocker": "4.0.6",
+    "@vitest/utils": "4.0.6",
+    "@vitest/spy": "4.0.6",
+    "@vitest/snapshot": "4.0.6"
+  },
+  "peerDependencies": {
+    "@arethetypeswrong/core": "^0.18.1",
+    "@edge-runtime/vm": "*",
+    "@types/debug": "^4.1.12",
+    "@types/node": "^20.19.0 || >=22.12.0",
+    "@vitest/browser-playwright": "4.0.6",
+    "@vitest/browser-preview": "4.0.6",
+    "@vitest/browser-webdriverio": "4.0.6",
+    "@vitest/ui": "4.0.6",
+    "esbuild": "^0.25.0",
+    "happy-dom": "*",
+    "jiti": ">=1.21.0",
+    "jsdom": "*",
+    "less": "^4.0.0",
+    "markdown-it-mathjax3": "^4",
+    "oxc-minify": "^0.96.0",
+    "postcss": "^8",
+    "publint": "^0.3.0",
+    "sass": "^1.70.0",
+    "sass-embedded": "^1.70.0",
+    "stylus": ">=0.54.8",
+    "sugarss": "^5.0.0",
+    "terser": "^5.16.0",
+    "tsx": "^4.8.1",
+    "typescript": "^5.0.0",
+    "unplugin-lightningcss": "^0.4.0",
+    "unplugin-unused": "^0.5.0",
+    "unrun": "^0.2.1",
+    "yaml": "^2.4.2"
+  },
+  "peerDependenciesMeta": {
+    "@arethetypeswrong/core": {
+      "optional": true
+    },
+    "@edge-runtime/vm": {
+      "optional": true
+    },
+    "@types/debug": {
+      "optional": true
+    },
+    "@types/node": {
+      "optional": true
+    },
+    "@vitest/browser-playwright": {
+      "optional": true
+    },
+    "@vitest/browser-preview": {
+      "optional": true
+    },
+    "@vitest/browser-webdriverio": {
+      "optional": true
+    },
+    "@vitest/ui": {
+      "optional": true
+    },
+    "esbuild": {
+      "optional": true
+    },
+    "happy-dom": {
+      "optional": true
+    },
+    "jiti": {
+      "optional": true
+    },
+    "jsdom": {
+      "optional": true
+    },
+    "less": {
+      "optional": true
+    },
+    "markdown-it-mathjax3": {
+      "optional": true
+    },
+    "oxc-minify": {
+      "optional": true
+    },
+    "postcss": {
+      "optional": true
+    },
+    "publint": {
+      "optional": true
+    },
+    "sass": {
+      "optional": true
+    },
+    "sass-embedded": {
+      "optional": true
+    },
+    "stylus": {
+      "optional": true
+    },
+    "sugarss": {
+      "optional": true
+    },
+    "terser": {
+      "optional": true
+    },
+    "tsx": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
+    },
+    "unplugin-lightningcss": {
+      "optional": true
+    },
+    "unplugin-unused": {
+      "optional": true
+    },
+    "unrun": {
+      "optional": true
+    },
+    "yaml": {
+      "optional": true
+    }
   },
   "devDependencies": {
-    "@napi-rs/cli": "catalog:",
-    "@oxc-node/core": "catalog:",
-    "@vitest/browser": "catalog:",
-    "@vitest/browser-playwright": "catalog:",
+    "@babel/parser": "^7.28.4",
+    "@napi-rs/cli": "^3.4.1",
+    "@oxc-node/core": "^0.0.32",
+    "@oxc-project/types": "=0.96.0",
+    "@vitest/browser": "^4.0.6",
+    "@vitest/browser-playwright": "^4.0.6",
     "@voidzero-dev/vite-plus-tools": "workspace:",
-    "playwright": "catalog:",
-    "rolldown": "catalog:"
+    "es-module-lexer": "^1.7.0",
+    "estree-walker": "^3.0.3",
+    "magic-string": "^0.30.19",
+    "playwright": "^1.56.1",
+    "picocolors": "^1.1.1",
+    "picomatch": "^4.0.2",
+    "rollup": "^4.18.0",
+    "rolldown": "workspace:*",
+    "rolldown-plugin-dts": "^0.17.0",
+    "rollup-plugin-license": "^3.6.0",
+    "tinyglobby": "^0.2.15",
+    "tsdown": "0.16.0",
+    "rolldown-vite": "^7.1.19",
+    "vitepress": "2.0.0-alpha.12",
+    "vitest": "^4.0.6"
+  },
+  "optionalDependencies": {
+    "fsevents": "~2.3.3"
   },
   "napi": {
     "binaryName": "vite-plus",

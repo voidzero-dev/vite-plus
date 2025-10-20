@@ -1,4 +1,4 @@
-use std::future::Future;
+use std::{future::Future, iter::once};
 
 use petgraph::stable_graph::StableGraph;
 use vite_error::Error as ViteError;
@@ -14,13 +14,15 @@ pub async fn test<
     workspace: &Workspace,
     args: &Vec<String>,
 ) -> Result<ExecutionSummary, Error> {
+    let ResolveCommandResult { bin_path, envs } =
+        resolve_test_command().await.map_err(|e| Error::Anyhow(e.into()))?;
     let wrapped_command =
-        || async { resolve_test_command().await.map_err(|e| Error::Anyhow(e.into())) };
+        || async { Ok(ResolveCommandResult { bin_path: "node".into(), envs: envs.clone() }) };
     let resolved_task = ResolvedTask::resolve_from_builtin(
         workspace,
         wrapped_command,
         "test",
-        args.iter().map(std::string::String::as_str),
+        once(&bin_path).chain(args.iter()),
     )
     .await?;
     let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();

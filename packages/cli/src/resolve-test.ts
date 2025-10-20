@@ -2,14 +2,16 @@
  * Vitest tool resolver for the vite-plus CLI.
  *
  * This module exports a function that resolves the Vitest binary path
- * using Node.js module resolution. The resolved path is passed back
- * to the Rust core, which then executes Vitest for running tests.
+ * to the bundled Vitest in the CLI distribution. The resolved path is
+ * passed back to the Rust core, which then executes Vitest for running tests.
  *
  * Used for: `vite-plus test` command
  */
 
 import { dirname, join } from 'node:path';
-import { DEFAULT_ENVS, resolve } from './utils.js';
+import { fileURLToPath } from 'node:url';
+
+import { DEFAULT_ENVS } from './utils.js';
 
 /**
  * Resolves the Vitest binary path and environment variables.
@@ -20,15 +22,13 @@ import { DEFAULT_ENVS, resolve } from './utils.js';
  *
  * Vitest is Vite's testing framework that provides a Jest-compatible
  * testing experience with Vite's fast HMR and transformation pipeline.
+ * The function points to the bundled Vitest in the CLI's dist directory.
  */
 export async function test(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
-  // try to resolve vitest package.json
-  const pkgJsonPath = resolve('vitest/package.json');
-  // vitest's CLI binary is located at vitest.mjs relative to the package root
-  const binPath = join(dirname(pkgJsonPath), 'vitest.mjs');
+  const binPath = join(dirname(fileURLToPath(import.meta.url)), 'vitest', 'vitest.mjs');
 
   return {
     binPath,

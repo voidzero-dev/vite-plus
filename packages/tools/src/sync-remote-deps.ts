@@ -3,7 +3,10 @@ import { execSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
+
 import * as semver from 'semver';
+
+import upstreamVersions from '../.upstream-versions.json' with { type: 'json' };
 
 interface PnpmWorkspace {
   packages?: string[];
@@ -21,11 +24,21 @@ interface PnpmWorkspace {
   [key: string]: any;
 }
 
+interface PackageJson {
+  name?: string;
+  version?: string;
+  exports?: Record<string, any>;
+  [key: string]: any;
+}
+
+type ExportValue = string | { [condition: string]: string | ExportValue } | null;
+
 const ROLLDOWN_REPO = 'git@github.com:rolldown/rolldown.git';
 const ROLLDOWN_VITE_REPO = 'git@github.com:vitejs/rolldown-vite.git';
 const ROLLDOWN_DIR = 'rolldown';
 const ROLLDOWN_VITE_DIR = 'rolldown-vite';
 const ROLLDOWN_VITE_BRANCH = 'rolldown-vite';
+const CLI_PACKAGE_PATH = 'packages/cli';
 
 function log(message: string) {
   console.log(`[sync-rolldown] ${message}`);
@@ -52,6 +65,7 @@ function cloneOrResetRepo(
   repoUrl: string,
   dir: string,
   branch: string = 'main',
+  hash?: string,
 ) {
   log(`Processing ${dir}...`);
 
@@ -67,7 +81,7 @@ function cloneOrResetRepo(
       if (result.status !== 0) {
         log(`${dir} is not a valid git repo, removing and re-cloning...`);
         rmSync(dir, { recursive: true, force: true });
-        cloneRepo(repoUrl, dir, branch);
+        cloneRepo(repoUrl, dir, branch, hash);
         return;
       }
 
@@ -78,33 +92,388 @@ function cloneOrResetRepo(
           `${dir} has wrong remote (${remoteUrl} vs ${repoUrl}), removing and re-cloning...`,
         );
         rmSync(dir, { recursive: true, force: true });
-        cloneRepo(repoUrl, dir, branch);
+        cloneRepo(repoUrl, dir, branch, hash);
         return;
       }
 
-      // Reset to latest
-      log(`Resetting ${dir} to latest ${branch}...`);
+      // Fetch latest commits
       execCommand('git fetch origin', dir);
-      execCommand(`git checkout ${branch}`, dir);
-      execCommand(`git reset --hard origin/${branch}`, dir);
-      execCommand('git clean -fdx', dir);
-      log(`${dir} reset to latest ${branch}`);
+
+      if (hash) {
+        // Reset to specific hash
+        log(`Resetting ${dir} to pinned hash ${hash.substring(0, 8)}...`);
+        execCommand(`git checkout ${branch}`, dir);
+        execCommand(`git reset --hard ${hash}`, dir);
+        execCommand('git clean -fdx', dir);
+        log(`${dir} reset to ${hash.substring(0, 8)}`);
+      } else {
+        // Reset to latest
+        log(`Resetting ${dir} to latest ${branch}...`);
+        execCommand(`git checkout ${branch}`, dir);
+        execCommand(`git reset --hard origin/${branch}`, dir);
+        execCommand('git clean -fdx', dir);
+        log(`${dir} reset to latest ${branch}`);
+      }
     } catch (err: any) {
       log(
         `Failed to reset ${dir} (${err.message}), removing and re-cloning...`,
       );
       rmSync(dir, { recursive: true, force: true });
-      cloneRepo(repoUrl, dir, branch);
+      cloneRepo(repoUrl, dir, branch, hash);
     }
   } else {
-    cloneRepo(repoUrl, dir, branch);
+    cloneRepo(repoUrl, dir, branch, hash);
   }
 }
 
-function cloneRepo(repoUrl: string, dir: string, branch: string) {
+function cloneRepo(repoUrl: string, dir: string, branch: string, hash?: string) {
   log(`Cloning ${repoUrl} (${branch}) into ${dir}...`);
   execCommand(`git clone --branch ${branch} ${repoUrl} ${dir}`);
-  log(`${dir} cloned successfully`);
+  if (hash) {
+    log(`Checking out pinned hash ${hash.substring(0, 8)}...`);
+    execCommand(`git reset --hard ${hash}`, dir);
+    log(`${dir} cloned and reset to ${hash.substring(0, 8)}`);
+  } else {
+    log(`${dir} cloned successfully`);
+  }
+}
+
+function transformRolldownExport(
+  exportPath: string,
+  exportValue: ExportValue,
+): [string, ExportValue] {
+  // Skip package.json
+  if (exportPath === './package.json') {
+    return ['', null];
+  }
+
+  // Transform export path: . -> ./rolldown, ./foo -> ./rolldown/foo
+  const newExportPath = exportPath === '.'
+    ? './rolldown'
+    : `./rolldown${exportPath.slice(1)}`;
+
+  // Transform export value
+  const transformValue = (value: ExportValue): ExportValue => {
+    if (typeof value === 'string') {
+      // Skip 'dev' condition paths that point to src
+      if (value.startsWith('./src/')) {
+        return null;
+      }
+      // Transform dist paths
+      return value.replace(/^\.\/dist\//, './dist/rolldown/');
+    }
+
+    if (value && typeof value === 'object') {
+      const result: Record<string, any> = {};
+      for (const [key, val] of Object.entries(value)) {
+        // Skip 'dev' condition
+        if (key === 'dev') continue;
+
+        const transformed = transformValue(val);
+        if (transformed !== null) {
+          result[key] = transformed;
+        }
+      }
+      return Object.keys(result).length > 0 ? result : null;
+    }
+
+    return value;
+  };
+
+  const newValue = transformValue(exportValue);
+
+  // Handle string values or add types if missing
+  if (typeof newValue === 'string') {
+    // Convert string to object with default and types
+    if (newValue.endsWith('.mjs')) {
+      return [newExportPath, {
+        default: newValue,
+        types: newValue.replace(/\.mjs$/, '.d.mts'),
+      }];
+    } else if (newValue.endsWith('.js')) {
+      return [newExportPath, {
+        default: newValue,
+        types: newValue.replace(/\.js$/, '.d.ts'),
+      }];
+    }
+    return [newExportPath, newValue];
+  }
+
+  if (newValue && typeof newValue === 'object') {
+    const importPath = ('import' in newValue ? newValue.import : newValue.default) as string | undefined;
+    if (importPath && !('types' in newValue)) {
+      if (importPath.endsWith('.mjs')) {
+        newValue.types = importPath.replace(/\.mjs$/, '.d.mts');
+      } else if (importPath.endsWith('.js')) {
+        newValue.types = importPath.replace(/\.js$/, '.d.ts');
+      }
+    }
+  }
+
+  return [newExportPath, newValue];
+}
+
+function transformPluginutilsExport(
+  exportPath: string,
+  exportValue: ExportValue,
+): [string, ExportValue] {
+  // Skip package.json
+  if (exportPath === './package.json') {
+    return ['', null];
+  }
+
+  // Transform . -> ./rolldown/pluginutils
+  const newExportPath = exportPath === '.'
+    ? './rolldown/pluginutils'
+    : `./rolldown/pluginutils${exportPath.slice(1)}`;
+
+  // Transform paths
+  const transformValue = (value: ExportValue): ExportValue => {
+    if (typeof value === 'string') {
+      if (value.startsWith('./src/')) {
+        return null;
+      }
+      return value.replace(/^\.\/dist\//, './dist/pluginutils/');
+    }
+
+    if (value && typeof value === 'object') {
+      const result: Record<string, any> = {};
+      for (const [key, val] of Object.entries(value)) {
+        if (key === 'dev') continue;
+        const transformed = transformValue(val);
+        if (transformed !== null) {
+          result[key] = transformed;
+        }
+      }
+      return Object.keys(result).length > 0 ? result : null;
+    }
+
+    return value;
+  };
+
+  const newValue = transformValue(exportValue);
+
+  // Handle string values or add types if missing
+  if (typeof newValue === 'string') {
+    // Convert string to object with default and types
+    if (newValue.endsWith('.js')) {
+      return [newExportPath, {
+        default: newValue,
+        types: newValue.replace(/\.js$/, '.d.ts'),
+      }];
+    }
+    return [newExportPath, newValue];
+  }
+
+  if (newValue && typeof newValue === 'object') {
+    const importPath = ('import' in newValue ? newValue.import : newValue.default) as string | undefined;
+    if (importPath && !('types' in newValue)) {
+      if (importPath.endsWith('.js')) {
+        newValue.types = importPath.replace(/\.js$/, '.d.ts');
+      }
+    }
+  }
+
+  return [newExportPath, newValue];
+}
+
+function transformViteExport(
+  exportPath: string,
+  exportValue: ExportValue,
+): [string, ExportValue] {
+  // Skip package.json
+  if (exportPath === './package.json') {
+    return ['', null];
+  }
+
+  // Determine new export path based on original
+  let newExportPath: string;
+  if (exportPath === '.') {
+    newExportPath = './vite';
+  } else if (
+    [
+      './client',
+      './module-runner',
+      './internal',
+      './dist/client/*',
+    ].includes(exportPath)
+  ) {
+    // Keep these at top level
+    newExportPath = exportPath;
+  } else if (exportPath.startsWith('./types/')) {
+    // Skip types exports - handled differently in CLI
+    return ['', null];
+  } else {
+    // Prefix others with /vite
+    newExportPath = `./vite${exportPath.slice(1)}`;
+  }
+
+  // Transform paths
+  const transformValue = (value: ExportValue): ExportValue => {
+    if (typeof value === 'string') {
+      // Transform dist paths
+      if (value.startsWith('./dist/node/')) {
+        return value.replace(/^\.\/dist\/node\//, './dist/vite/node/');
+      }
+      if (value.startsWith('./dist/client/')) {
+        return value.replace(/^\.\/dist\/client\//, './dist/vite/client/');
+      }
+      if (value.startsWith('./dist/')) {
+        return value.replace(/^\.\/dist\//, './dist/vite/');
+      }
+      // Transform misc paths
+      if (value.startsWith('./misc/')) {
+        return value.replace(/^\.\/misc\//, './dist/vite/misc/');
+      }
+      // Transform types paths
+      if (value.startsWith('./types/')) {
+        return value.replace(/^\.\/types\//, './dist/vite/types/');
+      }
+      // client.d.ts -> dist/client.d.ts
+      if (value === './client.d.ts') {
+        return './dist/client.d.ts';
+      }
+      return value;
+    }
+
+    if (value && typeof value === 'object') {
+      const result: Record<string, any> = {};
+      for (const [key, val] of Object.entries(value)) {
+        const transformed = transformValue(val);
+        if (transformed !== null) {
+          result[key] = transformed;
+        }
+      }
+      return Object.keys(result).length > 0 ? result : null;
+    }
+
+    return value;
+  };
+
+  const newValue = transformValue(exportValue);
+
+  // Add types if only a string path is specified or if types are missing
+  if (typeof newValue === 'string') {
+    // Convert string to object with import and types
+    if (newValue.endsWith('.js')) {
+      return [newExportPath, {
+        import: newValue,
+        types: newValue.replace(/\.js$/, '.d.ts'),
+      }];
+    }
+    return [newExportPath, newValue];
+  }
+
+  if (newValue && typeof newValue === 'object') {
+    const importPath = ('import' in newValue ? newValue.import : newValue.default) as string | undefined;
+    if (importPath && !('types' in newValue) && typeof importPath === 'string') {
+      if (importPath.endsWith('.js')) {
+        newValue.types = importPath.replace(/\.js$/, '.d.ts');
+      }
+    }
+  }
+
+  return [newExportPath, newValue];
+}
+
+function mergePackageExports(
+  cliPkg: PackageJson,
+  rolldownPkg: PackageJson,
+  rolldownVitePkg: PackageJson,
+  pluginutilsPkg: PackageJson,
+): Record<string, any> {
+  const result: Record<string, any> = {};
+  const cliOwnExports = new Set([
+    '.',
+    './bin',
+    './test',
+    './tsdown/run',
+    './client',
+    './vitepress',
+    './vitepress/dist/*',
+    './vitepress/client',
+    './vitepress/theme',
+    './vitepress/theme-without-fonts',
+    './vitest',
+    './vitest/browser',
+    './vitest/optional-types.js',
+    './vitest/src/*',
+    './vitest/globals',
+    './vitest/jsdom',
+    './vitest/importMeta',
+    './vitest/import-meta',
+    './vitest/node',
+    './vitest/internal/browser',
+    './vitest/internal/module-runner',
+    './vitest/runners',
+    './vitest/suite',
+    './vitest/environments',
+    './vitest/config',
+    './vitest/coverage',
+    './vitest/reporters',
+    './vitest/snapshot',
+    './vitest/mocker',
+    './vitest/worker',
+  ]);
+
+  // Keep CLI's own exports
+  if (cliPkg.exports) {
+    for (const [path, value] of Object.entries(cliPkg.exports)) {
+      if (cliOwnExports.has(path)) {
+        result[path] = value;
+      }
+    }
+  }
+
+  const conflicts: string[] = [];
+
+  // Add rolldown exports
+  if (rolldownPkg.exports) {
+    for (const [path, value] of Object.entries(rolldownPkg.exports)) {
+      const [newPath, newValue] = transformRolldownExport(path, value);
+      if (newPath && newValue !== null) {
+        if (result[newPath]) {
+          conflicts.push(`${newPath} (from rolldown ${path})`);
+        } else {
+          result[newPath] = newValue;
+        }
+      }
+    }
+  }
+
+  // Add pluginutils exports
+  if (pluginutilsPkg.exports) {
+    for (const [path, value] of Object.entries(pluginutilsPkg.exports)) {
+      const [newPath, newValue] = transformPluginutilsExport(path, value);
+      if (newPath && newValue !== null) {
+        if (result[newPath]) {
+          conflicts.push(`${newPath} (from pluginutils ${path})`);
+        } else {
+          result[newPath] = newValue;
+        }
+      }
+    }
+  }
+
+  // Add vite exports
+  if (rolldownVitePkg.exports) {
+    for (const [path, value] of Object.entries(rolldownVitePkg.exports)) {
+      const [newPath, newValue] = transformViteExport(path, value);
+      if (newPath && newValue !== null) {
+        if (result[newPath] && !cliOwnExports.has(newPath)) {
+          conflicts.push(`${newPath} (from rolldown-vite ${path})`);
+        } else if (!cliOwnExports.has(newPath)) {
+          result[newPath] = newValue;
+        }
+      }
+    }
+  }
+
+  if (conflicts.length > 0) {
+    error(`Export conflicts detected:\n${conflicts.map(c => `  - ${c}`).join('\n')}`);
+  }
+
+  return result;
 }
 
 function mergeSemverVersions(v1: string, v2: string, packageName: string): string {
@@ -198,10 +567,7 @@ function mergePnpmWorkspaces(
 
   // Add all entries from rolldown catalog
   for (const [pkg, version] of Object.entries(rolldown.catalog || {})) {
-    if (pkg === 'rolldown' || pkg === 'rolldown-vite') {
-      // Force workspace:* for rolldown packages
-      catalog[pkg] = 'workspace:*';
-    } else if (catalog[pkg]) {
+    if (catalog[pkg]) {
       // Merge versions
       catalog[pkg] = mergeSemverVersions(catalog[pkg], version, pkg);
     } else {
@@ -211,10 +577,7 @@ function mergePnpmWorkspaces(
 
   // Add all entries from rolldown-vite catalog (if it has one)
   for (const [pkg, version] of Object.entries(rolldownVite.catalog || {})) {
-    if (pkg === 'rolldown' || pkg === 'rolldown-vite') {
-      // Force workspace:* for rolldown packages
-      catalog[pkg] = 'workspace:*';
-    } else if (catalog[pkg]) {
+    if (catalog[pkg]) {
       // Merge versions
       catalog[pkg] = mergeSemverVersions(catalog[pkg], version, pkg);
     } else {
@@ -294,6 +657,9 @@ export function syncRemote() {
       'clean': {
         type: 'boolean',
       },
+      'update-hashes': {
+        type: 'boolean',
+      },
     },
     args: process.argv.slice(3),
   });
@@ -316,11 +682,17 @@ export function syncRemote() {
   }
 
   // Clone or reset repos
-  cloneOrResetRepo(ROLLDOWN_REPO, join(rootDir, ROLLDOWN_DIR), 'main');
+  cloneOrResetRepo(
+    ROLLDOWN_REPO,
+    join(rootDir, ROLLDOWN_DIR),
+    'main',
+    upstreamVersions.rolldown.hash,
+  );
   cloneOrResetRepo(
     ROLLDOWN_VITE_REPO,
     join(rootDir, ROLLDOWN_VITE_DIR),
     ROLLDOWN_VITE_BRANCH,
+    upstreamVersions['rolldown-vite'].hash,
   );
 
   log('Reading pnpm-workspace.yaml files...');
@@ -367,5 +739,62 @@ export function syncRemote() {
   writeFileSync(mainWorkspacePath, yamlContent, 'utf-8');
 
   log('✓ pnpm-workspace.yaml updated successfully!');
+
+  // Merge package.json exports
+  log('Merging package.json exports...');
+
+  const cliPackagePath = join(rootDir, CLI_PACKAGE_PATH, 'package.json');
+  const rolldownPackagePath = join(
+    rootDir,
+    ROLLDOWN_DIR,
+    'packages',
+    'rolldown',
+    'package.json',
+  );
+  const rolldownVitePackagePath = join(
+    rootDir,
+    ROLLDOWN_VITE_DIR,
+    'packages',
+    'vite',
+    'package.json',
+  );
+  const pluginutilsPackagePath = join(
+    rootDir,
+    ROLLDOWN_DIR,
+    'packages',
+    'pluginutils',
+    'package.json',
+  );
+
+  const cliPackage = JSON.parse(
+    readFileSync(cliPackagePath, 'utf-8'),
+  ) as PackageJson;
+  const rolldownPackage = JSON.parse(
+    readFileSync(rolldownPackagePath, 'utf-8'),
+  ) as PackageJson;
+  const rolldownVitePackage = JSON.parse(
+    readFileSync(rolldownVitePackagePath, 'utf-8'),
+  ) as PackageJson;
+  const pluginutilsPackage = JSON.parse(
+    readFileSync(pluginutilsPackagePath, 'utf-8'),
+  ) as PackageJson;
+
+  const mergedExports = mergePackageExports(
+    cliPackage,
+    rolldownPackage,
+    rolldownVitePackage,
+    pluginutilsPackage,
+  );
+
+  // Update CLI package.json with merged exports
+  cliPackage.exports = mergedExports;
+
+  writeFileSync(
+    cliPackagePath,
+    JSON.stringify(cliPackage, null, 2) + '\n',
+    'utf-8',
+  );
+
+  log('✓ package.json exports updated successfully!');
   log('✓ Done!');
 }

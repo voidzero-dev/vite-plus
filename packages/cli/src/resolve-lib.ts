@@ -8,7 +8,10 @@
  * Used for: `vite-plus lib` command
  */
 
-import { DEFAULT_ENVS, resolve } from './utils.js';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { DEFAULT_ENVS } from './utils.js';
 
 /**
  * Resolves the Tsdown binary path and environment variables.
@@ -23,8 +26,8 @@ export async function lib(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
-  // Resolve the Tsdown CLI module directly
-  const binPath = resolve('tsdown/run');
+  // Resolve the bundled Tsdown CLI
+  const binPath = join(dirname(fileURLToPath(import.meta.url)), 'tsdown', 'run.js');
 
   return {
     binPath,

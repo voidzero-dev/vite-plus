@@ -10,7 +10,9 @@
  */
 
 import { dirname, join } from 'node:path';
-import { DEFAULT_ENVS, resolve } from './utils.js';
+import { fileURLToPath } from 'node:url';
+
+import { DEFAULT_ENVS } from './utils.js';
 
 /**
  * Resolves the Vite binary path and environment variables.
@@ -27,17 +29,8 @@ export async function vite(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
-  let pkgJsonPath: string;
-  try {
-    // First try to resolve vite package.json
-    pkgJsonPath = resolve('vite/package.json');
-  } catch {
-    // Fallback to rolldown-vite package.json (for direct rolldown-vite installations)
-    pkgJsonPath = resolve('rolldown-vite/package.json');
-  }
-
   // Vite's CLI binary is located at bin/vite.js relative to the package root
-  const binPath = join(dirname(pkgJsonPath), 'bin', 'vite.js');
+  const binPath = join(dirname(fileURLToPath(import.meta.url)), 'vite', 'node', 'cli.js');
 
   return {
     binPath,

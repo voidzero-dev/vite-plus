@@ -6,4 +6,11 @@ export default defineConfig({
       'no-console': 'warn',
     },
   },
+  test: {
+    exclude: [
+      '**/node_modules/**',
+      './rolldown/**',
+      './rolldown-vite/**',
+    ],
+  },
 });
