@@ -8,7 +8,7 @@ import {
   type UserConfigFn,
   type UserConfigFnObject,
   type UserConfigFnPromise,
-} from 'rolldown-vite';
+} from 'vite';
 import { type ViteUserConfig } from 'vitest/config';
 
 // replace it with the real oxlint config in the future
@@ -87,5 +87,5 @@ function resolveConfig(
   );
 }
 
-export * from 'rolldown-vite';
+export * from 'vite';
 export { defineConfig, resolveConfig, type ResolvedConfig };

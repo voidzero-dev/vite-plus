@@ -7,8 +7,9 @@
     "outDir": "./dist",
     "noEmit": false,
     "allowImportingTsExtensions": false,
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "resolveJsonModule": true
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist", "./snap-tests/**"]
+  "exclude": ["node_modules", "dist", "./snap-tests/**", "./*.json"]
 }

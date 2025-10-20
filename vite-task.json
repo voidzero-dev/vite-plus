@@ -1,0 +1,15 @@
+{
+  "tasks": {
+    "build": {
+      "command": "",
+      "dependsOn": [
+        "@rolldown/pluginutils#build",
+        "rolldown#build-binding:release",
+        "rolldown#build-node",
+        "rolldown-vite#build-types",
+        "@voidzero-dev/vite-plus#build"
+      ],
+      "cacheable": false
+    }
+  }
+}

@@ -150,8 +150,14 @@ pub async fn run(options: CliOptions) -> Result<i32> {
                 let resolved = vite
                     .call_async(Ok(()))
                     .await
+                    .inspect_err(|err| {
+                        tracing::error!("vite error: {:?}", err);
+                    })
                     .map_err(js_error_to_vite_error)?
                     .await
+                    .inspect_err(|err| {
+                        tracing::error!("vite error: {:?}", err);
+                    })
                     .map_err(js_error_to_vite_error)?;
 
                 Ok(resolved.into())

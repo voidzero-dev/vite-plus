@@ -4,9 +4,7 @@ export default defineConfig({
   input: './src/index.ts',
   external: [
     /^node:/,
-    'oxfmt',
-    'oxlint',
-    /rolldown-vite/,
+    '@voidzero-dev/vite-plus/bin',
     'create-vite',
     'create-tsdown',
     // FIXME: Calling `require` for "child_process" in an environment that doesn't expose the `require` function

@@ -28,7 +28,7 @@
     "cross-spawn": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
-    "rolldown-vite": "catalog:",
+    "rolldown-vite": "workspace:*",
     "vitest": "catalog:"
   },
   "devDependencies": {
@@ -37,7 +37,7 @@
     "@voidzero-dev/vite-plus-tools": "workspace:",
     "mri": "catalog:",
     "picocolors": "catalog:",
-    "rolldown": "catalog:"
+    "rolldown": "workspace:*"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

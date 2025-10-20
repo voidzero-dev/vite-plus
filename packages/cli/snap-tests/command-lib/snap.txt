@@ -20,7 +20,8 @@ Options:
   --clean                   Clean output directory, --no-clean to disable 
   --external <module>       Mark dependencies as external 
   --minify                  Minify output 
-  --debug [feat]            Show debug logs 
+  --debug                   Enable debug mode 
+  --debug-logs [feat]       Show debug logs 
   --target <target>         Bundle target, e.g "es2015", "esnext" 
   -l, --logLevel <level>    Set log level: info, warn, error, silent 
   --fail-on-warn            Fail on warnings (default: true)
@@ -54,20 +55,20 @@ Options:
 ℹ tsdown v<semver> powered by rolldown v<semver>
 ℹ entry: src/index.ts
 ℹ Build start
-ℹ dist/index.js  <variable> kB │ gzip: <variable> kB
+ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
 
 
 > ls dist # should have the library
-index.js
+index.mjs
 
 > vite lib src/index.ts # should hit cache
 ✓ cache hit, replaying
 ℹ tsdown v<semver> powered by rolldown v<semver>
 ℹ entry: src/index.ts
 ℹ Build start
-ℹ dist/index.js  <variable> kB │ gzip: <variable> kB
+ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
 
