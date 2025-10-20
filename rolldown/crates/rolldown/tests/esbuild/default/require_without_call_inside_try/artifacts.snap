@@ -1,0 +1,18 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region entry.js
+try {
+	oldLocale = globalLocale._abbr;
+	__require("./locale/" + name);
+	getSetGlobalLocale(oldLocale);
+} catch (e) {}
+
+//#endregion
+```

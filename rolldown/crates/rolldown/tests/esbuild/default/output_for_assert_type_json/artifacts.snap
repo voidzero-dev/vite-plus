@@ -1,0 +1,30 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Errors
+
+## MISSING_EXPORT
+
+```text
+[MISSING_EXPORT] Error: "default" is not exported by "foo.copy".
+   ╭─[ js-entry.js:2:8 ]
+   │
+ 2 │ import copy from './foo.copy' assert { type: 'json' }
+   │        ──┬─  
+   │          ╰─── Missing export
+───╯
+
+```
+
+## MISSING_EXPORT
+
+```text
+[MISSING_EXPORT] Error: "default" is not exported by "foo.copy".
+   ╭─[ ts-entry.ts:2:8 ]
+   │
+ 2 │ import copy from './foo.copy' assert { type: 'json' }
+   │        ──┬─  
+   │          ╰─── Missing export
+───╯
+
+```

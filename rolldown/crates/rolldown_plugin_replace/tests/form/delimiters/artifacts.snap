@@ -1,0 +1,28 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## input.js
+
+```js
+//#region input.js
+console.log(`
+  <%replaced%>
+  <% original%>
+  <%original %>
+`);
+
+//#endregion
+//# sourceMappingURL=input.js.map
+```
+
+# Sourcemap Visualizer
+
+```
+- ../input.js
+(0:0) "console." --> (1:0) "console."
+(0:8) "log(" --> (1:8) "log("
+(0:12) "`\n" --> (1:12) "`\n"
+(4:2) ";\n" --> (5:2) ";\n"
+```

@@ -1,0 +1,20 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+//#region entry.js
+var Foo = class extends Object {
+	static FOO;
+	constructor() {
+		super();
+	}
+	#foo;
+};
+
+//#endregion
+export { Foo };
+```

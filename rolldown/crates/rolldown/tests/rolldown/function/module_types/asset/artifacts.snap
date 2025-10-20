@@ -1,0 +1,36 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## assets/foo-C-m4uiP6.txt
+
+## main.js
+
+```js
+//#region foo.txt
+var foo_default = "assets/foo-C-m4uiP6.txt";
+
+//#endregion
+//#region main.js
+var main_default = foo_default;
+
+//#endregion
+export { main_default as default };
+//# sourceMappingURL=main.js.map
+```
+
+# Output Stats
+
+- main.js, is_entry true, is_dynamic_entry false, exports ["default"]
+
+# Sourcemap Visualizer
+
+```
+- ../foo.txt
+(0:0) "__ROLLDOWN_ASSET_FILENAME__" --> (1:18) "\"assets/foo-C-m4uiP6.txt\""
+(0:0) "__ROLLDOWN_ASSET_FILENAME__" --> (1:43) ";\n"
+- ../main.js
+(2:0) "export default " --> (5:0) "var main_default = "
+(2:15) "filePath" --> (5:19) "foo_default;\n"
+```

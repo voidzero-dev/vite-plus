@@ -1,0 +1,14 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region entry.js
+console.log(__require("hello, world"));
+
+//#endregion
+```

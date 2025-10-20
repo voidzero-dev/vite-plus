@@ -1,0 +1,27 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "array",
+        "import": "array.js"
+      },
+      {
+        "name": "assign",
+        "import": "assign.js"
+      },
+      {
+        "name": "dot",
+        "import": "dot.js"
+      },
+      {
+        "name": "ident",
+        "import": "ident.js"
+      },
+      {
+        "name": "index",
+        "import": "index.js"
+      }
+    ]
+  },
+  "expectExecuted": false
+}

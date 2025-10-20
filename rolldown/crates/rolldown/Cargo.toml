@@ -1,0 +1,85 @@
+[package]
+name = "rolldown"
+version = "0.1.0"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+publish = true
+repository.workspace = true
+description = "Fast JavaScript bundler in Rust, designed for the future of Vite"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[features]
+default = ["serde"]
+serde = ["dep:serde", "oxc_index/serde"]
+testing = []
+
+[dependencies]
+anyhow = { workspace = true }
+append-only-vec = { workspace = true }
+arcstr = { workspace = true }
+bitflags = { workspace = true }
+commondir = { workspace = true }
+css-module-lexer = { workspace = true }
+derive_more = { workspace = true }
+dunce = { workspace = true }
+futures = { workspace = true }
+indexmap = { workspace = true }
+itertools = { workspace = true }
+itoa = { workspace = true }
+json-escape-simd = { workspace = true }
+memchr = { workspace = true }
+oxc = { workspace = true }
+oxc_allocator = { workspace = true }
+oxc_ecmascript = { workspace = true }
+oxc_index = { workspace = true }
+oxc_traverse = { workspace = true }
+petgraph = { workspace = true }
+rayon = { workspace = true }
+rolldown-notify = { workspace = true }
+rolldown_common = { workspace = true }
+rolldown_debug = { workspace = true }
+rolldown_ecmascript = { workspace = true }
+rolldown_ecmascript_utils = { workspace = true }
+rolldown_error = { workspace = true }
+rolldown_fs = { workspace = true, features = ["os"] }
+rolldown_plugin = { workspace = true }
+rolldown_plugin_chunk_import_map = { workspace = true }
+rolldown_plugin_data_uri = { workspace = true }
+rolldown_plugin_hmr = { workspace = true }
+rolldown_plugin_oxc_runtime = { workspace = true }
+rolldown_resolver = { workspace = true }
+rolldown_sourcemap = { workspace = true }
+rolldown_std_utils = { workspace = true }
+rolldown_tracing = { workspace = true }
+rolldown_utils = { workspace = true }
+rolldown_watcher = { workspace = true }
+rustc-hash = { workspace = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true }
+string_wizard = { workspace = true }
+sugar_path = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros", "sync", "time"] }
+tracing = { workspace = true }
+url = { workspace = true }
+xxhash-rust = { workspace = true, features = ["xxh3"] }
+
+[dev-dependencies]
+glob = { workspace = true }
+insta = { workspace = true }
+rolldown_testing = { path = "../rolldown_testing" }
+rolldown_workspace = { workspace = true }
+sugar_path = { workspace = true }
+testing_macros = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros", "sync", "rt-multi-thread"] }
+
+[package.metadata.cargo-shear]
+# `serde_json` is used in `trace_action` macro.
+ignored = ["serde", "serde_json"]

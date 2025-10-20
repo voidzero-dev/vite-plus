@@ -1,0 +1,32 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'react/jsx-runtime' in entry.jsx
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+import { Fragment, jsx } from "react/jsx-runtime";
+
+// HIDDEN [rolldown:runtime]
+//#region custom-react.js
+var require_custom_react = /* @__PURE__ */ __commonJS({ "custom-react.js": ((exports, module) => {
+	module.exports = {};
+}) });
+
+//#endregion
+//#region entry.jsx
+var import_custom_react = /* @__PURE__ */ __toESM(require_custom_react());
+console.log(/* @__PURE__ */ jsx("div", { jsx: import_custom_react.jsx }), /* @__PURE__ */ jsx(Fragment, { children: /* @__PURE__ */ jsx(import_custom_react.Fragment, {}) }));
+
+//#endregion
+```

@@ -1,0 +1,23 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "./entry.js"
+      }
+    ]
+  },
+  "configVariants": [
+    {
+      "format": "cjs"
+    },
+    {
+      "format": "iife"
+    },
+    {
+      "format": "umd",
+      "name": "module"
+    }
+  ],
+  "snapshot": false
+}

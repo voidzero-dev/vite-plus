@@ -1,0 +1,16 @@
+{
+  "expectExecuted": false,
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "entry.ts"
+      }
+    ],
+    "external": [
+      "a",
+      "b",
+      "c"
+    ]
+  }
+}

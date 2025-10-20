@@ -1,0 +1,67 @@
+use oxc::span::SourceType;
+#[cfg(feature = "deserialize_bundler_options")]
+use schemars::JsonSchema;
+#[cfg(feature = "deserialize_bundler_options")]
+use serde::Deserialize;
+use std::fmt::Display;
+
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(
+  feature = "deserialize_bundler_options",
+  derive(Deserialize, JsonSchema),
+  serde(rename_all = "camelCase", deny_unknown_fields)
+)]
+pub enum OutputFormat {
+  Esm,
+  Cjs,
+  Iife,
+  Umd,
+}
+
+impl OutputFormat {
+  #[inline]
+  pub const fn as_str(&self) -> &'static str {
+    match self {
+      Self::Esm => "esm",
+      Self::Cjs => "cjs",
+      Self::Iife => "iife",
+      Self::Umd => "umd",
+    }
+  }
+
+  #[inline]
+  pub fn is_esm(&self) -> bool {
+    matches!(self, Self::Esm)
+  }
+
+  #[inline]
+  pub fn is_esm_or_cjs(&self) -> bool {
+    matches!(self, Self::Esm | Self::Cjs)
+  }
+
+  #[inline]
+  pub fn keep_esm_import_export_syntax(&self) -> bool {
+    matches!(self, Self::Esm)
+  }
+
+  #[inline]
+  /// https://github.com/evanw/esbuild/blob/d34e79e2a998c21bb71d57b92b0017ca11756912/internal/config/config.go#L664-L666
+  /// Since we have different implementation for `IIFE` and extra implementation of `UMD` omit them as well
+  pub fn should_call_runtime_require(&self) -> bool {
+    !matches!(self, Self::Cjs | Self::Umd | Self::Iife)
+  }
+
+  #[inline]
+  pub fn source_type(&self) -> SourceType {
+    match self {
+      Self::Esm => SourceType::mjs(),
+      Self::Cjs | Self::Iife | Self::Umd => SourceType::cjs(),
+    }
+  }
+}
+
+impl Display for OutputFormat {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.as_str())
+  }
+}

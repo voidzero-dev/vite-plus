@@ -1,0 +1,27 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+import assert from "node:assert";
+
+// HIDDEN [rolldown:runtime]
+//#region foo.js
+var foo_exports = /* @__PURE__ */ __export({ foo: () => foo });
+var foo;
+var init_foo = __esm({ "foo.js": (() => {
+	foo = 123;
+}) });
+
+//#endregion
+//#region entry.js
+init_foo();
+const ns2 = (init_foo(), __toCommonJS(foo_exports));
+assert.equal(foo, 123);
+assert.equal(ns2.foo, 123);
+
+//#endregion
+```

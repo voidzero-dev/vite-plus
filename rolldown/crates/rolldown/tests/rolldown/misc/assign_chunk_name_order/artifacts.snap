@@ -1,0 +1,107 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## file.js
+
+```js
+import "./file2.js";
+
+```
+
+## file2.js
+
+```js
+//#region file.js
+console.log("file");
+
+//#endregion
+```
+
+## file3.js
+
+```js
+//#region 1/file.js
+const value = "a";
+
+//#endregion
+export { value };
+```
+
+## file4.js
+
+```js
+//#region 2/file.js
+const value = "b";
+
+//#endregion
+export { value };
+```
+
+## file5.js
+
+```js
+//#region 3/file.js
+const value = "c";
+
+//#endregion
+export { value };
+```
+
+## file6.js
+
+```js
+//#region 4/file.js
+const value = "d";
+
+//#endregion
+export { value };
+```
+
+## file7.js
+
+```js
+//#region 5/file.js
+const value = "e";
+
+//#endregion
+export { value };
+```
+
+## file8.js
+
+```js
+//#region 6/file.js
+const value = "f";
+
+//#endregion
+export { value };
+```
+
+## file9.js
+
+```js
+//#region 7/file.js
+const value = "g";
+
+//#endregion
+export { value };
+```
+
+## main.js
+
+```js
+import "./file2.js";
+
+//#region main.js
+import("./file3.js").then(console.log);
+import("./file4.js").then(console.log);
+import("./file5.js").then(console.log);
+import("./file6.js").then(console.log);
+import("./file7.js").then(console.log);
+import("./file8.js").then(console.log);
+import("./file9.js").then(console.log);
+
+//#endregion
+```

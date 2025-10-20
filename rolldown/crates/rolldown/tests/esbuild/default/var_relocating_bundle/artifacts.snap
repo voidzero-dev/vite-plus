@@ -1,0 +1,70 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## function-nested.js
+
+```js
+//#region function-nested.js
+function x() {
+	for (var e of []);
+	for (var { f, x: [g] } of []);
+	for (var h in {});
+	for (var { j, x: [k] } in {});
+}
+x();
+
+//#endregion
+```
+
+## function.js
+
+```js
+//#region function.js
+function x() {
+	for (var e of []);
+	for (var { f, x: [g] } of []);
+	for (var h in {});
+	for (var { j, x: [k] } in {});
+}
+x();
+
+//#endregion
+```
+
+## let.js
+
+```js
+//#region let.js
+for (let e of []);
+for (let { f, x: [g] } of []);
+for (let h in {});
+for (let { j, x: [k] } in {});
+
+//#endregion
+```
+
+## nested.js
+
+```js
+//#region nested.js
+for (var e of []);
+for (var { f, x: [g] } of []);
+for (var h in {});
+for (var { j, x: [k] } in {});
+
+//#endregion
+```
+
+## top-level.js
+
+```js
+//#region top-level.js
+for (var e of []);
+for (var { f, x: [g] } of []);
+for (var h in {});
+for (var { j, x: [k] } in {});
+
+//#endregion
+```

@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "allowJs": true,
+    "isolatedDeclarations": false,
+    "outDir": "./dist",
+    "tsBuildInfoFile": ".tsbuildinfo"
+  },
+  "references": [{ "path": "../rolldown" }],
+  "include": ["./src/**/*.ts", "vite.config.ts"]
+}

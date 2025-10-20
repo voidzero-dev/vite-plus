@@ -1,0 +1,21 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region foo.ts
+var require_foo = /* @__PURE__ */ __commonJS({ "foo.ts": ((exports) => {
+	exports.foo = 123;
+}) });
+
+//#endregion
+//#region entry.ts
+var import_foo = /* @__PURE__ */ __toESM(require_foo());
+console.log(import_foo, import_foo.foo, 234);
+
+//#endregion
+```

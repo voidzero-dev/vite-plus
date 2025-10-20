@@ -1,0 +1,15 @@
+{
+  "config": {
+    "experimental": {
+      "strictExecutionOrder": true
+    },
+    "advancedChunks": {
+      "groups": [
+        {
+          "test": "foo\\.js",
+          "name": "vendor"
+        }
+      ]
+    }
+  }
+}

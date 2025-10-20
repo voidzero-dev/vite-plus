@@ -1,0 +1,12 @@
+{
+  "config": {
+    "input": [
+      {
+        "import": "main.js"
+      }
+    ],
+    "format": "cjs",
+    "preserveModules": true
+  },
+  "expectExecuted": false
+}

@@ -1,0 +1,15 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "keep",
+        "import": "keep.js"
+      },
+      {
+        "name": "mangle",
+        "import": "mangle.js"
+      }
+    ]
+  },
+  "expectExecuted": false
+}

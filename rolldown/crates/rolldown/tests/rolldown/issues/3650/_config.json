@@ -1,0 +1,20 @@
+{
+  "config": {
+    "experimental": {
+      "strictExecutionOrder": true
+    },
+    "advancedChunks": {
+      "includeDependenciesRecursively": false,
+      "groups": [
+        {
+          "name": "first",
+          "test": "first"
+        },
+        {
+          "name": "second",
+          "test": "second|rolldown:runtime"
+        }
+      ]
+    }
+  }
+}

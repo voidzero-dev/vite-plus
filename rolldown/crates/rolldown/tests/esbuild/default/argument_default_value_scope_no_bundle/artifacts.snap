@@ -1,0 +1,37 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+//#region entry.js
+function a(x = foo) {
+	return x;
+}
+var b = class {
+	fn(x = foo) {
+		return x;
+	}
+};
+let c = [
+	function(x = foo) {
+		return x;
+	},
+	(x = foo) => {
+		return x;
+	},
+	{ fn(x = foo) {
+		return x;
+	} },
+	class {
+		fn(x = foo) {
+			return x;
+		}
+	}
+];
+
+//#endregion
+export { a, b, c };
+```

@@ -1,0 +1,10 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+var module=(function(e){return e.value=1,e})({});
+```

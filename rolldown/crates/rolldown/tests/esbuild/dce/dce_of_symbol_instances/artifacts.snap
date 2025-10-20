@@ -1,0 +1,26 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## class.js
+
+```js
+//#region class.js
+Symbol.iterator, keep;
+keep, Symbol.iterator;
+Symbol.wtf;
+
+//#endregion
+```
+
+## object.js
+
+```js
+//#region object.js
+Symbol.iterator, keep;
+keep, Symbol.iterator;
+Symbol.wtf;
+
+//#endregion
+```

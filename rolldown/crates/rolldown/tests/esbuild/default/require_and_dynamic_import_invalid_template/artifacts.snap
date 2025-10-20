@@ -1,0 +1,31 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region entry.js
+__require(tag`./b`);
+__require(`./${b}`);
+try {
+	__require(tag`./b`);
+	__require(`./${b}`);
+} catch {}
+(async () => {
+	import(tag`./b`);
+	import(`./${b}`);
+	await import(tag`./b`);
+	await import(`./${b}`);
+	try {
+		import(tag`./b`);
+		import(`./${b}`);
+		await import(tag`./b`);
+		await import(`./${b}`);
+	} catch {}
+})();
+
+//#endregion
+```

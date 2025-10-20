@@ -1,0 +1,13 @@
+{
+  "config": {
+    "external": ["node:assert"]
+  },
+  "configVariants": [
+    {
+      "format": "cjs"
+    },
+    {
+      "inlineDynamicImports": true
+    }
+  ]
+}

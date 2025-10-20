@@ -1,0 +1,312 @@
+name: Release Build
+
+permissions: {}
+
+on:
+  workflow_call:
+    inputs:
+      version: # Should be valid semver or 'patch', 'minor', 'major', 'commit'. See scripts/misc/bump-version.js for details.
+        type: string
+        default: 'noop'
+
+jobs:
+  build-binding:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            build: pnpm ci:build-release-binding --target x86_64-apple-darwin
+
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            build: pnpm ci:build-release-binding --target aarch64-apple-darwin
+
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            build: pnpm ci:build-release-binding --target x86_64-pc-windows-msvc
+
+          - os: windows-latest
+            target: i686-pc-windows-msvc
+            build: pnpm ci:build-release-binding --target i686-pc-windows-msvc
+
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            build: pnpm ci:build-release-binding --target aarch64-pc-windows-msvc
+
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            build: pnpm ci:build-release-binding --target x86_64-unknown-linux-gnu --use-napi-cross
+
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            build: pnpm ci:build-release-binding --target x86_64-unknown-linux-musl -x
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            build: pnpm ci:build-release-binding --use-napi-cross --target aarch64-unknown-linux-gnu
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-ohos
+            build: pnpm ci:build-release-binding --target aarch64-unknown-linux-ohos
+
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            build: pnpm ci:build-release-binding --target armv7-unknown-linux-gnueabihf --use-napi-cross
+
+          - os: ubuntu-latest
+            target: aarch64-linux-android
+            build: pnpm ci:build-release-binding --target aarch64-linux-android
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            build: |
+              pnpm ci:build-release-binding -x --target aarch64-unknown-linux-musl
+          - os: ubuntu-latest
+            target: wasm32-wasip1-threads
+            build: |
+              pnpm --filter rolldown build-binding:wasi:release
+
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - name: Setup Rust
+        uses: oxc-project/setup-rust@1ff88fdaffd6ae35c0fb32ccc159340b37d0beac # v1.0.7
+        with:
+          cache-key: release-${{ matrix.target }}
+          save-cache: ${{ github.ref_name == 'main' }}
+
+      - name: Rustup Adds Target
+        run: rustup target add ${{ matrix.target }}
+
+      - uses: mlugg/setup-zig@8d6198c65fb0feaa111df26e6b467fea8345e46f # v2.0.5
+        if: ${{ contains(matrix.target, 'musl') }}
+        with:
+          version: 0.14.1
+
+      - name: Setup OpenHarmony SDK
+        if: ${{ contains(matrix.target, 'ohos') }}
+        uses: Boshen/setup-ohos-sdk@edb865a89a712f1f15dbad932dfa9cfce849d95c # v1.0.0
+
+      - uses: taiki-e/install-action@e43a5023a747770bfcb71ae048541a681714b951 # v2.62.33
+        if: ${{ contains(matrix.target, 'musl') }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          tool: cargo-zigbuild
+
+      # https://github.com/nodejs/node-gyp/issues/2869
+      - name: Setup python
+        run: pip install setuptools
+        if: ${{ matrix.os == 'macos-latest' }}
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Build Binding
+        run: ${{ matrix.build }}
+        shell: bash
+        env:
+          TARGET_CC: clang # for mimalloc
+
+      - name: Upload Binding Artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          if-no-files-found: error
+          name: bindings-${{ matrix.target }}
+          path: |
+            packages/rolldown/src/rolldown-binding.*.node
+            packages/rolldown/src/rolldown-binding.*.wasm
+
+  build-freebsd:
+    name: Build FreeBSD
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+      - name: Build
+        id: build
+        uses: cross-platform-actions/action@e8a7b572196ff79ded1979dc2bb9ee67d1ddb252 # v0.29.0
+        env:
+          DEBUG: napi:*
+          RUSTUP_IO_THREADS: 1
+        with:
+          operating_system: freebsd
+          version: '14.2'
+          memory: 8G
+          cpu_count: 3
+          environment_variables: 'DEBUG RUSTUP_IO_THREADS'
+          shell: bash
+          run: |
+            sudo pkg install -y -f curl node libnghttp2 npm cmake
+            curl https://sh.rustup.rs -sSf --output rustup.sh
+            sh rustup.sh -y --profile minimal --default-toolchain stable
+            source "$HOME/.cargo/env"
+            rustup toolchain install
+            echo "~~~~ rustc --version ~~~~"
+            rustc --version
+            echo "~~~~ node -v ~~~~"
+            node -v
+            pwd
+            ls -lah
+            whoami
+            env
+            sudo corepack enable
+            sudo npm i -g corepack@latest # use a newer corepack due to https://github.com/nodejs/corepack/issues/612
+            pnpm install --ignore-scripts
+            pnpm ci:build-release-binding --target x86_64-unknown-freebsd
+            rm -rf node_modules
+            rm -rf target
+      - name: Upload artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bindings-x86_64-unknown-freebsd
+          path: ./packages/rolldown/src/rolldown-binding.*.node
+          if-no-files-found: error
+
+  build-rolldown-pluginutils:
+    strategy:
+      fail-fast: false
+    name: Build `@rolldown/pluginutils` Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Build `@rolldown/pluginutils`
+        run: pnpm --filter '@rolldown/pluginutils' build
+
+      - name: Upload `@rolldown/pluginutils` Artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          if-no-files-found: error
+          name: pluginutils-artifact
+          path: |
+            packages/pluginutils/dist/**
+
+  build-node-packages:
+    needs: build-rolldown-pluginutils
+    strategy:
+      fail-fast: false
+    name: Build Node Package
+    runs-on: ubuntu-latest
+    env:
+      RELEASING: 'true'
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Build Node binding
+        # This binary is only used to build the node package itself. It's won't be published.
+        run: pnpm --filter rolldown build-binding
+
+      - name: Determine Version
+        if: ${{ inputs.version != 'noop' }}
+        run: node --import @oxc-node/core/register ./scripts/misc/bump-version.js ${ROLLDOWN_VERSION}
+        env:
+          ROLLDOWN_VERSION: ${{ inputs.version }}
+
+      - name: Download Pluginutils Artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: packages/pluginutils/dist
+          name: pluginutils-artifact
+
+      - name: Build Node Packages
+        # Binaries are built in the previous steps. Unlike in local development, we only need to build the node package itself.
+        run: pnpm --filter rolldown build-node
+
+      - name: Upload Node Artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          if-no-files-found: error
+          name: node-artifact
+          path: |
+            packages/rolldown/dist/**
+
+      - name: Upload `rolldown-version.txt`
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          if-no-files-found: warn
+          name: rolldown-version
+          path: |
+            rolldown-version.txt
+
+  build-rolldown-browser:
+    needs: build-rolldown-pluginutils
+    strategy:
+      fail-fast: false
+    name: Build `@rolldown/browser` Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - name: Setup Rust
+        uses: oxc-project/setup-rust@1ff88fdaffd6ae35c0fb32ccc159340b37d0beac # v1.0.7
+        with:
+          cache-key: release-wasm32-wasip1-threads
+          save-cache: ${{ github.ref_name == 'main' }}
+
+      - name: Add WASI target
+        run: rustup target add wasm32-wasip1-threads
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Build Node binding
+        # This binary is only used to build the node package itself. It's won't be published.
+        run: pnpm --filter rolldown build-binding
+
+      - name: Determine Version
+        if: ${{ inputs.version != 'noop' }}
+        run: node --import @oxc-node/core/register ./scripts/misc/bump-version.js ${ROLLDOWN_VERSION}
+        env:
+          ROLLDOWN_VERSION: ${{ inputs.version }}
+
+      - name: Download Pluginutils Artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: packages/pluginutils/dist
+          name: pluginutils-artifact
+
+      - name: Build `@rolldown/browser`
+        # Binaries are built in the previous steps. Unlike in local development, we only need to build the node package itself.
+        run: pnpm --filter "@rolldown/browser" build:release
+
+      - name: Upload `@rolldown/browser` Artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          if-no-files-found: error
+          name: browser-artifact
+          path: |
+            packages/browser/dist/**
+
+  build-rolldown-debug:
+    strategy:
+      fail-fast: false
+    name: Build `@rolldown/debug` Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - name: Setup Rust
+        uses: oxc-project/setup-rust@1ff88fdaffd6ae35c0fb32ccc159340b37d0beac # v1.0.7
+        with:
+          # `@rolldown/debug` only rely on debug build to produce code in `src/generated`.
+          cache-key: debug-build
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Build `@rolldown/debug`
+        # This binary is only used to build the node package itself. It's won't be published.
+        run: pnpm --filter "@rolldown/debug" build
+
+      - name: Upload `@rolldown/debug` Artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          if-no-files-found: error
+          name: debug-artifact
+          path: |
+            packages/debug/dist/**

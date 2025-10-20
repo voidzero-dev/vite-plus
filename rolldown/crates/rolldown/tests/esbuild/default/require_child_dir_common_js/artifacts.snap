@@ -1,0 +1,20 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region dir/index.js
+var require_dir = /* @__PURE__ */ __commonJS({ "dir/index.js": ((exports, module) => {
+	module.exports = 123;
+}) });
+
+//#endregion
+//#region entry.js
+console.log(require_dir());
+
+//#endregion
+```

@@ -1,0 +1,38 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## chunk.js
+
+```js
+// HIDDEN [rolldown:runtime]
+export { __toDynamicImportESM as n, __commonJS as t };
+```
+
+## cjs.js
+
+```js
+import { t as __commonJS } from "./chunk.js";
+
+//#region cjs.js
+var require_cjs = /* @__PURE__ */ __commonJS({ "cjs.js": ((exports, module) => {
+	module.exports = "cjs";
+}) });
+
+//#endregion
+export default require_cjs();
+
+```
+
+## main.js
+
+```js
+import { n as __toDynamicImportESM } from "./chunk.js";
+
+//#region main.js
+var main_default = import("./cjs.js").then(__toDynamicImportESM());
+
+//#endregion
+export { main_default as default };
+```

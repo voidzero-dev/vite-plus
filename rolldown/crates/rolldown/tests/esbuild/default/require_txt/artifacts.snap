@@ -1,0 +1,20 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region test.txt
+var require_test = /* @__PURE__ */ __commonJS({ "test.txt": ((exports, module) => {
+	module.exports = "This is a test.";
+}) });
+
+//#endregion
+//#region entry.js
+console.log(require_test());
+
+//#endregion
+```

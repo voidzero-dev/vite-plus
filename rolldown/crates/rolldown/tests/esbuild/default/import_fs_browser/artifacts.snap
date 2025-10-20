@@ -1,0 +1,70 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'fs' in entry.js
+   ╭─[ entry.js:1:8 ]
+   │
+ 1 │ import 'fs'
+   │        ──┬─  
+   │          ╰─── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'fs' in entry.js
+   ╭─[ entry.js:2:21 ]
+   │
+ 2 │ import * as fs from 'fs'
+   │                     ──┬─  
+   │                       ╰─── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'fs' in entry.js
+   ╭─[ entry.js:3:26 ]
+   │
+ 3 │ import defaultValue from 'fs'
+   │                          ──┬─  
+   │                            ╰─── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'fs' in entry.js
+   ╭─[ entry.js:4:28 ]
+   │
+ 4 │ import {readFileSync} from 'fs'
+   │                            ──┬─  
+   │                              ╰─── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+import * as fs from "fs";
+import defaultValue, { readFileSync } from "fs";
+
+//#region entry.js
+console.log(fs, readFileSync, defaultValue);
+
+//#endregion
+```

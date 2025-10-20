@@ -1,0 +1,76 @@
+name: 'Automation Labeled'
+
+permissions: {}
+
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    types: [labeled]
+  issues:
+    types: [labeled]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha || github.event.issue.number }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
+
+jobs:
+  convert_stale_PR_to_draft:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request_target' && github.event.label.name == 'stale'
+    permissions:
+      pull-requests: write
+      contents: write
+    steps:
+      - name: Authenticate GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Convert Stale PR to Draft
+        run: |
+          gh pr ready ${{ github.event.pull_request.number }} --undo
+
+  needs-reproduction:
+    runs-on: ubuntu-latest
+    if: github.event.label.name == 'needs-reproduction'
+    permissions:
+      issues: write
+    steps:
+      - name: Find Comment
+        uses: peter-evans/find-comment@b30e6a3c0ed37e7c023ccd3f1db5c6c0b0c23aad # v4.0.0
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: 'Issues marked with `needs-reproduction`'
+
+      - name: Write a new comment
+        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5.0.0
+        continue-on-error: true
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.issue.number }}
+          body: 'Hello @${{ github.event.issue.user.login }}. Please provide a [minimal reproduction](https://stackoverflow.com/help/minimal-reproducible-example) using a GitHub repository or [StackBlitz](https://stackblitz.com/fork/github/rolldown/rolldown-starter-stackblitz?file=README.md). Issues marked with `needs-reproduction` will be closed if they have no activity within 14 days. Thanks!'
+          reactions-edit-mode: 'replace'
+          edit-mode: replace
+
+  create_issue_if_doc_labeled_on_pr:
+    if: github.event_name == 'pull_request_target' && github.event.label.name == 'documentation'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: read
+
+    steps:
+      - name: Create Issue from PR
+        uses: dacbd/create-issue-action@fec641442c0897e734fad173cfe83ae21a2284a3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: 'Update doc for : ${{ github.event.pull_request.title }} #${{github.event.pull_request.number}}'
+          body: |
+            This issue is to track documentation tasks related to Pull Request #${{ github.event.pull_request.number }}.
+
+            **PR Title:** ${{ github.event.pull_request.title }}
+            **PR Author:** @${{ github.event.pull_request.user.login }}
+            **PR Link:** ${{ github.event.pull_request.html_url }}
+
+            Please ensure all necessary documentation updates are completed.
+          assignees: ${{ github.event.pull_request.user.login }}

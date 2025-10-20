@@ -1,0 +1,28 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+import assert from "node:assert";
+
+// HIDDEN [rolldown:runtime]
+//#region y.b64
+var y_default = "eQ==";
+
+//#endregion
+//#region x.b64
+var require_x = /* @__PURE__ */ __commonJS({ "x.b64": ((exports, module) => {
+	module.exports = "eA==";
+}) });
+
+//#endregion
+//#region entry.js
+const x_b64 = require_x();
+assert.deepEqual(x_b64, "eA==");
+assert.equal(y_default, "eQ==");
+
+//#endregion
+```

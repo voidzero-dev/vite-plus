@@ -1,0 +1,38 @@
+{
+  "name": "@rolldown/pluginutils",
+  "version": "1.0.0-beta.43",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rolldown/rolldown.git",
+    "directory": "packages/pluginutils"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --typecheck"
+  },
+  "devDependencies": {
+    "@types/picomatch": "catalog:",
+    "picomatch": "catalog:",
+    "tsdown": "catalog:",
+    "vitest": "catalog:"
+  },
+  "tsdown": {
+    "exports": true,
+    "fixedExtension": true
+  }
+}

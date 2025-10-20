@@ -1,0 +1,13 @@
+{
+  "config": {
+    "preserveEntrySignatures": "allow-extension"
+  },
+  "configVariants": [
+    {
+      "preserveEntrySignatures": "strict"
+    },
+    {
+      "preserveEntrySignatures": "false"
+    }
+  ]
+}

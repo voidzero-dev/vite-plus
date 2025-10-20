@@ -1,0 +1,61 @@
+{
+  "name": "@rolldown/browser",
+  "version": "1.0.0-beta.43",
+  "description": "Fast JavaScript/TypeScript bundler in Rust with Rollup-compatible API.",
+  "homepage": "https://rolldown.rs/",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rolldown/rolldown.git",
+    "directory": "packages/browser"
+  },
+  "license": "MIT",
+  "keywords": [
+    "webpack",
+    "parcel",
+    "esbuild",
+    "rollup",
+    "bundler",
+    "rolldown"
+  ],
+  "files": [
+    "bin",
+    "dist",
+    "!*/.tsbuildinfo"
+  ],
+  "bin": {
+    "rolldown": "./bin/cli.mjs"
+  },
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "browser": "./dist/index.browser.mjs",
+      "default": "./dist/index.mjs"
+    },
+    "./config": "./dist/config.mjs",
+    "./experimental": {
+      "browser": "./dist/experimental-index.browser.mjs",
+      "default": "./dist/experimental-index.mjs"
+    },
+    "./filter": "./dist/filter-index.mjs",
+    "./parallelPlugin": "./dist/parallel-plugin.mjs",
+    "./parseAst": "./dist/parse-ast-index.mjs",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "scripts": {
+    "build": "pnpm run build:debug",
+    "build:debug": "pnpm run --filter rolldown build-browser-pkg:debug",
+    "build:release": "pnpm run --filter rolldown build-browser-pkg:release",
+    "build-node": "TARGET='browser' pnpm run --filter rolldown build-node",
+    "preinstall": "npx only-allow pnpm"
+  },
+  "dependencies": {
+    "@napi-rs/wasm-runtime": "catalog:"
+  }
+}

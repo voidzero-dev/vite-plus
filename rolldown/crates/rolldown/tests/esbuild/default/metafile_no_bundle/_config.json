@@ -1,0 +1,19 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "entry.js"
+      },
+      {
+        "name": "entry",
+        "import": "entry.css"
+      }
+    ],
+    "moduleTypes": {
+      ".css": "css"
+    },
+    "external": ["./dynamic", "./file", "./file2"]
+  },
+  "expectExecuted": false
+}

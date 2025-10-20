@@ -1,0 +1,16 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+//#region entry.js
+function foo(RegExp) {
+	return new RegExp(/./d, "d");
+}
+
+//#endregion
+export { foo };
+```

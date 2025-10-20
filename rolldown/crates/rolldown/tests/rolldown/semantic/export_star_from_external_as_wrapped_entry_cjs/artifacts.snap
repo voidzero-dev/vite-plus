@@ -1,0 +1,31 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+
+//#region main.js
+var main_exports = /* @__PURE__ */ __export({ main: () => main });
+__reExport(main_exports, require("node:fs"));
+var main;
+var init_main = __esm({ "main.js": (() => {
+	main = "main";
+	console.log((init_main(), __toCommonJS(main_exports)));
+}) });
+
+//#endregion
+init_main();
+exports.main = main;
+var node_fs = require("node:fs");
+Object.keys(node_fs).forEach(function (k) {
+  if (k !== 'default' && !Object.prototype.hasOwnProperty.call(exports, k)) Object.defineProperty(exports, k, {
+    enumerable: true,
+    get: function () { return node_fs[k]; }
+  });
+});
+
+```

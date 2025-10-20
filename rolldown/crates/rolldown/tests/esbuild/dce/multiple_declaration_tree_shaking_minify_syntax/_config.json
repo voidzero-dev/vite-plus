@@ -1,0 +1,24 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "var2",
+        "import": "var2.js"
+      },
+      {
+        "name": "var3",
+        "import": "var3.js"
+      },
+      {
+        "name": "function2",
+        "import": "function2.js"
+      },
+      {
+        "name": "function3",
+        "import": "function3.js"
+      }
+    ]
+  },
+  "expectError": true,
+  "expectExecuted": false
+}

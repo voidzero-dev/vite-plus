@@ -1,0 +1,46 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## keep.js
+
+```js
+//#region keep.js
+foo("_keepThisProperty");
+foo("_keepThisProperty");
+foo(x ? "_keepThisProperty" : "_keepThisPropertyToo");
+x[foo("_keepThisProperty")];
+x?.[foo("_keepThisProperty")];
+foo("_keepThisProperty");
+foo("_keepThisProperty");
+var { [foo("_keepThisProperty")]: x } = y;
+foo("_keepThisProperty") in x;
+
+//#endregion
+```
+
+## mangle.js
+
+```js
+//#region mangle.js
+x["_mangleThis"];
+x?.["_mangleThis"];
+x[y ? "_mangleThis" : z];
+x?.[y ? "_mangleThis" : z];
+x[y ? z : "_mangleThis"];
+x?.[y ? z : "_mangleThis"];
+x[y, "_mangleThis"];
+x?.[y, "_mangleThis"];
+y;
+y;
+var { "_mangleThis": x } = y;
+var { ["_mangleThis"]: x } = y;
+var { [(z, "_mangleThis")]: x } = y;
+"_mangleThis" in x;
+(y ? "_mangleThis" : z) in x;
+(y ? z : "_mangleThis") in x;
+(y, "_mangleThis") in x;
+
+//#endregion
+```

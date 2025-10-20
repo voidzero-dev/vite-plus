@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": ["src/**/*.js"],
+  "compilerOptions": {
+    "resolveJsonModule": true,
+    "isolatedDeclarations": false,
+    "allowJs": true,
+    "checkJs": true,
+    "esModuleInterop": true,
+    "composite": true,
+    "types": ["mocha", "node"],
+    "module": "CommonJS",
+    "moduleResolution": "Node"
+  }
+}

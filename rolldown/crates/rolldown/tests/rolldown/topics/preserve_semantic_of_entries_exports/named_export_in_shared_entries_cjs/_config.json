@@ -1,0 +1,17 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "./main.js"
+      },
+      {
+        "name": "entry2",
+        "import": "./main.js"
+      }
+    ],
+    "format": "cjs",
+    "esModule": "never",
+    "exports": "named"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "",
+        "import": ".htaccess"
+      },
+      {
+        "name": "entry",
+        "import": "entry.js"
+      },
+      {
+        "name": "",
+        "import": ".ts"
+      }
+    ]
+  },
+  "expectExecuted": false
+}

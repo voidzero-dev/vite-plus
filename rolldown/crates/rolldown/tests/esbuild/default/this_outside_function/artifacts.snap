@@ -1,0 +1,44 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+//#region entry.js
+if (shouldBeExportsNotThis) {
+	console.log(void 0);
+	console.log((x = void 0) => void 0);
+	console.log({ x: void 0 });
+	console.log(class extends (void 0).foo {});
+	console.log(class {
+		[(void 0).foo];
+	});
+	console.log(class {
+		[(void 0).foo]() {}
+	});
+	console.log(class {
+		static [(void 0).foo];
+	});
+	console.log(class {
+		static [(void 0).foo]() {}
+	});
+}
+if (shouldBeThisNotExports) {
+	console.log(class {
+		foo = this;
+	});
+	console.log(class {
+		foo() {}
+	});
+	console.log(class {
+		static foo = this;
+	});
+	console.log(class {
+		static foo() {}
+	});
+}
+
+//#endregion
+```

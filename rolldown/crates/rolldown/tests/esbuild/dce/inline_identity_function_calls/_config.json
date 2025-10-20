@@ -1,0 +1,84 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "identity",
+        "import": "identity.js"
+      },
+      {
+        "name": "identity-last",
+        "import": "identity-last.js"
+      },
+      {
+        "name": "identity-first",
+        "import": "identity-first.js"
+      },
+      {
+        "name": "identity-generator",
+        "import": "identity-generator.js"
+      },
+      {
+        "name": "identity-async",
+        "import": "identity-async.js"
+      },
+      {
+        "name": "identity-cross-module",
+        "import": "identity-cross-module.js"
+      },
+      {
+        "name": "identity-no-args",
+        "import": "identity-no-args.js"
+      },
+      {
+        "name": "identity-two-args",
+        "import": "identity-two-args.js"
+      },
+      {
+        "name": "reassign",
+        "import": "reassign.js"
+      },
+      {
+        "name": "reassign-inc",
+        "import": "reassign-inc.js"
+      },
+      {
+        "name": "reassign-div",
+        "import": "reassign-div.js"
+      },
+      {
+        "name": "reassign-array",
+        "import": "reassign-array.js"
+      },
+      {
+        "name": "reassign-object",
+        "import": "reassign-object.js"
+      },
+      {
+        "name": "not-identity-two-args",
+        "import": "not-identity-two-args.js"
+      },
+      {
+        "name": "not-identity-default",
+        "import": "not-identity-default.js"
+      },
+      {
+        "name": "not-identity-array",
+        "import": "not-identity-array.js"
+      },
+      {
+        "name": "not-identity-object",
+        "import": "not-identity-object.js"
+      },
+      {
+        "name": "not-identity-rest",
+        "import": "not-identity-rest.js"
+      },
+      {
+        "name": "not-identity-return",
+        "import": "not-identity-return.js"
+      }
+    ]
+  },
+  "expectError": true,
+  "expectExecuted": false
+}

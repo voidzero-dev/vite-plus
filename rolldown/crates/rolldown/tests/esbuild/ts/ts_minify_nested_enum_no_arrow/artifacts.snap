@@ -1,0 +1,27 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## a.js
+
+```js
+
+```
+
+## b.js
+
+```js
+//#region b.ts
+function foo() {
+	return /* @__PURE__ */ function(Foo) {
+		Foo[Foo["X"] = 0] = "X";
+		Foo[Foo["Y"] = 1] = "Y";
+		Foo[Foo["Z"] = Foo] = "Z";
+		return Foo;
+	}({});
+}
+
+//#endregion
+export { foo };
+```

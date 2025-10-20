@@ -1,0 +1,23 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## a.js
+
+```js
+//#region b.ts
+var Foo = class {};
+(function(_Foo) {
+	_Foo.foo = 1;
+})(Foo || (Foo = {}));
+(function(_Foo2) {
+	_Foo2.bar = 2;
+})(Foo || (Foo = {}));
+
+//#endregion
+//#region a.ts
+console.log(new Foo());
+
+//#endregion
+```

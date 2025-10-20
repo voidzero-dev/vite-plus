@@ -1,0 +1,20 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+//#region main.js
+console.log(1);
+function main_default() {
+	console.log({
+		a: 2,
+		NaN: NaN
+	});
+}
+
+//#endregion
+export { main_default as default };
+```

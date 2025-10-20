@@ -1,0 +1,32 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'demo-pkg' in src/entry.js
+   ╭─[ src/entry.js:1:16 ]
+   │
+ 1 │ import fn from 'demo-pkg'
+   │                ─────┬────  
+   │                     ╰────── Module not found, treating it as an external dependency
+   │ 
+   │ Help: The "main" field here was ignored. Main fields must be configured explicitly when using the "neutral" platform.
+───╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+import fn from "demo-pkg";
+
+//#region src/entry.js
+console.log(fn());
+
+//#endregion
+```

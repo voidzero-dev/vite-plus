@@ -1,0 +1,19 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region foo.js
+var foo_exports = /* @__PURE__ */ __export({
+	foo: () => foo,
+	ns: () => foo_exports
+});
+const foo = 123;
+
+//#endregion
+export { foo, foo_exports as ns };
+```

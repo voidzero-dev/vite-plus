@@ -1,0 +1,46 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## read.js
+
+```js
+//#region read.js
+console.log([
+	null,
+	null,
+	null
+], [
+	ident,
+	ident,
+	ident
+], [
+	dot.chain,
+	dot.chain,
+	dot.chain
+]);
+
+//#endregion
+```
+
+## write.js
+
+```js
+//#region write.js
+console.log([
+	a = 0,
+	b.c = 0,
+	b["c"] = 0
+], [
+	ident = 0,
+	ident = 0,
+	ident = 0
+], [
+	dot.chain = 0,
+	dot.chain = 0,
+	dot.chain = 0
+]);
+
+//#endregion
+```

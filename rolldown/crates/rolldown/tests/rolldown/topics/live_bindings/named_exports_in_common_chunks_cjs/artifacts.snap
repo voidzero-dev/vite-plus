@@ -1,0 +1,79 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## async-entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+const require_shared = require('./shared.js');
+let node_assert = require("node:assert");
+node_assert = __toESM(node_assert);
+
+//#region async-entry.js
+require_shared.reset();
+node_assert.default.strictEqual(require_shared.count, 0);
+node_assert.default.strictEqual(require_shared.count, require_shared.count);
+require_shared.inc();
+node_assert.default.strictEqual(require_shared.count, 1);
+node_assert.default.strictEqual(require_shared.count, require_shared.count);
+require_shared.inc();
+node_assert.default.strictEqual(require_shared.count, 2);
+node_assert.default.strictEqual(require_shared.count, require_shared.count);
+
+//#endregion
+```
+
+## main.js
+
+```js
+const require_shared = require('./shared.js');
+
+//#region main.js
+Promise.resolve().then(() => require("./async-entry.js"));
+
+//#endregion
+Object.defineProperty(exports, 'count', {
+  enumerable: true,
+  get: function () {
+    return require_shared.count;
+  }
+});
+exports.inc = require_shared.inc;
+exports.reset = require_shared.reset;
+```
+
+## shared.js
+
+```js
+
+//#region shared.js
+let count = 0;
+function reset() {
+	count = 0;
+}
+function inc() {
+	count += 1;
+}
+
+//#endregion
+Object.defineProperty(exports, 'count', {
+  enumerable: true,
+  get: function () {
+    return count;
+  }
+});
+Object.defineProperty(exports, 'inc', {
+  enumerable: true,
+  get: function () {
+    return inc;
+  }
+});
+Object.defineProperty(exports, 'reset', {
+  enumerable: true,
+  get: function () {
+    return reset;
+  }
+});
+```

@@ -1,0 +1,37 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'foo' in entry.js
+   ╭─[ entry.js:1:15 ]
+   │
+ 1 │ export * from "foo"
+   │               ──┬──  
+   │                 ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+(function() {
+
+
+
+var foo = require("foo");
+Object.keys(foo).forEach(function (k) {
+  if (k !== 'default' && !Object.prototype.hasOwnProperty.call(exports, k)) Object.defineProperty(exports, k, {
+    enumerable: true,
+    get: function () { return foo[k]; }
+  });
+});
+
+})();
+```

@@ -1,0 +1,12 @@
+{
+  "config": {
+    "optimization": {
+      "inlineConst": {
+        "mode": "smart"
+      }
+    },
+    "define": {
+      "process.env.NODE_ENV": "\"production\""
+    }
+  }
+}

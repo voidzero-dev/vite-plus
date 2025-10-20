@@ -1,0 +1,24 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "import-computed",
+        "import": "import-computed.js"
+      },
+      {
+        "name": "import-normal",
+        "import": "import-normal.js"
+      },
+      {
+        "name": "local-computed",
+        "import": "local-computed.js"
+      },
+      {
+        "name": "local-normal",
+        "import": "local-normal.js"
+      }
+    ],
+    "treeshake": false
+  },
+  "expectExecuted": false
+}

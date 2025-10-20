@@ -1,0 +1,198 @@
+use bitflags::bitflags;
+use oxc_index::IndexVec;
+use rustc_hash::FxHashMap;
+
+use crate::{ImportRecordIdx, SideEffectDetail, SymbolOrMemberExprRef, SymbolRef};
+
+use super::symbol_or_member_expr_ref::TaggedSymbolRef;
+
+#[derive(Debug, Clone)]
+pub struct StmtInfos {
+  /// The first `StmtInfo` is used to represent the statement that declares and constructs Module Namespace Object
+  pub infos: IndexVec<StmtInfoIdx, StmtInfo>,
+  // only for top level symbols
+  symbol_ref_to_declared_stmt_idx: FxHashMap<SymbolRef, Vec<StmtInfoIdx>>,
+  /// When `PropertyWriteSideEffects` is `false`, property write access stmt should be included
+  /// when the top level symbol is included.
+  /// Since they are rarely used, we box it to reduce the size of `StmtInfos`.
+  symbol_ref_to_referenced_stmt_idx: Box<FxHashMap<SymbolRef, Vec<StmtInfoIdx>>>,
+}
+
+impl StmtInfos {
+  pub const NAMESPACE_STMT_IDX: StmtInfoIdx = StmtInfoIdx::from_raw_unchecked(0);
+
+  pub fn new() -> Self {
+    Self {
+      infos: IndexVec::from_iter([StmtInfo::default()]),
+      symbol_ref_to_declared_stmt_idx: FxHashMap::default(),
+      symbol_ref_to_referenced_stmt_idx: Box::new(FxHashMap::default()),
+    }
+  }
+
+  pub fn get(&self, id: StmtInfoIdx) -> &StmtInfo {
+    &self.infos[id]
+  }
+
+  pub fn get_mut(&mut self, id: StmtInfoIdx) -> &mut StmtInfo {
+    &mut self.infos[id]
+  }
+
+  pub fn add_stmt_info(&mut self, info: StmtInfo) -> StmtInfoIdx {
+    let id = self.infos.push(info);
+    for symbol_ref in &*self.infos[id].declared_symbols {
+      self.symbol_ref_to_declared_stmt_idx.entry(symbol_ref.inner()).or_default().push(id);
+    }
+    id
+  }
+
+  /// # Panic
+  /// Caller should guarantee the stmt is included in `stmts` before, or it will panic.
+  pub fn declare_symbol_for_stmt(&mut self, id: StmtInfoIdx, symbol_ref: TaggedSymbolRef) {
+    self.infos[id].declared_symbols.push(symbol_ref);
+    self.symbol_ref_to_declared_stmt_idx.entry(symbol_ref.inner()).or_default().push(id);
+  }
+
+  /// # Panic
+  /// Caller should guarantee the stmt is included in `stmts` before, or it will panic.
+  #[inline]
+  pub fn reference_stmt_for_symbol_id(&mut self, id: StmtInfoIdx, symbol_ref: SymbolRef) {
+    self.symbol_ref_to_referenced_stmt_idx.entry(symbol_ref).or_default().push(id);
+  }
+
+  pub fn get_namespace_stmt_info(&self) -> &StmtInfo {
+    &self.infos[Self::NAMESPACE_STMT_IDX]
+  }
+
+  pub fn replace_namespace_stmt_info(&mut self, info: StmtInfo) -> StmtInfoIdx {
+    self.infos[Self::NAMESPACE_STMT_IDX] = info;
+    for symbol_ref in self.infos[Self::NAMESPACE_STMT_IDX]
+      .declared_symbols
+      .iter()
+      .filter(|item| matches!(item, TaggedSymbolRef::Normal(_)))
+    {
+      self
+        .symbol_ref_to_declared_stmt_idx
+        .entry(symbol_ref.inner())
+        .or_default()
+        .push(Self::NAMESPACE_STMT_IDX);
+    }
+    Self::NAMESPACE_STMT_IDX
+  }
+
+  pub fn declared_stmts_by_symbol(&self, symbol_ref: &SymbolRef) -> &[StmtInfoIdx] {
+    self.symbol_ref_to_declared_stmt_idx.get(symbol_ref).map_or(&[], Vec::as_slice)
+  }
+
+  pub fn iter_enumerated_without_namespace_stmt(
+    &self,
+  ) -> impl Iterator<Item = (StmtInfoIdx, &StmtInfo)> {
+    self.infos.iter_enumerated().skip(1)
+  }
+
+  pub fn symbol_ref_to_referenced_stmt_idx(&self) -> &FxHashMap<SymbolRef, Vec<StmtInfoIdx>> {
+    &self.symbol_ref_to_referenced_stmt_idx
+  }
+}
+
+impl std::ops::Deref for StmtInfos {
+  type Target = IndexVec<StmtInfoIdx, StmtInfo>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.infos
+  }
+}
+
+impl std::ops::DerefMut for StmtInfos {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.infos
+  }
+}
+
+oxc_index::define_index_type! {
+  #[derive(Default)]
+  pub struct StmtInfoIdx = u32;
+}
+
+bitflags! {
+    #[derive(Debug, Default, Clone, Copy)]
+    pub struct StmtInfoMeta: u8 {
+        const FnDecl = 1;
+        const ClassDecl = 1 << 1;
+        /// Flag for `var fn = function (){}`
+        const FnExpr = 1 << 2;
+        /// Flag for `var foo = class {}`
+        const ClassExpr = 1 << 3;
+        /// If this statement needs to reference `__require` runtime
+        const HasDummyRecord = 1 << 4;
+        /// see `has_dynamic_exports` in https://github.com/rolldown/rolldown/blob/8bc7dca5a09047b6b494e3fa7b6b7564aa465372/crates/rolldown/src/types/linking_metadata.rs?plain=1#L49
+        const ReExportDynamicExports = 1 << 5;
+        const KeepNamesType = StmtInfoMeta::FnDecl.bits() | StmtInfoMeta::ClassDecl.bits() | StmtInfoMeta::FnExpr.bits() | StmtInfoMeta::ClassExpr.bits();
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct StmtInfo {
+  // currently, we only store top level symbols
+  pub declared_symbols: Vec<TaggedSymbolRef>,
+  // We will add symbols of other modules to `referenced_symbols`, so we need `SymbolRef`
+  // here instead of `SymbolId`.
+  /// Top level symbols referenced by this statement.
+  pub referenced_symbols: Vec<SymbolOrMemberExprRef>,
+  pub side_effect: SideEffectDetail,
+  pub is_included: bool,
+  pub import_records: Vec<ImportRecordIdx>,
+  #[cfg(debug_assertions)]
+  pub debug_label: Option<String>,
+  pub meta: StmtInfoMeta,
+  // Some statements are generated by bundler, and they should be applied tree shaking to decide if they should be included in the final bundle.
+  pub force_tree_shaking: bool,
+}
+
+#[cfg(target_pointer_width = "64")]
+const _: () = {
+  #[cfg(not(debug_assertions))]
+  assert!(size_of::<StmtInfo>() == 80usize);
+};
+
+impl StmtInfo {
+  pub fn to_debug_stmt_info_for_tree_shaking(&self) -> DebugStmtInfoForTreeShaking {
+    DebugStmtInfoForTreeShaking {
+      is_included: self.is_included,
+      side_effect: self.side_effect,
+      #[cfg(debug_assertions)]
+      source: self.debug_label.clone().unwrap_or_else(|| "<Noop>".into()),
+    }
+  }
+
+  #[must_use]
+  pub fn with_declared_symbols(mut self, declared_symbols: Vec<TaggedSymbolRef>) -> Self {
+    self.declared_symbols = declared_symbols;
+    self
+  }
+
+  #[must_use]
+  pub fn with_referenced_symbols(mut self, referenced_symbols: Vec<SymbolOrMemberExprRef>) -> Self {
+    self.referenced_symbols = referenced_symbols;
+    self
+  }
+
+  #[inline]
+  pub fn unwrap_debug_label(&self) -> &str {
+    #[cfg(debug_assertions)]
+    {
+      self.debug_label.as_deref().unwrap_or("<Noop>")
+    }
+    #[cfg(not(debug_assertions))]
+    {
+      "<Noop>"
+    }
+  }
+}
+
+#[derive(Debug)]
+pub struct DebugStmtInfoForTreeShaking {
+  pub is_included: bool,
+  pub side_effect: SideEffectDetail,
+  #[cfg(debug_assertions)]
+  pub source: String,
+}

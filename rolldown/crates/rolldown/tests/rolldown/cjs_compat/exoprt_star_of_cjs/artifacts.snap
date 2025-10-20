@@ -1,0 +1,31 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region c.js
+var require_c = /* @__PURE__ */ __commonJS({ "c.js": ((exports) => {
+	exports.test = 1e3;
+}) });
+
+//#endregion
+//#region b.js
+var b_exports = {};
+__reExport(b_exports, /* @__PURE__ */ __toESM(require_c()));
+
+//#endregion
+//#region a.js
+var a_exports = {};
+__reExport(a_exports, b_exports);
+
+//#endregion
+//#region main.js
+var main_exports = {};
+__reExport(main_exports, a_exports);
+
+//#endregion
+```

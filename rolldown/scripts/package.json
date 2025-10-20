@@ -1,0 +1,35 @@
+{
+  "name": "@rolldown-internal/scripts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "type-check": "tsc -b",
+    "setup-bench": "oxnode ./misc/setup-benchmark-input/index.js",
+    "esbuild-snap-diff": "oxnode ./snap-diff/index.ts"
+  },
+  "dependencies": {
+    "@pnpm/find-workspace-packages": "catalog:",
+    "@types/fs-extra": "catalog:",
+    "@types/semver": "catalog:",
+    "chalk": "catalog:",
+    "change-case": "catalog:",
+    "dedent": "catalog:",
+    "fast-glob": "catalog:",
+    "follow-redirects": "catalog:",
+    "fs-extra": "catalog:",
+    "remark-parse": "catalog:",
+    "rolldown-tests": "workspace:*",
+    "semver": "catalog:",
+    "unified": "catalog:",
+    "zx": "catalog:"
+  },
+  "devDependencies": {
+    "@oxc-node/cli": "catalog:",
+    "acorn": "catalog:",
+    "astring": "catalog:",
+    "diff": "catalog:",
+    "estree-toolkit": "catalog:",
+    "micromatch": "catalog:",
+    "web-tree-sitter": "catalog:"
+  }
+}

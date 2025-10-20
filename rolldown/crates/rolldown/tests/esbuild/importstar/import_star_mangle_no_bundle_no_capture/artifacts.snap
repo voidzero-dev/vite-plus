@@ -1,0 +1,15 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+import * as ns from "./foo";
+
+//#region entry.js
+console.log(ns.foo, ns.foo, 234);
+
+//#endregion
+```

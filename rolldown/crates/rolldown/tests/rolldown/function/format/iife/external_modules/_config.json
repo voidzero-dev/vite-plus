@@ -1,0 +1,11 @@
+{
+  "config": {
+    "format": "iife",
+    "external": [
+      "node:path",
+      "node:fs"
+    ],
+    "name": "module"
+  },
+  "expectExecuted": false
+}

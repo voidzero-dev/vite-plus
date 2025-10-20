@@ -1,0 +1,51 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+import { t as __esm } from "./rolldown-runtime.js";
+import { n as init_foo, t as foo } from "./vendor.js";
+import nodeAssert from "node:assert";
+
+//#region main.js
+var init_main = __esm({ "main.js": (() => {
+	init_foo();
+	nodeAssert.strictEqual(foo, "foo bar");
+}) });
+
+//#endregion
+init_main();
+```
+
+## rolldown-runtime.js
+
+```js
+// HIDDEN [rolldown:runtime]
+export { __esm as t };
+```
+
+## vendor.js
+
+```js
+import { t as __esm } from "./rolldown-runtime.js";
+
+//#region bar.js
+var bar;
+var init_bar = __esm({ "bar.js": (() => {
+	bar = "bar";
+}) });
+
+//#endregion
+//#region foo.js
+var foo;
+var init_foo = __esm({ "foo.js": (() => {
+	init_bar();
+	foo = "foo " + bar;
+}) });
+
+//#endregion
+export { init_foo as n, foo as t };
+```

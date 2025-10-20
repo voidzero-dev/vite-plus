@@ -1,0 +1,30 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "bytesInOutput should be at least 99 (1)",
+        "import": "bytesInOutput should be at least 99 (1).js"
+      },
+      {
+        "name": "bytesInOutput should be at least 99 (2)",
+        "import": "bytesInOutput should be at least 99 (2).js"
+      },
+      {
+        "name": "bytesInOutput should be at least 99 (3)",
+        "import": "bytesInOutput should be at least 99 (3).js"
+      },
+      {
+        "name": "bytesInOutput should be at least 99",
+        "import": "bytesInOutput should be at least 99.css"
+      }
+    ],
+    "moduleTypes": {
+      ".css": "css",
+      ".file": "asset"
+    },
+    // Imported empty module would be treated as esm module in rolldown.
+    // If we don't shim missing exports, it would have a `MISSING_EXPORT` error.
+    "shimMissingExports": true
+  },
+  "expectExecuted": false
+}

@@ -1,0 +1,17 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Errors
+
+## PARSE_ERROR
+
+```text
+[PARSE_ERROR] Error: Delete of an unqualified identifier in strict mode.
+   ╭─[ entry.js:6:8 ]
+   │
+ 6 │ delete keep;
+   │        ──┬─  
+   │          ╰─── 
+───╯
+
+```

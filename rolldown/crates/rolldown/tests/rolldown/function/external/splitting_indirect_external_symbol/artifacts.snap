@@ -1,0 +1,36 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## indirect.js
+
+```js
+import { t as read } from "./indirect2.js";
+
+export { read };
+```
+
+## indirect2.js
+
+```js
+import { read } from "node:fs";
+
+export { read as t };
+```
+
+## main.js
+
+```js
+import { t as read } from "./indirect2.js";
+
+//#region read.js
+console.log(1);
+
+//#endregion
+//#region main.js
+console.log(read);
+import("./indirect.js").then(console.log);
+
+//#endregion
+```

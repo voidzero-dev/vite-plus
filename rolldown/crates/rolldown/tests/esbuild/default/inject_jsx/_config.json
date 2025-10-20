@@ -1,0 +1,32 @@
+{
+	"config": {
+		"input": [
+			{
+				"name": "entry",
+				"import": "entry.jsx"
+			}
+		],
+		"define": {
+			"React.createElement": "el",
+			"React.Fragment": "frag"
+		},
+		"inject": [
+			{
+				"from": "./inject.js",
+				"imported": "frag",
+				"type": "named"
+			},
+			{
+				"from": "./inject.js",
+				"imported": "el",
+				"type": "named"
+			}
+		],
+    "transform": {
+      "jsx": {
+        "runtime": "classic"
+      }
+    }
+	},
+	"expectExecuted": false
+}

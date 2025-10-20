@@ -1,0 +1,140 @@
+name: Publish to NPM
+
+permissions: {}
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - packages/rolldown/package.json
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      version_changed: ${{ steps.version.outputs.changed }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - name: Check version changes
+        uses: EndBug/version-check@5102328418c0130d66ca712d755c303e93368ce2 # v2.1.7
+        id: version
+        with:
+          static-checking: localIsNew
+          file-url: https://unpkg.com/rolldown@latest/package.json
+          file-name: packages/rolldown/package.json
+
+      - name: Print version
+        if: steps.version.outputs.changed == 'true'
+        env:
+          NEW_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          echo "Version change found! New version: ${NEW_VERSION}"
+
+  build:
+    needs: check
+    if: needs.check.outputs.version_changed == 'true'
+    name: Build bindings and node packages
+    uses: ./.github/workflows/reusable-release-build.yml
+
+  publish:
+    needs: build
+    if: github.repository == 'rolldown/rolldown'
+    name: Publish npm Packages
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # for `npm publish --provenance`
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Git Reset Hard
+        run: git reset --hard # fix pnpm install add new line for package.json
+
+      - name: Download Binding Artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: packages/rolldown/artifacts
+
+      - name: Create rolldown/npm dirs
+        run: pnpm --filter rolldown exec napi create-npm-dirs
+
+      - name: Move Binding Artifacts
+        run: pnpm --filter rolldown artifacts
+
+      - name: List Rolldown Bindings
+        run: ls -R ./packages/rolldown/npm
+        shell: bash
+
+      - name: Download Node Artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: packages/rolldown/dist
+          name: node-artifact
+
+      - name: Download `@rolldown/browser` Artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: packages/browser/dist
+          name: browser-artifact
+
+      - name: Download `@rolldown/debug` Artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: packages/debug/dist
+          name: debug-artifact
+
+      - name: Download Pluginutils Artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: packages/pluginutils/dist
+          name: pluginutils-artifact
+
+      - name: Copy Licenses
+        run: |
+          find ./packages/ -type d -maxdepth 1 -exec cp LICENSE {} \;
+          find ./packages/ -type d -maxdepth 1 -exec cp THIRD-PARTY-LICENSE {} \;
+
+      - name: Publish(Dry Run)
+        run: |
+          pnpm publish -r --tag latest --dry-run --no-git-checks
+
+      - name: Publish
+        run: |
+          npm install -g npm
+          pnpm publish -r --tag latest --no-git-checks
+
+  release:
+    needs: [check, publish]
+    if: github.repository == 'rolldown/rolldown'
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # for softprops/action-gh-release@v1
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - name: Get changelog from commit body
+        id: changelog
+        run: |
+          {
+            echo 'CHANGELOG<<EOF'
+            git show -s --format=%b
+            echo EOF
+          } >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@6da8fa9354ddfdc4aeace5fc48d7f679b5214090 # v2.4.1
+        with:
+          draft: false
+          tag_name: v${{ needs.check.outputs.version }} # tags the current commit
+          target_commitish: ${{ github.sha }}
+          body: ${{ steps.changelog.outputs.CHANGELOG }}

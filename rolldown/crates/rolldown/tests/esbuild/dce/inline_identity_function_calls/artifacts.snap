@@ -1,0 +1,36 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Errors
+
+## PARSE_ERROR
+
+```text
+[PARSE_ERROR] Error: Identifier `DROP` has already been declared
+   ╭─[ identity-last.js:1:10 ]
+   │
+ 1 │ function DROP(x) { return [x] }
+   │          ──┬─  
+   │            ╰─── `DROP` has already been declared here
+ 2 │ function DROP(x) { return x }
+   │          ──┬─  
+   │            ╰─── It can not be redeclared here
+───╯
+
+```
+
+## PARSE_ERROR
+
+```text
+[PARSE_ERROR] Error: Identifier `keep` has already been declared
+   ╭─[ identity-first.js:1:10 ]
+   │
+ 1 │ function keep(x) { return x }
+   │          ──┬─  
+   │            ╰─── `keep` has already been declared here
+ 2 │ function keep(x) { return [x] }
+   │          ──┬─  
+   │            ╰─── It can not be redeclared here
+───╯
+
+```

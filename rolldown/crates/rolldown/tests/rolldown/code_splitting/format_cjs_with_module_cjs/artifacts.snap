@@ -1,0 +1,59 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main1.js
+
+```js
+const require_share$1 = require('./share.js');
+let node_assert = require("node:assert");
+node_assert = require_share$1.__toESM(node_assert);
+
+//#region main1.js
+var import_share = /* @__PURE__ */ require_share$1.__toESM(require_share$1.require_share());
+node_assert.default.equal((0, import_share.share)(), 1);
+
+//#endregion
+```
+
+## main2.js
+
+```js
+const require_share$1 = require('./share.js');
+let node_assert = require("node:assert");
+node_assert = require_share$1.__toESM(node_assert);
+
+//#region main2.js
+var import_share = /* @__PURE__ */ require_share$1.__toESM(require_share$1.require_share());
+node_assert.default.equal((0, import_share.share)(), 1);
+
+//#endregion
+```
+
+## share.js
+
+```js
+// HIDDEN [rolldown:runtime]
+
+//#region share.js
+var require_share = /* @__PURE__ */ __commonJS({ "share.js": ((exports) => {
+	exports.share = function share() {
+		return 1;
+	};
+}) });
+
+//#endregion
+Object.defineProperty(exports, '__toESM', {
+  enumerable: true,
+  get: function () {
+    return __toESM;
+  }
+});
+Object.defineProperty(exports, 'require_share', {
+  enumerable: true,
+  get: function () {
+    return require_share;
+  }
+});
+```

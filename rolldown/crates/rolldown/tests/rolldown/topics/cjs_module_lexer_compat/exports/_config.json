@@ -1,0 +1,7 @@
+{
+  "config": {
+    "format": "cjs",
+    "esModule": "always",
+    "exports": "named"
+  }
+}

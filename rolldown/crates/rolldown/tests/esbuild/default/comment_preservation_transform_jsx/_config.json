@@ -1,0 +1,16 @@
+{
+  "expectExecuted": false,
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "entry.jsx"
+      }
+    ],
+    "transform": {
+      "jsx": {
+        "runtime": "classic"
+      }
+    }
+  }
+}

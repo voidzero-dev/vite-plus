@@ -1,0 +1,64 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "import",
+    "jsdoc",
+    "unicorn",
+    "typescript",
+    "oxc"
+  ],
+  "ignorePatterns": [
+    "crates/**",
+    "packages/rollup-tests/**",
+    "packages/rolldown/tests/fixtures/**",
+    "packages/rolldown/tests/stability/**",
+    "packages/rolldown/src/binding.*",
+    "packages/test-dev-server/tests/fixtures/**",
+    "packages/vite-tests/repo/**",
+    "rollup/**"
+  ],
+  "rules": {
+    "import/named": "error",
+    "import/namespace": [
+      "error",
+      {
+        "allowComputed": true
+      }
+    ],
+    "no-unused-expressions": [
+      "warn",
+      {
+        "allowShortCircuit": true,
+        "allowTaggedTemplates": true
+      }
+    ],
+    "no-unused-vars": [
+      "warn",
+      {
+        "varsIgnorePattern": "^_",
+        "argsIgnorePattern": "^_"
+      }
+    ],
+    "unicorn/prefer-node-protocol": "error"
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/packages/rolldown/src/**"
+      ],
+      "rules": {
+        "no-console": [
+          "warn",
+          {
+            "allow": [
+              "warn",
+              "error",
+              "debug",
+              "info"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

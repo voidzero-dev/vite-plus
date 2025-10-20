@@ -1,0 +1,55 @@
+name: WASI Test
+
+permissions: {}
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+      changed:
+        required: true
+        type: boolean
+
+jobs:
+  run:
+    name: WASI Test
+    if: ${{ inputs.changed }}
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          submodules: true # Pull submodules for additional files
+          persist-credentials: false
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Download Rolldown with WASI Binding
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: rolldown-wasi
+          path: ./packages
+
+      - name: Build Basic Example
+        run: pnpm --filter '@example/*' run --sequential build
+        if: ${{ inputs.os != 'windows-latest' }}
+        env:
+          NAPI_RS_FORCE_WASI: error
+
+      - name: Node Test
+        run: pnpm run --recursive --filter=!rollup-tests --filter=!vite-tests test
+        if: false
+        env:
+          NAPI_RS_FORCE_WASI: error
+          RD_LOG: trace
+
+      - name: Rollup Test
+        run: pnpm run --filter rollup-tests test
+        if: false
+        env:
+          NAPI_RS_FORCE_WASI: error
+          RD_LOG: trace

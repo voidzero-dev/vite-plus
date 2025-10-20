@@ -1,0 +1,20 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+import * as ext from "external";
+import { a, b } from "external";
+
+//#region foo.js
+console.log(ext, a, b);
+
+//#endregion
+//#region main.js
+console.log(ext, a, b);
+
+//#endregion
+```

@@ -1,0 +1,14 @@
+{
+  "_comment": "Build output is executed in esm environment, `require` is not available",
+  "expectExecuted": false,
+  "config": {
+    "platform": "node",
+    "format": "cjs",
+    "input": [
+      {
+        "name": "entry",
+        "import": "entry.js"
+      }
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Errors
+
+## PARSE_ERROR
+
+```text
+[PARSE_ERROR] Error: An implementation cannot be declared in ambient contexts.
+   ╭─[ entry.ts:2:51 ]
+   │
+ 2 │ /* @__NO_SIDE_EFFECTS__ */ declare function f1(y) { sideEffect(y) }
+   │                                                   │ 
+   │                                                   ╰─ 
+───╯
+
+```
+
+## PARSE_ERROR
+
+```text
+[PARSE_ERROR] Error: An implementation cannot be declared in ambient contexts.
+   ╭─[ entry.ts:8:59 ]
+   │
+ 8 │     /* @__NO_SIDE_EFFECTS__ */ export declare function f1(y) { sideEffect(y) }
+   │                                                              │ 
+   │                                                              ╰─ 
+───╯
+
+```

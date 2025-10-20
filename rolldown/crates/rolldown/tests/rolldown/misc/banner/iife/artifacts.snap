@@ -1,0 +1,20 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+// Banner
+
+var module = (function() {
+
+
+//#region main.js
+	var main_default = "banner";
+
+//#endregion
+return main_default;
+})();
+```

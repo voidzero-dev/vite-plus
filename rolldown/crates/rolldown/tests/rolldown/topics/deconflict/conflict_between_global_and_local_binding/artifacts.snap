@@ -1,0 +1,23 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+import assert from "node:assert";
+
+// HIDDEN [rolldown:runtime]
+//#region main.js
+var require_main = /* @__PURE__ */ __commonJS$1({ "main.js": ((exports, module) => {
+	module.exports = "main";
+	globalThis.__commonJS = 0;
+	__commonJS = 1;
+	assert.equal(__commonJS, 1);
+}) });
+
+//#endregion
+export default require_main();
+
+```

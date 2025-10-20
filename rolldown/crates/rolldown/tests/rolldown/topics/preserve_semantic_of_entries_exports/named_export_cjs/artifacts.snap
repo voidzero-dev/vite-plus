@@ -1,0 +1,18 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+Object.defineProperty(exports, '__esModule', { value: true });
+
+//#region main.js
+const foo = "foo";
+var main_default = "main";
+
+//#endregion
+exports.default = main_default;
+exports.foo = foo;
+```

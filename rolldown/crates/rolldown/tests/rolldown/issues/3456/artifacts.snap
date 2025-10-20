@@ -1,0 +1,26 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+import { "\n\"\\'" as test } from "external";
+
+export { test as "\n\"\\'" };
+```
+
+# Variant: [format: Cjs]
+
+## Assets
+
+### main.js
+
+```js
+// HIDDEN [rolldown:runtime]
+let external = require("external");
+external = __toESM(external);
+
+exports["\n\"\\'"] = external["\n\"\\'"];
+```

@@ -1,3 +1,6 @@
 [submodule "crates/fspy_detours_sys/detours"]
 	path = crates/fspy_detours_sys/detours
 	url = https://github.com/microsoft/Detours
+[submodule "rollup"]
+	path = rolldown/rollup
+	url = https://github.com/rollup/rollup.git

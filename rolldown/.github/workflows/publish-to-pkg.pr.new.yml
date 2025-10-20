@@ -1,0 +1,139 @@
+name: Publish to pkg.pr.new
+description: https://pkg.pr.new/~/rolldown/rolldown
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+  push:
+    branches:
+      - main
+    paths:
+      - 'crates/**'
+      - 'packages/**'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/publish-to-pkg.pr.new.yml'
+
+# Cancell all previous workflows on main.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+jobs:
+  debounce:
+    runs-on: ubuntu-latest
+    steps:
+      # Remove ❌ from main branch.
+      - uses: MercuryTechnologies/delete-cancelled-runs@f5c9d322d9c7afbd41f779199818c1ffe381d34b # 1.0.0
+        if: github.repository == 'rolldown/rolldown' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          workflow-file: 'publish-to-pkg.pr.new.yml'
+
+      - name: Debounce for 20 mins
+        if: github.repository == 'rolldown/rolldown' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # sleep for 20mins, which should be 1.5 times larger than time for https://github.com/rolldown/rolldown/queue/main.
+        run: |
+          echo "Start debounce wait: $(date)"
+          sleep 1200
+          echo "End debounce wait: $(date)"
+
+  build:
+    if: >
+      github.repository == 'rolldown/rolldown' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'trigger: preview')))
+    name: Build bindings and node packages
+    uses: ./.github/workflows/reusable-release-build.yml
+    needs:
+      - debounce
+    with:
+      version: 'commit'
+
+  publish:
+    if: >
+      github.repository == 'rolldown/rolldown' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'trigger: preview')))
+    name: Pkg Preview
+    runs-on: ubuntu-latest
+    needs:
+      - debounce
+      - build
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Git Reset Hard
+        run: git reset --hard # fix pnpm install add new line for package.json
+
+      - name: Download Binding Artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: packages/rolldown/artifacts
+
+      - name: Create rolldown/npm dirs
+        run: pnpm --filter rolldown exec napi create-npm-dirs
+
+      - name: Move Binding Artifacts
+        run: pnpm --filter rolldown artifacts
+
+      - name: List Rolldown Bindings
+        run: ls -R ./packages/rolldown/npm
+        shell: bash
+
+      - name: Download Node Artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: packages/rolldown/dist
+          name: node-artifact
+
+      - name: Download `@rolldown/browser` Artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: packages/browser/dist
+          name: browser-artifact
+
+      - name: Download Pluginutils Artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: packages/pluginutils/dist
+          name: pluginutils-artifact
+
+      - name: Download `@rolldown/debug` Artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: packages/debug/dist
+          name: debug-artifact
+
+      - name: Download `rolldown-version.txt`
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: rolldown-version
+
+      - name: Read `rolldown-version.txt`
+        id: rolldown-version
+        uses: igorskyflyer/action-readfile@d38a0aef4a6ba5245f2a127705a8cdc8d5d5e702 # v1.0.0
+        with:
+          path: rolldown-version.txt
+
+      - name: Canary/Nightly Versioning
+        run: |
+          node --import @oxc-node/core/register ./scripts/misc/bump-version.js ${ROLLDOWN_VERSION}
+          pnpm --filter rolldown prepublishOnly --skip-optional-publish
+        env:
+          ROLLDOWN_VERSION: ${{ steps.rolldown-version.outputs.content }}
+
+      - name: Copy Licenses
+        run: |
+          find ./packages/ -type d -maxdepth 1 -exec cp LICENSE {} \;
+          find ./packages/ -type d -maxdepth 1 -exec cp THIRD-PARTY-LICENSE {} \;
+
+      - name: Release
+        run: pnpx pkg-pr-new publish --compact --pnpm './packages/rolldown/npm/*' './packages/rolldown' './packages/browser' './packages/debug' './packages/pluginutils'

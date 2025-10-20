@@ -1,0 +1,31 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'pkg' in entry.ts
+   ╭─[ entry.ts:1:21 ]
+   │
+ 1 │ import { foo } from 'pkg'
+   │                     ──┬──  
+   │                       ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+import { foo } from "pkg";
+
+//#region entry.ts
+var used = foo.used;
+
+//#endregion
+export { used };
+```

@@ -1,0 +1,26 @@
+{
+  "name": "rollup-tests",
+  "private": true,
+  "scripts": {
+    "test": "ROLLUP_TEST=1 mocha --file ./src/intercept/check.js test/test.js",
+    "test--update": "ROLLUP_TEST=1 mocha --jobs 1 --file ./src/intercept/update-test-status.js test/test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "fixturify": "catalog:",
+    "fs-extra": "catalog:",
+    "mocha": "catalog:",
+    "oxc-transform": "catalog:",
+    "source-map-support": "catalog:"
+  },
+  "devDependencies": {
+    "@types/mocha": "catalog:",
+    "@types/node": "catalog:",
+    "@types/strip-comments": "catalog:",
+    "source-map": "catalog:",
+    "strip-comments": "catalog:",
+    "terser": "catalog:"
+  }
+}

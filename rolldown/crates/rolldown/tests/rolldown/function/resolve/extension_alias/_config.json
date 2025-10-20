@@ -1,0 +1,8 @@
+{
+  "config": {
+    
+    "resolve": {
+      "extensionAlias": [[".js", [".js",".ts"]]]
+    }
+  }
+}

@@ -1,0 +1,100 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## dynamic.js
+
+```js
+import { t as value } from "./main.js";
+
+//#region dynamic.js
+console.log(`shared: `, value);
+
+//#endregion
+```
+
+## main.js
+
+```js
+//#region lib.js
+const value = 100;
+
+//#endregion
+//#region main.js
+import("./dynamic.js");
+console.log(`shared: `, value);
+const unused = value;
+
+//#endregion
+export { value as t, unused };
+```
+
+# Variant: [preserve_entry_signatures: Strict]
+
+## Assets
+
+### dynamic.js
+
+```js
+import { t as value } from "./lib.js";
+
+//#region dynamic.js
+console.log(`shared: `, value);
+
+//#endregion
+```
+
+### lib.js
+
+```js
+//#region lib.js
+const value = 100;
+
+//#endregion
+export { value as t };
+```
+
+### main.js
+
+```js
+import { t as value } from "./lib.js";
+
+//#region main.js
+import("./dynamic.js");
+console.log(`shared: `, value);
+const unused = value;
+
+//#endregion
+export { unused };
+```
+
+# Variant: [preserve_entry_signatures: False]
+
+## Assets
+
+### dynamic.js
+
+```js
+import { t as value } from "./main.js";
+
+//#region dynamic.js
+console.log(`shared: `, value);
+
+//#endregion
+```
+
+### main.js
+
+```js
+//#region lib.js
+const value = 100;
+
+//#endregion
+//#region main.js
+import("./dynamic.js");
+console.log(`shared: `, value);
+
+//#endregion
+export { value as t };
+```

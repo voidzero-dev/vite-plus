@@ -1,0 +1,50 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'path1' in entry.js
+   ╭─[ entry.js:3:21 ]
+   │
+ 3 │ export * as ns from 'path1'
+   │                     ───┬───  
+   │                        ╰───── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'path2' in nested.js
+   ╭─[ nested.js:1:22 ]
+   │
+ 1 │ export * as foo from 'path2'
+   │                      ───┬───  
+   │                         ╰───── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+import * as _foo from "path2";
+import * as _ns from "path1";
+
+//#region nested.js
+let foo = 123;
+
+//#endregion
+//#region entry.js
+console.log(_foo, foo);
+let ns = 123;
+
+//#endregion
+export { _ns as ns, ns as sn };
+```

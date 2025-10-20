@@ -1,0 +1,24 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## src_entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region node_modules/demo-pkg/index.js
+var demo_pkg_exports = /* @__PURE__ */ __export({ foo: () => foo });
+var foo;
+var init_demo_pkg = __esm({ "node_modules/demo-pkg/index.js": (() => {
+	foo = 123;
+	console.log("hello");
+}) });
+
+//#endregion
+//#region src/entry.js
+init_demo_pkg();
+console.log("unused import");
+
+//#endregion
+```

@@ -1,0 +1,16 @@
+
+# Enable highlight in GitHub for `.snap` files
+# *.snap linguist-language=markdown
+
+# Ignore fixtures
+crates/rolldown/tests/**/*.js -linguist-detectable
+crates/rolldown/tests/**/*.jsx -linguist-detectable
+crates/rolldown/tests/**/*.ts -linguist-detectable
+crates/rolldown/tests/**/*.tsx -linguist-detectable
+
+packages/rolldown/tests/stability/**/*.js -linguist-detectable 
+
+# https://github.com/rolldown/rolldown/issues/1354
+* text eol=lf
+*.png -text
+*.md text eol=lf

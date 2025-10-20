@@ -1,0 +1,27 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "top-level",
+        "import": "top-level.js"
+      },
+      {
+        "name": "nested",
+        "import": "nested.js"
+      },
+      {
+        "name": "let",
+        "import": "let.js"
+      },
+      {
+        "name": "function",
+        "import": "function.js"
+      },
+      {
+        "name": "function-nested",
+        "import": "function-nested.js"
+      }
+    ]
+  },
+  "expectExecuted": false
+}

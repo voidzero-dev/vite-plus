@@ -1,0 +1,38 @@
+name: Rust Test
+
+permissions: {}
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+      changed:
+        required: true
+        type: boolean
+
+jobs:
+  run:
+    if: ${{ inputs.changed }}
+    name: Cargo Test
+    runs-on: ${{ inputs.os }}
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - name: Setup Rust
+        uses: oxc-project/setup-rust@1ff88fdaffd6ae35c0fb32ccc159340b37d0beac # v1.0.7
+        with:
+          tools: just
+          cache-key: debug-build
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Build
+        run: cargo test --workspace --exclude rolldown_binding --no-run
+
+      - name: Run Test
+        run: just test-rust
+        env:
+          # Reject updated snapshots https://insta.rs/docs/advanced/#controlling-snapshot-updating
+          INSTA_UPDATE: no

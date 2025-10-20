@@ -1,0 +1,43 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## a.js
+
+```js
+import { t as require_a } from "./a2.js";
+
+export default require_a();
+
+```
+
+## a2.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region b.js
+var require_b = /* @__PURE__ */ __commonJS({ "b.js": ((exports, module) => {
+	var import_a = /* @__PURE__ */ __toESM(require_a());
+	module.exports = "b";
+}) });
+
+//#endregion
+//#region a.js
+var require_a = /* @__PURE__ */ __commonJS({ "a.js": ((exports, module) => {
+	var import_b = /* @__PURE__ */ __toESM(require_b());
+	module.exports = "a";
+}) });
+
+//#endregion
+export { require_b as n, require_a as t };
+```
+
+## b.js
+
+```js
+import { n as require_b } from "./a2.js";
+
+export default require_b();
+
+```

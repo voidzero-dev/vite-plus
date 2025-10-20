@@ -1,0 +1,14 @@
+{
+  "name": "@example/rollup-plugin-esbuild",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "rolldown --config ./rolldown.config.js"
+  },
+  "devDependencies": {
+    "rolldown": "workspace:*"
+  },
+  "dependencies": {
+    "rollup-plugin-esbuild": "^6.1.1"
+  }
+}

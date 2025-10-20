@@ -1,0 +1,36 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## a_entry.js
+
+```js
+import { t as foo } from "./common.js";
+
+//#region a/entry.js
+console.log(foo);
+
+//#endregion
+```
+
+## b_entry.js
+
+```js
+import { t as foo } from "./common.js";
+
+//#region b/entry.js
+console.log(foo);
+
+//#endregion
+```
+
+## common.js
+
+```js
+//#region common.js
+let foo = 123;
+
+//#endregion
+export { foo as t };
+```

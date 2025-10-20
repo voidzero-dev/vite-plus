@@ -1,0 +1,18 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+snapshot_kind: text
+---
+# Errors
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Error: Could not resolve './doesNotExist.ts' in entry.ts
+   ╭─[ entry.ts:1:25 ]
+   │
+ 1 │ import {Something} from './doesNotExist.ts'
+   │                         ─────────┬─────────  
+   │                                  ╰─────────── Module not found.
+───╯
+
+```

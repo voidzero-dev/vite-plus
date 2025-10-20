@@ -1,0 +1,16 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "keep",
+        "import": "keep.js"
+      },
+      {
+        "name": "do-not-keep",
+        "import": "do-not-keep.js"
+      }
+    ]
+  },
+  "expectError": true,
+  "expectExecuted": false
+}

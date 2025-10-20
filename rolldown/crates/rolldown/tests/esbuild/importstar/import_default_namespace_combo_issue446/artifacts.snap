@@ -1,0 +1,259 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## IMPORT_IS_UNDEFINED
+
+```text
+[IMPORT_IS_UNDEFINED] Warning: Import `def` will always be undefined because there is no matching export in 'internal.js'
+   ╭─[ internal-def.js:2:18 ]
+   │
+ 2 │ console.log(def, ns.def)
+   │                  ───┬──  
+   │                     ╰──── 
+───╯
+
+```
+
+## IMPORT_IS_UNDEFINED
+
+```text
+[IMPORT_IS_UNDEFINED] Warning: Import `def` will always be undefined because there is no matching export in 'internal.js'
+   ╭─[ internal-ns-def.js:2:22 ]
+   │
+ 2 │ console.log(def, ns, ns.def)
+   │                      ───┬──  
+   │                         ╰──── 
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'external' in external-def.js
+   ╭─[ external-def.js:1:26 ]
+   │
+ 1 │ import def, * as ns from 'external'
+   │                          ─────┬────  
+   │                               ╰────── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'external' in external-default.js
+   ╭─[ external-default.js:1:26 ]
+   │
+ 1 │ import def, * as ns from 'external'
+   │                          ─────┬────  
+   │                               ╰────── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'external' in external-default2.js
+   ╭─[ external-default2.js:1:40 ]
+   │
+ 1 │ import def, {default as default2} from 'external'
+   │                                        ─────┬────  
+   │                                             ╰────── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'external' in external-ns-def.js
+   ╭─[ external-ns-def.js:1:26 ]
+   │
+ 1 │ import def, * as ns from 'external'
+   │                          ─────┬────  
+   │                               ╰────── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'external' in external-ns-default.js
+   ╭─[ external-ns-default.js:1:26 ]
+   │
+ 1 │ import def, * as ns from 'external'
+   │                          ─────┬────  
+   │                               ╰────── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'external' in external-ns.js
+   ╭─[ external-ns.js:1:26 ]
+   │
+ 1 │ import def, * as ns from 'external'
+   │                          ─────┬────  
+   │                               ╰────── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## external-def.js
+
+```js
+import * as ns from "external";
+import def from "external";
+
+//#region external-def.js
+console.log(def, ns.def);
+
+//#endregion
+```
+
+## external-default.js
+
+```js
+import * as ns from "external";
+import def from "external";
+
+//#region external-default.js
+console.log(def, ns.default);
+
+//#endregion
+```
+
+## external-default2.js
+
+```js
+import def from "external";
+
+//#region external-default2.js
+console.log(def, def);
+
+//#endregion
+```
+
+## external-ns-def.js
+
+```js
+import * as ns from "external";
+import def from "external";
+
+//#region external-ns-def.js
+console.log(def, ns, ns.def);
+
+//#endregion
+```
+
+## external-ns-default.js
+
+```js
+import * as ns from "external";
+import def from "external";
+
+//#region external-ns-default.js
+console.log(def, ns, ns.default);
+
+//#endregion
+```
+
+## external-ns.js
+
+```js
+import * as ns from "external";
+import def from "external";
+
+//#region external-ns.js
+console.log(def, ns);
+
+//#endregion
+```
+
+## internal-def.js
+
+```js
+import { t as internal_default } from "./internal.js";
+
+//#region internal-def.js
+console.log(internal_default, void 0);
+
+//#endregion
+```
+
+## internal-default.js
+
+```js
+import { t as internal_default } from "./internal.js";
+
+//#region internal-default.js
+console.log(internal_default, internal_default);
+
+//#endregion
+```
+
+## internal-default2.js
+
+```js
+import { t as internal_default } from "./internal.js";
+
+//#region internal-default2.js
+console.log(internal_default, internal_default);
+
+//#endregion
+```
+
+## internal-ns-def.js
+
+```js
+import { n as internal_exports, t as internal_default } from "./internal.js";
+
+//#region internal-ns-def.js
+console.log(internal_default, internal_exports, void 0);
+
+//#endregion
+```
+
+## internal-ns-default.js
+
+```js
+import { n as internal_exports, t as internal_default } from "./internal.js";
+
+//#region internal-ns-default.js
+console.log(internal_default, internal_exports, internal_default);
+
+//#endregion
+```
+
+## internal-ns.js
+
+```js
+import { n as internal_exports, t as internal_default } from "./internal.js";
+
+//#region internal-ns.js
+console.log(internal_default, internal_exports);
+
+//#endregion
+```
+
+## internal.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region internal.js
+var internal_exports = /* @__PURE__ */ __export({ default: () => internal_default });
+var internal_default = 123;
+
+//#endregion
+export { internal_exports as n, internal_default as t };
+```

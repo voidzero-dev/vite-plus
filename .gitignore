@@ -6,3 +6,4 @@ dist
 .DS_Store
 rolldown/pnpm-lock.yaml
 rolldown/pnpm-workspace.yaml
+rolldown/.gitmodules

@@ -1,0 +1,15 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "script",
+        "import": "script.jsx"
+      },
+      {
+        "name": "style",
+        "import": "style.css"
+      }
+    ]
+  },
+  "expectExecuted": false
+}

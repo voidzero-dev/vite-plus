@@ -1,0 +1,208 @@
+name: CI
+# Jobs in this workflow are all required run successfully before the PR can be merged. This is enforced by using GitHub status checks.
+# What's GitHub status check: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/about-status-checks
+
+permissions: {}
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  merge_group:
+  push:
+    branches:
+      - main
+      - 'renovate/**' # For renovate bot "automerge": true
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
+
+jobs:
+  # JOB to run change detection
+  changes: # https://github.com/dorny/paths-filter
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      rust-changes: ${{ (steps.filter.outputs.rust-changes == 'true') || (github.ref_name == 'main') }}
+      node-changes: ${{ (steps.filter.outputs.node-changes == 'true') || (github.ref_name == 'main') }}
+      pluginutils-changes: ${{ (steps.filter.outputs.pluginutils-changes == 'true') || (github.ref_name == 'main') }}
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            rust-changes: &rust-changes
+              - '.github/workflows/**'
+              - 'crates/**'
+              - 'tasks/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain.toml'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '.gitattributes'
+              - 'justfile'
+            node-changes:
+              - *rust-changes
+              - 'packages/**'
+              - 'examples/**'
+              - 'scripts/**'
+              - 'package.json'
+              - 'justfile'
+            pluginutils-changes:
+              - 'packages/pluginutils/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+      - name: Show outputs
+        run: |
+          echo "Rust changes: ${{ (steps.filter.outputs.rust-changes == 'true') || (github.ref_name == 'main') }}"
+          echo "Node changes: ${{ (steps.filter.outputs.node-changes == 'true') || (github.ref_name == 'main') }}"
+          echo "PluginUtils changes: ${{ (steps.filter.outputs.pluginutils-changes == 'true') || (github.ref_name == 'main') }}"
+
+  rust-validation:
+    name: Rust Validation
+    needs: changes
+    if: ${{ needs.changes.outputs.rust-changes == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - name: Setup Rust
+        uses: oxc-project/setup-rust@1ff88fdaffd6ae35c0fb32ccc159340b37d0beac # v1.0.7
+        with:
+          tools: just
+          cache-key: debug-build
+          components: clippy rustfmt
+
+      - run: just lint-rust
+
+  cargo-test:
+    needs: changes
+    strategy:
+      matrix:
+        target: [ubuntu-latest, macos-latest, windows-latest]
+    uses: ./.github/workflows/reusable-cargo-test.yml
+    with:
+      os: ${{ matrix.target }}
+      changed: ${{ needs.changes.outputs.rust-changes == 'true' }}
+
+  node-test:
+    needs: changes
+    strategy:
+      matrix:
+        target: [ubuntu-latest, macos-latest, windows-latest]
+    uses: ./.github/workflows/reusable-node-test.yml
+    with:
+      os: ${{ matrix.target }}
+      changed: ${{ needs.changes.outputs.node-changes == 'true' }}
+
+  build-rolldown-wasi:
+    needs: changes
+    uses: ./.github/workflows/reusable-wasi-build.yml
+    with:
+      changed: ${{ needs.changes.outputs.node-changes == 'true' }}
+
+  build-browser:
+    name: Build `@rolldown/browser`
+    needs: [changes]
+    if: ${{ needs.changes.outputs.node-changes == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          submodules: true # Pull submodules for additional files
+          persist-credentials: false
+
+      - name: Setup Rust
+        uses: oxc-project/setup-rust@1ff88fdaffd6ae35c0fb32ccc159340b37d0beac # v1.0.7
+        with:
+          tools: just
+          cache-key: debug-build-wasi
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Add WASI target
+        run: rustup target add wasm32-wasip1-threads
+
+      - name: Build `@rolldown/browser`
+        run: just build-browser
+
+  wasi-test:
+    needs: [changes, build-rolldown-wasi]
+    # run this even if build-rolldown-wasi is skipped
+    # Normally, if `build-rolldown-wasi` is skipped, this job won't run, which makes status checks failed.
+    # By using such syntax, https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#example-not-requiring-successful-dependent-jobs
+    # we always run this job even when `build-rolldown-wasi` is skipped. We'll handle/skip unnecessary runs in `reusable-wasi-test.yml`.
+    if: |
+      always() &&
+      (needs.build-rolldown-wasi.result == 'success' || needs.build-rolldown-wasi.result == 'skipped')
+    strategy:
+      matrix:
+        target: [ubuntu-latest, macos-latest, windows-latest]
+    uses: ./.github/workflows/reusable-wasi-test.yml
+    with:
+      os: ${{ matrix.target }}
+      changed: ${{ needs.changes.outputs.node-changes == 'true' }}
+
+  pluginutils-test:
+    name: Pluginutils Test
+    needs: changes
+    if: ${{ needs.changes.outputs.pluginutils-changes == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Test `@rolldown/pluginutils`
+        run: pnpm --filter '@rolldown/pluginutils' test
+
+  node-validation:
+    name: Node Validation
+    needs: changes
+    if: ${{ needs.changes.outputs.node-changes == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Lint Code
+        run: pnpm lint-code
+
+      - name: Lint exports & dependencies
+        run: pnpm lint-knip
+
+      - name: Validate workspace package
+        run: node scripts/misc/published-package-check.mjs
+
+  repo-validation:
+    name: Repo Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Lint Filename
+        run: cargo ls-lint
+
+      - name: update generated code
+        run: |
+          cargo run --bin generator
+          git diff --exit-code
+
+  typos:
+    name: Spell Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+      - uses: crate-ci/typos@80c8a4945eec0f6d464eaf9e65ed98ef085283d1 # v1.38.1
+        with:
+          files: .

@@ -1,0 +1,31 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'msw/browser' in lib/msw-config.ts
+   ╭─[ lib/msw-config.ts:1:47 ]
+   │
+ 1 │ import { setupWorker, type SetupWorker } from 'msw/browser'
+   │                                               ──────┬──────  
+   │                                                     ╰──────── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+import { setupWorker } from "msw/browser";
+
+//#region lib/msw-config.ts
+setupWorker();
+
+//#endregion
+export {  };
+```

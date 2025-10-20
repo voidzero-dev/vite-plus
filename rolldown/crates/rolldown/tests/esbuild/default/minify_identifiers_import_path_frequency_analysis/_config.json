@@ -1,0 +1,15 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "import",
+        "import": "import.js"
+      },
+      {
+        "name": "require",
+        "import": "require.js"
+      }
+    ]
+  },
+  "expectExecuted": false
+}

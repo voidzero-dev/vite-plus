@@ -1,0 +1,33 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'foo' in entry.js
+   ╭─[ entry.js:2:8 ]
+   │
+ 2 │ import 'foo'
+   │        ──┬──  
+   │          ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+import "foo";
+
+// HIDDEN [rolldown:runtime]
+//#region entry.js
+var require_entry = /* @__PURE__ */ __commonJS({ "entry.js": (() => {}) });
+
+//#endregion
+export default require_entry();
+
+```

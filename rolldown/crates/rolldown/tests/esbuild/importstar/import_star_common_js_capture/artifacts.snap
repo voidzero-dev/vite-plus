@@ -1,0 +1,29 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+import assert from "node:assert";
+
+// HIDDEN [rolldown:runtime]
+//#region foo.js
+var require_foo = /* @__PURE__ */ __commonJS({ "foo.js": ((exports) => {
+	exports.foo = 123;
+}) });
+
+//#endregion
+//#region entry.js
+var import_foo = /* @__PURE__ */ __toESM(require_foo());
+let foo = 234;
+assert.deepEqual(import_foo, {
+	default: { foo: 123 },
+	foo: 123
+});
+assert.equal(import_foo.foo, 123);
+assert.equal(foo, 234);
+
+//#endregion
+```

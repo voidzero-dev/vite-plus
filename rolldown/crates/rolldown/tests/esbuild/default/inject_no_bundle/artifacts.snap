@@ -1,0 +1,36 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+import { re_export } from "external-pkg";
+import { "reexpo.rt" as reexpo_rt } from "external-pkg2";
+
+//#region replacement.js
+let replace = { test() {} };
+let replaceDot = { test() {} };
+
+//#endregion
+//#region inject.js
+let obj = {};
+let sideEffects = console.log("this should be renamed");
+
+//#endregion
+//#region entry.js
+console.log("side effects");
+let collide = 123;
+console.log(obj.prop);
+console.log("defined");
+console.log("should be used");
+console.log("should be used");
+console.log(replace.test);
+console.log(replaceDot.test);
+console.log(collide);
+console.log(re_export);
+console.log(reexpo_rt);
+
+//#endregion
+```

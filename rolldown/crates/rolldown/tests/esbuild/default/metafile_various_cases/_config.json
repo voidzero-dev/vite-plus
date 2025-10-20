@@ -1,0 +1,23 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "entry.js"
+      },
+      {
+        "name": "entry",
+        "import": "entry.css"
+      }
+    ],
+    "moduleTypes": {
+      ".css": "css",
+      ".file": "asset",
+      ".svg": "dataurl"
+    },
+    // Imported empty module would be treated as esm module in rolldown.
+    // If we don't shim missing exports, it would have a `MISSING_EXPORT` error.
+    "shimMissingExports": true
+  },
+  "expectExecuted": false
+}

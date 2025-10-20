@@ -1,0 +1,29 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "entry.js"
+      }
+    ],
+		"inject": [
+			{
+				"from": "./inject.js",
+				"imported": "console.log",
+				"type": "named"
+			},
+			{
+				"from": "./inject.js",
+				"imported": "console.info",
+				"type": "named"
+			},
+			{
+				"from": "./inject.js",
+				"imported": "console.warn",
+				"type": "named"
+			}
+		]
+  },
+  "expectExecuted": false
+}
+

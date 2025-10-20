@@ -1,0 +1,38 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## a.js
+
+```js
+import { t as a } from "./shared.js";
+
+//#region a.js
+console.log(a);
+
+//#endregion
+```
+
+## b.js
+
+```js
+import { n as b } from "./shared.js";
+
+//#region b.js
+console.log(b);
+
+//#endregion
+```
+
+## shared.js
+
+```js
+//#region shared.js
+let a = 1;
+let b = 2;
+console.log("side effect");
+
+//#endregion
+export { b as n, a as t };
+```

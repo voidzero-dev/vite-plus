@@ -1,0 +1,12 @@
+{
+  "config": {
+    "transform": {
+      "jsx": {
+        "pragma": "React.createElement",
+        "runtime": "classic"
+      }
+    },
+    "tsconfig": "tsconfig.json"
+  },
+  "expectExecuted": false
+}

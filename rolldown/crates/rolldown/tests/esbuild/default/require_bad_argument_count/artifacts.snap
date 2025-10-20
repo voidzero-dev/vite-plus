@@ -1,0 +1,34 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'a' in entry.js
+   ╭─[ entry.js:2:9 ]
+   │
+ 2 │ require("a", "b")
+   │         ─┬─  
+   │          ╰─── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region entry.js
+__require();
+__require("a", "b");
+try {
+	__require();
+	__require("a", "b");
+} catch {}
+
+//#endregion
+```

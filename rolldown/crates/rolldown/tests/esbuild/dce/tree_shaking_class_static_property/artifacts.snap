@@ -1,0 +1,23 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+//#region entry.js
+(class {
+	static x = x;
+});
+(class {
+	static ["x"] = x;
+});
+x;
+x;
+x;
+x;
+x;
+
+//#endregion
+```

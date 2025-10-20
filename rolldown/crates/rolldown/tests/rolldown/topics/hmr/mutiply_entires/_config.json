@@ -1,0 +1,17 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "entry.js"
+      },
+      {
+        "name": "index",
+        "import": "index.js"
+      }
+    ],
+    "experimental": {
+      "hmr": {}
+    }
+  }
+}

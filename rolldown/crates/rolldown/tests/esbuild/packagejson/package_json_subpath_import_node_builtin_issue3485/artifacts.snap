@@ -1,0 +1,18 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+import fs from "fs";
+import http from "node:http";
+
+//#region entry.js
+fs.readFileSync();
+http.createServer();
+
+//#endregion
+export {  };
+```

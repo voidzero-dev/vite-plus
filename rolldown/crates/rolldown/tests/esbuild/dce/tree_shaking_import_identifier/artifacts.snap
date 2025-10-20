@@ -1,0 +1,21 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+//#region b.js
+var Base = class {};
+
+//#endregion
+//#region a.js
+var Keep = class extends Base {};
+
+//#endregion
+//#region entry.js
+new Keep();
+
+//#endregion
+```

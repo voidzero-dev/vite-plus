@@ -1,0 +1,17 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+import fs from "node:fs/promises";
+import "node:what-is-this";
+
+//#region entry.js
+fs.readFile();
+
+//#endregion
+export {  };
+```

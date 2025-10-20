@@ -1,0 +1,89 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## class.js
+
+```js
+//#region class.ts
+let x;
+(function(_x) {
+	class y$1 {}
+	_x.y = y$1;
+})(x || (x = {}));
+(function(_x2) {
+	_x2.z = y;
+})(x || (x = {}));
+
+//#endregion
+export { x };
+```
+
+## enum.js
+
+```js
+//#region enum.ts
+let x;
+(function(_x) {
+	_x.y = /* @__PURE__ */ function(y$1) {
+		return y$1;
+	}({});
+})(x || (x = {}));
+(function(_x2) {
+	_x2.z = y;
+})(x || (x = {}));
+
+//#endregion
+export { x };
+```
+
+## function.js
+
+```js
+//#region function.ts
+let x;
+(function(_x) {
+	function y$1() {}
+	_x.y = y$1;
+})(x || (x = {}));
+(function(_x2) {
+	_x2.z = y;
+})(x || (x = {}));
+
+//#endregion
+export { x };
+```
+
+## let.js
+
+```js
+//#region let.ts
+let x;
+(function(_x) {
+	_x.y = 123;
+})(x || (x = {}));
+(function(_x2) {
+	_x2.z = y;
+})(x || (x = {}));
+
+//#endregion
+export { x };
+```
+
+## namespace.js
+
+```js
+//#region namespace.ts
+let x;
+(function(_x) {
+	let y$1;
+	(function(_y) {})(y$1 || (y$1 = _x.y || (_x.y = {})));
+})(x || (x = {}));
+(function(_x2) {
+	_x2.z = y;
+})(x || (x = {}));
+
+//#endregion
+export { x };
+```

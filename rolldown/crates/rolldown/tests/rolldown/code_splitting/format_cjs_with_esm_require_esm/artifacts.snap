@@ -1,0 +1,56 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## chunk.js
+
+```js
+// HIDDEN [rolldown:runtime]
+
+Object.defineProperty(exports, '__esm', {
+  enumerable: true,
+  get: function () {
+    return __esm;
+  }
+});
+Object.defineProperty(exports, '__export', {
+  enumerable: true,
+  get: function () {
+    return __export;
+  }
+});
+Object.defineProperty(exports, '__toESM', {
+  enumerable: true,
+  get: function () {
+    return __toESM;
+  }
+});
+```
+
+## main1.js
+
+```js
+const require_chunk = require('./chunk.js');
+require("node:assert");
+
+```
+
+## main2.js
+
+```js
+const require_chunk = require('./chunk.js');
+
+//#region esm.js
+var esm_exports = /* @__PURE__ */ require_chunk.__export({ share: () => share });
+function share() {
+	return 1;
+}
+var init_esm = require_chunk.__esm({ "esm.js": (() => {}) });
+
+//#endregion
+//#region main2.js
+init_esm();
+
+//#endregion
+```

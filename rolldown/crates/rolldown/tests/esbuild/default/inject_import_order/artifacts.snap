@@ -1,0 +1,30 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'third' in entry.ts
+   ╭─[ entry.ts:1:8 ]
+   │
+ 1 │ import 'third'
+   │        ───┬───  
+   │           ╰───── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+import "third";
+
+//#region entry.ts
+console.log("third");
+
+//#endregion
+```

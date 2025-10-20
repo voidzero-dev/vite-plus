@@ -1,0 +1,23 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+import assert from "node:assert";
+
+// HIDDEN [rolldown:runtime]
+//#region 1aaa.js
+var _1aaa_exports = /* @__PURE__ */ __export({ default: () => _1aaa_default });
+const a = "shared.js";
+var _1aaa_default = a;
+
+//#endregion
+//#region main.js
+assert.equal("index.js", "index.js");
+console.log(_1aaa_exports);
+
+//#endregion
+```

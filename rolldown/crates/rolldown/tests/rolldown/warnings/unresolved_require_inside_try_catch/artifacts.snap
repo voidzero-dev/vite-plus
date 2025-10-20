@@ -1,0 +1,17 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Errors
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Error: Could not resolve './unresolved3' in main.js
+    ╭─[ main.js:12:15 ]
+    │
+ 12 │       require('./unresolved3')
+    │               ───────┬───────  
+    │                      ╰───────── Module not found.
+────╯
+
+```

@@ -1,0 +1,20 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+import { createRequire } from "node:module";
+
+//#region rolldown:runtime
+var __require = /* @__PURE__ */ createRequire(import.meta.url);
+
+//#endregion
+//#region main.js
+var main_default = __require("path").join;
+
+//#endregion
+export { main_default as default };
+```

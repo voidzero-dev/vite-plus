@@ -1,0 +1,38 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'pkg1' in entry.js
+   ╭─[ entry.js:1:8 ]
+   │
+ 1 │ import 'pkg1'
+   │        ───┬──  
+   │           ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+import "pkg1";
+
+//#region file.js
+console.log("file");
+
+//#endregion
+//#region node_modules/pkg2/index.js
+console.log("pkg2");
+
+//#endregion
+//#region libs/pkg3.js
+console.log("pkg3");
+
+//#endregion
+```

@@ -1,0 +1,13 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "entry.js"
+      }
+    ],
+    "format": "iife",
+    "name": "globalName"
+  },
+  "expectExecuted": false
+}

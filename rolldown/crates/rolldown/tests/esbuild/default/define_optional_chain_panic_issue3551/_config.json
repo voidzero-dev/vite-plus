@@ -1,0 +1,19 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "id-define",
+        "import": "id-define.js"
+      },
+      {
+        "name": "dot-define",
+        "import": "dot-define.js"
+      }
+    ],
+    "define": {
+      "x": "1",
+      "a.b": "1"
+    }
+  },
+  "expectExecuted": false
+}

@@ -1,0 +1,52 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## async-entry.js
+
+```js
+import { n as inc, r as reset, t as count } from "./shared.js";
+import assert from "node:assert";
+
+//#region async-entry.js
+reset();
+assert.strictEqual(count, 0);
+assert.strictEqual(count, count);
+inc();
+assert.strictEqual(count, 1);
+assert.strictEqual(count, count);
+inc();
+assert.strictEqual(count, 2);
+assert.strictEqual(count, count);
+
+//#endregion
+```
+
+## main.js
+
+```js
+import { n as inc, r as reset, t as count } from "./shared.js";
+
+//#region main.js
+import("./async-entry.js");
+
+//#endregion
+export { count, inc, reset };
+```
+
+## shared.js
+
+```js
+//#region shared.js
+let count = 0;
+function reset() {
+	count = 0;
+}
+function inc() {
+	count += 1;
+}
+
+//#endregion
+export { inc as n, reset as r, count as t };
+```

@@ -1,0 +1,23 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+//#region entry.js
+function outer() {
+	{
+		function inner() {
+			return Math.random();
+		}
+		const x = inner();
+		console.log(x);
+	}
+}
+outer();
+
+//#endregion
+export { outer };
+```

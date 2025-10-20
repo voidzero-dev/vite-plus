@@ -1,0 +1,88 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema-jsonc.json",
+  "ignoreBinaries": ["only-allow"],
+  "ignoreWorkspaces": ["examples/**"], // no rolldown plugin yet
+  "workspaces": {
+    ".": {
+      "project": [],
+      "ignoreDependencies": [
+        "@oxc-project/runtime",
+        "cjs-module-lexer",
+        "remove-unused-vars",
+        "rolldown",
+      ],
+    },
+    "crates/rolldown/tests/rolldown/topics/npm_packages": {
+      "entry": ["util_deprecate/main.js"],
+    },
+    "docs": {
+      "entry": [
+        ".vitepress/config.ts", // no Vitepress plugin yet
+        ".vitepress/theme/index.ts",
+        ".vitepress/theme/components/overrides/VPHero.vue",
+        "data-loading/*.data.{js,ts}",
+      ],
+    },
+    "packages/bench": {
+      "entry": ["vue-entry.js"],
+      "ignoreDependencies": ["@babel/preset-.+", "react", "react-dom"],
+    },
+    "packages/browser": {
+      "ignoreDependencies": ["@napi-rs/wasm-runtime"],
+    },
+    "packages/rolldown": {
+      "entry": [
+        "src/browser.js",
+        "src/cli/setup-index.ts",
+        "src/cli/index.ts",
+        "src/log/locate-character/index.d.ts",
+        "src/parallel-plugin-worker.ts",
+        "src/rolldown-binding.wasi-browser.js",
+        "src/{wasi,webcontainer}-*.*",
+      ],
+      "ignore": [
+        "src/binding.js",
+        "src/rolldown-binding.wasi.cjs",
+        "src/plugin/generated/hook-usage.ts",
+        "src/browser.js",
+      ],
+      "ignoreDependencies": [
+        "@rollup/plugin-json",
+        "buble",
+        "pathe",
+      ],
+      "ignoreUnresolved": ["#parallel-plugin-worker"], // target file is unavailable before build
+    },
+    "packages/rolldown/npm/wasm32-wasi": {
+      "ignoreDependencies": ["@napi-rs/wasm-runtime"],
+    },
+    "packages/rolldown/tests": {
+      "entry": ["*/**"],
+      "ignore": ["{cli,fixtures,stability}/**"], // lots of unlisted dependencies
+      "ignoreUnresolved": ["./world"],
+      "ignoreDependencies": [
+        "@rolldown/test-side-effects-field", // used in packages/rolldown/tests/fixtures/plugin/context/resolve-side-effects
+      ],
+    },
+    "packages/rollup-tests": {
+      "entry": ["src/**/*.js", "test/**/*.{js,ts}"],
+      "ignoreDependencies": [
+        "acorn",
+        "locate-character",
+        "requirejs",
+        "terser",
+        "weak-napi",
+      ],
+      "ignoreUnresolved": ["/types$"],
+    },
+    "packages/test-dev-server": {
+      "entry": [],
+    },
+    "scripts": {
+      "entry": ["misc/**"],
+    },
+    "packages/test-dev-server/tests/fixtures/*": {
+      "entry": ["dev.config.mjs", "src/*.js"], // no @rolldown/test-dev-server plugin
+    },
+  },
+}

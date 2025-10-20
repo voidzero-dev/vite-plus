@@ -1,0 +1,13 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "entry.js"
+      }
+    ],
+    "format": "cjs",
+    "external": ["./foo", "./bar"]
+  },
+  "expectExecuted": false
+}

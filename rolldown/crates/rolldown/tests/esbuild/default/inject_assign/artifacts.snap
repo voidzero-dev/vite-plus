@@ -1,0 +1,15 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+//#region entry.js
+test = true;
+foo.bar = true;
+some.define = true;
+
+//#endregion
+```

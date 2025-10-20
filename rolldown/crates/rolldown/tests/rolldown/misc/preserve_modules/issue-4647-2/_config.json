@@ -1,0 +1,13 @@
+{
+  "config": {
+    "input": [
+      {
+        "import": "./main.js"
+      },
+      {
+        "import": "./entry2.js"
+      }
+    ],
+    "preserveModules": true
+  }
+}

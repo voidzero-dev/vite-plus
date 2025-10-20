@@ -1,0 +1,44 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## MISSING_GLOBAL_NAME
+
+```text
+[MISSING_GLOBAL_NAME] Warning: No name was provided for external module "foo" in "output.globals" – guessing "foo".
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'foo' in entry.js
+   ╭─[ entry.js:1:22 ]
+   │
+ 1 │ export * as out from "foo"
+   │                      ──┬──  
+   │                        ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+var mod = (function(exports, foo) {
+
+// HIDDEN [rolldown:runtime]
+foo = __toESM(foo);
+
+Object.defineProperty(exports, 'out', {
+  enumerable: true,
+  get: function () {
+    return foo;
+  }
+});
+return exports;
+})({}, foo);
+```

@@ -1,0 +1,29 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+import assert from "node:assert";
+
+// HIDDEN [rolldown:runtime]
+//#region node_modules/demo-pkg/module.js
+var module_exports = /* @__PURE__ */ __export({ default: () => module_default });
+var module_default;
+var init_module = __esm({ "node_modules/demo-pkg/module.js": (() => {
+	module_default = "module";
+}) });
+
+//#endregion
+//#region src/test-main.js
+assert.deepEqual((init_module(), __toCommonJS(module_exports)), { default: "module" });
+
+//#endregion
+//#region src/test-module.js
+init_module();
+assert.equal(module_default, "module");
+
+//#endregion
+```

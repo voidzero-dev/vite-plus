@@ -1,0 +1,19 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## test.js
+
+```js
+//#region test.json
+var test = 123;
+var invalid_identifier = true;
+var test_default = {
+	test,
+	"invalid-identifier": invalid_identifier
+};
+
+//#endregion
+export { test_default as default, invalid_identifier as "invalid-identifier", test };
+```

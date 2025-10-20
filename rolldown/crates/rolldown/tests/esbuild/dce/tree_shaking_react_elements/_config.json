@@ -1,0 +1,19 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "entry.jsx"
+      }
+    ],
+    "external": [
+      "react"
+    ],
+    "transform": {
+      "jsx": {
+        "runtime": "classic"
+      }
+    }
+  },
+  "expectExecuted": false
+}

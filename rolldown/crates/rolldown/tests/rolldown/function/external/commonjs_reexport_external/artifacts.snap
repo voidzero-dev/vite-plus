@@ -1,0 +1,26 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region foo.js
+var foo_exports = {};
+import * as import_external from "external";
+__reExport(foo_exports, import_external);
+var init_foo = __esm({ "foo.js": (() => {}) });
+
+//#endregion
+//#region main.js
+var require_main = /* @__PURE__ */ __commonJS({ "main.js": ((exports, module) => {
+	const value = (init_foo(), __toCommonJS(foo_exports));
+	module.exports = value;
+}) });
+
+//#endregion
+export default require_main();
+
+```

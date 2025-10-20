@@ -1,0 +1,16 @@
+{
+  "config": {
+    "input": [
+      {
+        "import": "./main.js"
+      },
+      {
+        "import": "./a.js"
+      },
+      {
+        "import": "./b.js"
+      }
+    ],
+    "preserveModules": true
+  }
+}

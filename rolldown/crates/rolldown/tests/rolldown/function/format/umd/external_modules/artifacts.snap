@@ -1,0 +1,38 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## MISSING_GLOBAL_NAME
+
+```text
+[MISSING_GLOBAL_NAME] Warning: No name was provided for external module "node:fs" in "output.globals" – guessing "node_fs".
+
+```
+
+## MISSING_GLOBAL_NAME
+
+```text
+[MISSING_GLOBAL_NAME] Warning: No name was provided for external module "node:path" in "output.globals" – guessing "node_path".
+
+```
+
+# Assets
+
+## main.js
+
+```js
+(function(global, factory) {
+  typeof exports === 'object' && typeof module !== 'undefined' ?  factory(require('node:path'), require('node:fs')) :
+  typeof define === 'function' && define.amd ? define(['node:path', 'node:fs'], factory) :
+  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.node_path,global.node_fs));
+})(this, function(node_path, node_fs) {
+// HIDDEN [rolldown:runtime]
+node_path = __toESM(node_path);
+
+//#region main.js
+console.log(node_path.default);
+
+//#endregion
+});
+```

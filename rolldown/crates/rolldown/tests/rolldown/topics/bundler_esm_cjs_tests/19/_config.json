@@ -1,0 +1,24 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "./entry.js"
+      }
+    ],
+    // UMD requires a name
+    "name": "exports"
+  },
+  "configVariants": [
+    {
+      "format": "cjs"
+    },
+    {
+      "format": "iife"
+    },
+    {
+      "format": "umd"
+    }
+  ],
+  "snapshot": false
+}

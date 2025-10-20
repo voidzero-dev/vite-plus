@@ -1,0 +1,34 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## a.js
+
+```js
+import { n as q, t as p } from "./a2.js";
+
+export { p, q };
+```
+
+## a2.js
+
+```js
+//#region b.js
+var q = 6;
+
+//#endregion
+//#region a.js
+var p = 5;
+
+//#endregion
+export { q as n, p as t };
+```
+
+## b.js
+
+```js
+import { n as q, t as p } from "./a2.js";
+
+export { p, q };
+```

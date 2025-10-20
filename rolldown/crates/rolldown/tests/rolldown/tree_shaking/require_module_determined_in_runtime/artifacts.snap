@@ -1,0 +1,20 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region foo.js
+function applyExtends(config) {
+	__require(config.extends);
+}
+
+//#endregion
+//#region main.mjs
+console.log(`a: `, applyExtends);
+
+//#endregion
+```

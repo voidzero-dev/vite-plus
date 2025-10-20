@@ -1,0 +1,24 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region entry.js
+const ab = Math.random() < .5 ? "a.js" : "b.js";
+console.log({
+	concat: {
+		require: __require("./src/" + ab + ".js"),
+		import: import("./src/" + ab + ".js")
+	},
+	template: {
+		require: __require(`./src/${ab}.js`),
+		import: import(`./src/${ab}.js`)
+	}
+});
+
+//#endregion
+```

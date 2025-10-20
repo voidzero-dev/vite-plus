@@ -1,0 +1,154 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'bar' in entry.js
+   ╭─[ entry.js:6:8 ]
+   │
+ 6 │ import('bar').catch()
+   │        ──┬──  
+   │          ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'bar' in entry.js
+   ╭─[ entry.js:7:8 ]
+   │
+ 7 │ import('bar').catch()
+   │        ──┬──  
+   │          ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'bar' in entry.js
+   ╭─[ entry.js:8:8 ]
+   │
+ 8 │ import('bar') // We should get an error report here even though the earlier imports have the "HandlesImportErrors" flag
+   │        ──┬──  
+   │          ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'bar' in entry.js
+   ╭─[ entry.js:9:8 ]
+   │
+ 9 │ import('bar')
+   │        ──┬──  
+   │          ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'baz' in entry.js
+    ╭─[ entry.js:11:8 ]
+    │
+ 11 │ import('baz').catch()
+    │        ──┬──  
+    │          ╰──── Module not found, treating it as an external dependency
+────╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'baz' in entry.js
+    ╭─[ entry.js:12:8 ]
+    │
+ 12 │ import('baz').catch()
+    │        ──┬──  
+    │          ╰──── Module not found, treating it as an external dependency
+────╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'foo' in entry.js
+   ╭─[ entry.js:1:8 ]
+   │
+ 1 │ import('foo')
+   │        ──┬──  
+   │          ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'foo' in entry.js
+   ╭─[ entry.js:2:8 ]
+   │
+ 2 │ import('foo')
+   │        ──┬──  
+   │          ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'foo' in entry.js
+   ╭─[ entry.js:3:8 ]
+   │
+ 3 │ import('foo').catch()
+   │        ──┬──  
+   │          ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'foo' in entry.js
+   ╭─[ entry.js:4:8 ]
+   │
+ 4 │ import('foo').catch()
+   │        ──┬──  
+   │          ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+//#region entry.js
+import("foo");
+import("foo");
+import("foo").catch();
+import("foo").catch();
+import("bar").catch();
+import("bar").catch();
+import("bar");
+import("bar");
+import("baz").catch();
+import("baz").catch();
+
+//#endregion
+```

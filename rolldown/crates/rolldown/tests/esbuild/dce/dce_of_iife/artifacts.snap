@@ -1,0 +1,43 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## keep-these.js
+
+```js
+//#region keep-these.js
+undef = (() => {})();
+keepMe();
+((x = keepMe()) => {})();
+var someVar;
+(([y]) => {})(someVar);
+(({ z }) => {})(someVar);
+(/* @__PURE__ */ (() => stuff())())();
+((_ = keepMe()) => {})();
+var isPure = ((x, y) => 123)();
+use(isPure);
+var isNotPure = ((x = foo, y = bar) => 123)();
+use(isNotPure);
+(async () => ({ get then() {
+	notPure();
+} }))();
+(async function() {
+	return { get then() {
+		notPure();
+	} };
+})();
+
+//#endregion
+```
+
+## remove-these.js
+
+```js
+//#region remove-these.js
+(() => {})(keepThisButRemoveTheIIFE);
+var someVar;
+((x) => {})(someVar);
+
+//#endregion
+```

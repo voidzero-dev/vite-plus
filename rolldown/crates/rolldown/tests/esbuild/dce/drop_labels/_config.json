@@ -1,0 +1,13 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "entry.js"
+      }
+    ],
+    "format": "cjs",
+    "dropLabels": ["DROP_1", "DROP_2"]
+  },
+  "expectExecuted": false
+}

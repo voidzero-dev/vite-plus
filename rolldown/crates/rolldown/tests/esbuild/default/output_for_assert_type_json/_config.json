@@ -1,0 +1,15 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "js-entry",
+        "import": "js-entry.js"
+      },
+      {
+        "name": "ts-entry",
+        "import": "ts-entry.ts"
+      }
+    ]
+  },
+  "expectError": true // TODO(hyf0): Remove this line after supporting import attributes
+}

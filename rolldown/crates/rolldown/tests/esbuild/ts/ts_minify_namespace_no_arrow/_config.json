@@ -1,0 +1,16 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "a",
+        "import": "a.ts"
+      },
+      {
+        "name": "b",
+        "import": "b.ts"
+      }
+    ],
+    "treeshake": false
+  },
+  "expectExecuted": false
+}

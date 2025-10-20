@@ -1,0 +1,27 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## a.js
+
+```js
+import "./shared.js";
+
+```
+
+## b.js
+
+```js
+import "./shared.js";
+
+```
+
+## shared.js
+
+```js
+//#region shared.js
+globalThis.sideEffectExecuted = true;
+
+//#endregion
+```

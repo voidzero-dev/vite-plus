@@ -1,0 +1,17 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+
+//#region entry.mjs
+function confuseNode(exports$1) {
+	exports$1.notAnExport = function() {};
+}
+
+//#endregion
+exports.confuseNode = confuseNode;
+```

@@ -1,0 +1,60 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "empty",
+        "import": "empty.js"
+      },
+      {
+        "name": "empty-comma",
+        "import": "empty-comma.js"
+      },
+      {
+        "name": "empty-if-else",
+        "import": "empty-if-else.js"
+      },
+      {
+        "name": "empty-last",
+        "import": "empty-last.js"
+      },
+      {
+        "name": "empty-cross-module",
+        "import": "empty-cross-module.js"
+      },
+      {
+        "name": "empty-first",
+        "import": "empty-first.js"
+      },
+      {
+        "name": "empty-generator",
+        "import": "empty-generator.js"
+      },
+      {
+        "name": "empty-async",
+        "import": "empty-async.js"
+      },
+      {
+        "name": "reassign",
+        "import": "reassign.js"
+      },
+      {
+        "name": "reassign-inc",
+        "import": "reassign-inc.js"
+      },
+      {
+        "name": "reassign-div",
+        "import": "reassign-div.js"
+      },
+      {
+        "name": "reassign-array",
+        "import": "reassign-array.js"
+      },
+      {
+        "name": "reassign-object",
+        "import": "reassign-object.js"
+      }
+    ]
+  },
+  "expectError": true,
+  "expectExecuted": false
+}

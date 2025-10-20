@@ -1,0 +1,20 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+//#region data.json
+var data_default = {
+	"": "The property below should be converted to a computed property:",
+	["__proto__"]: __proto__
+};
+
+//#endregion
+//#region entry.js
+console.log(data_default);
+
+//#endregion
+```

@@ -1,0 +1,91 @@
+name: Benchmarks Node
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - '**/*.rs'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'packages/rolldown/**'
+      - 'packages/bench/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/benchmark-node.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
+
+jobs:
+  benchmark-node:
+    name: Benchmark Node
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: write
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - name: Download previous benchmark data
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          # https://github.com/rolldown/benchmark-results-storage
+          repository: rolldown/benchmark-results-storage
+          path: tmp
+          persist-credentials: false
+
+      - name: List Files
+        run: find -maxdepth 2 -ls
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Setup Rust
+        uses: oxc-project/setup-rust@1ff88fdaffd6ae35c0fb32ccc159340b37d0beac # v1.0.7
+        with:
+          tools: just
+          cache-key: release-build
+          save-cache: ${{ github.ref_name == 'main' }}
+
+      - name: Setup Benchmark Input
+        run: just setup-bench
+
+      - name: Build packages
+        run: just build-rolldown-release
+
+      - name: Run benchmarks
+        run: pnpm --filter bench run bench-ci
+
+      - name: Show/Update benchmark result
+        uses: benchmark-action/github-action-benchmark@4bdcce38c94cec68da58d012ac24b7b1155efe8b # v1.20.7
+        with:
+          name: 'Node Benchmark'
+          # What benchmark tool the output.txt came from
+          tool: 'customSmallerIsBetter'
+          # Where the output from the benchmark tool is stored
+          output-file-path: tmp/new-benchmark-node-output.json
+          # Where the previous data file is stored
+          external-data-json-path: tmp/benchmark-node-output.json
+          fail-on-alert: false
+          summary-always: true
+          comment-always: false
+          save-data-file: ${{ github.event_name == 'push' }}
+          alert-threshold: '110%' # Too much noise in the benchmark results
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Save benchmark result
+        if: github.event_name == 'push'
+        # https://github.com/dmnemec/copy_file_to_another_repo_action
+        uses: dmnemec/copy_file_to_another_repo_action@bbebd3da22e4a37d04dca5f782edd5201cb97083
+        env:
+          # Results are stored in https://github.com/rolldown/benchmark-results-storage
+          API_TOKEN_GITHUB: ${{ secrets.REPO_TOKEN_BENCHMARK_RESULTS }}
+        with:
+          source_file: './tmp/benchmark-node-output.json'
+          destination_repo: 'rolldown/benchmark-results-storage'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          user_name: 'github-actions[bot]'
+          commit_message: 'Update `benchmark-node-output.json`'

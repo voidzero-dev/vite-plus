@@ -1,0 +1,17 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+//#region main.js
+new URL(
+	/* @vite-ignore */
+	"path-should-not-exists",
+	import.meta.url
+);
+
+//#endregion
+```

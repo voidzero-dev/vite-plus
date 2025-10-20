@@ -1,0 +1,55 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## a.js
+
+```js
+import "./c2.js";
+import "./b2.js";
+
+```
+
+## b.js
+
+```js
+import "./c2.js";
+import "./b2.js";
+
+```
+
+## b2.js
+
+```js
+
+```
+
+## c.js
+
+```js
+import "./c2.js";
+
+```
+
+## c2.js
+
+```js
+//#region c.js
+await 0;
+
+//#endregion
+```
+
+## entry.js
+
+```js
+//#region entry.js
+import("./a.js");
+import("./b.js");
+import("./c.js");
+import("./entry.js");
+await 0;
+
+//#endregion
+```

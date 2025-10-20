@@ -1,0 +1,42 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+//#region \0@oxc-project+runtime@0.95.0/helpers/decorateMetadata.js
+function __decorateMetadata(k, v) {
+	if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+}
+
+//#endregion
+//#region \0@oxc-project+runtime@0.95.0/helpers/decorate.js
+function __decorate(decorators, target, key, desc) {
+	var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	return c > 3 && r && Object.defineProperty(target, key, r), r;
+}
+
+//#endregion
+//#region main.tsx
+function LogMethod(target, propertyKey, descriptor) {
+	console.log(target);
+	console.log(propertyKey);
+	console.log(descriptor);
+}
+var Demo = class {
+	foo(bar) {}
+};
+__decorate([
+	LogMethod,
+	__decorateMetadata("design:type", Function),
+	__decorateMetadata("design:paramtypes", [Number]),
+	__decorateMetadata("design:returntype", void 0)
+], Demo.prototype, "foo", null);
+new Demo();
+
+//#endregion
+```

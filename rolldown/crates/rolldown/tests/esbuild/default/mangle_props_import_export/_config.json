@@ -1,0 +1,15 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "esm",
+        "import": "esm.js"
+      },
+      {
+        "name": "cjs",
+        "import": "cjs.js"
+      }
+    ]
+  },
+  "expectExecuted": false
+}

@@ -1,0 +1,96 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'pkg1' in src/entry.js
+   ╭─[ src/entry.js:1:8 ]
+   │
+ 1 │ import 'pkg1'
+   │        ───┬──  
+   │           ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'pkg2' in src/entry.js
+   ╭─[ src/entry.js:2:8 ]
+   │
+ 2 │ import 'pkg2'
+   │        ───┬──  
+   │           ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'pkg3' in src/entry.js
+   ╭─[ src/entry.js:3:8 ]
+   │
+ 3 │ import 'pkg3'
+   │        ───┬──  
+   │           ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'pkg4' in src/entry.js
+   ╭─[ src/entry.js:4:8 ]
+   │
+ 4 │ import 'pkg4'
+   │        ───┬──  
+   │           ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'pkg5' in src/entry.js
+   ╭─[ src/entry.js:5:8 ]
+   │
+ 5 │ import 'pkg5'
+   │        ───┬──  
+   │           ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'pkg6' in src/entry.js
+   ╭─[ src/entry.js:6:8 ]
+   │
+ 6 │ import 'pkg6'
+   │        ───┬──  
+   │           ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+import "pkg1";
+import "pkg2";
+import "pkg3";
+import "pkg4";
+import "pkg5";
+import "pkg6";
+
+```

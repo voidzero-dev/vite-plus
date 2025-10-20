@@ -1,0 +1,16 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "js-entry",
+        "import": "js-entry.js"
+      },
+      {
+        "name": "ts-entry",
+        "import": "ts-entry.ts"
+      }
+    ]
+  },
+  "expectExecuted": false,
+  "expectError": true
+}

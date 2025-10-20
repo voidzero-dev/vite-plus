@@ -1,0 +1,19 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+//#region entry.ts
+var WeakMap = class {
+	#x;
+};
+var WeakSet = class {
+	#y() {}
+};
+
+//#endregion
+export { WeakMap, WeakSet };
+```

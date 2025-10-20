@@ -1,0 +1,28 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+import assert from "node:assert"
+class A {
+  constructor() {
+this.namespace = this.namespace || {};
+this.namespace.module = (function(exports) {
+
+
+//#region foo.js
+	const value = 1;
+
+//#endregion
+exports.value = value;
+return exports;
+})({});
+  }
+}
+let a = new A();
+assert(a instanceof A);
+assert(typeof a.namespace.module === "object");
+```

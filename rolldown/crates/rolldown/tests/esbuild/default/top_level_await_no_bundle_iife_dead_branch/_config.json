@@ -1,0 +1,13 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "entry.js"
+      }
+    ],
+    "treeshake": true,
+    "format": "iife"
+  },
+  "expectExecuted": false
+}

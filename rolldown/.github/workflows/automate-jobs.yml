@@ -1,0 +1,21 @@
+name: 'Automate Jobs'
+
+permissions: {}
+
+on:
+  issues:
+    types: [assigned]
+
+jobs:
+  remove-needs-triage-when-assigned:
+    if: github.event.action == 'assigned'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions-cool/issues-helper@45d75b6cf72bf4f254be6230cb887ad002702491 # v3.6.3
+        with:
+          actions: 'remove-labels'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.issue.number }}
+          labels: 'needs-triage'

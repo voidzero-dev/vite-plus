@@ -1,0 +1,22 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "./entry.mts"
+      }
+    ]
+  },
+  "configVariants": [
+    {
+      "format": "cjs"
+    },
+    {
+      "format": "iife"
+    },
+    {
+      "format": "umd"
+    }
+  ],
+  "snapshot": false
+}

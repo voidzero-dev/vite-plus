@@ -1,0 +1,25 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+//#region main.js
+try {
+	throw "FAIL";
+} catch (t) {
+	assert.strictEqual("PASS", "PASS");
+}
+let a = 1;
+let def = "PASS2";
+try {
+	throw ["FAIL2", "PASS1"];
+} catch ({ [a]: b, 3: d = def }) {
+	assert.strictEqual(b, "PASS1");
+	assert.strictEqual(d, "PASS2");
+}
+
+//#endregion
+```

@@ -1,0 +1,21 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+import { createRequire } from "node:module";
+
+// HIDDEN [rolldown:runtime]
+//#region main.js
+__require("fs");
+__require;
+function test() {
+	__require("fs");
+}
+
+//#endregion
+export { test };
+```

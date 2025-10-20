@@ -1,0 +1,33 @@
+{
+  "name": "@rolldown/test-dev-server",
+  "version": "0.0.0",
+  "description": "A implementation of a dev server for demonstrating",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "serve": "./bin/cli.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "test": "pnpm run --filter @rolldown/test-dev-server-tests test"
+  },
+  "dependencies": {
+    "@types/ws": "catalog:",
+    "connect": "catalog:",
+    "rolldown": "workspace:*",
+    "serve-static": "catalog:",
+    "ws": "catalog:"
+  },
+  "devDependencies": {
+    "@types/connect": "catalog:",
+    "@types/serve-static": "catalog:"
+  }
+}

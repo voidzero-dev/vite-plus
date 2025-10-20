@@ -1,0 +1,27 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+import assert from "node:assert";
+
+//#region entry.js
+var T = class {
+	#a() {
+		return "a";
+	}
+	#b() {
+		return "b";
+	}
+	static c;
+	d() {
+		assert.equal(this.#a(), "a");
+	}
+};
+new T().d();
+
+//#endregion
+```

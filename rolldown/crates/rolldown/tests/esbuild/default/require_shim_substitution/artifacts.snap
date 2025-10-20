@@ -1,0 +1,52 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'some-path' in entry.js
+    ╭─[ entry.js:12:9 ]
+    │
+ 12 │     import('some-path'),
+    │            ─────┬─────  
+    │                 ╰─────── Module not found, treating it as an external dependency
+────╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region example.json
+var require_example = /* @__PURE__ */ __commonJS({ "example.json": ((exports, module) => {
+	module.exports = { "works": true };
+}) });
+
+//#endregion
+//#region entry.js
+var require_entry = /* @__PURE__ */ __commonJS({ "entry.js": ((exports, module) => {
+	console.log([
+		__require,
+		typeof __require,
+		require_example(),
+		require_example(),
+		__require(window.SOME_PATH),
+		module.require("./example.json"),
+		module.require("./example.json", { type: "json" }),
+		module.require(window.SOME_PATH),
+		__require.resolve("some-path"),
+		__require.resolve(window.SOME_PATH),
+		import("some-path"),
+		import(window.SOME_PATH)
+	]);
+}) });
+
+//#endregion
+export default require_entry();
+
+```

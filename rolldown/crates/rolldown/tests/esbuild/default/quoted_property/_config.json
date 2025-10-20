@@ -1,0 +1,16 @@
+{
+  "_comment": "Original input is invalid",
+  "expectExecuted": false,
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "entry.js"
+      }
+    ],
+    "format": "cjs",
+    "external": [
+      "ext"
+    ]
+  }
+}

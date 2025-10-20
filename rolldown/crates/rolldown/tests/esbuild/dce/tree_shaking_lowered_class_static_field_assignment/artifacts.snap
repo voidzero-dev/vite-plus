@@ -1,0 +1,23 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+//#region entry.ts
+var KeepMe2 = class {
+	static x = "x";
+	static y = sideEffects();
+	static z = "z";
+};
+var KeepMe3 = class {
+	static x = "x";
+	static y = "y";
+	static z = "z";
+};
+new KeepMe3();
+
+//#endregion
+```

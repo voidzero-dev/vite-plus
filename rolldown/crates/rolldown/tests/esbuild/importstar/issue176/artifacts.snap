@@ -1,0 +1,22 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region folders/child/foo.js
+const foo = () => "hi there";
+
+//#endregion
+//#region folders/index.js
+var folders_exports = /* @__PURE__ */ __export({ foo: () => foo });
+
+//#endregion
+//#region entry.js
+console.log(JSON.stringify(folders_exports));
+
+//#endregion
+```

@@ -1,0 +1,34 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## MISSING_GLOBAL_NAME
+
+```text
+[MISSING_GLOBAL_NAME] Warning: No name was provided for external module "node:assert" in "output.globals" – guessing "node_assert".
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+(function(node_assert) {
+
+// HIDDEN [rolldown:runtime]
+node_assert = __toESM(node_assert);
+
+//#region cjs.js
+	var require_cjs = /* @__PURE__ */ __commonJS({ "cjs.js": ((exports) => {
+		exports.foo = process;
+	}) });
+
+//#endregion
+//#region entry.js
+	node_assert.default.deepEqual(require_cjs(), { foo: process });
+
+//#endregion
+})(node_assert);
+```

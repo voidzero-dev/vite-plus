@@ -1,0 +1,50 @@
+name: autofix.ci # For security reasons, the workflow in which the autofix.ci action is used must be named "autofix.ci".
+
+permissions: {}
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
+
+jobs:
+  autofix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+
+      - name: Restore dprint plugin cache
+        id: cache-restore
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          key: dprint-${{ hashFiles('dprint.json') }}
+          path: ~/.cache/dprint
+
+      - uses: oxc-project/setup-rust@1ff88fdaffd6ae35c0fb32ccc159340b37d0beac # v1.0.7
+        with:
+          restore-cache: false
+          tools: dprint,cargo-shear@1.3.0
+          components: rustfmt
+
+      - name: cargo-shear
+        id: shear
+        shell: bash
+        run: |
+          if ! cargo shear --fix; then
+            echo "shear=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check and update lock file
+        run: cargo check --workspace --all-features --all-targets
+        if: ${{ steps.shear.outputs.shear == 'true' }}
+
+      - run: dprint fmt
+
+      - run: cargo fmt --all
+
+      - uses: autofix-ci/action@635ffb0c9798bd160680f18fd73371e355b85f27 # v1.3.2
+        with:
+          fail-fast: false

@@ -1,0 +1,17 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry",
+        "import": "entry.js"
+      }
+    ],
+    "external": [
+      "/assets/images/test.jpg",
+      "./file.png",
+      "/dir/x/file.gif",
+      "/dir//file.gif"
+    ]
+  },
+  "expectError": true
+}

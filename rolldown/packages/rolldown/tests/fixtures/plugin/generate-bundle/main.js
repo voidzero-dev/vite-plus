@@ -1,0 +1,3 @@
+import './share'
+
+console.log()

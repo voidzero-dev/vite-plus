@@ -1,0 +1,32 @@
+{
+  "name": "bench",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bench": "oxnode ./benches/compare.js",
+    "bench-ci": "oxnode ./benches/ci.js",
+    "bench-par": "oxnode ./benches/par.js"
+  },
+  "dependencies": {
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "vue": "catalog:",
+    "vue-router": "^4.3.2"
+  },
+  "devDependencies": {
+    "@babel/core": "catalog:",
+    "@babel/preset-env": "catalog:",
+    "@babel/preset-typescript": "catalog:",
+    "@oxc-node/cli": "catalog:",
+    "@rollup/plugin-commonjs": "catalog:",
+    "@rollup/plugin-node-resolve": "catalog:",
+    "@types/babel__core": "catalog:",
+    "@types/lodash-es": "catalog:",
+    "chalk": "catalog:",
+    "esbuild": "catalog:",
+    "lodash-es": "catalog:",
+    "rolldown": "workspace:*",
+    "rollup": "catalog:",
+    "tinybench": "catalog:"
+  }
+}

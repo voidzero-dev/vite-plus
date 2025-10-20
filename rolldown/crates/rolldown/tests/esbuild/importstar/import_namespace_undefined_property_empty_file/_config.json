@@ -1,0 +1,14 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "entry-nope",
+        "import": "entry-nope.js"
+      },
+      {
+        "name": "entry-default",
+        "import": "entry-default.js"
+      }
+    ]
+  }
+}

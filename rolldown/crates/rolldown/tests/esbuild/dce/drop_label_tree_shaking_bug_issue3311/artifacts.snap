@@ -1,0 +1,18 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+//#region entry.js
+const myFunc = () => {
+	;
+	console.log("keep");
+};
+var entry_default = myFunc;
+
+//#endregion
+export { entry_default as default };
+```

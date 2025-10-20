@@ -1,0 +1,38 @@
+{
+  "file": {
+    "*.ts": "kebab-case",
+    "*.js": "kebab-case",
+    "*.d.ts": "kebab-case",
+    "*.rs": "snake_case"
+  },
+  "directory": {
+    "packages/**": "kebab-case",
+    "scripts/**": "kebab-case",
+    "crates/**": "snake_case"
+  },
+  "ignore": [
+    "**/node_modules",
+    "**/dist/",
+    "crates/rolldown/tests/**",
+    "prepare/**",
+    "packages/rolldown/tests/fixtures/builtin-plugin/load-fallback/path-has-hashtag/**",
+    "packages/debug/src/generated/**",
+    "**/*.config.{js,mjs,cjs,ts,cts,mts}",
+    "**/*.test.{js,mjs,cjs,ts,cts,mts}",
+    ".git/**",
+    ".github/**",
+    ".vscode/**",
+    "**/.pnpm/**",
+    "temp/**",
+    "tmp/**",
+    "rollup/**",
+    "target/**",
+    "packages/rollup-tests/test/**",
+    "packages/rolldown/npm/**",
+    "packages/rolldown/tests/fixtures/**/_config.ts",
+    "packages/rolldown/**/__snapshots__",
+    "packages/vite-tests/repo/**",
+    "docs/**",
+    "examples/hmr-raw/**"
+  ]
+}

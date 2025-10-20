@@ -1,0 +1,11 @@
+{
+  "config": {
+    "input": [
+      {
+        "name": "src_entry",
+        "import": "src/entry.js"
+      }
+    ]
+  },
+  "expectError": true // TODO(hyf0): Remove this line after supporting copy loader/module type.
+}

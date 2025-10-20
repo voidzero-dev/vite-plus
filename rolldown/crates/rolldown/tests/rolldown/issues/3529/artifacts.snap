@@ -1,0 +1,39 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## main.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region b.cjs
+var require_b = /* @__PURE__ */ __commonJS({ "b.cjs": ((exports, module) => {
+	const a$1 = require_a();
+	Object.defineProperty(module.exports, "b", {
+		enumerable: true,
+		get: () => () => ({ a: a$1 })
+	});
+}) });
+
+//#endregion
+//#region a.cjs
+var require_a = /* @__PURE__ */ __commonJS({ "a.cjs": ((exports, module) => {
+	const b$1 = require_b();
+	Object.defineProperty(module.exports, "a", {
+		enumerable: true,
+		get: () => () => ({ b: b$1 })
+	});
+}) });
+
+//#endregion
+//#region main.mjs
+var import_a = /* @__PURE__ */ __toESM(require_a(), 1);
+var import_b = /* @__PURE__ */ __toESM(require_b(), 1);
+console.log({
+	a: import_a.default,
+	b: import_b.default
+});
+
+//#endregion
+```

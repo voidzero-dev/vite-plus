@@ -1,0 +1,80 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## element.js
+
+```js
+//#region element.tsx
+let Foo = /* @__PURE__ */ function(Foo$1) {
+	Foo$1["Div"] = "div";
+	return Foo$1;
+}({});
+console.log(/* @__PURE__ */ React.createElement(Foo.Div, null));
+
+//#endregion
+export { Foo };
+```
+
+## fragment.js
+
+```js
+//#region fragment.tsx
+let React = /* @__PURE__ */ function(React$1) {
+	React$1["Fragment"] = "div";
+	return React$1;
+}({});
+console.log(/* @__PURE__ */ React.createElement(React.Fragment, null, "test"));
+
+//#endregion
+export { React };
+```
+
+## nested-element.js
+
+```js
+//#region nested-element.tsx
+let x;
+(function(_x) {
+	let y;
+	(function(_y) {
+		_y.Foo = /* @__PURE__ */ function(Foo) {
+			Foo["Div"] = "div";
+			return Foo;
+		}({});
+	})(y || (y = _x.y || (_x.y = {})));
+})(x || (x = {}));
+(function(_x2) {
+	let y;
+	(function(_y2) {
+		console.log(/* @__PURE__ */ React.createElement(x.y.Foo.Div, null));
+	})(y || (y = _x2.y || (_x2.y = {})));
+})(x || (x = {}));
+
+//#endregion
+```
+
+## nested-fragment.js
+
+```js
+//#region nested-fragment.tsx
+let x;
+(function(_x) {
+	let y;
+	(function(_y) {
+		_y.React = /* @__PURE__ */ function(React$1) {
+			React$1["Fragment"] = "div";
+			return React$1;
+		}({});
+	})(y || (y = _x.y || (_x.y = {})));
+})(x || (x = {}));
+(function(_x2) {
+	let y;
+	(function(_y2) {
+		console.log(/* @__PURE__ */ React.createElement(React.Fragment, null, "test"));
+	})(y || (y = _x2.y || (_x2.y = {})));
+})(x || (x = {}));
+
+//#endregion
+```

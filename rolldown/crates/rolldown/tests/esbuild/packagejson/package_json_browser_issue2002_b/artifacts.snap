@@ -1,0 +1,35 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'sub' in src/node_modules/pkg/sub/foo.js
+   ╭─[ src/node_modules/pkg/sub/foo.js:1:9 ]
+   │
+ 1 │ require('sub')
+   │         ──┬──  
+   │           ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## entry.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region src/node_modules/pkg/sub/foo.js
+var require_foo = /* @__PURE__ */ __commonJS({ "src/node_modules/pkg/sub/foo.js": (() => {
+	__require("sub");
+}) });
+
+//#endregion
+//#region src/entry.js
+require_foo();
+
+//#endregion
+```

@@ -1,0 +1,9 @@
+{
+  "config": {
+    "moduleTypes": {
+      ".txt": "asset"
+    }
+  },
+  "snapshotOutputStats": true,
+  "visualizeSourcemap": true
+}

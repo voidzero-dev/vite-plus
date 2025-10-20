@@ -1,0 +1,68 @@
+name: Prepare Release
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        type: string
+        required: true
+        description: version without leading `v`
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # for create-pull-request
+      pull-requests: write # for create-pull-request
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0 # for changelog
+          persist-credentials: true # for create-pull-request
+
+      - uses: taiki-e/install-action@e43a5023a747770bfcb71ae048541a681714b951 # v2.62.33
+        with:
+          tool: just
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - run: just bump-packages ${VERSION}
+
+      - name: Regenerate binding.js after version bump
+        run: pnpm --filter rolldown build-binding
+
+      - name: Generate changelog via git cliff
+        id: changelog
+        uses: orhun/git-cliff-action@d77b37db2e3f7398432d34b72a12aa3e2ba87e51 # v4.6.0
+        env:
+          # Used to make request to GitHub without ratelimits.
+          # `secrets.GIT_CLIFF_TOKEN` only has read permission.
+          GITHUB_TOKEN: ${{ secrets.GIT_CLIFF_TOKEN }}
+        with:
+          version: v2.9.1 # git cliff version
+          config: cliff.toml
+          args: --unreleased --prepend CHANGELOG.md --tag ${{ env.VERSION }}
+
+      - uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+        if: ${{ steps.changelog.outputs.content }}
+        with:
+          add-paths: |
+            CHANGELOG.md
+            packages/**/package.json
+            packages/rolldown/src/binding.js
+          commit-message: 'release: v${{ env.VERSION }}'
+          body: ${{ steps.changelog.outputs.content }}
+          branch: release-v${{ env.VERSION }}
+          branch-suffix: timestamp
+          base: main
+          title: 'release: v${{ env.VERSION }}'
+          assignees: Boshen, shulaoda

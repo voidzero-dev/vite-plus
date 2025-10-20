@@ -1,0 +1,59 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# warnings
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'xyz' in cjs.js
+   ╭─[ cjs.js:2:20 ]
+   │
+ 2 │ let bar_ = require('xyz').bar_
+   │                    ──┬──  
+   │                      ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+## UNRESOLVED_IMPORT
+
+```text
+[UNRESOLVED_IMPORT] Warning: Could not resolve 'xyz' in esm.js
+   ╭─[ esm.js:2:22 ]
+   │
+ 2 │ import { bar_ } from 'xyz'
+   │                      ──┬──  
+   │                        ╰──── Module not found, treating it as an external dependency
+───╯
+
+```
+
+# Assets
+
+## cjs.js
+
+```js
+// HIDDEN [rolldown:runtime]
+//#region cjs.js
+var require_cjs = /* @__PURE__ */ __commonJS({ "cjs.js": ((exports) => {
+	exports.foo_ = 123;
+	__require("xyz").bar_;
+}) });
+
+//#endregion
+export default require_cjs();
+
+```
+
+## esm.js
+
+```js
+import "xyz";
+
+//#region esm.js
+let foo_ = 123;
+
+//#endregion
+export { foo_ };
+```

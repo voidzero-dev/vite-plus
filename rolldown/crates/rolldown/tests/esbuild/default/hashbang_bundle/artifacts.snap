@@ -1,0 +1,18 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## entry.js
+
+```js
+#!/usr/bin/env a
+//#region code.js
+const code = 0;
+
+//#endregion
+//#region entry.js
+process.exit(code);
+
+//#endregion
+```

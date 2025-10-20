@@ -1,0 +1,32 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github>Boshen/renovate",
+    "helpers:pinGitHubActionDigestsToSemver"
+  ],
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/examples/**",
+    "**/crates/rolldown/tests/**"
+  ],
+  "packageRules": [
+    {
+      "groupName": "tsdown",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["tsdown"],
+      "schedule": ["at any time"]
+    },
+    {
+      "groupName": "rolldown-plugin-dts",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["rolldown-plugin-dts"],
+      "schedule": ["at any time"]
+    },
+    {
+      "groupName": "oxc-node",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["oxc-node"],
+      "schedule": ["at any time"]
+    }
+  ]
+}
