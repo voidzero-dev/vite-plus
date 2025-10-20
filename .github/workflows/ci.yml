@@ -151,7 +151,7 @@ jobs:
         run: pnpm lint
 
       - name: Install Playwright browsers
-        run: pnpm exec playwright install chromium
+        run: pnpx playwright install chromium
 
       - name: Run CLI E2E tests
         run: |
