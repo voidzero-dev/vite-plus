@@ -1,0 +1,67 @@
+> vp remove testnpm2 -D -- --no-audit && cat package.json # should pass when remove not exists package
+Running: npm uninstall --no-audit testnpm2
+
+up to date in <variable>ms
+{
+  "name": "command-remove-npm10",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>"
+}
+
+> vp add testnpm2 -- --no-audit && vp add -D test-vite-plus-install -- --no-audit && vp add -O test-vite-plus-package-optional -- --no-audit && cat package.json # should add packages to dependencies
+Running: npm install --no-audit testnpm2
+
+added 1 package in <variable>ms
+Running: npm install --save-dev --no-audit test-vite-plus-install
+
+added 1 package in <variable>ms
+Running: npm install --save-optional --no-audit test-vite-plus-package-optional
+
+added 1 package in <variable>ms
+{
+  "name": "command-remove-npm10",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+
+> vp remove testnpm2 test-vite-plus-install -- --no-audit && cat package.json # should remove packages from dependencies
+Running: npm uninstall --no-audit testnpm2 test-vite-plus-install
+
+removed 2 packages in <variable>ms
+{
+  "name": "command-remove-npm10",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>",
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+
+> vp remove -D test-vite-plus-package-optional -- --loglevel=warn --no-audit && cat package.json # support ignore -O flag and remove package from optional dependencies
+Running: npm uninstall --loglevel=warn --no-audit test-vite-plus-package-optional
+
+removed 1 package in <variable>ms
+{
+  "name": "command-remove-npm10",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>"
+}
+
+> vp remove -g testnpm2 -- --dry-run --no-audit && cat package.json # support remove global package with dry-run
+Running: npm uninstall --global --dry-run --no-audit testnpm2
+
+up to date in <variable>ms
+{
+  "name": "command-remove-npm10",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>"
+}

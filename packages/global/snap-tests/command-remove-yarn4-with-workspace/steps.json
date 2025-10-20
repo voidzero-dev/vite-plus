@@ -1,0 +1,12 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp add testnpm2 -D && vp add testnpm2 -D --filter=* --filter=@vite-plus-test/utils && vp add test-vite-plus-install --filter=* --filter=@vite-plus-test/utils && vp add test-vite-plus-package-optional -O --filter=* --filter=@vite-plus-test/utils && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # prepare packages",
+    "vp remove testnpm2 -r && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package from all workspaces and root",
+    "vp remove -O test-vite-plus-package-optional -r && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove optional package from all workspaces",
+    "vp remove test-vite-plus-install --filter=app && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package by filter=app",
+    "vp add test-vite-plus-install --filter=app && vp remove test-vite-plus-install --filter=* && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package by filter=*"
+  ]
+}

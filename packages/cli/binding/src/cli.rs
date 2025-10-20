@@ -24,6 +24,7 @@ use crate::commands::{
     install::InstallCommand,
     lib_cmd::lib,
     lint::{LintConfig, lint},
+    remove::RemoveCommand,
     test::test,
     vite::vite as vite_cmd,
 };
@@ -182,6 +183,51 @@ pub enum Commands {
         #[arg(last = true, allow_hyphen_values = true)]
         pass_through_args: Option<Vec<String>>,
     },
+    /// Remove packages from dependencies
+    #[command(alias = "rm", alias = "un", alias = "uninstall")]
+    Remove {
+        /// Only remove from `devDependencies` (pnpm-specific)
+        #[arg(short = 'D', long)]
+        save_dev: bool,
+
+        /// Only remove from `optionalDependencies` (pnpm-specific)
+        #[arg(short = 'O', long)]
+        save_optional: bool,
+
+        /// Only remove from `dependencies` (pnpm-specific)
+        #[arg(short = 'P', long)]
+        save_prod: bool,
+
+        /// Filter packages in monorepo (can be used multiple times)
+        #[arg(long, value_name = "PATTERN")]
+        filter: Option<Vec<String>>,
+
+        /// Remove from workspace root
+        #[arg(short = 'w', long)]
+        workspace_root: bool,
+
+        /// Remove recursively from all workspace packages, including workspace root
+        #[arg(short = 'r', long)]
+        recursive: bool,
+
+        /// Remove global packages
+        #[arg(short = 'g', long)]
+        global: bool,
+
+        /// Packages to remove
+        packages: Vec<String>,
+
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+}
+
+impl Commands {
+    /// Check if this command is a package manager command that should skip auto-install
+    pub fn is_package_manager_command(&self) -> bool {
+        matches!(self, Commands::Install { .. } | Commands::Add { .. } | Commands::Remove { .. })
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -325,8 +371,8 @@ pub async fn main<
         >,
     >,
 ) -> Result<std::process::ExitStatus, Error> {
-    // Auto-install dependencies if needed, but skip for install command itself, or if `VITE_DISABLE_AUTO_INSTALL=1` is set.
-    if !matches!(args.commands, Commands::Install { .. } | Commands::Add { .. })
+    // Auto-install dependencies if needed, but skip for package manager commands, or if `VITE_DISABLE_AUTO_INSTALL=1` is set.
+    if !args.commands.is_package_manager_command()
         && std::env::var_os("VITE_DISABLE_AUTO_INSTALL") != Some("1".into())
     {
         auto_install(&cwd).await?;
@@ -540,6 +586,32 @@ pub async fn main<
                 pass_through_args.as_deref(),
             )
             .await?;
+            return Ok(exit_status);
+        }
+        Commands::Remove {
+            save_dev,
+            save_optional,
+            save_prod,
+            filter,
+            workspace_root,
+            recursive,
+            global,
+            packages,
+            pass_through_args,
+        } => {
+            let exit_status = RemoveCommand::new(cwd)
+                .execute(
+                    packages,
+                    *save_dev,
+                    *save_optional,
+                    *save_prod,
+                    filter.as_deref(),
+                    *workspace_root,
+                    *recursive,
+                    *global,
+                    pass_through_args.as_deref(),
+                )
+                .await?;
             return Ok(exit_status);
         }
     };
@@ -1475,6 +1547,312 @@ mod tests {
                 assert_eq!(pass_through_args, &Some(vec!["--allow-build=react,napi".to_string()]));
             } else {
                 panic!("Expected Add command");
+            }
+        }
+    }
+
+    mod remove_command_tests {
+        use super::*;
+
+        #[test]
+        fn test_args_remove_command() {
+            let args = Args::try_parse_from(&["vite-plus", "remove", "react"]).unwrap();
+            if let Commands::Remove {
+                save_dev,
+                save_optional,
+                save_prod,
+                filter,
+                workspace_root,
+                recursive,
+                global,
+                packages,
+                pass_through_args,
+            } = &args.commands
+            {
+                assert_eq!(packages, &vec!["react".to_string()]);
+                assert!(!save_dev);
+                assert!(!save_optional);
+                assert!(!save_prod);
+                assert!(filter.is_none());
+                assert!(!workspace_root);
+                assert!(!recursive);
+                assert!(!global);
+                assert!(pass_through_args.is_none());
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_with_dev_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "remove", "-D", "typescript"]).unwrap();
+            if let Commands::Remove { save_dev, packages, .. } = &args.commands {
+                assert_eq!(packages, &vec!["typescript".to_string()]);
+                assert!(save_dev);
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_with_optional_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "remove", "-O", "lodash"]).unwrap();
+            if let Commands::Remove { save_optional, packages, .. } = &args.commands {
+                assert_eq!(packages, &vec!["lodash".to_string()]);
+                assert!(save_optional);
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_with_prod_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "remove", "-P", "express"]).unwrap();
+            if let Commands::Remove { save_prod, packages, .. } = &args.commands {
+                assert_eq!(packages, &vec!["express".to_string()]);
+                assert!(save_prod);
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_with_workspace_root() {
+            let args = Args::try_parse_from(&["vite-plus", "remove", "-w", "react"]).unwrap();
+            if let Commands::Remove { workspace_root, packages, .. } = &args.commands {
+                assert_eq!(packages, &vec!["react".to_string()]);
+                assert!(workspace_root);
+            } else {
+                panic!("Expected Remove command");
+            }
+
+            let args = Args::try_parse_from(&["vite-plus", "remove", "react", "--workspace-root"])
+                .unwrap();
+            if let Commands::Remove { workspace_root, packages, .. } = &args.commands {
+                assert_eq!(packages, &vec!["react".to_string()]);
+                assert!(workspace_root);
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_with_recursive() {
+            let args = Args::try_parse_from(&["vite-plus", "remove", "-r", "react"]).unwrap();
+            if let Commands::Remove { recursive, packages, .. } = &args.commands {
+                assert_eq!(packages, &vec!["react".to_string()]);
+                assert!(recursive);
+            } else {
+                panic!("Expected Remove command");
+            }
+
+            let args =
+                Args::try_parse_from(&["vite-plus", "remove", "react", "--recursive"]).unwrap();
+            if let Commands::Remove { recursive, packages, .. } = &args.commands {
+                assert_eq!(packages, &vec!["react".to_string()]);
+                assert!(recursive);
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_with_global() {
+            let args = Args::try_parse_from(&["vite-plus", "remove", "-g", "npm"]).unwrap();
+            if let Commands::Remove { global, packages, .. } = &args.commands {
+                assert_eq!(packages, &vec!["npm".to_string()]);
+                assert!(global);
+            } else {
+                panic!("Expected Remove command");
+            }
+
+            let args = Args::try_parse_from(&["vite-plus", "remove", "npm", "--global"]).unwrap();
+            if let Commands::Remove { global, packages, .. } = &args.commands {
+                assert_eq!(packages, &vec!["npm".to_string()]);
+                assert!(global);
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_multiple_packages() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "remove",
+                "react",
+                "react-dom",
+                "@types/react",
+            ])
+            .unwrap();
+            if let Commands::Remove { packages, .. } = &args.commands {
+                assert_eq!(packages, &vec!["react", "react-dom", "@types/react"]);
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_with_single_filter() {
+            let args =
+                Args::try_parse_from(&["vite-plus", "remove", "--filter", "app", "typescript"])
+                    .unwrap();
+            if let Commands::Remove { filter, packages, .. } = &args.commands {
+                assert_eq!(filter, &Some(vec!["app".to_string()]));
+                assert_eq!(packages, &vec!["typescript"]);
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_with_multiple_filters() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "remove",
+                "--filter",
+                "app",
+                "--filter",
+                "web",
+                "react",
+            ])
+            .unwrap();
+            if let Commands::Remove { filter, packages, .. } = &args.commands {
+                assert_eq!(filter, &Some(vec!["app".to_string(), "web".to_string()]));
+                assert_eq!(packages, &vec!["react"]);
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_with_combined_flags() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "remove",
+                "-D",
+                "-w",
+                "--filter",
+                "app",
+                "typescript",
+                "eslint",
+            ])
+            .unwrap();
+            if let Commands::Remove { save_dev, workspace_root, filter, packages, .. } =
+                &args.commands
+            {
+                assert!(save_dev);
+                assert!(workspace_root);
+                assert_eq!(filter, &Some(vec!["app".to_string()]));
+                assert_eq!(packages, &vec!["typescript", "eslint"]);
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_with_pass_through_args() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "remove",
+                "react",
+                "--",
+                "--ignore-scripts",
+                "--force",
+            ])
+            .unwrap();
+            if let Commands::Remove { packages, pass_through_args, .. } = &args.commands {
+                assert_eq!(packages, &vec!["react"]);
+                assert_eq!(
+                    pass_through_args,
+                    &Some(vec!["--ignore-scripts".to_string(), "--force".to_string()])
+                );
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_alias_rm() {
+            let args = Args::try_parse_from(&["vite-plus", "rm", "react"]).unwrap();
+            if let Commands::Remove { packages, .. } = &args.commands {
+                assert_eq!(packages, &vec!["react"]);
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_alias_un() {
+            let args = Args::try_parse_from(&["vite-plus", "un", "react"]).unwrap();
+            if let Commands::Remove { packages, .. } = &args.commands {
+                assert_eq!(packages, &vec!["react"]);
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_alias_uninstall() {
+            let args = Args::try_parse_from(&["vite-plus", "uninstall", "react"]).unwrap();
+            if let Commands::Remove { packages, .. } = &args.commands {
+                assert_eq!(packages, &vec!["react"]);
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_invalid_filter() {
+            let args = Args::try_parse_from(&["vite-plus", "remove", "react", "--filter"]);
+            assert!(args.is_err());
+        }
+
+        #[test]
+        fn test_args_remove_command_no_packages() {
+            // Remove command should accept empty packages list (package manager will handle this)
+            let args = Args::try_parse_from(&["vite-plus", "remove"]).unwrap();
+            if let Commands::Remove { packages, .. } = &args.commands {
+                assert!(packages.is_empty());
+            } else {
+                panic!("Expected Remove command");
+            }
+        }
+
+        #[test]
+        fn test_args_remove_command_complex_scenario() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "remove",
+                "-D",
+                "-r",
+                "--filter",
+                "app",
+                "--filter",
+                "web",
+                "typescript",
+                "eslint",
+                "@types/node",
+                "--",
+                "--ignore-scripts",
+            ])
+            .unwrap();
+            if let Commands::Remove {
+                save_dev,
+                recursive,
+                filter,
+                packages,
+                pass_through_args,
+                ..
+            } = &args.commands
+            {
+                assert!(save_dev);
+                assert!(recursive);
+                assert_eq!(filter, &Some(vec!["app".to_string(), "web".to_string()]));
+                assert_eq!(packages, &vec!["typescript", "eslint", "@types/node"]);
+                assert_eq!(pass_through_args, &Some(vec!["--ignore-scripts".to_string()]));
+            } else {
+                panic!("Expected Remove command");
             }
         }
     }

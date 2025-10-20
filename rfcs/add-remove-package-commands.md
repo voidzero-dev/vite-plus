@@ -166,16 +166,20 @@ vite remove -g typescript                # Remove global package
 
 #### Remove Command Mapping
 
-| Vite+ Flag             | pnpm                        | yarn                     | npm                           | Description                                    |
-| ---------------------- | --------------------------- | ------------------------ | ----------------------------- | ---------------------------------------------- |
-| `<packages>`           | `remove <packages>`         | `remove <packages>`      | `uninstall <packages>`        | Remove packages                                |
-| `-D, --save-dev`       | `-D`                        | `--dev` / `-D`           | `--save-dev` / `-D`           | Only remove from `devDependencies`             |
-| `-O, --save-optional`  | `-O`                        | `--optional` / `-O`      | `--save-optional` / `-O`      | Only remove from `optionalDependencies`        |
-| `-P, --save-prod`      | `-P`                        | `--save-prod` / `-P`     | `--save-prod` / `-P`          | Only remove from `dependencies`                |
-| `--filter <pattern>`   | `--filter <pattern> remove` | `workspace <pkg> remove` | `uninstall --workspace <pkg>` | Target specific workspace package(s)           |
-| `-w, --workspace-root` | `-w`                        | (default)                | (default)                     | Remove from workspace root                     |
-| `-r, --recursive`      | `-r`                        | `--recursive` / `-r`     | `--recursive` / `-r`          | Remove recursively from all workspace packages |
-| `-g, --global`         | `-g`                        | `global remove`          | `--global` / `-g`             | Remove global packages                         |
+- https://pnpm.io/cli/remove#options
+- https://yarnpkg.com/cli/remove#options
+- https://docs.npmjs.com/cli/v11/commands/npm-uninstall#description
+
+| Vite+ Flag             | pnpm                        | yarn                                               | npm                               | Description                                    |
+| ---------------------- | --------------------------- | -------------------------------------------------- | --------------------------------- | ---------------------------------------------- |
+| `<packages>`           | `remove <packages>`         | `remove <packages>`                                | `uninstall <packages>`            | Remove packages                                |
+| `-D, --save-dev`       | `-D`                        | N/A                                                | `--save-dev` / `-D`               | Only remove from `devDependencies`             |
+| `-O, --save-optional`  | `-O`                        | N/A                                                | `--save-optional` / `-O`          | Only remove from `optionalDependencies`        |
+| `-P, --save-prod`      | `-P`                        | N/A                                                | `--save-prod` / `-P`              | Only remove from `dependencies`                |
+| `--filter <pattern>`   | `--filter <pattern> remove` | `workspaces foreach -A --include <pattern> remove` | `uninstall --workspace <pattern>` | Target specific workspace package(s)           |
+| `-w, --workspace-root` | `-w`                        | N/A                                                | `--include-workspace-root`        | Remove from workspace root                     |
+| `-r, --recursive`      | `-r, --recursive`           | `-A, --all`                                        | `--workspaces`                    | Remove recursively from all workspace packages |
+| `-g, --global`         | `-g`                        | N/A                                                | `--global` / `-g`                 | Remove global packages                         |
 
 **Note**: Similar to add, `--filter` must precede the command for pnpm.
 
