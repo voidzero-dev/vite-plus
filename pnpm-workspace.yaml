@@ -3,6 +3,8 @@ packages:
   - packages/*
   - rolldown
   - rolldown/packages/*
+  - rolldown-vite
+  - rolldown-vite/packages/*
 
 catalog:
   '@babel/core': ^7.24.7
@@ -122,3 +124,5 @@ minimumReleaseAgeExclude:
 overrides:
   rolldown: 'catalog:'
   vite: 'catalog:'
+
+ignoreScripts: true
