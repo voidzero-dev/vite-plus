@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": ["rolldown.config.ts", "rolldown.dts.config.ts", "scripts"],
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "declaration": false,
+    "resolveJsonModule": true
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@vitejs/test-tailwind",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "debug": "node --inspect-brk ../../packages/vite/bin/vite",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "tailwindcss": "^4.1.14"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6"
+  }
+}

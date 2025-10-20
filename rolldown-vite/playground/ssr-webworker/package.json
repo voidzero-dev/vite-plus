@@ -1,0 +1,19 @@
+{
+  "name": "@vitejs/test-ssr-webworker",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "DEV=1 node worker",
+    "build:worker": "vite build --ssr src/entry-worker.jsx --outDir dist/worker"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "@vitejs/test-browser-exports": "file:./browser-exports",
+    "@vitejs/test-worker-exports": "file:./worker-exports"
+  },
+  "devDependencies": {
+    "miniflare": "^4.20251008.0",
+    "@vitejs/test-resolve-linked": "workspace:*"
+  }
+}

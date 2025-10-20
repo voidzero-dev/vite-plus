@@ -1,0 +1,20 @@
+{
+  "name": "@vitejs/test-css-sourcemap",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "debug": "node --inspect-brk ../../packages/vite/bin/vite",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "less": "^4.4.2",
+    "lightningcss": "^1.30.2",
+    "magic-string": "^0.30.19",
+    "sass": "^1.93.2",
+    "stylus": "^0.64.0",
+    "sugarss": "^5.0.1"
+  }
+}

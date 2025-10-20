@@ -1,0 +1,15 @@
+/assets/*
+  cache-control: max-age=31536000
+  cache-control: immutable
+
+/*.svg
+  cache-control: max-age=604800
+  cache-control: immutable
+
+/*.png
+  cache-control: max-age=604800
+  cache-control: immutable
+
+/*.webp
+  cache-control: max-age=604800
+  cache-control: immutable

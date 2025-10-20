@@ -1,0 +1,20 @@
+<link rel="stylesheet" href="/main.css" />
+
+<!-- comment one -->
+<h1>Hello</h1>
+<!-- comment two -->
+<script type="module"></script>
+<script type="module" src="/main.js"></script>
+<link rel="icon" href="{{cdn_host}}/cdn/images/favicon.ico" />
+<link rel="stylesheet" href="{{cdn_host}}/css.css" type="text/css" />
+<script src="{{cdn_host}}/js.js" vite-ignore></script>
+<p>index.html (fallback)</p>
+
+<div>External path: <span class="external-path"></span></div>
+<script type="module" src="/external-path.js" vite-ignore></script>
+<script type="module" vite-ignore></script>
+<link rel="stylesheet" href="/external-path.css" vite-ignore />
+<div>
+  External path by rollupOptions.external (build only):
+  <span class="external-path-by-rollup-options"></span>
+</div>

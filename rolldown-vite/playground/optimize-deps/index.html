@@ -1,0 +1,375 @@
+<h1>Optimize Deps</h1>
+
+<h2>CommonJS w/ named imports (react)</h2>
+<div class="cjs"></div>
+<h2>CommonJS w/ named imports (phoenix)</h2>
+<div class="cjs-phoenix">fail</div>
+<h2>CommonJS w/ default export (clipboard)</h2>
+<div class="cjs-clipboard">fail</div>
+<h2>CommonJS import default (dep-cjs-compiled-from-esm)</h2>
+<div class="cjs-dep-cjs-compiled-from-esm"></div>
+<h2>CommonJS import default (dep-cjs-compiled-from-cjs)</h2>
+<div class="cjs-dep-cjs-compiled-from-cjs"></div>
+
+<script type="module" src="./cjs.js"></script>
+
+<h2>CommonJS dynamic import default + named (react)</h2>
+<div class="cjs-dynamic"></div>
+<h2>CommonJS dynamic import named (phoenix)</h2>
+<div class="cjs-dynamic-phoenix"></div>
+<h2>CommonJS dynamic import default (clipboard)</h2>
+<div class="cjs-dynamic-clipboard"></div>
+<h2>CommonJS dynamic import default (dep-cjs-compiled-from-esm)</h2>
+<div class="cjs-dynamic-dep-cjs-compiled-from-esm"></div>
+<h2>CommonJS dynamic import default (dep-cjs-compiled-from-cjs)</h2>
+<div class="cjs-dynamic-dep-cjs-compiled-from-cjs"></div>
+
+<script type="module" src="./cjs-dynamic.js"></script>
+
+<h2>Dedupe (dep in linked & optimized package)</h2>
+<div class="dedupe"></div>
+<script type="module" src="./dedupe.js"></script>
+
+<h2>CommonJS w/ browser field mapping (axios)</h2>
+<div>This should show pong: <span class="cjs-browser-field"></span></div>
+
+<h2>CommonJS w/ bare id browser field mapping</h2>
+<div>This should show pong: <span class="cjs-browser-field-bare"></span></div>
+
+<h2>Detecting linked src package and optimizing its deps (lodash-es)</h2>
+<div>This should show fooBarBaz: <span class="deps-linked"></span></div>
+
+<h2>Optimizing force included dep even when it's linked</h2>
+<div class="force-include"></div>
+
+<h2>Dep with CSS</h2>
+<div class="dep-linked-include">This should be red</div>
+
+<h2>CJS Dep with CSS</h2>
+<div class="cjs-with-assets">This should be blue</div>
+
+<h2>import * as ...</h2>
+<div class="import-star"></div>
+
+<h2>Import from dependency with process.env.NODE_ENV</h2>
+<div class="node-env"></div>
+
+<h2>Import from dependency with .notjs files</h2>
+<div class="not-js"></div>
+
+<h2>
+  Import from dependency which uses relative path which needs to be resolved by
+  main field
+</h2>
+<div class="relative-to-main"></div>
+
+<h2>Import from dependency with dynamic import</h2>
+<div class="dep-with-dynamic-import"></div>
+
+<h2>Import from dependency with optional peer dep</h2>
+<div class="dep-with-optional-peer-dep"></div>
+<div class="dep-with-optional-peer-dep-error"></div>
+
+<h2>Import from dependency with optional peer dep submodule</h2>
+<div class="dep-with-optional-peer-dep-submodule"></div>
+<div class="dep-with-optional-peer-dep-submodule-error"></div>
+
+<h2>Import from dependency with optional peer dep (cjs)</h2>
+<div class="dep-with-optional-peer-dep-cjs"></div>
+<div class="dep-with-optional-peer-dep-cjs-error"></div>
+
+<h2>Externalize known non-js files in optimize included dep</h2>
+<div class="externalize-known-non-js"></div>
+
+<h2>Vue & Vuex</h2>
+<div class="vue"></div>
+
+<h2>Dep with changes from esbuild plugin</h2>
+<div>This should show a greeting: <span class="esbuild-plugin"></span></div>
+
+<h2>Dep from hidden dir</h2>
+<div>This should show hello!: <span class="hidden-dir"></span></div>
+
+<h2>Nested include</h2>
+<div>Module path: <span class="nested-include"></span></div>
+
+<h2>Alias with colon</h2>
+<div>URL: <span class="url"></span></div>
+
+<h2>Alias using absolute path</h2>
+<div class="alias-using-absolute-path"></div>
+
+<h2>Reused variable names</h2>
+<div>This should show reused: <span class="reused-variable-names"></span></div>
+
+<h2>Flatten Id</h2>
+<div class="clonedeep-slash"></div>
+<div class="clonedeep-dot"></div>
+
+<h2>Non Optimized Module isn't duplicated</h2>
+<div class="non-optimized-module-is-not-duplicated"></div>
+
+<h2>Pre bundle css require</h2>
+<div class="css-require">css require</div>
+
+<h2>Pre bundle css modules require</h2>
+<div class="css-module-require">This should be red</div>
+
+<h2>Long file name import works</h2>
+<div class="long-file-name"></div>
+
+<script type="module" src="./long-file-name.js"></script>
+
+<h2>Import the CommonJS external package that omits the js suffix</h2>
+<div class="external-package-js"></div>
+<div class="external-package-scss-js"></div>
+<div class="external-package-astro-js"></div>
+<div class="external-package-tsx-js"></div>
+<script type="module">
+  import {
+    astro,
+    okay,
+    scss,
+    tsx,
+  } from '@vitejs/test-dep-cjs-external-package-omit-js-suffix'
+
+  text('.external-package-js', okay())
+  text('.external-package-scss-js', scss())
+  text('.external-package-astro-js', astro())
+  text('.external-package-tsx-js', tsx())
+</script>
+
+<script>
+  function text(el, text) {
+    document.querySelector(el).textContent = text
+  }
+</script>
+
+<script type="module">
+  // test dep detection in globbed files
+  const globbed = import.meta.glob('./glob/*.js', { eager: true })
+
+  import cjsBrowserFieldBare from '@vitejs/test-dep-cjs-browser-field-bare'
+  text('.cjs-browser-field-bare', cjsBrowserFieldBare)
+
+  import { camelCase } from '@vitejs/test-dep-linked'
+  text('.deps-linked', camelCase('foo-bar-baz'))
+
+  import { msg, VueSFC } from '@vitejs/test-dep-linked-include'
+  text('.force-include', msg)
+  text('.externalize-known-non-js', VueSFC.render())
+
+  import * as linked from '@vitejs/test-dep-linked-include'
+  const keys = Object.keys(linked)
+  if (keys.length) {
+    text('.import-star', `[success] ${keys.join(', ')}`)
+  }
+
+  import '@vitejs/test-dep-cjs-with-assets'
+  import '@vitejs/test-dep-css-require'
+  import cssModuleRequire from '@vitejs/test-dep-css-require/mod.cjs'
+  document
+    .querySelector('.css-module-require')
+    .classList.add(cssModuleRequire.cssModuleRequire)
+
+  import { env } from '@vitejs/test-dep-node-env'
+  text('.node-env', env)
+
+  import { notjsValue } from '@vitejs/test-dep-not-js'
+  text('.not-js', notjsValue)
+
+  import foo from '@vitejs/test-dep-relative-to-main/entry'
+  text('.relative-to-main', foo)
+
+  import { lazyFoo } from '@vitejs/test-dep-with-dynamic-import'
+  lazyFoo().then((foo) => {
+    text('.dep-with-dynamic-import', foo)
+  })
+
+  import { createApp } from 'vue'
+  import { createStore } from 'vuex'
+  if (typeof createApp === 'function' && typeof createStore === 'function') {
+    text('.vue', '[success]')
+  }
+
+  import { hello } from '@vitejs/test-dep-esbuild-plugin-transform'
+  text('.esbuild-plugin', hello())
+
+  import { greeting } from './.hidden-dir/foo.js'
+  text('.hidden-dir', greeting)
+
+  import { nestedInclude } from '@vitejs/test-nested-exclude'
+  text('.nested-include', nestedInclude)
+
+  import { parse } from 'node:url'
+  text('.url', parse('https://vite.dev').hostname)
+
+  import('./dynamic-use-dep-alias-using-absolute-path.js').then((mod) =>
+    text('.alias-using-absolute-path', mod.default),
+  )
+
+  import './index.astro'
+  import './generics.vue'
+
+  // All these imports should end up resolved to the same URL (same ?v= injected on them)
+  import { add as addFromDirectAbsolutePath } from '/node_modules/@vitejs/test-dep-non-optimized/index.js'
+  import { add as addFromDirectRelativePath } from './node_modules/@vitejs/test-dep-non-optimized/index.js'
+  import { get as getFromBareImport } from '@vitejs/test-dep-non-optimized'
+
+  addFromDirectAbsolutePath('from-absolute-path')
+  addFromDirectRelativePath('from-relative-path')
+  text(
+    '.non-optimized-module-is-not-duplicated',
+    getFromBareImport().join(', '),
+  )
+</script>
+
+<script type="module">
+  const reusedName = 1
+</script>
+<script type="module">
+  const reusedName = 'reused'
+  text('.reused-variable-names', reusedName)
+</script>
+
+<script type="module">
+  import {
+    callItself,
+    callPeerDep,
+  } from '@vitejs/test-dep-with-optional-peer-dep'
+  text('.dep-with-optional-peer-dep', callItself())
+
+  // expect error as optional peer dep not installed
+  callPeerDep().catch((e) => {
+    text(
+      '.dep-with-optional-peer-dep-error',
+      e &&
+        typeof e.message === 'string' &&
+        e.message.includes(
+          'Could not resolve "foobar" imported by "@vitejs/test-dep-with-optional-peer-dep".',
+        )
+        ? '[success]'
+        : `[failed]: ${e.message}`,
+    )
+  })
+</script>
+
+<script type="module">
+  import {
+    callItself,
+    callPeerDepSubmodule,
+  } from '@vitejs/test-dep-with-optional-peer-dep-submodule'
+  text('.dep-with-optional-peer-dep-submodule', callItself())
+
+  // expect error as optional peer dep not installed
+  callPeerDepSubmodule().catch((e) => {
+    text(
+      '.dep-with-optional-peer-dep-submodule-error',
+      e &&
+        typeof e.message === 'string' &&
+        e.message.includes(
+          'Could not resolve "foobar/baz" imported by "@vitejs/test-dep-with-optional-peer-dep-submodule".',
+        )
+        ? '[success]'
+        : `[failed]: ${e.message}`,
+    )
+  })
+</script>
+
+<script type="module">
+  import {
+    callItself,
+    callPeerDep,
+  } from '@vitejs/test-dep-with-optional-peer-dep-cjs'
+  text('.dep-with-optional-peer-dep-cjs', callItself())
+
+  // expect fallback as optional peer dep not installed
+  text(
+    '.dep-with-optional-peer-dep-cjs-error',
+    callPeerDep() === 'fallback' ? '[success]' : `[failed]: did not fallback`,
+  )
+</script>
+
+<script type="module">
+  // should error on builtin modules (named import)
+  // no node: protocol intentionally
+  import { Buffer } from 'buffer'
+  // named imports error immediately
+</script>
+
+<script type="module">
+  // should error on builtin modules (default import)
+  // no node: protocol intentionally
+  import cp from 'child_process'
+  // must access property to error
+  if (import.meta.env.DEV) {
+    cp.execSync()
+  }
+</script>
+
+<script type="module">
+  // should error on builtin modules from dep
+  import { read } from '@vitejs/test-dep-with-builtin-module-esm'
+  if (import.meta.env.DEV) {
+    read()
+  }
+</script>
+
+<script type="module">
+  // should error on builtin modules from dep
+  import { read } from '@vitejs/test-dep-with-builtin-module-cjs'
+  if (import.meta.env.DEV) {
+    read()
+  }
+</script>
+
+<script type="module">
+  import cloneDeepSlash from 'lodash/cloneDeep'
+  import cloneDeepDot from 'lodash.clonedeep'
+
+  text('.clonedeep-slash', cloneDeepSlash({ name: 'clonedeep-slash' }).name)
+  text('.clonedeep-dot', cloneDeepDot({ name: 'clonedeep-dot' }).name)
+</script>
+
+<script type="module">
+  import loadSub from '@vitejs/test-dep-incompatible'
+  loadSub() // should show an error that tells there's an incompatible dep
+</script>
+
+<h2>Pre-bundle transitive dependency 'some-package.pdf'</h2>
+<div>prebundled: <span class="dep-with-asset-ext-prebundled">???</span></div>
+<div>
+  no dual package: <span class="dep-with-asset-ext-no-dual-package">???</span>
+</div>
+<script type="module">
+  import original, { isPreBundled } from '@vitejs/test-dep-with-asset-ext1.pdf'
+  import reexport from '@vitejs/test-dep-with-asset-ext2.pdf'
+  text('.dep-with-asset-ext-prebundled', isPreBundled)
+  text('.dep-with-asset-ext-no-dual-package', original === reexport)
+</script>
+
+<script type="module">
+  // manually check Firefox doesn't show warning in devtool debugger
+  import * as sub from '@vitejs/test-dep-source-map-no-sources/sub.js'
+  import * as all from '@vitejs/test-dep-source-map-no-sources/all.js'
+</script>
+
+<h2>Pre-bundle dependency with external sub-dependencies</h2>
+<div>
+  require('some-external-sub-dependency') returns a plain object rather than a
+  module namespace object:
+  <span class="dep-cjs-with-external-deps-object">???</span>
+</div>
+<div>
+  require('some-external-sub-dependency') returns the default export if the
+  dependency is a Node builtin:
+  <span class="dep-cjs-with-external-deps-node-builtin">???</span>
+</div>
+<script type="module">
+  import * as optimized from '@vitejs/test-dep-cjs-with-external-deps'
+  text('.dep-cjs-with-external-deps-object', optimized.externalResult)
+  text(
+    '.dep-cjs-with-external-deps-node-builtin',
+    optimized.externalDummyNodeBuiltinResult,
+  )
+</script>
