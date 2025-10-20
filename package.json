@@ -22,7 +22,7 @@
     "@types/node": "catalog:",
     "@voidzero-dev/vite-plus": "workspace:*",
     "husky": "^9.1.7",
-    "lint-staged": "^16.1.6",
+    "lint-staged": "^16.2.4",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "typescript": "catalog:",

@@ -4,3 +4,5 @@ dist
 .claude/settings.local.json
 *.tsbuildinfo
 .DS_Store
+rolldown/pnpm-lock.yaml
+rolldown/pnpm-workspace.yaml
