@@ -26,18 +26,18 @@ pub fn channel(capacity: usize) -> io::Result<(ChannelConf, Receiver)> {
     // Initialize the lock file with a unique name.
     let lock_file_path = temp_dir().join(format!("fspy_ipc_{}.lock", Uuid::new_v4()));
 
-    // Initialize the shared memory with a unique id.
-    // Use a named shared memory so it can be opened from other processes.
-    let shm_id = format!("fspy_shm_{}", Uuid::new_v4());
-    let shm = ShmemConf::new()
-        .size(capacity)
-        .os_id(&shm_id)
-        .create()
-        .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+    let mut conf = ShmemConf::new().size(capacity);
+    // On Windows, allow opening raw shared memory (without backing file) for DLL injection scenarios
+    #[cfg(target_os = "windows")]
+    {
+        conf = conf.allow_raw(true);
+    }
+
+    let shm = conf.create().map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
 
     let conf = ChannelConf {
         lock_file_path: lock_file_path.as_os_str().into(),
-        shm_id: shm_id.into(),
+        shm_id: shm.get_os_id().into(),
         shm_size: capacity,
     };
 
