@@ -236,10 +236,10 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn test_from_ansi() {
-        let asni_str = "hello";
-        let native_str = NativeStr::from_ansi(asni_str.as_bytes());
+        let ansi_str = "hello";
+        let native_str = NativeStr::from_ansi(ansi_str.as_bytes());
         let os_string = native_str.to_os_string();
-        assert_eq!(os_string.to_str().unwrap(), asni_str);
+        assert_eq!(os_string.to_str().unwrap(), ansi_str);
     }
 
     #[cfg(windows)]
