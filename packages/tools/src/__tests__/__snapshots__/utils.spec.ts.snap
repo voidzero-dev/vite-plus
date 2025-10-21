@@ -5,6 +5,16 @@ exports[`replaceUnstableOutput() > replace date 1`] = `
 <date>"
 `;
 
+exports[`replaceUnstableOutput() > replace ignore npm audited packages log 1`] = `
+"removed 1 package in <variable>ms
+Done in <variable>ms"
+`;
+
+exports[`replaceUnstableOutput() > replace ignore pnpm request warning log 1`] = `
+"Foo bar
+Packages:"
+`;
+
 exports[`replaceUnstableOutput() > replace tsdown output 1`] = `
 "ℹ tsdown v<semver> powered by rolldown v<semver>
 ℹ entry: src/index.ts
@@ -54,6 +64,12 @@ vitest/<semver>
 foo/v<semver>
 foo@<semver>
 bar@v<semver>"
+`;
+
+exports[`replaceUnstableOutput() > replace yarn YN0000: └ Completed with duration to empty string 1`] = `
+"➤ YN0000: └ Completed
+➤ YN0000: └ Completed
+➤ YN0000: └ Completed"
 `;
 
 exports[`replaceUnstableOutput() > replace yarn YN0013 1`] = `

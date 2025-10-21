@@ -26,6 +26,7 @@ use crate::commands::{
     lint::{LintConfig, lint},
     remove::RemoveCommand,
     test::test,
+    update::UpdateCommand,
     vite::vite as vite_cmd,
 };
 
@@ -215,6 +216,60 @@ pub enum Commands {
         global: bool,
 
         /// Packages to remove
+        packages: Vec<String>,
+
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+    /// Update packages to their latest versions
+    #[command(alias = "up")]
+    Update {
+        /// Update to latest version (ignore semver range)
+        #[arg(short = 'L', long)]
+        latest: bool,
+
+        /// Update global packages
+        #[arg(short = 'g', long)]
+        global: bool,
+
+        /// Update recursively in all workspace packages
+        #[arg(short = 'r', long)]
+        recursive: bool,
+
+        /// Filter packages in monorepo (can be used multiple times)
+        #[arg(long, value_name = "PATTERN")]
+        filter: Option<Vec<String>>,
+
+        /// Include workspace root
+        #[arg(short = 'w', long)]
+        workspace_root: bool,
+
+        /// Update only devDependencies
+        #[arg(short = 'D', long)]
+        dev: bool,
+
+        /// Update only dependencies (production)
+        #[arg(short = 'P', long)]
+        prod: bool,
+
+        /// Interactive mode - show outdated packages and choose which to update
+        #[arg(short = 'i', long)]
+        interactive: bool,
+
+        /// Don't update optionalDependencies
+        #[arg(long)]
+        no_optional: bool,
+
+        /// Update lockfile only, don't modify package.json
+        #[arg(long)]
+        no_save: bool,
+
+        /// Only update if package exists in workspace (pnpm-specific)
+        #[arg(long)]
+        workspace: bool,
+
+        /// Packages to update (optional - updates all if omitted)
         packages: Vec<String>,
 
         /// Additional arguments to pass through to the package manager
@@ -609,6 +664,40 @@ pub async fn main<
                     *workspace_root,
                     *recursive,
                     *global,
+                    pass_through_args.as_deref(),
+                )
+                .await?;
+            return Ok(exit_status);
+        }
+        Commands::Update {
+            latest,
+            global,
+            recursive,
+            filter,
+            workspace_root,
+            dev,
+            prod,
+            interactive,
+            no_optional,
+            no_save,
+            workspace,
+            packages,
+            pass_through_args,
+        } => {
+            let exit_status = UpdateCommand::new(cwd)
+                .execute(
+                    packages,
+                    *latest,
+                    *global,
+                    *recursive,
+                    filter.as_deref(),
+                    *workspace_root,
+                    *dev,
+                    *prod,
+                    *interactive,
+                    *no_optional,
+                    *no_save,
+                    *workspace,
                     pass_through_args.as_deref(),
                 )
                 .await?;
@@ -1853,6 +1942,381 @@ mod tests {
                 assert_eq!(pass_through_args, &Some(vec!["--ignore-scripts".to_string()]));
             } else {
                 panic!("Expected Remove command");
+            }
+        }
+    }
+
+    mod update_command_tests {
+        use super::*;
+
+        #[test]
+        fn test_args_update_command_basic() {
+            let args = Args::try_parse_from(&["vite-plus", "update"]).unwrap();
+            if let Commands::Update {
+                latest,
+                global,
+                recursive,
+                filter,
+                workspace_root,
+                dev,
+                prod,
+                interactive,
+                no_optional,
+                no_save,
+                workspace,
+                packages,
+                ..
+            } = &args.commands
+            {
+                assert!(!latest);
+                assert!(!global);
+                assert!(!recursive);
+                assert!(filter.is_none());
+                assert!(!workspace_root);
+                assert!(!dev);
+                assert!(!prod);
+                assert!(!interactive);
+                assert!(!no_optional);
+                assert!(!no_save);
+                assert!(!workspace);
+                assert!(packages.is_empty());
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_alias() {
+            let args = Args::try_parse_from(&["vite-plus", "up"]).unwrap();
+            assert!(matches!(args.commands, Commands::Update { .. }));
+        }
+
+        #[test]
+        fn test_args_update_command_with_packages() {
+            let args =
+                Args::try_parse_from(&["vite-plus", "update", "react", "react-dom"]).unwrap();
+            if let Commands::Update { packages, .. } = &args.commands {
+                assert_eq!(packages, &vec!["react", "react-dom"]);
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_latest_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "update", "-L", "react"]).unwrap();
+            if let Commands::Update { latest, packages, .. } = &args.commands {
+                assert!(latest);
+                assert_eq!(packages, &vec!["react"]);
+            } else {
+                panic!("Expected Update command");
+            }
+
+            let args = Args::try_parse_from(&["vite-plus", "update", "--latest", "react"]).unwrap();
+            if let Commands::Update { latest, packages, .. } = &args.commands {
+                assert!(latest);
+                assert_eq!(packages, &vec!["react"]);
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_global_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "update", "-g"]).unwrap();
+            if let Commands::Update { global, .. } = &args.commands {
+                assert!(global);
+            } else {
+                panic!("Expected Update command");
+            }
+
+            let args = Args::try_parse_from(&["vite-plus", "update", "--global"]).unwrap();
+            if let Commands::Update { global, .. } = &args.commands {
+                assert!(global);
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_recursive_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "update", "-r"]).unwrap();
+            if let Commands::Update { recursive, .. } = &args.commands {
+                assert!(recursive);
+            } else {
+                panic!("Expected Update command");
+            }
+
+            let args = Args::try_parse_from(&["vite-plus", "update", "--recursive"]).unwrap();
+            if let Commands::Update { recursive, .. } = &args.commands {
+                assert!(recursive);
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_workspace_root_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "update", "-w"]).unwrap();
+            if let Commands::Update { workspace_root, .. } = &args.commands {
+                assert!(workspace_root);
+            } else {
+                panic!("Expected Update command");
+            }
+
+            let args = Args::try_parse_from(&["vite-plus", "update", "--workspace-root"]).unwrap();
+            if let Commands::Update { workspace_root, .. } = &args.commands {
+                assert!(workspace_root);
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_dev_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "update", "-D"]).unwrap();
+            if let Commands::Update { dev, .. } = &args.commands {
+                assert!(dev);
+            } else {
+                panic!("Expected Update command");
+            }
+
+            let args = Args::try_parse_from(&["vite-plus", "update", "--dev"]).unwrap();
+            if let Commands::Update { dev, .. } = &args.commands {
+                assert!(dev);
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_prod_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "update", "-P"]).unwrap();
+            if let Commands::Update { prod, .. } = &args.commands {
+                assert!(prod);
+            } else {
+                panic!("Expected Update command");
+            }
+
+            let args = Args::try_parse_from(&["vite-plus", "update", "--prod"]).unwrap();
+            if let Commands::Update { prod, .. } = &args.commands {
+                assert!(prod);
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_interactive_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "update", "-i"]).unwrap();
+            if let Commands::Update { interactive, .. } = &args.commands {
+                assert!(interactive);
+            } else {
+                panic!("Expected Update command");
+            }
+
+            let args = Args::try_parse_from(&["vite-plus", "update", "--interactive"]).unwrap();
+            if let Commands::Update { interactive, .. } = &args.commands {
+                assert!(interactive);
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_no_optional_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "update", "--no-optional"]).unwrap();
+            if let Commands::Update { no_optional, .. } = &args.commands {
+                assert!(no_optional);
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_no_save_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "update", "--no-save"]).unwrap();
+            if let Commands::Update { no_save, .. } = &args.commands {
+                assert!(no_save);
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_workspace_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "update", "--workspace"]).unwrap();
+            if let Commands::Update { workspace, .. } = &args.commands {
+                assert!(workspace);
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_filter() {
+            let args =
+                Args::try_parse_from(&["vite-plus", "update", "--filter", "app", "react"]).unwrap();
+            if let Commands::Update { filter, packages, .. } = &args.commands {
+                assert_eq!(filter, &Some(vec!["app".to_string()]));
+                assert_eq!(packages, &vec!["react"]);
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_multiple_filters() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "update",
+                "--filter",
+                "app",
+                "--filter",
+                "web",
+                "react",
+            ])
+            .unwrap();
+            if let Commands::Update { filter, packages, .. } = &args.commands {
+                assert_eq!(filter, &Some(vec!["app".to_string(), "web".to_string()]));
+                assert_eq!(packages, &vec!["react"]);
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_combined_flags() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "update",
+                "-L",
+                "-r",
+                "-D",
+                "--filter",
+                "app",
+                "typescript",
+                "eslint",
+            ])
+            .unwrap();
+            if let Commands::Update { latest, recursive, dev, filter, packages, .. } =
+                &args.commands
+            {
+                assert!(latest);
+                assert!(recursive);
+                assert!(dev);
+                assert_eq!(filter, &Some(vec!["app".to_string()]));
+                assert_eq!(packages, &vec!["typescript", "eslint"]);
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_with_pass_through_args() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "update",
+                "react",
+                "--",
+                "--registry",
+                "https://custom-registry.com",
+            ])
+            .unwrap();
+            if let Commands::Update { packages, pass_through_args, .. } = &args.commands {
+                assert_eq!(packages, &vec!["react"]);
+                assert_eq!(
+                    pass_through_args,
+                    &Some(vec![
+                        "--registry".to_string(),
+                        "https://custom-registry.com".to_string()
+                    ])
+                );
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_complex_scenario() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "update",
+                "-L",
+                "-r",
+                "-w",
+                "-D",
+                "--filter",
+                "app",
+                "--filter",
+                "web",
+                "--no-optional",
+                "react",
+                "vue",
+                "--",
+                "--registry",
+                "https://registry.npmjs.org",
+            ])
+            .unwrap();
+            if let Commands::Update {
+                latest,
+                recursive,
+                workspace_root,
+                dev,
+                filter,
+                no_optional,
+                packages,
+                pass_through_args,
+                ..
+            } = &args.commands
+            {
+                assert!(latest);
+                assert!(recursive);
+                assert!(workspace_root);
+                assert!(dev);
+                assert_eq!(filter, &Some(vec!["app".to_string(), "web".to_string()]));
+                assert!(no_optional);
+                assert_eq!(packages, &vec!["react", "vue"]);
+                assert_eq!(
+                    pass_through_args,
+                    &Some(vec!["--registry".to_string(), "https://registry.npmjs.org".to_string()])
+                );
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_all_packages() {
+            // When no packages are specified, should update all packages
+            let args = Args::try_parse_from(&["vite-plus", "update", "-r"]).unwrap();
+            if let Commands::Update { recursive, packages, .. } = &args.commands {
+                assert!(recursive);
+                assert!(packages.is_empty());
+            } else {
+                panic!("Expected Update command");
+            }
+        }
+
+        #[test]
+        fn test_args_update_command_workspace_combinations() {
+            // Test --workspace-root with --recursive
+            let args = Args::try_parse_from(&["vite-plus", "update", "-w", "-r"]).unwrap();
+            if let Commands::Update { workspace_root, recursive, .. } = &args.commands {
+                assert!(workspace_root);
+                assert!(recursive);
+            } else {
+                panic!("Expected Update command");
+            }
+
+            // Test --workspace flag
+            let args =
+                Args::try_parse_from(&["vite-plus", "update", "--workspace", "react"]).unwrap();
+            if let Commands::Update { workspace, packages, .. } = &args.commands {
+                assert!(workspace);
+                assert_eq!(packages, &vec!["react"]);
+            } else {
+                panic!("Expected Update command");
             }
         }
     }

@@ -1,0 +1,8 @@
+{
+  "name": "command-update-pnpm10-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.18.0",
+  "dependencies": {
+    "testnpm2": "*"
+  }
+}

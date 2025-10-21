@@ -1,0 +1,116 @@
+> vp update testnpm2 --latest -w && cat package.json # should update in workspace root
+Running: pnpm update --latest --workspace-root testnpm2
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+Packages: +<variable>
++<repeat>
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-update-pnpm10-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+
+> vp update testnpm2 --latest --filter app && cat packages/app/package.json # should update in specific package
+Running: pnpm --filter app update --latest testnpm2
+.                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+.                                        |   +2 +<repeat>
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-install": "*",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "*"
+  }
+}
+
+> vp up -D --filter app && cat packages/app/package.json # should update dev dependencies in app
+Running: pnpm --filter app update --dev
+.                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-install": "*",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}
+
+> vp update --latest --filter "*" && cat packages/app/package.json packages/utils/package.json # should update in all packages
+Running: pnpm --filter * update --latest
+Scope: all <variable> workspace projects
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-install": "^1.0.0",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+
+> vp update -r --no-save && cat package.json packages/app/package.json # should update recursively without saving
+Running: pnpm update --recursive --no-save
+Scope: all <variable> workspace projects
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-update-pnpm10-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-install": "^1.0.0",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}
+
+> vp update --workspace --filter app @vite-plus-test/utils && cat packages/app/package.json # should update workspace dependency
+Running: pnpm --filter app update --workspace @vite-plus-test/utils
+.                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-install": "^1.0.0",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}

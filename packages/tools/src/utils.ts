@@ -26,17 +26,29 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
     // ignore pnpm progress
     .replaceAll(/Progress: resolved \d+, reused \d+, downloaded \d+, added \d+\n/g, '')
     // ignore pnpm warn
-    .replaceAll(/WARN\s+Skip\s+adding .+?\n/g, '')
+    .replaceAll(/ ?WARN\s+Skip\s+adding .+?\n/g, '')
+    .replaceAll(/ ?WARN\s+Request\s+took .+?\n/g, '')
     .replaceAll(/Scope: all \d+ workspace projects/g, 'Scope: all <variable> workspace projects')
     .replaceAll(/\++\n/g, '+<repeat>\n')
     // ignore yarn YN0013, because it's unstable output, only exists on CI environment
     // ➤ YN0013: │ A package was added to the project (+ 0.7 KiB).
     .replaceAll(/➤ YN0013:[^\n]+\n/g, '')
+    // ignore yarn `YN0000: └ Completed <duration>`, it's unstable output
+    // ➤ YN0000: └ Completed in <variable>ms <variable>ms
+    // ➤ YN0000: └ Completed in <variable>ms
+    // =>
+    // ➤ YN0000: └ Completed
+    .replaceAll(/➤ YN0000: └ Completed.* <variable>(s|ms|µs)( <variable>(s|ms|µs))?\n/g, '➤ YN0000: └ Completed\n')
     // ignore npm warn
     // npm warn Unknown env config "recursive". This will stop working in the next major version of npm
     .replaceAll(/npm warn Unknown env config .+?\n/g, '')
     // WARN  Issue while reading "/path/to/.npmrc". Failed to replace env in config: ${NPM_AUTH_TOKEN}
     .replaceAll(/WARN\s+Issue\s+while\s+reading .+?\n/g, '')
+    // ignore npm audited packages log
+    // "removed 1 package, and audited 3 packages in 700ms" => "removed <variable> package in <variable>ms"
+    // "\nfound 0 vulnerabilities\n" => ""
+    .replaceAll(/(removed \d+ package), and audited \d+ packages( in <variable>(?:s|ms|µs))\n/g, '$1$2\n')
+    .replaceAll(/\nfound \d+ vulnerabilities\n/g, '')
     // replace size for tsdown
     .replaceAll(/ \d+(\.\d+)? ([km]B)/g, ' <variable> $2');
 }

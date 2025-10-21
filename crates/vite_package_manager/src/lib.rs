@@ -1,4 +1,5 @@
 pub mod add;
+pub mod commands;
 mod config;
 mod install;
 pub mod package;

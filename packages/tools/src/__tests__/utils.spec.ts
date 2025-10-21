@@ -92,6 +92,34 @@ Done in 171ms using pnpm v10.16.1
     `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
+
+  test('replace yarn YN0000: └ Completed with duration to empty string', () => {
+    const output = `
+➤ YN0000: └ Completed in 100ms
+➤ YN0000: └ Completed in 100ms 200ms
+➤ YN0000: └ Completed
+    `;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
+
+  test('replace ignore pnpm request warning log', () => {
+    const output = `
+Foo bar
+ WARN  Request took <variable>ms: https://registry.npmjs.org/testnpm2
+Packages:
+    `;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
+
+  test('replace ignore npm audited packages log', () => {
+    const output = `
+removed 1 package, and audited 3 packages in 700ms
+
+found 0 vulnerabilities
+Done in 1000ms
+    `;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
 });
 
 describe('isPassThroughEnv()', () => {

@@ -1,0 +1,14 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp update --help # should show help",
+    "vp update testnpm2 && cat package.json # should update package within semver range",
+    "vp up testnpm2 --latest && cat package.json # should to absolute latest version",
+    "vp update -D && cat package.json # should update only dev dependencies",
+    "vp update -P --no-save && cat package.json # should update only dependencies and optionalDependencies without saving",
+    "vp rm testnpm2 && vp add testnpm2@1.0.0 -O && vp update --no-optional --latest && cat package.json # should skip optional dependencies",
+    "vp update && vp update --recursive && cat package.json # should update all packages and change the package.json"
+  ]
+}
