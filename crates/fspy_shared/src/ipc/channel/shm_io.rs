@@ -141,7 +141,10 @@ impl<M: AsRawSlice> ShmWriter<M> {
 
         let frame_size = frame_size.get();
         let Ok(frame_size_i32) = i32::try_from(frame_size) else {
-            // negative frame size is meant to indicate completion. So we can't write frame larger than i32::MAX.
+            // The frame header uses a signed 32-bit integer (i32) to store the frame size.
+            // Negative values are reserved to indicate completion, so only positive values are valid.
+            // Therefore, the maximum allowed frame size is i32::MAX (2^31-1), approximately 2GB.
+            // Attempting to claim a frame larger than this will fail.
             return None;
         };
 
