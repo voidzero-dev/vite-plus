@@ -76,7 +76,7 @@ impl PathAccessIterable {
         let accesses_in_arena =
             self.arenas.iter().flat_map(|arena| arena.borrow_accesses().iter()).copied();
 
-        let accesses_in_shm = self.ipc_receiver_lock_guard.iter_path_acceses();
+        let accesses_in_shm = self.ipc_receiver_lock_guard.iter_path_accesses();
         accesses_in_shm.chain(accesses_in_arena)
     }
 }

@@ -31,7 +31,7 @@ impl OwnedReceiverLockGuard {
         spawn_blocking(move || Self::lock(receiver)).await.expect("lock task panicked")
     }
 
-    pub fn iter_path_acceses(&self) -> impl Iterator<Item = PathAccess<'_>> {
+    pub fn iter_path_accesses(&self) -> impl Iterator<Item = PathAccess<'_>> {
         self.borrow_lock_guard().iter_frames().map(|frame| {
             let (path_access, decoded_size) =
                 borrow_decode_from_slice::<PathAccess<'_>, _>(frame, BINCODE_CONFIG).unwrap();

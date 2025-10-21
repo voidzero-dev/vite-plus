@@ -40,7 +40,7 @@ pub struct PathAccessIterable {
 
 impl PathAccessIterable {
     pub fn iter(&self) -> impl Iterator<Item = PathAccess<'_>> {
-        self.ipc_receiver_lock_guard.iter_path_acceses()
+        self.ipc_receiver_lock_guard.iter_path_accesses()
     }
 }
 
