@@ -68,7 +68,9 @@ impl Client {
         let frame_size = NonZeroUsize::new(size_writer.bytes_written)
             .expect("fspy: encoded PathAccess should never be empty");
 
-        let mut frame = ipc_sender.claim_frame(frame_size).expect("fspy: failed to claim frame in shared memory");
+        let mut frame = ipc_sender
+            .claim_frame(frame_size)
+            .expect("fspy: failed to claim frame in shared memory");
         let written_size = encode_into_slice(&path_access, &mut frame, BINCODE_CONFIG)?;
         assert_eq!(written_size, size_writer.bytes_written);
 
