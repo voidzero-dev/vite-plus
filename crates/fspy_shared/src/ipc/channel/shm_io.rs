@@ -229,8 +229,7 @@ impl<M: AsRawSlice> ShmWriter<M> {
             return Err(WriteEncodedError::InsufficientSpace);
         };
 
-        let written_size = encode_into_slice(value, &mut frame, config)
-            .expect("encoding into claimed frame should never fail");
+        let written_size = encode_into_slice(value, &mut frame, config)?;
         assert_eq!(written_size, size_writer.bytes_written);
 
         Ok(())
