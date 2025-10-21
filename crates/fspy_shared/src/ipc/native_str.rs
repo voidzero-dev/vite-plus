@@ -13,7 +13,7 @@ use bincode::{BorrowDecode, Decode, Encode};
 #[cfg(unix)]
 use bstr::BStr;
 
-/// Similar to `OsStr`, but requires zero-copy to construct from either asni or wide characters on Windows.
+/// Similar to `OsStr`, but requires zero-copy to construct from either ansi or wide characters on Windows.
 #[derive(Encode, BorrowDecode, Clone, Copy, PartialEq, Eq)]
 pub struct NativeStr<'a> {
     #[cfg(windows)]
