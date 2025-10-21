@@ -26,6 +26,7 @@ pub fn channel(capacity: usize) -> io::Result<(ChannelConf, Receiver)> {
     // Initialize the lock file with a unique name.
     let lock_file_path = temp_dir().join(format!("fspy_ipc_{}.lock", Uuid::new_v4()));
 
+    #[allow(unused_mut)]
     let mut conf = ShmemConf::new().size(capacity);
     // On Windows, allow opening raw shared memory (without backing file) for DLL injection scenarios
     #[cfg(target_os = "windows")]
@@ -52,6 +53,8 @@ impl ChannelConf {
     pub fn sender(&self) -> io::Result<Sender> {
         let lock_file = File::open(self.lock_file_path.to_cow_os_str())?;
         lock_file.try_lock_shared()?;
+
+        #[allow(unused_mut)]
         let mut conf = ShmemConf::new().size(self.shm_size).os_id(&self.shm_id);
         // On Windows, allow opening raw shared memory (without backing file) for DLL injection scenarios
         #[cfg(target_os = "windows")]
