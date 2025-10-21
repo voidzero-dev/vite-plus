@@ -198,7 +198,7 @@ static DETOUR_CREATE_PROCESS_A: Detour<
                 unsafe {
                     sender.send(PathAccess {
                         mode: AccessMode::Read,
-                        path: NativeStr::from_bytes(CStr::from_ptr(lp_application_name).to_bytes()),
+                        path: NativeStr::from_ansi(CStr::from_ptr(lp_application_name).to_bytes()),
                     });
                 }
             }

@@ -2,7 +2,7 @@
 
 mod shm_io;
 
-use std::{env::temp_dir, fs::File, io, num::NonZeroUsize, path::PathBuf, sync::Arc};
+use std::{env::temp_dir, fs::File, io, ops::Deref, path::PathBuf, sync::Arc};
 
 use bincode::{Decode, Encode};
 use shared_memory::{Shmem, ShmemConf};
@@ -21,8 +21,12 @@ pub struct ChannelConf {
     shm_size: usize,
 }
 
+/// Creates a mpsc IPC channel with one receiver and a `ChannelConf` that can be passed around processes and used to create multiple senders
 pub fn channel(capacity: usize) -> io::Result<(ChannelConf, Receiver)> {
+    // Initialize the lock file with a unique name.
     let lock_file_path = temp_dir().join(format!("fspy_ipc_{}.lock", Uuid::new_v4()));
+
+    // Initialize the shared memory with a unique id.
     let shm = ShmemConf::new()
         .size(capacity)
         .create()
@@ -39,6 +43,9 @@ pub fn channel(capacity: usize) -> io::Result<(ChannelConf, Receiver)> {
 }
 
 impl ChannelConf {
+    /// Creates a sender.
+    ///
+    /// This doesn't block on the file lock. Instead it returns immediately with error if the receiver is locked or dropped.
     pub fn sender(&self) -> io::Result<Sender> {
         let lock_file = File::open(self.lock_file_path.to_cow_os_str())?;
         lock_file.try_lock_shared()?;
@@ -48,20 +55,37 @@ impl ChannelConf {
             .open()
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
         let writer = unsafe { ShmWriter::new(shm) };
-        Ok(Sender { writer, _lock_file: lock_file })
+        Ok(Sender { writer, lock_file, lock_file_path: self.lock_file_path.clone() })
     }
 }
 
 pub struct Sender {
     writer: ShmWriter<Shmem>,
-    // Holds the file to keep the shared lock alive
-    _lock_file: File,
+    lock_file_path: NativeString,
+    lock_file: File,
 }
-impl Sender {
-    pub fn claim_frame(&self, frame_size: NonZeroUsize) -> Option<FrameMut<'_>> {
-        self.writer.claim_frame(frame_size)
+
+impl Drop for Sender {
+    fn drop(&mut self) {
+        if let Err(err) = self.lock_file.unlock() {
+            debug!("Failed to unlock the shared IPC lock {:?}: {}", self.lock_file_path, err);
+        }
     }
 }
+
+impl Deref for Sender {
+    type Target = ShmWriter<Shmem>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.writer
+    }
+}
+
+/// Safety: `Sender` holds a shared file lock that ensures there's no reader, so `shm` can be safely written to.
+unsafe impl Send for Sender {}
+
+/// Safety: `Sender` holds a shared file lock that ensures there's no reader, so `shm` can be safely written to.
+unsafe impl Sync for Sender {}
 
 /// The unique receiver side of an IPC channel.
 /// Owns the lock file and removes it on drop.
@@ -71,17 +95,11 @@ pub struct Receiver {
     shm: Shmem,
 }
 
-/// Safety: `shm` is only read under the receiver lock
+/// Safety: Receiver doesn't read or write `shm`. It only pass it to ReceiverLockGuard under the lock.
 unsafe impl Send for Receiver {}
 
-/// Safety: `shm` is only read under the receiver lock
+/// Safety: Receiver doesn't read or write `shm`. It only pass it to ReceiverLockGuard under the lock.
 unsafe impl Sync for Receiver {}
-
-/// Safety: `shm` is only written under the sender lock
-unsafe impl Send for Sender {}
-
-/// Safety: `shm` is only written using a thread-safe algorithm under the sender lock.
-unsafe impl Sync for Sender {}
 
 impl Drop for Receiver {
     fn drop(&mut self) {
@@ -99,40 +117,37 @@ impl Receiver {
 
     /// Lock the shared memory for unique read access.
     /// Blocks until all the senders have dropped (or processes owning them have all exited) so the shared memory can be safely read.
-    /// During the lifetime of returned `ReceiverLock`, no new senders can be created (ChannelConf::sender would fail).
-    pub fn lock(self) -> io::Result<ReceiverLock> {
+    /// During the lifetime of returned `ReceiverReadGuard`, no new senders can be created (ChannelConf::sender would fail).
+    pub fn lock(&self) -> io::Result<ReceiverLockGuard<'_>> {
         self.lock_file.lock()?;
-        let reader = ShmReader::new(unsafe {
-            std::slice::from_raw_parts(self.shm.as_ptr(), self.shm.len())
-        });
-        Ok(ReceiverLock { reader, receiver: self })
+        let reader = ShmReader::new(unsafe { self.shm.as_slice() });
+        Ok(ReceiverLockGuard { reader, lock_file: &self.lock_file })
     }
 }
 
-pub struct ReceiverLock {
-    // The order here is important to ensure the reader is dropped before the receiver.
-    // The reader holds a reference to the shared memory owned by the receiver.
-    reader: ShmReader<&'static [u8]>,
-    receiver: Receiver,
+pub struct ReceiverLockGuard<'a> {
+    reader: ShmReader<&'a [u8]>,
+    lock_file: &'a File,
 }
 
-impl Drop for ReceiverLock {
+impl<'a> Drop for ReceiverLockGuard<'a> {
     fn drop(&mut self) {
-        if let Err(err) = self.receiver.lock_file.unlock() {
+        if let Err(err) = self.lock_file.unlock() {
             debug!("Failed to unlock IPC lock file: {}", err);
         }
     }
 }
-impl<'a> ReceiverLock {
-    pub fn iter_frames(&self) -> impl Iterator<Item = &[u8]> {
-        self.reader.iter_frames()
+impl<'a> Deref for ReceiverLockGuard<'a> {
+    type Target = ShmReader<&'a [u8]>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.reader
     }
 }
 
 #[cfg(test)]
 mod tests {
-
-    use std::str::from_utf8;
+    use std::{num::NonZeroUsize, str::from_utf8};
 
     use bstr::B;
     use fspy_test_utils::command_executing;

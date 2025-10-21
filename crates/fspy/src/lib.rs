@@ -26,7 +26,9 @@ use tokio::process::Child;
 
 pub struct TrackedChild {
     pub tokio_child: Child,
-    pub accesses_future: BoxFuture<'static, io::Result<os_impl::PathAccessIterable>>,
+    /// This future lazily locks the IPC channel when it's polled.
+    /// Do not `await` it until the child process has existed.
+    pub accesses_future: BoxFuture<'static, io::Result<PathAccessIterable>>,
 }
 
 pub struct Spy(SpyInner);

@@ -15,7 +15,7 @@ use bincode::borrow_decode_from_slice;
 use fspy_seccomp_unotify::supervisor::supervise;
 use fspy_shared::ipc::{
     BINCODE_CONFIG, NativeString, PathAccess,
-    channel::{ReceiverLock, channel},
+    channel::{Receiver, ReceiverLockGuard, channel},
 };
 #[cfg(target_os = "macos")]
 use fspy_shared_unix::payload::Fixtures;
@@ -27,6 +27,7 @@ use fspy_shared_unix::{
 use futures_util::FutureExt;
 #[cfg(target_os = "linux")]
 use syscall_handler::SyscallHandler;
+use tokio::task::spawn_blocking;
 
 use crate::{Command, TrackedChild, arena::PathAccessArena};
 
@@ -41,6 +42,7 @@ pub struct SpyInner {
 const PRELOAD_CDYLIB_BINARY: &[u8] = include_bytes!(env!("CARGO_CDYLIB_FILE_FSPY_PRELOAD_UNIX"));
 
 impl SpyInner {
+    /// Initilize the fs accesss spy by writing the preload library on disk
     pub fn init_in(dir: &Path) -> io::Result<Self> {
         use const_format::formatcp;
         use xxhash_rust::const_xxh3::xxh3_128;
@@ -69,9 +71,19 @@ impl SpyInner {
     }
 }
 
+#[ouroboros::self_referencing]
+struct OwnedReceiverLockGuard {
+    /// Owns the shared memory
+    receiver: Receiver,
+    /// Borrows the shared memory and owns the file lock
+    #[borrows(receiver)]
+    #[covariant]
+    lock_guard: ReceiverLockGuard<'this>,
+}
+
 pub struct PathAccessIterable {
     arenas: Vec<PathAccessArena>,
-    ipc_receiver_lock: ReceiverLock,
+    ipc_receiver_lock_guard: OwnedReceiverLockGuard,
 }
 
 impl PathAccessIterable {
@@ -79,12 +91,13 @@ impl PathAccessIterable {
         let accesses_in_arena =
             self.arenas.iter().flat_map(|arena| arena.borrow_accesses().iter()).copied();
 
-        let accesses_in_shm = self.ipc_receiver_lock.iter_frames().map(|frame| {
-            let (path_access, decoded_size) =
-                borrow_decode_from_slice::<PathAccess<'_>, _>(frame, BINCODE_CONFIG).unwrap();
-            assert_eq!(decoded_size, frame.len());
-            path_access
-        });
+        let accesses_in_shm =
+            self.ipc_receiver_lock_guard.borrow_lock_guard().iter_frames().map(|frame| {
+                let (path_access, decoded_size) =
+                    borrow_decode_from_slice::<PathAccess<'_>, _>(frame, BINCODE_CONFIG).unwrap();
+                assert_eq!(decoded_size, frame.len());
+                path_access
+            });
         accesses_in_shm.chain(accesses_in_arena)
     }
 }
@@ -155,9 +168,13 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
     };
 
     let accesses_future = async move {
-        let ipc_receiver_lock = ipc_receiver.lock()?;
         let arenas = arenas_future.await?;
-        Ok(PathAccessIterable { arenas, ipc_receiver_lock })
+        // `receiver.lock()` blocks. Run it inside `spawn_blocking` to avoid blocking the tokio runtime.
+        let ipc_receiver_lock_guard = spawn_blocking(move || {
+            OwnedReceiverLockGuard::try_new(ipc_receiver, |receiver| receiver.lock())
+        })
+        .await??;
+        Ok(PathAccessIterable { arenas, ipc_receiver_lock_guard })
     }
     .boxed();
 
