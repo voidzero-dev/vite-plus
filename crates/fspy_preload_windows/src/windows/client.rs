@@ -1,69 +1,33 @@
-use std::{
-    cell::SyncUnsafeCell,
-    ffi::{CStr, c_void},
-    mem::MaybeUninit,
-    ptr::null_mut,
-};
+use std::{cell::SyncUnsafeCell, ffi::CStr, mem::MaybeUninit};
 
-use bincode::{borrow_decode_from_slice, encode_into_std_write, encode_to_vec};
-use dashmap::DashSet;
+use bincode::{borrow_decode_from_slice, encode_to_vec};
 use fspy_detours_sys::DetourCopyPayloadToProcess;
 use fspy_shared::{
-    ipc::{BINCODE_CONFIG, PathAccess},
+    ipc::{BINCODE_CONFIG, PathAccess, channel::Sender},
     windows::{PAYLOAD_ID, Payload},
 };
-use ntapi::ntobapi::DUPLICATE_SAME_ACCESS;
-use smallvec::SmallVec;
-use winapi::{
-    shared::minwindef::{BOOL, DWORD, FALSE},
-    um::{
-        fileapi::WriteFile, handleapi::DuplicateHandle, processthreadsapi::GetCurrentProcess,
-        winnt::HANDLE,
-    },
-};
-use winsafe::GetLastError;
+use winapi::{shared::minwindef::BOOL, um::winnt::HANDLE};
 
 use crate::stack_once::{StackOnceGuard, stack_once_token};
 
-const MSG_INLINE_SIZE: usize = 256;
-
 pub struct Client<'a> {
     payload: Payload<'a>,
-    messages: DashSet<SmallVec<u8, MSG_INLINE_SIZE>>,
-}
-
-unsafe fn write_pipe_message(pipe: HANDLE, msg: &[u8]) {
-    let mut bytes_written: DWORD = 0;
-    let mut remaining_msg = msg;
-    while !remaining_msg.is_empty() {
-        let ret = unsafe {
-            WriteFile(
-                pipe,
-                msg.as_ptr().cast(),
-                msg.len().try_into().unwrap(),
-                &mut bytes_written,
-                null_mut(),
-            )
-        };
-        assert_ne!(ret, 0, "fspy WriteFile to pipe failed: {:?}", GetLastError());
-        remaining_msg = &remaining_msg[bytes_written as usize..];
-    }
+    ipc_sender: Option<Sender>,
 }
 
 stack_once_token!(PATH_ACCESS_ONCE);
 
 pub struct PathAccessSender<'a> {
-    messages: &'a DashSet<SmallVec<u8, MSG_INLINE_SIZE>>,
+    ipc_sender: &'a Option<Sender>,
     _once_guard: StackOnceGuard,
 }
 
 impl<'a> PathAccessSender<'a> {
-    pub unsafe fn send(&self, access: PathAccess<'_>) {
-        // TODO: send cwd as dir if the path is relative
-        let mut buf = SmallVec::<u8, 256>::new();
-        encode_into_std_write(access, &mut buf, BINCODE_CONFIG).unwrap();
-
-        self.messages.insert(buf);
+    pub fn send(&self, access: PathAccess<'_>) {
+        let Some(sender) = &self.ipc_sender else {
+            return;
+        };
+        sender.write_encoded(&access, BINCODE_CONFIG).expect("failed to send path access");
     }
 }
 
@@ -73,50 +37,34 @@ impl<'a> Client<'a> {
             borrow_decode_from_slice::<'a, Payload, _>(payload_bytes, BINCODE_CONFIG).unwrap();
         assert_eq!(decoded_len, payload_bytes.len());
 
-        Self { payload, messages: DashSet::with_capacity(1024) }
+        let ipc_sender = match payload.channel_conf.sender() {
+            Ok(sender) => Some(sender),
+            Err(err) => {
+                // this can happen if the process is started after the root target process has exited.
+                // By that time the channel would have been closed in the receiver side.
+                // In this case we just leave a message and skip sending any path accesses.
+                eprintln!("fspy: failed to create ipc sender: {}", err);
+                None
+            }
+        };
+
+        Self { payload, ipc_sender }
     }
 
-    pub fn finish(&self) {
-        for msg in self.messages.iter() {
-            unsafe { write_pipe_message(self.payload.pipe_handle as _, &msg) };
-        }
-    }
-
-    pub unsafe fn send(&self, access: PathAccess<'_>) {
-        // TODO: send cwd as dir if the path is relative
-        let mut buf = SmallVec::<u8, 256>::new();
-        encode_into_std_write(access, &mut buf, BINCODE_CONFIG).unwrap();
-
-        self.messages.insert(buf);
+    pub fn send(&self, access: PathAccess<'_>) {
+        let Some(sender) = &self.ipc_sender else {
+            return;
+        };
+        sender.write_encoded(&access, BINCODE_CONFIG).expect("failed to send path access");
     }
 
     pub fn sender(&self) -> Option<PathAccessSender<'_>> {
         let guard = PATH_ACCESS_ONCE.try_enter()?;
-        Some(PathAccessSender { messages: &self.messages, _once_guard: guard })
+        Some(PathAccessSender { ipc_sender: &self.ipc_sender, _once_guard: guard })
     }
 
     pub unsafe fn prepare_child_process(&self, child_handle: HANDLE) -> BOOL {
-        let mut payload = self.payload;
-
-        let mut handle_in_child: *mut c_void = null_mut();
-        let ret = unsafe {
-            DuplicateHandle(
-                GetCurrentProcess(),
-                payload.pipe_handle as _,
-                child_handle,
-                &mut handle_in_child,
-                0,
-                FALSE,
-                DUPLICATE_SAME_ACCESS,
-            )
-        };
-        if ret == 0 {
-            return 0;
-        }
-
-        payload.pipe_handle = handle_in_child as usize;
-
-        let payload_bytes = encode_to_vec(payload, BINCODE_CONFIG).unwrap();
+        let payload_bytes = encode_to_vec(&self.payload, BINCODE_CONFIG).unwrap();
         unsafe {
             DetourCopyPayloadToProcess(
                 child_handle,

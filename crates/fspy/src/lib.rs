@@ -4,6 +4,8 @@
 // Persist the injected DLL/shared library somewhere in the filesystem.
 mod fixture;
 
+mod ipc;
+
 #[cfg(unix)]
 #[path = "./unix/mod.rs"]
 mod os_impl;
@@ -12,6 +14,7 @@ mod os_impl;
 #[path = "./windows/mod.rs"]
 mod os_impl;
 
+#[cfg(unix)]
 mod arena;
 mod command;
 

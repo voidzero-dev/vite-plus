@@ -1,40 +1,31 @@
 use std::{
-    ffi::{CStr, c_char, c_void},
-    fs::OpenOptions,
+    ffi::{CStr, c_char},
     io,
     os::windows::{ffi::OsStrExt, io::AsRawHandle, process::ChildExt as _},
     path::Path,
-    ptr::null_mut,
     sync::Arc,
 };
 
-use bincode::borrow_decode_from_slice;
 use const_format::formatcp;
 use fspy_detours_sys::{DetourCopyPayloadToProcess, DetourUpdateProcessWithDll};
 use fspy_shared::{
-    ipc::{BINCODE_CONFIG, PathAccess},
+    ipc::{BINCODE_CONFIG, PathAccess, channel::channel},
     windows::{PAYLOAD_ID, Payload},
 };
 use futures_util::FutureExt;
-use tokio::{
-    io::AsyncReadExt,
-    net::windows::named_pipe::{PipeMode, ServerOptions},
-};
-// use detours_sys2::{DetourAttach,};
 use winapi::{
-    shared::minwindef::{FALSE, TRUE},
-    um::{
-        handleapi::DuplicateHandle,
-        processthreadsapi::{GetCurrentProcess, ResumeThread},
-        winbase::CREATE_SUSPENDED,
-        winnt::DUPLICATE_SAME_ACCESS,
-    },
+    shared::minwindef::TRUE,
+    um::{processthreadsapi::ResumeThread, winbase::CREATE_SUSPENDED},
 };
-// use windows_sys::Win32::System::Threading::{CREATE_SUSPENDED, ResumeThread};
 use winsafe::co::{CP, WC};
 use xxhash_rust::const_xxh3::xxh3_128;
 
-use crate::{TrackedChild, arena::PathAccessArena, command::Command, fixture::Fixture};
+use crate::{
+    TrackedChild,
+    command::Command,
+    fixture::Fixture,
+    ipc::{OwnedReceiverLockGuard, SHM_CAPACITY},
+};
 
 const PRELOAD_CDYLIB_BINARY: &[u8] = include_bytes!(env!("CARGO_CDYLIB_FILE_FSPY_PRELOAD_WINDOWS"));
 const INTERPOSE_CDYLIB: Fixture = Fixture::new(
@@ -43,38 +34,14 @@ const INTERPOSE_CDYLIB: Fixture = Fixture::new(
     formatcp!("{:x}", xxh3_128(PRELOAD_CDYLIB_BINARY)),
 );
 
-fn luid() -> io::Result<u64> {
-    let mut luid = unsafe { std::mem::zeroed::<winapi::um::winnt::LUID>() };
-    let ret = unsafe { winapi::um::securitybaseapi::AllocateLocallyUniqueId(&mut luid) };
-    if ret == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok((u64::from(luid.HighPart as u32)) << 32 | u64::from(luid.LowPart))
-}
-
 pub struct PathAccessIterable {
-    arena: PathAccessArena,
-    // pipe_receiver: NamedPipeServer,
+    ipc_receiver_lock_guard: OwnedReceiverLockGuard,
 }
-
-const MESSAGE_MAX_LEN: usize = 4096;
 
 impl PathAccessIterable {
     pub fn iter(&self) -> impl Iterator<Item = PathAccess<'_>> {
-        self.arena.borrow_accesses().iter().copied()
+        self.ipc_receiver_lock_guard.iter_path_acceses()
     }
-    //     pub async fn next<'a>(&mut self, buf: &'a mut Vec<u8>) -> io::Result<Option<PathAccess<'a>>> {
-    //         buf.resize(MESSAGE_MAX_LEN, 0);
-    //         let n = self.pipe_receiver.read(buf.as_mut_slice()).await?;
-    //         if n == 0 {
-    //             return Ok(None);
-    //         }
-    //         let msg = &buf[..n];
-    //         let (path_access, decoded_len) =
-    //             borrow_decode_from_slice::<'_, PathAccess, _>(msg, BINCODE_CONFIG).unwrap();
-    //         assert_eq!(decoded_len, msg.len());
-    //         Ok(Some(path_access))
-    //     }
 }
 
 // pub struct TracedProcess {
@@ -110,46 +77,13 @@ pub(crate) async fn spawn_impl(command: Command) -> io::Result<TrackedChild> {
 
     command.creation_flags(CREATE_SUSPENDED);
 
-    let pipe_name = format!(r"\\.\pipe\fspy_ipc_{:x}", luid()?);
+    let (channel_conf, receiver) = channel(SHM_CAPACITY)?;
 
-    let mut pipe_receiver = ServerOptions::new()
-        .pipe_mode(PipeMode::Message)
-        .access_outbound(false)
-        .access_inbound(true)
-        .in_buffer_size(1024)
-        // .out_buffer_size(100 * 1024 * 1024)
-        .create(&pipe_name)?;
-
-    let connect_fut = pipe_receiver.connect();
-
-    let pipe_sender = OpenOptions::new().write(true).open(&pipe_name).unwrap();
-
-    connect_fut.await?;
-
-    // Temporary workaround before switching to shared memory IPC on Windows.
-    // The shared memory IPC requires `accesses_future` to be polled after the child process has exited.
-    // The test code has updated but the Windows implementation here has not yet adopted that model.
-    // As a result, accesses_future didn't get polled making the pipe_sender to block indefinitely.
-    // To unblock the pipe_sender, we spawn a separate task to keep reading pipe_receiver.
-    // This workaround can be removed once the shared memory IPC is used on Windows.
-    let accesses_future = tokio::task::spawn(async move {
-        let mut arena = PathAccessArena::default();
-
-        let mut buf = [0u8; MESSAGE_MAX_LEN];
-        loop {
-            let n = pipe_receiver.read(&mut buf).await?;
-            if n == 0 {
-                break;
-            }
-            let msg = &buf[..n];
-            let (path_access, decoded_len) =
-                borrow_decode_from_slice::<'_, PathAccess, _>(msg, BINCODE_CONFIG).unwrap();
-            assert_eq!(decoded_len, msg.len());
-            arena.add(path_access);
-        }
-        io::Result::Ok(PathAccessIterable { arena })
-    });
-    let accesses_future = async move { accesses_future.await.unwrap() }.boxed();
+    let accesses_future = async move {
+        let ipc_receiver_lock_guard = OwnedReceiverLockGuard::lock_async(receiver).await?;
+        io::Result::Ok(PathAccessIterable { ipc_receiver_lock_guard })
+    }
+    .boxed();
 
     // let path_access_stream = PathAccessIterable { pipe_receiver };
 
@@ -163,24 +97,8 @@ pub(crate) async fn spawn_impl(command: Command) -> io::Result<TrackedChild> {
             return Err(io::Error::last_os_error());
         }
 
-        let mut handle_in_child: *mut c_void = null_mut();
-        let ret = unsafe {
-            DuplicateHandle(
-                GetCurrentProcess(),
-                pipe_sender.as_raw_handle(),
-                process_handle,
-                &mut handle_in_child,
-                0,
-                FALSE,
-                DUPLICATE_SAME_ACCESS,
-            )
-        };
-        if ret == 0 {
-            return Err(io::Error::last_os_error());
-        }
-
         let payload = Payload {
-            pipe_handle: handle_in_child.addr(),
+            channel_conf: channel_conf.clone(),
             asni_dll_path_with_nul: asni_dll_path_with_nul.to_bytes(),
         };
         let payload_bytes = bincode::encode_to_vec(payload, BINCODE_CONFIG).unwrap();
@@ -207,6 +125,5 @@ pub(crate) async fn spawn_impl(command: Command) -> io::Result<TrackedChild> {
         Ok(std_child)
     })?;
 
-    drop(pipe_sender);
     Ok(TrackedChild { tokio_child: child, accesses_future })
 }

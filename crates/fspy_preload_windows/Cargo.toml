@@ -26,6 +26,3 @@ winsafe = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dev-dependencies]
 tempfile = { workspace = true }
-
-[dependencies]
-dashmap = { workspace = true }

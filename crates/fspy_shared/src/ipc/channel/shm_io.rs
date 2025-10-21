@@ -8,6 +8,9 @@ use std::{
     sync::atomic::{AtomicI32, AtomicUsize, Ordering, fence},
 };
 
+use bincode::{
+    Encode, config::Config, enc::write::SizeWriter, encode_into_slice, encode_into_writer,
+};
 use bytemuck::must_cast;
 use shared_memory::Shmem;
 
@@ -101,6 +104,16 @@ impl Drop for FrameMut<'_> {
             i32::try_from(self.content.len()).expect("frame size checked in `append_frame`");
         self.header.store(-frame_size_i32, Ordering::Relaxed);
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum WriteEncodedError {
+    #[error("Failed to encode value into shared memory")]
+    EncodeError(#[from] bincode::error::EncodeError),
+    #[error("Tried to write a frame of zero size into shared memory")]
+    ZeroSizedFrame,
+    #[error("Not enough space in shared memory to write the encoded frame")]
+    InsufficientSpace,
 }
 
 impl<M: AsRawSlice> ShmWriter<M> {
@@ -200,8 +213,31 @@ impl<M: AsRawSlice> ShmWriter<M> {
         })
     }
 
+    /// Append an encoded value into the shared memory.
+    pub fn write_encoded<T: Encode, C: Config>(
+        &self,
+        value: &T,
+        config: C,
+    ) -> Result<(), WriteEncodedError> {
+        let mut size_writer = SizeWriter::default();
+        encode_into_writer(value, &mut size_writer, config)?;
+
+        let Some(frame_size) = NonZeroUsize::new(size_writer.bytes_written) else {
+            return Err(WriteEncodedError::ZeroSizedFrame);
+        };
+        let Some(mut frame) = self.claim_frame(frame_size) else {
+            return Err(WriteEncodedError::InsufficientSpace);
+        };
+
+        let written_size = encode_into_slice(value, &mut frame, config)
+            .expect("encoding into claimed frame should never fail");
+        assert_eq!(written_size, size_writer.bytes_written);
+
+        Ok(())
+    }
+
     #[cfg(test)]
-    pub fn append_frame(&self, frame: &[u8]) -> bool {
+    pub fn try_write_frame(&self, frame: &[u8]) -> bool {
         let Some(frame_size) = NonZeroUsize::new(frame.len()) else {
             return false;
         };
@@ -334,10 +370,10 @@ mod tests {
     #[test]
     fn single_thread_basic() {
         let writer = unsafe { ShmWriter::new(MockedShm::alloc(1024)) };
-        assert!(writer.append_frame(b"hello"));
-        assert!(writer.append_frame(b"world"));
-        assert!(writer.append_frame(b"this is a test"));
-        assert!(!writer.append_frame(&vec![0u8; 2048])); // too large
+        assert!(writer.try_write_frame(b"hello"));
+        assert!(writer.try_write_frame(b"world"));
+        assert!(writer.try_write_frame(b"this is a test"));
+        assert!(!writer.try_write_frame(&vec![0u8; 2048])); // too large
 
         let reader = ShmReader::new(writer.into_memory());
         let mut frames = reader.iter_frames();
@@ -349,9 +385,9 @@ mod tests {
     #[test]
     fn single_thread_empty() {
         let writer = unsafe { ShmWriter::new(MockedShm::alloc(1024)) };
-        assert!(writer.append_frame(b"hello"));
-        assert!(!writer.append_frame(b""));
-        assert!(writer.append_frame(b"this is a test"));
+        assert!(writer.try_write_frame(b"hello"));
+        assert!(!writer.try_write_frame(b""));
+        assert!(writer.try_write_frame(b"this is a test"));
 
         let reader = ShmReader::new(writer.into_memory());
         let mut frames = reader.iter_frames();
@@ -363,14 +399,14 @@ mod tests {
     #[test]
     fn single_thread_crash_after_claim() {
         let mut writer = unsafe { ShmWriter::new(MockedShm::alloc(1024)) };
-        assert!(writer.append_frame(b"foo"));
+        assert!(writer.try_write_frame(b"foo"));
 
         // Simulate crash during writing
         writer.set_fail_on_claim(true);
-        assert!(!writer.append_frame(b"hello"));
+        assert!(!writer.try_write_frame(b"hello"));
 
         writer.set_fail_on_claim(false);
-        assert!(writer.append_frame(b"bar"));
+        assert!(writer.try_write_frame(b"bar"));
 
         let reader = ShmReader::new(writer.into_memory());
         let mut frames = reader.iter_frames();
@@ -382,14 +418,14 @@ mod tests {
     #[test]
     fn single_thread_crash_partial_write() {
         let writer = unsafe { ShmWriter::new(MockedShm::alloc(1024)) };
-        assert!(writer.append_frame(b"foo"));
+        assert!(writer.try_write_frame(b"foo"));
 
         // Simulate crash during writing
         let mut frame = writer.claim_frame(5.try_into().unwrap()).unwrap();
         frame[..3].copy_from_slice(b"wor");
         std::mem::forget(frame);
 
-        assert!(writer.append_frame(b"bar"));
+        assert!(writer.try_write_frame(b"bar"));
 
         let reader = ShmReader::new(writer.into_memory());
         let mut frames = reader.iter_frames();
@@ -407,11 +443,11 @@ mod tests {
 
         let mut writer = unsafe { ShmWriter::new(MockedShm::alloc(1024)) };
 
-        assert!(writer.append_frame(b"foo"));
+        assert!(writer.try_write_frame(b"foo"));
 
         // First crash: AfterClaim (leaves frame header as 0)
         writer.set_fail_on_claim(true);
-        assert!(!writer.append_frame(b"world"));
+        assert!(!writer.try_write_frame(b"world"));
         writer.set_fail_on_claim(false);
 
         // Second crash: PartialWrite (leaves positive frame header)
@@ -419,7 +455,7 @@ mod tests {
         frame[..3].copy_from_slice(b"wor");
         std::mem::forget(frame);
 
-        assert!(writer.append_frame(b"bar"));
+        assert!(writer.try_write_frame(b"bar"));
 
         // ShmReader must skip BOTH invalid frames (0 header + partial header)
         // and find the valid frame beyond them - this tests the loop continuation
@@ -438,7 +474,7 @@ mod tests {
         // in reverse order. This ensures the loop correctly handles different
         // sequences of invalid frame types (partial write -> after claim).
 
-        assert!(writer.append_frame(b"foo"));
+        assert!(writer.try_write_frame(b"foo"));
 
         // First crash: PartialWrite (leaves positive frame header)
         let mut frame = writer.claim_frame(5.try_into().unwrap()).unwrap();
@@ -447,10 +483,10 @@ mod tests {
 
         // Second crash: AfterClaim (leaves frame header as 0)
         writer.set_fail_on_claim(true);
-        assert!(!writer.append_frame(b"world"));
+        assert!(!writer.try_write_frame(b"world"));
         writer.set_fail_on_claim(false);
 
-        assert!(writer.append_frame(b"bar"));
+        assert!(writer.try_write_frame(b"bar"));
 
         let reader = ShmReader::new(writer.into_memory());
         // ShmReader must skip BOTH invalid frames in this order and continue
@@ -470,9 +506,9 @@ mod tests {
                 s.spawn(|| {
                     let writer = unsafe { ShmWriter::new(shm.clone()) };
                     for _ in 0..10 {
-                        assert!(writer.append_frame(b"hello"));
-                        assert!(writer.append_frame(b"foo"));
-                        assert!(writer.append_frame(b"this is a test"));
+                        assert!(writer.try_write_frame(b"hello"));
+                        assert!(writer.try_write_frame(b"foo"));
+                        assert!(writer.try_write_frame(b"this is a test"));
                     }
                 });
             }
@@ -494,9 +530,9 @@ mod tests {
             for _ in 0..4 {
                 s.spawn(|| {
                     for _ in 0..10 {
-                        writer.append_frame(b"hello");
-                        writer.append_frame(b"foo");
-                        writer.append_frame(b"this is a test");
+                        writer.try_write_frame(b"hello");
+                        writer.try_write_frame(b"foo");
+                        writer.try_write_frame(b"this is a test");
                     }
                 });
             }
@@ -521,10 +557,10 @@ mod tests {
         let large_frame = vec![0u8; (i32::MAX as usize) - 100];
 
         // This should fail safely, not cause overflow
-        assert!(!writer.append_frame(&large_frame));
+        assert!(!writer.try_write_frame(&large_frame));
 
         // Small frame should still work
-        assert!(writer.append_frame(b"test"));
+        assert!(writer.try_write_frame(b"test"));
 
         let reader = ShmReader::new(writer.into_memory());
         let mut frames = reader.iter_frames();
@@ -544,7 +580,8 @@ mod tests {
             for _ in 0..10 {
                 s.spawn(|| {
                     // Many threads trying to write large-ish frames
-                    writer.append_frame(b"this_is_a_moderately_long_frame_that_might_cause_races");
+                    writer
+                        .try_write_frame(b"this_is_a_moderately_long_frame_that_might_cause_races");
                 });
             }
         });
@@ -617,7 +654,7 @@ mod tests {
             let shm = ShmemConf::new().os_id(shm_name).open().unwrap();
             let writer = unsafe { ShmWriter::new(shm) };
             for i in 0..FRAME_COUNT_EACH_CHILD {
-                assert!(writer.append_frame(format!("{child_index} {i}").as_bytes()));
+                assert!(writer.try_write_frame(format!("{child_index} {i}").as_bytes()));
             }
             std::process::exit(0);
         }

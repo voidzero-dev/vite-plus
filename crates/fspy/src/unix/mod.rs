@@ -10,13 +10,9 @@ mod macos_fixtures;
 
 use std::{io, path::Path};
 
-use bincode::borrow_decode_from_slice;
 #[cfg(target_os = "linux")]
 use fspy_seccomp_unotify::supervisor::supervise;
-use fspy_shared::ipc::{
-    BINCODE_CONFIG, NativeString, PathAccess,
-    channel::{Receiver, ReceiverLockGuard, channel},
-};
+use fspy_shared::ipc::{NativeString, PathAccess, channel::channel};
 #[cfg(target_os = "macos")]
 use fspy_shared_unix::payload::Fixtures;
 use fspy_shared_unix::{
@@ -27,9 +23,12 @@ use fspy_shared_unix::{
 use futures_util::FutureExt;
 #[cfg(target_os = "linux")]
 use syscall_handler::SyscallHandler;
-use tokio::task::spawn_blocking;
 
-use crate::{Command, TrackedChild, arena::PathAccessArena};
+use crate::{
+    Command, TrackedChild,
+    arena::PathAccessArena,
+    ipc::{OwnedReceiverLockGuard, SHM_CAPACITY},
+};
 
 #[derive(Debug, Clone)]
 pub struct SpyInner {
@@ -71,16 +70,6 @@ impl SpyInner {
     }
 }
 
-#[ouroboros::self_referencing]
-struct OwnedReceiverLockGuard {
-    /// Owns the shared memory
-    receiver: Receiver,
-    /// Borrows the shared memory and owns the file lock
-    #[borrows(receiver)]
-    #[covariant]
-    lock_guard: ReceiverLockGuard<'this>,
-}
-
 pub struct PathAccessIterable {
     arenas: Vec<PathAccessArena>,
     ipc_receiver_lock_guard: OwnedReceiverLockGuard,
@@ -91,21 +80,10 @@ impl PathAccessIterable {
         let accesses_in_arena =
             self.arenas.iter().flat_map(|arena| arena.borrow_accesses().iter()).copied();
 
-        let accesses_in_shm =
-            self.ipc_receiver_lock_guard.borrow_lock_guard().iter_frames().map(|frame| {
-                let (path_access, decoded_size) =
-                    borrow_decode_from_slice::<PathAccess<'_>, _>(frame, BINCODE_CONFIG).unwrap();
-                assert_eq!(decoded_size, frame.len());
-                path_access
-            });
+        let accesses_in_shm = self.ipc_receiver_lock_guard.iter_path_acceses();
         accesses_in_shm.chain(accesses_in_arena)
     }
 }
-
-// Shared memory size for storing path accesses.
-// 4 GiB is large enough to store path accesses in almost any realistic scenario.
-// This doesn't allocate physical memory until it's actually used.
-const SHM_CAPACITY: usize = 4 * 1024 * 1024 * 1024;
 
 pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild> {
     #[cfg(target_os = "linux")]
@@ -170,10 +148,7 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
     let accesses_future = async move {
         let arenas = arenas_future.await?;
         // `receiver.lock()` blocks. Run it inside `spawn_blocking` to avoid blocking the tokio runtime.
-        let ipc_receiver_lock_guard = spawn_blocking(move || {
-            OwnedReceiverLockGuard::try_new(ipc_receiver, |receiver| receiver.lock())
-        })
-        .await??;
+        let ipc_receiver_lock_guard = OwnedReceiverLockGuard::lock_async(ipc_receiver).await?;
         Ok(PathAccessIterable { arenas, ipc_receiver_lock_guard })
     }
     .boxed();
