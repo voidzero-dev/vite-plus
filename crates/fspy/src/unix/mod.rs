@@ -42,7 +42,7 @@ pub struct SpyInner {
 const PRELOAD_CDYLIB_BINARY: &[u8] = include_bytes!(env!("CARGO_CDYLIB_FILE_FSPY_PRELOAD_UNIX"));
 
 impl SpyInner {
-    /// Initilize the fs accesss spy by writing the preload library on disk
+    /// Initialize the fs access spy by writing the preload library on disk
     pub fn init_in(dir: &Path) -> io::Result<Self> {
         use const_format::formatcp;
         use xxhash_rust::const_xxh3::xxh3_128;
