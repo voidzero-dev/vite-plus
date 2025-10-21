@@ -126,7 +126,13 @@ pub(crate) async fn spawn_impl(command: Command) -> io::Result<TrackedChild> {
 
     connect_fut.await?;
 
-    let accesses_future = async move {
+    // Temporary workaround before switching to shared memory IPC on Windows.
+    // The shared memory IPC requires `accesses_future` to be polled after the child process has exited.
+    // The test code has updated but the Windows implementation here has not yet adopted that model.
+    // As a result, accesses_future didn't get polled making the pipe_sender to block indefinitely.
+    // To unblock the pipe_sender, we spawn a separate task to keep reading pipe_receiver.
+    // This workaround can be removed once the shared memory IPC is used on Windows.
+    let accesses_future = tokio::task::spawn(async move {
         let mut arena = PathAccessArena::default();
 
         let mut buf = [0u8; MESSAGE_MAX_LEN];
@@ -142,8 +148,8 @@ pub(crate) async fn spawn_impl(command: Command) -> io::Result<TrackedChild> {
             arena.add(path_access);
         }
         io::Result::Ok(PathAccessIterable { arena })
-    }
-    .boxed();
+    });
+    let accesses_future = async move { accesses_future.await.unwrap() }.boxed();
 
     // let path_access_stream = PathAccessIterable { pipe_receiver };
 
