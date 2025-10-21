@@ -104,11 +104,11 @@ impl Drop for FrameMut<'_> {
 }
 
 impl<M: AsRawSlice> ShmWriter<M> {
-    /// Create a new `ShmCursor` backed by a shared memory region.
+    /// Create a new `ShmWriter` backed by a shared memory region.
     ///
     /// # Safety
     /// - `mem.as_raw_slice()` must return a stable valid pointer to a memory region of `total` bytes,
-    /// - the memory region must only be accessed via `ShmCursor` across all the processes.
+    /// - the memory region must only be accessed via `ShmWriter` across all the processes.
     /// - The unused region of the shared memory must be initialized to zero.
     pub unsafe fn new(mem: M) -> Self {
         assert_alignment(mem.as_raw_slice() as *const u8);
