@@ -17,7 +17,6 @@ hex = { workspace = true }
 indoc = { workspace = true }
 pathdiff = { workspace = true }
 petgraph = { workspace = true, features = ["serde-1"] }
-reqwest = { workspace = true }
 rustc-hash = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -36,6 +35,12 @@ vite_glob = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }
 wax = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+reqwest = { workspace = true, features = ["stream", "native-tls-vendored", "json"] }
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+reqwest = { workspace = true, features = ["stream", "rustls-tls", "json"] }
 
 [dev-dependencies]
 httpmock = { workspace = true }

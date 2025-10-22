@@ -16,7 +16,10 @@ pub unsafe fn with_argv(
     let argc = 1 + unsafe {
         va.with_copy(|mut copy| {
             core::iter::from_fn(|| Some(copy.arg::<*const c_char>()))
-                .position(<*const i8>::is_null)
+                .position(|s| {
+                    // Find the NULL terminator
+                    s.is_null()
+                })
                 .unwrap()
         })
     };

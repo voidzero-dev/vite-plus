@@ -14,12 +14,16 @@ import {
   sys,
 } from 'typescript';
 
-const { values: { target, x } } = parseArgs({
+const { values: { target, x, [`use-napi-cross`]: useNapiCross } } = parseArgs({
   options: {
     target: {
       type: 'string',
     },
     x: {
+      type: 'boolean',
+      default: false,
+    },
+    [`use-napi-cross`]: {
       type: 'boolean',
       default: false,
     },
@@ -35,6 +39,7 @@ const { task } = await cli.build({
   esm: true,
   target,
   crossCompile: x,
+  useNapiCross,
 });
 
 const output = (await task).find((o) => o.kind === 'node');
