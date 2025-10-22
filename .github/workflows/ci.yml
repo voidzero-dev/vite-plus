@@ -101,10 +101,10 @@ jobs:
       - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
 
       - name: Build self
-        run: cargo build --bin vt
+        run: pnpm bootstrap-cli
 
       - name: Run self
-        run: ./target/debug/vt run -r build
+        run: vite run -r build
 
       - name: Print help for built-in commands
         run: |

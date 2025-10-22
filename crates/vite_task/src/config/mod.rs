@@ -22,11 +22,11 @@ use vite_str::Str;
 pub use workspace::*;
 
 use crate::{
-    ResolveCommandResult,
     cmd::TaskParsedCommand,
     collections::{HashMap, HashSet},
     config::name::TaskName,
     execute::TaskEnvs,
+    types::ResolveCommandResult,
 };
 
 #[derive(Encode, Decode, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Diff)]
@@ -141,7 +141,7 @@ impl ResolvedTask {
 
     #[tracing::instrument(skip(workspace, resolve_command, args))]
     /// Resolve a built-in task, like `vite lint`, `vite build`
-    pub(crate) async fn resolve_from_builtin<
+    pub async fn resolve_from_builtin<
         Resolved: Future<Output = Result<ResolveCommandResult, Error>>,
         ResolveFn: Fn() -> Resolved,
     >(
@@ -161,7 +161,7 @@ impl ResolvedTask {
         )
     }
 
-    pub(crate) fn resolve_from_builtin_with_command_result(
+    pub fn resolve_from_builtin_with_command_result(
         workspace: &Workspace,
         task_name: &str,
         args: impl Iterator<Item = impl AsRef<str>> + Clone,

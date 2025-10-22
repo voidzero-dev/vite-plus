@@ -1,12 +1,8 @@
 use std::future::Future;
 
 use petgraph::stable_graph::StableGraph;
-
-use crate::{
-    Error, ResolveCommandResult, Workspace,
-    config::ResolvedTask,
-    schedule::{ExecutionPlan, ExecutionSummary},
-};
+use vite_error::Error;
+use vite_task::{ExecutionPlan, ExecutionSummary, ResolveCommandResult, ResolvedTask, Workspace};
 
 pub async fn test<
     Test: Future<Output = Result<ResolveCommandResult, Error>>,

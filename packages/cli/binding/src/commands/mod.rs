@@ -1,0 +1,7 @@
+pub(crate) mod doc;
+pub(crate) mod fmt;
+pub(crate) mod install;
+pub(crate) mod lib_cmd;
+pub(crate) mod lint;
+pub(crate) mod test;
+pub(crate) mod vite;

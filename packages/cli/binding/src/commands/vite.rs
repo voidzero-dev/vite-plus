@@ -1,14 +1,10 @@
 use std::{future::Future, iter};
 
 use petgraph::stable_graph::StableGraph;
+use vite_error::Error;
+use vite_task::{ExecutionPlan, ExecutionSummary, ResolveCommandResult, ResolvedTask, Workspace};
 
-use crate::{
-    Error, ResolveCommandResult, Workspace,
-    config::ResolvedTask,
-    schedule::{ExecutionPlan, ExecutionSummary},
-};
-
-pub async fn create_vite<
+pub async fn vite<
     Vite: Future<Output = Result<ResolveCommandResult, Error>>,
     ViteFn: Fn() -> Vite,
 >(

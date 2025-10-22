@@ -2,12 +2,8 @@ use std::{collections::HashMap, future::Future};
 
 use petgraph::stable_graph::StableGraph;
 use serde::{Deserialize, Serialize};
-
-use crate::{
-    Error, ResolveCommandResult, Workspace,
-    config::ResolvedTask,
-    schedule::{ExecutionPlan, ExecutionSummary},
-};
+use vite_error::Error;
+use vite_task::{ExecutionPlan, ExecutionSummary, ResolveCommandResult, ResolvedTask, Workspace};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LintConfig {

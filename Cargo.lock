@@ -4558,12 +4558,22 @@ name = "vite-plus-cli"
 version = "0.0.1"
 dependencies = [
  "clap",
+ "crossterm 0.29.0",
  "napi",
  "napi-build",
  "napi-derive",
+ "petgraph 0.8.3",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "tokio",
  "tracing",
+ "tracing-subscriber",
  "vite_error",
+ "vite_package_manager",
  "vite_path",
+ "vite_str",
  "vite_task",
 ]
 

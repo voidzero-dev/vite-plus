@@ -13,6 +13,9 @@
 //! 4. JavaScript resolves the tool path and returns it to Rust
 //! 5. Rust executes the tool with the resolved path
 
+mod cli;
+mod commands;
+
 use std::{collections::HashMap, sync::Arc};
 
 use clap::Parser as _;
@@ -20,12 +23,14 @@ use napi::{anyhow, bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
 use vite_error::Error;
 use vite_path::current_dir;
-use vite_task::{Args, CliOptions as ViteTaskCliOptions, Commands, ResolveCommandResult};
+use vite_task::ResolveCommandResult;
+
+use crate::cli::{Args, CliOptions as ViteTaskCliOptions, Commands};
 
 /// Module initialization - sets up tracing for debugging
 #[napi_derive::module_init]
 pub fn init() {
-    vite_task::init_tracing();
+    crate::cli::init_tracing();
 }
 
 /// Configuration options passed from JavaScript to Rust.
@@ -113,7 +118,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     let doc = options.doc;
     let resolve_universal_vite_config = options.resolve_universal_vite_config;
     // Call the Rust core with wrapped resolver functions
-    let result = vite_task::main(
+    let result = crate::cli::main(
         cwd,
         args,
         Some(ViteTaskCliOptions {

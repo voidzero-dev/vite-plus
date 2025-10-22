@@ -207,6 +207,10 @@ impl Workspace {
         &self.task_cache.path
     }
 
+    pub const fn root_dir(&self) -> &AbsolutePathBuf {
+        &self.root_dir
+    }
+
     pub async fn unload(self) -> Result<(), Error> {
         tracing::debug!("Saving task cache {}", self.root_dir.as_path().display());
         self.task_cache.save().await?;

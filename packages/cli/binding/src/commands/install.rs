@@ -11,14 +11,10 @@ use crossterm::{
     terminal,
 };
 use petgraph::stable_graph::StableGraph;
+use vite_error::Error;
 use vite_package_manager::package_manager::{PackageManager, PackageManagerType};
 use vite_path::AbsolutePathBuf;
-
-use crate::{
-    Error, ResolveCommandResult, Workspace,
-    config::ResolvedTask,
-    schedule::{ExecutionPlan, ExecutionSummary},
-};
+use vite_task::{ExecutionPlan, ExecutionSummary, ResolveCommandResult, ResolvedTask, Workspace};
 
 /// Install command.
 ///
