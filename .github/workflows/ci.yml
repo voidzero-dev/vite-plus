@@ -179,14 +179,14 @@ jobs:
 
       - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
 
-      - name: Build vt
-        run: cargo build --bin vt --release
+      - name: Build vite rust binary
+        run: cargo build --bin vite --release
 
-      - name: Run vt install
+      - name: Run vite install
         run: |
           export PATH=$PWD/target/release:$PATH
 
-          # Test vt install on various repositories with different package managers
+          # Test vite install on various repositories with different package managers
           repos=(
             # pnpm workspace
             "pnpm/pnpm:pnpm"
@@ -201,16 +201,16 @@ jobs:
 
           for repo_info in "${repos[@]}"; do
             IFS=':' read -r repo dir_name <<< "$repo_info"
-            echo "Testing vt install on $repo..."
+            echo "Testing vite install on $repo..."
             # remove the directory if it exists
             if [ -d "tmp/$dir_name" ]; then
               rm -rf "tmp/$dir_name"
             fi
             git clone --depth 1 "https://github.com/$repo.git" "tmp/$dir_name"
             cd "tmp/$dir_name"
-            vt install
+            vite install
             # run again to show install cache increase by time
-            time vt install
+            time vite install
             echo "✓ Successfully installed dependencies for $repo"
             echo ""
           done
