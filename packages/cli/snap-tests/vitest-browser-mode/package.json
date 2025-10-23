@@ -1,2 +1,8 @@
 {
+  "name": "vitest-browser-mode",
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.19.0",
+  "dependencies": {
+    "@vitest/browser-playwright": "^4.0.1"
+  }
 }

@@ -239,20 +239,19 @@ Options:
   --api [port]                                          Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204. Use '--help --api' for more info. 
   --silent [value]                                      Silent console output from tests. Use 'passed-only' to see logs from failing tests only. 
   --hideSkippedTests                                    Hide logs for skipped tests 
-  --reporter <name>                                     Specify reporters (default, basic, blob, verbose, dot, json, tap, tap-flat, junit, hanging-process, github-actions) 
+  --reporter <name>                                     Specify reporters (default, blob, verbose, dot, json, tap, tap-flat, junit, tree, hanging-process, github-actions) 
   --outputFile <filename/-s>                            Write test results to a file when supporter reporter is also specified, use cac's dot notation for individual outputs of multiple reporters (example: --outputFile.tap=./tap.txt) 
   --coverage                                            Enable coverage report. Use '--help --coverage' for more info. 
   --mode <name>                                         Override Vite mode (default: test or benchmark) 
-  --workspace <path>                                    [deprecated] Path to a workspace configuration file 
   --isolate                                             Run every test file in isolation. To disable isolation, use --no-isolate (default: true) 
   --globals                                             Inject apis globally 
   --dom                                                 Mock browser API with happy-dom 
   --browser <name>                                      Run tests in the browser. Equivalent to --browser.enabled (default: false). Use '--help --browser' for more info. 
   --pool <pool>                                         Specify pool, if not running in the browser (default: forks) 
-  --poolOptions <options>                               Specify pool options. Use '--help --poolOptions' for more info. 
+  --execArgv <option>                                   Pass additional arguments to node process when spawning worker_threads or child_process. 
+  --vmMemoryLimit <limit>                               Memory limit for VM pools. If you see memory leaks, try to tinker this value. 
   --fileParallelism                                     Should all test files run in parallel. Use --no-file-parallelism to disable (default: true) 
   --maxWorkers <workers>                                Maximum number or percentage of workers to run tests in 
-  --minWorkers <workers>                                Minimum number or percentage of workers to run tests in 
   --environment <name>                                  Specify runner environment, if not running in the browser (default: node) 
   --passWithNoTests                                     Pass when no tests are found 
   --logHeapUsage                                        Show the size of heap for each test when running in node 
@@ -285,7 +284,7 @@ Options:
   --no-color                                            Removes colors from the console output (default: true)
   --clearScreen                                         Clear terminal screen when re-running tests during watch mode (default: true) 
   --configLoader <loader>                               Use bundle to bundle the config with esbuild or runner (experimental) to process it on the fly. This is only available in vite version <semver> and above. (default: bundle) 
-  --standalone                                          Start Vitest without running tests. File filters will be ignored, tests will be running only on change (default: false) 
+  --standalone                                          Start Vitest without running tests. Tests will be running only on change. This option is ignored when CLI file filters are passed. (default: false) 
   --mergeReports [path]                                 Path to a blob reports directory. If this options is used, Vitest won't run any tests, it will only report previously recorded tests 
   -h, --help                                            Display this message 
 

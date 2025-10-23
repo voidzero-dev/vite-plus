@@ -11,7 +11,7 @@ catalog:
   '@types/node': ^24.5.2
   '@types/react': ^19.1.8
   '@types/react-dom': ^19.1.6
-  '@vitest/browser': ^3.2.4
+  '@vitest/browser': ^4.0.3
   create-tsdown: 0.0.3
   create-vite: ^8.0.0
   cross-spawn: ^7.0.5
@@ -32,7 +32,7 @@ catalog:
   typescript: ^5.9.2
   vite: npm:rolldown-vite@^7.1.10
   vitepress: 2.0.0-alpha.12
-  vitest: ^3.2.4
+  vitest: ^4.0.3
   vue: ^3.5.21
 
 catalogMode: prefer
@@ -42,6 +42,7 @@ minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@oxc-project/*'
   - '@rolldown/*'
+  - '@vitest/*'
   - create-vite
   - oxfmt
   - oxlint

@@ -8,6 +8,7 @@
  * Used for: `vite-plus test` command
  */
 
+import { dirname, join } from 'node:path';
 import { DEFAULT_ENVS, resolve } from './utils.js';
 
 /**
@@ -24,8 +25,10 @@ export async function test(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
-  // Resolve the Vitest CLI module directly
-  const binPath = resolve('vitest/vitest.mjs');
+  // try to resolve vitest package.json
+  const pkgJsonPath = resolve('vitest/package.json');
+  // vitest's CLI binary is located at vitest.mjs relative to the package root
+  const binPath = join(dirname(pkgJsonPath), 'vitest.mjs');
 
   return {
     binPath,
