@@ -27,6 +27,7 @@
     "create-vite": "catalog:",
     "cross-spawn": "catalog:",
     "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
     "rolldown-vite": "catalog:",
     "vitest": "catalog:"
   },

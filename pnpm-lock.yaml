@@ -187,6 +187,9 @@ importers:
       oxlint:
         specifier: 'catalog:'
         version: 1.16.0(oxlint-tsgolint@0.2.0)
+      oxlint-tsgolint:
+        specifier: 'catalog:'
+        version: 0.2.0
       rolldown-vite:
         specifier: 'catalog:'
         version: 7.1.12(@types/node@24.5.2)(esbuild@0.25.8)(jiti@2.5.1)(yaml@2.8.1)

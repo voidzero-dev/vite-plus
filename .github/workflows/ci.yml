@@ -110,8 +110,7 @@ jobs:
         run: |
           vite -h
           vite run -h
-          # FIXME(#246): Global CLI fails to run `vite lint`
-          # vite lint -h
+          vite lint -h
           vite test -h
           vite build -h
           vite fmt -h
