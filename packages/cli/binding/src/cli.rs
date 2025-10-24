@@ -24,6 +24,7 @@ use crate::commands::{
     fmt::{FmtConfig, fmt},
     install::InstallCommand,
     lib_cmd::lib,
+    link::LinkCommand,
     lint::{LintConfig, lint},
     outdated::OutdatedCommand,
     remove::RemoveCommand,
@@ -408,6 +409,17 @@ pub enum Commands {
         #[arg(last = true, allow_hyphen_values = true)]
         pass_through_args: Option<Vec<String>>,
     },
+    /// Link packages for local development
+    #[command(disable_help_flag = true, alias = "ln")]
+    Link {
+        /// Package name or directory to link
+        /// If empty, registers current package globally
+        package: Option<String>,
+
+        /// Arguments to pass to package manager
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
 }
 
 impl Commands {
@@ -421,6 +433,7 @@ impl Commands {
                 | Commands::Dedupe { .. }
                 | Commands::Outdated { .. }
                 | Commands::Why { .. }
+                | Commands::Link { .. }
         )
     }
 }
@@ -880,6 +893,10 @@ pub async fn main<
                     pass_through_args.as_deref(),
                 )
                 .await?;
+            return Ok(exit_status);
+        }
+        Commands::Link { package, args } => {
+            let exit_status = LinkCommand::new(cwd).execute(package.as_deref(), Some(args)).await?;
             return Ok(exit_status);
         }
         Commands::Why {
