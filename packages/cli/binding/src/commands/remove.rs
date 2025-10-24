@@ -1,6 +1,8 @@
 use std::process::ExitStatus;
 
-use vite_package_manager::{package_manager::PackageManager, remove::RemoveCommandOptions};
+use vite_package_manager::{
+    commands::remove::RemoveCommandOptions, package_manager::PackageManager,
+};
 use vite_path::AbsolutePathBuf;
 
 use crate::Error;

@@ -1,7 +1,7 @@
 use std::process::ExitStatus;
 
 use vite_package_manager::{
-    add::{AddCommandOptions, SaveDependencyType},
+    commands::add::{AddCommandOptions, SaveDependencyType},
     package_manager::PackageManager,
 };
 use vite_path::AbsolutePathBuf;

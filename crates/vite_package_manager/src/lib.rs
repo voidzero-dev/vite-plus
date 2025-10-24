@@ -1,10 +1,7 @@
-pub mod add;
 pub mod commands;
 mod config;
-mod install;
 pub mod package;
 pub mod package_manager;
-pub mod remove;
 mod request;
 mod shim;
 
@@ -20,10 +17,8 @@ use vite_str::Str;
 use wax::Glob;
 
 pub use crate::{
-    add::{AddCommandOptions, SaveDependencyType},
     package::{DependencyType, PackageJson},
     package_manager::{WorkspaceFile, WorkspaceRoot, find_package_root, find_workspace_root},
-    remove::RemoveCommandOptions,
 };
 
 /// The workspace configuration for pnpm.

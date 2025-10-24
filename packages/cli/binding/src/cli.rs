@@ -9,7 +9,7 @@ use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use tokio::fs::write;
 use vite_error::Error;
-use vite_package_manager::SaveDependencyType;
+use vite_package_manager::commands::add::SaveDependencyType;
 use vite_path::AbsolutePathBuf;
 use vite_str::Str;
 use vite_task::{
