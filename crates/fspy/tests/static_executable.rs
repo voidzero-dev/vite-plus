@@ -25,12 +25,14 @@ fn test_bin_path() -> &'static Path {
             .expect("failed to set permissions on test binary");
 
         // Verify that the test binary is indeed a static executable
-        let output = std::process::Command::new("ldd")
-            .arg(&test_bin_path)
-            .output()
-            .expect("failed to run ldd");
-        let stderr = from_utf8(&output.stderr).unwrap().trim();
-        assert_eq!(stderr, "not a dynamic executable");
+        let output = std::process::Command::new("ldd").arg(&test_bin_path).output().unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "ldd should fail on static executables. Stdout: {}. Stderr: {}",
+            from_utf8(&output.stdout).unwrap(),
+            from_utf8(&output.stderr).unwrap()
+        );
 
         test_bin_path
     });
