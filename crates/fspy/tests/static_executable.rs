@@ -1,14 +1,17 @@
 #![cfg(target_os = "linux")]
 
 use std::{
+    ffi::OsStr,
     fs::{self, Permissions},
-    os::unix::fs::PermissionsExt as _,
+    os::unix::{ffi::OsStrExt, fs::PermissionsExt as _},
     path::{Path, PathBuf},
     str::from_utf8,
-    sync::{LazyLock, OnceLock},
+    sync::LazyLock,
 };
 
-use bstr::{B, BStr};
+use fspy::PathAccessIterable;
+
+use crate::test_utils::assert_contains;
 
 mod test_utils;
 
@@ -35,11 +38,19 @@ fn test_bin_path() -> &'static Path {
     TEST_BIN_PATH.as_path()
 }
 
-#[tokio::test]
-async fn static_executable() {
+async fn track_test_bin(args: &[&str]) -> PathAccessIterable {
     let mut cmd = fspy::Spy::global().unwrap().new_command(test_bin_path());
-    // cmd.envs(std::env::vars_os());
+    cmd.args(args);
     let mut tracked_child = cmd.spawn().await.unwrap();
 
-    tracked_child.tokio_child.wait().await.unwrap();
+    let output = tracked_child.tokio_child.wait().await.unwrap();
+    assert!(output.success());
+
+    tracked_child.accesses_future.await.unwrap()
+}
+
+#[tokio::test]
+async fn open_read() {
+    let accesses = track_test_bin(&["open_read", "/hello"]).await;
+    assert_contains(&accesses, Path::new("/hello"), fspy::AccessMode::Read);
 }
