@@ -1530,6 +1530,7 @@ dependencies = [
  "fspy_seccomp_unotify",
  "fspy_shared",
  "fspy_shared_unix",
+ "fspy_test_bin",
  "futures-util",
  "libc",
  "memmap2",
@@ -1636,6 +1637,7 @@ dependencies = [
  "passfd 0.2.0 (git+https://github.com/polachok/passfd?rev=d55881752c16aced1a49a75f9c428d38d3767213)",
  "seccompiler",
  "syscalls",
+ "tempfile",
  "test-log",
  "tokio",
  "tracing",
@@ -1683,6 +1685,10 @@ dependencies = [
  "phf",
  "stackalloc",
 ]
+
+[[package]]
+name = "fspy_test_bin"
+version = "0.0.0"
 
 [[package]]
 name = "fspy_test_utils"

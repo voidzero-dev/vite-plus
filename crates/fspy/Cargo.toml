@@ -55,6 +55,12 @@ csv-async = { workspace = true }
 ctor = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "fs", "io-std"] }
 
+[target.'cfg(all(target_os = "linux", target_arch = "aarch64"))'.dev-dependencies]
+fspy_test_bin = { path = "../fspy_test_bin", artifact = "bin", target = "aarch64-unknown-linux-musl" }
+
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dev-dependencies]
+fspy_test_bin = { path = "../fspy_test_bin", artifact = "bin", target = "x86_64-unknown-linux-musl" }
+
 [build-dependencies]
 anyhow = { workspace = true }
 attohttpc = { workspace = true }

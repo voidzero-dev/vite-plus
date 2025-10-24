@@ -2,16 +2,27 @@ pub mod handler;
 mod listener;
 
 use std::{
+    convert::Infallible,
     io::{self},
-    os::fd::{AsRawFd, FromRawFd, OwnedFd},
+    os::{
+        fd::{FromRawFd, OwnedFd},
+        unix::ffi::OsStrExt,
+    },
 };
 
+use futures_util::{
+    future::{Either, select},
+    pin_mut,
+};
 pub use handler::SeccompNotifyHandler;
 use listener::NotifyListener;
-use nix::fcntl::{FcntlArg, FdFlag, fcntl};
 use passfd::tokio::FdPassingExt;
 use seccompiler::{BpfProgram, SeccompAction, SeccompFilter};
-use tokio::{net::UnixStream, task::JoinSet};
+use tokio::{
+    net::{UnixListener, UnixStream},
+    sync::oneshot,
+    task::{JoinHandle, JoinSet},
+};
 use tracing::{Level, span};
 
 use crate::{
@@ -19,27 +30,28 @@ use crate::{
     payload::{Filter, SeccompPayload},
 };
 
-pub struct Supervisor<F> {
-    pub payload: SeccompPayload,
-    pub pre_exec: PreExec,
-    pub handling_loop: F,
+pub struct Supervisor<H> {
+    payload: SeccompPayload,
+    cancel_tx: oneshot::Sender<Infallible>,
+    handling_loop_task: JoinHandle<io::Result<Vec<H>>>,
 }
 
-pub struct PreExec(OwnedFd);
-impl PreExec {
-    pub fn run(&self) -> nix::Result<()> {
-        let mut fd_flag = FdFlag::from_bits_retain(fcntl(&self.0, FcntlArg::F_GETFD)?);
-        fd_flag.remove(FdFlag::FD_CLOEXEC);
-        fcntl(&self.0, FcntlArg::F_SETFD(fd_flag))?;
-        Ok(())
+impl<H> Supervisor<H> {
+    pub fn payload(&self) -> &SeccompPayload {
+        &self.payload
+    }
+
+    pub async fn stop(self) -> io::Result<Vec<H>> {
+        drop(self.cancel_tx);
+        self.handling_loop_task.await.expect("handling loop task panicked")
     }
 }
 
-pub fn supervise<H: SeccompNotifyHandler + Default + Send + 'static>()
--> io::Result<Supervisor<impl Future<Output = io::Result<Vec<H>>> + Send>> {
-    let (notify_fd_receiver, notify_fd_sender) = UnixStream::pair()?;
-    let notify_fd_sender = notify_fd_sender.into_std()?;
-    notify_fd_sender.set_nonblocking(false)?;
+pub fn supervise<H: SeccompNotifyHandler + Default + Send + 'static>() -> io::Result<Supervisor<H>>
+{
+    let notify_listener = tempfile::Builder::new()
+        .prefix("fspy_seccomp_notify")
+        .make(|path| UnixListener::bind(path))?;
 
     let filter = SeccompFilter::new(
         H::syscalls().iter().map(|sysno| (sysno.id().into(), vec![])).collect(),
@@ -57,22 +69,25 @@ pub fn supervise<H: SeccompNotifyHandler + Default + Send + 'static>()
             .collect(),
     );
 
-    let payload = SeccompPayload { ipc_fd: notify_fd_sender.as_raw_fd(), filter };
+    let payload =
+        SeccompPayload { ipc_path: notify_listener.path().as_os_str().as_bytes().to_vec(), filter };
+
+    // The oneshot channel is used to cancel the accept loop.
+    // The sender doesn't need to actually send anything. Drop is enough.
+    let (cancel_tx, mut cancel_rx) = oneshot::channel::<Infallible>();
 
     let handling_loop = async move {
         let mut join_set: JoinSet<io::Result<H>> = JoinSet::new();
 
         loop {
-            let notify_fd = match notify_fd_receiver.recv_fd().await {
-                Ok(fd) => unsafe { OwnedFd::from_raw_fd(fd) },
-                Err(err) => {
-                    if err.kind() == io::ErrorKind::UnexpectedEof {
-                        break;
-                    } else {
-                        return Err(err);
-                    }
-                }
+            let accept_future = notify_listener.as_file().accept();
+            pin_mut!(accept_future);
+            let (incoming_stream, _) = match select(&mut cancel_rx, accept_future).await {
+                Either::Left((Err(_), _)) => break,
+                Either::Right((incoming, _)) => incoming?,
             };
+            let notify_fd = incoming_stream.recv_fd().await?;
+            let notify_fd = unsafe { OwnedFd::from_raw_fd(notify_fd) };
             let mut listener = NotifyListener::try_from(notify_fd)?;
 
             let mut handler = H::default();
@@ -96,5 +111,5 @@ pub fn supervise<H: SeccompNotifyHandler + Default + Send + 'static>()
         }
         Ok(handlers)
     };
-    Ok(Supervisor { payload, pre_exec: PreExec(notify_fd_sender.into()), handling_loop })
+    Ok(Supervisor { payload, cancel_tx, handling_loop_task: tokio::spawn(handling_loop) })
 }

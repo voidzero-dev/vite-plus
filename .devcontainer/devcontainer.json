@@ -5,16 +5,13 @@
   // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
   "image": "mcr.microsoft.com/vscode/devcontainers/base:ubuntu-22.04",
   "updateContentCommand": {
-    "systemPackages": "sudo apt-get update -y && sudo apt-get install -y pkg-config libssl-dev",
-    "rustToolchain": "rustup show",
-    "mise": "mise trust && mise install && mkdir -p ~/.config/fish && echo 'mise activate fish --shims | source' >> ~/.config/fish/config.fish"
+    "rustToolchain": "rustup show"
   },
   "containerEnv": {
     "CARGO_TARGET_DIR": "/tmp/target"
   },
   "features": {
     "ghcr.io/devcontainers/features/rust:1": {},
-    "ghcr.io/devcontainers-extra/features/mise:1": {},
     "ghcr.io/devcontainers-extra/features/fish-apt-get:1": {}
   },
   "customizations": {

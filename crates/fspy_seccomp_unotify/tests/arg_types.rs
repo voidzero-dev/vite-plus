@@ -13,7 +13,6 @@ use assertables::assert_contains;
 use fspy_seccomp_unotify::{
     impl_handler,
     supervisor::{
-        Supervisor,
         handler::arg::{CStrPtr, Fd},
         supervise,
     },
@@ -52,12 +51,13 @@ async fn run_in_pre_exec(
 ) -> Result<Vec<Syscall>, Box<dyn Error>> {
     Ok(timeout(Duration::from_secs(5), async move {
         let mut cmd = Command::new("/bin/echo");
-        let Supervisor { payload, handling_loop, pre_exec } = supervise::<SyscallRecorder>()?;
+        let supervisor = supervise::<SyscallRecorder>()?;
+
+        let payload = supervisor.payload().clone();
 
         unsafe {
             cmd.pre_exec(move || {
                 install_target(&payload)?;
-                pre_exec.run()?;
                 f()?;
                 Ok(())
             });
@@ -66,22 +66,16 @@ async fn run_in_pre_exec(
             let _span = span!(Level::TRACE, "spawn test child process");
             cmd.spawn()
         });
+
+        let exit_status = child_fut.await.unwrap()?.wait().await?;
+        trace!("test child process exited with status: {:?}", exit_status);
+
         trace!("waiting for handler to finish and test child process to exit");
-        let (recorders, exit_status) = futures_util::future::try_join(
-            async move {
-                let recorders = handling_loop.await?;
-                trace!("{} recorders awaited", recorders.len());
-                Ok(recorders)
-            },
-            async move {
-                let exit_status = child_fut.await.unwrap()?.wait().await?;
-                trace!("test child process exited with status: {:?}", exit_status);
-                io::Result::Ok(exit_status)
-            },
-        )
-        .await?;
 
         assert!(exit_status.success());
+
+        let recorders = supervisor.stop().await?;
+        trace!("{} recorders awaited", recorders.len());
 
         let syscalls = recorders.into_iter().map(|recorder| recorder.0.into_iter()).flatten();
         io::Result::Ok(syscalls.collect())
