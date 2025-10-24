@@ -1,4 +1,12 @@
 pub mod add;
+pub mod cache;
+pub mod config;
 mod install;
+pub mod list;
+pub mod owner;
+pub mod pack;
+pub mod prune;
+pub mod publish;
 pub mod remove;
 pub mod update;
+pub mod view;

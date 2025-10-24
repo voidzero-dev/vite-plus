@@ -276,6 +276,9 @@ pub enum Commands {
         #[arg(last = true, allow_hyphen_values = true)]
         pass_through_args: Option<Vec<String>>,
     },
+    /// Package manager utilities
+    #[command(disable_help_flag = true, subcommand)]
+    Pm(PmCommands),
 }
 
 impl Commands {
@@ -291,6 +294,231 @@ pub enum CacheSubcommand {
     Clean,
     /// View the cache entries in json for debugging purpose
     View,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum PmCommands {
+    /// Remove unnecessary packages
+    Prune {
+        /// Remove devDependencies
+        #[arg(long)]
+        prod: bool,
+
+        /// Remove optional dependencies
+        #[arg(long)]
+        no_optional: bool,
+
+        /// Arguments to pass to package manager
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+
+    /// Create a tarball of the package
+    Pack {
+        /// Preview without creating tarball
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output directory for tarball
+        #[arg(long)]
+        pack_destination: Option<String>,
+
+        /// Gzip compression level (0-9)
+        #[arg(long)]
+        pack_gzip_level: Option<u8>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Arguments to pass to package manager
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+
+    /// List installed packages
+    #[command(alias = "ls")]
+    List {
+        /// Package pattern to filter
+        pattern: Option<String>,
+
+        /// Include all transitive dependencies
+        #[arg(long)]
+        all: bool,
+
+        /// Maximum depth of dependency tree
+        #[arg(long)]
+        depth: Option<u32>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Show extended information
+        #[arg(long)]
+        long: bool,
+
+        /// Parseable output format
+        #[arg(long)]
+        parseable: bool,
+
+        /// Only production dependencies
+        #[arg(long)]
+        prod: bool,
+
+        /// Only dev dependencies
+        #[arg(long)]
+        dev: bool,
+
+        /// List across all workspaces
+        #[arg(short = 'r', long)]
+        recursive: bool,
+
+        /// Filter packages in monorepo (pnpm)
+        #[arg(long)]
+        filter: Vec<String>,
+
+        /// Target specific workspace (npm)
+        #[arg(long)]
+        workspace: Vec<String>,
+
+        /// List global packages
+        #[arg(short = 'g', long)]
+        global: bool,
+
+        /// Arguments to pass to package manager
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+
+    /// View package information from registry
+    View {
+        /// Package name with optional version
+        package: String,
+
+        /// Specific field to view
+        field: Option<String>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Arguments to pass to package manager
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+
+    /// Publish package to registry
+    Publish {
+        /// Tarball or folder to publish
+        target: Option<String>,
+
+        /// Preview without publishing
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Publish tag (default: latest)
+        #[arg(long)]
+        tag: Option<String>,
+
+        /// Access level (public/restricted)
+        #[arg(long)]
+        access: Option<String>,
+
+        /// Skip git checks (pnpm)
+        #[arg(long)]
+        no_git_checks: bool,
+
+        /// Force publish
+        #[arg(long)]
+        force: bool,
+
+        /// Publish all workspace packages
+        #[arg(short = 'r', long)]
+        recursive: bool,
+
+        /// Filter packages in monorepo (pnpm)
+        #[arg(long)]
+        filter: Vec<String>,
+
+        /// Target specific workspace (npm)
+        #[arg(long)]
+        workspace: Vec<String>,
+
+        /// Arguments to pass to package manager
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+
+    /// Manage package owners
+    Owner {
+        /// Subcommand: list, add, rm
+        #[command(subcommand)]
+        command: OwnerCommands,
+    },
+
+    /// Manage package cache
+    Cache {
+        /// Subcommand: dir, path, clean, clear, verify, list
+        subcommand: Option<String>,
+
+        /// Force clean (npm)
+        #[arg(long)]
+        force: bool,
+
+        /// Arguments to pass to package manager
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+
+    /// Manage package manager configuration
+    Config {
+        /// Subcommand: list, get, set, delete
+        subcommand: Option<String>,
+
+        /// Config key
+        key: Option<String>,
+
+        /// Config value (for set)
+        value: Option<String>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Use global config
+        #[arg(long)]
+        global: bool,
+
+        /// Arguments to pass to package manager
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum OwnerCommands {
+    /// List package owners
+    List {
+        /// Package name
+        package: String,
+    },
+
+    /// Add package owner
+    Add {
+        /// Username
+        user: String,
+        /// Package name
+        package: String,
+    },
+
+    /// Remove package owner
+    Rm {
+        /// Username
+        user: String,
+        /// Package name
+        package: String,
+    },
 }
 
 /// Resolve boolean flag value considering both positive and negative forms.
@@ -703,6 +931,10 @@ pub async fn main<
                 .await?;
             return Ok(exit_status);
         }
+        Commands::Pm(pm_command) => {
+            let exit_status = execute_pm_command(cwd, pm_command).await?;
+            return Ok(exit_status);
+        }
     };
 
     let execution_summary_dir = EXECUTION_SUMMARY_DIR.as_path();
@@ -878,6 +1110,165 @@ async fn execute_add_command(
             pass_through_args,
         )
         .await
+}
+
+/// Execute pm command with the given subcommand
+async fn execute_pm_command(
+    cwd: AbsolutePathBuf,
+    pm_command: &PmCommands,
+) -> Result<ExitStatus, Error> {
+    use vite_package_manager::{
+        commands::{
+            cache::{CacheCommandOptions, CacheSubcommand},
+            config::{ConfigCommandOptions, ConfigSubcommand},
+            list::ListCommandOptions,
+            owner::OwnerSubcommand,
+            pack::PackCommandOptions,
+            prune::PruneCommandOptions,
+            publish::PublishCommandOptions,
+            view::ViewCommandOptions,
+        },
+        package_manager::PackageManager,
+    };
+
+    let package_manager = PackageManager::builder(&cwd).build().await?;
+
+    match pm_command {
+        PmCommands::Prune { prod, no_optional, args } => {
+            let options = PruneCommandOptions {
+                prod: *prod,
+                no_optional: *no_optional,
+                pass_through_args: if args.is_empty() { None } else { Some(args) },
+            };
+            package_manager.run_prune_command(&options, &cwd).await
+        }
+        PmCommands::Pack { dry_run, pack_destination, pack_gzip_level, json, args } => {
+            let options = PackCommandOptions {
+                dry_run: *dry_run,
+                pack_destination: pack_destination.as_deref(),
+                pack_gzip_level: *pack_gzip_level,
+                json: *json,
+                pass_through_args: if args.is_empty() { None } else { Some(args) },
+            };
+            package_manager.run_pack_command(&options, &cwd).await
+        }
+        PmCommands::List {
+            pattern,
+            all,
+            depth,
+            json,
+            long,
+            parseable,
+            prod,
+            dev,
+            recursive,
+            filter,
+            workspace,
+            global,
+            args,
+        } => {
+            let options = ListCommandOptions {
+                pattern: pattern.as_deref(),
+                all: *all,
+                depth: *depth,
+                json: *json,
+                long: *long,
+                parseable: *parseable,
+                prod: *prod,
+                dev: *dev,
+                recursive: *recursive,
+                filters: if filter.is_empty() { None } else { Some(filter) },
+                workspaces: if workspace.is_empty() { None } else { Some(workspace) },
+                global: *global,
+                pass_through_args: if args.is_empty() { None } else { Some(args) },
+            };
+            package_manager.run_list_command(&options, &cwd).await
+        }
+        PmCommands::View { package, field, json, args } => {
+            let options = ViewCommandOptions {
+                package,
+                field: field.as_deref(),
+                json: *json,
+                pass_through_args: if args.is_empty() { None } else { Some(args) },
+            };
+            package_manager.run_view_command(&options, &cwd).await
+        }
+        PmCommands::Publish {
+            target,
+            dry_run,
+            tag,
+            access,
+            no_git_checks,
+            force,
+            recursive,
+            filter,
+            workspace,
+            args,
+        } => {
+            let options = PublishCommandOptions {
+                target: target.as_deref(),
+                dry_run: *dry_run,
+                tag: tag.as_deref(),
+                access: access.as_deref(),
+                no_git_checks: *no_git_checks,
+                force: *force,
+                recursive: *recursive,
+                filters: if filter.is_empty() { None } else { Some(filter) },
+                workspaces: if workspace.is_empty() { None } else { Some(workspace) },
+                pass_through_args: if args.is_empty() { None } else { Some(args) },
+            };
+            package_manager.run_publish_command(&options, &cwd).await
+        }
+        PmCommands::Owner { command } => match command {
+            OwnerCommands::List { package } => {
+                let subcommand = OwnerSubcommand::List { package };
+                package_manager.run_owner_command(subcommand, &cwd).await
+            }
+            OwnerCommands::Add { user, package } => {
+                let subcommand = OwnerSubcommand::Add { user, package };
+                package_manager.run_owner_command(subcommand, &cwd).await
+            }
+            OwnerCommands::Rm { user, package } => {
+                let subcommand = OwnerSubcommand::Rm { user, package };
+                package_manager.run_owner_command(subcommand, &cwd).await
+            }
+        },
+        PmCommands::Cache { subcommand, force, args } => {
+            let cache_subcmd = subcommand.as_ref().and_then(|s| match s.as_str() {
+                "dir" => Some(CacheSubcommand::Dir),
+                "path" => Some(CacheSubcommand::Path),
+                "clean" => Some(CacheSubcommand::Clean),
+                "clear" => Some(CacheSubcommand::Clear),
+                "verify" => Some(CacheSubcommand::Verify),
+                "list" => Some(CacheSubcommand::List),
+                _ => None,
+            });
+
+            let options = CacheCommandOptions {
+                subcommand: cache_subcmd,
+                force: *force,
+                pass_through_args: if args.is_empty() { None } else { Some(args) },
+            };
+            package_manager.run_cache_command(&options, &cwd).await
+        }
+        PmCommands::Config { subcommand, key, value, json, global, args } => {
+            let config_subcmd = match (subcommand.as_deref(), key.as_deref(), value.as_deref()) {
+                (Some("list"), _, _) | (None, None, None) => Some(ConfigSubcommand::List),
+                (Some("get"), Some(k), _) => Some(ConfigSubcommand::Get { key: k }),
+                (Some("set"), Some(k), Some(v)) => Some(ConfigSubcommand::Set { key: k, value: v }),
+                (Some("delete"), Some(k), _) => Some(ConfigSubcommand::Delete { key: k }),
+                _ => None,
+            };
+
+            let options = ConfigCommandOptions {
+                subcommand: config_subcmd,
+                json: *json,
+                global: *global,
+                pass_through_args: if args.is_empty() { None } else { Some(args) },
+            };
+            package_manager.run_config_command(&options, &cwd).await
+        }
+    }
 }
 
 #[cfg(test)]
