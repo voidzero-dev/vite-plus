@@ -49,6 +49,9 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: test
 
+      - run: rustup target add x86_64-unknown-linux-musl
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+
       - run: cargo check --all-targets --all-features
         env:
           RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
