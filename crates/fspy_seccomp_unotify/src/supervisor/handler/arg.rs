@@ -20,14 +20,13 @@ pub struct CStrPtr {
 }
 
 impl CStrPtr {
-    pub fn read<B: BufMut>(&self, buf: &mut B) -> io::Result<()> {
+    // Reads the C string from the remote process into the provided buffer.
+    // Returns whether the read was successful or not because the buffer was filled before a null-terminator was found.
+    pub fn read<B: BufMut>(&self, buf: &mut B) -> io::Result<bool> {
         loop {
             let chunk = buf.chunk_mut();
             if chunk.len() == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidFilename,
-                    "CStrPtr::read: buf is filled before null-terminator is found",
-                ));
+                return Ok(false);
             }
 
             let local_iov =
@@ -52,18 +51,21 @@ impl CStrPtr {
                 continue;
             };
             unsafe { buf.advance_mut(nul_index) };
-            return Ok(());
+            return Ok(true);
         }
     }
 
-    pub fn read_with_buf<const BUF_SIZE: usize, R, F: FnOnce(&[u8]) -> io::Result<R>>(
+    // Reads the C string from the remote process into a fixed-size buffer.
+    // The closure is called with `Some(&[u8])` if a null-terminator was found within the buffer size,
+    // or `None` if the buffer was filled without encountering a null-terminator.
+    pub fn read_with_buf<const BUF_SIZE: usize, R, F: FnOnce(Option<&[u8]>) -> io::Result<R>>(
         &self,
         f: F,
     ) -> io::Result<R> {
-        let mut read_buf: [MaybeUninit<u8>; 32768] = [const { MaybeUninit::uninit() }; 32768];
+        let mut read_buf: [MaybeUninit<u8>; BUF_SIZE] = [const { MaybeUninit::uninit() }; BUF_SIZE];
         let mut read_buf = ReadBuf::uninit(read_buf.as_mut_slice());
-        self.read(&mut read_buf)?;
-        f(read_buf.filled())
+        let success = self.read(&mut read_buf)?;
+        f(if success { Some(read_buf.filled()) } else { None })
     }
 }
 
