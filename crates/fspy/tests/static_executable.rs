@@ -4,35 +4,31 @@ use std::{
     fs::{self, Permissions},
     os::unix::fs::PermissionsExt as _,
     path::{Path, PathBuf},
-    str::from_utf8,
     sync::LazyLock,
 };
 
 use fspy::PathAccessIterable;
+use fspy_shared_unix::is_dynamically_linked_to_libc;
 
 use crate::test_utils::assert_contains;
 
 mod test_utils;
 
-const PRELOAD_CDYLIB_BINARY: &[u8] = include_bytes!(env!("CARGO_BIN_FILE_FSPY_TEST_BIN"));
+const TEST_BIN_CONTENT: &[u8] = include_bytes!(env!("CARGO_BIN_FILE_FSPY_TEST_BIN"));
 
 fn test_bin_path() -> &'static Path {
     static TEST_BIN_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
+        assert_eq!(
+            is_dynamically_linked_to_libc(&TEST_BIN_CONTENT),
+            Ok(false),
+            "Test binary is not a static executable"
+        );
+
         let tmp_dir = env!("CARGO_TARGET_TMPDIR");
         let test_bin_path = PathBuf::from(tmp_dir).join("fspy-test-bin");
-        fs::write(&test_bin_path, PRELOAD_CDYLIB_BINARY).expect("failed to write test binary");
+        fs::write(&test_bin_path, TEST_BIN_CONTENT).expect("failed to write test binary");
         fs::set_permissions(&test_bin_path, Permissions::from_mode(0o755))
             .expect("failed to set permissions on test binary");
-
-        // Verify that the test binary is indeed a static executable
-        let output = std::process::Command::new("ldd").arg(&test_bin_path).output().unwrap();
-        assert_eq!(
-            output.status.code(),
-            Some(1),
-            "ldd should fail on static executables. Stdout: {}. Stderr: {}",
-            from_utf8(&output.stdout).unwrap(),
-            from_utf8(&output.stderr).unwrap()
-        );
 
         test_bin_path
     });

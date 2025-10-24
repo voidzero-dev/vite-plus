@@ -1,11 +1,10 @@
-mod elf;
-
 use std::{ffi::OsStr, os::unix::ffi::OsStrExt as _, path::Path};
 
 use fspy_seccomp_unotify::{payload::SeccompPayload, target::install_target};
 use memmap2::Mmap;
 
 use crate::{
+    elf,
     exec::{Exec, ensure_env},
     open_exec::open_executable,
     payload::{EncodedPayload, PAYLOAD_ENV_NAME},
