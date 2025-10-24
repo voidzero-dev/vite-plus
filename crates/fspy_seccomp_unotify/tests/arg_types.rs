@@ -44,7 +44,7 @@ impl SyscallRecorder {
     }
 }
 
-impl_handler!(SyscallRecorder, openat);
+impl_handler!(SyscallRecorder: openat,);
 
 async fn run_in_pre_exec(
     mut f: impl FnMut() -> io::Result<()> + Send + Sync + 'static,

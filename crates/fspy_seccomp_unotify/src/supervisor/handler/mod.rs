@@ -11,14 +11,21 @@ pub trait SeccompNotifyHandler {
 
 #[macro_export]
 macro_rules! impl_handler {
-    ($type: ty, $($syscall:ident)*) => {
+    ($type:ty: $(
+        $(#[$attr:meta])?
+        $syscall:ident,
+    )* ) => {
 
     impl $crate::supervisor::handler::SeccompNotifyHandler for $type {
         fn syscalls() -> &'static [::syscalls::Sysno] {
-            &[ $( ::syscalls::Sysno:: $syscall ),* ]
+            &[ $(
+                $(#[$attr])?
+                ::syscalls::Sysno::$syscall
+            ),* ]
         }
         fn handle_notify(&mut self, notify: &::libc::seccomp_notif) -> ::std::io::Result<()> {
             $(
+                $(#[$attr])?
                 if notify.data.nr == ::syscalls::Sysno::$syscall as _ {
                     return self.$syscall($crate::supervisor::handler::arg::FromNotify::from_notify(notify)?)
                 }
