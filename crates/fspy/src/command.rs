@@ -164,7 +164,7 @@ impl Command {
         }
 
         self.program = which::which_in(
-            dbg!(self.program.as_os_str()),
+            self.program.as_os_str(),
             path_env,
             if let Some(cwd) = &self.cwd { cwd.clone() } else { std::env::current_dir()? },
         )
