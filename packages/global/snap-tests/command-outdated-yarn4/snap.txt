@@ -1,0 +1,19 @@
+> vp outdated -- -h # should show yarn upgrade-interactive help
+Note: yarn@2+ uses 'yarn upgrade-interactive' for checking outdated packages
+Running: yarn upgrade-interactive -h
+Open the upgrade interface
+
+Usage
+
+$ yarn upgrade-interactive
+
+Details
+
+This command opens a fullscreen terminal interface where you can see any out of 
+date packages used by your application, their status compared to the latest 
+versions available on the remote registry, and select packages to upgrade.
+
+Examples
+
+Open the upgrade window
+  $ yarn upgrade-interactive

@@ -1,0 +1,13 @@
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "@vite-plus-test/utils": "^1.0.0"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-other-optional": "1.0.0"
+  }
+}

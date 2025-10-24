@@ -1,0 +1,8 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp outdated -- -h # should show yarn upgrade-interactive help"
+  ]
+}

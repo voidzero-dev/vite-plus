@@ -1,0 +1,30 @@
+> vp install
+
+added 6 packages in <variable>ms
+
+
+[1]> vp outdated testnpm2 -w # should outdated in workspace root
+Running: npm outdated --include-workspace-root testnpm2
+Package   Current  Wanted  Latest  Location               Depended by
+testnpm2    <semver>   <semver>   <semver>  node_modules/testnpm2  command-outdated-npm10-with-workspace
+
+> vp outdated testnpm2 --filter app # should outdated in specific package
+Running: npm outdated --workspace app testnpm2
+
+[1]> vp outdated --filter "*" --format json # should outdated in all packages
+Running: npm outdated --json --workspace *
+{
+  "test-vite-plus-other-optional": {
+    "current": "1.0.0",
+    "wanted": "1.0.0",
+    "latest": "1.1.0",
+    "dependent": "app",
+    "location": "<cwd>/node_modules/test-vite-plus-other-optional"
+  }
+}
+
+[1]> vp outdated -r # should outdated recursively
+Running: npm outdated --all
+Package                        Current  Wanted  Latest  Location                                    Depended by
+test-vite-plus-other-optional    <semver>   <semver>   <semver>  node_modules/test-vite-plus-other-optional  app@
+testnpm2                         <semver>   <semver>   <semver>  node_modules/testnpm2                       command-outdated-npm10-with-workspace

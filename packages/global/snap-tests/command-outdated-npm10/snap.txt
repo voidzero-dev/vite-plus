@@ -1,0 +1,111 @@
+> vp install # should install packages first
+
+added 4 packages in <variable>ms
+
+
+[1]> vp outdated testnpm2 # should outdated package
+Running: npm outdated testnpm2
+Package   Current  Wanted  Latest  Location               Depended by
+testnpm2    <semver>   <semver>   <semver>  node_modules/testnpm2  command-outdated-npm10
+
+> vp outdated test-vite* # should outdated with glob pattern not working on npm
+Running: npm outdated test-vite*
+
+[1]> vp outdated --format json # should support json output
+Running: npm outdated --json
+{
+  "test-vite-plus-other-optional": {
+    "current": "1.0.0",
+    "wanted": "1.0.0",
+    "latest": "1.1.0",
+    "dependent": "command-outdated-npm10",
+    "location": "<cwd>/node_modules/test-vite-plus-other-optional"
+  },
+  "test-vite-plus-top-package": {
+    "current": "1.0.0",
+    "wanted": "1.0.0",
+    "latest": "1.1.0",
+    "dependent": "command-outdated-npm10",
+    "location": "<cwd>/node_modules/test-vite-plus-top-package"
+  },
+  "testnpm2": {
+    "current": "1.0.0",
+    "wanted": "1.0.0",
+    "latest": "1.0.1",
+    "dependent": "command-outdated-npm10",
+    "location": "<cwd>/node_modules/testnpm2"
+  }
+}
+
+[1]> vp outdated --format list # should support list output
+Running: npm outdated --parseable
+<cwd>/node_modules/test-vite-plus-other-optional:test-vite-plus-other-optional@<semver>:test-vite-plus-other-optional@<semver>:test-vite-plus-other-optional@<semver>:command-outdated-npm10
+<cwd>/node_modules/test-vite-plus-top-package:test-vite-plus-top-package@<semver>:test-vite-plus-top-package@<semver>:test-vite-plus-top-package@<semver>:command-outdated-npm10
+<cwd>/node_modules/testnpm2:testnpm2@<semver>:testnpm2@<semver>:testnpm2@<semver>:command-outdated-npm10
+
+[1]> vp outdated --format table # should support table output
+Running: npm outdated
+Package                        Current  Wanted  Latest  Location                                    Depended by
+test-vite-plus-other-optional    <semver>   <semver>   <semver>  node_modules/test-vite-plus-other-optional  command-outdated-npm10
+test-vite-plus-top-package       <semver>   <semver>   <semver>  node_modules/test-vite-plus-top-package     command-outdated-npm10
+testnpm2                         <semver>   <semver>   <semver>  node_modules/testnpm2                       command-outdated-npm10
+
+[1]> vp outdated testnpm2 --long # should support --long
+Running: npm outdated --long testnpm2
+Package   Current  Wanted  Latest  Location               Depended by             Package Type  Homepage
+testnpm2    <semver>   <semver>   <semver>  node_modules/testnpm2  command-outdated-npm10  dependencies
+
+[1]> vp outdated -r # should support recursive output
+Running: npm outdated --all
+Package                        Current  Wanted  Latest  Location                                    Depended by
+test-vite-plus-other-optional    <semver>   <semver>   <semver>  node_modules/test-vite-plus-other-optional  command-outdated-npm10
+test-vite-plus-top-package       <semver>   <semver>   <semver>  node_modules/test-vite-plus-top-package     command-outdated-npm10
+testnpm2                         <semver>   <semver>   <semver>  node_modules/testnpm2                       command-outdated-npm10
+
+[1]> vp outdated -P # should support prod output
+Warning: --prod/--dev not supported by npm
+Running: npm outdated
+Package                        Current  Wanted  Latest  Location                                    Depended by
+test-vite-plus-other-optional    <semver>   <semver>   <semver>  node_modules/test-vite-plus-other-optional  command-outdated-npm10
+test-vite-plus-top-package       <semver>   <semver>   <semver>  node_modules/test-vite-plus-top-package     command-outdated-npm10
+testnpm2                         <semver>   <semver>   <semver>  node_modules/testnpm2                       command-outdated-npm10
+
+[1]> vp outdated -D # should support dev output
+Warning: --prod/--dev not supported by npm
+Running: npm outdated
+Package                        Current  Wanted  Latest  Location                                    Depended by
+test-vite-plus-other-optional    <semver>   <semver>   <semver>  node_modules/test-vite-plus-other-optional  command-outdated-npm10
+test-vite-plus-top-package       <semver>   <semver>   <semver>  node_modules/test-vite-plus-top-package     command-outdated-npm10
+testnpm2                         <semver>   <semver>   <semver>  node_modules/testnpm2                       command-outdated-npm10
+
+[1]> vp outdated --no-optional # should support no-optional output
+Warning: --no-optional not supported by npm
+Running: npm outdated
+Package                        Current  Wanted  Latest  Location                                    Depended by
+test-vite-plus-other-optional    <semver>   <semver>   <semver>  node_modules/test-vite-plus-other-optional  command-outdated-npm10
+test-vite-plus-top-package       <semver>   <semver>   <semver>  node_modules/test-vite-plus-top-package     command-outdated-npm10
+testnpm2                         <semver>   <semver>   <semver>  node_modules/testnpm2                       command-outdated-npm10
+
+[1]> vp outdated --compatible # should compatible output nothing
+Warning: --compatible not supported by npm
+Running: npm outdated
+Package                        Current  Wanted  Latest  Location                                    Depended by
+test-vite-plus-other-optional    <semver>   <semver>   <semver>  node_modules/test-vite-plus-other-optional  command-outdated-npm10
+test-vite-plus-top-package       <semver>   <semver>   <semver>  node_modules/test-vite-plus-top-package     command-outdated-npm10
+testnpm2                         <semver>   <semver>   <semver>  node_modules/testnpm2                       command-outdated-npm10
+
+[1]> json-edit package.json '_.optionalDependencies["test-vite-plus-other-optional"] = "^1.0.0"' && vp outdated --compatible # should support compatible output with optional dependencies
+Warning: --compatible not supported by npm
+Running: npm outdated
+Package                        Current  Wanted  Latest  Location                                    Depended by
+test-vite-plus-other-optional    <semver>   <semver>   <semver>  node_modules/test-vite-plus-other-optional  command-outdated-npm10
+test-vite-plus-top-package       <semver>   <semver>   <semver>  node_modules/test-vite-plus-top-package     command-outdated-npm10
+testnpm2                         <semver>   <semver>   <semver>  node_modules/testnpm2                       command-outdated-npm10
+
+[1]> vp outdated --sort-by name # should support sort-by output
+Warning: --sort-by not supported by npm
+Running: npm outdated
+Package                        Current  Wanted  Latest  Location                                    Depended by
+test-vite-plus-other-optional    <semver>   <semver>   <semver>  node_modules/test-vite-plus-other-optional  command-outdated-npm10
+test-vite-plus-top-package       <semver>   <semver>   <semver>  node_modules/test-vite-plus-top-package     command-outdated-npm10
+testnpm2                         <semver>   <semver>   <semver>  node_modules/testnpm2                       command-outdated-npm10

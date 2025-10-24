@@ -1,0 +1,14 @@
+{
+  "name": "command-outdated-yarn4",
+  "version": "1.0.0",
+  "packageManager": "yarn@4.10.1",
+  "dependencies": {
+    "testnpm2": "1.0.0"
+  },
+  "devDependencies": {
+    "test-vite-plus-top-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-other-optional": "1.0.0"
+  }
+}

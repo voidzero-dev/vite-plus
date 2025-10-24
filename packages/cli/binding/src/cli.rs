@@ -9,7 +9,7 @@ use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use tokio::fs::write;
 use vite_error::Error;
-use vite_install::commands::add::SaveDependencyType;
+use vite_install::commands::{add::SaveDependencyType, outdated::Format};
 use vite_path::AbsolutePathBuf;
 use vite_str::Str;
 use vite_task::{
@@ -25,6 +25,7 @@ use crate::commands::{
     install::InstallCommand,
     lib_cmd::lib,
     lint::{LintConfig, lint},
+    outdated::OutdatedCommand,
     remove::RemoveCommand,
     test::test,
     update::UpdateCommand,
@@ -288,6 +289,59 @@ pub enum Commands {
         #[arg(last = true, allow_hyphen_values = true)]
         pass_through_args: Option<Vec<String>>,
     },
+    /// Check for outdated packages
+    Outdated {
+        /// Package name(s) to check (supports glob patterns in pnpm)
+        packages: Vec<String>,
+
+        /// Show extended information
+        #[arg(long)]
+        long: bool,
+
+        /// Output format: table (default), list, or json
+        #[arg(long, value_name = "FORMAT", value_parser = clap::value_parser!(Format))]
+        format: Option<Format>,
+
+        /// Check recursively across all workspaces
+        #[arg(short = 'r', long)]
+        recursive: bool,
+
+        /// Filter packages in monorepo (can be used multiple times)
+        #[arg(long, value_name = "PATTERN")]
+        filter: Option<Vec<String>>,
+
+        /// Include workspace root
+        #[arg(short = 'w', long)]
+        workspace_root: bool,
+
+        /// Only production and optional dependencies (pnpm-specific)
+        #[arg(short = 'P', long)]
+        prod: bool,
+
+        /// Only dev dependencies (pnpm-specific)
+        #[arg(short = 'D', long)]
+        dev: bool,
+
+        /// Exclude optional dependencies (pnpm-specific)
+        #[arg(long)]
+        no_optional: bool,
+
+        /// Only show compatible versions (pnpm-specific)
+        #[arg(long)]
+        compatible: bool,
+
+        /// Sort results by field (pnpm-specific)
+        #[arg(long, value_name = "FIELD")]
+        sort_by: Option<String>,
+
+        /// Check globally installed packages
+        #[arg(short = 'g', long)]
+        global: bool,
+
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
 }
 
 impl Commands {
@@ -299,6 +353,7 @@ impl Commands {
                 | Commands::Add { .. }
                 | Commands::Remove { .. }
                 | Commands::Dedupe { .. }
+                | Commands::Outdated { .. }
         )
     }
 }
@@ -724,6 +779,40 @@ pub async fn main<
         Commands::Dedupe { check, pass_through_args } => {
             let exit_status =
                 DedupeCommand::new(cwd).execute(*check, pass_through_args.as_deref()).await?;
+            return Ok(exit_status);
+        }
+        Commands::Outdated {
+            packages,
+            long,
+            format,
+            recursive,
+            filter,
+            workspace_root,
+            prod,
+            dev,
+            no_optional,
+            compatible,
+            sort_by,
+            global,
+            pass_through_args,
+        } => {
+            let exit_status = OutdatedCommand::new(cwd)
+                .execute(
+                    packages,
+                    *long,
+                    *format,
+                    *recursive,
+                    filter.as_deref(),
+                    *workspace_root,
+                    *prod,
+                    *dev,
+                    *no_optional,
+                    *compatible,
+                    sort_by.as_deref(),
+                    *global,
+                    pass_through_args.as_deref(),
+                )
+                .await?;
             return Ok(exit_status);
         }
     };

@@ -1,0 +1,24 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp outdated --help # should show help",
+    "vp install # should install packages first",
+    "vp outdated testnpm2 # should outdated package",
+    "vp outdated test-vite* # should outdated with one glob pattern",
+    "vp outdated test-vite* '*npm*' # should outdated with multiple glob patterns",
+    "vp outdated --format json # should support json output",
+    "vp outdated --format list # should support list output",
+    "vp outdated --format table # should support table output",
+    "vp outdated testnpm2 --long --format list # should support --long",
+    "vp outdated -r # should support recursive output",
+    "vp outdated -P # should support prod output",
+    "vp outdated -D # should support dev output",
+    "vp outdated --no-optional # should support no-optional output",
+    "vp outdated --compatible # should compatible output nothing",
+    "json-edit package.json '_.optionalDependencies[\"test-vite-plus-other-optional\"] = \"^1.0.0\"' && vp outdated --compatible # should support compatible output with optional dependencies",
+    "vp outdated --sort-by name # should support sort-by output",
+    "vp outdated testnpm2 -g --format json # should support global output"
+  ]
+}
