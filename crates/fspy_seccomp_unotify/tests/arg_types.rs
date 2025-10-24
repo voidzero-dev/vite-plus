@@ -13,7 +13,7 @@ use assertables::assert_contains;
 use fspy_seccomp_unotify::{
     impl_handler,
     supervisor::{
-        handler::arg::{CStrPtr, Fd},
+        handler::arg::{CStrPtr, Caller, Fd},
         supervise,
     },
     target::install_target,
@@ -34,9 +34,9 @@ enum Syscall {
 #[derive(Default, Clone, Debug)]
 struct SyscallRecorder(Vec<Syscall>);
 impl SyscallRecorder {
-    fn openat(&mut self, (fd, path): (Fd, CStrPtr)) -> io::Result<()> {
-        let at_dir = fd.get_path()?;
-        let path = path.read_with_buf::<32768, _, _>(|path| {
+    fn openat(&mut self, caller: Caller<'_>, (fd, path): (Fd, CStrPtr)) -> io::Result<()> {
+        let at_dir = fd.get_path(caller)?;
+        let path = path.read_with_buf::<32768, _, _>(caller, |path| {
             Ok(path.map(|path| OsString::from_vec(path.to_vec())))
         })?;
         self.0.push(Syscall::Openat { at_dir, path });

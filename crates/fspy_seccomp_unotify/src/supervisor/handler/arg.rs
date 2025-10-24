@@ -10,19 +10,33 @@ use libc::{pid_t, seccomp_notif};
 use tokio::io::ReadBuf;
 
 pub trait FromSyscallArg: Sized {
-    fn from_syscall_arg(pid: u32, arg: u64) -> io::Result<Self>;
+    fn from_syscall_arg(arg: u64) -> io::Result<Self>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct CStrPtr {
-    pid: pid_t,
     remote_ptr: *mut c_void,
+}
+
+/// Represents the caller of a syscall. Needed to read memory from the caller's address space.
+#[derive(Debug, Clone, Copy)]
+pub struct Caller<'a> {
+    pid: pid_t,
+    _marker: std::marker::PhantomData<&'a ()>,
+}
+
+impl<'a> Caller<'a> {
+    /// Creates a `Caller` for the given pid with a local lifetime.
+    #[doc(hidden)] // only exposed for `impl_handler` macro
+    pub fn with_pid<R, F: FnOnce(Caller<'_>) -> R>(pid: pid_t, f: F) -> R {
+        f(Self { pid, _marker: std::marker::PhantomData })
+    }
 }
 
 impl CStrPtr {
     // Reads the C string from the remote process into the provided buffer.
     // Returns whether the read was successful or not because the buffer was filled before a null-terminator was found.
-    pub fn read<B: BufMut>(&self, buf: &mut B) -> io::Result<bool> {
+    pub fn read<B: BufMut>(&self, caller: Caller<'_>, buf: &mut B) -> io::Result<bool> {
         loop {
             let chunk = buf.chunk_mut();
             if chunk.len() == 0 {
@@ -35,7 +49,7 @@ impl CStrPtr {
             let remote_iov = libc::iovec { iov_base: self.remote_ptr, iov_len: chunk.len() };
 
             let read_size =
-                unsafe { libc::process_vm_readv(self.pid, &local_iov, 1, &remote_iov, 1, 0) };
+                unsafe { libc::process_vm_readv(caller.pid, &local_iov, 1, &remote_iov, 1, 0) };
 
             let Ok(read_size) = usize::try_from(read_size) else {
                 return Err(io::Error::last_os_error());
@@ -60,48 +74,48 @@ impl CStrPtr {
     // or `None` if the buffer was filled without encountering a null-terminator.
     pub fn read_with_buf<const BUF_SIZE: usize, R, F: FnOnce(Option<&[u8]>) -> io::Result<R>>(
         &self,
+        caller: Caller<'_>,
         f: F,
     ) -> io::Result<R> {
         let mut read_buf: [MaybeUninit<u8>; BUF_SIZE] = [const { MaybeUninit::uninit() }; BUF_SIZE];
         let mut read_buf = ReadBuf::uninit(read_buf.as_mut_slice());
-        let success = self.read(&mut read_buf)?;
+        let success = self.read(caller, &mut read_buf)?;
         f(if success { Some(read_buf.filled()) } else { None })
     }
 }
 
 impl FromSyscallArg for CStrPtr {
-    fn from_syscall_arg(pid: u32, arg: u64) -> io::Result<Self> {
-        Ok(Self { pid: pid as _, remote_ptr: arg as _ })
+    fn from_syscall_arg(arg: u64) -> io::Result<Self> {
+        Ok(Self { remote_ptr: arg as _ })
     }
 }
 
 #[derive(Debug)]
 pub struct Ignored(());
 impl FromSyscallArg for Ignored {
-    fn from_syscall_arg(_pid: u32, _arg: u64) -> io::Result<Self> {
+    fn from_syscall_arg(_arg: u64) -> io::Result<Self> {
         Ok(Ignored(()))
     }
 }
 
 #[derive(Debug)]
 pub struct Fd {
-    pid: u32,
     fd: RawFd,
 }
 impl FromSyscallArg for Fd {
-    fn from_syscall_arg(pid: u32, arg: u64) -> io::Result<Self> {
-        Ok(Self { pid, fd: arg as _ })
+    fn from_syscall_arg(arg: u64) -> io::Result<Self> {
+        Ok(Self { fd: arg as _ })
     }
 }
 
 impl Fd {
     // TODO: allocate in arena
-    pub fn get_path(&self) -> nix::Result<OsString> {
+    pub fn get_path(&self, caller: Caller<'_>) -> nix::Result<OsString> {
         nix::fcntl::readlink(
             if self.fd == libc::AT_FDCWD {
-                format!("/proc/{}/cwd", self.pid)
+                format!("/proc/{}/cwd", caller.pid)
             } else {
-                format!("/proc/{}/fd/{}", self.pid, self.fd)
+                format!("/proc/{}/fd/{}", caller.pid, self.fd)
             }
             .as_str(),
         )
@@ -114,25 +128,22 @@ pub trait FromNotify: Sized {
 
 impl<T: FromSyscallArg> FromNotify for (T,) {
     fn from_notify(notif: &seccomp_notif) -> io::Result<Self> {
-        Ok((T::from_syscall_arg(notif.pid, notif.data.args[0])?,))
+        Ok((T::from_syscall_arg(notif.data.args[0])?,))
     }
 }
 
 impl<T1: FromSyscallArg, T2: FromSyscallArg> FromNotify for (T1, T2) {
     fn from_notify(notif: &seccomp_notif) -> io::Result<Self> {
-        Ok((
-            T1::from_syscall_arg(notif.pid, notif.data.args[0])?,
-            T2::from_syscall_arg(notif.pid, notif.data.args[1])?,
-        ))
+        Ok((T1::from_syscall_arg(notif.data.args[0])?, T2::from_syscall_arg(notif.data.args[1])?))
     }
 }
 
 impl<T1: FromSyscallArg, T2: FromSyscallArg, T3: FromSyscallArg> FromNotify for (T1, T2, T3) {
     fn from_notify(notif: &seccomp_notif) -> io::Result<Self> {
         Ok((
-            T1::from_syscall_arg(notif.pid, notif.data.args[0])?,
-            T2::from_syscall_arg(notif.pid, notif.data.args[1])?,
-            T3::from_syscall_arg(notif.pid, notif.data.args[2])?,
+            T1::from_syscall_arg(notif.data.args[0])?,
+            T2::from_syscall_arg(notif.data.args[1])?,
+            T3::from_syscall_arg(notif.data.args[2])?,
         ))
     }
 }
@@ -142,10 +153,10 @@ impl<T1: FromSyscallArg, T2: FromSyscallArg, T3: FromSyscallArg, T4: FromSyscall
 {
     fn from_notify(notif: &seccomp_notif) -> io::Result<Self> {
         Ok((
-            T1::from_syscall_arg(notif.pid, notif.data.args[0])?,
-            T2::from_syscall_arg(notif.pid, notif.data.args[1])?,
-            T3::from_syscall_arg(notif.pid, notif.data.args[2])?,
-            T4::from_syscall_arg(notif.pid, notif.data.args[3])?,
+            T1::from_syscall_arg(notif.data.args[0])?,
+            T2::from_syscall_arg(notif.data.args[1])?,
+            T3::from_syscall_arg(notif.data.args[2])?,
+            T4::from_syscall_arg(notif.data.args[3])?,
         ))
     }
 }

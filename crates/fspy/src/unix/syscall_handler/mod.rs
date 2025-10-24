@@ -1,8 +1,8 @@
-use std::{io, os::unix::ffi::OsStrExt};
+use std::{borrow::Cow, ffi::OsStr, io, os::unix::ffi::OsStrExt, path::Path};
 
 use fspy_seccomp_unotify::{
     impl_handler,
-    supervisor::handler::arg::{CStrPtr, Fd, Ignored},
+    supervisor::handler::arg::{CStrPtr, Caller, Fd, Ignored},
 };
 use fspy_shared::ipc::{AccessMode, NativeStr, PathAccess};
 
