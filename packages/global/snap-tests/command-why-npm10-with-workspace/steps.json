@@ -1,0 +1,11 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp install",
+    "vp why testnpm2 --filter app # should check why in specific workspace using --workspace",
+    "vp why test-vite-plus-package --filter app # should check why dev dependencies in app workspace",
+    "vp why testnpm2 --filter app --json # should support json output with workspace filter"
+  ]
+}

@@ -10,3 +10,4 @@ pub(crate) mod remove;
 pub(crate) mod test;
 pub(crate) mod update;
 pub(crate) mod vite;
+pub(crate) mod why;

@@ -30,6 +30,7 @@ use crate::commands::{
     test::test,
     update::UpdateCommand,
     vite::vite as vite_cmd,
+    why::WhyCommand,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -344,6 +345,69 @@ pub enum Commands {
         #[arg(last = true, allow_hyphen_values = true)]
         pass_through_args: Option<Vec<String>>,
     },
+    /// Show why a package is installed
+    #[command(alias = "explain")]
+    Why {
+        /// Package(s) to check
+        #[arg(required = true)]
+        packages: Vec<String>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Show extended information (pnpm-specific)
+        #[arg(long)]
+        long: bool,
+
+        /// Show parseable output (pnpm-specific)
+        #[arg(long)]
+        parseable: bool,
+
+        /// Check recursively across all workspaces
+        #[arg(short = 'r', long)]
+        recursive: bool,
+
+        /// Filter packages in monorepo (pnpm/npm-specific)
+        #[arg(long, value_name = "PATTERN")]
+        filter: Option<Vec<String>>,
+
+        /// Check in workspace root (pnpm-specific)
+        #[arg(short = 'w', long)]
+        workspace_root: bool,
+
+        /// Only production dependencies (pnpm-specific)
+        #[arg(short = 'P', long)]
+        prod: bool,
+
+        /// Only dev dependencies (pnpm-specific)
+        #[arg(short = 'D', long)]
+        dev: bool,
+
+        /// Limit tree depth (pnpm-specific)
+        #[arg(long)]
+        depth: Option<u32>,
+
+        /// Exclude optional dependencies (pnpm-specific)
+        #[arg(long)]
+        no_optional: bool,
+
+        /// Check globally installed packages
+        #[arg(short = 'g', long)]
+        global: bool,
+
+        /// Exclude peer dependencies (pnpm/yarn@2+-specific)
+        #[arg(long)]
+        exclude_peers: bool,
+
+        /// Use a finder function defined in .pnpmfile.cjs (pnpm-specific)
+        #[arg(long, value_name = "FINDER_NAME")]
+        find_by: Option<String>,
+
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
 }
 
 impl Commands {
@@ -356,6 +420,7 @@ impl Commands {
                 | Commands::Remove { .. }
                 | Commands::Dedupe { .. }
                 | Commands::Outdated { .. }
+                | Commands::Why { .. }
         )
     }
 }
@@ -812,6 +877,44 @@ pub async fn main<
                     *compatible,
                     sort_by.as_deref(),
                     *global,
+                    pass_through_args.as_deref(),
+                )
+                .await?;
+            return Ok(exit_status);
+        }
+        Commands::Why {
+            packages,
+            json,
+            long,
+            parseable,
+            recursive,
+            filter,
+            workspace_root,
+            prod,
+            dev,
+            depth,
+            no_optional,
+            global,
+            exclude_peers,
+            find_by,
+            pass_through_args,
+        } => {
+            let exit_status = WhyCommand::new(cwd)
+                .execute(
+                    packages,
+                    *json,
+                    *long,
+                    *parseable,
+                    *recursive,
+                    filter.as_deref(),
+                    *workspace_root,
+                    *prod,
+                    *dev,
+                    *depth,
+                    *no_optional,
+                    *global,
+                    *exclude_peers,
+                    find_by.as_deref(),
                     pass_through_args.as_deref(),
                 )
                 .await?;

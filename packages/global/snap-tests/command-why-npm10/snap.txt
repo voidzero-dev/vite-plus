@@ -1,0 +1,93 @@
+> vp install # should install packages first
+
+added 3 packages in <variable>ms
+
+
+> vp why testnpm2 # should show why package is installed (uses npm explain)
+Running: npm explain testnpm2
+testnpm2@<semver>
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+
+> vp explain testnpm2 # should work with explain alias
+Running: npm explain testnpm2
+testnpm2@<semver>
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+
+> vp why test-vite-plus-package # should show why dev package is installed
+Running: npm explain test-vite-plus-package
+test-vite-plus-package@<semver> dev
+node_modules/test-vite-plus-package
+  dev test-vite-plus-package@"1.0.0" from the root project
+
+> vp why testnpm2 --json # should support json output
+Running: npm explain --json testnpm2
+[
+  {
+    "name": "testnpm2",
+    "version": "1.0.1",
+    "location": "node_modules/testnpm2",
+    "isWorkspace": false,
+    "dependents": [
+      {
+        "type": "prod",
+        "name": "testnpm2",
+        "spec": "1.0.1",
+        "from": {
+          "location": "<cwd>"
+        }
+      }
+    ],
+    "dev": false,
+    "optional": false,
+    "devOptional": false,
+    "peer": false,
+    "bundled": false,
+    "overridden": false
+  }
+]
+
+> vp why testnpm2 test-vite-plus-package # should support multiple packages
+Running: npm explain testnpm2 test-vite-plus-package
+testnpm2@<semver>
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+
+test-vite-plus-package@<semver> dev
+node_modules/test-vite-plus-package
+  dev test-vite-plus-package@"1.0.0" from the root project
+
+> vp why testnpm2 --long # should warn that --long not supported by npm
+Warning: --long not supported by npm
+Running: npm explain testnpm2
+testnpm2@<semver>
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+
+> vp why testnpm2 --parseable # should warn that --parseable not supported by npm
+Warning: --parseable not supported by npm
+Running: npm explain testnpm2
+testnpm2@<semver>
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+
+> vp why testnpm2 -P # should warn that --prod not supported by npm
+Warning: --prod/--dev not supported by npm
+Running: npm explain testnpm2
+testnpm2@<semver>
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+
+> vp why testnpm2 --find-by customFinder # should warn that --find-by not supported by npm
+Warning: --find-by not supported by npm
+Running: npm explain testnpm2
+testnpm2@<semver>
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project
+
+> vp why testnpm2 -- --omit=dev # should support pass through arguments
+Running: npm explain testnpm2 --omit=dev
+testnpm2@<semver>
+node_modules/testnpm2
+  testnpm2@"1.0.1" from the root project

@@ -122,6 +122,17 @@ Done in 1000ms
     `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
+
+  test('replace ignore npm registry domain', () => {
+    const output = `
+https://registry.npmjs.org/testnpm2
+https://registry.yarnpkg.com/debug
+https://registry.yarnpkg.com/testnpm2/-/testnpm2-1.0.0.tgz
+"resolved": "https://registry.yarnpkg.com/testnpm2/-/testnpm2-1.0.0.tgz",
+"resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.0.tgz",
+    `;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
 });
 
 describe('isPassThroughEnv()', () => {

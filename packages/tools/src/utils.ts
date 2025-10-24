@@ -54,7 +54,9 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
     .replaceAll(/(added \d+ packages), and audited \d+ packages( in <variable>(?:s|ms|µs))\n/g, '$1$2\n')
     .replaceAll(/\nfound \d+ vulnerabilities\n/g, '')
     // replace size for tsdown
-    .replaceAll(/ \d+(\.\d+)? ([km]B)/g, ' <variable> $2');
+    .replaceAll(/ \d+(\.\d+)? ([km]B)/g, ' <variable> $2')
+    // ignore npm registry domain
+    .replaceAll(/(https?:\/\/registry\.)[^/]+?\//g, '$1<domain>/');
 }
 
 // Exact matches for common environment variables
