@@ -53,8 +53,9 @@ for (const caseName of fs.readdirSync(casesDir)) {
   }
 }
 
-await Promise.all(tasks);
-
+if (tasks.length > 0) {
+  await Promise.all(tasks);
+}
 interface Steps {
   ignoredPlatforms?: string[];
   env: Record<string, string>;
