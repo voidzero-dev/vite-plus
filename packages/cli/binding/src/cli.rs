@@ -19,6 +19,7 @@ use vite_task::{
 
 use crate::commands::{
     add::AddCommand,
+    dedupe::DedupeCommand,
     doc::doc as doc_cmd,
     fmt::{FmtConfig, fmt},
     install::InstallCommand,
@@ -276,12 +277,29 @@ pub enum Commands {
         #[arg(last = true, allow_hyphen_values = true)]
         pass_through_args: Option<Vec<String>>,
     },
+    /// Deduplicate dependencies by removing older versions
+    #[command(alias = "ddp")]
+    Dedupe {
+        /// Check if deduplication would make changes
+        #[arg(long)]
+        check: bool,
+
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
 }
 
 impl Commands {
     /// Check if this command is a package manager command that should skip auto-install
     pub fn is_package_manager_command(&self) -> bool {
-        matches!(self, Commands::Install { .. } | Commands::Add { .. } | Commands::Remove { .. })
+        matches!(
+            self,
+            Commands::Install { .. }
+                | Commands::Add { .. }
+                | Commands::Remove { .. }
+                | Commands::Dedupe { .. }
+        )
     }
 }
 
@@ -701,6 +719,11 @@ pub async fn main<
                     pass_through_args.as_deref(),
                 )
                 .await?;
+            return Ok(exit_status);
+        }
+        Commands::Dedupe { check, pass_through_args } => {
+            let exit_status =
+                DedupeCommand::new(cwd).execute(*check, pass_through_args.as_deref()).await?;
             return Ok(exit_status);
         }
     };
@@ -2317,6 +2340,69 @@ mod tests {
                 assert_eq!(packages, &vec!["react"]);
             } else {
                 panic!("Expected Update command");
+            }
+        }
+    }
+
+    mod dedupe_command_tests {
+        use super::*;
+
+        #[test]
+        fn test_args_dedupe_command_basic() {
+            let args = Args::try_parse_from(&["vite-plus", "dedupe"]).unwrap();
+            if let Commands::Dedupe { check, .. } = &args.commands {
+                assert!(!check);
+            } else {
+                panic!("Expected Dedupe command");
+            }
+        }
+
+        #[test]
+        fn test_args_dedupe_command_with_alias() {
+            let args = Args::try_parse_from(&["vite-plus", "ddp"]).unwrap();
+            assert!(matches!(args.commands, Commands::Dedupe { .. }));
+        }
+
+        #[test]
+        fn test_args_dedupe_command_with_check() {
+            let args = Args::try_parse_from(&["vite-plus", "dedupe", "--check"]).unwrap();
+            if let Commands::Dedupe { check, .. } = &args.commands {
+                assert!(check);
+            } else {
+                panic!("Expected Dedupe command");
+            }
+        }
+
+        #[test]
+        fn test_args_dedupe_command_with_pass_through_args() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "dedupe",
+                "--",
+                "--some-flag",
+                "--another-flag",
+            ])
+            .unwrap();
+            if let Commands::Dedupe { pass_through_args, .. } = &args.commands {
+                assert_eq!(
+                    pass_through_args,
+                    &Some(vec!["--some-flag".to_string(), "--another-flag".to_string()])
+                );
+            } else {
+                panic!("Expected Dedupe command");
+            }
+        }
+
+        #[test]
+        fn test_args_dedupe_command_with_check_and_pass_through() {
+            let args =
+                Args::try_parse_from(&["vite-plus", "dedupe", "--check", "--", "--custom-flag"])
+                    .unwrap();
+            if let Commands::Dedupe { check, pass_through_args, .. } = &args.commands {
+                assert!(check);
+                assert_eq!(pass_through_args, &Some(vec!["--custom-flag".to_string()]));
+            } else {
+                panic!("Expected Dedupe command");
             }
         }
     }

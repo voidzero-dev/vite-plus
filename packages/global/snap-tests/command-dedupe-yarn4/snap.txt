@@ -1,0 +1,65 @@
+> vp dedupe && cat package.json # should dedupe dependencies
+Running: yarn dedupe
+➤ YN0000: ┌ Deduplication step
+➤ YN0000: │ No packages can be deduped using the highest strategy
+➤ YN0000: └ Completed
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0, test-vite-plus-package@npm:1.0.0, testnpm2@npm:1.0.1
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+{
+  "name": "command-dedupe-yarn4",
+  "version": "1.0.0",
+  "packageManager": "yarn@<semver>",
+  "dependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "1.0.0"
+  }
+}
+
+> vp dedupe --check && cat package.json # should check if deduplication would make changes
+Running: yarn dedupe --check
+➤ YN0000: ┌ Deduplication step
+➤ YN0000: │ No packages can be deduped using the highest strategy
+➤ YN0000: └ Completed
+{
+  "name": "command-dedupe-yarn4",
+  "version": "1.0.0",
+  "packageManager": "yarn@<semver>",
+  "dependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "1.0.0"
+  }
+}
+
+> vp ddp -- --json && cat package.json # support pass through arguments
+Running: yarn dedupe --json
+{
+  "name": "command-dedupe-yarn4",
+  "version": "1.0.0",
+  "packageManager": "yarn@<semver>",
+  "dependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "1.0.0"
+  }
+}

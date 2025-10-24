@@ -1,0 +1,130 @@
+> vp dedupe --help # should show help
+Deduplicate dependencies by removing older versions
+
+Usage: vp dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+
+Arguments:
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+      --check  Check if deduplication would make changes
+  -h, --help   Print help
+
+> vp dedupe && cat package.json # should dedupe dependencies
+Running: pnpm dedupe
+Already up to date
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
++ testnpm2 <semver>
+
+optionalDependencies:
++ test-vite-plus-package-optional <semver>
+
+devDependencies:
++ test-vite-plus-package <semver>
+
+{
+  "name": "command-dedupe-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "1.0.0"
+  }
+}
+
+> vp dedupe --check && cat package.json # should check if deduplication would make changes
+Running: pnpm dedupe --check
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+{
+  "name": "command-dedupe-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "1.0.0"
+  }
+}
+
+> vp ddp -- --loglevel=warn && cat package.json # support pass through arguments
+Running: pnpm dedupe --loglevel=warn
+{
+  "name": "command-dedupe-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "1.0.0"
+  }
+}
+
+[1]> json-edit package.json '_.dependencies = {}' && cat package.json && vp dedupe --check # should check fails because no dependencies
+{
+  "name": "command-dedupe-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {},
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "1.0.0"
+  }
+}
+Running: pnpm dedupe --check
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+ ERR_PNPM_DEDUPE_CHECK_ISSUES  Dedupe --check found changes to the lockfile
+
+Importers
+.
+└── - testnpm2 <semver>
+
+
+Packages
+- testnpm2@<semver>
+
+Run pnpm dedupe to apply the changes above.
+
+
+> vp dedupe && cat package.json && vp dedupe --check # should dedupe fix the change by removing the dependencies
+Running: pnpm dedupe
+Packages: -1
+-
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
+- testnpm2 <semver>
+
+{
+  "name": "command-dedupe-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {},
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "1.0.0"
+  }
+}
+Running: pnpm dedupe --check
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+

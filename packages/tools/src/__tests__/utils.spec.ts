@@ -114,6 +114,8 @@ Packages:
   test('replace ignore npm audited packages log', () => {
     const output = `
 removed 1 package, and audited 3 packages in 700ms
+up to date, audited 4 packages in 11ms
+added 3 packages, and audited 4 packages in 100ms
 
 found 0 vulnerabilities
 Done in 1000ms

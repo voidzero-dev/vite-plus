@@ -46,8 +46,12 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
     .replaceAll(/WARN\s+Issue\s+while\s+reading .+?\n/g, '')
     // ignore npm audited packages log
     // "removed 1 package, and audited 3 packages in 700ms" => "removed <variable> package in <variable>ms"
+    // "up to date, audited 4 packages in 11ms" => "up to date in <variable>ms"
+    // "added 3 packages, and audited 4 packages in 100ms" => "added 3 packages in <variable>ms"
     // "\nfound 0 vulnerabilities\n" => ""
     .replaceAll(/(removed \d+ package), and audited \d+ packages( in <variable>(?:s|ms|µs))\n/g, '$1$2\n')
+    .replaceAll(/(up to date), audited \d+ packages( in <variable>(?:s|ms|µs))\n/g, '$1$2\n')
+    .replaceAll(/(added \d+ packages), and audited \d+ packages( in <variable>(?:s|ms|µs))\n/g, '$1$2\n')
     .replaceAll(/\nfound \d+ vulnerabilities\n/g, '')
     // replace size for tsdown
     .replaceAll(/ \d+(\.\d+)? ([km]B)/g, ' <variable> $2');

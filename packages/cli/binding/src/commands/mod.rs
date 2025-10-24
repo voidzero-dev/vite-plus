@@ -1,4 +1,5 @@
 pub(crate) mod add;
+pub(crate) mod dedupe;
 pub(crate) mod doc;
 pub(crate) mod fmt;
 pub(crate) mod install;
