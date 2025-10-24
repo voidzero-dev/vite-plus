@@ -36,26 +36,19 @@ process.on('exit', () => fs.rmSync(tempTmpDir, { recursive: true, force: true })
 const casesDir = path.resolve('snap-tests');
 
 const filter = process.argv[2] ?? ''; // Optional filter to run specific test cases
-const isCI = process.env.CI === 'true';
 
 const tasks: Promise<void>[] = [];
 for (const caseName of fs.readdirSync(casesDir)) {
   if (caseName.startsWith('.')) continue; // Skip hidden files like .DS_Store
   if (caseName.includes(filter)) {
-    if (isCI) {
-      // FIXME: parallel run will cause panicked: Access tokio runtime failed in spawn, maybe related to napi-3.3.0/src/tokio_runtime.rs:113:6
-      // see https://app.graphite.dev/github/pr/voidzero-dev/vite-plus/251/chore(cli)-restore-to-run-snap-test-parallel
-      await runTestCase(caseName);
-    } else {
-      // let snap-test run faster on local machine
-      tasks.push(runTestCase(caseName));
-    }
+    tasks.push(runTestCase(caseName));
   }
 }
 
 if (tasks.length > 0) {
   await Promise.all(tasks);
 }
+
 interface Steps {
   ignoredPlatforms?: string[];
   env: Record<string, string>;
