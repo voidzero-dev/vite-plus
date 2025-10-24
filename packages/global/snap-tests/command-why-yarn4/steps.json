@@ -1,0 +1,19 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp install --mode=update-lockfile # should install packages first",
+    "vp why testnpm2 # should show why package is installed",
+    "vp explain testnpm2 # should work with explain alias",
+    "vp why test-vite-plus-package # should show why dev package is installed",
+    "vp why testnpm2 -r # should support recursive in yarn@2+",
+    "vp why testnpm2 test-vite-plus-package # should warn about multiple packages and use first",
+    "vp why testnpm2 --json # should warn that --json not supported by yarn",
+    "vp why testnpm2 --long # should warn that --long not supported by yarn",
+    "vp why testnpm2 --parseable # should warn that --parseable not supported by yarn",
+    "vp why testnpm2 -P # should warn that --prod not supported by yarn",
+    "vp why testnpm2 --find-by customFinder # should warn that --find-by not supported by yarn",
+    "vp why testnpm2 --exclude-peers # should exclude peers by removing --peers flag"
+  ]
+}

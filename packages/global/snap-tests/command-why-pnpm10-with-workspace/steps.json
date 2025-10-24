@@ -1,0 +1,15 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp install",
+    "vp why testnpm2 -w # should check why in workspace root",
+    "vp why testnpm2 --filter app # should check why in specific package",
+    "vp why test-vite-plus-package -D --filter app # should check why dev dependencies in app",
+    "vp why testnpm2 --filter \"*\" # should check why in all packages",
+    "vp why testnpm2 -r # should check why recursively",
+    "vp why testnpm2 --filter app --json # should support json output with filter",
+    "vp why test-vite-plus-install --filter app --depth 1 # should support depth limiting with filter"
+  ]
+}

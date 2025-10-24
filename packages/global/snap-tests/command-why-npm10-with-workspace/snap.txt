@@ -1,0 +1,232 @@
+> vp install
+
+added 6 packages in <variable>ms
+
+
+> vp why testnpm2 --filter app # should check why in specific workspace using --workspace
+Running: npm explain --workspace app testnpm2
+testnpm2@<semver>
+node_modules/testnpm2
+  testnpm2@"1.0.0" from @vite-plus-test/utils@undefined
+  packages/utils
+    @vite-plus-test/utils@undefined
+    node_modules/@vite-plus-test/utils
+      @vite-plus-test/utils@"*" from app@undefined
+      packages/app
+        app@undefined
+        node_modules/app
+          workspace packages/app from the root project
+      workspace packages/utils from the root project
+  testnpm2@"1.0.0" from app@undefined
+  packages/app
+    app@undefined
+    node_modules/app
+      workspace packages/app from the root project
+  testnpm2@"1.0.0" from the root project
+
+> vp why test-vite-plus-package --filter app # should check why dev dependencies in app workspace
+Running: npm explain --workspace app test-vite-plus-package
+test-vite-plus-package@<semver> dev
+node_modules/test-vite-plus-package
+  dev test-vite-plus-package@"1.0.0" from app@undefined
+  packages/app
+    app@undefined
+    node_modules/app
+      workspace packages/app from the root project
+
+> vp why testnpm2 --filter app --json # should support json output with workspace filter
+Running: npm explain --workspace app --json testnpm2
+[
+  {
+    "name": "testnpm2",
+    "version": "1.0.0",
+    "location": "node_modules/testnpm2",
+    "isWorkspace": false,
+    "dependents": [
+      {
+        "type": "prod",
+        "name": "testnpm2",
+        "spec": "1.0.0",
+        "from": {
+          "name": "@vite-plus-test/utils",
+          "errors": [
+            {}
+          ],
+          "package": {
+            "name": "@vite-plus-test/utils",
+            "dependencies": {
+              "testnpm2": "1.0.0"
+            }
+          },
+          "location": "packages/utils",
+          "isWorkspace": true,
+          "dependents": [],
+          "linksIn": [
+            {
+              "name": "@vite-plus-test/utils",
+              "errors": [
+                {}
+              ],
+              "package": {
+                "name": "@vite-plus-test/utils",
+                "dependencies": {
+                  "testnpm2": "1.0.0"
+                }
+              },
+              "location": "node_modules/@vite-plus-test/utils",
+              "isWorkspace": true,
+              "dependents": [
+                {
+                  "type": "prod",
+                  "name": "@vite-plus-test/utils",
+                  "spec": "*",
+                  "from": {
+                    "name": "app",
+                    "errors": [
+                      {}
+                    ],
+                    "package": {
+                      "name": "app",
+                      "dependencies": {
+                        "testnpm2": "1.0.0",
+                        "test-vite-plus-install": "1.0.0",
+                        "@vite-plus-test/utils": "*"
+                      },
+                      "devDependencies": {
+                        "test-vite-plus-package": "1.0.0"
+                      },
+                      "optionalDependencies": {
+                        "test-vite-plus-other-optional": "1.0.0"
+                      }
+                    },
+                    "location": "packages/app",
+                    "isWorkspace": true,
+                    "dependents": [],
+                    "linksIn": [
+                      {
+                        "name": "app",
+                        "errors": [
+                          {}
+                        ],
+                        "package": {
+                          "dependencies": {
+                            "@vite-plus-test/utils": "*",
+                            "test-vite-plus-install": "1.0.0",
+                            "testnpm2": "1.0.0"
+                          },
+                          "devDependencies": {
+                            "test-vite-plus-package": "1.0.0"
+                          },
+                          "optionalDependencies": {
+                            "test-vite-plus-other-optional": "1.0.0"
+                          },
+                          "name": "app"
+                        },
+                        "location": "node_modules/app",
+                        "isWorkspace": true,
+                        "dependents": [
+                          {
+                            "type": "workspace",
+                            "name": "app",
+                            "spec": "file:<cwd>/packages/app",
+                            "from": {
+                              "location": "<cwd>"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "workspace",
+                  "name": "@vite-plus-test/utils",
+                  "spec": "file:<cwd>/packages/utils",
+                  "from": {
+                    "location": "<cwd>"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "prod",
+        "name": "testnpm2",
+        "spec": "1.0.0",
+        "from": {
+          "name": "app",
+          "errors": [
+            {}
+          ],
+          "package": {
+            "name": "app",
+            "dependencies": {
+              "testnpm2": "1.0.0",
+              "test-vite-plus-install": "1.0.0",
+              "@vite-plus-test/utils": "*"
+            },
+            "devDependencies": {
+              "test-vite-plus-package": "1.0.0"
+            },
+            "optionalDependencies": {
+              "test-vite-plus-other-optional": "1.0.0"
+            }
+          },
+          "location": "packages/app",
+          "isWorkspace": true,
+          "dependents": [],
+          "linksIn": [
+            {
+              "name": "app",
+              "errors": [
+                {}
+              ],
+              "package": {
+                "dependencies": {
+                  "@vite-plus-test/utils": "*",
+                  "test-vite-plus-install": "1.0.0",
+                  "testnpm2": "1.0.0"
+                },
+                "devDependencies": {
+                  "test-vite-plus-package": "1.0.0"
+                },
+                "optionalDependencies": {
+                  "test-vite-plus-other-optional": "1.0.0"
+                },
+                "name": "app"
+              },
+              "location": "node_modules/app",
+              "isWorkspace": true,
+              "dependents": [
+                {
+                  "type": "workspace",
+                  "name": "app",
+                  "spec": "file:<cwd>/packages/app",
+                  "from": {
+                    "location": "<cwd>"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "prod",
+        "name": "testnpm2",
+        "spec": "1.0.0",
+        "from": {
+          "location": "<cwd>"
+        }
+      }
+    ],
+    "dev": false,
+    "optional": false,
+    "devOptional": false,
+    "peer": false,
+    "bundled": false,
+    "overridden": false
+  }
+]

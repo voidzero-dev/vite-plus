@@ -12,6 +12,14 @@ added 3 packages in <variable>ms
 Done in <variable>ms"
 `;
 
+exports[`replaceUnstableOutput() > replace ignore npm registry domain 1`] = `
+"https://registry.<domain>/testnpm2
+https://registry.<domain>/debug
+https://registry.<domain>/testnpm2/-/testnpm2-1.0.0.tgz
+"resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.0.tgz",
+"resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.0.tgz","
+`;
+
 exports[`replaceUnstableOutput() > replace ignore pnpm request warning log 1`] = `
 "Foo bar
 Packages:"
