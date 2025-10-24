@@ -85,9 +85,6 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
     #[cfg(target_os = "linux")]
     let supervisor = supervise::<SyscallHandler>()?;
 
-    #[cfg(target_os = "linux")]
-    let supervisor_pre_exec = supervisor.pre_exec;
-
     let (ipc_channel_conf, ipc_receiver) = channel(SHM_CAPACITY)?;
 
     let payload = Payload {
@@ -99,7 +96,7 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
         preload_path: command.spy_inner.preload_path.clone(),
 
         #[cfg(target_os = "linux")]
-        seccomp_payload: supervisor.payload,
+        seccomp_payload: supervisor.payload().clone(),
     };
 
     let encoded_payload = encode_payload(payload);
@@ -120,8 +117,6 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
 
     unsafe {
         tokio_command.pre_exec(move || {
-            #[cfg(target_os = "linux")]
-            supervisor_pre_exec.run()?;
             if let Some(pre_exec) = pre_exec.as_ref() {
                 pre_exec.run()?;
             }
@@ -137,7 +132,7 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
         let arenas = std::iter::once(exec_resolve_accesses);
         #[cfg(target_os = "linux")]
         let arenas =
-            arenas.chain(supervisor.handling_loop.await?.into_iter().map(|handler| handler.arena));
+            arenas.chain(supervisor.stop().await?.into_iter().map(|handler| handler.arena));
         io::Result::Ok(arenas.collect::<Vec<_>>())
     };
 

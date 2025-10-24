@@ -1,9 +1,8 @@
 #![cfg(target_os = "linux")]
 
 use std::{
-    ffi::OsStr,
     fs::{self, Permissions},
-    os::unix::{ffi::OsStrExt, fs::PermissionsExt as _},
+    os::unix::fs::PermissionsExt as _,
     path::{Path, PathBuf},
     str::from_utf8,
     sync::LazyLock,

@@ -18,6 +18,10 @@ pub struct SyscallHandler {
 impl SyscallHandler {
     fn openat(&mut self, (_, path): (Ignored, CStrPtr)) -> io::Result<()> {
         path.read_with_buf::<PATH_MAX, _, _>(|path| {
+            let Some(path) = path else {
+                // Ignore paths that are too long to fit in PATH_MAX
+                return Ok(());
+            };
             self.arena
                 .add(PathAccess { mode: AccessMode::Read, path: NativeStr::from_bytes(path) });
             Ok(())

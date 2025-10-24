@@ -1,4 +1,3 @@
-use std::os::fd::RawFd;
 mod filter;
 use bincode::{Decode, Encode};
 pub use filter::Filter;

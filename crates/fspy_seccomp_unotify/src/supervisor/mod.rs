@@ -19,7 +19,7 @@ use listener::NotifyListener;
 use passfd::tokio::FdPassingExt;
 use seccompiler::{BpfProgram, SeccompAction, SeccompFilter};
 use tokio::{
-    net::{UnixListener, UnixStream},
+    net::UnixListener,
     sync::oneshot,
     task::{JoinHandle, JoinSet},
 };
