@@ -1,8 +1,13 @@
-use std::fs::File;
-
-use nix::fcntl::{AT_FDCWD, OFlag, OpenHow, openat2};
-
+#[cfg(not(target_os = "linux"))]
 fn main() {
+    unimplemented!("fspy_test_bin is only for Linux");
+}
+
+#[cfg(target_os = "linux")]
+fn main() {
+    use std::fs::File;
+
+    use nix::fcntl::{AT_FDCWD, OFlag, OpenHow, openat2};
     let args = std::env::args().collect::<Vec<_>>();
     assert!(args.len() == 3, "expected 2 arguments: <action> <file_path>");
     let action = args[1].as_str();
