@@ -19,6 +19,7 @@ use fspy_shared_unix::{
 use futures_util::FutureExt;
 #[cfg(target_os = "linux")]
 use syscall_handler::SyscallHandler;
+use tokio::task::spawn_blocking;
 
 use crate::{
     Command, TrackedChild,
@@ -124,15 +125,16 @@ pub(crate) async fn spawn_impl(mut command: Command) -> io::Result<TrackedChild>
         });
     }
 
-    let child = tokio_command.spawn()?;
-
-    drop(tokio_command);
+    // tokio_command.spawn blocks while executing the `pre_exec` closure.
+    // Run it inside spawn_blocking to avoid blocking the tokio runtime, especially the supervisor loop,
+    // which needs to accept incoming connections while `pre_exec` is connecting to it.
+    let child = spawn_blocking(move || tokio_command.spawn()).await??;
 
     let arenas_future = async move {
         let arenas = std::iter::once(exec_resolve_accesses);
         #[cfg(target_os = "linux")]
         let arenas =
-            arenas.chain(supervisor.stop().await?.into_iter().map(|handler| handler.arena));
+            arenas.chain(supervisor.stop().await?.into_iter().map(|handler| handler.into_arena()));
         io::Result::Ok(arenas.collect::<Vec<_>>())
     };
 

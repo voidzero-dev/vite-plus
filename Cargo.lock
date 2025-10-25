@@ -1689,6 +1689,9 @@ dependencies = [
 [[package]]
 name = "fspy_test_bin"
 version = "0.0.0"
+dependencies = [
+ "nix 0.30.1",
+]
 
 [[package]]
 name = "fspy_test_utils"

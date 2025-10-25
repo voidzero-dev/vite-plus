@@ -24,13 +24,15 @@ macro_rules! impl_handler {
             ),* ]
         }
         fn handle_notify(&mut self, notify: &::libc::seccomp_notif) -> ::std::io::Result<()> {
-            $(
-                $(#[$attr])?
-                if notify.data.nr == ::syscalls::Sysno::$syscall as _ {
-                    return self.$syscall($crate::supervisor::handler::arg::FromNotify::from_notify(notify)?)
-                }
-            )*
-            Ok(())
+            $crate::supervisor::handler::arg::Caller::with_pid(notify.pid as _, |caller| {
+                $(
+                    $(#[$attr])?
+                    if notify.data.nr == ::syscalls::Sysno::$syscall as _ {
+                        return self.$syscall(caller, $crate::supervisor::handler::arg::FromNotify::from_notify(notify)?)
+                    }
+                )*
+                Ok(())
+            })
         }
     }
     };

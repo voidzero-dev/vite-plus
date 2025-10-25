@@ -96,11 +96,11 @@ pub fn supervise<H: SeccompNotifyHandler + Default + Send + 'static>() -> io::Re
             join_set.spawn(async move {
                 while let Some(notify) = listener.next().await? {
                     let _span = span!(Level::TRACE, "notify loop tick");
-                    // Errors on the supervisor side shouldn't block the syscall.
-                    let handle_result = handler.handle_notify(notify);
+                    // Errors on the supervisor side could be caused by a target process aborting.
+                    // It shouldn't break the syscall handling loop as there might be target processes.
+                    let _handle_result = handler.handle_notify(notify);
                     let notify_id = notify.id;
                     listener.send_continue(notify_id, &mut resp_buf)?;
-                    handle_result?;
                 }
                 io::Result::Ok(handler)
             });
