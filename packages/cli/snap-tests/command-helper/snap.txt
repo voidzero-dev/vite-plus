@@ -51,23 +51,33 @@ Options:
 
 
 > vite fmt -h # fmt help message
-Usage: [--check | --list-different] [PATH]...
+Usage: [--check | --list-different] [-c=PATH] [--ignore-path=PATH]... [PATH]...
 
 Output Options
-        --check           Check mode - check if files are formatted
-        --list-different  List mode - list files that would be changed
+        --check              Check mode - check if files are formatted
+        --list-different     List mode - list files that would be changed
+
+Basic Options
+    -c, --config=PATH        Path to the configuration file
+
+Ignore Options
+        --ignore-path=PATH   Path to ignore file(s). Can be specified multiple times. If not
+                             specified, .gitignore and .prettierignore in the current directory are
+                             used.
+        --with-node-modules  Format code in node_modules directory (skipped by default)
 
 Miscellaneous
         --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
-        --threads=INT     Number of threads to use. Set to 1 for using only 1 CPU core
+        --threads=INT        Number of threads to use. Set to 1 for using only 1 CPU core
 
 Available positional items:
-    PATH                  Single file, single path or list of paths. If not provided, current
-                          working directory is used.
+    PATH                     Single file, single path or list of paths. If not provided, current
+                             working directory is used. Glob is supported only for exclude patterns
+                             like `'!**/fixtures/*.js'.
 
 Available options:
-    -h, --help            Prints help information
-    -V, --version         Prints version information
+    -h, --help               Prints help information
+    -V, --version            Prints version information
 
 
 

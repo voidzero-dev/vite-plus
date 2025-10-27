@@ -8,29 +8,31 @@ catalog:
   '@oxc-node/cli': ^0.0.32
   '@oxc-node/core': ^0.0.32
   '@types/cross-spawn': ^6.0.6
-  '@types/node': ^24.5.2
+  '@types/node': ^24.9.1
   '@types/react': ^19.1.8
   '@types/react-dom': ^19.1.6
   '@vitest/browser': ^4.0.3
   create-tsdown: 0.0.3
   create-vite: ^8.0.0
   cross-spawn: ^7.0.5
+  husky: ^9.1.7
+  lint-staged: ^16.2.6
   minimatch: ^10.0.3
   mri: ^1.2.0
   next: ^15.4.3
   oxc-minify: ^0.82.1
-  oxfmt: ^0.2.0
-  oxlint: ^1.16.0
-  oxlint-tsgolint: ^0.2.0
+  oxfmt: ^0.8.0
+  oxlint: ^1.24.0
+  oxlint-tsgolint: ^0.3.0
   picocolors: ^1.1.1
   playwright: ^1.56.1
   react: ^19.1.0
   react-dom: ^19.1.0
-  rolldown: ^1.0.0-beta.39
-  rolldown-vite: ^7.1.10
-  tsdown: ^0.15.1
-  typescript: ^5.9.2
-  vite: npm:rolldown-vite@^7.1.10
+  rolldown: ^1.0.0-beta.45
+  rolldown-vite: ^7.1.19
+  tsdown: ^0.15.10
+  typescript: ^5.9.3
+  vite: npm:rolldown-vite@^7.1.19
   vitepress: 2.0.0-alpha.12
   vitest: ^4.0.3
   vue: ^3.5.21

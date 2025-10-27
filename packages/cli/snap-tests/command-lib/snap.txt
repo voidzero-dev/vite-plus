@@ -59,9 +59,6 @@ Options:
 ✔ Build complete in <variable>ms
 
 
-⚠ Deprecation Warning: The top-level "define" option is deprecated. Use "transform.define" instead.
-⚠ Deprecation Warning: The top-level "inject" option is deprecated. Use "transform.inject" instead.
-
 > ls dist # should have the library
 index.js
 
@@ -74,6 +71,3 @@ index.js
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
 
-
-⚠ Deprecation Warning: The top-level "define" option is deprecated. Use "transform.define" instead.
-⚠ Deprecation Warning: The top-level "inject" option is deprecated. Use "transform.inject" instead.
