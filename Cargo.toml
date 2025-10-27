@@ -5,7 +5,7 @@ members = ["bench", "crates/*", "packages/cli/binding"]
 [workspace.package]
 authors = ["Vite+ Authors"]
 edition = "2024"
-license = "MIT"
+license = "BUSL-1.1"
 rust-version = "1.88.0"
 
 [workspace.lints.rust]

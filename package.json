@@ -1,5 +1,6 @@
 {
   "name": "vite-plus-monorepo",
+  "license": "BUSL-1.1",
   "private": true,
   "packageManager": "pnpm@10.17.1",
   "engines": {
