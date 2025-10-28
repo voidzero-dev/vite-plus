@@ -1,22 +1,3 @@
-> vite install
-Packages: +<variable>
-+<repeat>
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
-
-dependencies:
-+ @vitest/browser-playwright <semver>
-
-╭ Warning ─────────────────────────────────────────────────────────────────────╮
-│                                                                              │
-│   Ignored build scripts: esbuild.                                            │
-│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
-│   to run scripts.                                                            │
-│                                                                              │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-Done in <variable>ms using pnpm v<semver>
-
-
 > vite test
 
  RUN  v<semver> <cwd>
