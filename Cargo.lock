@@ -4805,7 +4805,6 @@ dependencies = [
  "serde_json",
  "serde_yml",
  "tempfile",
- "test-log",
  "vite_error",
  "vite_glob",
  "vite_path",

@@ -22,7 +22,6 @@ wax = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
-test-log = { workspace = true }
 
 [lints]
 workspace = true
