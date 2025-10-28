@@ -43,7 +43,7 @@ twox-hash = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 vite_error = { workspace = true }
 vite_glob = { workspace = true }
-vite_package_manager = { workspace = true }
+vite_package_graph = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }
 wax = { workspace = true }

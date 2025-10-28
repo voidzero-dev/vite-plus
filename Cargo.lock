@@ -4810,7 +4810,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "vite_error",
- "vite_package_manager",
+ "vite_install",
  "vite_path",
  "vite_str",
  "vite_task",
@@ -4848,7 +4848,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vite_package_manager"
+name = "vite_install"
 version = "0.0.0"
 dependencies = [
  "anyhow",
@@ -4861,13 +4861,10 @@ dependencies = [
  "indoc",
  "nix 0.30.1",
  "pathdiff",
- "petgraph 0.8.3",
  "reqwest",
- "rustc-hash",
  "semver 1.0.27",
  "serde",
  "serde_json",
- "serde_yml",
  "sha1",
  "sha2",
  "tar",
@@ -4877,6 +4874,24 @@ dependencies = [
  "tokio-test",
  "tracing",
  "tracing-subscriber",
+ "vite_error",
+ "vite_glob",
+ "vite_package_graph",
+ "vite_path",
+ "vite_str",
+]
+
+[[package]]
+name = "vite_package_graph"
+version = "0.0.0"
+dependencies = [
+ "petgraph 0.8.3",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "tempfile",
+ "test-log",
  "vite_error",
  "vite_glob",
  "vite_path",
@@ -4945,7 +4960,7 @@ dependencies = [
  "uuid",
  "vite_error",
  "vite_glob",
- "vite_package_manager",
+ "vite_package_graph",
  "vite_path",
  "vite_str",
  "wax",

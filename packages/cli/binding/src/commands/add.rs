@@ -1,6 +1,6 @@
 use std::process::ExitStatus;
 
-use vite_package_manager::{
+use vite_install::{
     commands::add::{AddCommandOptions, SaveDependencyType},
     package_manager::PackageManager,
 };

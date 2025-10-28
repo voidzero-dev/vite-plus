@@ -10,7 +10,7 @@ use sha2::{Digest, Sha224, Sha256, Sha512};
 use tar::Archive;
 use tokio::{fs, io::AsyncWriteExt};
 
-use crate::Error;
+use vite_error::Error;
 
 /// HTTP client with built-in retry support
 #[derive(Clone)]

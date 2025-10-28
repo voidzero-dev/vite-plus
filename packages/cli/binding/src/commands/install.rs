@@ -12,7 +12,7 @@ use crossterm::{
 };
 use petgraph::stable_graph::StableGraph;
 use vite_error::Error;
-use vite_package_manager::package_manager::{PackageManager, PackageManagerType};
+use vite_install::{PackageManager, PackageManagerType};
 use vite_path::AbsolutePathBuf;
 use vite_task::{ExecutionPlan, ExecutionSummary, ResolveCommandResult, ResolvedTask, Workspace};
 

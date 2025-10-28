@@ -1,9 +1,5 @@
-pub mod commands;
-mod config;
 pub mod package;
-pub mod package_manager;
-mod request;
-mod shim;
+mod package_manager;
 
 use std::{fs, io};
 
@@ -442,7 +438,7 @@ mod tests {
         });
         fs::write(temp_dir_path.join("packages/pkg-a/package.json"), pkg_a.to_string()).unwrap();
 
-        // Create package B with different dependency types
+        // Create package B
         fs::create_dir_all(temp_dir_path.join("packages/pkg-b")).unwrap();
         let pkg_b = serde_json::json!({
             "name": "pkg-b"

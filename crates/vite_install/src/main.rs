@@ -1,5 +1,5 @@
 use vite_error::Error;
-use vite_package_manager::package_manager::PackageManager;
+use vite_install::PackageManager;
 use vite_path::current_dir;
 
 #[tokio::main]

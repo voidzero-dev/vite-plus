@@ -19,7 +19,7 @@ tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 vite_error = { workspace = true }
-vite_package_manager = { workspace = true }
+vite_install = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }
 vite_task = { workspace = true }

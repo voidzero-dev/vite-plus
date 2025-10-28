@@ -1,6 +1,6 @@
 use std::process::ExitStatus;
 
-use vite_package_manager::{
+use vite_install::{
     commands::remove::RemoveCommandOptions, package_manager::PackageManager,
 };
 use vite_path::AbsolutePathBuf;
