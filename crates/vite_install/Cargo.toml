@@ -26,6 +26,7 @@ tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 vite_error = { workspace = true }
+vite_glob = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }
 vite_workspace = { workspace = true }
