@@ -23,7 +23,6 @@ xxhash-rust = { workspace = true }
 [target.'cfg(target_os = "linux")'.dependencies]
 fspy_seccomp_unotify = { workspace = true, features = ["supervisor"] }
 nix = { workspace = true, features = ["uio"] }
-thread_local = { workspace = true }
 tokio = { workspace = true, features = ["bytes"] }
 
 [target.'cfg(unix)'.dependencies]
