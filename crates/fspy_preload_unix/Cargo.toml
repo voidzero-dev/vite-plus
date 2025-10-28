@@ -7,7 +7,6 @@ publish = false
 crate-type = ["cdylib"]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-const_format = { workspace = true }
 fspy_seccomp_unotify = { workspace = true, features = ["target"] }
 syscalls = { workspace = true }
 
@@ -22,6 +21,5 @@ fspy_shared_unix = { workspace = true }
 libc = { workspace = true }
 memmap2 = { workspace = true }
 nix = { workspace = true, features = ["signal", "fs", "socket", "mman", "time"] }
-passfd = { workspace = true }
 ref-cast = { workspace = true }
 which = { workspace = true }
