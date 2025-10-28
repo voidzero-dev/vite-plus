@@ -139,6 +139,9 @@ napi = { version = "3.0.0", default-features = false, features = ["async", "erro
 napi-build = "2"
 napi-derive = { version = "3.0.0", default-features = false, features = ["type-def", "strict"] }
 
+[workspace.metadata.cargo-shear]
+ignored = ["fspy_preload_unix", "fspy_preload_windows"]
+
 [profile.dev]
 # Disabling debug info speeds up local and CI builds,
 # and we don't rely on it for debugging that much.
