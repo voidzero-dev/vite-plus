@@ -5,9 +5,7 @@ edition = "2024"
 publish = false
 
 [target.'cfg(target_os = "linux")'.dependencies]
-arrayvec = { workspace = true }
 bincode = { workspace = true }
-bytes = { workspace = true }
 libc = { workspace = true }
 nix = { workspace = true, features = ["process", "fs", "poll", "socket", "uio"] }
 passfd = { workspace = true, default-features = false, optional = true }

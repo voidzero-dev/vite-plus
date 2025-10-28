@@ -15,20 +15,16 @@ futures-util = { workspace = true }
 libc = { workspace = true }
 ouroboros = { workspace = true }
 rand = { workspace = true }
-slab = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["net", "process", "io-util", "sync"] }
 which = { workspace = true }
 xxhash-rust = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-arrayvec = { workspace = true }
-blink-alloc = { workspace = true }
 fspy_seccomp_unotify = { workspace = true, features = ["supervisor"] }
 nix = { workspace = true, features = ["uio"] }
 thread_local = { workspace = true }
 tokio = { workspace = true, features = ["bytes"] }
-tokio-seqpacket = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 fspy_preload_unix = { workspace = true }

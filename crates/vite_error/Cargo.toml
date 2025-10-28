@@ -15,7 +15,6 @@ nix = { workspace = true }
 petgraph = { workspace = true }
 rusqlite = { workspace = true }
 semver = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yml = { workspace = true }
 thiserror = { workspace = true }

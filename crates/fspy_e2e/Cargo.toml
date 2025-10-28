@@ -6,7 +6,6 @@ publish = false
 
 [dependencies]
 fspy = { workspace = true }
-futures-util = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
 toml = { workspace = true }

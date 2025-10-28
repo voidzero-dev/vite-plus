@@ -331,28 +331,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-stream"
-version = "0.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b5a71a6f37880a80d1d7f19efd781e4b5de42c88f0722cc13bcb6cc2cfe8476"
-dependencies = [
- "async-stream-impl",
- "futures-core",
- "pin-project-lite",
-]
-
-[[package]]
-name = "async-stream-impl"
-version = "0.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7c24de15d275a1ecfd47a380fb4d5ec9bfe0933f309ed5e705b775596a3574d"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.106",
-]
-
-[[package]]
 name = "async-task"
 version = "4.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -509,16 +487,6 @@ name = "bitflags"
 version = "2.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2261d10cca569e4643e526d8dc2e62e433cc8aba21ab764233731f8d369bf394"
-
-[[package]]
-name = "blink-alloc"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e669f146bb8b2327006ed94c69cf78c8ec81c100192564654230a40b4f091d82"
-dependencies = [
- "allocator-api2",
- "parking_lot",
-]
 
 [[package]]
 name = "block-buffer"
@@ -1131,17 +1099,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive-where"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef941ded77d15ca19b40374869ac6000af1c9f2a4c0f3d4c70926287e6364a8f"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.106",
-]
-
-[[package]]
 name = "derive_more"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1284,16 +1241,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f678cf4a922c215c63e0de95eb1ff08a958a81d47e485cf9da1e27bf6305cfa5"
 
 [[package]]
-name = "edit"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f364860e764787163c8c8f58231003839be31276e821e2ad2092ddf496b1aa09"
-dependencies = [
- "tempfile",
- "which 4.4.2",
-]
-
-[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1413,15 +1360,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
-name = "filedesc"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4960c866d9cf4c48f64f11ef0020c98900d0cb32e9b019c000ed838470daa1d"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "filedescriptor"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1514,10 +1452,8 @@ version = "0.1.0"
 dependencies = [
  "allocator-api2",
  "anyhow",
- "arrayvec",
  "attohttpc",
  "bincode",
- "blink-alloc",
  "bstr",
  "bumpalo",
  "const_format",
@@ -1542,10 +1478,8 @@ dependencies = [
  "slab",
  "tar",
  "tempfile",
- "thread_local",
  "tokio",
- "tokio-seqpacket",
- "which 7.0.3",
+ "which",
  "winapi",
  "winsafe 0.0.24",
  "xxhash-rust",
@@ -1565,7 +1499,6 @@ name = "fspy_e2e"
 version = "0.0.0"
 dependencies = [
  "fspy",
- "futures-util",
  "serde",
  "tokio",
  "toml",
@@ -1576,47 +1509,37 @@ name = "fspy_preload_unix"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "arrayvec",
  "bincode",
  "bstr",
  "bytemuck",
  "const_format",
  "ctor 0.6.0",
- "derive-where",
  "fspy_seccomp_unotify",
  "fspy_shared",
  "fspy_shared_unix",
  "libc",
- "libc-print",
  "memmap2",
  "nix 0.30.1",
  "passfd 0.2.0 (git+https://github.com/polachok/passfd?rev=d55881752c16aced1a49a75f9c428d38d3767213)",
- "path-dedot",
  "ref-cast",
- "socket2 0.5.10",
  "syscalls",
- "thread_local",
- "which 7.0.3",
+ "which",
 ]
 
 [[package]]
 name = "fspy_preload_windows"
 version = "0.1.0"
 dependencies = [
- "arrayvec",
- "backtrace",
  "bincode",
  "bytemuck",
  "constcat",
- "derive-where",
  "fspy_detours_sys",
  "fspy_shared",
  "ntapi",
- "path-dedot",
  "ref-cast",
  "smallvec 2.0.0-alpha.11",
  "tempfile",
- "which 7.0.3",
+ "which",
  "widestring",
  "winapi",
  "winsafe 0.0.24",
@@ -1626,10 +1549,8 @@ dependencies = [
 name = "fspy_seccomp_unotify"
 version = "0.1.0"
 dependencies = [
- "arrayvec",
  "assertables",
  "bincode",
- "bytes",
  "futures-util",
  "libc",
  "nix 0.30.1",
@@ -1653,10 +1574,8 @@ dependencies = [
  "bstr",
  "bytemuck",
  "ctor 0.6.0",
- "derive-where",
  "fspy_test_utils",
  "libc",
- "memmap2",
  "nix 0.30.1",
  "os_str_bytes",
  "phf",
@@ -1929,15 +1848,6 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
-
-[[package]]
-name = "home"
-version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "589533453244b0995c858700322199b2becb13b627df2851f64a2775d024abcf"
-dependencies = [
- "windows-sys 0.59.0",
-]
 
 [[package]]
 name = "http"
@@ -2438,15 +2348,6 @@ name = "libc"
 version = "0.2.176"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "58f929b4d672ea937a23a1ab494143d968337a5f47e56d0815df1e0890ddf174"
-
-[[package]]
-name = "libc-print"
-version = "0.1.23"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4a660208db49e35faf57b37484350f1a61072f2a5becf0592af6015d9ddd4b0"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "libloading"
@@ -3023,15 +2924,6 @@ name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
-
-[[package]]
-name = "path-dedot"
-version = "3.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07ba0ad7e047712414213ff67533e6dd477af0a4e1d14fb52343e53d30ea9397"
-dependencies = [
- "once_cell",
-]
 
 [[package]]
 name = "pathdiff"
@@ -4421,17 +4313,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-seqpacket"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6eb09d9a154bede1fafb3a9b13f4347de87e1ec07fa6fb42f52041800f18fe06"
-dependencies = [
- "filedesc",
- "libc",
- "tokio",
-]
-
-[[package]]
 name = "tokio-stream"
 version = "0.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4440,19 +4321,6 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
-]
-
-[[package]]
-name = "tokio-test"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2468baabc3311435b55dd935f702f42cd1b8abb7e754fb7dfb16bd36aa88f9f7"
-dependencies = [
- "async-stream",
- "bytes",
- "futures-core",
- "tokio",
- "tokio-stream",
 ]
 
 [[package]]
@@ -4827,7 +4695,6 @@ dependencies = [
  "reqwest",
  "rusqlite",
  "semver 1.0.27",
- "serde",
  "serde_json",
  "serde_yml",
  "thiserror 2.0.17",
@@ -4850,7 +4717,6 @@ dependencies = [
 name = "vite_install"
 version = "0.0.0"
 dependencies = [
- "anyhow",
  "backon",
  "directories",
  "flate2",
@@ -4870,9 +4736,7 @@ dependencies = [
  "tempfile",
  "test-log",
  "tokio",
- "tokio-test",
  "tracing",
- "tracing-subscriber",
  "vite_error",
  "vite_glob",
  "vite_path",
@@ -4911,12 +4775,9 @@ dependencies = [
  "bincode",
  "brush-parser",
  "bstr",
- "clap",
  "compact_str 0.9.0",
- "crossterm 0.29.0",
  "dashmap",
  "diff-struct",
- "edit",
  "fspy",
  "futures-core",
  "futures-util",
@@ -4928,15 +4789,12 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
- "serial_test",
  "sha2",
  "shell-escape",
  "supports-color",
  "tempfile",
- "test-log",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "twox-hash",
  "uuid",
  "vite_error",
@@ -5187,18 +5045,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32b130c0d2d49f8b6889abc456e795e82525204f27c42cf767cf0d7734e089b8"
 dependencies = [
  "rustls-pki-types",
-]
-
-[[package]]
-name = "which"
-version = "4.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87ba24419a2078cd2b0f2ede2691b6c66d8e47836da3b6db8265ebad47afbfc7"
-dependencies = [
- "either",
- "home",
- "once_cell",
- "rustix 0.38.44",
 ]
 
 [[package]]

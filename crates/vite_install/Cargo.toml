@@ -8,7 +8,6 @@ publish = false
 rust-version.workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
 backon = { workspace = true }
 directories = { workspace = true }
 flate2 = { workspace = true }
@@ -26,7 +25,6 @@ tar = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 vite_error = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }
@@ -43,8 +41,6 @@ nix = { workspace = true }
 httpmock = { workspace = true }
 tempfile = { workspace = true }
 test-log = { workspace = true }
-tokio-test = { workspace = true }
-vite_glob = { workspace = true }
 
 [lints]
 workspace = true

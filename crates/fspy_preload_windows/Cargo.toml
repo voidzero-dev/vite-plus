@@ -7,16 +7,12 @@ edition.workspace = true
 crate-type = ["cdylib"]
 
 [target.'cfg(target_os = "windows")'.dependencies]
-arrayvec = { workspace = true }
-backtrace = { workspace = true }
 bincode = { workspace = true }
 bytemuck = { workspace = true }
 constcat = { workspace = true }
-derive-where = { workspace = true }
 fspy_detours_sys = { workspace = true }
 fspy_shared = { workspace = true }
 ntapi = { workspace = true }
-path-dedot = { workspace = true }
 ref-cast = { workspace = true }
 smallvec = { workspace = true }
 which = { workspace = true }
