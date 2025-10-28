@@ -26,7 +26,6 @@ arrayvec = { workspace = true }
 blink-alloc = { workspace = true }
 fspy_seccomp_unotify = { workspace = true, features = ["supervisor"] }
 nix = { workspace = true, features = ["uio"] }
-syscalls = { workspace = true, features = ["std"] }
 thread_local = { workspace = true }
 tokio = { workspace = true, features = ["bytes"] }
 tokio-seqpacket = { workspace = true }
