@@ -71,10 +71,11 @@ jobs:
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: lint
-          tools: cargo-shear
+          tools: dprint,cargo-shear
           components: clippy rust-docs rustfmt
 
       - run: |
+          dprint check
           cargo shear
           cargo fmt --check
           # cargo clippy --all-targets --all-features -- -D warnings
