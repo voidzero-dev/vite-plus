@@ -8,14 +8,11 @@ crate-type = ["cdylib"]
 
 [target.'cfg(target_os = "windows")'.dependencies]
 bincode = { workspace = true }
-bytemuck = { workspace = true }
 constcat = { workspace = true }
 fspy_detours_sys = { workspace = true }
 fspy_shared = { workspace = true }
 ntapi = { workspace = true }
-ref-cast = { workspace = true }
 smallvec = { workspace = true }
-which = { workspace = true }
 widestring = { workspace = true }
 winapi = { workspace = true, features = ["winerror", "winbase", "namedpipeapi", "memoryapi", "std"] }
 winsafe = { workspace = true }

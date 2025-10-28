@@ -6,20 +6,12 @@ publish = false
 [lib]
 crate-type = ["cdylib"]
 
-[target.'cfg(target_os = "linux")'.dependencies]
-fspy_seccomp_unotify = { workspace = true, features = ["target"] }
-syscalls = { workspace = true }
-
 [target.'cfg(unix)'.dependencies]
 anyhow = { workspace = true }
 bincode = { workspace = true }
 bstr = { workspace = true, default-features = false }
-bytemuck = { workspace = true }
 ctor = { workspace = true }
 fspy_shared = { workspace = true }
 fspy_shared_unix = { workspace = true }
 libc = { workspace = true }
-memmap2 = { workspace = true }
 nix = { workspace = true, features = ["signal", "fs", "socket", "mman", "time"] }
-ref-cast = { workspace = true }
-which = { workspace = true }

@@ -20,18 +20,6 @@ os_str_bytes = { workspace = true }
 winapi = { workspace = true, features = ["std"] }
 winsafe = { workspace = true }
 
-[target.'cfg(target_os = "macos")'.dependencies]
-phf = { workspace = true }
-
-[target.'cfg(unix)'.dependencies]
-base64 = { workspace = true }
-libc = { workspace = true }
-nix = { workspace = true, features = ["mman"] }
-
-# [features]
-# supervisor = ["dep:tokio", "dep:passfd"]
-# target = []
-
 [dev-dependencies]
 assert2 = { workspace = true }
 ctor = { workspace = true }

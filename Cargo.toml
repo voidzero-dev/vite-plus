@@ -140,7 +140,8 @@ napi-build = "2"
 napi-derive = { version = "3.0.0", default-features = false, features = ["type-def", "strict"] }
 
 [workspace.metadata.cargo-shear]
-ignored = ["fspy_preload_unix", "fspy_preload_windows"]
+# These are artifact dependencies. They are not directly `use`d in Rust code.
+ignored = ["fspy_preload_unix", "fspy_preload_windows", "fspy_test_bin"]
 
 [profile.dev]
 # Disabling debug info speeds up local and CI builds,
