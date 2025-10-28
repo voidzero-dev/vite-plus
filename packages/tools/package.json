@@ -4,9 +4,13 @@
   "type": "module",
   "bin": {
     "json-edit": "./src/json-edit.ts",
-    "snap-test": "./src/snap-test.ts"
+    "snap-test": "./src/snap-test.ts",
+    "replace-file-content": "./src/replace-file-content.ts"
   },
   "devDependencies": {
     "minimatch": "catalog:"
+  },
+  "scripts": {
+    "snap-test": "snap-test"
   }
 }

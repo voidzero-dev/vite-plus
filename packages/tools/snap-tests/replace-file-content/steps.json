@@ -1,0 +1,8 @@
+{
+  "env": {
+  },
+  "commands": [
+    "cat foo/example.toml # should show original toml file",
+    "replace-file-content foo/example.toml 'version = \"0.0.0\"' 'version = \"1.0.0\"' && cat foo/example.toml # should edit toml file"
+  ]
+}

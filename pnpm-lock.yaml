@@ -108,6 +108,9 @@ importers:
       '@voidzero-dev/vite-plus':
         specifier: workspace:*
         version: link:packages/cli
+      '@voidzero-dev/vite-plus-tools':
+        specifier: workspace:*
+        version: link:packages/tools
       husky:
         specifier: 'catalog:'
         version: 9.1.7

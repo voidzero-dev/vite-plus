@@ -22,6 +22,7 @@
     "@oxc-node/core": "catalog:",
     "@types/node": "catalog:",
     "@voidzero-dev/vite-plus": "workspace:*",
+    "@voidzero-dev/vite-plus-tools": "workspace:*",
     "husky": "catalog:",
     "lint-staged": "catalog:",
     "oxfmt": "catalog:",
