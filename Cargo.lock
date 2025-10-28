@@ -4794,7 +4794,7 @@ dependencies = [
 
 [[package]]
 name = "vite-plus-cli"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "clap",
  "crossterm 0.29.0",

@@ -47,6 +47,10 @@ jobs:
 
       - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
 
+      - name: Set binding version
+        run: |
+          sed -i 's/version = "0.0.0"/version = "0.0.0-${{ github.sha }}"/' packages/cli/binding/Cargo.toml
+
       - name: Build
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         run: pnpm --filter=@voidzero-dev/vite-plus build --target ${{ matrix.settings.target }} --use-napi-cross
@@ -108,7 +112,7 @@ jobs:
           pattern: bindings-*
           merge-multiple: true
 
-      - name: Set version
+      - name: Set npm packages version
         run: |
           sed -i 's/"version": "0.0.0"/"version": "0.0.0-${{ github.sha }}"/' packages/global/package.json
           sed -i 's/"version": "0.0.0"/"version": "0.0.0-${{ github.sha }}"/' packages/cli/package.json
