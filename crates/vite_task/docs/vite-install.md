@@ -29,9 +29,9 @@ Examples
 
 ```yaml
 packages:
-  - "packages/*"
-  - "apps/*"
-  - "!**/test/**"
+  - 'packages/*'
+  - 'apps/*'
+  - '!**/test/**'
 ```
 
 /path/to/package.json

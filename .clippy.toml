@@ -19,5 +19,5 @@ disallowed-types = [
 ]
 
 disallowed-macros = [
-  { path = "std::format", reason = "Use `vite_str::format` for small strings." }
+  { path = "std::format", reason = "Use `vite_str::format` for small strings." },
 ]

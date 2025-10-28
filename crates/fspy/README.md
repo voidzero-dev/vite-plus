@@ -16,8 +16,8 @@ For fully static binaries (such as `esbuild`), `LD_PRELOAD` does not work. In th
 It uses [Detours](https://github.com/microsoft/Detours) to intercept file system calls. The implementation is in `src/windows`.
 
 ## Unified interface
-The unified interface of `Command` is in `src/command.rs`.
 
+The unified interface of `Command` is in `src/command.rs`.
 
 ## Preload Libraries
 
