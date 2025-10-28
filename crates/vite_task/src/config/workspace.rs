@@ -6,11 +6,11 @@ use std::{
 };
 
 use petgraph::{Graph, graph::NodeIndex, stable_graph::StableDiGraph, visit::IntoNodeReferences};
-use vite_package_graph::{
-    DependencyType, PackageInfo, PackageJson, WorkspaceRoot, find_package_root, find_workspace_root,
-};
 use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePath, RelativePathBuf};
 use vite_str::Str;
+use vite_workspace::{
+    DependencyType, PackageInfo, PackageJson, WorkspaceRoot, find_package_root, find_workspace_root,
+};
 
 use super::{
     ResolvedTask, ResolvedTaskConfig, TaskCommand, TaskConfig, TaskGraphBuilder, TaskId,
@@ -131,7 +131,7 @@ impl Workspace {
         let (workspace_root, cwd, current_package_path) =
             Self::determine_current_package_path(&cwd)?;
 
-        let package_graph = vite_package_graph::get_package_graph(workspace_root)?;
+        let package_graph = vite_workspace::get_package_graph(workspace_root)?;
         // Load vite-task.json files for all packages
         let packages_with_task_jsons = Self::load_vite_task_jsons(&package_graph, workspace_root)?;
 

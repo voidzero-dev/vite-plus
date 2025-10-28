@@ -4876,27 +4876,9 @@ dependencies = [
  "tracing-subscriber",
  "vite_error",
  "vite_glob",
- "vite_package_graph",
  "vite_path",
  "vite_str",
-]
-
-[[package]]
-name = "vite_package_graph"
-version = "0.0.0"
-dependencies = [
- "petgraph 0.8.3",
- "rustc-hash",
- "serde",
- "serde_json",
- "serde_yml",
- "tempfile",
- "test-log",
- "vite_error",
- "vite_glob",
- "vite_path",
- "vite_str",
- "wax",
+ "vite_workspace",
 ]
 
 [[package]]
@@ -4960,9 +4942,9 @@ dependencies = [
  "uuid",
  "vite_error",
  "vite_glob",
- "vite_package_graph",
  "vite_path",
  "vite_str",
+ "vite_workspace",
  "wax",
 ]
 
@@ -4983,6 +4965,24 @@ dependencies = [
  "tracing-error",
  "tracing-subscriber",
  "tui-term",
+]
+
+[[package]]
+name = "vite_workspace"
+version = "0.0.0"
+dependencies = [
+ "petgraph 0.8.3",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "tempfile",
+ "test-log",
+ "vite_error",
+ "vite_glob",
+ "vite_path",
+ "vite_str",
+ "wax",
 ]
 
 [[package]]

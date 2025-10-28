@@ -11,11 +11,11 @@ use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use tokio::{fs::remove_dir_all, process::Command};
 use vite_error::Error;
-use vite_package_graph::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
-#[cfg(test)]
-use vite_package_graph::find_package_root;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
+#[cfg(test)]
+use vite_workspace::find_package_root;
+use vite_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 
 use crate::{
     config::{get_cache_dir, get_npm_package_tgz_url, get_npm_package_version_url},

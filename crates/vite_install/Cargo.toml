@@ -28,9 +28,9 @@ tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 vite_error = { workspace = true }
-vite_package_graph = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }
+vite_workspace = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 reqwest = { workspace = true, features = ["stream", "native-tls-vendored", "json"] }
