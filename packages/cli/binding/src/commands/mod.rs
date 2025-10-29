@@ -9,6 +9,7 @@ pub(crate) mod lint;
 pub(crate) mod outdated;
 pub(crate) mod remove;
 pub(crate) mod test;
+pub(crate) mod unlink;
 pub(crate) mod update;
 pub(crate) mod vite;
 pub(crate) mod why;

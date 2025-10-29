@@ -29,6 +29,7 @@ use crate::commands::{
     outdated::OutdatedCommand,
     remove::RemoveCommand,
     test::test,
+    unlink::UnlinkCommand,
     update::UpdateCommand,
     vite::vite as vite_cmd,
     why::WhyCommand,
@@ -418,6 +419,21 @@ pub enum Commands {
         #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
+    /// Unlink packages
+    #[command(disable_help_flag = true)]
+    Unlink {
+        /// Package name to unlink
+        /// If empty, unlinks current package globally
+        package: Option<String>,
+
+        /// Unlink in every workspace package (pnpm only)
+        #[arg(short = 'r', long)]
+        recursive: bool,
+
+        /// Arguments to pass to package manager
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
 }
 
 impl Commands {
@@ -432,6 +448,7 @@ impl Commands {
                 | Commands::Outdated { .. }
                 | Commands::Why { .. }
                 | Commands::Link { .. }
+                | Commands::Unlink { .. }
         )
     }
 }
@@ -895,6 +912,11 @@ pub async fn main<
         }
         Commands::Link { package, args } => {
             let exit_status = LinkCommand::new(cwd).execute(package.as_deref(), Some(args)).await?;
+            return Ok(exit_status);
+        }
+        Commands::Unlink { package, recursive, args } => {
+            let exit_status =
+                UnlinkCommand::new(cwd).execute(package.as_deref(), *recursive, Some(args)).await?;
             return Ok(exit_status);
         }
         Commands::Why {
