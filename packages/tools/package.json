@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "bin": {
-    "tool": "./src/bin.js"
+    "tool": "./src/bin.js",
+    "json-edit": "./src/json-edit.ts"
   },
   "devDependencies": {
     "minimatch": "catalog:"
