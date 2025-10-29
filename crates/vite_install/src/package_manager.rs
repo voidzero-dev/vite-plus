@@ -616,7 +616,7 @@ mod tests {
         fs::create_dir_all(&root_dir).unwrap();
         let found = find_package_root(&root_dir);
         let err = found.unwrap_err();
-        assert!(matches!(err, Error::PackageJsonNotFound(_)));
+        assert!(matches!(err, vite_workspace::Error::PackageJsonNotFound(_)));
     }
 
     #[test]
@@ -683,7 +683,7 @@ mod tests {
         // Should return PackageJsonNotFound error if no package.json found
         let found = find_workspace_root(&nested_dir);
         let err = found.unwrap_err();
-        assert!(matches!(err, Error::PackageJsonNotFound(_)));
+        assert!(matches!(err, vite_workspace::Error::PackageJsonNotFound(_)));
     }
 
     #[test]

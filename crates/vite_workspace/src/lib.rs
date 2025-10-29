@@ -1,3 +1,4 @@
+mod error;
 pub mod package;
 mod package_manager;
 
@@ -6,13 +7,13 @@ use std::{fs, io};
 use petgraph::{Graph, graph::NodeIndex};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
-use vite_error::Error;
 use vite_glob::GlobPatternSet;
 use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 use vite_str::Str;
 use wax::Glob;
 
 pub use crate::{
+    error::Error,
     package::{DependencyType, PackageJson},
     package_manager::{WorkspaceFile, WorkspaceRoot, find_package_root, find_workspace_root},
 };
@@ -515,7 +516,7 @@ mod tests {
         if let Err(Error::DuplicatedPackageName { name, .. }) = result {
             assert_eq!(name, "duplicate");
         } else {
-            panic!("Expected DuplicatedPackageName error");
+            panic!("Expected DuplicatedPackageName error, got: {:?}", result);
         }
     }
 

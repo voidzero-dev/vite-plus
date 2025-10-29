@@ -4672,6 +4672,8 @@ dependencies = [
  "tokio",
  "vite_path",
  "vite_str",
+ "vite_task",
+ "vite_workspace",
  "wax",
 ]
 
@@ -4679,7 +4681,7 @@ dependencies = [
 name = "vite_glob"
 version = "0.0.0"
 dependencies = [
- "vite_error",
+ "thiserror 2.0.17",
  "vite_str",
  "wax",
 ]
@@ -4764,11 +4766,11 @@ dependencies = [
  "shell-escape",
  "supports-color",
  "tempfile",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
  "twox-hash",
  "uuid",
- "vite_error",
  "vite_glob",
  "vite_path",
  "vite_str",
@@ -4805,7 +4807,7 @@ dependencies = [
  "serde_json",
  "serde_yml",
  "tempfile",
- "vite_error",
+ "thiserror 2.0.17",
  "vite_glob",
  "vite_path",
  "vite_str",

@@ -33,11 +33,11 @@ sha2 = { workspace = true }
 shell-escape = { workspace = true }
 supports-color = { workspace = true }
 tempfile = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "io-std", "macros"] }
 tracing = { workspace = true }
 twox-hash = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
-vite_error = { workspace = true }
 vite_glob = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }

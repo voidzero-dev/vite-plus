@@ -4,8 +4,9 @@ use std::{
     path::Path,
 };
 
-use vite_error::Error;
 use vite_path::{AbsolutePath, RelativePathBuf};
+
+use crate::Error;
 
 /// The package root directory and its package.json file.
 #[derive(Debug)]

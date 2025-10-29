@@ -14,7 +14,7 @@ serde = { workspace = true, features = ["derive"] }
 # use `preserve_order` feature to preserve the order of the fields in `package.json`
 serde_json = { workspace = true, features = ["preserve_order"] }
 serde_yml = { workspace = true }
-vite_error = { workspace = true }
+thiserror = { workspace = true }
 vite_glob = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }

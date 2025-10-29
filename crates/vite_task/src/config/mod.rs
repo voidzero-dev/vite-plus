@@ -16,12 +16,12 @@ use diff::Diff;
 use serde::{Deserialize, Serialize};
 pub use task_command::*;
 pub use task_graph_builder::*;
-use vite_error::Error;
 use vite_path::{self, RelativePath, RelativePathBuf};
 use vite_str::Str;
 pub use workspace::*;
 
 use crate::{
+    Error,
     cmd::TaskParsedCommand,
     collections::{HashMap, HashSet},
     config::name::TaskName,

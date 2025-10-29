@@ -1,11 +1,13 @@
 use std::{future::Future, iter};
 
 use petgraph::stable_graph::StableGraph;
-use vite_error::Error;
-use vite_task::{ExecutionPlan, ExecutionSummary, ResolveCommandResult, ResolvedTask, Workspace};
+use vite_error::Error as ViteError;
+use vite_task::{
+    Error, ExecutionPlan, ExecutionSummary, ResolveCommandResult, ResolvedTask, Workspace,
+};
 
 pub async fn vite<
-    Vite: Future<Output = Result<ResolveCommandResult, Error>>,
+    Vite: Future<Output = Result<ResolveCommandResult, ViteError>>,
     ViteFn: Fn() -> Vite,
 >(
     arg_forward: &str,
@@ -13,9 +15,11 @@ pub async fn vite<
     workspace: &Workspace,
     args: &Vec<String>,
 ) -> Result<ExecutionSummary, Error> {
+    let wrapped_command =
+        || async { resolve_vite_command().await.map_err(|e| Error::Anyhow(e.into())) };
     let resolved_task = ResolvedTask::resolve_from_builtin(
         workspace,
-        resolve_vite_command,
+        wrapped_command,
         arg_forward,
         iter::once(arg_forward).chain(args.iter().map(std::string::String::as_str)),
     )

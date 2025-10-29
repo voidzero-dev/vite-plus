@@ -1,6 +1,8 @@
+mod error;
+
 use std::path::Path;
 
-use vite_error::Error;
+pub use error::Error;
 use wax::{Glob, Pattern};
 
 /// If there are no negated patterns, it will follow the first match wins semantics.

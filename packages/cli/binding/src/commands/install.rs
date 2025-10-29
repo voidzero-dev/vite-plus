@@ -413,7 +413,8 @@ mod tests {
         let args = vec![];
 
         let result = command.execute(&args).await;
-        assert!(matches!(result.unwrap_err(), Error::PackageJsonNotFound(_)));
+        let err = result.unwrap_err();
+        assert!(matches!(err, Error::WorkspaceError(_)));
     }
 
     /// Test that in CI environment, we will use pnpm without prompting

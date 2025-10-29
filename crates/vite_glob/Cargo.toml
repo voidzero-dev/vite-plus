@@ -8,7 +8,7 @@ publish = false
 rust-version.workspace = true
 
 [dependencies]
-vite_error = { workspace = true }
+thiserror = { workspace = true }
 wax = { workspace = true }
 
 [dev-dependencies]
