@@ -27,7 +27,7 @@
   },
   "scripts": {
     "build": "oxnode ./build.ts",
-    "snap-test": "snap-test"
+    "snap-test": "tool snap-test"
   },
   "files": [
     "bin",

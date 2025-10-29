@@ -17,7 +17,7 @@ napi-derive = { workspace = true }
 > replace-file-content foo/example.toml 'version = "0.0.0"' 'version = "1.0.0"' && cat foo/example.toml # should edit toml file
 [package]
 name = "foo"
-version = "1.0.0"
+version = "0.0.0"
 edition = "2024"
 
 [[bin]]

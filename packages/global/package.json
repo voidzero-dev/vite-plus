@@ -19,7 +19,7 @@
   ],
   "scripts": {
     "build": "rolldown -c rolldown.config.ts",
-    "snap-test": "snap-test"
+    "snap-test": "tool snap-test"
   },
   "dependencies": {
     "@voidzero-dev/vite-plus": "workspace:*",

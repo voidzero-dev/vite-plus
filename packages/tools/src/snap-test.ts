@@ -1,12 +1,12 @@
-#!/usr/bin/env node
-
 import cp from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { debuglog, promisify } from 'node:util';
+import { debuglog, parseArgs, promisify } from 'node:util';
+
+import { isPassThroughEnv, replaceUnstableOutput } from './utils';
 
 const debug = debuglog('vite-plus/snap-test');
 const cpExec = promisify(cp.exec);
@@ -16,37 +16,42 @@ const exec = async (command: string, options: cp.ExecOptionsWithStringEncoding) 
     process.platform === 'win32' ? { ...options, shell: 'pwsh.exe' } : options,
   );
 
-import { isPassThroughEnv, replaceUnstableOutput } from './utils.ts';
+export async function snapTest() {
+  const { positionals } = parseArgs({
+    allowPositionals: true,
+    args: process.argv.slice(3),
+  });
 
-// Create a unique temporary directory for testing
-// On macOS, `tmpdir()` is a symlink. Resolve it so that we can replace the resolved cwd in outputs.
-const tempTmpDir = `${fs.realpathSync(tmpdir())}/vite-plus-test-${randomUUID()}`;
-fs.mkdirSync(tempTmpDir, { recursive: true });
+  const filter = positionals[0] ?? ''; // Optional filter to run specific test cases
 
-// Make dependencies available in the test cases
-fs.symlinkSync(
-  path.resolve('node_modules'),
-  path.join(tempTmpDir, 'node_modules'),
-  process.platform === 'win32' ? 'junction' : 'dir',
-);
+  // Create a unique temporary directory for testing
+  // On macOS, `tmpdir()` is a symlink. Resolve it so that we can replace the resolved cwd in outputs.
+  const tempTmpDir = `${fs.realpathSync(tmpdir())}/vite-plus-test-${randomUUID()}`;
+  fs.mkdirSync(tempTmpDir, { recursive: true });
 
-// Clean up the temporary directory on exit
-process.on('exit', () => fs.rmSync(tempTmpDir, { recursive: true, force: true }));
+  // Make dependencies available in the test cases
+  fs.symlinkSync(
+    path.resolve('node_modules'),
+    path.join(tempTmpDir, 'node_modules'),
+    process.platform === 'win32' ? 'junction' : 'dir',
+  );
 
-const casesDir = path.resolve('snap-tests');
+  // Clean up the temporary directory on exit
+  process.on('exit', () => fs.rmSync(tempTmpDir, { recursive: true, force: true }));
 
-const filter = process.argv[2] ?? ''; // Optional filter to run specific test cases
+  const casesDir = path.resolve('snap-tests');
 
-const tasks: Promise<void>[] = [];
-for (const caseName of fs.readdirSync(casesDir)) {
-  if (caseName.startsWith('.')) continue; // Skip hidden files like .DS_Store
-  if (caseName.includes(filter)) {
-    tasks.push(runTestCase(caseName));
+  const tasks: Promise<void>[] = [];
+  for (const caseName of fs.readdirSync(casesDir)) {
+    if (caseName.startsWith('.')) continue; // Skip hidden files like .DS_Store
+    if (caseName.includes(filter)) {
+      tasks.push(runTestCase(caseName, tempTmpDir, casesDir));
+    }
   }
-}
 
-if (tasks.length > 0) {
-  await Promise.all(tasks);
+  if (tasks.length > 0) {
+    await Promise.all(tasks);
+  }
 }
 
 interface Steps {
@@ -55,7 +60,7 @@ interface Steps {
   commands: string[];
 }
 
-async function runTestCase(name: string) {
+async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
   const steps: Steps = JSON.parse(await fsPromises.readFile(`${casesDir}/${name}/steps.json`, 'utf-8'));
   if (steps.ignoredPlatforms !== undefined && steps.ignoredPlatforms.includes(process.platform)) {
     console.log('%s skipped on platform %s', name, process.platform);
@@ -67,7 +72,7 @@ async function runTestCase(name: string) {
   await fsPromises.cp(`${casesDir}/${name}`, caseTmpDir, { recursive: true, errorOnExist: true });
 
   const passThroughEnvs = Object.fromEntries(Object.entries(process.env).filter(([key]) => isPassThroughEnv(key)));
-  const env = {
+  const env: Record<string, string> = {
     ...passThroughEnvs,
     // Indicate CLI is running in test mode, so that it prints more detailed outputs.
     VITE_PLUS_CLI_TEST: '1',
@@ -104,7 +109,7 @@ async function runTestCase(name: string) {
       if (stderr) {
         newSnap.push(replaceUnstableOutput(stderr, caseTmpDir));
       }
-    } catch (error) {
+    } catch (error: any) {
       // add error exit code to the command
       newSnap.push(`[${error.code}]> ${command}`);
       if (error.stdout) {

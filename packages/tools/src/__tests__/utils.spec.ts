@@ -2,7 +2,7 @@ import { tmpdir } from 'node:os';
 
 import { describe, expect, test } from '@voidzero-dev/vite-plus/test';
 
-import { isPassThroughEnv, replaceUnstableOutput } from '../utils.ts';
+import { isPassThroughEnv, replaceUnstableOutput } from '../utils';
 
 describe('replaceUnstableOutput()', () => {
   test('replace unstable semver version', () => {
