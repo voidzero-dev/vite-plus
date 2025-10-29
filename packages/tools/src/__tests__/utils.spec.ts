@@ -1,4 +1,7 @@
+import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 import { describe, expect, test } from '@voidzero-dev/vite-plus/test';
 
@@ -68,7 +71,14 @@ Done in 171ms using pnpm v10.16.1
 
   test('replace unstable cwd', () => {
     const cwd = tmpdir();
-    const output = `${cwd}/foo.txt`;
+    const output = `${path.join(cwd, 'foo.txt')}`;
+    expect(replaceUnstableOutput(output.trim(), cwd)).toMatchSnapshot();
+  });
+
+  test('replace unstable tmpdir with realpath', () => {
+    const tmp = fs.realpathSync(tmpdir());
+    const cwd = path.join(tmp, `vite-plus-unittest-${randomUUID()}`);
+    const output = `${path.join(cwd, 'foo.txt')}\n${path.join(cwd, '../other/bar.txt')}`;
     expect(replaceUnstableOutput(output.trim(), cwd)).toMatchSnapshot();
   });
 
@@ -115,6 +125,7 @@ Packages:
     const output = `
 removed 1 package, and audited 3 packages in 700ms
 up to date, audited 4 packages in 11ms
+added 1 package, and audited 3 packages in 700ms
 added 3 packages, and audited 4 packages in 100ms
 
 found 0 vulnerabilities

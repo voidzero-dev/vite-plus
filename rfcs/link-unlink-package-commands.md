@@ -141,8 +141,8 @@ vite unlink -r
 
 | Vite+ Command     | pnpm              | yarn@1            | yarn@2+           | npm              | Description                                             |
 | ----------------- | ----------------- | ----------------- | ----------------- | ---------------- | ------------------------------------------------------- |
-| `vite link`       | `pnpm link`       | `yarn link`       | `yarn link`       | `npm link`       | Register current package globally                       |
-| `vite link <pkg>` | `pnpm link <pkg>` | `yarn link <pkg>` | `yarn link <pkg>` | `npm link <pkg>` | Links global package to current project                 |
+| `vite link`       | `pnpm link`       | `yarn link`       | `yarn link`       | `npm link`       | Register current package or link to local directory     |
+| `vite link <pkg>` | `pnpm link <pkg>` | `yarn link <pkg>` | `yarn link <pkg>` | `npm link <pkg>` | Links package to current project                        |
 | `vite link <dir>` | `pnpm link <dir>` | `yarn link <dir>` | `yarn link <dir>` | `npm link <dir>` | Links package from `<dir>` directory to current project |
 
 #### Unlink Command Mapping
@@ -163,11 +163,11 @@ vite unlink -r
 - https://docs.npmjs.com/cli/v11/commands/npm-uninstall
 - npm unlink removes symlinks
 
-| Vite+ Command             | pnpm                | yarn@1              | yarn@2+             | npm                       | Description                        |
-| ------------------------- | ------------------- | ------------------- | ------------------- | ------------------------- | ---------------------------------- |
-| `vite unlink`             | `pnpm unlink`       | `yarn unlink`       | `yarn unlink`       | `npm unlink`              | Unlinks current package globally   |
-| `vite unlink <pkg>`       | `pnpm unlink <pkg>` | `yarn unlink <pkg>` | `yarn unlink <pkg>` | `npm unlink <pkg>`        | Unlinks specific package           |
-| `vite unlink --recursive` | `pnpm unlink -r`    | N/A                 | `yarn unlink --all` | `npm unlink --workspaces` | Unlinks in every workspace package |
+| Vite+ Command             | pnpm                      | yarn@1              | yarn@2+             | npm                | Description                        |
+| ------------------------- | ------------------------- | ------------------- | ------------------- | ------------------ | ---------------------------------- |
+| `vite unlink`             | `pnpm unlink`             | `yarn unlink`       | `yarn unlink`       | `npm unlink`       | Unlinks current package            |
+| `vite unlink <pkg>`       | `pnpm unlink <pkg>`       | `yarn unlink <pkg>` | `yarn unlink <pkg>` | `npm unlink <pkg>` | Unlinks specific package           |
+| `vite unlink --recursive` | `pnpm unlink --recursive` | N/A                 | `yarn unlink --all` | N/A                | Unlinks in every workspace package |
 
 ### Link/Unlink Behavior Differences Across Package Managers
 
@@ -175,10 +175,9 @@ vite unlink -r
 
 **Link behavior:**
 
-- `pnpm link --global`: Registers current package in global store
-- `pnpm link --global <pkg>`: Links a global package to current project
+- `pnpm link`: Links current package dependencies to local directory
+- `pnpm link <pkg>`: Links a package to current project (searches globally and locally)
 - `pnpm link <dir>`: Links a local directory directly (no global registration)
-- `pnpm link --dir <dir> <pkg>`: Links package in a specific directory
 
 **Unlink behavior:**
 
@@ -305,16 +304,6 @@ impl PackageManager {
             PackageManagerType::Pnpm => {
                 bin_name = "pnpm".into();
                 args.push("link".into());
-
-                // pnpm link behavior:
-                // - pnpm link --global: register current package globally
-                // - pnpm link --global <pkg>: link global package to current
-                // - pnpm link <dir>: link local directory
-
-                // For registering current package or linking global package
-                if options.package.is_none() || !options.package.unwrap().starts_with('.') {
-                    args.push("--global".into());
-                }
             }
             PackageManagerType::Yarn => {
                 bin_name = "yarn".into();
@@ -386,7 +375,7 @@ impl PackageManager {
                 args.push("unlink".into());
 
                 if options.recursive {
-                    args.push("-r".into());
+                    args.push("--recursive".into());
                 }
             }
             PackageManagerType::Yarn => {
@@ -394,7 +383,7 @@ impl PackageManager {
                 args.push("unlink".into());
 
                 if options.recursive {
-                    eprintln!("Warning: yarn doesn't support --recursive for unlink command");
+                    args.push("--all".into());
                 }
             }
             PackageManagerType::Npm => {
@@ -402,7 +391,7 @@ impl PackageManager {
                 args.push("unlink".into());
 
                 if options.recursive {
-                    eprintln!("Warning: npm doesn't support --recursive for unlink command");
+                    println!("Warning: npm doesn't support --recursive for unlink command");
                 }
             }
         }
@@ -575,14 +564,15 @@ vite link ../other-project/packages/utils
 
 ### 4. Recursive Unlink Support
 
-**Decision**: Support `--recursive` flag for unlink (pnpm only) with graceful degradation.
+**Decision**: Support `--recursive` flag for unlink (pnpm and yarn@2+) with graceful degradation.
 
 **Rationale**:
 
-- pnpm supports `-r` flag to unlink in every workspace package
+- pnpm supports `--recursive` flag to unlink in every workspace package
+- yarn@2+ supports `--all` flag for similar functionality
 - Provides workspace-wide cleanup capability
-- Warn users when unavailable on yarn/npm
-- Consistent with other pnpm workspace features
+- Warn users when unavailable on npm and yarn@1
+- Consistent with other workspace features
 
 ## Error Handling
 
@@ -600,8 +590,8 @@ Please run one of:
 
 ```bash
 $ vite unlink --recursive
-Warning: yarn doesn't support --recursive for unlink command
-# Proceeds with standard unlink (without -r flag)
+Warning: npm doesn't support --recursive for unlink command
+# Proceeds with standard unlink (without --recursive flag)
 ```
 
 ## User Experience
@@ -761,7 +751,7 @@ fn test_pnpm_link_no_package() {
         package: None,
         ..Default::default()
     });
-    assert_eq!(args, vec!["link", "--global"]);
+    assert_eq!(args, vec!["link"]);
 }
 
 #[test]
@@ -771,7 +761,7 @@ fn test_pnpm_link_package() {
         package: Some("react"),
         ..Default::default()
     });
-    assert_eq!(args, vec!["link", "--global", "react"]);
+    assert_eq!(args, vec!["link", "react"]);
 }
 
 #[test]
@@ -823,7 +813,7 @@ fn test_pnpm_unlink_recursive() {
         recursive: true,
         ..Default::default()
     });
-    assert_eq!(args, vec!["unlink", "-r"]);
+    assert_eq!(args, vec!["unlink", "--recursive"]);
 }
 ```
 
@@ -898,13 +888,13 @@ Arguments:
              If empty, unlinks current package globally
 
 Options:
-  -r, --recursive        Unlink in every workspace package (pnpm only)
+  -r, --recursive        Unlink in every workspace package (pnpm and yarn@2+)
   -h, --help             Print help
 
 Examples:
-  vite unlink                      # Unlink current package globally
+  vite unlink                      # Unlink current package
   vite unlink react                # Unlink 'react' from current project
-  vite unlink --recursive          # Unlink in all workspace packages (pnpm)
+  vite unlink --recursive          # Unlink in all workspace packages (pnpm and yarn@2+)
   vite unlink -r                   # Same as above (short form)
 ```
 
@@ -1002,13 +992,13 @@ npm install my-lib@latest
 
 ## Package Manager Compatibility
 
-| Feature              | pnpm                  | yarn@1           | yarn@2+          | npm              | Notes              |
-| -------------------- | --------------------- | ---------------- | ---------------- | ---------------- | ------------------ |
-| Global registration  | `link --global`       | `link`           | `link`           | `link`           | pnpm uses --global |
-| Link global package  | `link --global <pkg>` | `link <pkg>`     | `link <pkg>`     | `link <pkg>`     | pnpm uses --global |
-| Link local directory | `link <dir>`          | `link <dir>`     | `link <dir>`     | `link <dir>`     | All supported      |
-| Unlink               | `unlink`              | `unlink`         | `unlink`         | `unlink`         | All supported      |
-| Recursive unlink     | ✅ `unlink -r`        | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only          |
+| Feature              | pnpm                    | yarn@1           | yarn@2+           | npm              | Notes            |
+| -------------------- | ----------------------- | ---------------- | ----------------- | ---------------- | ---------------- |
+| Link package/dir     | `link`                  | `link`           | `link`            | `link`           | All supported    |
+| Link with package    | `link <pkg>`            | `link <pkg>`     | `link <pkg>`      | `link <pkg>`     | All supported    |
+| Link local directory | `link <dir>`            | `link <dir>`     | `link <dir>`      | `link <dir>`     | All supported    |
+| Unlink               | `unlink`                | `unlink`         | `unlink`          | `unlink`         | All supported    |
+| Recursive unlink     | ✅ `unlink --recursive` | ❌ Not supported | ✅ `unlink --all` | ❌ Not supported | pnpm and yarn@2+ |
 
 ## Future Enhancements
 
@@ -1103,9 +1093,9 @@ vite link --verify
 This RFC proposes adding `vite link` and `vite unlink` commands to provide a unified interface for local package development across pnpm/yarn/npm. The design:
 
 - ✅ Automatically adapts to detected package manager
-- ✅ Supports both global registration and local directory linking
+- ✅ Supports both package and local directory linking
 - ✅ Minimal options for simplicity (only --recursive for unlink)
-- ✅ pnpm-specific features (--global for link, -r for unlink) with graceful degradation
+- ✅ Consistent behavior across all package managers
 - ✅ Clear error messages and warnings
 - ✅ No caching overhead
 - ✅ Simple implementation leveraging existing infrastructure

@@ -1,8 +1,13 @@
 import { Minimatch } from 'minimatch';
+import { homedir } from 'node:os';
+import path from 'node:path';
 
 export function replaceUnstableOutput(output: string, cwd?: string) {
   if (cwd) {
     output = output.replaceAll(cwd, '<cwd>');
+    if (path.dirname(cwd) !== '/') {
+      output = output.replaceAll(path.dirname(cwd), '<cwd>/..');
+    }
   }
   return output
     // semver version
@@ -51,12 +56,14 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
     // "\nfound 0 vulnerabilities\n" => ""
     .replaceAll(/(removed \d+ package), and audited \d+ packages( in <variable>(?:s|ms|µs))\n/g, '$1$2\n')
     .replaceAll(/(up to date), audited \d+ packages( in <variable>(?:s|ms|µs))\n/g, '$1$2\n')
-    .replaceAll(/(added \d+ packages), and audited \d+ packages( in <variable>(?:s|ms|µs))\n/g, '$1$2\n')
+    .replaceAll(/(added \d+ packages?), and audited \d+ packages( in <variable>(?:s|ms|µs))\n/g, '$1$2\n')
     .replaceAll(/\nfound \d+ vulnerabilities\n/g, '')
     // replace size for tsdown
     .replaceAll(/ \d+(\.\d+)? ([km]B)/g, ' <variable> $2')
     // ignore npm registry domain
-    .replaceAll(/(https?:\/\/registry\.)[^/]+?\//g, '$1<domain>/');
+    .replaceAll(/(https?:\/\/registry\.)[^/]+?\//g, '$1<domain>/')
+    // replace homedir; e.g.: /Users/foo/Library/pnpm/global/5/node_modules/testnpm2 => <homedir>/Library/pnpm/global/5/node_modules/testnpm2
+    .replaceAll(homedir(), '<homedir>');
 }
 
 // Exact matches for common environment variables

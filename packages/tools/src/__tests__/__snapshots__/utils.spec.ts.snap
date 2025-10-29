@@ -8,6 +8,7 @@ exports[`replaceUnstableOutput() > replace date 1`] = `
 exports[`replaceUnstableOutput() > replace ignore npm audited packages log 1`] = `
 "removed 1 package in <variable>ms
 up to date in <variable>ms
+added 1 package in <variable>ms
 added 3 packages in <variable>ms
 Done in <variable>ms"
 `;
@@ -74,6 +75,11 @@ vitest/<semver>
 foo/v<semver>
 foo@<semver>
 bar@v<semver>"
+`;
+
+exports[`replaceUnstableOutput() > replace unstable tmpdir with realpath 1`] = `
+"<cwd>/foo.txt
+<cwd>/../other/bar.txt"
 `;
 
 exports[`replaceUnstableOutput() > replace yarn YN0000: └ Completed with duration to empty string 1`] = `

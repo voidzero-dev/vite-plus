@@ -1,0 +1,5 @@
+{
+  "name": "command-unlink-yarn4",
+  "version": "1.0.0",
+  "packageManager": "yarn@4.0.0"
+}
