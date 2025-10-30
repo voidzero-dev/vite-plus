@@ -18,12 +18,18 @@ catalogs:
     '@oxc-node/core':
       specifier: ^0.0.32
       version: 0.0.32
+    '@std/yaml':
+      specifier: npm:@jsr/std__yaml@^1.0.10
+      version: 1.0.10
     '@types/cross-spawn':
       specifier: ^6.0.6
       version: 6.0.6
     '@types/node':
       specifier: ^24.9.1
       version: 24.9.1
+    '@types/semver':
+      specifier: ^7.7.1
+      version: 7.7.1
     '@vitest/browser':
       specifier: ^4.0.4
       version: 4.0.4
@@ -72,6 +78,9 @@ catalogs:
     rolldown-vite:
       specifier: ^7.1.19
       version: 7.1.19
+    semver:
+      specifier: ^7.7.3
+      version: 7.7.3
     tsdown:
       specifier: ^0.15.10
       version: 0.15.10
@@ -246,9 +255,24 @@ importers:
 
   packages/tools:
     devDependencies:
+      '@oxc-node/cli':
+        specifier: 'catalog:'
+        version: 0.0.32
+      '@oxc-node/core':
+        specifier: 'catalog:'
+        version: 0.0.32
+      '@std/yaml':
+        specifier: 'catalog:'
+        version: '@jsr/std__yaml@1.0.10'
+      '@types/semver':
+        specifier: 'catalog:'
+        version: 7.7.1
       minimatch:
         specifier: 'catalog:'
         version: 10.0.3
+      semver:
+        specifier: 'catalog:'
+        version: 7.7.3
 
 packages:
 
@@ -601,6 +625,9 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@jsr/std__yaml@1.0.10':
+    resolution: {integrity: sha512-1WIM023Kvi48pvPE3UO5YcieambLgywUooLhAkkaObIcMB77F/YP2ILdl+vNfik+vElkl9znmuST9AZo8mbCpA==, tarball: https://npm.jsr.io/~/11/@jsr/std__yaml/1.0.10.tgz}
 
   '@napi-rs/cli@3.1.5':
     resolution: {integrity: sha512-Wn6ZPw27qJiEWglGjkaAa70AHuLtyPya6FvjINYJ5U20uvbRhoB0Ta2+bFTAFfUb9R+wvuFvog9JQdy65OmFAQ==}
@@ -1478,6 +1505,9 @@ packages:
 
   '@types/node@24.9.1':
     resolution: {integrity: sha512-QoiaXANRkSXK6p0Duvt56W208du4P9Uye9hWLWgGMDTEoKPhuenzNcC4vGUmrNkiOKTlIrBoyNQYNpSwfEZXSg==}
+
+  '@types/semver@7.7.1':
+    resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
 
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
@@ -2901,6 +2931,8 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  '@jsr/std__yaml@1.0.10': {}
+
   '@napi-rs/cli@3.1.5(@emnapi/runtime@1.6.0)(@types/node@24.9.1)':
     dependencies:
       '@inquirer/prompts': 7.6.0(@types/node@24.9.1)
@@ -3540,6 +3572,8 @@ snapshots:
   '@types/node@24.9.1':
     dependencies:
       undici-types: 7.16.0
+
+  '@types/semver@7.7.1': {}
 
   '@types/unist@3.0.3': {}
 

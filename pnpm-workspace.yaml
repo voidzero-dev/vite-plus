@@ -7,10 +7,12 @@ catalog:
   '@napi-rs/cli': ^3.1.5
   '@oxc-node/cli': ^0.0.32
   '@oxc-node/core': ^0.0.32
+  '@std/yaml': npm:@jsr/std__yaml@^1.0.10
   '@types/cross-spawn': ^6.0.6
   '@types/node': ^24.9.1
   '@types/react': ^19.1.8
   '@types/react-dom': ^19.1.6
+  '@types/semver': ^7.7.1
   '@vitest/browser': ^4.0.4
   '@vitest/browser-playwright': ^4.0.4
   create-tsdown: 0.0.3
@@ -31,6 +33,7 @@ catalog:
   react-dom: ^19.1.0
   rolldown: ^1.0.0-beta.45
   rolldown-vite: ^7.1.19
+  semver: ^7.7.3
   tsdown: ^0.15.10
   typescript: ^5.9.3
   vite: npm:rolldown-vite@^7.1.19

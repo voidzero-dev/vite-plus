@@ -7,7 +7,14 @@
     "json-edit": "./src/json-edit.ts"
   },
   "devDependencies": {
-    "minimatch": "catalog:"
+    "@oxc-node/cli": "catalog:",
+    "@oxc-node/core": "catalog:",
+    "@types/semver": "catalog:",
+    "@std/yaml": "catalog:",
+    "minimatch": "catalog:",
+    "semver": "catalog:"
+  },
+  "dependencies": {
   },
   "scripts": {
     "snap-test": "tool snap-test"
