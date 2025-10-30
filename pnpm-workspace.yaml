@@ -4,7 +4,7 @@ packages:
 
 catalog:
   '@clack/prompts': ^0.11.0
-  '@napi-rs/cli': ^3.1.5
+  '@napi-rs/cli': ^3.4.1
   '@oxc-node/cli': ^0.0.32
   '@oxc-node/core': ^0.0.32
   '@std/yaml': npm:@jsr/std__yaml@^1.0.10
@@ -46,6 +46,7 @@ catalogMode: prefer
 minimumReleaseAge: 1440
 
 minimumReleaseAgeExclude:
+  - '@napi-rs/*'
   - '@oxc-project/*'
   - '@rolldown/*'
   - '@vitest/*'

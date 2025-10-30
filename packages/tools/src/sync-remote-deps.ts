@@ -222,7 +222,13 @@ function mergePnpmWorkspaces(
     }
   }
 
-  result.catalog = catalog;
+  // Sort catalog keys alphabetically
+  result.catalog = Object.keys(catalog)
+    .sort()
+    .reduce((sorted, key) => {
+      sorted[key] = catalog[key];
+      return sorted;
+    }, {} as Record<string, string>);
 
   // Merge minimumReleaseAgeExclude
   const excludeSet = new Set(main.minimumReleaseAgeExclude || []);
