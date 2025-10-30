@@ -16,6 +16,6 @@ switch (subcommand) {
     break;
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
-    console.error('Available subcommands: json-edit, snap-test, replace-file-content, sync-remote');
+    console.error('Available subcommands: snap-test, replace-file-content, sync-remote');
     process.exit(1);
 }
