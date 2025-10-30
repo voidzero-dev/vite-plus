@@ -444,10 +444,6 @@ impl AddCommand {
         workspace_only: bool,
         extra_args: Vec<String>,
     ) -> Result<ExecutionSummary, Error> {
-        if packages.is_empty() {
-            return Err(Error::NoPackagesSpecified);
-        }
-
         let package_manager = PackageManager::builder(&self.workspace_root).build().await?;
         let workspace = Workspace::partial_load(self.workspace_root)?;
 
@@ -504,10 +500,6 @@ impl RemoveCommand {
         workspace_root: bool,
         extra_args: Vec<String>,
     ) -> Result<ExecutionSummary, Error> {
-        if packages.is_empty() {
-            return Err(Error::NoPackagesSpecified);
-        }
-
         let package_manager = PackageManager::builder(&self.workspace_root).build().await?;
         let workspace = Workspace::partial_load(self.workspace_root)?;
 

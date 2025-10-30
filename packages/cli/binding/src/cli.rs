@@ -180,6 +180,7 @@ pub enum Commands {
         global: bool,
 
         /// Packages to add
+        #[arg(required = true)]
         packages: Vec<String>,
 
         /// Additional arguments to pass through to the package manager
@@ -218,6 +219,7 @@ pub enum Commands {
         global: bool,
 
         /// Packages to remove
+        #[arg(required = true)]
         packages: Vec<String>,
 
         /// Additional arguments to pass through to the package manager
@@ -2007,17 +2009,6 @@ mod tests {
         fn test_args_remove_command_invalid_filter() {
             let args = Args::try_parse_from(&["vite-plus", "remove", "react", "--filter"]);
             assert!(args.is_err());
-        }
-
-        #[test]
-        fn test_args_remove_command_no_packages() {
-            // Remove command should accept empty packages list (package manager will handle this)
-            let args = Args::try_parse_from(&["vite-plus", "remove"]).unwrap();
-            if let Commands::Remove { packages, .. } = &args.commands {
-                assert!(packages.is_empty());
-            } else {
-                panic!("Expected Remove command");
-            }
         }
 
         #[test]

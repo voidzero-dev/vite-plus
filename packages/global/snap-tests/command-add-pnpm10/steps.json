@@ -4,11 +4,11 @@
   },
   "commands": [
     "vp add --help # should show help",
+    "vp add # should error because no packages specified",
     "vp add testnpm2 urllib -D -- --loglevel=verbose --verbose && cat package.json # should add package as dev dependencies",
-    "#vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies",
-    "#vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add",
-    "#vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies",
-    "#vp add test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support pass through arguments",
-    "#vp add -g testnpm2 -- --dry-run && cat package.json # support add global package with dry-run"
+    "vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies",
+    "vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add",
+    "vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies",
+    "vp add test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support pass through arguments"
   ]
 }

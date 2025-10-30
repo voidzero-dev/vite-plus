@@ -93,9 +93,6 @@ pub enum Error {
     #[error("Unrecognized any package manager, please specify the package manager")]
     UnrecognizedPackageManager,
 
-    #[error("No packages specified. Usage: vite add <packages>...")]
-    NoPackagesSpecified,
-
     #[error(
         "Package manager {name}@{version} in {package_json_path:?} is invalid, expected format: 'package-manager-name@major.minor.patch'"
     )]

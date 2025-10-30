@@ -1,10 +1,10 @@
 > vp remove --help # should show help
 Remove packages from dependencies
 
-Usage: vp remove [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
-  [PACKAGES]...           Packages to remove
+  <PACKAGES>...           Packages to remove
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
@@ -16,6 +16,14 @@ Options:
   -r, --recursive         Remove recursively from all workspace packages, including workspace root
   -g, --global            Remove global packages
   -h, --help              Print help
+
+[2]> vp remove # should error because no packages specified
+error: the following required arguments were not provided:
+  <PACKAGES>...
+
+Usage: vp remove <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+For more information, try '--help'.
 
 [1]> vp remove testnpm2 -D && cat package.json # should error when remove not exists package from dev dependencies
 Running: pnpm remove --save-dev testnpm2
@@ -109,6 +117,6 @@ error: unexpected argument '--stream' found
 
   tip: to pass '--stream' as a value, use '-- --stream'
 
-Usage: vp remove [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 For more information, try '--help'.

@@ -30,10 +30,6 @@ impl RemoveCommand {
         global: bool,
         pass_through_args: Option<&[String]>,
     ) -> Result<ExitStatus, Error> {
-        if packages.is_empty() {
-            return Err(Error::NoPackagesSpecified);
-        }
-
         // Detect package manager
         let package_manager = PackageManager::builder(&self.cwd).build().await?;
 
@@ -66,21 +62,5 @@ mod tests {
 
         let cmd = RemoveCommand::new(workspace_root.clone());
         assert_eq!(cmd.cwd, workspace_root);
-    }
-
-    #[tokio::test]
-    async fn test_remove_command_no_packages() {
-        let workspace_root = if cfg!(windows) {
-            AbsolutePathBuf::new("C:\\test".into()).unwrap()
-        } else {
-            AbsolutePathBuf::new("/test".into()).unwrap()
-        };
-
-        let cmd = RemoveCommand::new(workspace_root);
-        let result =
-            cmd.execute(&vec![], false, false, false, None, false, false, false, None).await;
-
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), Error::NoPackagesSpecified));
     }
 }

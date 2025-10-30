@@ -1,10 +1,10 @@
 > vp add --help # should show help
 Add packages to dependencies
 
-Usage: vp add [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
-  [PACKAGES]...           Packages to add
+  <PACKAGES>...           Packages to add
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
@@ -35,6 +35,14 @@ Options:
   -h, --help
           Print help
 
+[2]> vp add # should error because no packages specified
+error: the following required arguments were not provided:
+  <PACKAGES>...
+
+Usage: vp add <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+For more information, try '--help'.
+
 > vp add testnpm2 urllib -D -- --loglevel=verbose --verbose && cat package.json # should add package as dev dependencies
 Running: pnpm add --save-dev --loglevel=verbose --verbose testnpm2 urllib
 Packages: +<variable>
@@ -56,8 +64,107 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> #vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies
-> #vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
-> #vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
-> #vp add test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support pass through arguments
-> #vp add -g testnpm2 -- --dry-run && cat package.json # support add global package with dry-run
+> vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies
+Running: pnpm add --allow-build=test-vite-plus-install testnpm2 test-vite-plus-install
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
++ test-vite-plus-install <semver>
+
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-add-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1",
+    "urllib": "^4.8.2"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+
+> vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
+Running: pnpm add --save-peer test-vite-plus-package@<semver>
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+peerDependencies:
++ test-vite-plus-package <semver>
+
+devDependencies:
++ test-vite-plus-package <semver> already in devDependencies, was not moved to dependencies.
+
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-add-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0",
+    "testnpm2": "^1.0.1",
+    "urllib": "^4.8.2"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "peerDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  }
+}
+
+> vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
+Running: pnpm add --save-optional test-vite-plus-package-optional
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+optionalDependencies:
++ test-vite-plus-package-optional <semver>
+
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-add-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0",
+    "testnpm2": "^1.0.1",
+    "urllib": "^4.8.2"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "peerDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+
+> vp add test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support pass through arguments
+Running: pnpm add --loglevel=warn test-vite-plus-package-optional
+{
+  "name": "command-add-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0",
+    "testnpm2": "^1.0.1",
+    "urllib": "^4.8.2"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "peerDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}

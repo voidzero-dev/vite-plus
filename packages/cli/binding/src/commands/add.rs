@@ -34,10 +34,6 @@ impl AddCommand {
         allow_build: Option<&str>,
         pass_through_args: Option<&[String]>,
     ) -> Result<ExitStatus, Error> {
-        if packages.is_empty() {
-            return Err(Error::NoPackagesSpecified);
-        }
-
         let add_command_options = AddCommandOptions {
             packages,
             save_dependency_type,
@@ -72,21 +68,5 @@ mod tests {
 
         let cmd = AddCommand::new(workspace_root.clone());
         assert_eq!(cmd.cwd, workspace_root);
-    }
-
-    #[tokio::test]
-    async fn test_add_command_no_packages() {
-        let workspace_root = if cfg!(windows) {
-            AbsolutePathBuf::new("C:\\test".into()).unwrap()
-        } else {
-            AbsolutePathBuf::new("/test".into()).unwrap()
-        };
-
-        let cmd = AddCommand::new(workspace_root);
-        let result =
-            cmd.execute(&vec![], None, false, None, None, false, false, false, None, None).await;
-
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), Error::NoPackagesSpecified));
     }
 }
