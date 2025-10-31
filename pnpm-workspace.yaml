@@ -51,6 +51,9 @@ minimumReleaseAgeExclude:
   - '@rolldown/*'
   - '@vitest/*'
   - create-vite
+  - oxc-minify
+  - oxc-parser
+  - oxc-transform
   - oxfmt
   - oxlint
   - oxlint-tsgolint
