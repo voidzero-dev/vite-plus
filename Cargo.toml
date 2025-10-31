@@ -61,13 +61,6 @@ directories = "6.0.0"
 elf = { version = "0.8.0", default-features = false }
 flate2 = "1.0.35"
 fspy = { path = "crates/fspy" }
-fspy_detours_sys = { path = "crates/fspy_detours_sys" }
-fspy_preload_unix = { path = "crates/fspy_preload_unix", artifact = "cdylib" }
-fspy_preload_windows = { path = "crates/fspy_preload_windows", artifact = "cdylib" }
-fspy_seccomp_unotify = { path = "crates/fspy_seccomp_unotify" }
-fspy_shared = { path = "crates/fspy_shared" }
-fspy_shared_unix = { path = "crates/fspy_shared_unix" }
-fspy_test_utils = { path = "crates/fspy_test_utils" }
 futures = "0.3.31"
 futures-core = "0.3.31"
 futures-util = "0.3.31"
@@ -122,12 +115,12 @@ tui-term = "0.2.0"
 twox-hash = "2.1.1"
 uuid = "1.18.1"
 vite_error = { path = "crates/vite_error" }
-vite_glob = { path = "crates/vite_glob" }
+vite_glob = { git = "https://github.com/voidzero-dev/vite-task", branch = "10-30-chore_remove_vite-plus_files" }
 vite_install = { path = "crates/vite_install" }
-vite_path = { path = "crates/vite_path" }
-vite_str = { path = "crates/vite_str" }
-vite_task = { path = "crates/vite_task" }
-vite_workspace = { path = "crates/vite_workspace" }
+vite_path = { git = "https://github.com/voidzero-dev/vite-task", branch = "10-30-chore_remove_vite-plus_files" }
+vite_str = { git = "https://github.com/voidzero-dev/vite-task", branch = "10-30-chore_remove_vite-plus_files" }
+vite_task = { git = "https://github.com/voidzero-dev/vite-task", branch = "10-30-chore_remove_vite-plus_files" }
+vite_workspace = { git = "https://github.com/voidzero-dev/vite-task", branch = "10-30-chore_remove_vite-plus_files" }
 wax = "0.6.0"
 which = "7.0.3"
 widestring = "1.2.0"

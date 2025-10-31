@@ -1,7 +1,0 @@
-{
-  "name": "@test/scope-a",
-  "version": "1.0.0",
-  "scripts": {
-    "b#c": "echo Task b#c in scope-a"
-  }
-}

@@ -1,9 +1,0 @@
-{
-  "tasks": {
-    "deploy": {
-      "command": "deploy-script --prod",
-      "cacheable": false,
-      "dependsOn": ["@test/app#build", "@test/app#test", "@test/utils#lint"]
-    }
-  }
-}

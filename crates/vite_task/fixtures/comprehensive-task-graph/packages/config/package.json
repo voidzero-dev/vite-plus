@@ -1,8 +1,0 @@
-{
-  "name": "@test/config",
-  "version": "1.0.0",
-  "scripts": {
-    "build": "echo Building config",
-    "validate": "echo Validating config"
-  }
-}
