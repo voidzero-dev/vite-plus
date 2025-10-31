@@ -1,0 +1,11 @@
+{
+  "name": "command-list-yarn4",
+  "version": "1.0.0",
+  "packageManager": "yarn@4.10.3",
+  "dependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  }
+}

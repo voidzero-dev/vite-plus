@@ -1,0 +1,19 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp install # should install packages first",
+    "vp pm list --json # should list installed packages",
+    "vp pm list testnpm2 --json # should list specific package",
+    "vp pm list --depth 0 --json # should list packages with depth limit",
+    "vp pm list --long --json # should list packages with extended info",
+    "vp pm list --parseable --json # should list packages in parseable format",
+    "vp pm list --prod --json # should list production dependencies only (uses --include prod --include peer)",
+    "vp pm list --dev --json # should list development dependencies only (uses --include dev)",
+    "vp pm list --no-optional --json # should exclude optional dependencies (uses --omit optional)",
+    "vp pm list --exclude-peers --json # should exclude peer dependencies (uses --omit peer)",
+    "vp pm list -- --loglevel=warn --json # should support pass through arguments"
+  ]
+}

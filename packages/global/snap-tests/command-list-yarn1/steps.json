@@ -1,0 +1,21 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp install # should install packages first",
+    "vp pm list # should list installed packages",
+    "vp pm list testnpm2 # should list specific package",
+    "vp pm list --depth 0 # should list packages with depth limit",
+    "vp pm list --json # should list packages in JSON format",
+    "vp pm list --prod # should show warning that --prod not supported by yarn@1",
+    "vp pm list --dev # should show warning that --dev not supported by yarn@1",
+    "vp pm list --no-optional # should show warning that --no-optional not supported by yarn@1",
+    "vp pm list --exclude-peers # should show warning that --exclude-peers not supported by yarn@1",
+    "vp pm list --only-projects # should show warning that --only-projects not supported by yarn@1",
+    "vp pm list --find-by customFinder # should show warning that --find-by not supported by yarn@1",
+    "vp pm list --recursive # should show warning that --recursive not supported by yarn@1",
+    "vp pm list --filter app # should show warning that --filter not supported by yarn@1",
+    "vp pm list -- --loglevel=warn # should support pass through arguments"
+  ]
+}

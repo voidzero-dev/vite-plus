@@ -1,0 +1,25 @@
+> vp pm publish --help # should show help
+Publish package to registry
+
+Usage: vp pm publish [OPTIONS] [TARBALL|FOLDER] [-- <PASS_THROUGH_ARGS>...]
+
+Arguments:
+  [TARBALL|FOLDER]        Tarball or folder to publish
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+      --dry-run                  Preview without publishing
+      --tag <TAG>                Publish tag (default: latest)
+      --access <ACCESS>          Access level (public/restricted)
+      --otp <OTP>                One-time password for authentication
+      --no-git-checks            Skip git checks (pnpm-specific)
+      --publish-branch <BRANCH>  Set the branch name to publish from (pnpm-specific)
+      --report-summary           Save publish summary to pnpm-publish-summary.json (pnpm-specific)
+      --force                    Force publish
+      --json                     Output in JSON format (pnpm-specific)
+  -r, --recursive                Publish all workspace packages
+      --filter <PATTERN>         Filter packages in monorepo (can be used multiple times)
+  -h, --help                     Print help
+
+> vp pm publish --dry-run -- --loglevel error # should preview publish without actually publishing (uses pnpm publish --dry-run)
++ command-publish-pnpm10@<semver>

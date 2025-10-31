@@ -1,0 +1,12 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp pm config --help # should show help",
+    "vp pm config list --location project > /dev/null # should list all project configuration",
+    "vp pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope",
+    "vp pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope",
+    "vp pm config delete vite-plus-pm-config-test-key --location project # should delete config key from project scope"
+  ]
+}

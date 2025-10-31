@@ -1,0 +1,10 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp pm cache dir # should show cache directory (uses npm config get cache)",
+    "vp pm cache path # should show cache path (alias for dir, uses npm config get cache)"
+  ]
+}

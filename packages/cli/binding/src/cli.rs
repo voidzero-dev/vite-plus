@@ -27,6 +27,7 @@ use crate::commands::{
     link::LinkCommand,
     lint::{LintConfig, lint},
     outdated::OutdatedCommand,
+    pm::PmCommand,
     remove::RemoveCommand,
     test::test,
     unlink::UnlinkCommand,
@@ -437,6 +438,323 @@ pub enum Commands {
         #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
+    /// Package manager utilities
+    #[command(subcommand)]
+    Pm(PmCommands),
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum PmCommands {
+    /// Remove unnecessary packages
+    Prune {
+        /// Remove devDependencies
+        #[arg(long)]
+        prod: bool,
+
+        /// Remove optional dependencies
+        #[arg(long)]
+        no_optional: bool,
+
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Create a tarball of the package
+    Pack {
+        /// Pack all workspace packages
+        #[arg(short = 'r', long)]
+        recursive: bool,
+
+        /// Filter packages to pack (can be used multiple times)
+        #[arg(long, value_name = "PATTERN")]
+        filter: Option<Vec<String>>,
+
+        /// Customizes the output path for the tarball. Use %s and %v to include the package name and version (pnpm and yarn@2+ only), e.g., %s.tgz or some-dir/%s-%v.tgz
+        #[arg(long)]
+        out: Option<String>,
+
+        /// Directory where the tarball will be saved (pnpm and npm only)
+        #[arg(long)]
+        pack_destination: Option<String>,
+
+        /// Gzip compression level (0-9)
+        #[arg(long)]
+        pack_gzip_level: Option<u8>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// List installed packages
+    #[command(alias = "ls")]
+    List {
+        /// Package pattern to filter
+        pattern: Option<String>,
+
+        /// Maximum depth of dependency tree
+        #[arg(long)]
+        depth: Option<u32>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Show extended information
+        #[arg(long)]
+        long: bool,
+
+        /// Parseable output format
+        #[arg(long)]
+        parseable: bool,
+
+        /// Only production dependencies
+        #[arg(short = 'P', long)]
+        prod: bool,
+
+        /// Only dev dependencies
+        #[arg(short = 'D', long)]
+        dev: bool,
+
+        /// Exclude optional dependencies
+        #[arg(long)]
+        no_optional: bool,
+
+        /// Exclude peer dependencies
+        #[arg(long)]
+        exclude_peers: bool,
+
+        /// Show only project packages (pnpm-specific)
+        #[arg(long)]
+        only_projects: bool,
+
+        /// Use a finder function defined in .pnpmfile.cjs (pnpm-specific)
+        #[arg(long, value_name = "FINDER_NAME")]
+        find_by: Option<String>,
+
+        /// List across all workspaces
+        #[arg(short = 'r', long)]
+        recursive: bool,
+
+        /// Filter packages in monorepo (can be used multiple times)
+        #[arg(long, value_name = "PATTERN")]
+        filter: Vec<String>,
+
+        /// List global packages
+        #[arg(short = 'g', long)]
+        global: bool,
+
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// View package information from registry
+    #[command(alias = "info", alias = "show")]
+    View {
+        /// Package name with optional version
+        #[arg(required = true)]
+        package: String,
+
+        /// Specific field to view
+        field: Option<String>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Publish package to registry
+    Publish {
+        /// Tarball or folder to publish
+        #[arg(value_name = "TARBALL|FOLDER")]
+        target: Option<String>,
+
+        /// Preview without publishing
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Publish tag (default: latest)
+        #[arg(long)]
+        tag: Option<String>,
+
+        /// Access level (public/restricted)
+        #[arg(long)]
+        access: Option<String>,
+
+        /// One-time password for authentication
+        #[arg(long, value_name = "OTP")]
+        otp: Option<String>,
+
+        /// Skip git checks (pnpm-specific)
+        #[arg(long)]
+        no_git_checks: bool,
+
+        /// Set the branch name to publish from (pnpm-specific)
+        #[arg(long, value_name = "BRANCH")]
+        publish_branch: Option<String>,
+
+        /// Save publish summary to pnpm-publish-summary.json (pnpm-specific)
+        #[arg(long)]
+        report_summary: bool,
+
+        /// Force publish
+        #[arg(long)]
+        force: bool,
+
+        /// Output in JSON format (pnpm-specific)
+        #[arg(long)]
+        json: bool,
+
+        /// Publish all workspace packages
+        #[arg(short = 'r', long)]
+        recursive: bool,
+
+        /// Filter packages in monorepo (can be used multiple times)
+        #[arg(long, value_name = "PATTERN")]
+        filter: Option<Vec<String>>,
+
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Manage package owners
+    #[command(subcommand, alias = "author")]
+    Owner(OwnerCommands),
+
+    /// Manage package cache
+    Cache {
+        /// Subcommand: dir, path, clean
+        #[arg(required = true)]
+        subcommand: String,
+
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Manage package manager configuration
+    #[command(subcommand, alias = "c")]
+    Config(ConfigCommands),
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ConfigCommands {
+    /// List all configuration
+    List {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Use global config
+        #[arg(short = 'g', long)]
+        global: bool,
+
+        /// Config location: project (default) or global
+        #[arg(long, value_name = "LOCATION")]
+        location: Option<String>,
+    },
+
+    /// Get configuration value
+    Get {
+        /// Config key
+        key: String,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Use global config
+        #[arg(short = 'g', long)]
+        global: bool,
+
+        /// Config location: project (default) or global
+        #[arg(long, value_name = "LOCATION")]
+        location: Option<String>,
+    },
+
+    /// Set configuration value
+    Set {
+        /// Config key
+        key: String,
+
+        /// Config value
+        value: String,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Use global config
+        #[arg(short = 'g', long)]
+        global: bool,
+
+        /// Config location: project (default) or global
+        #[arg(long, value_name = "LOCATION")]
+        location: Option<String>,
+    },
+
+    /// Delete configuration key
+    Delete {
+        /// Config key
+        key: String,
+
+        /// Use global config
+        #[arg(short = 'g', long)]
+        global: bool,
+
+        /// Config location: project (default) or global
+        #[arg(long, value_name = "LOCATION")]
+        location: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum OwnerCommands {
+    /// List package owners
+    #[command(alias = "ls")]
+    List {
+        /// Package name
+        package: String,
+
+        /// One-time password for authentication
+        #[arg(long, value_name = "OTP")]
+        otp: Option<String>,
+    },
+
+    /// Add package owner
+    Add {
+        /// Username
+        user: String,
+        /// Package name
+        package: String,
+
+        /// One-time password for authentication
+        #[arg(long, value_name = "OTP")]
+        otp: Option<String>,
+    },
+
+    /// Remove package owner
+    Rm {
+        /// Username
+        user: String,
+        /// Package name
+        package: String,
+
+        /// One-time password for authentication
+        #[arg(long, value_name = "OTP")]
+        otp: Option<String>,
+    },
 }
 
 impl Commands {
@@ -452,6 +770,7 @@ impl Commands {
                 | Commands::Why { .. }
                 | Commands::Link { .. }
                 | Commands::Unlink { .. }
+                | Commands::Pm(..)
         )
     }
 }
@@ -958,6 +1277,10 @@ pub async fn main<
                     pass_through_args.as_deref(),
                 )
                 .await?;
+            return Ok(exit_status);
+        }
+        Commands::Pm(pm_command) => {
+            let exit_status = PmCommand::new(cwd).execute(pm_command.clone()).await?;
             return Ok(exit_status);
         }
     };

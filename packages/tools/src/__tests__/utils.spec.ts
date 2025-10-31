@@ -152,6 +152,24 @@ Progress: resolved
 `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
+
+  test('replace ignore tarball download average speed warning log', () => {
+    const output = `
+ WARN  Tarball download average speed 29 KiB/s (size 56 KiB) is below 50 KiB/s: https://registry.npmjs.org/qs/-/qs-6.14.0.tgz (GET)
+ WARN  Tarball download average speed 34 KiB/s (size 347 KiB) is below 50 KiB/s: https://registry.npmjs.org/undici/-/undici-7.16.0.tgz (GET)
+`;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
+
+  test('replace hash values', () => {
+    const output = `
+npm notice shasum: 65c35f9599054722ecde040abd4a19682a723cdc
+npm notice integrity: sha512-qugLL42iCblSD[...]Gfk6HJodp2ZOQ==
+"shasum": "65c35f9599054722ecde040abd4a19682a723cdc",
+"integrity": "sha512-qugLL42iCblSDO0Vwic9xYkKYNtf+MwPW4cQSppKbGtQ/xswl1gXyu/DF5b7I/WbsVi02DJIHGfk6HJodp2ZOQ==",
+    `;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
 });
 
 describe('isPassThroughEnv()', () => {

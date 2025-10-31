@@ -1,0 +1,8 @@
+{
+  "name": "command-pack-yarn4-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "yarn@4.10.3",
+  "workspaces": [
+    "packages/*"
+  ]
+}

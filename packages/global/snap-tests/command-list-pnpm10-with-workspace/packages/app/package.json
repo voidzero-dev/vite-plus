@@ -1,0 +1,10 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*"
+  },
+  "peerDependencies": {
+    "test-vite-plus-package-optional": "1.0.0"
+  }
+}

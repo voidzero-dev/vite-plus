@@ -1,0 +1,12 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp pm pack # should pack current package",
+    "vp pm pack --out ./dist/package.tgz # should pack with output file",
+    "vp pm pack --json # should pack with json output",
+    "vp pm pack -- --dry-run # should support pass through arguments"
+  ]
+}

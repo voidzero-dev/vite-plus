@@ -1,0 +1,14 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp install # should install packages first",
+    "vp pm prune --help # should show help",
+    "vp pm prune # should prune extraneous dependencies",
+    "vp pm prune --prod # should prune dev dependencies (uses --omit=dev)",
+    "vp pm prune --no-optional # should prune optional dependencies (uses --omit=optional)",
+    "vp pm prune --prod --no-optional # should prune both dev and optional dependencies",
+    "vp pm prune -- --loglevel=warn # should support pass through arguments"
+  ]
+}

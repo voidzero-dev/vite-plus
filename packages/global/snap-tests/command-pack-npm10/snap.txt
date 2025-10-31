@@ -1,0 +1,123 @@
+> vp pm pack --json && rm -rf *.tgz # should pack current package
+[
+  {
+    "id": "command-pack-npm10@<semver>",
+    "name": "command-pack-npm10",
+    "version": "1.0.0",
+    "size": <variable>,
+    "unpackedSize": <variable>,
+    "shasum": "<hash>",
+    "integrity": "sha512-<hash>",
+    "filename": "command-pack-npm10-1.0.0.tgz",
+    "files": [
+      {
+        "path": "output.log",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "snap.txt",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "steps.json",
+        "size": <variable>,
+        "mode": 420
+      }
+    ],
+    "entryCount": 4,
+    "bundled": []
+  }
+]
+
+> vp pm pack --pack-destination ./dist --json && rm -rf ./dist # should pack with destination
+[
+  {
+    "id": "command-pack-npm10@<semver>",
+    "name": "command-pack-npm10",
+    "version": "1.0.0",
+    "size": <variable>,
+    "unpackedSize": <variable>,
+    "shasum": "<hash>",
+    "integrity": "sha512-<hash>",
+    "filename": "command-pack-npm10-1.0.0.tgz",
+    "files": [
+      {
+        "path": "command-pack-npm10-1.0.0.tgz",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "output.log",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "snap.txt",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "steps.json",
+        "size": <variable>,
+        "mode": 420
+      }
+    ],
+    "entryCount": 5,
+    "bundled": []
+  }
+]
+
+> vp pm pack --json -- --loglevel=warn && rm -rf *.tgz # should support pass through arguments
+[
+  {
+    "id": "command-pack-npm10@<semver>",
+    "name": "command-pack-npm10",
+    "version": "1.0.0",
+    "size": <variable>,
+    "unpackedSize": <variable>,
+    "shasum": "<hash>",
+    "integrity": "sha512-<hash>",
+    "filename": "command-pack-npm10-1.0.0.tgz",
+    "files": [
+      {
+        "path": "command-pack-npm10-1.0.0.tgz",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "output.log",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "snap.txt",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "steps.json",
+        "size": <variable>,
+        "mode": 420
+      }
+    ],
+    "entryCount": 5,
+    "bundled": []
+  }
+]

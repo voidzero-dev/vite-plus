@@ -1,0 +1,10 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp pm cache --help # should show help",
+    "vp pm cache dir > /dev/null # should show cache directory (uses pnpm store path)",
+    "vp pm cache path > /dev/null # should show cache path (alias for dir, uses pnpm store path)"
+  ]
+}

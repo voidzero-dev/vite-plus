@@ -5,6 +5,13 @@ exports[`replaceUnstableOutput() > replace date 1`] = `
 <date>"
 `;
 
+exports[`replaceUnstableOutput() > replace hash values 1`] = `
+"npm notice shasum: <hash>
+npm notice integrity: sha512-<hash>
+"shasum": "<hash>",
+"integrity": "sha512-<hash>","
+`;
+
 exports[`replaceUnstableOutput() > replace ignore npm audited packages log 1`] = `
 "removed 1 package in <variable>ms
 up to date in <variable>ms
@@ -24,6 +31,11 @@ https://registry.<domain>/testnpm2/-/testnpm2-1.0.0.tgz
 exports[`replaceUnstableOutput() > replace ignore pnpm request warning log 1`] = `
 "Foo bar
 Packages:"
+`;
+
+exports[`replaceUnstableOutput() > replace ignore tarball download average speed warning log 1`] = `
+"WARN  Tarball download average speed 29 KiB/s (size 56 KiB) is below 50 KiB/s: https://registry.<domain>/qs/-/qs-6.14.0.tgz (GET)
+ WARN  Tarball download average speed 34 KiB/s (size 347 KiB) is below 50 KiB/s: https://registry.<domain>/undici/-/undici-7.16.0.tgz (GET)"
 `;
 
 exports[`replaceUnstableOutput() > replace pnpm registry request error warning log 1`] = `"Progress: resolved"`;

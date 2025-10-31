@@ -20,6 +20,7 @@ Commands:
   why       Show why a package is installed
   link      Link packages for local development
   unlink    Unlink packages
+  pm        Package manager utilities
   help      Print this message or the help of the given subcommand(s)
 
 Arguments:
@@ -31,3 +32,22 @@ Options:
       --no-debug  
   -h, --help      Print help
   -V, --version   Print version
+
+> vp pm -h # show pm help message
+Package manager utilities
+
+Usage: vp pm <COMMAND>
+
+Commands:
+  prune    Remove unnecessary packages
+  pack     Create a tarball of the package
+  list     List installed packages
+  view     View package information from registry
+  publish  Publish package to registry
+  owner    Manage package owners
+  cache    Manage package cache
+  config   Manage package manager configuration
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help

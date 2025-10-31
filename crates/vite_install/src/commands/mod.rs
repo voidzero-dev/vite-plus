@@ -1,9 +1,17 @@
 pub mod add;
+pub mod cache;
+pub mod config;
 pub mod dedupe;
 mod install;
 pub mod link;
+pub mod list;
 pub mod outdated;
+pub mod owner;
+pub mod pack;
+pub mod prune;
+pub mod publish;
 pub mod remove;
 pub mod unlink;
 pub mod update;
+pub mod view;
 pub mod why;

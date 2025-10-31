@@ -1,0 +1,18 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp install # should install packages first",
+    "vp pm list # should list current workspace root dependencies",
+    "vp pm list --recursive # should list all packages in workspace recursively",
+    "vp pm list --filter app # should list specific workspace package (uses --filter app list)",
+    "vp pm list --filter app --filter @vite-plus-test/utils # should list multiple workspace packages",
+    "vp pm list --recursive --json # should list all workspace packages in JSON format",
+    "vp pm list --recursive --depth 0 # should list workspace packages with depth limit",
+    "vp pm list --recursive --only-projects # should list only workspace projects (pnpm-specific)",
+    "vp pm list --recursive --exclude-peers # should exclude peer dependencies in workspace",
+    "vp pm list --recursive --prod # should list production dependencies in workspace"
+  ]
+}

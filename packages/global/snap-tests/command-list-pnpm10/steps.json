@@ -1,0 +1,24 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp install # should install packages first",
+    "vp pm list --help # should show help",
+    "vp pm list # should list installed packages",
+    "vp pm list testnpm2 # should list specific package",
+    "vp pm list --depth 0 # should list packages with depth limit",
+    "vp pm list --json # should list packages in JSON format",
+    "vp pm list --long # should list packages with extended info",
+    "vp pm list --parseable # should list packages in parseable format",
+    "vp pm list --prod # should list production dependencies only",
+    "vp pm list --dev # should list development dependencies only",
+    "vp pm list --no-optional # should exclude optional dependencies",
+    "vp pm list --exclude-peers # should exclude peer dependencies",
+    "vp pm list --only-projects # should list only workspace projects (pnpm-specific)",
+    "vp pm list --find-by customFinder # should use custom finder (pnpm-specific)",
+    "vp pm list --recursive # should list packages recursively in workspace",
+    "vp pm list -- --loglevel=warn # should support pass through arguments"
+  ]
+}

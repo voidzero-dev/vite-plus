@@ -1,0 +1,14 @@
+> vp pm cache --help # should show help
+Manage package cache
+
+Usage: vp pm cache <SUBCOMMAND> [-- <PASS_THROUGH_ARGS>...]
+
+Arguments:
+  <SUBCOMMAND>            Subcommand: dir, path, clean
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  -h, --help  Print help
+
+> vp pm cache dir > /dev/null # should show cache directory (uses pnpm store path)
+> vp pm cache path > /dev/null # should show cache path (alias for dir, uses pnpm store path)

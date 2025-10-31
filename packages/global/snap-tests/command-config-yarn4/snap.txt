@@ -1,0 +1,14 @@
+[1]> vp pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope
+Usage Error: Couldn't find a configuration settings named "vite-plus-pm-config-test-key"
+
+$ yarn config set [--json] [-H,--home] <name> <value>
+
+[1]> vp pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope
+Usage Error: Couldn't find a configuration settings named "vite-plus-pm-config-test-key"
+
+$ yarn config get [--why] [--json] [--no-redacted] <name>
+
+[1]> vp pm config delete vite-plus-pm-config-test-key --location project # should delete config key from project scope (uses yarn config unset)
+Usage Error: Couldn't find a configuration settings named "vite-plus-pm-config-test-key"
+
+$ yarn config unset [-H,--home] <name>

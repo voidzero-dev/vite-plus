@@ -1,0 +1,5 @@
+> vp pm cache dir # should show cache directory (uses npm config get cache)
+<homedir>/.npm
+
+> vp pm cache path # should show cache path (alias for dir, uses npm config get cache)
+<homedir>/.npm

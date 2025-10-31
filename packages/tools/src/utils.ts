@@ -61,9 +61,23 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
     .replaceAll(/(added \d+ packages?), and audited \d+ packages( in <variable>(?:s|ms|µs))\n/g, '$1$2\n')
     .replaceAll(/\nfound \d+ vulnerabilities\n/g, '')
     // replace size for tsdown
-    .replaceAll(/ \d+(\.\d+)? ([km]B)/g, ' <variable> $2')
+    .replaceAll(/ \d+(\.\d+)? ([km]?B)/g, ' <variable> $2')
+    // replace npm notice size:
+    // "npm notice 5.6kB snap.txt"
+    // "npm notice 619B steps.json"
+    .replaceAll(/ \d+(\.\d+)?([km]?B) /g, ' <variable>$2 ')
+    // '"size": 821' => '"size": <variable>'
+    // '"unpackedSize": 2720' => '"unpackedSize": <variable>'
+    .replaceAll(/"(size|unpackedSize)": \d+/g, '"$1": <variable>')
     // ignore npm registry domain
-    .replaceAll(/(https?:\/\/registry\.)[^/]+?\//g, '$1<domain>/')
+    .replaceAll(/(https?:\/\/registry\.)[^/\s]+(\/?)/g, '$1<domain>$2')
+    // ignore pnpm tarball download average speed warning log
+    .replaceAll(/ WARN  Tarball download average speed .+?\n/g, '')
+    // ignore npm hash values
+    .replaceAll(/shasum: .+?\n/g, 'shasum: <hash>\n')
+    .replaceAll(/integrity: ([\w-]+)-.+?\n/g, 'integrity: $1-<hash>\n')
+    .replaceAll(/"shasum": ".+?"/g, '"shasum": "<hash>"')
+    .replaceAll(/"integrity": "(\w+)-.+?"/g, '"integrity": "$1-<hash>"')
     // replace homedir; e.g.: /Users/foo/Library/pnpm/global/5/node_modules/testnpm2 => <homedir>/Library/pnpm/global/5/node_modules/testnpm2
     .replaceAll(homedir(), '<homedir>');
 }

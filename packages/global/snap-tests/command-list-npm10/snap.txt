@@ -1,0 +1,261 @@
+> vp install # should install packages first
+
+added 3 packages in <variable>ms
+
+
+> vp pm list --json # should list installed packages
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10",
+  "dependencies": {
+    "test-vite-plus-package-optional": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "overridden": false
+    },
+    "test-vite-plus-package": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "overridden": false
+    },
+    "testnpm2": {
+      "version": "1.0.1",
+      "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz",
+      "overridden": false
+    }
+  }
+}
+
+> vp pm list testnpm2 --json # should list specific package
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10",
+  "dependencies": {
+    "testnpm2": {
+      "version": "1.0.1",
+      "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz",
+      "overridden": false
+    }
+  }
+}
+
+> vp pm list --depth 0 --json # should list packages with depth limit
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10",
+  "dependencies": {
+    "test-vite-plus-package-optional": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "overridden": false
+    },
+    "test-vite-plus-package": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "overridden": false
+    },
+    "testnpm2": {
+      "version": "1.0.1",
+      "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz",
+      "overridden": false
+    }
+  }
+}
+
+> vp pm list --long --json # should list packages with extended info
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10",
+  "packageManager": "npm@<semver>",
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "peerDependencies": {
+    "test-vite-plus-package-optional": "1.0.0"
+  },
+  "_id": "command-list-npm10@<semver>",
+  "extraneous": false,
+  "path": "<cwd>",
+  "_dependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-package-optional": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "overridden": false,
+      "name": "test-vite-plus-package-optional",
+      "integrity": "sha512-<hash>",
+      "license": "MIT",
+      "peer": true,
+      "_id": "test-vite-plus-package-optional@<semver>",
+      "extraneous": false,
+      "path": "<cwd>/node_modules/test-vite-plus-package-optional",
+      "_dependencies": {},
+      "devDependencies": {},
+      "peerDependencies": {}
+    },
+    "test-vite-plus-package": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "overridden": false,
+      "name": "test-vite-plus-package",
+      "integrity": "sha512-<hash>",
+      "dev": true,
+      "license": "MIT",
+      "_id": "test-vite-plus-package@<semver>",
+      "extraneous": false,
+      "path": "<cwd>/node_modules/test-vite-plus-package",
+      "_dependencies": {},
+      "devDependencies": {},
+      "peerDependencies": {}
+    },
+    "testnpm2": {
+      "version": "1.0.1",
+      "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz",
+      "overridden": false,
+      "name": "testnpm2",
+      "integrity": "sha512-<hash>",
+      "license": "ISC",
+      "_id": "testnpm2@<semver>",
+      "extraneous": false,
+      "path": "<cwd>/node_modules/testnpm2",
+      "_dependencies": {},
+      "devDependencies": {},
+      "peerDependencies": {}
+    }
+  }
+}
+
+> vp pm list --parseable --json # should list packages in parseable format
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10",
+  "dependencies": {
+    "test-vite-plus-package-optional": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "overridden": false
+    },
+    "test-vite-plus-package": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "overridden": false
+    },
+    "testnpm2": {
+      "version": "1.0.1",
+      "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz",
+      "overridden": false
+    }
+  }
+}
+
+> vp pm list --prod --json # should list production dependencies only (uses --include prod --include peer)
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10",
+  "dependencies": {
+    "test-vite-plus-package-optional": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "overridden": false
+    },
+    "test-vite-plus-package": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "overridden": false
+    },
+    "testnpm2": {
+      "version": "1.0.1",
+      "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz",
+      "overridden": false
+    }
+  }
+}
+
+> vp pm list --dev --json # should list development dependencies only (uses --include dev)
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10",
+  "dependencies": {
+    "test-vite-plus-package-optional": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "overridden": false
+    },
+    "test-vite-plus-package": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "overridden": false
+    },
+    "testnpm2": {
+      "version": "1.0.1",
+      "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz",
+      "overridden": false
+    }
+  }
+}
+
+> vp pm list --no-optional --json # should exclude optional dependencies (uses --omit optional)
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10",
+  "dependencies": {
+    "test-vite-plus-package-optional": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "overridden": false
+    },
+    "test-vite-plus-package": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "overridden": false
+    },
+    "testnpm2": {
+      "version": "1.0.1",
+      "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz",
+      "overridden": false
+    }
+  }
+}
+
+> vp pm list --exclude-peers --json # should exclude peer dependencies (uses --omit peer)
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10",
+  "dependencies": {
+    "test-vite-plus-package": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "overridden": false
+    },
+    "testnpm2": {
+      "version": "1.0.1",
+      "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz",
+      "overridden": false
+    }
+  }
+}
+
+> vp pm list -- --loglevel=warn --json # should support pass through arguments
+{
+  "version": "1.0.0",
+  "name": "command-list-npm10",
+  "dependencies": {
+    "test-vite-plus-package-optional": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "overridden": false
+    },
+    "test-vite-plus-package": {
+      "version": "1.0.0",
+      "resolved": "https://registry.<domain>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "overridden": false
+    },
+    "testnpm2": {
+      "version": "1.0.1",
+      "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz",
+      "overridden": false
+    }
+  }
+}

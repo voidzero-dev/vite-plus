@@ -1,0 +1,21 @@
+> vp pm config --help # should show help
+Manage package manager configuration
+
+Usage: vp pm config <COMMAND>
+
+Commands:
+  list    List all configuration
+  get     Get configuration value
+  set     Set configuration value
+  delete  Delete configuration key
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
+
+> vp pm config list --location project > /dev/null # should list all project configuration
+> vp pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope
+> vp pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope
+test-value
+
+> vp pm config delete vite-plus-pm-config-test-key --location project # should delete config key from project scope

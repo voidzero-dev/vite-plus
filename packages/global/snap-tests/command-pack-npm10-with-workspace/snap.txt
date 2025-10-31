@@ -1,0 +1,217 @@
+> vp pm pack --json # should pack current workspace root
+[
+  {
+    "id": "command-pack-npm10-with-workspace@<semver>",
+    "name": "command-pack-npm10-with-workspace",
+    "version": "1.0.0",
+    "size": <variable>,
+    "unpackedSize": <variable>,
+    "shasum": "<hash>",
+    "integrity": "sha512-<hash>",
+    "filename": "command-pack-npm10-with-workspace-1.0.0.tgz",
+    "files": [
+      {
+        "path": "output.log",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "packages/app/package.json",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "packages/utils/package.json",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "snap.txt",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "steps.json",
+        "size": <variable>,
+        "mode": 420
+      }
+    ],
+    "entryCount": 6,
+    "bundled": []
+  }
+]
+
+> vp pm pack --recursive --json && rm -rf *.tgz # should pack all packages in workspace (uses --workspaces)
+[
+  {
+    "id": "app@<semver>",
+    "name": "app",
+    "version": "1.0.0",
+    "size": <variable>,
+    "unpackedSize": <variable>,
+    "shasum": "<hash>",
+    "integrity": "sha512-<hash>",
+    "filename": "app-1.0.0.tgz",
+    "files": [
+      {
+        "path": "package.json",
+        "size": <variable>,
+        "mode": 420
+      }
+    ],
+    "entryCount": 1,
+    "bundled": []
+  },
+  {
+    "id": "@vite-plus-test/utils@<semver>",
+    "name": "@vite-plus-test/utils",
+    "version": "1.0.0",
+    "size": <variable>,
+    "unpackedSize": <variable>,
+    "shasum": "<hash>",
+    "integrity": "sha512-<hash>",
+    "filename": "vite-plus-test-utils-1.0.0.tgz",
+    "files": [
+      {
+        "path": "package.json",
+        "size": <variable>,
+        "mode": 420
+      }
+    ],
+    "entryCount": 1,
+    "bundled": []
+  }
+]
+
+> vp pm pack --filter app --json && rm -rf *.tgz # should pack specific package (uses --workspace app)
+[
+  {
+    "id": "app@<semver>",
+    "name": "app",
+    "version": "1.0.0",
+    "size": <variable>,
+    "unpackedSize": <variable>,
+    "shasum": "<hash>",
+    "integrity": "sha512-<hash>",
+    "filename": "app-1.0.0.tgz",
+    "files": [
+      {
+        "path": "package.json",
+        "size": <variable>,
+        "mode": 420
+      }
+    ],
+    "entryCount": 1,
+    "bundled": []
+  }
+]
+
+> vp pm pack --filter app --filter @vite-plus-test/utils --json && rm -rf *.tgz # should pack multiple packages
+[
+  {
+    "id": "app@<semver>",
+    "name": "app",
+    "version": "1.0.0",
+    "size": <variable>,
+    "unpackedSize": <variable>,
+    "shasum": "<hash>",
+    "integrity": "sha512-<hash>",
+    "filename": "app-1.0.0.tgz",
+    "files": [
+      {
+        "path": "package.json",
+        "size": <variable>,
+        "mode": 420
+      }
+    ],
+    "entryCount": 1,
+    "bundled": []
+  },
+  {
+    "id": "@vite-plus-test/utils@<semver>",
+    "name": "@vite-plus-test/utils",
+    "version": "1.0.0",
+    "size": <variable>,
+    "unpackedSize": <variable>,
+    "shasum": "<hash>",
+    "integrity": "sha512-<hash>",
+    "filename": "vite-plus-test-utils-1.0.0.tgz",
+    "files": [
+      {
+        "path": "package.json",
+        "size": <variable>,
+        "mode": 420
+      }
+    ],
+    "entryCount": 1,
+    "bundled": []
+  }
+]
+
+> vp pm pack --pack-destination ./dist --json && rm -rf ./dist # should pack with destination
+[
+  {
+    "id": "command-pack-npm10-with-workspace@<semver>",
+    "name": "command-pack-npm10-with-workspace",
+    "version": "1.0.0",
+    "size": <variable>,
+    "unpackedSize": <variable>,
+    "shasum": "<hash>",
+    "integrity": "sha512-<hash>",
+    "filename": "command-pack-npm10-with-workspace-1.0.0.tgz",
+    "files": [
+      {
+        "path": "app-1.0.0.tgz",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "command-pack-npm10-with-workspace-1.0.0.tgz",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "output.log",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "packages/app/package.json",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "packages/utils/package.json",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "snap.txt",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "steps.json",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
+        "path": "vite-plus-test-utils-1.0.0.tgz",
+        "size": <variable>,
+        "mode": 420
+      }
+    ],
+    "entryCount": 9,
+    "bundled": []
+  }
+]

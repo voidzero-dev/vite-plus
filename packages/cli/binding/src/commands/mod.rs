@@ -7,6 +7,7 @@ pub(crate) mod lib_cmd;
 pub(crate) mod link;
 pub(crate) mod lint;
 pub(crate) mod outdated;
+pub(crate) mod pm;
 pub(crate) mod remove;
 pub(crate) mod test;
 pub(crate) mod unlink;
