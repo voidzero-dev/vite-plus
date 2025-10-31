@@ -44,9 +44,6 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      # - name: Configure Git to use GITHUB_TOKEN for Cargo
-      #   run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
-
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
           save-cache: ${{ github.ref_name == 'main' }}
@@ -55,7 +52,9 @@ jobs:
       - run: rustup target add x86_64-unknown-linux-musl
         if: ${{ matrix.os == 'ubuntu-latest' }}
 
-      - run: git clone https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/voidzero-dev/vite-task.git
+      - name: Configure Git for access to vite-task
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
       - run: cargo check --verbose --all-targets --all-features
         env:
           RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
