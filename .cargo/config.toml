@@ -3,3 +3,6 @@ rustflags = ["--cfg", "tokio_unstable"] # also update .github/workflows/ci.yml
 
 [unstable]
 bindeps = true
+
+[net]
+git-fetch-with-cli = true #  use git CLI to authenticate for vite-task git dependencies
