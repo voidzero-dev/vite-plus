@@ -44,6 +44,9 @@ jobs:
           persist-credentials: false
           submodules: true
 
+      - name: Configure Git to use GITHUB_TOKEN for Cargo
+        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
           save-cache: ${{ github.ref_name == 'main' }}
@@ -66,6 +69,9 @@ jobs:
         with:
           persist-credentials: false
           submodules: true
+
+      - name: Configure Git to use GITHUB_TOKEN for Cargo
+        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
@@ -98,6 +104,9 @@ jobs:
         with:
           persist-credentials: false
           submodules: true
+
+      - name: Configure Git to use GITHUB_TOKEN for Cargo
+        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
@@ -135,6 +144,9 @@ jobs:
         with:
           persist-credentials: false
           submodules: true
+
+      - name: Configure Git to use GITHUB_TOKEN for Cargo
+        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - run: |
           brew install rustup
@@ -174,6 +186,9 @@ jobs:
         with:
           persist-credentials: false
           submodules: true
+
+      - name: Configure Git to use GITHUB_TOKEN for Cargo
+        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
