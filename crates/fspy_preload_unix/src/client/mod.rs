@@ -71,7 +71,7 @@ impl Client {
         let mut frame = ipc_sender
             .claim_frame(frame_size)
             .expect("fspy: failed to claim frame in shared memory");
-        let written_size = encode_into_slice(&path_access, &mut frame, BINCODE_CONFIG)?;
+        let written_size = encode_into_slice(path_access, &mut frame, BINCODE_CONFIG)?;
         assert_eq!(written_size, size_writer.bytes_written);
 
         Ok(())

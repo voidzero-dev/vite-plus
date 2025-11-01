@@ -79,7 +79,7 @@ impl RelativePath {
 #[derive(
     Debug, Encode, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize, Default,
 )]
-#[allow(clippy::unsafe_derive_deserialize)]
+#[expect(clippy::unsafe_derive_deserialize)]
 pub struct RelativePathBuf(Str);
 
 impl AsRef<Path> for RelativePathBuf {

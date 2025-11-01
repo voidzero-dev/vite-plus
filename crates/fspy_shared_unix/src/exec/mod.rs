@@ -100,18 +100,15 @@ impl Exec {
         config: ExecResolveConfig,
     ) -> nix::Result<()> {
         if let Some(search_path) = config.search_path {
-            let path = search_path.custom_path.map_or_else(
-                || {
-                    getenv(c"PATH").map_or_else(
-                        || {
-                            // https://github.com/kraj/musl/blob/1b06420abdf46f7d06ab4067e7c51b8b63731852/src/process/execvp.c#L21
-                            b"/usr/local/bin:/bin:/usr/bin".as_bstr()
-                        },
-                        |path| path.to_bytes().as_bstr(),
-                    )
-                },
-                |custom_path| custom_path,
-            );
+            let path = search_path.custom_path.unwrap_or_else(|| {
+                getenv(c"PATH").map_or_else(
+                    || {
+                        // https://github.com/kraj/musl/blob/1b06420abdf46f7d06ab4067e7c51b8b63731852/src/process/execvp.c#L21
+                        b"/usr/local/bin:/bin:/usr/bin".as_bstr()
+                    },
+                    |path| path.to_bytes().as_bstr(),
+                )
+            });
             let program = which::which(
                 self.program.as_ref(),
                 path,

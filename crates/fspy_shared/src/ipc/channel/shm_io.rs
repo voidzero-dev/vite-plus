@@ -71,7 +71,7 @@ fn assert_alignment(ptr: *const u8) {
 fn roundup_to_align_frame_header(mut size: usize) -> usize {
     // round up new_end so that the next frame header is aligned
     const FRAME_HEADER_ALIGN: usize = align_of::<AtomicI32>();
-    if size % FRAME_HEADER_ALIGN != 0 {
+    if !size.is_multiple_of(FRAME_HEADER_ALIGN) {
         size += FRAME_HEADER_ALIGN - (size % FRAME_HEADER_ALIGN);
     }
     size
@@ -349,7 +349,7 @@ mod tests {
             // allocates this many of usize to fit the requested byte size
             let size_in_usize = len / size_of::<usize>() + 1;
 
-            let mem: Vec<usize> = core::iter::repeat(0usize).take(size_in_usize).collect();
+            let mem: Vec<usize> = std::iter::repeat_n(0usize, size_in_usize).collect();
 
             Self { mem: Arc::new(mem), len }
         }

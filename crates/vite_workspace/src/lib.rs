@@ -516,7 +516,7 @@ mod tests {
         if let Err(Error::DuplicatedPackageName { name, .. }) = result {
             assert_eq!(name, "duplicate");
         } else {
-            panic!("Expected DuplicatedPackageName error, got: {:?}", result);
+            panic!("Expected DuplicatedPackageName error, got: {result:?}");
         }
     }
 

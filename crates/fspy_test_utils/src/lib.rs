@@ -61,12 +61,10 @@ pub fn create_command(id: &str, arg: impl Encode) -> Command {
 mod tests {
     use std::str::from_utf8;
 
-    use super::*;
-
     #[test]
     fn test_command_executing() {
         let mut command = command_executing!(42u32, |arg: u32| {
-            print!("{}", arg);
+            print!("{arg}");
         });
         let output = command.output().unwrap();
         assert_eq!(from_utf8(&output.stdout), Ok("42"));

@@ -38,11 +38,8 @@ pub fn get_display_command(display_options: DisplayOptions, task: &ResolvedTask)
     };
 
     let cwd = task.resolved_command.fingerprint.cwd.as_str();
-    Some(format!(
-        "{}$ {}",
-        if cwd.is_empty() { format_args!("") } else { format_args!("~/{cwd}") },
-        display_command
-    ))
+    let cwd_str = if cwd.is_empty() { format_args!("") } else { format_args!("~/{cwd}") };
+    Some(format!("{cwd_str}$ {display_command}"))
 }
 
 /// Displayed before the task is executed

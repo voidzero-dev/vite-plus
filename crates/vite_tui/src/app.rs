@@ -85,7 +85,7 @@ impl App {
 
             tokio::spawn({
                 let action_tx = self.action_tx.clone();
-                let task = task.to_string();
+                let task = task.clone();
                 async move {
                     // Consume the output from the child
                     // Can't read the full buffer, since that would wait for EOF

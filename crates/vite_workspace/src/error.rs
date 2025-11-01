@@ -1,12 +1,9 @@
 use std::{io, path::Path};
 
-use serde_json;
-use serde_yml;
 use vite_path::{
     AbsolutePathBuf, RelativePathBuf, absolute::StripPrefixError, relative::InvalidPathDataError,
 };
 use vite_str::Str;
-use wax;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

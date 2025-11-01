@@ -34,7 +34,7 @@ pub fn channel(capacity: usize) -> io::Result<(ChannelConf, Receiver)> {
         conf = conf.allow_raw(true);
     }
 
-    let shm = conf.create().map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+    let shm = conf.create().map_err(io::Error::other)?;
 
     let conf = ChannelConf {
         lock_file_path: lock_file_path.as_os_str().into(),
@@ -61,7 +61,7 @@ impl ChannelConf {
         {
             conf = conf.allow_raw(true);
         }
-        let shm = conf.open().map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+        let shm = conf.open().map_err(io::Error::other)?;
         let writer = unsafe { ShmWriter::new(shm) };
         Ok(Sender { writer, lock_file, lock_file_path: self.lock_file_path.clone() })
     }

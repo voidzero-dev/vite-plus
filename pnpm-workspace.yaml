@@ -9,12 +9,12 @@ catalog:
   '@oxc-node/core': ^0.0.32
   '@std/yaml': npm:@jsr/std__yaml@^1.0.10
   '@types/cross-spawn': ^6.0.6
-  '@types/node': ^24.9.1
+  '@types/node': ^24.9.2
   '@types/react': ^19.1.8
   '@types/react-dom': ^19.1.6
   '@types/semver': ^7.7.1
-  '@vitest/browser': ^4.0.4
-  '@vitest/browser-playwright': ^4.0.4
+  '@vitest/browser': ^4.0.6
+  '@vitest/browser-playwright': ^4.0.6
   create-tsdown: 0.0.3
   create-vite: ^8.0.0
   cross-spawn: ^7.0.5
@@ -23,10 +23,10 @@ catalog:
   minimatch: ^10.0.3
   mri: ^1.2.0
   next: ^15.4.3
-  oxc-minify: ^0.82.1
-  oxfmt: ^0.8.0
-  oxlint: ^1.24.0
-  oxlint-tsgolint: ^0.3.0
+  oxc-minify: ^0.96.0
+  oxfmt: ^0.9.0
+  oxlint: ^1.25.0
+  oxlint-tsgolint: ^0.4.0
   picocolors: ^1.1.1
   playwright: ^1.56.1
   react: ^19.1.0
@@ -34,11 +34,11 @@ catalog:
   rolldown: ^1.0.0-beta.45
   rolldown-vite: ^7.1.19
   semver: ^7.7.3
-  tsdown: ^0.15.10
+  tsdown: ^0.15.12
   typescript: ^5.9.3
-  vite: npm:rolldown-vite@^7.1.19
+  vite: npm:rolldown-vite@^7.1.20
   vitepress: 2.0.0-alpha.12
-  vitest: ^4.0.4
+  vitest: ^4.0.6
   vue: ^3.5.21
 
 catalogMode: prefer
