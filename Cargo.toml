@@ -32,62 +32,24 @@ cargo = { level = "warn", priority = -1 }
 cargo_common_metadata = "allow"
 
 [workspace.dependencies]
-allocator-api2 = { version = "0.2.21", default-features = false, features = ["alloc", "std"] }
 anyhow = "1.0.98"
-assert2 = "0.3.16"
-assertables = "9.8.1"
-attohttpc = { version = "0.30.1", features = ["tls-native", "tls-native-vendored"], default-features = false }
 backon = "1.3.0"
-base64 = "0.22.1"
 bincode = "2.0.1"
-bindgen = "0.72.1"
-brush-parser = "0.2.18"
 bstr = { version = "1.12.0", default-features = false, features = ["alloc", "std"] }
-bumpalo = { version = "3.17.0", features = ["allocator-api2"] }
-bytemuck = { version = "1.23.0", features = ["extern_crate_alloc", "must_cast"] }
-cc = "1.2.39"
 clap = "4.5.40"
-color-eyre = "0.6.5"
-compact_str = "0.9.0"
-const_format = "0.2.34"
-constcat = "0.6.1"
 criterion = { version = "0.7", features = ["html_reports"] }
 crossterm = { version = "0.29.0", features = ["event-stream"] }
-csv-async = { version = "1.3.1", features = ["tokio"] }
-ctor = "0.6"
-dashmap = "6.1.0"
-diff-struct = "0.5.3"
 directories = "6.0.0"
-elf = { version = "0.8.0", default-features = false }
 flate2 = "1.0.35"
-fspy = { path = "crates/fspy" }
-futures = "0.3.31"
-futures-core = "0.3.31"
 futures-util = "0.3.31"
 hex = "0.4.3"
 httpmock = "0.7"
 indoc = "2.0.5"
-itertools = "0.14.0"
-libc = "0.2.172"
-memmap2 = "0.9.7"
 nix = { version = "0.30.1", features = ["dir"] }
-ntapi = "0.4.1"
-os_str_bytes = "7.1.1"
-ouroboros = "0.18.5"
-owo-colors = "4.1.0"
-passfd = { git = "https://github.com/polachok/passfd", rev = "d55881752c16aced1a49a75f9c428d38d3767213", default-features = false }
 pathdiff = "0.2.3"
 petgraph = "0.8.2"
-phf = { version = "0.11.3", features = ["macros"] }
-portable-pty = "0.9.0"
-rand = "0.9.1"
-ratatui = "0.29.0"
-rayon = "1.10.0"
-ref-cast = "1.0.24"
 reqwest = { version = "0.12", default-features = false }
 rusqlite = "0.37.0"
-rustc-hash = "2.1.1"
-seccompiler = { git = "https://github.com/branchseer/seccompiler", branch = "seccomp-action-raw" }
 semver = "1.0.26"
 serde = "1.0.219"
 serde_json = "1.0.140"
@@ -95,25 +57,13 @@ serde_yml = "0.0.12"
 serial_test = "3.2.0"
 sha1 = "0.10.6"
 sha2 = "0.10.9"
-shared_memory = "0.12.4"
-shell-escape = "0.1.5"
-smallvec = { version = "2.0.0-alpha.11", features = ["std"] }
-stackalloc = "1.2.1"
-supports-color = "3.0.1"
-syscalls = { version = "0.6.18", default-features = false }
 tar = "0.4.43"
 tempfile = "3.14.0"
 test-log = { version = "0.2.18", features = ["trace"] }
 thiserror = "2"
 tokio = "1.46.1"
-tokio-util = "0.7.15"
-toml = "0.9.5"
 tracing = "0.1.41"
-tracing-error = "0.2.1"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "serde"] }
-tui-term = "0.2.0"
-twox-hash = "2.1.1"
-uuid = "1.18.1"
 vite_error = { path = "crates/vite_error" }
 vite_glob = { git = "https://github.com/voidzero-dev/vite-task", branch = "10-30-chore_remove_vite-plus_files" }
 vite_install = { path = "crates/vite_install" }
@@ -122,19 +72,10 @@ vite_str = { git = "https://github.com/voidzero-dev/vite-task", branch = "10-30-
 vite_task = { git = "https://github.com/voidzero-dev/vite-task", branch = "10-30-chore_remove_vite-plus_files" }
 vite_workspace = { git = "https://github.com/voidzero-dev/vite-task", branch = "10-30-chore_remove_vite-plus_files" }
 wax = "0.6.0"
-which = "7.0.3"
-widestring = "1.2.0"
-winapi = "0.3.9"
-winsafe = { version = "0.0.24", features = ["kernel"] }
-xxhash-rust = { version = "0.8.15", features = ["const_xxh3"] }
 
 napi = { version = "3.0.0", default-features = false, features = ["async", "error_anyhow"] }
 napi-build = "2"
 napi-derive = { version = "3.0.0", default-features = false, features = ["type-def", "strict"] }
-
-[workspace.metadata.cargo-shear]
-# These are artifact dependencies. They are not directly `use`d in Rust code.
-ignored = ["fspy_preload_unix", "fspy_preload_windows", "fspy_test_bin"]
 
 [profile.dev]
 # Disabling debug info speeds up local and CI builds,
