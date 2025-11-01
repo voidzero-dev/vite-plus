@@ -55,7 +55,7 @@ jobs:
       - name: Configure Git for access to vite-task
         run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
-      - run: cargo check --verbose --all-targets --all-features
+      - run: cargo check --all-targets --all-features
         env:
           RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
 
@@ -70,8 +70,8 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - name: Configure Git to use GITHUB_TOKEN for Cargo
-        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      - name: Configure Git for access to vite-task
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
@@ -105,8 +105,8 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - name: Configure Git to use GITHUB_TOKEN for Cargo
-        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      - name: Configure Git for access to vite-task
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
@@ -145,8 +145,8 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - name: Configure Git to use GITHUB_TOKEN for Cargo
-        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      - name: Configure Git for access to vite-task
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - run: |
           brew install rustup
@@ -187,8 +187,8 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - name: Configure Git to use GITHUB_TOKEN for Cargo
-        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      - name: Configure Git for access to vite-task
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
