@@ -397,7 +397,13 @@ async fn download_package_manager(
             // Another concurrent process created the directory - that's OK
             tracing::debug!("Target directory already exists (concurrent creation), using it");
             // Clean up the temporary directory we don't need anymore
-            let _ = remove_dir_all(&target_dir_tmp).await;
+            if let Err(cleanup_err) = remove_dir_all(&target_dir_tmp).await {
+                tracing::warn!(
+                    "Failed to clean up temporary directory {:?}: {}",
+                    target_dir_tmp,
+                    cleanup_err
+                );
+            }
             Ok(install_dir)
         }
         Err(e) => Err(e.into()),
@@ -405,10 +411,11 @@ async fn download_package_manager(
 }
 
 // OS-specific error codes for concurrent file system operations
-const ENOTEMPTY_UNIX: i32 = 39; // Directory not empty on some Unix systems
-const ENOTEMPTY_MACOS: i32 = 66; // Directory not empty on macOS
+// Note: ENOTEMPTY varies by Unix flavor - Linux uses 39, macOS/BSD use 66
+const ENOTEMPTY_LINUX: i32 = 39; // Directory not empty on Linux
+const ENOTEMPTY_BSD: i32 = 66; // Directory not empty on macOS/BSD
 const ERROR_DIR_NOT_EMPTY_WINDOWS: i32 = 145; // Directory not empty on Windows
-const EEXIST_UNIX: i32 = 17; // File exists on Unix
+const EEXIST_UNIX: i32 = 17; // File exists on Unix (both Linux and macOS)
 const ERROR_ALREADY_EXISTS_WINDOWS: i32 = 183; // File/directory already exists on Windows
 
 /// Remove the directory and all its contents.
@@ -423,7 +430,7 @@ async fn remove_dir_all_force(path: impl AsRef<Path>) -> Result<(), std::io::Err
             if e.kind() == std::io::ErrorKind::NotFound
                 || matches!(
                     e.raw_os_error(),
-                    Some(ENOTEMPTY_UNIX) | Some(ENOTEMPTY_MACOS) | Some(ERROR_DIR_NOT_EMPTY_WINDOWS)
+                    Some(ENOTEMPTY_LINUX) | Some(ENOTEMPTY_BSD) | Some(ERROR_DIR_NOT_EMPTY_WINDOWS)
                 )
             {
                 tracing::debug!("Ignoring directory removal error (likely concurrent access): {}", e);
