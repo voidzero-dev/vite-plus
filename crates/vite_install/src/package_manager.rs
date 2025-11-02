@@ -404,6 +404,13 @@ async fn download_package_manager(
     }
 }
 
+// OS-specific error codes for concurrent file system operations
+const ENOTEMPTY_UNIX: i32 = 39; // Directory not empty on some Unix systems
+const ENOTEMPTY_MACOS: i32 = 66; // Directory not empty on macOS
+const ERROR_DIR_NOT_EMPTY_WINDOWS: i32 = 145; // Directory not empty on Windows
+const EEXIST_UNIX: i32 = 17; // File exists on Unix
+const ERROR_ALREADY_EXISTS_WINDOWS: i32 = 183; // File/directory already exists on Windows
+
 /// Remove the directory and all its contents.
 /// Ignore the error if the directory is not found or already being removed by another process.
 async fn remove_dir_all_force(path: impl AsRef<Path>) -> Result<(), std::io::Error> {
@@ -414,11 +421,11 @@ async fn remove_dir_all_force(path: impl AsRef<Path>) -> Result<(), std::io::Err
             // - NotFound: directory was already removed
             // - DirectoryNotEmpty: another process is actively using/removing the directory
             if e.kind() == std::io::ErrorKind::NotFound
-                || matches!(e.raw_os_error(), Some(39) | Some(66) | Some(145))
+                || matches!(
+                    e.raw_os_error(),
+                    Some(ENOTEMPTY_UNIX) | Some(ENOTEMPTY_MACOS) | Some(ERROR_DIR_NOT_EMPTY_WINDOWS)
+                )
             {
-                // 39 = ENOTEMPTY on some Unix systems
-                // 66 = ENOTEMPTY on macOS
-                // 145 = ERROR_DIR_NOT_EMPTY on Windows
                 tracing::debug!("Ignoring directory removal error (likely concurrent access): {}", e);
                 Ok(())
             } else {
@@ -431,9 +438,10 @@ async fn remove_dir_all_force(path: impl AsRef<Path>) -> Result<(), std::io::Err
 /// Check if an error indicates that a file or directory already exists.
 fn is_already_exists_error(e: &std::io::Error) -> bool {
     e.kind() == std::io::ErrorKind::AlreadyExists
-        || matches!(e.raw_os_error(), Some(17) | Some(183))
-    // 17 = EEXIST on Unix
-    // 183 = ERROR_ALREADY_EXISTS on Windows
+        || matches!(
+            e.raw_os_error(),
+            Some(EEXIST_UNIX) | Some(ERROR_ALREADY_EXISTS_WINDOWS)
+        )
 }
 
 /// Create shim files for the package manager.
