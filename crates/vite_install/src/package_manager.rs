@@ -610,19 +610,10 @@ pub(crate) async fn run_command(
 #[cfg(test)]
 mod tests {
     //! Tests for package manager detection and installation.
-    //!
-    //! Note: Some tests are marked with `#[ignore]` because they require network access
-    //! to download package managers from npm registry. These tests are meant to be run
-    //! as e2e/integration tests.
-    //!
-    //! To run only the unit tests (without network): `cargo test -p vite_install`
-    //! To run all tests including e2e tests: `cargo test -p vite_install -- --ignored --test-threads=1`
-    //!
-    //! The `--test-threads=1` flag is recommended when running e2e tests to avoid
-    //! race conditions in concurrent downloads to the shared cache directory.
 
     use std::fs;
 
+    use httpmock::prelude::*;
     use tempfile::{TempDir, tempdir};
 
     use super::*;
@@ -638,6 +629,100 @@ mod tests {
     fn create_pnpm_workspace_yaml(dir: &AbsolutePath, content: &str) {
         fs::write(dir.join("pnpm-workspace.yaml"), content)
             .expect("Failed to write pnpm-workspace.yaml");
+    }
+
+    /// Helper to create a mock package tar.gz for testing
+    fn create_mock_package_tgz(package_manager_type: PackageManagerType) -> Vec<u8> {
+        use flate2::write::GzEncoder;
+        use flate2::Compression;
+        use std::io::Write;
+        use tar::Builder;
+
+        let bin_name = package_manager_type.to_string();
+        let mut tar_builder = Builder::new(Vec::new());
+
+        // Add package.json
+        let package_json = format!(r#"{{"name":"{}","version":"1.0.0"}}"#, bin_name);
+        let mut header = tar::Header::new_gnu();
+        header.set_size(package_json.len() as u64);
+        header.set_mode(0o644);
+        tar_builder
+            .append_data(&mut header, "package/package.json", package_json.as_bytes())
+            .unwrap();
+
+        // Add bin file
+        let bin_content = format!("#!/usr/bin/env node\nconsole.log('mock {}');", bin_name);
+        let mut header = tar::Header::new_gnu();
+        header.set_size(bin_content.len() as u64);
+        header.set_mode(0o755);
+        tar_builder
+            .append_data(
+                &mut header,
+                &format!("package/bin/{}", bin_name),
+                bin_content.as_bytes(),
+            )
+            .unwrap();
+
+        let tar_data = tar_builder.into_inner().unwrap();
+
+        // Compress with gzip
+        let mut gz_encoder = GzEncoder::new(Vec::new(), Compression::default());
+        gz_encoder.write_all(&tar_data).unwrap();
+        gz_encoder.finish().unwrap()
+    }
+
+    /// Helper to setup a mock npm registry server for testing
+    /// Returns the MockServer instance
+    fn setup_mock_registry() -> MockServer {
+        MockServer::start()
+    }
+
+    /// Helper to mock a package download endpoint
+    fn mock_package_download(
+        server: &MockServer,
+        package_name: &str,
+        version: &str,
+        package_manager_type: PackageManagerType,
+    ) -> Mock {
+        let filename = package_name.split('/').next_back().unwrap_or(package_name);
+        let path = format!("/{}/-/{}-{}.tgz", package_name, filename, version);
+        let mock_tgz = create_mock_package_tgz(package_manager_type);
+
+        server.mock(|when, then| {
+            when.method(GET).path(&path);
+            then.status(200)
+                .header("content-type", "application/octet-stream")
+                .body(mock_tgz);
+        })
+    }
+
+    /// Helper to mock a 404 response for a non-existent package version
+    fn mock_package_not_found(server: &MockServer, package_name: &str, version: &str) -> Mock {
+        let filename = package_name.split('/').next_back().unwrap_or(package_name);
+        let path = format!("/{}/-/{}-{}.tgz", package_name, filename, version);
+
+        server.mock(|when, then| {
+            when.method(GET).path(&path);
+            then.status(404).body("Not Found");
+        })
+    }
+
+    /// Helper to mock the package version endpoint (e.g., /package_name/latest)
+    fn mock_package_version(
+        server: &MockServer,
+        package_name: &str,
+        version_or_tag: &str,
+        actual_version: &str,
+    ) -> Mock {
+        let path = format!("/{}/{}", package_name, version_or_tag);
+        let response_json = format!(r#"{{"version":"{}"}}"#, actual_version);
+
+        server.mock(|when, then| {
+            when.method(GET).path(&path);
+            then.status(200)
+                .header("content-type", "application/json")
+                .body(response_json);
+        })
     }
 
     #[test]
@@ -916,20 +1001,26 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires network access - run with --ignored flag for e2e tests"]
     async fn test_detect_package_manager_with_pnpm_workspace_yaml() {
+        let server = setup_mock_registry();
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let workspace_content = "packages:\n  - 'packages/*'";
         create_pnpm_workspace_yaml(&temp_dir_path, workspace_content);
 
+        // Mock pnpm package download (uses "latest" version by default)
+        mock_package_version(&server, "pnpm", "latest", "9.0.0");
+        mock_package_download(&server, "pnpm", "9.0.0", PackageManagerType::Pnpm);
+
+        std::env::set_var("NPM_CONFIG_REGISTRY", &server.base_url());
         let result =
             PackageManager::builder(temp_dir_path).build().await.expect("Should detect pnpm");
+        std::env::remove_var("NPM_CONFIG_REGISTRY");
+        
         assert_eq!(result.bin_name, "pnpm");
     }
 
     #[tokio::test]
-    #[ignore = "requires network access - run with --ignored flag for e2e tests"]
     async fn test_detect_package_manager_with_pnpm_lock_yaml() {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -988,7 +1079,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires network access - run with --ignored flag for e2e tests"]
     #[cfg(not(windows))] // FIXME
     async fn test_detect_package_manager_with_package_lock_json() {
         use std::process::Command;
@@ -1222,7 +1312,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires network access - run with --ignored flag for e2e tests"]
     async fn test_download_failed_package_manager_with_hash() {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1336,7 +1425,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires network access - run with --ignored flag for e2e tests"]
     async fn test_detect_package_manager_with_invalid_package_manager_field() {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1354,15 +1442,26 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires network access - run with --ignored flag for e2e tests"]
     async fn test_detect_package_manager_with_not_exists_version_in_package_manager_field() {
+        let server = setup_mock_registry();
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content =
             r#"{"name": "test-package", "packageManager": "yarn@10000000000.0.0"}"#;
         create_package_json(&temp_dir_path, package_content);
 
+        // Mock 404 response for non-existent version
+        // Yarn >= 2.0.0 uses @yarnpkg/cli-dist as package name
+        mock_package_not_found(&server, "@yarnpkg/cli-dist", "10000000000.0.0");
+
+        // Set the npm registry to point to our mock server
+        std::env::set_var("NPM_CONFIG_REGISTRY", &server.base_url());
+
         let result = PackageManager::builder(temp_dir_path).build().await;
+        
+        // Clean up env var
+        std::env::remove_var("NPM_CONFIG_REGISTRY");
+        
         assert!(result.is_err());
         println!("result: {result:?}");
         // Check if it's the expected error type
@@ -1375,7 +1474,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires network access - run with --ignored flag for e2e tests"]
     async fn test_detect_package_manager_with_invalid_semver() {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1412,7 +1510,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires network access - run with --ignored flag for e2e tests"]
     async fn test_detect_package_manager_without_any_indicators() {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1659,7 +1756,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires network access - run with --ignored flag for e2e tests"]
     async fn test_detect_package_manager_pnpmfile_over_yarn_config() {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
