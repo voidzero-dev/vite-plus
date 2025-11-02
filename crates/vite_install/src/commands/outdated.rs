@@ -86,18 +86,21 @@ impl PackageManager {
         &self,
         options: &OutdatedCommandOptions,
     ) -> ResolveCommandResult {
-        let bin_path = self.get_bin_path();
         let envs = self.get_envs();
         let mut args: Vec<String> = Vec::new();
 
         // Global packages should use npm cli only
         if options.global {
-            
+            let bin_path = "npm".to_string();
             Self::format_npm_outdated_args(&mut args, options);
             args.push("-g".into());
-        } else {
-            match self.client {
-                PackageManagerType::Pnpm => {
+            return ResolveCommandResult { bin_path, args, envs };
+        }
+
+        let bin_path = self.get_bin_path();
+        
+        match self.client {
+            PackageManagerType::Pnpm => {
                     
 
                     // pnpm: --filter must come before command
