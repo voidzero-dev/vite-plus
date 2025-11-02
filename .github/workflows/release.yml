@@ -50,6 +50,9 @@ jobs:
       - name: Set binding version
         run: pnpm exec tool replace-file-content packages/cli/binding/Cargo.toml 'version = "0.0.0"' 'version = "0.0.0-${{ github.sha }}"'
 
+      - name: Configure Git for access to vite-task
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
       - name: Build
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         run: pnpm --filter=@voidzero-dev/vite-plus build --target ${{ matrix.settings.target }} --use-napi-cross
@@ -95,6 +98,9 @@ jobs:
           submodules: true
 
       - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Configure Git for access to vite-task
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: Bootstrap
         run: pnpm bootstrap-cli:ci
