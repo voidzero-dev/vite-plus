@@ -1,0 +1,59 @@
+> cat array.json # should show original array.json file
+[
+  {
+    "name": "test",
+    "age": 18
+  },
+  {
+    "name": "abc",
+    "age": 20
+  },
+  {
+    "name": "def",
+    "age": 15
+  },
+  {
+    "name": "ghi",
+    "age": 18
+  }
+]
+
+> tool json-sort array.json '_.name' && cat array.json # should sort array.json file by name
+[
+  {
+    "name": "abc",
+    "age": 20
+  },
+  {
+    "name": "def",
+    "age": 15
+  },
+  {
+    "name": "ghi",
+    "age": 18
+  },
+  {
+    "name": "test",
+    "age": 18
+  }
+]
+
+> tool json-sort array.json '_.age' && cat array.json # should sort array.json file by age
+[
+  {
+    "name": "def",
+    "age": 15
+  },
+  {
+    "name": "ghi",
+    "age": 18
+  },
+  {
+    "name": "test",
+    "age": 18
+  },
+  {
+    "name": "abc",
+    "age": 20
+  }
+]

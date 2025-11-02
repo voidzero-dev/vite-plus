@@ -13,8 +13,12 @@ switch (subcommand) {
     const { syncRemote } = await import('./sync-remote-deps');
     syncRemote();
     break;
+  case 'json-sort':
+    const { jsonSort } = await import('./json-sort');
+    jsonSort();
+    break;
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
-    console.error('Available subcommands: snap-test, replace-file-content, sync-remote');
+    console.error('Available subcommands: snap-test, replace-file-content, sync-remote, json-sort');
     process.exit(1);
 }
