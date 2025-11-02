@@ -1022,6 +1022,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_detect_package_manager_with_pnpm_lock_yaml() {
+        let server = setup_mock_registry();
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content = r#"{"name": "test-package", "version": "1.0.0"}"#;
@@ -1031,8 +1032,15 @@ mod tests {
         fs::write(temp_dir_path.join("pnpm-lock.yaml"), "lockfileVersion: '6.0'")
             .expect("Failed to write pnpm-lock.yaml");
 
+        // Mock pnpm package download
+        mock_package_version(&server, "pnpm", "latest", "9.0.0");
+        mock_package_download(&server, "pnpm", "9.0.0", PackageManagerType::Pnpm);
+
+        std::env::set_var("NPM_CONFIG_REGISTRY", &server.base_url());
         let result =
             PackageManager::builder(temp_dir_path).build().await.expect("Should detect pnpm");
+        std::env::remove_var("NPM_CONFIG_REGISTRY");
+        
         assert_eq!(result.bin_name, "pnpm");
 
         // check if the package.json file has the `packageManager` field
@@ -1083,6 +1091,7 @@ mod tests {
     async fn test_detect_package_manager_with_package_lock_json() {
         use std::process::Command;
 
+        let server = setup_mock_registry();
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content = r#"{"name": "test-package"}"#;
@@ -1092,8 +1101,15 @@ mod tests {
         fs::write(temp_dir_path.join("package-lock.json"), r#"{"lockfileVersion": 2}"#)
             .expect("Failed to write package-lock.json");
 
+        // Mock npm package download
+        mock_package_version(&server, "npm", "latest", "10.0.0");
+        mock_package_download(&server, "npm", "10.0.0", PackageManagerType::Npm);
+
+        std::env::set_var("NPM_CONFIG_REGISTRY", &server.base_url());
         let result =
             PackageManager::builder(temp_dir_path).build().await.expect("Should detect npm");
+        std::env::remove_var("NPM_CONFIG_REGISTRY");
+        
         assert_eq!(result.bin_name, "npm");
 
         // check shim files
@@ -1313,12 +1329,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_failed_package_manager_with_hash() {
+        let server = setup_mock_registry();
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content = r#"{"name": "test-package", "packageManager": "yarn@1.22.21+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"}"#;
         create_package_json(&temp_dir_path, package_content);
 
+        // Mock yarn package download (yarn 1.x uses "yarn" as package name)
+        // This will provide a package with a different hash than expected
+        mock_package_download(&server, "yarn", "1.22.21", PackageManagerType::Yarn);
+
+        std::env::set_var("NPM_CONFIG_REGISTRY", &server.base_url());
         let result = PackageManager::builder(temp_dir_path).build().await;
+        std::env::remove_var("NPM_CONFIG_REGISTRY");
+        
         assert!(result.is_err());
         // Check if it's the expected error type
         if let Err(Error::HashMismatch { expected, actual }) = result {
@@ -1326,12 +1350,10 @@ mod tests {
                 expected,
                 "sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
             );
-            assert_eq!(
-                actual,
-                "sha512.ca75da26c00327d26267ce33536e5790f18ebd53266796fbb664d2a4a5116308042dd8ee7003b276a20eace7d3c5561c3577bdd71bcb67071187af124779620a"
-            );
+            // The actual hash will be from our mock package, so we just verify it's different
+            assert_ne!(expected, actual);
         } else {
-            panic!("Expected HashMismatch error");
+            panic!("Expected HashMismatch error, got {result:?}");
         }
     }
 
@@ -1412,15 +1434,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_detect_package_manager_with_npm_package_manager_field() {
+        let server = setup_mock_registry();
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content = r#"{"name": "test-package", "packageManager": "npm@10.0.0"}"#;
         create_package_json(&temp_dir_path, package_content);
 
+        // Mock npm package download
+        mock_package_download(&server, "npm", "10.0.0", PackageManagerType::Npm);
+
+        std::env::set_var("NPM_CONFIG_REGISTRY", &server.base_url());
         let result = PackageManager::builder(temp_dir_path)
             .build()
             .await
             .expect("Should detect npm with version");
+        std::env::remove_var("NPM_CONFIG_REGISTRY");
+        
         assert_eq!(result.bin_name, "npm");
     }
 
@@ -1488,16 +1517,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_detect_package_manager_with_default_fallback() {
+        let server = setup_mock_registry();
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content = r#"{"name": "test-package"}"#;
         create_package_json(&temp_dir_path, package_content);
 
+        // Mock yarn package download (yarn >= 2.0.0 uses @yarnpkg/cli-dist)
+        mock_package_version(&server, "@yarnpkg/cli-dist", "latest", "4.0.0");
+        mock_package_download(&server, "@yarnpkg/cli-dist", "4.0.0", PackageManagerType::Yarn);
+
+        std::env::set_var("NPM_CONFIG_REGISTRY", &server.base_url());
         let result = PackageManager::builder(temp_dir_path.clone())
             .package_manager_type(PackageManagerType::Yarn)
             .build()
             .await
             .expect("Should use default");
+        std::env::remove_var("NPM_CONFIG_REGISTRY");
+        
         assert_eq!(result.bin_name, "yarn");
         // package.json should have the `packageManager` field
         let package_json_path = temp_dir_path.join("package.json");
@@ -1757,6 +1794,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_detect_package_manager_pnpmfile_over_yarn_config() {
+        let server = setup_mock_registry();
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content = r#"{"name": "test-package"}"#;
@@ -1772,11 +1810,18 @@ mod tests {
         )
         .expect("Failed to write yarn.config.cjs");
 
+        // Mock pnpm package download
+        mock_package_version(&server, "pnpm", "latest", "9.0.0");
+        mock_package_download(&server, "pnpm", "9.0.0", PackageManagerType::Pnpm);
+
+        std::env::set_var("NPM_CONFIG_REGISTRY", &server.base_url());
         // pnpmfile.cjs should be detected first (before yarn.config.cjs)
         let result = PackageManager::builder(temp_dir_path)
             .build()
             .await
             .expect("Should detect pnpm from pnpmfile.cjs");
+        std::env::remove_var("NPM_CONFIG_REGISTRY");
+        
         assert_eq!(
             result.bin_name, "pnpm",
             "pnpmfile.cjs should be detected before yarn.config.cjs"
