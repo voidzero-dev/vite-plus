@@ -1,11 +1,9 @@
-use std::{collections::HashMap, process::ExitStatus};
+use std::process::ExitStatus;
 
 use vite_error::Error;
 use vite_path::AbsolutePath;
 
-use crate::package_manager::{
-    PackageManager, PackageManagerType, ResolveCommandResult, format_path_env, run_command,
-};
+use crate::package_manager::{PackageManager, PackageManagerType, ResolveCommandResult, run_command};
 
 /// The type of dependency to save.
 #[derive(Debug, Default, Clone, Copy)]
