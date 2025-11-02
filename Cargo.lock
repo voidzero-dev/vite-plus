@@ -1253,7 +1253,7 @@ dependencies = [
 [[package]]
 name = "fspy"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?branch=10-30-chore_remove_vite-plus_files#79da5552a1716cf9315069ca0d3ef191bf7a189e"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=c615ca66039e48b4a31d54fd0f1672c08d255e78#c615ca66039e48b4a31d54fd0f1672c08d255e78"
 dependencies = [
  "allocator-api2",
  "anyhow",
@@ -1286,7 +1286,7 @@ dependencies = [
 [[package]]
 name = "fspy_detours_sys"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?branch=10-30-chore_remove_vite-plus_files#79da5552a1716cf9315069ca0d3ef191bf7a189e"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=c615ca66039e48b4a31d54fd0f1672c08d255e78#c615ca66039e48b4a31d54fd0f1672c08d255e78"
 dependencies = [
  "cc",
  "winapi",
@@ -1295,7 +1295,7 @@ dependencies = [
 [[package]]
 name = "fspy_preload_unix"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?branch=10-30-chore_remove_vite-plus_files#79da5552a1716cf9315069ca0d3ef191bf7a189e"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=c615ca66039e48b4a31d54fd0f1672c08d255e78#c615ca66039e48b4a31d54fd0f1672c08d255e78"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1310,7 +1310,7 @@ dependencies = [
 [[package]]
 name = "fspy_preload_windows"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?branch=10-30-chore_remove_vite-plus_files#79da5552a1716cf9315069ca0d3ef191bf7a189e"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=c615ca66039e48b4a31d54fd0f1672c08d255e78#c615ca66039e48b4a31d54fd0f1672c08d255e78"
 dependencies = [
  "bincode",
  "constcat",
@@ -1326,7 +1326,7 @@ dependencies = [
 [[package]]
 name = "fspy_seccomp_unotify"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?branch=10-30-chore_remove_vite-plus_files#79da5552a1716cf9315069ca0d3ef191bf7a189e"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=c615ca66039e48b4a31d54fd0f1672c08d255e78#c615ca66039e48b4a31d54fd0f1672c08d255e78"
 dependencies = [
  "bincode",
  "futures-util",
@@ -1343,7 +1343,7 @@ dependencies = [
 [[package]]
 name = "fspy_shared"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?branch=10-30-chore_remove_vite-plus_files#79da5552a1716cf9315069ca0d3ef191bf7a189e"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=c615ca66039e48b4a31d54fd0f1672c08d255e78#c615ca66039e48b4a31d54fd0f1672c08d255e78"
 dependencies = [
  "allocator-api2",
  "bincode",
@@ -1361,7 +1361,7 @@ dependencies = [
 [[package]]
 name = "fspy_shared_unix"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?branch=10-30-chore_remove_vite-plus_files#79da5552a1716cf9315069ca0d3ef191bf7a189e"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=c615ca66039e48b4a31d54fd0f1672c08d255e78#c615ca66039e48b4a31d54fd0f1672c08d255e78"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4177,7 +4177,7 @@ dependencies = [
 [[package]]
 name = "vite_glob"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?branch=10-30-chore_remove_vite-plus_files#79da5552a1716cf9315069ca0d3ef191bf7a189e"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=c615ca66039e48b4a31d54fd0f1672c08d255e78#c615ca66039e48b4a31d54fd0f1672c08d255e78"
 dependencies = [
  "thiserror 2.0.17",
  "wax",
@@ -4217,7 +4217,7 @@ dependencies = [
 [[package]]
 name = "vite_path"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?branch=10-30-chore_remove_vite-plus_files#79da5552a1716cf9315069ca0d3ef191bf7a189e"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=c615ca66039e48b4a31d54fd0f1672c08d255e78#c615ca66039e48b4a31d54fd0f1672c08d255e78"
 dependencies = [
  "bincode",
  "diff-struct",
@@ -4230,7 +4230,7 @@ dependencies = [
 [[package]]
 name = "vite_str"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?branch=10-30-chore_remove_vite-plus_files#79da5552a1716cf9315069ca0d3ef191bf7a189e"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=c615ca66039e48b4a31d54fd0f1672c08d255e78#c615ca66039e48b4a31d54fd0f1672c08d255e78"
 dependencies = [
  "bincode",
  "compact_str",
@@ -4241,7 +4241,7 @@ dependencies = [
 [[package]]
 name = "vite_task"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?branch=10-30-chore_remove_vite-plus_files#79da5552a1716cf9315069ca0d3ef191bf7a189e"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=c615ca66039e48b4a31d54fd0f1672c08d255e78#c615ca66039e48b4a31d54fd0f1672c08d255e78"
 dependencies = [
  "anyhow",
  "bincode",
@@ -4280,7 +4280,7 @@ dependencies = [
 [[package]]
 name = "vite_workspace"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?branch=10-30-chore_remove_vite-plus_files#79da5552a1716cf9315069ca0d3ef191bf7a189e"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=c615ca66039e48b4a31d54fd0f1672c08d255e78#c615ca66039e48b4a31d54fd0f1672c08d255e78"
 dependencies = [
  "petgraph 0.8.3",
  "rustc-hash",
