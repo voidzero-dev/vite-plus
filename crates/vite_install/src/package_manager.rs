@@ -600,6 +600,18 @@ pub(crate) async fn run_command(
 
 #[cfg(test)]
 mod tests {
+    //! Tests for package manager detection and installation.
+    //!
+    //! Note: Some tests are marked with `#[ignore]` because they require network access
+    //! to download package managers from npm registry. These tests are meant to be run
+    //! as e2e/integration tests.
+    //!
+    //! To run only the unit tests (without network): `cargo test -p vite_install`
+    //! To run all tests including e2e tests: `cargo test -p vite_install -- --ignored --test-threads=1`
+    //!
+    //! The `--test-threads=1` flag is recommended when running e2e tests to avoid
+    //! race conditions in concurrent downloads to the shared cache directory.
+
     use std::fs;
 
     use tempfile::{TempDir, tempdir};
