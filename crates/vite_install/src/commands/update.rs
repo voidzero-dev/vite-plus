@@ -42,13 +42,12 @@ impl PackageManager {
     /// Resolve the update command.
     #[must_use]
     pub fn resolve_update_command(&self, options: &UpdateCommandOptions) -> ResolveCommandResult {
-        let bin_path = self.get_bin_path();
         let envs = self.get_envs();
         let mut args: Vec<String> = Vec::new();
 
         // global packages should use npm cli only
         if options.global {
-            
+            let bin_path = "npm".to_string();
             args.push("update".into());
             args.push("--global".into());
             if let Some(pass_through_args) = options.pass_through_args {
@@ -58,6 +57,8 @@ impl PackageManager {
 
             return ResolveCommandResult { bin_path, args, envs };
         }
+
+        let bin_path = self.get_bin_path();
 
         match self.client {
             PackageManagerType::Pnpm => {

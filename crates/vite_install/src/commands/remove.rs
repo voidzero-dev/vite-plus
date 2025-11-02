@@ -36,14 +36,13 @@ impl PackageManager {
     /// Resolve the remove command.
     #[must_use]
     pub fn resolve_remove_command(&self, options: &RemoveCommandOptions) -> ResolveCommandResult {
-        let bin_path: String;
         let envs = self.get_envs();
         let mut args: Vec<String> = Vec::new();
 
         // global packages should use npm cli only
         if options.global {
             // TODO(@fengmk2): Need to handle the case where the npm CLI does not exist in the PATH
-            bin_path = "npm".into();
+            let bin_path = "npm".to_string();
             args.push("uninstall".into());
             args.push("--global".into());
             if let Some(pass_through_args) = options.pass_through_args {
@@ -55,7 +54,7 @@ impl PackageManager {
         }
 
         // Use full path to the package manager binary for reliable execution
-        bin_path = self.get_bin_path();
+        let bin_path = self.get_bin_path();
 
         match self.client {
             PackageManagerType::Pnpm => {
