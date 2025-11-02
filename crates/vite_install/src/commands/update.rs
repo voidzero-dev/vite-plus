@@ -62,7 +62,6 @@ impl PackageManager {
 
         match self.client {
             PackageManagerType::Pnpm => {
-                
                 // pnpm: --filter must come before command
                 if let Some(filters) = options.filters {
                     for filter in filters {
@@ -71,7 +70,6 @@ impl PackageManager {
                     }
                 }
                 args.push("update".into());
-
                 if options.latest {
                     args.push("--latest".into());
                 }
@@ -101,8 +99,6 @@ impl PackageManager {
                 }
             }
             PackageManagerType::Yarn => {
-                
-
                 // Determine yarn version
                 let is_yarn_v1 = self.version.starts_with("1.");
 
@@ -137,9 +133,7 @@ impl PackageManager {
                 }
             }
             PackageManagerType::Npm => {
-                
                 args.push("update".into());
-
                 if let Some(filters) = options.filters {
                     for filter in filters {
                         args.push("--workspace".into());

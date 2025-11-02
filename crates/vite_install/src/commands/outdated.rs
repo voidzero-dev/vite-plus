@@ -101,8 +101,6 @@ impl PackageManager {
         
         match self.client {
             PackageManagerType::Pnpm => {
-                    
-
                     // pnpm: --filter must come before command
                     if let Some(filters) = options.filters {
                         for filter in filters {
@@ -156,8 +154,6 @@ impl PackageManager {
                     args.extend_from_slice(options.packages);
                 }
                 PackageManagerType::Yarn => {
-                    
-
                     // Check if yarn@2+ (uses upgrade-interactive)
                     if !self.version.starts_with("1.") {
                         println!(
@@ -217,12 +213,10 @@ impl PackageManager {
                     }
                 }
                 PackageManagerType::Npm => {
-                    
                     Self::format_npm_outdated_args(&mut args, options);
                 }
             }
         }
-
         // Add pass-through args
         if let Some(pass_through_args) = options.pass_through_args {
             args.extend_from_slice(pass_through_args);

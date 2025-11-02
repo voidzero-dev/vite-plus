@@ -50,8 +50,6 @@ impl PackageManager {
 
         match self.client {
             PackageManagerType::Pnpm => {
-                
-
                 // pnpm: --filter must come before command
                 if let Some(filters) = options.filters {
                     for filter in filters {
@@ -116,8 +114,6 @@ impl PackageManager {
                 args.extend_from_slice(options.packages);
             }
             PackageManagerType::Yarn => {
-                
-
                 args.push("why".into());
 
                 // yarn only supports single package
@@ -161,8 +157,6 @@ impl PackageManager {
                 }
             }
             PackageManagerType::Npm => {
-                
-
                 // npm uses 'explain' as primary command
                 args.push("explain".into());
 
