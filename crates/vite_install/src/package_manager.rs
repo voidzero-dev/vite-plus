@@ -393,11 +393,12 @@ async fn download_package_manager(
             create_shim_files(package_manager_type, &bin_prefix).await?;
             Ok(install_dir)
         }
-        Err(e) if is_already_exists_error(&e) => {
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
             // Another concurrent process created the directory - that's OK
             tracing::debug!("Target directory already exists (concurrent creation), using it");
             // Clean up the temporary directory we don't need anymore
-            if let Err(cleanup_err) = remove_dir_all(&target_dir_tmp).await {
+            // Use remove_dir_all_force to handle potential concurrent cleanup attempts
+            if let Err(cleanup_err) = remove_dir_all_force(&target_dir_tmp).await {
                 tracing::warn!(
                     "Failed to clean up temporary directory {:?}: {}",
                     target_dir_tmp,
@@ -415,8 +416,6 @@ async fn download_package_manager(
 const ENOTEMPTY_LINUX: i32 = 39; // Directory not empty on Linux
 const ENOTEMPTY_BSD: i32 = 66; // Directory not empty on macOS/BSD
 const ERROR_DIR_NOT_EMPTY_WINDOWS: i32 = 145; // Directory not empty on Windows
-const EEXIST_UNIX: i32 = 17; // File exists on Unix (both Linux and macOS)
-const ERROR_ALREADY_EXISTS_WINDOWS: i32 = 183; // File/directory already exists on Windows
 
 /// Remove the directory and all its contents.
 /// Ignore the error if the directory is not found or already being removed by another process.
@@ -440,15 +439,6 @@ async fn remove_dir_all_force(path: impl AsRef<Path>) -> Result<(), std::io::Err
             }
         }
     }
-}
-
-/// Check if an error indicates that a file or directory already exists.
-fn is_already_exists_error(e: &std::io::Error) -> bool {
-    e.kind() == std::io::ErrorKind::AlreadyExists
-        || matches!(
-            e.raw_os_error(),
-            Some(EEXIST_UNIX) | Some(ERROR_ALREADY_EXISTS_WINDOWS)
-        )
 }
 
 /// Create shim files for the package manager.
