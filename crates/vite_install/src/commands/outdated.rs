@@ -1,10 +1,10 @@
-use std::{collections::HashMap, process::ExitStatus, str::FromStr};
+use std::process::ExitStatus, str::FromStr};
 
 use vite_error::Error;
 use vite_path::AbsolutePath;
 
 use crate::package_manager::{
-    PackageManager, PackageManagerType, ResolveCommandResult, format_path_env, run_command,
+    PackageManager, PackageManagerType, ResolveCommandResult, run_command,
 };
 
 /// Output format for the outdated command.
@@ -86,19 +86,19 @@ impl PackageManager {
         &self,
         options: &OutdatedCommandOptions,
     ) -> ResolveCommandResult {
-        let bin_name: String;
-        let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
+        let bin_path = self.get_bin_path();
+        let envs = self.get_envs();
         let mut args: Vec<String> = Vec::new();
 
         // Global packages should use npm cli only
         if options.global {
-            bin_name = "npm".into();
+            
             Self::format_npm_outdated_args(&mut args, options);
             args.push("-g".into());
         } else {
             match self.client {
                 PackageManagerType::Pnpm => {
-                    bin_name = "pnpm".into();
+                    
 
                     // pnpm: --filter must come before command
                     if let Some(filters) = options.filters {
@@ -153,7 +153,7 @@ impl PackageManager {
                     args.extend_from_slice(options.packages);
                 }
                 PackageManagerType::Yarn => {
-                    bin_name = "yarn".into();
+                    
 
                     // Check if yarn@2+ (uses upgrade-interactive)
                     if !self.version.starts_with("1.") {
@@ -214,7 +214,7 @@ impl PackageManager {
                     }
                 }
                 PackageManagerType::Npm => {
-                    bin_name = "npm".into();
+                    
                     Self::format_npm_outdated_args(&mut args, options);
                 }
             }
@@ -225,7 +225,7 @@ impl PackageManager {
             args.extend_from_slice(pass_through_args);
         }
 
-        ResolveCommandResult { bin_path: bin_name, args, envs }
+        ResolveCommandResult { bin_path, args, envs }
     }
 
     fn format_npm_outdated_args(args: &mut Vec<String>, options: &OutdatedCommandOptions) {
@@ -313,7 +313,7 @@ mod tests {
     fn test_pnpm_outdated_basic() {
         let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.0.0");
         let result = pm.resolve_outdated_command(&OutdatedCommandOptions { ..Default::default() });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["outdated"]);
     }
 
@@ -325,7 +325,7 @@ mod tests {
             packages: &packages,
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["outdated", "*babel*", "eslint-*"]);
     }
 
@@ -336,7 +336,7 @@ mod tests {
             format: Some(Format::Json),
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["outdated", "--format", "json"]);
     }
 
@@ -345,7 +345,7 @@ mod tests {
         let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
         let result = pm.resolve_outdated_command(&OutdatedCommandOptions { ..Default::default() });
         assert_eq!(result.args, vec!["outdated"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -356,7 +356,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["outdated", "--json"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -364,7 +364,7 @@ mod tests {
         let pm = create_mock_package_manager(PackageManagerType::Yarn, "1.22.19");
         let result = pm.resolve_outdated_command(&OutdatedCommandOptions { ..Default::default() });
         assert_eq!(result.args, vec!["outdated"]);
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
     }
 
     #[test]
@@ -376,7 +376,7 @@ mod tests {
             recursive: true,
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["--filter", "app", "outdated", "--recursive"]);
     }
 
@@ -385,7 +385,7 @@ mod tests {
         let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.0.0");
         let result = pm
             .resolve_outdated_command(&OutdatedCommandOptions { prod: true, ..Default::default() });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["outdated", "--prod"]);
     }
 
@@ -397,7 +397,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["outdated", "--parseable"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -408,7 +408,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["outdated", "--all"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -420,7 +420,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["outdated", "--workspace", "app"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -430,7 +430,7 @@ mod tests {
             global: true,
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["outdated", "-g"]);
     }
 
@@ -441,7 +441,7 @@ mod tests {
             workspace_root: true,
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["outdated", "--workspace-root"]);
     }
 
@@ -453,7 +453,7 @@ mod tests {
             recursive: true,
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["outdated", "--workspace-root", "--recursive"]);
     }
 
@@ -474,7 +474,7 @@ mod tests {
             sort_by: Some("name"),
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(
             result.args,
             vec![
@@ -502,7 +502,7 @@ mod tests {
             workspace_root: true,
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["outdated", "--include-workspace-root"]);
     }
 
@@ -515,7 +515,7 @@ mod tests {
             workspace_root: true,
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["outdated", "--workspace", "app", "--include-workspace-root"]);
     }
 }

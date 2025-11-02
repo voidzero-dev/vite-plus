@@ -1,10 +1,10 @@
-use std::{collections::HashMap, process::ExitStatus};
+use std::process::ExitStatus;
 
 use vite_error::Error;
 use vite_path::AbsolutePath;
 
 use crate::package_manager::{
-    PackageManager, PackageManagerType, ResolveCommandResult, format_path_env, run_command,
+    PackageManager, PackageManagerType, ResolveCommandResult, run_command,
 };
 
 /// Options for the why command.
@@ -44,13 +44,13 @@ impl PackageManager {
     /// Resolve the why command.
     #[must_use]
     pub fn resolve_why_command(&self, options: &WhyCommandOptions) -> ResolveCommandResult {
-        let bin_name: String;
-        let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
+        let bin_path = self.get_bin_path();
+        let envs = self.get_envs();
         let mut args: Vec<String> = Vec::new();
 
         match self.client {
             PackageManagerType::Pnpm => {
-                bin_name = "pnpm".into();
+                
 
                 // pnpm: --filter must come before command
                 if let Some(filters) = options.filters {
@@ -116,7 +116,7 @@ impl PackageManager {
                 args.extend_from_slice(options.packages);
             }
             PackageManagerType::Yarn => {
-                bin_name = "yarn".into();
+                
 
                 args.push("why".into());
 
@@ -161,7 +161,7 @@ impl PackageManager {
                 }
             }
             PackageManagerType::Npm => {
-                bin_name = "npm".into();
+                
 
                 // npm uses 'explain' as primary command
                 args.push("explain".into());
@@ -205,7 +205,7 @@ impl PackageManager {
             args.extend_from_slice(pass_through_args);
         }
 
-        ResolveCommandResult { bin_path: bin_name, args, envs }
+        ResolveCommandResult { bin_path, args, envs }
     }
 }
 
@@ -243,7 +243,7 @@ mod tests {
         let packages = vec!["react".to_string()];
         let result = pm
             .resolve_why_command(&WhyCommandOptions { packages: &packages, ..Default::default() });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["why", "react"]);
     }
 
@@ -253,7 +253,7 @@ mod tests {
         let packages = vec!["react".to_string(), "lodash".to_string()];
         let result = pm
             .resolve_why_command(&WhyCommandOptions { packages: &packages, ..Default::default() });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["why", "react", "lodash"]);
     }
 
@@ -266,7 +266,7 @@ mod tests {
             json: true,
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["why", "--json", "react"]);
     }
 
@@ -276,7 +276,7 @@ mod tests {
         let packages = vec!["react".to_string()];
         let result = pm
             .resolve_why_command(&WhyCommandOptions { packages: &packages, ..Default::default() });
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["explain", "react"]);
     }
 
@@ -286,7 +286,7 @@ mod tests {
         let packages = vec!["react".to_string(), "lodash".to_string()];
         let result = pm
             .resolve_why_command(&WhyCommandOptions { packages: &packages, ..Default::default() });
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["explain", "react", "lodash"]);
     }
 
@@ -300,7 +300,7 @@ mod tests {
             filters: Some(&filters),
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["explain", "--workspace", "app", "react"]);
     }
 
@@ -310,7 +310,7 @@ mod tests {
         let packages = vec!["react".to_string()];
         let result = pm
             .resolve_why_command(&WhyCommandOptions { packages: &packages, ..Default::default() });
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["why", "react", "--peers"]);
     }
 
@@ -323,7 +323,7 @@ mod tests {
             exclude_peers: true,
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["why", "react"]);
     }
 
@@ -333,7 +333,7 @@ mod tests {
         let packages = vec!["react".to_string()];
         let result = pm
             .resolve_why_command(&WhyCommandOptions { packages: &packages, ..Default::default() });
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
         // yarn@1 doesn't support --peers
         assert_eq!(result.args, vec!["why", "react"]);
     }
@@ -348,7 +348,7 @@ mod tests {
             filters: Some(&filters),
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["--filter", "app", "why", "react"]);
     }
 
@@ -361,7 +361,7 @@ mod tests {
             depth: Some(3),
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["why", "--depth", "3", "react"]);
     }
 
@@ -374,7 +374,7 @@ mod tests {
             find_by: Some("customFinder"),
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["why", "--find-by", "customFinder", "react"]);
     }
 }

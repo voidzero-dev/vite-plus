@@ -52,13 +52,13 @@ impl PackageManager {
     /// Resolve the add command.
     #[must_use]
     pub fn resolve_add_command(&self, options: &AddCommandOptions) -> ResolveCommandResult {
-        let bin_name: String;
-        let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
+        let bin_path: String;
+        let envs = self.get_envs();
         let mut args: Vec<String> = Vec::new();
 
         // global packages should use npm cli only
         if options.global {
-            bin_name = "npm".into();
+            bin_path = "npm".into();
             args.push("install".into());
             args.push("--global".into());
             if let Some(pass_through_args) = options.pass_through_args {
@@ -66,12 +66,14 @@ impl PackageManager {
             }
             args.extend_from_slice(options.packages);
 
-            return ResolveCommandResult { bin_path: bin_name, args, envs };
+            return ResolveCommandResult { bin_path, args, envs };
         }
+
+        // Use full path to the package manager binary for reliable execution
+        bin_path = self.get_bin_path();
 
         match self.client {
             PackageManagerType::Pnpm => {
-                bin_name = "pnpm".into();
                 // pnpm: --filter must come before command
                 if let Some(filters) = options.filters {
                     for filter in filters {
@@ -121,7 +123,6 @@ impl PackageManager {
                 }
             }
             PackageManagerType::Yarn => {
-                bin_name = "yarn".into();
                 // yarn: workspaces foreach --all --include {filter} add
                 // https://yarnpkg.com/cli/workspaces/foreach
                 if let Some(filters) = options.filters {
@@ -158,7 +159,6 @@ impl PackageManager {
                 }
             }
             PackageManagerType::Npm => {
-                bin_name = "npm".into();
                 // npm: install --workspace <pkg>
                 args.push("install".into());
                 if let Some(filters) = options.filters {
@@ -201,7 +201,7 @@ impl PackageManager {
         }
         args.extend_from_slice(options.packages);
 
-        ResolveCommandResult { bin_path: bin_name, args, envs }
+        ResolveCommandResult { bin_path, args, envs }
     }
 }
 
@@ -248,7 +248,7 @@ mod tests {
             allow_build: None,
             pass_through_args: None,
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["add", "react"]);
     }
 
@@ -268,7 +268,7 @@ mod tests {
             pass_through_args: None,
         });
         assert_eq!(result.args, vec!["--filter", "app", "add", "react"]);
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -290,7 +290,7 @@ mod tests {
             result.args,
             vec!["--filter", "app", "add", "--save-catalog-name=react18", "react"]
         );
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -309,7 +309,7 @@ mod tests {
             pass_through_args: None,
         });
         assert_eq!(result.args, vec!["--filter", "app", "add", "--save-catalog", "react"]);
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -328,7 +328,7 @@ mod tests {
             pass_through_args: None,
         });
         assert_eq!(result.args, vec!["--filter", "app", "add", "--workspace-root", "react"]);
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -347,7 +347,7 @@ mod tests {
             pass_through_args: None,
         });
         assert_eq!(result.args, vec!["add", "--workspace-root", "--save-dev", "typescript"]);
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -366,7 +366,7 @@ mod tests {
             pass_through_args: None,
         });
         assert_eq!(result.args, vec!["--filter", "app", "add", "--workspace", "@myorg/utils"]);
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -385,7 +385,7 @@ mod tests {
             pass_through_args: None,
         });
         assert_eq!(result.args, vec!["add", "react"]);
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
     }
 
     #[test]
@@ -407,7 +407,7 @@ mod tests {
             result.args,
             vec!["workspaces", "foreach", "--all", "--include", "app", "add", "react"]
         );
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
     }
 
     #[test]
@@ -426,7 +426,7 @@ mod tests {
             pass_through_args: None,
         });
         assert_eq!(result.args, vec!["add", "--dev", "typescript"]);
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
     }
 
     #[test]
@@ -445,7 +445,7 @@ mod tests {
             pass_through_args: None,
         });
         assert_eq!(result.args, vec!["install", "react"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -464,7 +464,7 @@ mod tests {
             pass_through_args: None,
         });
         assert_eq!(result.args, vec!["install", "--workspace", "app", "react"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -483,7 +483,7 @@ mod tests {
             pass_through_args: None,
         });
         assert_eq!(result.args, vec!["install", "--include-workspace-root", "typescript"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -505,7 +505,7 @@ mod tests {
             result.args,
             vec!["install", "--workspace", "app", "--workspace", "web", "lodash"]
         );
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -535,7 +535,7 @@ mod tests {
                 "lodash"
             ]
         );
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -554,6 +554,6 @@ mod tests {
             pass_through_args: None,
         });
         assert_eq!(result.args, vec!["add", "--allow-build=react,napi", "react"]);
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 }

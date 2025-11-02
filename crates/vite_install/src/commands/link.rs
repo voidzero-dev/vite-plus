@@ -1,10 +1,10 @@
-use std::{collections::HashMap, process::ExitStatus};
+use std::process::ExitStatus;
 
 use vite_error::Error;
 use vite_path::AbsolutePath;
 
 use crate::package_manager::{
-    PackageManager, PackageManagerType, ResolveCommandResult, format_path_env, run_command,
+    PackageManager, PackageManagerType, ResolveCommandResult, run_command,
 };
 
 /// Options for the link command.
@@ -31,21 +31,18 @@ impl PackageManager {
     /// Resolve the link command.
     #[must_use]
     pub fn resolve_link_command(&self, options: &LinkCommandOptions) -> ResolveCommandResult {
-        let bin_name: String;
-        let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
+        let bin_path = self.get_bin_path();
+        let envs = self.get_envs();
         let mut args: Vec<String> = Vec::new();
 
         match self.client {
             PackageManagerType::Pnpm => {
-                bin_name = "pnpm".into();
                 args.push("link".into());
             }
             PackageManagerType::Yarn => {
-                bin_name = "yarn".into();
                 args.push("link".into());
             }
             PackageManagerType::Npm => {
-                bin_name = "npm".into();
                 args.push("link".into());
             }
         }
@@ -60,7 +57,7 @@ impl PackageManager {
             args.extend_from_slice(pass_through_args);
         }
 
-        ResolveCommandResult { bin_path: bin_name, args, envs }
+        ResolveCommandResult { bin_path, args, envs }
     }
 }
 
@@ -96,7 +93,7 @@ mod tests {
     fn test_pnpm_link_no_package() {
         let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.0.0");
         let result = pm.resolve_link_command(&LinkCommandOptions { ..Default::default() });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["link"]);
     }
 
@@ -107,7 +104,7 @@ mod tests {
             package: Some("react"),
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["link", "react"]);
     }
 
@@ -118,7 +115,7 @@ mod tests {
             package: Some("./packages/utils"),
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["link", "./packages/utils"]);
     }
 
@@ -129,7 +126,7 @@ mod tests {
             package: Some("/absolute/path/to/package"),
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["link", "/absolute/path/to/package"]);
     }
 
@@ -137,7 +134,7 @@ mod tests {
     fn test_yarn_link_basic() {
         let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
         let result = pm.resolve_link_command(&LinkCommandOptions { ..Default::default() });
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["link"]);
     }
 
@@ -148,7 +145,7 @@ mod tests {
             package: Some("react"),
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["link", "react"]);
     }
 
@@ -156,7 +153,7 @@ mod tests {
     fn test_npm_link_basic() {
         let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
         let result = pm.resolve_link_command(&LinkCommandOptions { ..Default::default() });
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["link"]);
     }
 
@@ -167,7 +164,7 @@ mod tests {
             package: Some("react"),
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["link", "react"]);
     }
 }

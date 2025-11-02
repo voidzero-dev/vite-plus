@@ -1,10 +1,10 @@
-use std::{collections::HashMap, process::ExitStatus};
+use std::process::ExitStatus;
 
 use vite_error::Error;
 use vite_path::AbsolutePath;
 
 use crate::package_manager::{
-    PackageManager, PackageManagerType, ResolveCommandResult, format_path_env, run_command,
+    PackageManager, PackageManagerType, ResolveCommandResult, run_command,
 };
 
 /// Options for the update command.
@@ -42,13 +42,13 @@ impl PackageManager {
     /// Resolve the update command.
     #[must_use]
     pub fn resolve_update_command(&self, options: &UpdateCommandOptions) -> ResolveCommandResult {
-        let bin_name: String;
-        let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
+        let bin_path = self.get_bin_path();
+        let envs = self.get_envs();
         let mut args: Vec<String> = Vec::new();
 
         // global packages should use npm cli only
         if options.global {
-            bin_name = "npm".into();
+            
             args.push("update".into());
             args.push("--global".into());
             if let Some(pass_through_args) = options.pass_through_args {
@@ -56,12 +56,12 @@ impl PackageManager {
             }
             args.extend_from_slice(options.packages);
 
-            return ResolveCommandResult { bin_path: bin_name, args, envs };
+            return ResolveCommandResult { bin_path, args, envs };
         }
 
         match self.client {
             PackageManagerType::Pnpm => {
-                bin_name = "pnpm".into();
+                
                 // pnpm: --filter must come before command
                 if let Some(filters) = options.filters {
                     for filter in filters {
@@ -100,7 +100,7 @@ impl PackageManager {
                 }
             }
             PackageManagerType::Yarn => {
-                bin_name = "yarn".into();
+                
 
                 // Determine yarn version
                 let is_yarn_v1 = self.version.starts_with("1.");
@@ -136,7 +136,7 @@ impl PackageManager {
                 }
             }
             PackageManagerType::Npm => {
-                bin_name = "npm".into();
+                
                 args.push("update".into());
 
                 if let Some(filters) = options.filters {
@@ -186,7 +186,7 @@ impl PackageManager {
         }
         args.extend_from_slice(options.packages);
 
-        ResolveCommandResult { bin_path: bin_name, args, envs }
+        ResolveCommandResult { bin_path, args, envs }
     }
 }
 
@@ -236,7 +236,7 @@ mod tests {
             workspace_only: false,
             pass_through_args: None,
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["update", "react"]);
     }
 
@@ -248,7 +248,7 @@ mod tests {
             latest: true,
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["update", "--latest", "react"]);
     }
 
@@ -260,7 +260,7 @@ mod tests {
             latest: false,
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
         assert_eq!(result.args, vec!["update"]);
     }
 
@@ -273,7 +273,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["--filter", "app", "update", "react"]);
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -285,7 +285,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "--recursive"]);
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -297,7 +297,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "--interactive"]);
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -309,7 +309,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "--dev"]);
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -321,7 +321,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "--no-optional"]);
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -333,7 +333,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "--no-save", "react"]);
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -346,7 +346,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["--filter", "app", "update", "--workspace", "@myorg/utils"]);
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -357,7 +357,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["upgrade", "react"]);
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
     }
 
     #[test]
@@ -369,7 +369,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["upgrade", "--latest", "react"]);
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
     }
 
     #[test]
@@ -381,7 +381,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["workspace", "app", "upgrade", "react"]);
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
     }
 
     #[test]
@@ -392,7 +392,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["up", "react"]);
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
     }
 
     #[test]
@@ -404,7 +404,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["up", "--interactive"]);
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
     }
 
     #[test]
@@ -419,7 +419,7 @@ mod tests {
             result.args,
             vec!["workspaces", "foreach", "--all", "--include", "app", "up", "react"]
         );
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
     }
 
     #[test]
@@ -431,7 +431,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["up", "--recursive"]);
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
     }
 
     #[test]
@@ -442,7 +442,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "react"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -451,7 +451,7 @@ mod tests {
         let result = pm
             .resolve_update_command(&UpdateCommandOptions { packages: &[], ..Default::default() });
         assert_eq!(result.args, vec!["update"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -463,7 +463,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "--workspace", "app", "react"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -475,7 +475,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "--include-workspace-root", "--workspaces"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -487,7 +487,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "--include=dev"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -499,7 +499,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "--no-optional"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -511,7 +511,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "--no-save", "react"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -523,7 +523,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "--global", "typescript"]);
-        assert_eq!(result.bin_path, "npm");
+        assert!(result.bin_path.ends_with("/npm") || result.bin_path.ends_with("\\npm") || result.bin_path == "npm", "Expected path to end with npm or be npm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -535,7 +535,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "--latest", "react", "react-dom", "vite"]);
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -565,7 +565,7 @@ mod tests {
                 "react"
             ]
         );
-        assert_eq!(result.bin_path, "pnpm");
+        assert!(result.bin_path.ends_with("/pnpm") || result.bin_path.ends_with("\\pnpm"), "Expected path to end with pnpm, got: {}", result.bin_path);
     }
 
     #[test]
@@ -590,6 +590,6 @@ mod tests {
                 "lodash"
             ]
         );
-        assert_eq!(result.bin_path, "yarn");
+        assert!(result.bin_path.ends_with("/yarn") || result.bin_path.ends_with("\\yarn"), "Expected path to end with yarn, got: {}", result.bin_path);
     }
 }

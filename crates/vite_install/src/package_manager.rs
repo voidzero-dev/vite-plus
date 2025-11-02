@@ -151,6 +151,30 @@ impl PackageManager {
         self.install_dir.join("bin")
     }
 
+    /// Get the full path to the package manager binary.
+    /// This returns the absolute path to the shim file that should be executed.
+    #[must_use]
+    pub fn get_bin_path(&self) -> String {
+        let bin_name = self.client.to_string();
+        self.get_bin_prefix().join(&bin_name).to_string()
+    }
+
+    /// Get environment variables to set when running the package manager.
+    /// This includes PATH and package manager specific variables.
+    #[must_use]
+    pub fn get_envs(&self) -> HashMap<String, String> {
+        let mut envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
+        
+        // For Yarn, set environment variables to bypass corepack check
+        // since vite-plus manages package managers directly (similar to corepack)
+        if matches!(self.client, PackageManagerType::Yarn) {
+            // YARN_IGNORE_PATH tells yarn to not check for version mismatches
+            envs.insert("YARN_IGNORE_PATH".to_string(), "1".to_string());
+        }
+        
+        envs
+    }
+
     #[must_use]
     pub fn get_fingerprint_ignores(&self) -> Vec<Str> {
         let mut ignores: Vec<Str> = vec![
