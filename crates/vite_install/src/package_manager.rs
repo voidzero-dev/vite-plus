@@ -411,12 +411,6 @@ async fn download_package_manager(
     }
 }
 
-// OS-specific error codes for concurrent file system operations
-// Note: ENOTEMPTY varies by Unix flavor - Linux uses 39, macOS/BSD use 66
-const ENOTEMPTY_LINUX: i32 = 39; // Directory not empty on Linux
-const ENOTEMPTY_BSD: i32 = 66; // Directory not empty on macOS/BSD
-const ERROR_DIR_NOT_EMPTY_WINDOWS: i32 = 145; // Directory not empty on Windows
-
 /// Remove the directory and all its contents.
 /// Ignore the error if the directory is not found or already being removed by another process.
 async fn remove_dir_all_force(path: impl AsRef<Path>) -> Result<(), std::io::Error> {
@@ -426,12 +420,11 @@ async fn remove_dir_all_force(path: impl AsRef<Path>) -> Result<(), std::io::Err
             // Ignore errors that can occur during concurrent test execution:
             // - NotFound: directory was already removed
             // - DirectoryNotEmpty: another process is actively using/removing the directory
-            if e.kind() == std::io::ErrorKind::NotFound
-                || matches!(
-                    e.raw_os_error(),
-                    Some(ENOTEMPTY_LINUX) | Some(ENOTEMPTY_BSD) | Some(ERROR_DIR_NOT_EMPTY_WINDOWS)
-                )
-            {
+            // Using ErrorKind for cross-platform compatibility instead of raw OS error codes
+            if matches!(
+                e.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
+            ) {
                 tracing::debug!("Ignoring directory removal error (likely concurrent access): {}", e);
                 Ok(())
             } else {
