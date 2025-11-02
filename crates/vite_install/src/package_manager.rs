@@ -405,6 +405,15 @@ async fn download_package_manager(
                     cleanup_err
                 );
             }
+            // Ensure shim files exist - they should have been created by the other process,
+            // but create them if they're missing to ensure a complete installation
+            if !is_exists_file(&bin_file)?
+                || !is_exists_file(bin_file.with_extension("cmd"))?
+                || !is_exists_file(bin_file.with_extension("ps1"))?
+            {
+                tracing::debug!("Shim files missing, creating them");
+                create_shim_files(package_manager_type, &bin_prefix).await?;
+            }
             Ok(install_dir)
         }
         Err(e) => Err(e.into()),
@@ -417,18 +426,20 @@ async fn remove_dir_all_force(path: impl AsRef<Path>) -> Result<(), std::io::Err
     match remove_dir_all(path).await {
         Ok(()) => Ok(()),
         Err(e) => {
-            // Ignore errors that can occur during concurrent test execution:
-            // - NotFound: directory was already removed
-            // - DirectoryNotEmpty: another process is actively using/removing the directory
-            // Using ErrorKind for cross-platform compatibility instead of raw OS error codes
-            if matches!(
-                e.kind(),
-                std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
-            ) {
-                tracing::debug!("Ignoring directory removal error (likely concurrent access): {}", e);
-                Ok(())
-            } else {
-                Err(e)
+            // Ignore errors that can occur during concurrent test execution
+            // Using ErrorKind for cross-platform compatibility
+            match e.kind() {
+                // Directory was already removed by another process
+                std::io::ErrorKind::NotFound => {
+                    tracing::debug!("Ignoring NotFound error (concurrent removal): {}", e);
+                    Ok(())
+                }
+                // Another process is actively using/removing the directory
+                std::io::ErrorKind::DirectoryNotEmpty => {
+                    tracing::debug!("Ignoring DirectoryNotEmpty error (concurrent access): {}", e);
+                    Ok(())
+                }
+                _ => Err(e),
             }
         }
     }
