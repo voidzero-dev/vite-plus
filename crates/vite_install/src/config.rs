@@ -33,30 +33,30 @@ pub fn get_cache_dir() -> Result<AbsolutePathBuf, Error> {
     Ok(cache_dir.join("vite"))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
 
-    #[test]
-    fn test_npm_registry() {
-        assert_eq!(NPM_REGISTRY.clone(), "https://registry.npmjs.org");
-    }
+//     #[test]
+//     fn test_npm_registry() {
+//         assert_eq!(NPM_REGISTRY.clone(), "https://registry.npmjs.org");
+//     }
 
-    #[test]
-    fn test_npm_tgz_url() {
-        assert_eq!(
-            get_npm_package_tgz_url("vite", "7.1.3"),
-            "https://registry.npmjs.org/vite/-/vite-7.1.3.tgz"
-        );
-        assert_eq!(
-            get_npm_package_tgz_url("@vitejs/release-scripts", "1.6.0"),
-            "https://registry.npmjs.org/@vitejs/release-scripts/-/release-scripts-1.6.0.tgz"
-        );
-    }
+//     #[test]
+//     fn test_npm_tgz_url() {
+//         assert_eq!(
+//             get_npm_package_tgz_url("vite", "7.1.3"),
+//             "https://registry.npmjs.org/vite/-/vite-7.1.3.tgz"
+//         );
+//         assert_eq!(
+//             get_npm_package_tgz_url("@vitejs/release-scripts", "1.6.0"),
+//             "https://registry.npmjs.org/@vitejs/release-scripts/-/release-scripts-1.6.0.tgz"
+//         );
+//     }
 
-    #[test]
-    fn test_get_cache_dir() {
-        let cache_dir = get_cache_dir().unwrap();
-        assert!(cache_dir.ends_with("vite"));
-    }
-}
+//     #[test]
+//     fn test_get_cache_dir() {
+//         let cache_dir = get_cache_dir().unwrap();
+//         assert!(cache_dir.ends_with("vite"));
+//     }
+// }

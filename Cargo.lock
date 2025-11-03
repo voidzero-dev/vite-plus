@@ -4207,6 +4207,7 @@ dependencies = [
  "test-log",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "vite_error",
  "vite_glob",
  "vite_path",

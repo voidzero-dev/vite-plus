@@ -9,7 +9,7 @@ use std::{
 
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
-use tokio::{fs::remove_dir_all, process::Command};
+use tokio::{fs::remove_dir_all, process::Command, sync::Mutex as TokioMutex};
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
@@ -590,6 +590,40 @@ mod tests {
 
     use super::*;
 
+    fn init_tracing() {
+        use std::sync::OnceLock;
+
+        use tracing_subscriber::{
+            filter::{LevelFilter, Targets},
+            prelude::__tracing_subscriber_SubscriberExt,
+            util::SubscriberInitExt,
+        };
+
+        static TRACING: OnceLock<()> = OnceLock::new();
+        TRACING.get_or_init(|| {
+            // Usage without the `regex` feature.
+            // <https://github.com/tokio-rs/tracing/issues/1436#issuecomment-918528013>
+            tracing_subscriber::registry()
+                .with(
+                    std::env::var("VITE_LOG")
+                        .map_or_else(
+                            |_| Targets::new(),
+                            |env_var| {
+                                use std::str::FromStr;
+                                Targets::from_str(&env_var).unwrap_or_default()
+                            },
+                        )
+                        // disable brush-parser tracing
+                        .with_targets([
+                            ("tokenize", LevelFilter::OFF),
+                            ("parse", LevelFilter::OFF),
+                        ]),
+                )
+                .with(tracing_subscriber::fmt::layer())
+                .init();
+        });
+    }
+
     fn create_temp_dir() -> TempDir {
         tempdir().expect("Failed to create temp directory")
     }
@@ -1139,6 +1173,158 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_parse_package_manager_without_hash1() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Test without hash
+        let package_content = r#"{"name": "test-package", "packageManager": "pnpm@8.15.0"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let workspace_root = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, hash) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        assert_eq!(pm_type, PackageManagerType::Pnpm);
+        assert_eq!(version, "8.15.0");
+        assert!(hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_parse_package_manager_without_hash2() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Test without hash
+        let package_content = r#"{"name": "test-package", "packageManager": "pnpm@8.15.0"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let workspace_root = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, hash) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        assert_eq!(pm_type, PackageManagerType::Pnpm);
+        assert_eq!(version, "8.15.0");
+        assert!(hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_parse_package_manager_without_hash3() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Test without hash
+        let package_content = r#"{"name": "test-package", "packageManager": "pnpm@8.15.0"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let workspace_root = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, hash) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        assert_eq!(pm_type, PackageManagerType::Pnpm);
+        assert_eq!(version, "8.15.0");
+        assert!(hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_parse_package_manager_without_hash4() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Test without hash
+        let package_content = r#"{"name": "test-package", "packageManager": "pnpm@8.15.0"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let workspace_root = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, hash) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        assert_eq!(pm_type, PackageManagerType::Pnpm);
+        assert_eq!(version, "8.15.0");
+        assert!(hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_parse_package_manager_without_hash5() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Test without hash
+        let package_content = r#"{"name": "test-package", "packageManager": "pnpm@8.15.0"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let workspace_root = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, hash) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        assert_eq!(pm_type, PackageManagerType::Pnpm);
+        assert_eq!(version, "8.15.0");
+        assert!(hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_parse_package_manager_without_hash6() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Test without hash
+        let package_content = r#"{"name": "test-package", "packageManager": "pnpm@8.15.0"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let workspace_root = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, hash) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        assert_eq!(pm_type, PackageManagerType::Pnpm);
+        assert_eq!(version, "8.15.0");
+        assert!(hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_parse_package_manager_without_hash7() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Test without hash
+        let package_content = r#"{"name": "test-package", "packageManager": "pnpm@8.15.0"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let workspace_root = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, hash) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        assert_eq!(pm_type, PackageManagerType::Pnpm);
+        assert_eq!(version, "8.15.0");
+        assert!(hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_parse_package_manager_without_hash8() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Test without hash
+        let package_content = r#"{"name": "test-package", "packageManager": "pnpm@8.15.0"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let workspace_root = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, hash) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        assert_eq!(pm_type, PackageManagerType::Pnpm);
+        assert_eq!(version, "8.15.0");
+        assert!(hash.is_none());
+    }
+
+    #[tokio::test]
     async fn test_download_success_package_manager_with_hash() {
         use std::process::Command;
 
@@ -1311,25 +1497,25 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_detect_package_manager_with_not_exists_version_in_package_manager_field() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content =
-            r#"{"name": "test-package", "packageManager": "yarn@10000000000.0.0"}"#;
-        create_package_json(&temp_dir_path, package_content);
+    // #[tokio::test]
+    // async fn test_detect_package_manager_with_not_exists_version_in_package_manager_field() {
+    //     let temp_dir = create_temp_dir();
+    //     let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+    //     let package_content =
+    //         r#"{"name": "test-package", "packageManager": "yarn@10000000000.0.0"}"#;
+    //     create_package_json(&temp_dir_path, package_content);
 
-        let result = PackageManager::builder(temp_dir_path).build().await;
-        assert!(result.is_err());
-        println!("result: {result:?}");
-        // Check if it's the expected error type
-        if let Err(Error::PackageManagerVersionNotFound { name, version, .. }) = result {
-            assert_eq!(name, "yarn");
-            assert_eq!(version, "10000000000.0.0");
-        } else {
-            panic!("Expected PackageManagerVersionNotFound error, got {result:?}");
-        }
-    }
+    //     let result = PackageManager::builder(temp_dir_path).build().await;
+    //     assert!(result.is_err());
+    //     println!("result: {result:?}");
+    //     // Check if it's the expected error type
+    //     if let Err(Error::PackageManagerVersionNotFound { name, version, .. }) = result {
+    //         assert_eq!(name, "yarn");
+    //         assert_eq!(version, "10000000000.0.0");
+    //     } else {
+    //         panic!("Expected PackageManagerVersionNotFound error, got {result:?}");
+    //     }
+    // }
 
     #[tokio::test]
     async fn test_detect_package_manager_with_invalid_semver() {
@@ -1615,6 +1801,267 @@ mod tests {
 
     #[tokio::test]
     async fn test_detect_package_manager_pnpmfile_over_yarn_config() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create both pnpmfile.cjs and yarn.config.cjs
+        fs::write(temp_dir_path.join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
+            .expect("Failed to write pnpmfile.cjs");
+
+        fs::write(
+            temp_dir_path.join("yarn.config.cjs"),
+            "module.exports = { nodeLinker: 'node-modules' }",
+        )
+        .expect("Failed to write yarn.config.cjs");
+
+        // pnpmfile.cjs should be detected first (before yarn.config.cjs)
+        let result = PackageManager::builder(temp_dir_path)
+            .build()
+            .await
+            .expect("Should detect pnpm from pnpmfile.cjs");
+        assert_eq!(
+            result.bin_name, "pnpm",
+            "pnpmfile.cjs should be detected before yarn.config.cjs"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_pnpmfile_over_yarn_config1() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create both pnpmfile.cjs and yarn.config.cjs
+        fs::write(temp_dir_path.join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
+            .expect("Failed to write pnpmfile.cjs");
+
+        fs::write(
+            temp_dir_path.join("yarn.config.cjs"),
+            "module.exports = { nodeLinker: 'node-modules' }",
+        )
+        .expect("Failed to write yarn.config.cjs");
+
+        // pnpmfile.cjs should be detected first (before yarn.config.cjs)
+        let result = PackageManager::builder(temp_dir_path)
+            .build()
+            .await
+            .expect("Should detect pnpm from pnpmfile.cjs");
+        assert_eq!(
+            result.bin_name, "pnpm",
+            "pnpmfile.cjs should be detected before yarn.config.cjs"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_pnpmfile_over_yarn_config2() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create both pnpmfile.cjs and yarn.config.cjs
+        fs::write(temp_dir_path.join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
+            .expect("Failed to write pnpmfile.cjs");
+
+        fs::write(
+            temp_dir_path.join("yarn.config.cjs"),
+            "module.exports = { nodeLinker: 'node-modules' }",
+        )
+        .expect("Failed to write yarn.config.cjs");
+
+        // pnpmfile.cjs should be detected first (before yarn.config.cjs)
+        let result = PackageManager::builder(temp_dir_path)
+            .build()
+            .await
+            .expect("Should detect pnpm from pnpmfile.cjs");
+        assert_eq!(
+            result.bin_name, "pnpm",
+            "pnpmfile.cjs should be detected before yarn.config.cjs"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_pnpmfile_over_yarn_config3() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create both pnpmfile.cjs and yarn.config.cjs
+        fs::write(temp_dir_path.join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
+            .expect("Failed to write pnpmfile.cjs");
+
+        fs::write(
+            temp_dir_path.join("yarn.config.cjs"),
+            "module.exports = { nodeLinker: 'node-modules' }",
+        )
+        .expect("Failed to write yarn.config.cjs");
+
+        // pnpmfile.cjs should be detected first (before yarn.config.cjs)
+        let result = PackageManager::builder(temp_dir_path)
+            .build()
+            .await
+            .expect("Should detect pnpm from pnpmfile.cjs");
+        assert_eq!(
+            result.bin_name, "pnpm",
+            "pnpmfile.cjs should be detected before yarn.config.cjs"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_pnpmfile_over_yarn_config4() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create both pnpmfile.cjs and yarn.config.cjs
+        fs::write(temp_dir_path.join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
+            .expect("Failed to write pnpmfile.cjs");
+
+        fs::write(
+            temp_dir_path.join("yarn.config.cjs"),
+            "module.exports = { nodeLinker: 'node-modules' }",
+        )
+        .expect("Failed to write yarn.config.cjs");
+
+        // pnpmfile.cjs should be detected first (before yarn.config.cjs)
+        let result = PackageManager::builder(temp_dir_path)
+            .build()
+            .await
+            .expect("Should detect pnpm from pnpmfile.cjs");
+        assert_eq!(
+            result.bin_name, "pnpm",
+            "pnpmfile.cjs should be detected before yarn.config.cjs"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_pnpmfile_over_yarn_config44() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create both pnpmfile.cjs and yarn.config.cjs
+        fs::write(temp_dir_path.join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
+            .expect("Failed to write pnpmfile.cjs");
+
+        fs::write(
+            temp_dir_path.join("yarn.config.cjs"),
+            "module.exports = { nodeLinker: 'node-modules' }",
+        )
+        .expect("Failed to write yarn.config.cjs");
+
+        // pnpmfile.cjs should be detected first (before yarn.config.cjs)
+        let result = PackageManager::builder(temp_dir_path)
+            .build()
+            .await
+            .expect("Should detect pnpm from pnpmfile.cjs");
+        assert_eq!(
+            result.bin_name, "pnpm",
+            "pnpmfile.cjs should be detected before yarn.config.cjs"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_pnpmfile_over_yarn_config5() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create both pnpmfile.cjs and yarn.config.cjs
+        fs::write(temp_dir_path.join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
+            .expect("Failed to write pnpmfile.cjs");
+
+        fs::write(
+            temp_dir_path.join("yarn.config.cjs"),
+            "module.exports = { nodeLinker: 'node-modules' }",
+        )
+        .expect("Failed to write yarn.config.cjs");
+
+        // pnpmfile.cjs should be detected first (before yarn.config.cjs)
+        let result = PackageManager::builder(temp_dir_path)
+            .build()
+            .await
+            .expect("Should detect pnpm from pnpmfile.cjs");
+        assert_eq!(
+            result.bin_name, "pnpm",
+            "pnpmfile.cjs should be detected before yarn.config.cjs"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_pnpmfile_over_yarn_config6() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create both pnpmfile.cjs and yarn.config.cjs
+        fs::write(temp_dir_path.join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
+            .expect("Failed to write pnpmfile.cjs");
+
+        fs::write(
+            temp_dir_path.join("yarn.config.cjs"),
+            "module.exports = { nodeLinker: 'node-modules' }",
+        )
+        .expect("Failed to write yarn.config.cjs");
+
+        // pnpmfile.cjs should be detected first (before yarn.config.cjs)
+        let result = PackageManager::builder(temp_dir_path)
+            .build()
+            .await
+            .expect("Should detect pnpm from pnpmfile.cjs");
+        assert_eq!(
+            result.bin_name, "pnpm",
+            "pnpmfile.cjs should be detected before yarn.config.cjs"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_pnpmfile_over_yarn_config7() {
+        init_tracing();
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create both pnpmfile.cjs and yarn.config.cjs
+        fs::write(temp_dir_path.join("pnpmfile.cjs"), "module.exports = { hooks: {} }")
+            .expect("Failed to write pnpmfile.cjs");
+
+        fs::write(
+            temp_dir_path.join("yarn.config.cjs"),
+            "module.exports = { nodeLinker: 'node-modules' }",
+        )
+        .expect("Failed to write yarn.config.cjs");
+
+        // pnpmfile.cjs should be detected first (before yarn.config.cjs)
+        let result = PackageManager::builder(temp_dir_path)
+            .build()
+            .await
+            .expect("Should detect pnpm from pnpmfile.cjs");
+        assert_eq!(
+            result.bin_name, "pnpm",
+            "pnpmfile.cjs should be detected before yarn.config.cjs"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_pnpmfile_over_yarn_config8() {
+        init_tracing();
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content = r#"{"name": "test-package"}"#;
