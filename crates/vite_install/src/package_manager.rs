@@ -374,9 +374,21 @@ async fn download_package_manager(
     tracing::debug!("Rename package dir to {}", bin_name);
     tokio::fs::rename(&target_dir_tmp.join("package"), &target_dir_tmp.join(&bin_name)).await?;
 
-    // check bin_file again, for the concurrent download cases
+    // Use a file-based lock to ensure atomicity of remove + rename operations
+    // This prevents DirectoryNotEmpty error when multiple processes/threads
+    // try to install the same package manager version concurrently.
+    // The lock is automatically skipped on NFS filesystems where locking is unreliable.
+    let lock_path = parent_dir.join(format!("{version}.lock"));
+    tracing::debug!("Acquire lock file: {:?}", lock_path);
+    let lock_file = File::create(lock_path.as_path())?;
+    // Acquire exclusive lock (blocks until available)
+    lock_file.lock()?;
+    tracing::debug!("Lock acquired: {:?}", lock_path);
+
+    // Check again after acquiring the lock, in case another thread completed
+    // the installation while we were downloading
     if is_exists_file(&bin_file)? {
-        tracing::debug!("bin_file already exists, skip rename");
+        tracing::debug!("bin_file already exists after lock acquisition, skip rename");
         return Ok(install_dir);
     }
 
@@ -395,12 +407,13 @@ async fn download_package_manager(
 /// Remove the directory and all its contents.
 /// Ignore the error if the directory is not found.
 async fn remove_dir_all_force(path: impl AsRef<Path>) -> Result<(), std::io::Error> {
-    match remove_dir_all(path).await {
+    match remove_dir_all(path.as_ref()).await {
         Ok(()) => Ok(()),
         Err(e) => {
             if e.kind() == std::io::ErrorKind::NotFound {
                 Ok(())
             } else {
+                tracing::error!("remove_dir_all_force path: {:?} error: {e:?}", path.as_ref());
                 Err(e)
             }
         }

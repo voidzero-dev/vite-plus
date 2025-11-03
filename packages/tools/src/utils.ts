@@ -126,6 +126,8 @@ const DEFAULT_PASSTHROUGH_ENVS = [
   '*_TOKEN',
   // oxc specific
   'OXLINT_*',
+  // Rust specific
+  'RUST_*',
 ].map(env => new Minimatch(env));
 
 export function isPassThroughEnv(env: string) {

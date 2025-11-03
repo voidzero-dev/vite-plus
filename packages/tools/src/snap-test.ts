@@ -2,7 +2,7 @@ import cp from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { cpus, tmpdir } from 'node:os';
 import path from 'node:path';
 import { debuglog, parseArgs, promisify } from 'node:util';
 
@@ -15,6 +15,44 @@ const exec = async (command: string, options: cp.ExecOptionsWithStringEncoding) 
     command,
     process.platform === 'win32' ? { ...options, shell: 'pwsh.exe' } : options,
   );
+
+/**
+ * Run tasks with limited concurrency based on CPU count.
+ * @param tasks Array of task functions to execute
+ * @param maxConcurrency Maximum number of concurrent tasks (defaults to CPU count)
+ */
+async function runWithConcurrencyLimit(
+  tasks: (() => Promise<void>)[],
+  maxConcurrency = cpus().length,
+): Promise<void> {
+  const executing: Promise<void>[] = [];
+  const errors: Error[] = [];
+
+  for (const task of tasks) {
+    const promise = task()
+      .catch((error) => {
+        errors.push(error);
+        console.error('Task failed:', error);
+      })
+      .finally(() => {
+        executing.splice(executing.indexOf(promise), 1);
+      });
+
+    executing.push(promise);
+
+    if (executing.length >= maxConcurrency) {
+      await Promise.race(executing);
+    }
+  }
+
+  await Promise.all(executing);
+
+  if (errors.length > 0) {
+    throw new Error(
+      `${errors.length} test case(s) failed. First error: ${errors[0].message}`,
+    );
+  }
+}
 
 export async function snapTest() {
   const { positionals } = parseArgs({
@@ -41,16 +79,22 @@ export async function snapTest() {
 
   const casesDir = path.resolve('snap-tests');
 
-  const tasks: Promise<void>[] = [];
+  const taskFunctions: (() => Promise<void>)[] = [];
   for (const caseName of fs.readdirSync(casesDir)) {
     if (caseName.startsWith('.')) continue; // Skip hidden files like .DS_Store
     if (caseName.includes(filter)) {
-      tasks.push(runTestCase(caseName, tempTmpDir, casesDir));
+      taskFunctions.push(() => runTestCase(caseName, tempTmpDir, casesDir));
     }
   }
 
-  if (tasks.length > 0) {
-    await Promise.all(tasks);
+  if (taskFunctions.length > 0) {
+    const cpuCount = cpus().length;
+    console.log(
+      'Running %d test cases with concurrency limit of %d (CPU count)',
+      taskFunctions.length,
+      cpuCount,
+    );
+    await runWithConcurrencyLimit(taskFunctions, cpuCount);
   }
 }
 

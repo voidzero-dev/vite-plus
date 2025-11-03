@@ -172,7 +172,7 @@ jobs:
 
       - name: Run CLI E2E tests
         run: |
-          pnpm test
+          RUST_BACKTRACE=1 pnpm test
           git diff --exit-code
 
   install-e2e-test:
