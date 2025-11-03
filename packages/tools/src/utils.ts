@@ -35,6 +35,8 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
     .replaceAll(/ ?WARN\s+Request\s+took .+?\n/g, '')
     .replaceAll(/Scope: all \d+ workspace projects/g, 'Scope: all <variable> workspace projects')
     .replaceAll(/\++\n/g, '+<repeat>\n')
+    // ignore pnpm registry request error warning log
+    .replaceAll(/ ?WARN\s+GET\s+https:\/\/registry\..+?\n/g, '')
     // ignore yarn YN0013, because it's unstable output, only exists on CI environment
     // ➤ YN0013: │ A package was added to the project (+ 0.7 KiB).
     .replaceAll(/➤ YN0013:[^\n]+\n/g, '')
@@ -126,6 +128,8 @@ const DEFAULT_PASSTHROUGH_ENVS = [
   '*_TOKEN',
   // oxc specific
   'OXLINT_*',
+  // Rust specific
+  'RUST_*',
 ].map(env => new Minimatch(env));
 
 export function isPassThroughEnv(env: string) {

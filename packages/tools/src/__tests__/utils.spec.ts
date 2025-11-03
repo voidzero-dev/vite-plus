@@ -144,6 +144,14 @@ https://registry.yarnpkg.com/testnpm2/-/testnpm2-1.0.0.tgz
     `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
+
+  test('replace pnpm registry request error warning log', () => {
+    const output = `
+ WARN  GET https://registry.npmjs.org/test-vite-plus-install error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+Progress: resolved
+`;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
 });
 
 describe('isPassThroughEnv()', () => {

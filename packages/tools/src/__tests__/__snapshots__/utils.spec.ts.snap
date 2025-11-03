@@ -26,6 +26,8 @@ exports[`replaceUnstableOutput() > replace ignore pnpm request warning log 1`] =
 Packages:"
 `;
 
+exports[`replaceUnstableOutput() > replace pnpm registry request error warning log 1`] = `"Progress: resolved"`;
+
 exports[`replaceUnstableOutput() > replace tsdown output 1`] = `
 "ℹ tsdown v<semver> powered by rolldown v<semver>
 ℹ entry: src/index.ts
