@@ -381,11 +381,11 @@ async fn download_package_manager(
     }
 
     // rename $target_dir_tmp to $target_dir
+    // We don't remove target_dir first to avoid race conditions where another thread
+    // might be in the middle of creating it. Instead, we rely on the rename operation
+    // to fail if the directory already exists, which we handle gracefully.
     tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
-    remove_dir_all_force(&target_dir).await?;
     
-    // Handle potential race condition where another concurrent process may have
-    // already created the target directory
     match tokio::fs::rename(&target_dir_tmp, &target_dir).await {
         Ok(()) => {
             // create shim file
