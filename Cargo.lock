@@ -1102,7 +1102,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.1",
 ]
 
 [[package]]
@@ -1229,7 +1229,7 @@ dependencies = [
 [[package]]
 name = "fspy"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#6cca9d508278a2dad6a02bdd81183ee4ac71ad4d"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#b11dee581cee47330b65a818e4c5f2a45d220a5e"
 dependencies = [
  "allocator-api2",
  "anyhow",
@@ -1264,7 +1264,7 @@ dependencies = [
 [[package]]
 name = "fspy_detours_sys"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#6cca9d508278a2dad6a02bdd81183ee4ac71ad4d"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#b11dee581cee47330b65a818e4c5f2a45d220a5e"
 dependencies = [
  "cc",
  "winapi",
@@ -1273,7 +1273,7 @@ dependencies = [
 [[package]]
 name = "fspy_preload_unix"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#6cca9d508278a2dad6a02bdd81183ee4ac71ad4d"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#b11dee581cee47330b65a818e4c5f2a45d220a5e"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1288,7 +1288,7 @@ dependencies = [
 [[package]]
 name = "fspy_preload_windows"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#6cca9d508278a2dad6a02bdd81183ee4ac71ad4d"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#b11dee581cee47330b65a818e4c5f2a45d220a5e"
 dependencies = [
  "bincode",
  "constcat",
@@ -1304,7 +1304,7 @@ dependencies = [
 [[package]]
 name = "fspy_seccomp_unotify"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#6cca9d508278a2dad6a02bdd81183ee4ac71ad4d"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#b11dee581cee47330b65a818e4c5f2a45d220a5e"
 dependencies = [
  "bincode",
  "futures-util",
@@ -1321,7 +1321,7 @@ dependencies = [
 [[package]]
 name = "fspy_shared"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#6cca9d508278a2dad6a02bdd81183ee4ac71ad4d"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#b11dee581cee47330b65a818e4c5f2a45d220a5e"
 dependencies = [
  "allocator-api2",
  "bincode",
@@ -1339,7 +1339,7 @@ dependencies = [
 [[package]]
 name = "fspy_shared_unix"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#6cca9d508278a2dad6a02bdd81183ee4ac71ad4d"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#b11dee581cee47330b65a818e4c5f2a45d220a5e"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2859,7 +2859,7 @@ dependencies = [
  "once_cell",
  "socket2 0.5.10",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3133,7 +3133,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.1",
 ]
 
 [[package]]
@@ -3640,7 +3640,7 @@ dependencies = [
  "getrandom 0.3.3",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.1",
 ]
 
 [[package]]
@@ -4120,7 +4120,7 @@ dependencies = [
 [[package]]
 name = "vite_glob"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#6cca9d508278a2dad6a02bdd81183ee4ac71ad4d"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#b11dee581cee47330b65a818e4c5f2a45d220a5e"
 dependencies = [
  "thiserror 2.0.17",
  "wax",
@@ -4160,7 +4160,7 @@ dependencies = [
 [[package]]
 name = "vite_path"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#6cca9d508278a2dad6a02bdd81183ee4ac71ad4d"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#b11dee581cee47330b65a818e4c5f2a45d220a5e"
 dependencies = [
  "bincode",
  "diff-struct",
@@ -4173,7 +4173,7 @@ dependencies = [
 [[package]]
 name = "vite_str"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#6cca9d508278a2dad6a02bdd81183ee4ac71ad4d"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#b11dee581cee47330b65a818e4c5f2a45d220a5e"
 dependencies = [
  "bincode",
  "compact_str",
@@ -4184,7 +4184,7 @@ dependencies = [
 [[package]]
 name = "vite_task"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#6cca9d508278a2dad6a02bdd81183ee4ac71ad4d"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#b11dee581cee47330b65a818e4c5f2a45d220a5e"
 dependencies = [
  "anyhow",
  "bincode",
@@ -4223,7 +4223,7 @@ dependencies = [
 [[package]]
 name = "vite_workspace"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#6cca9d508278a2dad6a02bdd81183ee4ac71ad4d"
+source = "git+https://github.com/voidzero-dev/vite-task?rev=refs%2Fpull%2F11%2Fhead#b11dee581cee47330b65a818e4c5f2a45d220a5e"
 dependencies = [
  "petgraph 0.8.3",
  "rustc-hash",
@@ -4418,6 +4418,7 @@ dependencies = [
  "either",
  "env_home",
  "rustix",
+ "tracing",
  "winsafe 0.0.19",
 ]
 
@@ -4458,7 +4459,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.1",
 ]
 
 [[package]]

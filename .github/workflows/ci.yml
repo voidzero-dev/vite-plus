@@ -165,7 +165,7 @@ jobs:
         run: pnpm run bootstrap-cli
 
       - name: Run CLI lint
-        run: pnpm lint
+        run: VITE_LOG=error pnpm lint
 
       - name: Install Playwright browsers
         run: pnpx playwright install chromium
