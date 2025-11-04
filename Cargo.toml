@@ -73,9 +73,9 @@ vite_task = { git = "https://github.com/voidzero-dev/vite-task", rev = "refs/pul
 vite_workspace = { git = "https://github.com/voidzero-dev/vite-task", rev = "refs/pull/11/head" }
 wax = "0.6.0"
 
-napi = { version = "3.0.0", default-features = false, features = ["async", "error_anyhow"] }
+napi = { version = "=3.2.0", default-features = false, features = ["async", "error_anyhow"] }
 napi-build = "2"
-napi-derive = { version = "3.0.0", default-features = false, features = ["type-def", "strict"] }
+napi-derive = { version = "=3.2.0", default-features = false, features = ["type-def", "strict"] }
 
 [profile.dev]
 # Disabling debug info speeds up local and CI builds,
