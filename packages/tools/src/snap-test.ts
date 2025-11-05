@@ -8,6 +8,7 @@ import { cpus, tmpdir } from 'node:os';
 import path from 'node:path';
 import { debuglog, parseArgs } from 'node:util';
 
+import { setTimeout } from 'node:timers/promises';
 import { isPassThroughEnv, replaceUnstableOutput } from './utils';
 
 const debug = debuglog('vite-plus/snap-test');
@@ -159,21 +160,24 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
     const outputStreamPath = path.join(caseTmpDir, 'output.log');
     const outputStream = await open(outputStreamPath, 'w');
 
-    const exitCode = await execute(stripComments(command), [], {
-      env,
-      cwd,
-      stdin: null,
-      // Declared to be `Writable` but `FileHandle` works too.
-      // @ts-expect-error
-      stderr: outputStream,
-      // @ts-expect-error
-      stdout: outputStream,
-      glob: {
-        // Disable glob expansion. Pass args like '--filter=*' as-is.
-        isGlobPattern: () => false,
-        match: async () => [],
-      },
-    });
+    const exitCode = await Promise.race([
+      execute(stripComments(command), [], {
+        env,
+        cwd,
+        stdin: null,
+        // Declared to be `Writable` but `FileHandle` works too.
+        // @ts-expect-error
+        stderr: outputStream,
+        // @ts-expect-error
+        stdout: outputStream,
+        glob: {
+          // Disable glob expansion. Pass args like '--filter=*' as-is.
+          isGlobPattern: () => false,
+          match: async () => [],
+        },
+      }),
+      setTimeout(30 * 1000),
+    ]);
 
     await outputStream.close();
 
@@ -181,11 +185,14 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
 
     let commandLine = `> ${command}`;
     if (exitCode !== 0) {
-      commandLine = `[${exitCode}]` + commandLine;
+      commandLine = (exitCode === undefined ? '[timeout]' : `[${exitCode}]`) + commandLine;
     }
     newSnap.push(commandLine);
     if (output.length > 0) {
       newSnap.push(replaceUnstableOutput(output, caseTmpDir));
+    }
+    if (exitCode === undefined) {
+      break; // Stop executing further commands on timeout
     }
   }
   const newSnapContent = newSnap.join('\n');
