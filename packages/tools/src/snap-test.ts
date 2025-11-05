@@ -161,6 +161,10 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
       stdin: null,
       stderr: outputStream as any,
       stdout: outputStream as any,
+      glob: {
+        isGlobPattern: () => false,
+        match: async () => [],
+      },
     });
 
     outputStream.close();
