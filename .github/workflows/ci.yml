@@ -176,6 +176,13 @@ jobs:
         run: |
           RUST_BACKTRACE=1 pnpm test
           git diff --exit-code
+          if: ${{ matrix.os != 'windows-latest' }}
+
+      - name: Run CLI E2E tests
+        run: |
+          RUST_BACKTRACE=1 pnpm -r snap-test
+          git diff --exit-code
+          if: ${{ matrix.os != 'windows-latest' }}
 
   install-e2e-test:
     name: vite install E2E test
