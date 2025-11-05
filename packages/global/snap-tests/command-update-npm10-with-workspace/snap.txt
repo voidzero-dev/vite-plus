@@ -32,6 +32,7 @@ up to date in <variable>ms
 
 > vp up -D --filter app -- --no-audit && cat packages/app/package.json # should update dev dependencies in app
 Running: npm update --workspace app --include=dev --no-audit
+npm warn workspaces app in filter set, but no workspace folder present
 
 up to date in <variable>ms
 {
@@ -45,10 +46,10 @@ up to date in <variable>ms
   }
 }
 
-npm warn workspaces app in filter set, but no workspace folder present
-
 > vp update --filter "*" -- --no-audit && cat packages/app/package.json packages/utils/package.json # should update in all packages
 Running: npm update --workspace * --no-audit
+npm warn workspaces app in filter set, but no workspace folder present
+npm warn workspaces @vite-plus-test/utils in filter set, but no workspace folder present
 
 up to date in <variable>ms
 {
@@ -69,11 +70,10 @@ up to date in <variable>ms
   }
 }
 
-npm warn workspaces app in filter set, but no workspace folder present
-npm warn workspaces @vite-plus-test/utils in filter set, but no workspace folder present
-
 > vp update -r --no-save -- --no-audit && cat package.json packages/app/package.json # should update recursively without saving
 Running: npm update --include-workspace-root --workspaces --no-save --no-audit
+npm warn workspaces app in filter set, but no workspace folder present
+npm warn workspaces @vite-plus-test/utils in filter set, but no workspace folder present
 
 up to date in <variable>ms
 {
@@ -97,9 +97,6 @@ up to date in <variable>ms
     "test-vite-plus-package": "*"
   }
 }
-
-npm warn workspaces app in filter set, but no workspace folder present
-npm warn workspaces @vite-plus-test/utils in filter set, but no workspace folder present
 
 > vp update --workspace --filter app @vite-plus-test/utils -- --no-audit && cat packages/app/package.json # should update workspace dependency
 Running: npm update --workspace app --no-audit @vite-plus-test/utils

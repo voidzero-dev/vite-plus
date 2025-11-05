@@ -84,6 +84,10 @@ Running: npm install --save-optional --no-audit testnpm2@<semver>
 added 1 package in <variable>ms
 Warning: npm doesn't support --latest flag. Updating within semver range only.
 Running: npm update --no-optional --no-audit
+npm warn config optional Use `--omit=optional` to exclude optional dependencies, or
+npm warn config `--include=optional` to include them.
+npm warn config
+npm warn config       Default value does install optional deps unless otherwise omitted.
 
 changed 1 package in <variable>ms
 {
@@ -98,11 +102,6 @@ changed 1 package in <variable>ms
     "testnpm2": "^1.0.0"
   }
 }
-
-npm warn config optional Use `--omit=optional` to exclude optional dependencies, or
-npm warn config `--include=optional` to include them.
-npm warn config
-npm warn config       Default value does install optional deps unless otherwise omitted.
 
 > vp update -- --no-audit && cat package.json # should update all packages but won't change the package.json
 Running: npm update --no-audit

@@ -145,14 +145,12 @@ packages:
 
 [1]> vp add --filter app test-vite-plus-package-optional --save-catalog-name v1 # should error because save-catalog-name is not supported at pnpm@9
 Running: pnpm --filter app add --save-catalog-name=v1 test-vite-plus-package-optional
-
  ERROR  Unknown option: 'save-catalog-name'
 Did you mean 'save-optional'? Use "--config.unknown=value" to force an unknown option.
 For help, run: pnpm help add
 
 [1]> vp add --filter=./packages/utils test-vite-plus-package-optional -O --save-catalog v2 # should error because save-catalog is not supported at pnpm@9
 Running: pnpm --filter ./packages/utils add --save-optional --save-catalog test-vite-plus-package-optional v2
-
  ERROR  Unknown option: 'save-catalog'
 Did you mean 'save-exact', or 'save-prod'? Use "--config.unknown=value" to force an unknown option.
 For help, run: pnpm help add

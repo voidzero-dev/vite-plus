@@ -78,7 +78,6 @@ Done in <variable>ms using pnpm v<semver>
 
 [1]> vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install # should error because allow-build is not supported at pnpm@9
 Running: pnpm add --allow-build=test-vite-plus-install testnpm2 test-vite-plus-install
-
  ERROR  Unknown option: 'allow-build'
 For help, run: pnpm help add
 
