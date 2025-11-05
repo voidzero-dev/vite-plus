@@ -832,12 +832,12 @@ dependencies = [
 
 [[package]]
 name = "ctor"
-version = "0.5.0"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67773048316103656a637612c4a62477603b777d91d9c62ff2290f9cde178fdb"
+checksum = "ec09e802f5081de6157da9a75701d6c713d8dc3ba52571fd4bd25f412644e8a6"
 dependencies = [
  "ctor-proc-macro 0.0.6",
- "dtor",
+ "dtor 0.0.6",
 ]
 
 [[package]]
@@ -847,7 +847,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59c9b8bdf64ee849747c1b12eb861d21aa47fa161564f48332f1afe2373bf899"
 dependencies = [
  "ctor-proc-macro 0.0.7",
- "dtor",
+ "dtor 0.1.0",
 ]
 
 [[package]]
@@ -1028,12 +1028,27 @@ dependencies = [
 
 [[package]]
 name = "dtor"
+version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97cbdf2ad6846025e8e25df05171abfb30e3ababa12ee0a0e44b9bbe570633a8"
+dependencies = [
+ "dtor-proc-macro 0.0.5",
+]
+
+[[package]]
+name = "dtor"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e58a0764cddb55ab28955347b45be00ade43d4d6f3ba4bf3dc354e4ec9432934"
 dependencies = [
- "dtor-proc-macro",
+ "dtor-proc-macro 0.0.6",
 ]
+
+[[package]]
+name = "dtor-proc-macro"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7454e41ff9012c00d53cf7f475c5e3afa3b91b7c90568495495e8d9bf47a1055"
 
 [[package]]
 name = "dtor-proc-macro"
@@ -2202,13 +2217,13 @@ dependencies = [
 
 [[package]]
 name = "napi"
-version = "3.3.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1b74e3dce5230795bb4d2821b941706dee733c7308752507254b0497f39cad7"
+checksum = "96671d5c84cee3ae4cab96386b9f953b22569ece9677b9fdd1492550a165eca5"
 dependencies = [
  "anyhow",
  "bitflags 2.9.4",
- "ctor 0.5.0",
+ "ctor 0.4.3",
  "napi-build",
  "napi-sys",
  "nohash-hasher",
@@ -2224,12 +2239,12 @@ checksum = "dcae8ad5609d14afb3a3b91dee88c757016261b151e9dcecabf1b2a31a6cab14"
 
 [[package]]
 name = "napi-derive"
-version = "3.2.5"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7552d5a579b834614bbd496db5109f1b9f1c758f08224b0dee1e408333adf0d0"
+checksum = "b0fb461a375ab7e557a0f69a962affe8f14902bb35cbfe1b9292f011207fcace"
 dependencies = [
  "convert_case 0.8.0",
- "ctor 0.5.0",
+ "ctor 0.4.3",
  "napi-derive-backend",
  "proc-macro2",
  "quote",
@@ -2819,7 +2834,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.0",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -2856,9 +2871,9 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.0",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
