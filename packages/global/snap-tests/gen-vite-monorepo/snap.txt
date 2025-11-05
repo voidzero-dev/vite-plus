@@ -1,0 +1,153 @@
+> vp gen vite:monorepo --no-interactive # create monorepo with default values
+> ls vite-plus-monorepo # check files created
+README.md
+apps
+package.json
+packages
+pnpm-workspace.yaml
+tsconfig.json
+vite.config.ts
+
+> cat vite-plus-monorepo/package.json # check package.json
+{
+  "name": "vite-plus-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "ready": "vite fmt && vite lint --type-aware && vite run test -r && vite run build -r",
+    "dev": "vite run website#dev"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "catalog:",
+      "vitest": "catalog:"
+    },
+    "peerDependencyRules": {
+      "allowAny": [
+        "vite"
+      ]
+    }
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> cat vite-plus-monorepo/pnpm-workspace.yaml # check workspace config
+packages:
+  - apps/*
+  - packages/*
+  - tools/*
+
+catalog:
+  '@types/node': ^24
+  vite-plus: npm:@voidzero-dev/vite-plus@latest
+  vite: npm:@voidzero-dev/vite-plus@latest
+  vitest: npm:@voidzero-dev/vite-plus@latest
+  typescript: ^5
+
+catalogMode: prefer
+
+> cat vite-plus-monorepo/.npmrc # check .npmrc
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+@voidzero-dev:registry=https://npm.pkg.github.com/
+
+> test -d vite-plus-monorepo/.git && echo 'Git initialized' || echo 'No git' # check git init
+Git initialized
+
+> ls vite-plus-monorepo/apps # check apps directory created
+website
+
+> ls vite-plus-monorepo/apps/website/package.json # check website package.json
+vite-plus-monorepo/apps/website/package.json
+
+> cd vite-plus-monorepo && vp gen --no-interactive vite:application # create application in non-interactive mode
+> ls vite-plus-monorepo/apps # check apps directory created
+vite-plus-application
+website
+
+> ls vite-plus-monorepo/apps/vite-plus-application/package.json # check vite-plus-application package.json
+vite-plus-monorepo/apps/vite-plus-application/package.json
+
+> cd vite-plus-monorepo && vp gen --no-interactive vite:library # create library in non-interactive mode
+> ls vite-plus-monorepo/packages/vite-plus-library/package.json # check vite-plus-library package.json
+vite-plus-monorepo/packages/vite-plus-library/package.json
+
+> cd vite-plus-monorepo && vp gen --no-interactive vite:generator # create generator in non-interactive mode
+> ls vite-plus-monorepo/tools # check tools directory created
+vite-plus-generator
+
+> cat vite-plus-monorepo/tools/vite-plus-generator/package.json # check vite-plus-generator package.json
+{
+  "name": "vite-plus-generator",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "description": "A starter for creating a Vite+ code generator.",
+  "bin": "./bin/index.ts",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "keywords": [
+    "bingo-template",
+    "vite-plus-generator"
+  ],
+  "scripts": {
+    "test": "vite test",
+    "dev": "node bin/index.ts"
+  },
+  "dependencies": {
+    "bingo": "^0.7.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
+
+> vp gen vite:monorepo --no-interactive --directory my-vite-plus-monorepo # create monorepo with custom directory
+> ls my-vite-plus-monorepo # check files created
+README.md
+apps
+package.json
+packages
+pnpm-workspace.yaml
+tsconfig.json
+vite.config.ts
+
+> cat my-vite-plus-monorepo/package.json # check package.json
+{
+  "name": "my-vite-plus-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "ready": "vite fmt && vite lint --type-aware && vite run test -r && vite run build -r",
+    "dev": "vite run website#dev"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "catalog:",
+      "vitest": "catalog:"
+    },
+    "peerDependencyRules": {
+      "allowAny": [
+        "vite"
+      ]
+    }
+  },
+  "packageManager": "pnpm@<semver>"
+}

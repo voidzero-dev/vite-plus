@@ -5,12 +5,13 @@ export default defineConfig({
   external: [
     /^node:/,
     '@voidzero-dev/vite-plus/bin',
-    'create-vite',
-    'create-tsdown',
+    '@voidzero-dev/vite-plus/binding',
     // FIXME: Calling `require` for "child_process" in an environment that doesn't expose the `require` function
     'cross-spawn',
     // FIXME: will lost colors if not external
     'picocolors',
+    // FIXME: Calling `require` for "module" in an environment that doesn't expose the `require` function
+    'validate-npm-package-name',
   ],
   output: {
     format: 'esm',

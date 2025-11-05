@@ -1,0 +1,93 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`formatTargetDir > should format target dir with invalid input 1`] = `
+{
+  "directory": "",
+  "error": "Parsed package name "." is invalid: name cannot start with a period",
+  "packageName": "",
+}
+`;
+
+exports[`formatTargetDir > should format target dir with invalid input 2`] = `
+{
+  "directory": "",
+  "error": "Absolute path is not allowed",
+  "packageName": "",
+}
+`;
+
+exports[`formatTargetDir > should format target dir with invalid input 3`] = `
+{
+  "directory": "",
+  "error": "Parsed package name "@scope" is invalid: name can only contain URL-friendly characters",
+  "packageName": "",
+}
+`;
+
+exports[`formatTargetDir > should format target dir with invalid input 4`] = `
+{
+  "directory": "",
+  "error": "Relative path contains ".." which is not allowed",
+  "packageName": "",
+}
+`;
+
+exports[`formatTargetDir > should format target dir with invalid package name 1`] = `"Parsed package name "my-package@" is invalid: name can only contain URL-friendly characters"`;
+
+exports[`formatTargetDir > should format target dir with invalid package name 2`] = `"Parsed package name "my-package@1.0.0" is invalid: name can only contain URL-friendly characters"`;
+
+exports[`formatTargetDir > should format target dir with valid input 1`] = `
+{
+  "directory": "my-package",
+  "packageName": "my-package",
+}
+`;
+
+exports[`formatTargetDir > should format target dir with valid input 2`] = `
+{
+  "directory": "my-package",
+  "packageName": "my-package",
+}
+`;
+
+exports[`formatTargetDir > should format target dir with valid input 3`] = `
+{
+  "directory": "my-package",
+  "packageName": "@my-scope/my-package",
+}
+`;
+
+exports[`formatTargetDir > should format target dir with valid input 4`] = `
+{
+  "directory": "foo/my-package",
+  "packageName": "@my-scope/my-package",
+}
+`;
+
+exports[`formatTargetDir > should format target dir with valid input 5`] = `
+{
+  "directory": "foo/my-package",
+  "packageName": "@my-scope/my-package",
+}
+`;
+
+exports[`formatTargetDir > should format target dir with valid input 6`] = `
+{
+  "directory": "foo/bar/my-package",
+  "packageName": "@scope/my-package",
+}
+`;
+
+exports[`formatTargetDir > should format target dir with valid input 7`] = `
+{
+  "directory": "foo/bar/my-package",
+  "packageName": "@scope/my-package",
+}
+`;
+
+exports[`formatTargetDir > should format target dir with valid input 8`] = `
+{
+  "directory": "foo/bar/@scope/my-package/sub-package",
+  "packageName": "sub-package",
+}
+`;

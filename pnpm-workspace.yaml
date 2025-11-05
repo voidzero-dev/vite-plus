@@ -34,6 +34,7 @@ catalog:
   '@types/semver': ^7.7.1
   '@types/serve-static': ^2.0.0
   '@types/strip-comments': ^2.0.4
+  '@types/validate-npm-package-name': ^4.0.2
   '@types/ws': ^8.18.0
   '@vitest/browser': ^4.0.9
   '@vitest/browser-playwright': ^4.0.9
@@ -47,8 +48,6 @@ catalog:
   change-case: ^5.4.4
   connect: ^3.7.0
   consola: ^3.4.2
-  create-tsdown: 0.0.3
-  create-vite: ^8.0.0
   cross-spawn: ^7.0.5
   debug: ^4.4.3
   dedent: ^1.5.3
@@ -101,6 +100,7 @@ catalog:
   typescript: ^5.9.3
   unified: ^11.0.5
   valibot: 1.1.0
+  validate-npm-package-name: ^7.0.0
   vitepress: 2.0.0-alpha.12
   vitepress-plugin-group-icons: ^1.0.0
   vitepress-plugin-llms: ^1.1.0
@@ -125,7 +125,6 @@ minimumReleaseAgeExclude:
   - '@oxc-transform/*'
   - '@oxfmt/*'
   - '@oxlint-tsgolint/*'
-  - create-vite
   - oxc-minify
   - oxc-parser
   - oxc-transform

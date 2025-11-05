@@ -1,4 +1,5 @@
 {
+  "name": "vite-plus-monorepo-template",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -8,19 +9,19 @@
     "tools/*"
   ],
   "scripts": {
-    "ready": "vite fmt && vite run lint && vite run test:all && vite run build:all",
-    "dev": "vite run website#dev",
-    "lint": "vite lint --type-aware",
-    "test:all": "vite run -r test",
-    "build:all": "vite run -r build"
+    "ready": "vite fmt && vite lint --type-aware && vite run test -r && vite run build -r",
+    "dev": "vite run website#dev"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "devDependencies": {
-    "vite": "catalog:"
+    "vite-plus": "catalog:"
   },
   "pnpm": {
     "overrides": {
       "vite": "catalog:",
-      "tsdown": "catalog:"
+      "vitest": "catalog:"
     },
     "peerDependencyRules": {
       "allowAny": [
@@ -30,6 +31,6 @@
   },
   "resolutions": {
     "vite": "catalog:",
-    "tsdown": "catalog:"
+    "vitest": "catalog:"
   }
 }

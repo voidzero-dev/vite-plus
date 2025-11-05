@@ -1,0 +1,13 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    {
+      "command": "vp gen vite:application --no-interactive --directory @my-scope/my-vite-app -- --template vanilla-ts # create vite app with vanilla-ts template with scope name",
+      "ignoreOutput": true
+    },
+    "ls my-vite-app/package.json # check package.json",
+    "cat my-vite-app/.npmrc # check .npmrc"
+  ]
+}

@@ -1,0 +1,7 @@
+> vp gen vite:library --no-interactive --directory @my-scope/my-library # create vite library with scope name
+> ls my-library/package.json # check package.json
+my-library/package.json
+
+> cat my-library/.npmrc # check .npmrc
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+@voidzero-dev:registry=https://npm.pkg.github.com/

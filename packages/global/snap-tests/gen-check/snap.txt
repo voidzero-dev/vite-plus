@@ -1,0 +1,96 @@
+> vp gen --help # show help
+Usage: vite gen [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
+
+Run any template (builtin, remote, or local) with automatic vite+ integration.
+
+Arguments:
+  TEMPLATE                   Template name (optional; you will be prompted if omitted)
+                            - Built-in: vite:monorepo, vite:application, vite:library, vite:generator
+                            - Remote: create-vite, @tanstack/create-start, create-next-app, create-nuxt,
+                                      github:user/repo, https://github.com/user/template-repo
+                            - Local: @company/generator-*, ./tools/create-ui-component
+
+Options (before --):
+  --directory DIR           Target directory for the generated project.
+                            Only works for built-in templates; auto-detected for remote templates.
+  --no-interactive          Run in non-interactive mode (skip prompts and use defaults)
+  --list                    List all available templates
+  -h, --help                Show this help message
+
+Template options (after --):
+  All arguments after -- are passed directly through to the template command.
+
+Examples:
+  # Interactive mode - choose template via prompt
+  vite gen
+
+  # Run any existing template (npx / pnpm dlx / yarn dlx / bunx auto-detected)
+  vite gen create-vite
+  vite gen create-next-app
+  vite gen @tanstack/create-start
+
+  # With template-specific options (after --)
+  vite gen create-vite -- --template react-ts
+  vite gen create-next-app -- --typescript --app
+
+  # Create vite+ monorepo, application, library, or generator scaffolds
+  vite gen vite:monorepo
+  vite gen vite:application
+  vite gen vite:library
+  vite gen vite:generator
+
+  # Monorepo: specify target directory
+  vite gen vite:application --directory=packages/my-app
+
+  # Combine gen command options and template options
+  vite gen vite:application --directory=apps/my-app -- --template vue-ts
+
+  # Run templates from GitHub (via degit)
+  vite gen github:user/repo
+  vite gen https://github.com/user/template-repo
+
+Note: Templates are executed via npx / pnpm dlx / yarn dlx / bunx,
+      based on the detected package manager.
+      No global installation required - always uses the latest version.
+
+Aliases: g, generate, new
+
+
+> vp gen --list # list templates
+
+📦 Available Templates
+
+Vite+ Built-in Templates:
+  • vite:monorepo                 - Create a new monorepo
+  • vite:application              - Create a new application
+  • vite:library                  - Create a new library
+  • vite:generator                - Scaffold a new code generator
+
+Popular Remote Templates:
+  • create-vite                   - Official Vite templates
+  • @tanstack/create-start        - TanStack applications
+  • create-next-app               - Next.js application
+  • create-nuxt                   - Nuxt application
+  • create-typescript-app         - TypeScript application
+  • create-react-router           - React Router application
+  • create-vue                    - Vue application
+
+Run vite gen for interactive mode
+Run vite gen <template> to use any template
+Run vite gen <template> -- <options> to pass options to the template
+
+✨ Tip: You can use ANY npm template with vite gen!
+
+
+[1]> vp gen --no-interactive # run in non-interactive mode without template name will show error
+
+Template name is required when running in non-interactive mode
+
+Usage: vite gen [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
+
+Example: 
+  # Create a new application in non-interactive mode with a custom target directory
+  vite gen vite:application --no-interactive --directory=apps/my-app
+
+Use `vite gen --list` to list all available templates, or run `vite gen --help` for more information.
+

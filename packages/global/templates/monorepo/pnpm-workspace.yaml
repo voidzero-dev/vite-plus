@@ -4,13 +4,10 @@ packages:
   - tools/*
 
 catalog:
-  '@types/node': ^24.5.0
-  '@voidzero-dev/vite-plus': latest
-  bumpp: ^10.1.0
-  happy-dom: ^18.0.1
+  '@types/node': ^24
+  vite-plus: npm:@voidzero-dev/vite-plus@latest
   vite: npm:@voidzero-dev/vite-plus@latest
-  vitest: ^3.2.4
-  typescript: ^5.9.2
-  tsdown: ^0.15.1
+  vitest: npm:@voidzero-dev/vite-plus@latest
+  typescript: ^5
 
 catalogMode: prefer

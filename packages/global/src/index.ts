@@ -1,8 +1,9 @@
-// Parse command line arguments to intercept 'new' command
+// Parse command line arguments to intercept 'new' and 'gen' commands
 const args = process.argv.slice(2);
 
-if (args[0] === 'new') {
-  import('./new.ts');
+const command = args[0];
+if (command === 'gen' || command === 'g' || command === 'generate' || command === 'new') {
+  import('./gen.ts');
 } else {
   // Delegate all other commands to vite-plus CLI
   import('@voidzero-dev/vite-plus/bin');

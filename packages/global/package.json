@@ -23,17 +23,20 @@
   },
   "dependencies": {
     "@voidzero-dev/vite-plus": "workspace:*",
-    "create-tsdown": "catalog:",
-    "create-vite": "catalog:",
     "cross-spawn": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
-    "rolldown-vite": "workspace:*"
+    "rolldown-vite": "workspace:*",
+    "validate-npm-package-name": "catalog:"
   },
   "devDependencies": {
     "@clack/prompts": "catalog:",
+    "@std/yaml": "catalog:",
     "@types/cross-spawn": "catalog:",
+    "@types/validate-npm-package-name": "catalog:",
     "@voidzero-dev/vite-plus-tools": "workspace:",
+    "glob": "catalog:",
+    "minimatch": "catalog:",
     "mri": "catalog:",
     "picocolors": "catalog:",
     "rolldown": "workspace:*"

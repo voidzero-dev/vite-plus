@@ -1,0 +1,7 @@
+> vp gen vite:application --no-interactive --directory @my-scope/my-vite-app -- --template vanilla-ts # create vite app with vanilla-ts template with scope name
+> ls my-vite-app/package.json # check package.json
+my-vite-app/package.json
+
+> cat my-vite-app/.npmrc # check .npmrc
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+@voidzero-dev:registry=https://npm.pkg.github.com/

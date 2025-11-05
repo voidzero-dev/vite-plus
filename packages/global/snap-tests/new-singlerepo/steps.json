@@ -1,8 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "vp new --template vanilla-ts --monorepo false --pm pnpm --git false --overwrite hello-vite-plus # create singlerepo",
-    "cd hello-vite-plus && ls -a . # check files",
-    "cd hello-vite-plus && cat package.json # check package.json"
-  ]
-}

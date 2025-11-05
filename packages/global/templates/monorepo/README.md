@@ -13,13 +13,13 @@ vite run ready
 - Run the tests:
 
 ```bash
-vite run test
+vite run test -r
 ```
 
 - Build the monorepo:
 
 ```bash
-vite run build
+vite run build -r
 ```
 
 - Run the development server:

@@ -107,10 +107,19 @@ export async function snapTest() {
   process.exit(0); // Ensure exit even if there are pending timed-out steps
 }
 
+interface Command {
+  command: string;
+  /**
+   * If true, the stdout and stderr output of the command will be ignored.
+   * This is useful for commands that stdout/stderr is unstable.
+   */
+  ignoreOutput?: boolean;
+}
+
 interface Steps {
   ignoredPlatforms?: string[];
   env: Record<string, string>;
-  commands: string[];
+  commands: (string | Command)[];
 }
 
 async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
@@ -153,7 +162,8 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
 
   const cwd = npath.toPortablePath(caseTmpDir);
   for (const command of steps.commands) {
-    debug('running command: %s, cwd: %s, env: %o', command, caseTmpDir, env);
+    const cmd = typeof command === 'string' ? { command } : command;
+    debug('running command: %o, cwd: %s, env: %o', cmd, caseTmpDir, env);
 
     // While `@yarnpkg/shell` supports capturing output via in-memory `Writable` streams,
     // it seems not to have stable ordering of stdout/stderr chunks.
@@ -162,15 +172,15 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
     const outputStream = await open(outputStreamPath, 'w');
 
     const exitCode = await Promise.race([
-      execute(stripComments(command), [], {
+      execute(stripComments(cmd.command), [], {
         env,
         cwd,
         stdin: null,
         // Declared to be `Writable` but `FileHandle` works too.
         // @ts-expect-error
-        stderr: outputStream,
+        stderr: cmd.ignoreOutput ? null : outputStream,
         // @ts-expect-error
-        stdout: outputStream,
+        stdout: cmd.ignoreOutput ? null : outputStream,
         glob: {
           // Disable glob expansion. Pass args like '--filter=*' as-is.
           isGlobPattern: () => false,
@@ -184,7 +194,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
 
     const output = readFileSync(outputStreamPath, 'utf-8');
 
-    let commandLine = `> ${command}`;
+    let commandLine = `> ${cmd.command}`;
     if (exitCode !== 0) {
       commandLine = (exitCode === undefined ? '[timeout]' : `[${exitCode}]`) + commandLine;
     }
