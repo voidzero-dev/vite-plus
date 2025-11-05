@@ -153,9 +153,9 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
   for (const command of steps.commands) {
     debug('running command: %s, cwd: %s, env: %o', command, caseTmpDir, env);
 
-    /// While `@yarnpkg/shell` supports capturing output via in-memory `Writable` streams,
-    /// it seems not to have stable ordering of stdout/stderr chunks.
-    /// To ensure stable ordering, we redirect outputs to a file instead.
+    // While `@yarnpkg/shell` supports capturing output via in-memory `Writable` streams,
+    // it seems not to have stable ordering of stdout/stderr chunks.
+    // To ensure stable ordering, we redirect outputs to a file instead.
     const outputStreamPath = path.join(caseTmpDir, 'output.log');
     const outputStream = await open(outputStreamPath, 'w');
 
@@ -173,7 +173,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
       },
     });
 
-    outputStream.close();
+    await outputStream.close();
 
     const output = readFileSync(outputStreamPath, 'utf-8');
 
