@@ -2,23 +2,21 @@
 
   vitepress v<semver>
 
-build complete in <variable>ms.
-
-
 - building client + server bundles...
 [32m✓[0m building client + server bundles...
 - rendering pages...
 [32m✓[0m rendering pages...
+build complete in <variable>ms.
+
 
 > vite doc build # build documentation again should hit the cache
 ✓ cache hit, replaying
 
   vitepress v<semver>
 
-build complete in <variable>ms.
-
-
 - building client + server bundles...
 [32m✓[0m building client + server bundles...
 - rendering pages...
 [32m✓[0m rendering pages...
+build complete in <variable>ms.
+

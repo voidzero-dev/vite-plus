@@ -153,33 +153,26 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
   const cwd = npath.toPortablePath(caseTmpDir);
   for (const command of steps.commands) {
     debug('running command: %s, cwd: %s, env: %o', command, caseTmpDir, env);
-    const stdoutStream = new PassThrough();
-    const stderrStream = new PassThrough();
+    const outputStream = new PassThrough();
 
     const exitCode = await execute(stripComments(command), [], {
       env,
       cwd,
       stdin: null,
-      stderr: stderrStream,
-      stdout: stdoutStream,
+      stderr: outputStream,
+      stdout: outputStream,
     });
 
-    stdoutStream.end();
-    const stdout = await text(stdoutStream);
-
-    stderrStream.end();
-    const stderr = await text(stderrStream);
+    outputStream.end();
+    const output = await text(outputStream);
 
     let commandLine = `> ${command}`;
     if (exitCode !== 0) {
       commandLine = `[${exitCode}]` + commandLine;
     }
     newSnap.push(commandLine);
-    if (stdout.length > 0) {
-      newSnap.push(replaceUnstableOutput(stdout, caseTmpDir));
-    }
-    if (stderr.length > 0) {
-      newSnap.push(replaceUnstableOutput(stderr, caseTmpDir));
+    if (output.length > 0) {
+      newSnap.push(replaceUnstableOutput(output, caseTmpDir));
     }
   }
   const newSnapContent = newSnap.join('\n');
