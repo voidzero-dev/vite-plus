@@ -1,20 +1,25 @@
-import cp from 'node:child_process';
+import { npath } from '@yarnpkg/fslib';
+import { execute } from '@yarnpkg/shell';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import { cpus, tmpdir } from 'node:os';
 import path from 'node:path';
-import { debuglog, parseArgs, promisify } from 'node:util';
+import { PassThrough } from 'node:stream';
+import { text } from 'node:stream/consumers';
+import { debuglog, parseArgs } from 'node:util';
 
 import { isPassThroughEnv, replaceUnstableOutput } from './utils';
 
 const debug = debuglog('vite-plus/snap-test');
-const cpExec = promisify(cp.exec);
-const exec = async (command: string, options: cp.ExecOptionsWithStringEncoding) =>
-  cpExec(
-    command,
-    process.platform === 'win32' ? { ...options, shell: 'pwsh.exe' } : options,
-  );
+
+// Remove comments (starting with ' #') from command strings
+// `@yarnpkg/shell` doesn't parse comments.
+// This doesn't handle all edge cases (such as ' #' in quoted strings), but is good enough for our test cases.
+function stripComments(command: string): string {
+  const commentStart = command.indexOf(' #');
+  return commentStart === -1 ? command : command.slice(0, commentStart);
+}
 
 /**
  * Run tasks with limited concurrency based on CPU count.
@@ -142,26 +147,36 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
 
   const newSnap: string[] = [];
 
+  const cwd = npath.toPortablePath(caseTmpDir);
   for (const command of steps.commands) {
     debug('running command: %s, cwd: %s, env: %o', command, caseTmpDir, env);
-    try {
-      const { stdout, stderr } = await exec(command, { env, cwd: caseTmpDir, encoding: 'utf-8' });
-      newSnap.push(`> ${command}`);
-      if (stdout) {
-        newSnap.push(replaceUnstableOutput(stdout, caseTmpDir));
-      }
-      if (stderr) {
-        newSnap.push(replaceUnstableOutput(stderr, caseTmpDir));
-      }
-    } catch (error: any) {
-      // add error exit code to the command
-      newSnap.push(`[${error.code}]> ${command}`);
-      if (error.stdout) {
-        newSnap.push(replaceUnstableOutput(error.stdout, caseTmpDir));
-      }
-      if (error.stderr) {
-        newSnap.push(replaceUnstableOutput(error.stderr, caseTmpDir));
-      }
+    const stdoutStream = new PassThrough();
+    const stderrStream = new PassThrough();
+
+    const exitCode = await execute(stripComments(command), [], {
+      env,
+      cwd,
+      stdin: null,
+      stderr: stderrStream,
+      stdout: stdoutStream,
+    });
+
+    stdoutStream.end();
+    const stdout = await text(stdoutStream);
+
+    stderrStream.end();
+    const stderr = await text(stderrStream);
+
+    let commandLine = `> ${command}`;
+    if (exitCode !== 0) {
+      commandLine = `[${exitCode}]` + commandLine;
+    }
+    newSnap.push(commandLine);
+    if (stdout.length > 0) {
+      newSnap.push(replaceUnstableOutput(stdout, caseTmpDir));
+    }
+    if (stderr.length > 0) {
+      newSnap.push(replaceUnstableOutput(stderr, caseTmpDir));
     }
   }
   const newSnapContent = newSnap.join('\n');

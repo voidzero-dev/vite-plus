@@ -36,6 +36,9 @@ catalogs:
     '@vitest/browser-playwright':
       specifier: ^4.0.6
       version: 4.0.6
+    '@yarnpkg/fslib':
+      specifier: ^3.1.3
+      version: 3.1.3
     '@yarnpkg/shell':
       specifier: ^4.1.3
       version: 4.1.3
@@ -258,6 +261,9 @@ importers:
 
   packages/tools:
     dependencies:
+      '@yarnpkg/fslib':
+        specifier: 'catalog:'
+        version: 3.1.3
       '@yarnpkg/shell':
         specifier: 'catalog:'
         version: 4.1.3(typanion@3.14.0)
