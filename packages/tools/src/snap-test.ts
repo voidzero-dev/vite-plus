@@ -17,6 +17,9 @@ const debug = debuglog('vite-plus/snap-test');
 // `@yarnpkg/shell` doesn't parse comments.
 // This doesn't handle all edge cases (such as ' #' in quoted strings), but is good enough for our test cases.
 function stripComments(command: string): string {
+  if (command.trim().startsWith('#')) {
+    return '';
+  }
   const commentStart = command.indexOf(' #');
   return commentStart === -1 ? command : command.slice(0, commentStart);
 }
