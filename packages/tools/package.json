@@ -16,5 +16,8 @@
   },
   "scripts": {
     "snap-test": "tool snap-test"
+  },
+  "dependencies": {
+    "@yarnpkg/shell": "catalog:"
   }
 }
