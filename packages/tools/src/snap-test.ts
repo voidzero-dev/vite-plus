@@ -1,12 +1,11 @@
 import { npath } from '@yarnpkg/fslib';
 import { execute } from '@yarnpkg/shell';
 import { randomUUID } from 'node:crypto';
-import fs from 'node:fs';
+import fs, { readFileSync } from 'node:fs';
 import fsPromises from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 import { cpus, tmpdir } from 'node:os';
 import path from 'node:path';
-import { PassThrough } from 'node:stream';
-import { text } from 'node:stream/consumers';
 import { debuglog, parseArgs } from 'node:util';
 
 import { isPassThroughEnv, replaceUnstableOutput } from './utils';
@@ -153,18 +152,20 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
   const cwd = npath.toPortablePath(caseTmpDir);
   for (const command of steps.commands) {
     debug('running command: %s, cwd: %s, env: %o', command, caseTmpDir, env);
-    const outputStream = new PassThrough();
+    const outpuStreamPath = path.join(caseTmpDir, 'output.log');
+    const outputStream = await open(outpuStreamPath, 'w');
 
     const exitCode = await execute(stripComments(command), [], {
       env,
       cwd,
       stdin: null,
-      stderr: outputStream,
-      stdout: outputStream,
+      stderr: outputStream as any,
+      stdout: outputStream as any,
     });
 
-    outputStream.end();
-    const output = await text(outputStream);
+    outputStream.close();
+
+    const output = readFileSync(outpuStreamPath, 'utf-8');
 
     let commandLine = `> ${command}`;
     if (exitCode !== 0) {
