@@ -152,16 +152,22 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
   const cwd = npath.toPortablePath(caseTmpDir);
   for (const command of steps.commands) {
     debug('running command: %s, cwd: %s, env: %o', command, caseTmpDir, env);
-    const outpuStreamPath = path.join(caseTmpDir, 'output.log');
-    const outputStream = await open(outpuStreamPath, 'w');
+
+    /// While `@yarnpkg/shell` supports capturing output via in-memory `Writable` streams,
+    /// it seems not to have stable ordering of stdout/stderr chunks.
+    /// To ensure stable ordering, we redirect outputs to a file instead.
+    const outputStreamPath = path.join(caseTmpDir, 'output.log');
+    const outputStream = await open(outputStreamPath, 'w');
 
     const exitCode = await execute(stripComments(command), [], {
       env,
       cwd,
       stdin: null,
+      // Declared to be `Writable` but `FileHandle` works too.
       stderr: outputStream as any,
       stdout: outputStream as any,
       glob: {
+        // Disable glob expansion. Pass args like '--filter=*' as-is.
         isGlobPattern: () => false,
         match: async () => [],
       },
@@ -169,7 +175,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
 
     outputStream.close();
 
-    const output = readFileSync(outpuStreamPath, 'utf-8');
+    const output = readFileSync(outputStreamPath, 'utf-8');
 
     let commandLine = `> ${command}`;
     if (exitCode !== 0) {
