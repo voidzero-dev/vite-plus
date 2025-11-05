@@ -104,6 +104,7 @@ export async function snapTest() {
     );
     await runWithConcurrencyLimit(taskFunctions, cpuCount);
   }
+  process.exit(0); // Ensure exit even if there are pending timed-out steps
 }
 
 interface Steps {
