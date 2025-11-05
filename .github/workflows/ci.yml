@@ -138,6 +138,7 @@ jobs:
         include:
           - os: ubuntu-latest
           - os: namespace-profile-mac-default
+          - os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -166,6 +167,7 @@ jobs:
 
       - name: Run CLI lint
         run: pnpm lint
+        if: ${{ matrix.os != 'windows-latest' }}
 
       - name: Install Playwright browsers
         run: pnpx playwright install chromium
