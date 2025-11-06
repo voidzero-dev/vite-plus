@@ -164,8 +164,10 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
       cwd,
       stdin: null,
       // Declared to be `Writable` but `FileHandle` works too.
-      stderr: outputStream as any,
-      stdout: outputStream as any,
+      // @ts-expect-error
+      stderr: outputStream,
+      // @ts-expect-error
+      stdout: outputStream,
       glob: {
         // Disable glob expansion. Pass args like '--filter=*' as-is.
         isGlobPattern: () => false,
