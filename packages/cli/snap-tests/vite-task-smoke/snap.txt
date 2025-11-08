@@ -1,0 +1,48 @@
+> vp run test-task
+$ echo hello
+hello
+
+$ node main.js
+foo
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   2 tasks • 0 cache hits • 2 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] test-task(subcommand 0): $ echo hello ✓
+      → Cache miss: no previous cache entry found
+  ·······················································
+  [2] test-task: $ node main.js ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> tool replace-file-content main.js foo bar
+> vp run test-task
+$ echo hello (✓ cache hit, replaying)
+hello
+
+$ node main.js (✗ cache miss: content of input 'main.js' changed, executing)
+bar
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   2 tasks • 1 cache hits • 1 cache misses 
+Performance:  50% cache hit rate, <variable>ms saved in total
+
+Task Details:
+────────────────────────────────────────────────
+  [1] test-task(subcommand 0): $ echo hello ✓
+      → Cache hit - output replayed - <variable>ms saved
+  ·······················································
+  [2] test-task: $ node main.js ✓
+      → Cache miss: content of input 'main.js' changed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

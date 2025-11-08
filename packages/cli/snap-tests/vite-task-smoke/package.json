@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "test-task": "echo hello && node main.js"
+  }
+}
