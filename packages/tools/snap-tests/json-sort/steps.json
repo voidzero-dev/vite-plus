@@ -1,4 +1,5 @@
 {
+  "ignoredPlatforms": ["win32"],
   "env": {
   },
   "commands": [

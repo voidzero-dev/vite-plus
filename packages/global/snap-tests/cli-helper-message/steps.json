@@ -1,4 +1,5 @@
 {
+  "ignoredPlatforms": ["win32"],
   "commands": [
     "vp -h # show help message"
   ]
