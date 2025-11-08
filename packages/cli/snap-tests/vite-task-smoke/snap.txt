@@ -36,12 +36,12 @@ bar
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Statistics:   2 tasks • 1 cache hits • 1 cache misses 
-Performance:  50% cache hit rate, <variable>ms saved in total
+Performance:  50% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
   [1] test-task(subcommand 0): $ echo hello ✓
-      → Cache hit - output replayed - <variable>ms saved
+      → Cache hit - output replayed - 0.00ns saved
   ·······················································
   [2] test-task: $ node main.js ✓
       → Cache miss: content of input 'main.js' changed

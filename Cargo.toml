@@ -65,12 +65,12 @@ tokio = "1.48.0"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "serde"] }
 vite_error = { path = "crates/vite_error" }
-vite_glob = { git = "https://github.com/voidzero-dev/vite-task", rev = "ba48c0edb8700c26363b89812be1f93940947efc" }
+vite_glob = { git = "https://github.com/voidzero-dev/vite-task", branch = "11-08-feat_handle_echo_as_shell_built-in" }
 vite_install = { path = "crates/vite_install" }
-vite_path = { git = "https://github.com/voidzero-dev/vite-task", rev = "ba48c0edb8700c26363b89812be1f93940947efc" }
-vite_str = { git = "https://github.com/voidzero-dev/vite-task", rev = "ba48c0edb8700c26363b89812be1f93940947efc" }
-vite_task = { git = "https://github.com/voidzero-dev/vite-task", rev = "ba48c0edb8700c26363b89812be1f93940947efc" }
-vite_workspace = { git = "https://github.com/voidzero-dev/vite-task", rev = "ba48c0edb8700c26363b89812be1f93940947efc" }
+vite_path = { git = "https://github.com/voidzero-dev/vite-task", branch = "11-08-feat_handle_echo_as_shell_built-in" }
+vite_str = { git = "https://github.com/voidzero-dev/vite-task", branch = "11-08-feat_handle_echo_as_shell_built-in" }
+vite_task = { git = "https://github.com/voidzero-dev/vite-task", branch = "11-08-feat_handle_echo_as_shell_built-in" }
+vite_workspace = { git = "https://github.com/voidzero-dev/vite-task", branch = "11-08-feat_handle_echo_as_shell_built-in" }
 wax = "0.6.0"
 
 napi = { version = "3.0.0", default-features = false, features = ["async", "error_anyhow"] }
