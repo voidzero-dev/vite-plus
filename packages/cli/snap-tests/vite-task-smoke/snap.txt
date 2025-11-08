@@ -41,7 +41,7 @@ Performance:  50% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] test-task(subcommand 0): $ echo hello ✓
-      → Cache hit - output replayed - 0.00ns saved
+      → Cache hit - output replayed - <variable>ms saved
   ·······················································
   [2] test-task: $ node main.js ✓
       → Cache miss: content of input 'main.js' changed

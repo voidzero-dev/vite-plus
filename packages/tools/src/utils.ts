@@ -17,7 +17,7 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
     // date
     .replaceAll(/\d{2}:\d{2}:\d{2}/g, '<date>')
     // duration
-    .replaceAll(/\d+(?:\.\d+)?(?:s|ms|µs)/g, '<variable>ms')
+    .replaceAll(/\d+(?:\.\d+)?(?:s|ms|µs|ns)/g, '<variable>ms')
     // oxlint
     .replaceAll(/with \d+ rules/g, 'with <variable> rules')
     .replaceAll(/using \d+ threads/g, 'using <variable> threads')
