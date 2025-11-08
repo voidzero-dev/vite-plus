@@ -1,6 +1,6 @@
 > vp run test-task
-$ echo hello
-hello
+$ node -p 40+2
+42
 
 $ node main.js
 foo
@@ -15,7 +15,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] test-task(subcommand 0): $ echo hello ✓
+  [1] test-task(subcommand 0): $ node -p 40+2 ✓
       → Cache miss: no previous cache entry found
   ·······················································
   [2] test-task: $ node main.js ✓
@@ -24,8 +24,8 @@ Task Details:
 
 > tool replace-file-content main.js foo bar
 > vp run test-task
-$ echo hello (✓ cache hit, replaying)
-hello
+$ node -p 40+2 (✓ cache hit, replaying)
+42
 
 $ node main.js (✗ cache miss: content of input 'main.js' changed, executing)
 bar
@@ -40,7 +40,7 @@ Performance:  50% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] test-task(subcommand 0): $ echo hello ✓
+  [1] test-task(subcommand 0): $ node -p 40+2 ✓
       → Cache hit - output replayed - <variable>ms saved
   ·······················································
   [2] test-task: $ node main.js ✓

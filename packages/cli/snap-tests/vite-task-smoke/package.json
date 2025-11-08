@@ -1,5 +1,5 @@
 {
   "scripts": {
-    "test-task": "echo hello && node main.js"
+    "test-task": "node -p 40+2 && node main.js"
   }
 }
