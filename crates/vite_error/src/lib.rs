@@ -122,6 +122,9 @@ pub enum Error {
     #[error("Unsupported hash algorithm: {0}")]
     UnsupportedHashAlgorithm(Str),
 
+    #[error("Cannot find binary path for command '{0}'")]
+    CannotFindBinaryPath(Str),
+
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
 }
