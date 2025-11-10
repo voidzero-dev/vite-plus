@@ -72,6 +72,7 @@ vite_str = { git = "https://github.com/voidzero-dev/vite-task", rev = "d66556ab0
 vite_task = { git = "https://github.com/voidzero-dev/vite-task", rev = "d66556ab090fb5c5d85ecc7798a0fe9b6f1f26da" }
 vite_workspace = { git = "https://github.com/voidzero-dev/vite-task", rev = "d66556ab090fb5c5d85ecc7798a0fe9b6f1f26da" }
 wax = "0.6.0"
+which = "8.0.0"
 
 napi = { version = "3.0.0", default-features = false, features = ["async", "error_anyhow"] }
 napi-build = "2"

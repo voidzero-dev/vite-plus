@@ -332,7 +332,7 @@ async fn download_package_manager(
     let cache_dir = get_cache_dir()?;
     let bin_name = package_manager_type.to_string();
     // $CACHE_DIR/vite/package_manager/pnpm/10.0.0
-    let target_dir = cache_dir.join(format!("package_manager/{bin_name}/{version}"));
+    let target_dir = cache_dir.join("package_manager").join(&bin_name).join(version);
     let install_dir = target_dir.join(&bin_name);
 
     // If all shims are already exists, return the target directory
@@ -559,7 +559,14 @@ pub(crate) async fn run_command(
 ) -> Result<ExitStatus, Error> {
     println!("Running: {} {}", bin_name, args.join(" "));
 
-    let mut cmd = Command::new(bin_name);
+    // Resolve the command path using which crate
+    // If PATH is provided in envs, use which_in to search in custom paths
+    // Otherwise, use which to search in system PATH
+    let paths = envs.get("PATH");
+    let bin_path = which::which_in(bin_name, paths, cwd.as_ref())
+        .map_err(|_| Error::CannotFindBinaryPath(bin_name.into()))?;
+
+    let mut cmd = Command::new(bin_path);
     cmd.args(args)
         .envs(envs)
         .current_dir(cwd.as_ref())
@@ -1863,6 +1870,35 @@ mod tests {
             // Regular files should be ignored
             assert!(matcher.is_match("README.md"), "Should ignore docs");
             assert!(matcher.is_match("src/app.ts"), "Should ignore source files");
+        }
+    }
+
+    mod run_command_tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn test_run_command_and_find_binary_path() {
+            let temp_dir = create_temp_dir();
+            let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+            let envs = HashMap::from([("PATH".to_string(), format_path_env(&temp_dir_path))]);
+            let result =
+                run_command("npm", &["--version".to_string()], &envs, &temp_dir_path).await;
+            assert!(result.is_ok(), "Should run command successfully, but got error: {:?}", result);
+        }
+
+        #[tokio::test]
+        async fn test_run_command_and_not_find_binary_path() {
+            let temp_dir = create_temp_dir();
+            let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+            let envs = HashMap::from([("PATH".to_string(), format_path_env(&temp_dir_path))]);
+            let result =
+                run_command("npm-not-exists", &["--version".to_string()], &envs, &temp_dir_path)
+                    .await;
+            assert!(result.is_err(), "Should not find binary path, but got: {:?}", result);
+            assert_eq!(
+                result.unwrap_err().to_string(),
+                "Cannot find binary path for command 'npm-not-exists'"
+            );
         }
     }
 }
