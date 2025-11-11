@@ -1,4 +1,4 @@
-> vite lib -h # lib help message
+> vp lib -h # lib help message
 tsdown/<semver>
 
 Usage:
@@ -51,7 +51,7 @@ Options:
   -v, --version             Display version number 
 
 
-> vite fmt -h # fmt help message
+> vp fmt -h # fmt help message
 Usage: [--check | --list-different] [-c=PATH] [--ignore-path=PATH]... [PATH]...
 
 Output Options
@@ -82,7 +82,7 @@ Available options:
 
 
 
-> vite lint -h # lint help message
+> vp lint -h # lint help message
 Usage: [-c=<./.oxlintrc.json>] [PATH]...
 
 Basic Configuration
@@ -179,7 +179,7 @@ Available options:
 
 
 
-> vite build -h # build help message
+> vp build -h # build help message
 vite/<semver>
 
 Usage:
@@ -209,7 +209,7 @@ Options:
   -h, --help                    Display this message 
 
 
-> vite test -h # test help message
+> vp test -h # test help message
 vitest/<semver>
  WARN: no options were found for your subcommands so we printed the whole output
 
