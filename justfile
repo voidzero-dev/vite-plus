@@ -12,6 +12,13 @@ init:
   cargo binstall watchexec-cli cargo-insta typos-cli cargo-shear dprint taplo-cli -y
   pnpm run bootstrap-cli
 
+build:
+  pnpm --filter @rolldown/pluginutils build
+  pnpm --filter rolldown build-binding:release
+  pnpm --filter rolldown build-node
+  pnpm --filter rolldown-vite build-types
+  pnpm --filter=@voidzero-dev/vite-plus build
+
 ready:
   git diff --exit-code --quiet
   typos

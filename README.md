@@ -1,5 +1,17 @@
 # Vite+
 
+## Pull upstream dependencies
+
+```
+pnpm tools sync-remote
+```
+
+## Build Vite+ and upstream dependencies
+
+```
+just build
+```
+
 ## Install internal global cli
 
 Add the following lines to your `~/.npmrc` file:
