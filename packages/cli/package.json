@@ -11,6 +11,10 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./binding": {
+      "import": "./dist/binding.js",
+      "types": "./dist/binding.d.ts"
+    },
     "./bin": {
       "import": "./dist/bin.js"
     },
@@ -181,7 +185,8 @@
   },
   "scripts": {
     "build": "oxnode -C dev ./build.ts",
-    "snap-test": "tool snap-test"
+    "snap-test": "tool snap-test",
+    "test": "vitest run"
   },
   "files": [
     "bin",

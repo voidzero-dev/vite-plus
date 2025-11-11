@@ -46,7 +46,7 @@ async function buildNapiBinding() {
 
 async function buildCli() {
   await build({
-    input: ['./src/bin.ts', './src/index.ts', './src/config.ts'],
+    input: ['./src/bin.ts', './src/index.ts', './src/config.ts', './src/binding.ts'],
     external: [/^node:/, 'vitest-dev', './vitest/dist/config.js', './vitest/dist/index.js'],
     plugins: [
       {

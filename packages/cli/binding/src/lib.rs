@@ -15,12 +15,14 @@
 
 mod cli;
 mod commands;
+mod utils;
 
 use std::{collections::HashMap, sync::Arc};
 
 use clap::Parser as _;
 use napi::{anyhow, bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
+pub use utils::run_command;
 use vite_error::Error;
 use vite_path::current_dir;
 use vite_task::ResolveCommandResult;

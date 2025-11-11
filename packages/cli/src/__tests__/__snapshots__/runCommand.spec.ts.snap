@@ -1,0 +1,47 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`should read file on the temp directory 1`] = `
+{
+  "exitCode": 0,
+  "pathAccesses": {
+    "test.txt": {
+      "read": true,
+      "readDir": false,
+      "write": false,
+    },
+  },
+}
+`;
+
+exports[`should run command successfully 1`] = `
+{
+  "exitCode": 0,
+  "pathAccesses": {},
+}
+`;
+
+exports[`should write and read file on the temp directory 1`] = `
+{
+  "exitCode": 0,
+  "pathAccesses": {
+    "test.txt": {
+      "read": true,
+      "readDir": false,
+      "write": true,
+    },
+  },
+}
+`;
+
+exports[`should write file on the temp directory 1`] = `
+{
+  "exitCode": 0,
+  "pathAccesses": {
+    "test.txt": {
+      "read": false,
+      "readDir": false,
+      "write": true,
+    },
+  },
+}
+`;

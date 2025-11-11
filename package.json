@@ -13,7 +13,7 @@
     "install-global-cli": "npm install -g ./packages/global",
     "typecheck": "tsc -b tsconfig.json",
     "lint": "vite lint --type-aware --threads 4",
-    "test": "vite test run --config vite.config.ts && pnpm -r snap-test",
+    "test": "vite test run && pnpm --filter=@voidzero-dev/vite-plus test && pnpm -r snap-test",
     "prepare": "husky"
   },
   "devDependencies": {

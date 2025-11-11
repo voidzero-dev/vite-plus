@@ -4105,6 +4105,7 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "crossterm",
+ "fspy",
  "napi",
  "napi-build",
  "napi-derive",
@@ -4116,11 +4117,26 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "vite_command",
  "vite_error",
  "vite_install",
  "vite_path",
  "vite_str",
  "vite_task",
+]
+
+[[package]]
+name = "vite_command"
+version = "0.0.0"
+dependencies = [
+ "fspy",
+ "nix 0.30.1",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "vite_error",
+ "vite_path",
+ "which",
 ]
 
 [[package]]

@@ -1,0 +1,24 @@
+[package]
+name = "vite_command"
+version = "0.0.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+fspy = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+vite_error = { workspace = true }
+vite_path = { workspace = true }
+which = { workspace = true, features = ["tracing"] }
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+nix = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

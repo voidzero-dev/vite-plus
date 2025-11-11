@@ -42,6 +42,16 @@ export interface JsCommandResolvedResult {
   envs: Record<string, string>
 }
 
+/** Access modes for a path. */
+export interface PathAccess {
+  /** Whether the path was read */
+  read: boolean
+  /** Whether the path was written */
+  write: boolean
+  /** Whether the path was read as a directory */
+  readDir: boolean
+}
+
 /**
  * Main entry point for the CLI, called from JavaScript.
  *
@@ -64,3 +74,73 @@ export interface JsCommandResolvedResult {
  * (e.g., `LintFailed`, `ViteError`) to provide better error messages.
  */
 export declare function run(options: CliOptions): Promise<number>
+
+/**
+ * Run a command with fspy tracking, callable from JavaScript.
+ *
+ * This function wraps `vite_command::run_command_with_fspy` to provide
+ * a JavaScript-friendly interface for executing commands and tracking
+ * their file system accesses.
+ *
+ * ## Parameters
+ *
+ * - `options`: Configuration for the command to run, including:
+ *   - `bin_name`: The name of the binary to execute
+ *   - `args`: Command line arguments
+ *   - `envs`: Environment variables
+ *   - `cwd`: Working directory
+ *
+ * ## Returns
+ *
+ * Returns a `RunCommandResult` containing:
+ * - The exit code of the command
+ * - A map of file paths accessed and their access modes
+ *
+ * ## Example
+ *
+ * ```javascript
+ * const result = await runCommand({
+ *   binName: "node",
+ *   args: ["-p", "console.log('hello')"],
+ *   envs: { PATH: process.env.PATH },
+ *   cwd: "/tmp"
+ * });
+ * console.log(`Exit code: ${result.exitCode}`);
+ * console.log(`Path accesses:`, result.pathAccesses);
+ * ```
+ */
+export declare function runCommand(options: RunCommandOptions): Promise<RunCommandResult>
+
+/**
+ * Input parameters for running a command with fspy tracking.
+ *
+ * This structure contains the information needed to execute a command:
+ * - `bin_name`: The name of the binary to execute
+ * - `args`: Command line arguments to pass to the binary
+ * - `envs`: Environment variables to set when executing the command
+ * - `cwd`: The current working directory for the command
+ */
+export interface RunCommandOptions {
+  /** The name of the binary to execute */
+  binName: string
+  /** Command line arguments to pass to the binary */
+  args: Array<string>
+  /** Environment variables to set when executing the command */
+  envs: Record<string, string>
+  /** The current working directory for the command */
+  cwd: string
+}
+
+/**
+ * Result returned by the run_command function.
+ *
+ * This structure contains:
+ * - `exit_code`: The exit code of the command
+ * - `path_accesses`: A map of relative paths to their access modes
+ */
+export interface RunCommandResult {
+  /** The exit code of the command */
+  exitCode: number
+  /** Map of relative paths to their access modes */
+  pathAccesses: Record<string, PathAccess>
+}
