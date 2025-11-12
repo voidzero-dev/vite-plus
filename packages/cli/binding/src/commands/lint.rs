@@ -23,12 +23,8 @@ pub async fn lint<
 ) -> Result<ExecutionSummary, Error> {
     let ResolveCommandResult { bin_path, envs } =
         resolve_lint_command().await.map_err(|e| Error::Anyhow(e.into()))?;
-    let wrapped_command = || async {
-        Ok(ResolveCommandResult {
-            bin_path: (if cfg!(windows) { "node.exe" } else { "node" }).into(),
-            envs: envs.clone(),
-        })
-    };
+    let wrapped_command =
+        || async { Ok(ResolveCommandResult { bin_path: "node".into(), envs: envs.clone() }) };
     let resolved_task = ResolvedTask::resolve_from_builtin(
         workspace,
         wrapped_command,
