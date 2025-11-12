@@ -3,7 +3,8 @@
 ## Pull upstream dependencies
 
 ```
-pnpm tools sync-remote
+pnpm tool sync-remote
+pnpm install
 ```
 
 ## Build Vite+ and upstream dependencies
