@@ -115,7 +115,7 @@ async function buildVite() {
         {
           name: 'rewrite-static-paths',
           transform(_, id, meta) {
-            if (id.endsWith('vite/src/node/constants.ts')) {
+            if (id.endsWith(join('vite', 'src', 'node', 'constants.ts'))) {
               const { magicString } = meta;
               if (magicString) {
                 magicString.replace(
