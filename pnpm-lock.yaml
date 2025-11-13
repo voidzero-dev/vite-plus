@@ -594,9 +594,6 @@ importers:
       rolldown-vite:
         specifier: workspace:*
         version: link:../../rolldown-vite/packages/vite
-      vitest:
-        specifier: 'catalog:'
-        version: 4.0.6(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.10.0)(@vitest/browser-playwright@4.0.6)(@vitest/browser-preview@4.0.6)(@vitest/browser-webdriverio@4.0.6)(@vitest/ui@4.0.6)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)
     devDependencies:
       '@clack/prompts':
         specifier: 'catalog:'

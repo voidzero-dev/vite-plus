@@ -143,7 +143,7 @@ jobs:
           target: x86_64-unknown-linux-gnu
 
       - name: Build self
-        run: pnpm bootstrap-cli
+        run: pnpm bootstrap-cli:ci
 
       - name: Print help for built-in commands
         run: |
@@ -198,7 +198,7 @@ jobs:
           target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' ||  matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'aarch64-apple-darwin' }}
 
       - name: Build CLI
-        run: pnpm run bootstrap-cli
+        run: pnpm run bootstrap-cli:ci
 
       - name: Run CLI lint
         run: pnpm lint

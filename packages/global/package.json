@@ -28,8 +28,7 @@
     "cross-spawn": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
-    "rolldown-vite": "workspace:*",
-    "vitest": "catalog:"
+    "rolldown-vite": "workspace:*"
   },
   "devDependencies": {
     "@clack/prompts": "catalog:",
