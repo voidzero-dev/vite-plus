@@ -68,6 +68,7 @@ jobs:
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.settings.target }}
+          build-rolldown-native: 'true'
 
       - name: Build global cli
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
