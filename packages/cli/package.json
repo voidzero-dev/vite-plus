@@ -14,86 +14,12 @@
     "./bin": {
       "import": "./dist/bin.js"
     },
-    "./test": {
-      "import": "./dist/test.js",
-      "types": "./dist/test.d.ts"
-    },
-    "./client": {
-      "types": "./dist/client.d.ts"
-    },
-    "./tsdown/run": {
-      "default": "./dist/tsdown/run.js"
-    },
-    "./vitepress": {
-      "types": "./dist/vitepress/types/index.d.ts",
-      "default": "./dist/vitepress/node/index.js"
-    },
-    "./vitepress/dist/*": "./dist/vitepress/*",
-    "./vitepress/client": {
-      "types": "./dist/vitepress/client.d.ts",
-      "default": "./dist/vitepress/client/index.js"
-    },
-    "./vitepress/theme": {
-      "types": "./dist/vitepress/theme.d.ts",
-      "default": "./dist/vitepress/client/theme-default/index.js"
-    },
-    "./vitepress/theme-without-fonts": {
-      "types": "./dist/vitepress/theme-without-fonts.d.ts",
-      "default": "./dist/vitepress/client/theme-default/without-fonts.js"
-    },
-    "./vitest": {
-      "import": {
-        "types": "./dist/vitest/dist/index.d.ts",
-        "default": "./dist/vitest/dist/index.js"
-      },
-      "require": {
-        "types": "./dist/vitest/index.d.cts",
-        "default": "./dist/vitest/index.cjs"
-      }
-    },
     "./browser": {
       "types": "./dist/vitest/browser/context.d.ts",
       "default": "./dist/vitest/browser/context.js"
     },
-    "./optional-types.js": {
-      "types": "./dist/vitest/optional-types.d.ts"
-    },
-    "./src/*": "./dist/vitest/src/*",
-    "./globals": {
-      "types": "./dist/vitest/globals.d.ts"
-    },
-    "./jsdom": {
-      "types": "./dist/vitest/jsdom.d.ts"
-    },
-    "./importMeta": {
-      "types": "./dist/vitest/importMeta.d.ts"
-    },
-    "./import-meta": {
-      "types": "./dist/vitest/import-meta.d.ts"
-    },
-    "./node": {
-      "types": "./dist/vitest/dist/node.d.ts",
-      "default": "./dist/vitest/dist/node.js"
-    },
-    "./internal/browser": {
-      "types": "./dist/vitest/dist/browser.d.ts",
-      "default": "./dist/vitest/dist/browser.js"
-    },
-    "./internal/module-runner": {
-      "types": "./dist/vitest/dist/module-runner.d.ts",
-      "default": "./dist/vitest/dist/module-runner.js"
-    },
-    "./runners": {
-      "types": "./dist/vitest/dist/runners.d.ts",
-      "default": "./dist/vitest/dist/runners.js"
-    },
-    "./suite": {
-      "types": "./dist/vitest/dist/suite.d.ts",
-      "default": "./dist/vitest/dist/suite.js"
-    },
-    "./environments": {
-      "types": "./dist/vitest/dist/environments.d.ts",
-      "default": "./dist/vitest/dist/environments.js"
+    "./client": {
+      "types": "./dist/client.d.ts"
     },
     "./config": {
       "types": "./dist/vitest/config.d.ts",
@@ -104,21 +30,53 @@
       "types": "./dist/vitest/coverage.d.ts",
       "default": "./dist/vitest/dist/coverage.js"
     },
-    "./reporters": {
-      "types": "./dist/vitest/dist/reporters.d.ts",
-      "default": "./dist/vitest/dist/reporters.js"
+    "./dist/client/*": "./dist/vite/client/*",
+    "./environments": {
+      "types": "./dist/vitest/dist/environments.d.ts",
+      "default": "./dist/vitest/dist/environments.js"
     },
-    "./snapshot": {
-      "types": "./dist/vitest/dist/snapshot.d.ts",
-      "default": "./dist/vitest/dist/snapshot.js"
+    "./globals": {
+      "types": "./dist/vitest/globals.d.ts"
+    },
+    "./import-meta": {
+      "types": "./dist/vitest/import-meta.d.ts"
+    },
+    "./importMeta": {
+      "types": "./dist/vitest/importMeta.d.ts"
+    },
+    "./internal": {
+      "import": "./dist/vite/node/internal.js",
+      "types": "./dist/vite/node/internal.d.ts"
+    },
+    "./internal/browser": {
+      "types": "./dist/vitest/dist/browser.d.ts",
+      "default": "./dist/vitest/dist/browser.js"
+    },
+    "./internal/module-runner": {
+      "types": "./dist/vitest/dist/module-runner.d.ts",
+      "default": "./dist/vitest/dist/module-runner.js"
+    },
+    "./jsdom": {
+      "types": "./dist/vitest/jsdom.d.ts"
     },
     "./mocker": {
       "types": "./dist/vitest/dist/mocker.d.ts",
       "default": "./dist/vitest/dist/mocker.js"
     },
-    "./worker": {
-      "types": "./dist/vitest/worker.d.ts",
-      "default": "./dist/vitest/dist/worker.js"
+    "./module-runner": {
+      "import": "./dist/vite/node/module-runner.js",
+      "types": "./dist/vite/node/module-runner.d.ts"
+    },
+    "./node": {
+      "types": "./dist/vitest/dist/node.d.ts",
+      "default": "./dist/vitest/dist/node.js"
+    },
+    "./optional-types.js": {
+      "types": "./dist/vitest/optional-types.d.ts"
+    },
+    "./reporters": {
+      "types": "./dist/vitest/dist/reporters.d.ts",
+      "default": "./dist/vitest/dist/reporters.js"
     },
     "./rolldown": {
       "default": "./dist/rolldown/index.mjs",
@@ -151,19 +109,61 @@
       "default": "./dist/pluginutils/index.js",
       "types": "./dist/pluginutils/index.d.ts"
     },
+    "./runners": {
+      "types": "./dist/vitest/dist/runners.d.ts",
+      "default": "./dist/vitest/dist/runners.js"
+    },
+    "./snapshot": {
+      "types": "./dist/vitest/dist/snapshot.d.ts",
+      "default": "./dist/vitest/dist/snapshot.js"
+    },
+    "./src/*": "./dist/vitest/src/*",
+    "./suite": {
+      "types": "./dist/vitest/dist/suite.d.ts",
+      "default": "./dist/vitest/dist/suite.js"
+    },
+    "./test": {
+      "import": "./dist/test.js",
+      "types": "./dist/test.d.ts"
+    },
+    "./tsdown/run": {
+      "default": "./dist/tsdown/run.js"
+    },
     "./vite": {
       "import": "./dist/vite/node/index.js",
       "types": "./dist/vite/node/index.d.ts"
     },
-    "./module-runner": {
-      "import": "./dist/vite/node/module-runner.js",
-      "types": "./dist/vite/node/module-runner.d.ts"
+    "./vitepress": {
+      "types": "./dist/vitepress/types/index.d.ts",
+      "default": "./dist/vitepress/node/index.js"
     },
-    "./internal": {
-      "import": "./dist/vite/node/internal.js",
-      "types": "./dist/vite/node/internal.d.ts"
+    "./vitepress/client": {
+      "types": "./dist/vitepress/client.d.ts",
+      "default": "./dist/vitepress/client/index.js"
     },
-    "./dist/client/*": "./dist/vite/client/*"
+    "./vitepress/dist/*": "./dist/vitepress/*",
+    "./vitepress/theme": {
+      "types": "./dist/vitepress/theme.d.ts",
+      "default": "./dist/vitepress/client/theme-default/index.js"
+    },
+    "./vitepress/theme-without-fonts": {
+      "types": "./dist/vitepress/theme-without-fonts.d.ts",
+      "default": "./dist/vitepress/client/theme-default/without-fonts.js"
+    },
+    "./vitest": {
+      "import": {
+        "types": "./dist/vitest/dist/index.d.ts",
+        "default": "./dist/vitest/dist/index.js"
+      },
+      "require": {
+        "types": "./dist/vitest/index.d.cts",
+        "default": "./dist/vitest/index.cjs"
+      }
+    },
+    "./worker": {
+      "types": "./dist/vitest/worker.d.ts",
+      "default": "./dist/vitest/dist/worker.js"
+    }
   },
   "imports": {
     "#module-sync-enabled": {

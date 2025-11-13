@@ -10,6 +10,7 @@ alias r := ready
 
 init:
   cargo binstall watchexec-cli cargo-insta typos-cli cargo-shear dprint taplo-cli -y
+  pnpm tool sync-remote
   pnpm run bootstrap-cli
 
 build:

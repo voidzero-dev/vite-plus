@@ -11,7 +11,7 @@ switch (subcommand) {
     break;
   case 'sync-remote':
     const { syncRemote } = await import('./sync-remote-deps');
-    syncRemote();
+    await syncRemote();
     break;
   case 'json-sort':
     const { jsonSort } = await import('./json-sort');

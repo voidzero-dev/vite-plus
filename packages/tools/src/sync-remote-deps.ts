@@ -1,10 +1,7 @@
-import { parse as parseYaml, stringify as stringifyYaml } from '@std/yaml';
 import { execSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-
-import * as semver from 'semver';
 
 import upstreamVersions from '../.upstream-versions.json' with { type: 'json' };
 
@@ -286,29 +283,15 @@ function transformViteExport(
     return ['', null];
   }
 
-  // Determine new export path based on original
-  let newExportPath: string;
-  if (exportPath === '.') {
-    newExportPath = './vite';
-  } else if (
-    [
-      './client',
-      './module-runner',
-      './internal',
-      './dist/client/*',
-    ].includes(exportPath)
-  ) {
-    // Keep these at top level
-    newExportPath = exportPath;
-  } else if (exportPath.startsWith('./types/')) {
-    // Skip types exports - handled differently in CLI
+  // Skip types exports - handled differently in CLI
+  if (exportPath.startsWith('./types/')) {
     return ['', null];
-  } else {
-    // Prefix others with /vite
-    newExportPath = `./vite${exportPath.slice(1)}`;
   }
 
-  // Transform paths
+  // Keys remain unchanged
+  const newExportPath = exportPath;
+
+  // Transform paths in values
   const transformValue = (value: ExportValue): ExportValue => {
     if (typeof value === 'string') {
       // Transform dist paths
@@ -376,44 +359,88 @@ function transformViteExport(
   return [newExportPath, newValue];
 }
 
+function transformVitestExport(
+  exportPath: string,
+  exportValue: ExportValue,
+): [string, ExportValue] {
+  // Skip package.json
+  if (exportPath === './package.json') {
+    return ['', null];
+  }
+
+  // Special case: rename "." to "./vitest" to avoid conflict with CLI's main export
+  const newExportPath = exportPath === '.' ? './vitest' : exportPath;
+
+  // Transform paths in values by prepending dist/vitest/ after ./
+  const transformValue = (value: ExportValue): ExportValue => {
+    if (typeof value === 'string') {
+      // Transform all relative paths by prepending dist/vitest/
+      if (value.startsWith('./')) {
+        return value.replace(/^\.\//, './dist/vitest/');
+      }
+      return value;
+    }
+
+    if (value && typeof value === 'object') {
+      const result: Record<string, any> = {};
+      for (const [key, val] of Object.entries(value)) {
+        const transformed = transformValue(val);
+        if (transformed !== null) {
+          result[key] = transformed;
+        }
+      }
+      return Object.keys(result).length > 0 ? result : null;
+    }
+
+    return value;
+  };
+
+  const newValue = transformValue(exportValue);
+
+  // Add types if only a string path is specified or if types are missing
+  if (typeof newValue === 'string') {
+    // Convert string to object with import and types
+    if (newValue.endsWith('.js')) {
+      return [newExportPath, {
+        import: newValue,
+        types: newValue.replace(/\.js$/, '.d.ts'),
+      }];
+    }
+    return [newExportPath, newValue];
+  }
+
+  if (newValue && typeof newValue === 'object') {
+    const importPath = ('import' in newValue ? newValue.import : newValue.default) as string | undefined;
+    if (importPath && !('types' in newValue) && typeof importPath === 'string') {
+      if (importPath.endsWith('.js')) {
+        newValue.types = importPath.replace(/\.js$/, '.d.ts');
+      }
+    }
+  }
+
+  return [newExportPath, newValue];
+}
+
 function mergePackageExports(
   cliPkg: PackageJson,
   rolldownPkg: PackageJson,
   rolldownVitePkg: PackageJson,
   pluginutilsPkg: PackageJson,
+  vitestPackage: PackageJson,
 ): Record<string, any> {
   const result: Record<string, any> = {};
   const cliOwnExports = new Set([
     '.',
     './bin',
     './test',
-    './tsdown/run',
     './client',
+    './vite',
+    './tsdown/run',
     './vitepress',
     './vitepress/dist/*',
     './vitepress/client',
     './vitepress/theme',
     './vitepress/theme-without-fonts',
-    './vitest',
-    './vitest/browser',
-    './vitest/optional-types.js',
-    './vitest/src/*',
-    './vitest/globals',
-    './vitest/jsdom',
-    './vitest/importMeta',
-    './vitest/import-meta',
-    './vitest/node',
-    './vitest/internal/browser',
-    './vitest/internal/module-runner',
-    './vitest/runners',
-    './vitest/suite',
-    './vitest/environments',
-    './vitest/config',
-    './vitest/coverage',
-    './vitest/reporters',
-    './vitest/snapshot',
-    './vitest/mocker',
-    './vitest/worker',
   ]);
 
   // Keep CLI's own exports
@@ -469,14 +496,39 @@ function mergePackageExports(
     }
   }
 
+  // Add vitest exports
+  if (vitestPackage.exports) {
+    for (const [path, value] of Object.entries(vitestPackage.exports)) {
+      const [newPath, newValue] = transformVitestExport(path, value);
+      if (newPath && newValue !== null) {
+        if (result[newPath] && !cliOwnExports.has(newPath)) {
+          conflicts.push(`${newPath} (from vitest ${path})`);
+        } else if (!cliOwnExports.has(newPath)) {
+          result[newPath] = newValue;
+        }
+      }
+    }
+  }
+
   if (conflicts.length > 0) {
     error(`Export conflicts detected:\n${conflicts.map(c => `  - ${c}`).join('\n')}`);
   }
 
-  return result;
+  // Sort exports by key
+  return Object.keys(result)
+    .sort()
+    .reduce((sorted, key) => {
+      sorted[key] = result[key];
+      return sorted;
+    }, {} as Record<string, any>);
 }
 
-function mergeSemverVersions(v1: string, v2: string, packageName: string): string {
+function mergeSemverVersions(
+  v1: string,
+  v2: string,
+  packageName: string,
+  semver: typeof import('semver'),
+): string {
   // Handle special cases
   if (v1 === v2) return v1;
 
@@ -549,6 +601,7 @@ function mergePnpmWorkspaces(
   main: PnpmWorkspace,
   rolldown: PnpmWorkspace,
   rolldownVite: PnpmWorkspace,
+  semver: typeof import('semver'),
 ): PnpmWorkspace {
   const result: PnpmWorkspace = { ...main };
 
@@ -569,7 +622,7 @@ function mergePnpmWorkspaces(
   for (const [pkg, version] of Object.entries(rolldown.catalog || {})) {
     if (catalog[pkg]) {
       // Merge versions
-      catalog[pkg] = mergeSemverVersions(catalog[pkg], version, pkg);
+      catalog[pkg] = mergeSemverVersions(catalog[pkg], version, pkg, semver);
     } else {
       catalog[pkg] = version;
     }
@@ -579,11 +632,14 @@ function mergePnpmWorkspaces(
   for (const [pkg, version] of Object.entries(rolldownVite.catalog || {})) {
     if (catalog[pkg]) {
       // Merge versions
-      catalog[pkg] = mergeSemverVersions(catalog[pkg], version, pkg);
+      catalog[pkg] = mergeSemverVersions(catalog[pkg], version, pkg, semver);
     } else {
       catalog[pkg] = version;
     }
   }
+
+  // Remove vite from catalog
+  delete catalog.vite;
 
   // Sort catalog keys alphabetically
   result.catalog = Object.keys(catalog)
@@ -595,7 +651,7 @@ function mergePnpmWorkspaces(
 
   // Merge minimumReleaseAgeExclude
   const excludeSet = new Set(main.minimumReleaseAgeExclude || []);
-  excludeSet.add('@napi-rs/*');
+
   (rolldown.minimumReleaseAgeExclude || []).forEach((item) => excludeSet.add(item));
   (rolldownVite.minimumReleaseAgeExclude || []).forEach((item) => excludeSet.add(item));
   result.minimumReleaseAgeExclude = Array.from(excludeSet);
@@ -638,20 +694,13 @@ function mergePnpmWorkspaces(
     };
   }
 
-  // Update overrides
-  result.overrides = {
-    ...main.overrides,
-    rolldown: 'workspace:*',
-    vite: `./${ROLLDOWN_VITE_DIR}/packages/vite`,
-  };
-
   // Set ignoreScripts
   result.ignoreScripts = true;
 
   return result;
 }
 
-export function syncRemote() {
+export async function syncRemote() {
   const { values } = parseArgs({
     options: {
       'clean': {
@@ -695,6 +744,26 @@ export function syncRemote() {
     upstreamVersions['rolldown-vite'].hash,
   );
 
+  // Dynamically import dependencies after git clone
+  let parseYaml: typeof import('@std/yaml').parse;
+  let stringifyYaml: typeof import('@std/yaml').stringify;
+  let semver: typeof import('semver');
+
+  try {
+    const yaml = await import('@std/yaml');
+    parseYaml = yaml.parse;
+    stringifyYaml = yaml.stringify;
+    semver = await import('semver');
+  } catch {
+    log('Dependencies not found, running pnpm install...');
+    execCommand('pnpm install', rootDir);
+    log('Retrying imports...');
+    const yaml = await import('@std/yaml');
+    parseYaml = yaml.parse;
+    stringifyYaml = yaml.stringify;
+    semver = await import('semver');
+  }
+
   log('Reading pnpm-workspace.yaml files...');
 
   // Read main pnpm-workspace.yaml
@@ -729,6 +798,7 @@ export function syncRemote() {
     mainWorkspace,
     rolldownWorkspace,
     rolldownViteWorkspace,
+    semver,
   );
 
   // Write the merged workspace back
@@ -739,6 +809,8 @@ export function syncRemote() {
   writeFileSync(mainWorkspacePath, yamlContent, 'utf-8');
 
   log('✓ pnpm-workspace.yaml updated successfully!');
+
+  execCommand('pnpm install', rootDir);
 
   // Merge package.json exports
   log('Merging package.json exports...');
@@ -765,6 +837,14 @@ export function syncRemote() {
     'pluginutils',
     'package.json',
   );
+  const vitestPackagePath = join(
+    rootDir,
+    'packages',
+    'cli',
+    'node_modules',
+    'vitest',
+    'package.json',
+  );
 
   const cliPackage = JSON.parse(
     readFileSync(cliPackagePath, 'utf-8'),
@@ -778,12 +858,16 @@ export function syncRemote() {
   const pluginutilsPackage = JSON.parse(
     readFileSync(pluginutilsPackagePath, 'utf-8'),
   ) as PackageJson;
+  const vitestPackage = JSON.parse(
+    readFileSync(vitestPackagePath, 'utf-8'),
+  ) as PackageJson;
 
   const mergedExports = mergePackageExports(
     cliPackage,
     rolldownPackage,
     rolldownVitePackage,
     pluginutilsPackage,
+    vitestPackage,
   );
 
   // Update CLI package.json with merged exports

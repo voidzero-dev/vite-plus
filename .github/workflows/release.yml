@@ -69,6 +69,10 @@ jobs:
         with:
           target: ${{ matrix.settings.target }}
 
+      - name: Build global cli
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+        run: pnpm --filter @voidzero-dev/global build
+
       - name: Upload Vite+ artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -92,6 +96,14 @@ jobs:
         with:
           name: cli
           path: ./packages/cli/dist
+          if-no-files-found: error
+
+      - name: Upload global dist
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+        with:
+          name: global
+          path: ./packages/global/dist
           if-no-files-found: error
 
   Release:
@@ -125,6 +137,12 @@ jobs:
         with:
           path: packages/cli/dist/rolldown/shared
           pattern: rolldown-native-*
+          merge-multiple: true
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: packages/global/dist
+          pattern: global
           merge-multiple: true
 
       - name: Set npm packages version
