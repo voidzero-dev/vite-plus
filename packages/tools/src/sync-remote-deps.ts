@@ -435,6 +435,7 @@ function mergePackageExports(
     './test',
     './client',
     './vite',
+    './config',
     './tsdown/run',
     './vitepress',
     './vitepress/dist/*',
@@ -498,7 +499,7 @@ function mergePackageExports(
 
   // Add vitest exports
   if (vitestPackage.exports) {
-    for (const [path, value] of Object.entries(vitestPackage.exports)) {
+    for (const [path, value] of Object.entries(vitestPackage.exports).filter(([path]) => path !== './config')) {
       const [newPath, newValue] = transformVitestExport(path, value);
       if (newPath && newValue !== null) {
         if (result[newPath] && !cliOwnExports.has(newPath)) {

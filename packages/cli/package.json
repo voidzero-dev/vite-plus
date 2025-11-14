@@ -22,9 +22,8 @@
       "types": "./dist/client.d.ts"
     },
     "./config": {
-      "types": "./dist/vitest/config.d.ts",
-      "require": "./dist/vitest/dist/config.cjs",
-      "default": "./dist/vitest/dist/config.js"
+      "types": "./dist/config.d.ts",
+      "default": "./dist/config.js"
     },
     "./coverage": {
       "types": "./dist/vitest/coverage.d.ts",

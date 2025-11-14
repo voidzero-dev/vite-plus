@@ -45,8 +45,8 @@ async function buildNapiBinding() {
 
 async function buildCli() {
   await build({
-    input: ['./src/bin.ts', './src/index.ts', './src/test.ts'],
-    external: [/^node:/, 'vitest'],
+    input: ['./src/bin.ts', './src/index.ts', './src/test.ts', './src/config.ts'],
+    external: [/^node:/, 'vitest', './vitest/config'],
     plugins: [
       {
         name: 'rewrite-import-path',
@@ -65,6 +65,15 @@ async function buildCli() {
           if (id.startsWith(pkgJson.name)) {
             return { id, external: true };
           }
+        },
+        renderChunk(code) {
+          if (code.includes('import * as Rolldown from "rolldown"')) {
+            return code.replaceAll(
+              `import * as Rolldown from "rolldown"`,
+              `import * as Rolldown from "${pkgJson.name}/rolldown"`,
+            );
+          }
+          return code;
         },
       },
       dts(),
@@ -384,7 +393,7 @@ async function bundleVitest() {
       ).replaceAll(`import 'vite';`, `import '${pkgJson.name}/vite';`).replaceAll(
         `'vite/module-runner'`,
         `'${pkgJson.name}/module-runner'`,
-      );
+      ).replaceAll(`declare module "vite"`, `declare module "${pkgJson.name}/vite"`);
       await writeFile(destPath, content, 'utf-8');
     } else {
       await copyFile(file, destPath);
