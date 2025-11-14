@@ -23,4 +23,6 @@ declare module '@voidzero-dev/vite-plus/vite' {
 }
 
 // @ts-expect-error
-export * from './vitest/config';
+export * from './vitest/dist/config.js';
+
+export { resolveConfig } from '@voidzero-dev/vite-plus/vite';

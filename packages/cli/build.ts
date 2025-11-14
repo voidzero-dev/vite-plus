@@ -12,6 +12,7 @@ import pkgJson from './package.json' with { type: 'json' };
 import viteRolldownConfig from './vite-rolldown.config';
 
 const projectDir = join(fileURLToPath(import.meta.url), '..');
+const rolldownViteSourceDir = resolve(projectDir, '..', '..', 'rolldown-vite', 'packages', 'vite');
 
 // Main build orchestration
 await buildCli();
@@ -46,7 +47,7 @@ async function buildNapiBinding() {
 async function buildCli() {
   await build({
     input: ['./src/bin.ts', './src/index.ts', './src/test.ts', './src/config.ts'],
-    external: [/^node:/, 'vitest', './vitest/config'],
+    external: [/^node:/, 'vitest', './vitest/dist/config.js'],
     plugins: [
       {
         name: 'rewrite-import-path',
@@ -86,6 +87,8 @@ async function buildCli() {
       nativeMagicString: true,
     },
   });
+
+  await cp(join(rolldownViteSourceDir, 'client.d.ts'), join(projectDir, 'dist', 'vite', 'client.d.ts'));
 }
 
 async function buildVite() {
@@ -188,7 +191,6 @@ async function buildVite() {
   await build(newViteRolldownConfig as BuildOptions[]);
 
   // Copy additional vite files
-  const rolldownViteSourceDir = resolve(projectDir, '..', '..', 'rolldown-vite', 'packages', 'vite');
 
   await cp(join(rolldownViteSourceDir, 'misc'), join(projectDir, 'dist/vite/misc'), {
     recursive: true,

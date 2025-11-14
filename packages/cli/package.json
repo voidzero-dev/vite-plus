@@ -19,7 +19,7 @@
       "default": "./dist/vitest/browser/context.js"
     },
     "./client": {
-      "types": "./dist/client.d.ts"
+      "types": "./dist/vite/client.d.ts"
     },
     "./config": {
       "types": "./dist/config.d.ts",

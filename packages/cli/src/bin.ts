@@ -21,13 +21,18 @@ async function resolveUniversalViteConfig(err: null | Error, viteConfigCwd: stri
   if (err) {
     throw err;
   }
-  const { resolveConfig } = await import('./index.js');
-  const config = await resolveConfig({ root: viteConfigCwd }, 'build');
+  try {
+    const { resolveConfig } = await import('./config.js');
+    const config = await resolveConfig({ root: viteConfigCwd }, 'build');
 
-  return Promise.resolve(JSON.stringify({
-    lint: config.lint,
-    fmt: config.fmt,
-  }));
+    return Promise.resolve(JSON.stringify({
+      lint: config.lint,
+      fmt: config.fmt,
+    }));
+  } catch (err) {
+    console.error('[vite+] resolve universal vite config error:', err);
+    throw err;
+  }
 }
 
 // Initialize the CLI with tool resolvers
