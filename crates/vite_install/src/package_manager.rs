@@ -4,12 +4,11 @@ use std::{
     fs::{self, File},
     io::BufReader,
     path::Path,
-    process::{ExitStatus, Stdio},
 };
 
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
-use tokio::{fs::remove_dir_all, process::Command};
+use tokio::fs::remove_dir_all;
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
@@ -502,89 +501,6 @@ pub(crate) fn format_path_env(bin_prefix: impl AsRef<Path>) -> String {
     let mut paths = env::split_paths(&env::var_os("PATH").unwrap_or_default()).collect::<Vec<_>>();
     paths.insert(0, bin_prefix.as_ref().to_path_buf());
     env::join_paths(paths).unwrap().to_string_lossy().to_string()
-}
-
-#[cfg(unix)]
-fn fix_stdio_streams() {
-    // libuv may mark stdin/stdout/stderr as close-on-exec, which interferes with Rust's subprocess spawning.
-    // As a workaround, we clear the FD_CLOEXEC flag on these file descriptors to prevent them from being closed when spawning child processes.
-    //
-    // For details see https://github.com/libuv/libuv/issues/2062
-    // Fixed by reference from https://github.com/electron/electron/pull/15555
-
-    use std::os::fd::BorrowedFd;
-
-    use nix::{
-        fcntl::{FcntlArg, FdFlag, fcntl},
-        libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO},
-    };
-
-    // Safe function to clear FD_CLOEXEC flag
-    fn clear_cloexec(fd: BorrowedFd<'_>) {
-        // Borrow RawFd as BorrowedFd to satisfy AsFd constraint
-        if let Ok(flags) = fcntl(fd, FcntlArg::F_GETFD) {
-            let mut fd_flags = FdFlag::from_bits_retain(flags);
-            if fd_flags.contains(FdFlag::FD_CLOEXEC) {
-                fd_flags.remove(FdFlag::FD_CLOEXEC);
-                // Ignore errors: some fd may be closed
-                let _ = fcntl(fd, FcntlArg::F_SETFD(fd_flags));
-            }
-        }
-    }
-
-    // Clear FD_CLOEXEC on stdin, stdout, stderr
-    clear_cloexec(unsafe { BorrowedFd::borrow_raw(STDIN_FILENO) });
-    clear_cloexec(unsafe { BorrowedFd::borrow_raw(STDOUT_FILENO) });
-    clear_cloexec(unsafe { BorrowedFd::borrow_raw(STDERR_FILENO) });
-}
-
-// TODO: should move to vite-command crate later
-/// Run a command with the given bin name, arguments, environment variables, and current working directory.
-///
-/// # Arguments
-///
-/// * `bin_name`: The name of the binary to run.
-/// * `args`: The arguments to pass to the binary.
-/// * `envs`: The custom environment variables to set for the command, will be merged with the system environment variables.
-/// * `cwd`: The current working directory for the command.
-///
-/// # Returns
-///
-/// Returns the exit status of the command.
-pub(crate) async fn run_command(
-    bin_name: &str,
-    args: &[String],
-    envs: &HashMap<String, String>,
-    cwd: impl AsRef<AbsolutePath>,
-) -> Result<ExitStatus, Error> {
-    println!("Running: {} {}", bin_name, args.join(" "));
-
-    // Resolve the command path using which crate
-    // If PATH is provided in envs, use which_in to search in custom paths
-    // Otherwise, use which to search in system PATH
-    let paths = envs.get("PATH");
-    let bin_path = which::which_in(bin_name, paths, cwd.as_ref())
-        .map_err(|_| Error::CannotFindBinaryPath(bin_name.into()))?;
-
-    let mut cmd = Command::new(bin_path);
-    cmd.args(args)
-        .envs(envs)
-        .current_dir(cwd.as_ref())
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
-
-    // fix stdio streams on unix
-    #[cfg(unix)]
-    unsafe {
-        cmd.pre_exec(|| {
-            fix_stdio_streams();
-            Ok(())
-        });
-    }
-
-    let status = cmd.status().await?;
-    Ok(status)
 }
 
 #[cfg(test)]
@@ -1870,35 +1786,6 @@ mod tests {
             // Regular files should be ignored
             assert!(matcher.is_match("README.md"), "Should ignore docs");
             assert!(matcher.is_match("src/app.ts"), "Should ignore source files");
-        }
-    }
-
-    mod run_command_tests {
-        use super::*;
-
-        #[tokio::test]
-        async fn test_run_command_and_find_binary_path() {
-            let temp_dir = create_temp_dir();
-            let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-            let envs = HashMap::from([("PATH".to_string(), format_path_env(&temp_dir_path))]);
-            let result =
-                run_command("npm", &["--version".to_string()], &envs, &temp_dir_path).await;
-            assert!(result.is_ok(), "Should run command successfully, but got error: {:?}", result);
-        }
-
-        #[tokio::test]
-        async fn test_run_command_and_not_find_binary_path() {
-            let temp_dir = create_temp_dir();
-            let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-            let envs = HashMap::from([("PATH".to_string(), format_path_env(&temp_dir_path))]);
-            let result =
-                run_command("npm-not-exists", &["--version".to_string()], &envs, &temp_dir_path)
-                    .await;
-            assert!(result.is_err(), "Should not find binary path, but got: {:?}", result);
-            assert_eq!(
-                result.unwrap_err().to_string(),
-                "Cannot find binary path for command 'npm-not-exists'"
-            );
         }
     }
 }

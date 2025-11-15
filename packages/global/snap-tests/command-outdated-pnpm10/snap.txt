@@ -39,7 +39,6 @@ Done in <variable>ms using pnpm v<semver>
 
 
 [1]> vp outdated testnpm2 # should outdated package
-Running: pnpm outdated testnpm2
 ┌──────────┬─────────┬────────┐
 │ Package  │ Current │ Latest │
 ├──────────┼─────────┼────────┤
@@ -47,7 +46,6 @@ Running: pnpm outdated testnpm2
 └──────────┴─────────┴────────┘
 
 [1]> vp outdated test-vite* # should outdated with one glob pattern
-Running: pnpm outdated test-vite*
 ┌──────────────────────────────────────────┬─────────┬────────┐
 │ Package                                  │ Current │ Latest │
 ├──────────────────────────────────────────┼─────────┼────────┤
@@ -57,7 +55,6 @@ Running: pnpm outdated test-vite*
 └──────────────────────────────────────────┴─────────┴────────┘
 
 [1]> vp outdated test-vite* '*npm*' # should outdated with multiple glob patterns
-Running: pnpm outdated test-vite* *npm*
 ┌──────────────────────────────────────────┬─────────┬────────┐
 │ Package                                  │ Current │ Latest │
 ├──────────────────────────────────────────┼─────────┼────────┤
@@ -69,7 +66,6 @@ Running: pnpm outdated test-vite* *npm*
 └──────────────────────────────────────────┴─────────┴────────┘
 
 [1]> vp outdated --format json # should support json output
-Running: pnpm outdated --format json
 {
   "testnpm2": {
     "current": "1.0.0",
@@ -95,7 +91,6 @@ Running: pnpm outdated --format json
 }
 
 [1]> vp outdated --format list # should support list output
-Running: pnpm outdated --format list
 testnpm2
 <semver> => <semver>
 
@@ -106,7 +101,6 @@ test-vite-plus-top-package (dev)
 <semver> => <semver>
 
 [1]> vp outdated --format table # should support table output
-Running: pnpm outdated --format table
 ┌──────────────────────────────────────────┬─────────┬────────┐
 │ Package                                  │ Current │ Latest │
 ├──────────────────────────────────────────┼─────────┼────────┤
@@ -118,12 +112,10 @@ Running: pnpm outdated --format table
 └──────────────────────────────────────────┴─────────┴────────┘
 
 [1]> vp outdated testnpm2 --long --format list # should support --long
-Running: pnpm outdated --format list --long testnpm2
 testnpm2
 <semver> => <semver>
 
 [1]> vp outdated -r # should support recursive output
-Running: pnpm outdated --recursive
 ┌──────────────────────────────────────────┬─────────┬────────┬─────────────────────────┐
 │ Package                                  │ Current │ Latest │ Dependents              │
 ├──────────────────────────────────────────┼─────────┼────────┼─────────────────────────┤
@@ -135,7 +127,6 @@ Running: pnpm outdated --recursive
 └──────────────────────────────────────────┴─────────┴────────┴─────────────────────────┘
 
 [1]> vp outdated -P # should support prod output
-Running: pnpm outdated --prod
 ┌──────────────────────────────────────────┬─────────┬────────┐
 │ Package                                  │ Current │ Latest │
 ├──────────────────────────────────────────┼─────────┼────────┤
@@ -145,7 +136,6 @@ Running: pnpm outdated --prod
 └──────────────────────────────────────────┴─────────┴────────┘
 
 [1]> vp outdated -D # should support dev output
-Running: pnpm outdated --dev
 ┌──────────────────────────────────┬─────────┬────────┐
 │ Package                          │ Current │ Latest │
 ├──────────────────────────────────┼─────────┼────────┤
@@ -153,7 +143,6 @@ Running: pnpm outdated --dev
 └──────────────────────────────────┴─────────┴────────┘
 
 [1]> vp outdated --no-optional # should support no-optional output
-Running: pnpm outdated --no-optional
 ┌──────────────────────────────────┬─────────┬────────┐
 │ Package                          │ Current │ Latest │
 ├──────────────────────────────────┼─────────┼────────┤
@@ -163,10 +152,7 @@ Running: pnpm outdated --no-optional
 └──────────────────────────────────┴─────────┴────────┘
 
 > vp outdated --compatible # should compatible output nothing
-Running: pnpm outdated --compatible
-
 [1]> json-edit package.json '_.optionalDependencies["test-vite-plus-other-optional"] = "^1.0.0"' && vp outdated --compatible # should support compatible output with optional dependencies
-Running: pnpm outdated --compatible
 ┌──────────────────────────────────────────┬─────────┬────────┐
 │ Package                                  │ Current │ Latest │
 ├──────────────────────────────────────────┼─────────┼────────┤
@@ -174,7 +160,6 @@ Running: pnpm outdated --compatible
 └──────────────────────────────────────────┴─────────┴────────┘
 
 [1]> vp outdated --sort-by name # should support sort-by output
-Running: pnpm outdated --sort-by name
 ┌──────────────────────────────────────────┬─────────┬────────┐
 │ Package                                  │ Current │ Latest │
 ├──────────────────────────────────────────┼─────────┼────────┤
@@ -186,5 +171,4 @@ Running: pnpm outdated --sort-by name
 └──────────────────────────────────────────┴─────────┴────────┘
 
 > vp outdated testnpm2 -g --format json # should support global output
-Running: npm outdated --json testnpm2 -g
 {}

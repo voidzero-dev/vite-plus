@@ -1,11 +1,9 @@
 [1]> vp remove testnpm2 -D && cat package.json # should error when remove not exists package
-Running: yarn remove testnpm2
 Usage Error: Pattern testnpm2 doesn't match any packages referenced by this workspace
 
 $ yarn remove [-A,--all] [--mode #0] ...
 
 > vp add testnpm2 && vp add -D test-vite-plus-install && vp add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies
-Running: yarn add testnpm2
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + testnpm2@npm:1.0.1
@@ -15,7 +13,6 @@ Running: yarn add testnpm2
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done in <variable>ms <variable>ms
-Running: yarn add --dev test-vite-plus-install
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-install@npm:1.0.0
@@ -25,7 +22,6 @@ Running: yarn add --dev test-vite-plus-install
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done in <variable>ms <variable>ms
-Running: yarn add --optional test-vite-plus-package-optional
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0
@@ -51,7 +47,6 @@ Running: yarn add --optional test-vite-plus-package-optional
 }
 
 > vp remove testnpm2 test-vite-plus-install && cat package.json # should remove packages from dependencies
-Running: yarn remove testnpm2 test-vite-plus-install
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ - test-vite-plus-install@npm:1.0.0, testnpm2@npm:1.0.1
@@ -71,7 +66,6 @@ Running: yarn remove testnpm2 test-vite-plus-install
 }
 
 > vp remove -D test-vite-plus-package-optional && cat package.json # support ignore -O flag and remove package from optional dependencies
-Running: yarn remove test-vite-plus-package-optional
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ - test-vite-plus-package-optional@npm:1.0.0
@@ -88,7 +82,6 @@ Running: yarn remove test-vite-plus-package-optional
 }
 
 > vp remove -g testnpm2 -- --dry-run && cat package.json # support remove global package with dry-run
-Running: npm uninstall --global --dry-run testnpm2
 
 up to date in <variable>ms
 {

@@ -1,6 +1,5 @@
 > mkdir -p ../test-lib-yarn && echo '{"name": "test-lib-yarn", "version": "1.0.0"}' > ../test-lib-yarn/package.json # create test library
 > vp link ../test-lib-yarn && cat package.json # should link local directory
-Running: yarn link ../test-lib-yarn
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -19,7 +18,6 @@ Running: yarn link ../test-lib-yarn
 }
 
 > vp ln ../test-lib-yarn && cat package.json # should work with ln alias
-Running: yarn link ../test-lib-yarn
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -38,7 +36,6 @@ Running: yarn link ../test-lib-yarn
 }
 
 > vp unlink test-lib-yarn && cat package.json # cleanup temp states
-Running: yarn unlink test-lib-yarn
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed

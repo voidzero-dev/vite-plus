@@ -13,7 +13,6 @@ Options:
 
 > mkdir -p ../unlink-test-lib && echo '{"name": "unlink-test-lib", "version": "1.0.0"}' > ../unlink-test-lib/package.json # create test library
 > vp link ../unlink-test-lib && cat package.json # link the library first
-Running: pnpm link ../unlink-test-lib
 
 dependencies:
 + unlink-test-lib <semver> <- ../unlink-test-lib
@@ -28,7 +27,6 @@ dependencies:
 }
 
 > vp unlink unlink-test-lib && cat package.json # should unlink the package
-Running: pnpm unlink unlink-test-lib
 Nothing to unlink
 {
   "name": "command-unlink-pnpm10",
@@ -40,12 +38,10 @@ Nothing to unlink
 }
 
 > vp link ../unlink-test-lib # link again
-Running: pnpm link ../unlink-test-lib
 Lockfile is up to date, resolution step is skipped
 
 
 > vp unlink && cat package.json # should unlink all packages
-Running: pnpm unlink
 Nothing to unlink
 {
   "name": "command-unlink-pnpm10",

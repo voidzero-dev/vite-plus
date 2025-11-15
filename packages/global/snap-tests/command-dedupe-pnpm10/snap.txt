@@ -11,7 +11,6 @@ Options:
   -h, --help   Print help
 
 > vp dedupe && cat package.json # should dedupe dependencies
-Running: pnpm dedupe
 Already up to date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
@@ -40,7 +39,6 @@ devDependencies:
 }
 
 > vp dedupe --check && cat package.json # should check if deduplication would make changes
-Running: pnpm dedupe --check
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 {
@@ -59,7 +57,6 @@ Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <
 }
 
 > vp ddp -- --loglevel=warn && cat package.json # support pass through arguments
-Running: pnpm dedupe --loglevel=warn
 {
   "name": "command-dedupe-pnpm10",
   "version": "1.0.0",
@@ -88,7 +85,6 @@ Running: pnpm dedupe --loglevel=warn
     "test-vite-plus-package-optional": "1.0.0"
   }
 }
-Running: pnpm dedupe --check
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
  ERR_PNPM_DEDUPE_CHECK_ISSUES  Dedupe --check found changes to the lockfile
@@ -105,7 +101,6 @@ Run pnpm dedupe to apply the changes above.
 
 
 > vp dedupe && cat package.json && vp dedupe --check # should dedupe fix the change by removing the dependencies
-Running: pnpm dedupe
 Packages: -1
 -
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -125,6 +120,5 @@ dependencies:
     "test-vite-plus-package-optional": "1.0.0"
   }
 }
-Running: pnpm dedupe --check
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 

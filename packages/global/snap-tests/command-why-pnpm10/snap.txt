@@ -41,7 +41,6 @@ Done in <variable>ms using pnpm v<semver>
 
 
 > vp why testnpm2 # should show why package is installed
-Running: pnpm why testnpm2
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -50,7 +49,6 @@ dependencies:
 testnpm2 <semver>
 
 > vp explain testnpm2 # should work with explain alias
-Running: pnpm why testnpm2
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -59,7 +57,6 @@ dependencies:
 testnpm2 <semver>
 
 > vp why test-vite-plus-package # should show why dev package is installed
-Running: pnpm why test-vite-plus-package
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -68,7 +65,6 @@ devDependencies:
 test-vite-plus-package <semver>
 
 > vp why testnpm2 test-vite-plus-package # should support multiple packages
-Running: pnpm why testnpm2 test-vite-plus-package
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -80,7 +76,6 @@ devDependencies:
 test-vite-plus-package <semver>
 
 > vp why testnpm2 --json # should support json output
-Running: pnpm why --json testnpm2
 [
   {
     "name": "command-why-pnpm10",
@@ -99,7 +94,6 @@ Running: pnpm why --json testnpm2
 ]
 
 > vp why testnpm2 --long # should support long output
-Running: pnpm why --long testnpm2
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -109,12 +103,10 @@ testnpm2 <semver>
   <cwd>/node_modules/.pnpm/testnpm2@<semver>/node_modules/testnpm2
 
 > vp why testnpm2 --parseable # should support parseable output
-Running: pnpm why --parseable testnpm2
 <cwd>
 <cwd>/node_modules/.pnpm/testnpm2@<semver>/node_modules/testnpm2
 
 > vp why testnpm2 -P # should support prod dependencies only
-Running: pnpm why --prod testnpm2
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -123,7 +115,6 @@ dependencies:
 testnpm2 <semver>
 
 > vp why test-vite-plus-package -D # should support dev dependencies only
-Running: pnpm why --dev test-vite-plus-package
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -132,7 +123,6 @@ devDependencies:
 test-vite-plus-package <semver>
 
 > vp why testnpm2 --depth 1 # should support depth limiting
-Running: pnpm why --depth 1 testnpm2
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -141,14 +131,10 @@ dependencies:
 testnpm2 <semver>
 
 > vp why test-vite-plus-package-optional --no-optional # should exclude optional dependencies
-Running: pnpm why --no-optional test-vite-plus-package-optional
-
 [1]> vp why testnpm2 --find-by customFinder # should support find-by option (pnpm-specific)
-Running: pnpm why --find-by customFinder testnpm2
  ERR_PNPM_FINDER_NOT_FOUND  No finder with name customFinder is found
 
 > vp why testnpm2 -- --reporter=silent # should support pass through arguments
-Running: pnpm why testnpm2 --reporter=silent
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>

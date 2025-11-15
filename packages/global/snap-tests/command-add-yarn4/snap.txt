@@ -36,7 +36,6 @@ Options:
           Print help
 
 > vp add testnpm2 -D && cat package.json # should add package as dev dependencies
-Running: yarn add --dev testnpm2
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + testnpm2@npm:1.0.1
@@ -56,7 +55,6 @@ Running: yarn add --dev testnpm2
 }
 
 > vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies
-Running: yarn add testnpm2 test-vite-plus-install
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-install@npm:1.0.0
@@ -79,7 +77,6 @@ Running: yarn add testnpm2 test-vite-plus-install
 }
 
 > vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
-Running: yarn add --peer test-vite-plus-package@<semver>
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -104,7 +101,6 @@ Running: yarn add --peer test-vite-plus-package@<semver>
 }
 
 > vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
-Running: yarn add --optional test-vite-plus-package-optional
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0
@@ -133,7 +129,6 @@ Running: yarn add --optional test-vite-plus-package-optional
 }
 
 > vp add test-vite-plus-package-optional -- --tilde && cat package.json # support pass through arguments
-Running: yarn add --tilde test-vite-plus-package-optional
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed

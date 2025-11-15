@@ -44,7 +44,6 @@ Usage: vp add <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 For more information, try '--help'.
 
 > vp add testnpm2 urllib -D -- --loglevel=verbose --verbose && cat package.json # should add package as dev dependencies
-Running: pnpm add --save-dev --loglevel=verbose --verbose testnpm2 urllib
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -65,7 +64,6 @@ Done in <variable>ms using pnpm v<semver>
 }
 
 > vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies
-Running: pnpm add --allow-build=test-vite-plus-install testnpm2 test-vite-plus-install
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -88,7 +86,6 @@ Done in <variable>ms using pnpm v<semver>
 }
 
 > vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
-Running: pnpm add --save-peer test-vite-plus-package@<semver>
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -118,7 +115,6 @@ Done in <variable>ms using pnpm v<semver>
 }
 
 > vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
-Running: pnpm add --save-optional test-vite-plus-package-optional
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -148,7 +144,6 @@ Done in <variable>ms using pnpm v<semver>
 }
 
 > vp add test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support pass through arguments
-Running: pnpm add --loglevel=warn test-vite-plus-package-optional
 {
   "name": "command-add-pnpm10",
   "version": "1.0.0",

@@ -1,10 +1,11 @@
 use std::{collections::HashMap, process::ExitStatus, str::FromStr};
 
+use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
 
 use crate::package_manager::{
-    PackageManager, PackageManagerType, ResolveCommandResult, format_path_env, run_command,
+    PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
 };
 
 /// Output format for the outdated command.

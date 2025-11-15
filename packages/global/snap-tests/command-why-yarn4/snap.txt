@@ -12,62 +12,51 @@
 
 
 > vp why testnpm2 # should show why package is installed
-Running: yarn why testnpm2 --peers
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)
 
 > vp explain testnpm2 # should work with explain alias
-Running: yarn why testnpm2 --peers
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)
 
 > vp why test-vite-plus-package # should show why dev package is installed
-Running: yarn why test-vite-plus-package --peers
 └─ command-why-yarn4@workspace:.
    └─ test-vite-plus-package@npm:1.0.0 (via npm:1.0.0)
 
 > vp why testnpm2 -r # should support recursive in yarn@2+
-Running: yarn why testnpm2 --recursive --peers
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)
 
 > vp why testnpm2 test-vite-plus-package # should warn about multiple packages and use first
 Warning: yarn only supports checking one package at a time, using first package
-Running: yarn why testnpm2 --peers
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)
 
 > vp why testnpm2 --json # should warn that --json not supported by yarn
 Warning: --json not supported by yarn
-Running: yarn why testnpm2 --peers
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)
 
 > vp why testnpm2 --long # should warn that --long not supported by yarn
 Warning: --long not supported by yarn
-Running: yarn why testnpm2 --peers
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)
 
 > vp why testnpm2 --parseable # should warn that --parseable not supported by yarn
 Warning: --parseable not supported by yarn
-Running: yarn why testnpm2 --peers
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)
 
 > vp why testnpm2 -P # should warn that --prod not supported by yarn
 Warning: --prod/--dev not supported by yarn
-Running: yarn why testnpm2 --peers
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)
 
 > vp why testnpm2 --find-by customFinder # should warn that --find-by not supported by yarn
 Warning: --find-by not supported by yarn
-Running: yarn why testnpm2 --peers
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)
 
 > vp why testnpm2 --exclude-peers # should exclude peers by removing --peers flag
-Running: yarn why testnpm2
 └─ command-why-yarn4@workspace:.
    └─ testnpm2@npm:1.0.1 (via npm:1.0.1)

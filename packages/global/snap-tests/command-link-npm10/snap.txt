@@ -1,6 +1,5 @@
 > mkdir -p ../test-lib-npm && echo '{"name": "test-lib-npm", "version": "1.0.0"}' > ../test-lib-npm/package.json # create test library
 > vp link ../test-lib-npm && cat package.json # should link local directory
-Running: npm link ../test-lib-npm
 
 added 1 package in <variable>ms
 {
@@ -10,7 +9,6 @@ added 1 package in <variable>ms
 }
 
 > vp ln ../test-lib-npm && cat package.json # should work with ln alias
-Running: npm link ../test-lib-npm
 
 up to date in <variable>ms
 {
@@ -20,7 +18,6 @@ up to date in <variable>ms
 }
 
 > vp unlink test-lib-npm && cat package.json # cleanup temp states
-Running: npm unlink test-lib-npm
 
 removed 1 package in <variable>ms
 {

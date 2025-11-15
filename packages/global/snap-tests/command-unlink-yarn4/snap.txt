@@ -1,6 +1,5 @@
 > mkdir -p ../unlink-test-lib-yarn && echo '{"name": "unlink-test-lib-yarn", "version": "1.0.0"}' > ../unlink-test-lib-yarn/package.json # create test library
 > vp link ../unlink-test-lib-yarn && cat package.json # link the library first
-Running: yarn link ../unlink-test-lib-yarn
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -19,7 +18,6 @@ Running: yarn link ../unlink-test-lib-yarn
 }
 
 > vp unlink unlink-test-lib-yarn && cat package.json # should unlink the package
-Running: yarn unlink unlink-test-lib-yarn
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -35,7 +33,6 @@ Running: yarn unlink unlink-test-lib-yarn
 }
 
 > vp link ../unlink-test-lib-yarn && cat package.json # link again
-Running: yarn link ../unlink-test-lib-yarn
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -54,7 +51,6 @@ Running: yarn link ../unlink-test-lib-yarn
 }
 
 > vp unlink --recursive && cat package.json # should unlink all with --all flag
-Running: yarn unlink --all
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -70,7 +66,6 @@ Running: yarn unlink --all
 }
 
 > vp unlink -r && cat package.json # should work with -r short form
-Running: yarn unlink --all
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed

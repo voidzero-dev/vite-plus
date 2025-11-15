@@ -1,5 +1,4 @@
 > vp update testnpm2 && cat package.json packages/utils/package.json # should update all testnpm2 versions
-Running: yarn up testnpm2
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-install@npm:1.0.0, test-vite-plus-package@npm:1.0.0, testnpm2@npm:1.0.1
@@ -29,7 +28,6 @@ Running: yarn up testnpm2
 }
 
 > vp update testnpm2 --latest --filter app && cat packages/app/package.json # should update in specific package
-Running: yarn workspaces foreach --all --include app up testnpm2
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + testnpm2@npm:1.0.1
@@ -53,7 +51,6 @@ Done in <variable>ms <variable>ms
 }
 
 > vp up -D --filter app && cat packages/app/package.json # should update dev dependencies in app
-Running: yarn workspaces foreach --all --include app up
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -76,7 +73,6 @@ Done in <variable>ms <variable>ms
 }
 
 > vp update --filter "*" && cat packages/app/package.json packages/utils/package.json # should update in all packages
-Running: yarn workspaces foreach --all --include * up
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -114,7 +110,6 @@ Done in <variable>ms <variable>ms
 }
 
 > vp update -r --no-save && cat package.json packages/app/package.json # should update recursively without saving
-Running: yarn up --recursive
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -147,7 +142,6 @@ Running: yarn up --recursive
 }
 
 > vp update --workspace --filter app @vite-plus-test/utils && cat packages/app/package.json # should update workspace dependency
-Running: yarn workspaces foreach --all --include app up @vite-plus-test/utils
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed

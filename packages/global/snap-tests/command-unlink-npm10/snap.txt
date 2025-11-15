@@ -1,6 +1,5 @@
 > mkdir -p ../unlink-test-lib-npm && echo '{"name": "unlink-test-lib-npm", "version": "1.0.0"}' > ../unlink-test-lib-npm/package.json # create test library
 > vp link ../unlink-test-lib-npm && cat package.json # link the library first
-Running: npm link ../unlink-test-lib-npm
 
 added 1 package in <variable>ms
 {
@@ -10,7 +9,6 @@ added 1 package in <variable>ms
 }
 
 > vp unlink unlink-test-lib-npm && cat package.json # should unlink the package
-Running: npm unlink unlink-test-lib-npm
 
 removed 1 package in <variable>ms
 {

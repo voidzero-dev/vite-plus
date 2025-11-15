@@ -1,5 +1,4 @@
 > vp update testnpm2 && cat package.json # should update package within semver range
-Running: yarn up testnpm2
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0, test-vite-plus-package@npm:1.0.0, testnpm2@npm:1.0.1
@@ -25,7 +24,6 @@ Running: yarn up testnpm2
 }
 
 > vp rm testnpm2 && vp add testnpm2@1.0.0 -D && vp update testnpm2 --latest && cat package.json # should to absolute latest version
-Running: yarn remove testnpm2
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ - testnpm2@npm:1.0.1
@@ -35,7 +33,6 @@ Running: yarn remove testnpm2
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done in <variable>ms <variable>ms
-Running: yarn add --dev testnpm2@<semver>
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + testnpm2@npm:1.0.0
@@ -45,7 +42,6 @@ Running: yarn add --dev testnpm2@<semver>
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done in <variable>ms <variable>ms
-Running: yarn up testnpm2
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + testnpm2@npm:1.0.1
@@ -70,7 +66,6 @@ Running: yarn up testnpm2
 }
 
 > vp update -D && cat package.json # should update and ignore -D options
-Running: yarn up
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -93,7 +88,6 @@ Running: yarn up
 }
 
 > vp update --recursive && cat package.json # should update all packages but won't change the package.json
-Running: yarn up --recursive
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed

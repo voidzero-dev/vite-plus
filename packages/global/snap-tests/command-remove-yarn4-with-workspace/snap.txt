@@ -1,5 +1,4 @@
 > vp add testnpm2 -D && vp add testnpm2 -D --filter=* --filter=@vite-plus-test/utils && vp add test-vite-plus-install --filter=* --filter=@vite-plus-test/utils && vp add test-vite-plus-package-optional -O --filter=* --filter=@vite-plus-test/utils && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # prepare packages
-Running: yarn add --dev testnpm2
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + testnpm2@npm:1.0.1
@@ -9,7 +8,6 @@ Running: yarn add --dev testnpm2
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done in <variable>ms <variable>ms
-Running: yarn workspaces foreach --all --include * --include @vite-plus-test/utils add --dev testnpm2
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -43,7 +41,6 @@ Running: yarn workspaces foreach --all --include * --include @vite-plus-test/uti
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done in <variable>ms <variable>ms
 Done in <variable>ms <variable>ms
-Running: yarn workspaces foreach --all --include * --include @vite-plus-test/utils add test-vite-plus-install
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-install@npm:1.0.0
@@ -78,7 +75,6 @@ Running: yarn workspaces foreach --all --include * --include @vite-plus-test/uti
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done in <variable>ms <variable>ms
 Done in <variable>ms <variable>ms
-Running: yarn workspaces foreach --all --include * --include @vite-plus-test/utils add --optional test-vite-plus-package-optional
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0
@@ -169,7 +165,6 @@ Done in <variable>ms <variable>ms
 }
 
 > vp remove testnpm2 -r && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package from all workspaces and root
-Running: yarn remove --all testnpm2
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ - testnpm2@npm:1.0.1
@@ -223,7 +218,6 @@ Running: yarn remove --all testnpm2
 }
 
 > vp remove -O test-vite-plus-package-optional -r && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove optional package from all workspaces
-Running: yarn remove --all test-vite-plus-package-optional
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ - test-vite-plus-package-optional@npm:1.0.0
@@ -265,7 +259,6 @@ Running: yarn remove --all test-vite-plus-package-optional
 }
 
 > vp remove test-vite-plus-install --filter=app && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package by filter=app
-Running: yarn workspaces foreach --all --include app remove test-vite-plus-install
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -304,7 +297,6 @@ Done in <variable>ms <variable>ms
 }
 
 > vp add test-vite-plus-install --filter=app && vp remove test-vite-plus-install --filter=* && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package by filter=*
-Running: yarn workspaces foreach --all --include app add test-vite-plus-install
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -314,7 +306,6 @@ Running: yarn workspaces foreach --all --include app add test-vite-plus-install
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done in <variable>ms <variable>ms
 Done in <variable>ms <variable>ms
-Running: yarn workspaces foreach --all --include * remove test-vite-plus-install
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed

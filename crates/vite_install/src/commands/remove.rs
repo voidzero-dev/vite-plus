@@ -1,10 +1,11 @@
 use std::{collections::HashMap, process::ExitStatus};
 
+use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
 
 use crate::package_manager::{
-    PackageManager, PackageManagerType, ResolveCommandResult, format_path_env, run_command,
+    PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
 };
 
 /// Options for the remove command.

@@ -1,5 +1,4 @@
 > vp dedupe && cat package.json # should dedupe dependencies
-Running: yarn dedupe
 ➤ YN0000: ┌ Deduplication step
 ➤ YN0000: │ No packages can be deduped using the highest strategy
 ➤ YN0000: └ Completed
@@ -28,7 +27,6 @@ Running: yarn dedupe
 }
 
 > vp dedupe --check && cat package.json # should check if deduplication would make changes
-Running: yarn dedupe --check
 ➤ YN0000: ┌ Deduplication step
 ➤ YN0000: │ No packages can be deduped using the highest strategy
 ➤ YN0000: └ Completed
@@ -48,7 +46,6 @@ Running: yarn dedupe --check
 }
 
 > vp ddp -- --json && cat package.json # support pass through arguments
-Running: yarn dedupe --json
 {
   "name": "command-dedupe-yarn4",
   "version": "1.0.0",

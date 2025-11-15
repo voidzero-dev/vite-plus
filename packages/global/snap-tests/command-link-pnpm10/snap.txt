@@ -23,7 +23,6 @@ Done in <variable>ms using pnpm v<semver>
 
 > mkdir -p ../test-lib-pnpm && echo '{"name": "testnpm2", "version": "1.0.0"}' > ../test-lib-pnpm/package.json # create test library
 > vp link ../test-lib-pnpm && cat package.json pnpm-lock.yaml # should link local directory
-Running: pnpm link ../test-lib-pnpm
 Packages: -1
 -
 
@@ -57,7 +56,6 @@ importers:
         version: link:../test-lib-pnpm
 
 > vp ln ../test-lib-pnpm && cat package.json pnpm-lock.yaml # should work with ln alias
-Running: pnpm link ../test-lib-pnpm
 Lockfile is up to date, resolution step is skipped
 
 {
@@ -86,9 +84,7 @@ importers:
         version: link:../test-lib-pnpm
 
 > vp unlink ../test-lib-pnpm && vp unlink testnpm2 && cat package.json pnpm-lock.yaml # should unlink the package
-Running: pnpm unlink ../test-lib-pnpm
 Nothing to unlink
-Running: pnpm unlink testnpm2
 Nothing to unlink
 {
   "name": "command-link-pnpm10",

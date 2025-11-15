@@ -11,7 +11,6 @@ Done in <variable>ms using pnpm v<semver>
 
 
 > vp why testnpm2 -w # should check why in workspace root
-Running: pnpm why --workspace-root testnpm2
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10-with-workspace@<semver> <cwd>
@@ -20,7 +19,6 @@ dependencies:
 testnpm2 <semver>
 
 > vp why testnpm2 --filter app # should check why in specific package
-Running: pnpm --filter app why testnpm2
 Legend: production dependency, optional only, dev only
 
 app <cwd>/packages/app
@@ -31,7 +29,6 @@ dependencies:
 testnpm2 <semver>
 
 > vp why test-vite-plus-package -D --filter app # should check why dev dependencies in app
-Running: pnpm --filter app why --dev test-vite-plus-package
 Legend: production dependency, optional only, dev only
 
 app <cwd>/packages/app
@@ -40,7 +37,6 @@ devDependencies:
 test-vite-plus-package <semver>
 
 > vp why testnpm2 --filter "*" # should check why in all packages
-Running: pnpm --filter * why testnpm2
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10-with-workspace@<semver> <cwd>
@@ -61,7 +57,6 @@ dependencies:
 testnpm2 <semver>
 
 > vp why testnpm2 -r # should check why recursively
-Running: pnpm why --recursive testnpm2
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10-with-workspace@<semver> <cwd>
@@ -82,7 +77,6 @@ dependencies:
 testnpm2 <semver>
 
 > vp why testnpm2 --filter app --json # should support json output with filter
-Running: pnpm --filter app why --json testnpm2
 [
   {
     "name": "app",
@@ -113,7 +107,6 @@ Running: pnpm --filter app why --json testnpm2
 ]
 
 > vp why test-vite-plus-install --filter app --depth 1 # should support depth limiting with filter
-Running: pnpm --filter app why --depth 1 test-vite-plus-install
 Legend: production dependency, optional only, dev only
 
 app <cwd>/packages/app

@@ -1,5 +1,4 @@
 > vp dedupe && cat package.json # should dedupe dependencies
-Running: npm dedupe
 
 added 3 packages in <variable>ms
 {
@@ -18,7 +17,6 @@ added 3 packages in <variable>ms
 }
 
 > vp dedupe --check && cat package.json # should check if deduplication would make changes
-Running: npm dedupe --dry-run
 
 up to date in <variable>ms
 {
@@ -37,7 +35,6 @@ up to date in <variable>ms
 }
 
 > vp ddp -- --loglevel=warn && cat package.json # support pass through arguments
-Running: npm dedupe --loglevel=warn
 
 up to date in <variable>ms
 {
