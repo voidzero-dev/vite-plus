@@ -575,6 +575,8 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { run, runCommand } = nativeBinding
+const { detectWorkspace, downloadPackageManager, run, runCommand } = nativeBinding
+export { detectWorkspace }
+export { downloadPackageManager }
 export { run }
 export { runCommand }

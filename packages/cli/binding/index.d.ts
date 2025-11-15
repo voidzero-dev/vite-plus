@@ -29,6 +29,89 @@ export interface CliOptions {
 }
 
 /**
+ * Detect the workspace root and package manager type and version
+ *
+ * ## Parameters
+ *
+ * - `cwd`: The current working directory to detect the workspace root
+ *
+ * ## Returns
+ *
+ * Returns a `DetectWorkspaceResult` containing:
+ * - The name of the package manager
+ * - The version of the package manager
+ * - Whether the workspace is a monorepo
+ * - The workspace root, where the package.json file is located.
+ *
+ * ## Example
+ *
+ * ```javascript
+ * const result = await detectWorkspace("/path/to/workspace");
+ * console.log(`Package manager name: ${result.package_manager_name}`);
+ * console.log(`Package manager version: ${result.package_manager_version}`);
+ * console.log(`Is monorepo: ${result.is_monorepo}`);
+ * console.log(`Workspace root: ${result.root}`);
+ * ```
+ */
+export declare function detectWorkspace(cwd: string): Promise<DetectWorkspaceResult>
+
+export interface DetectWorkspaceResult {
+  packageManagerName?: string
+  packageManagerVersion?: string
+  isMonorepo: boolean
+  root?: string
+}
+
+/**
+ * Download a package manager
+ *
+ * ## Parameters
+ *
+ * - `options`: Configuration for the package manager to download, including:
+ *   - `name`: The name of the package manager
+ *   - `version`: The version of the package manager
+ *   - `expected_hash`: The expected hash of the package manager
+ *
+ * ## Returns
+ *
+ * Returns a `DownloadPackageManagerResult` containing:
+ * - The name of the package manager
+ * - The install directory of the package manager
+ * - The binary prefix of the package manager
+ * - The package name of the package manager
+ * - The version of the package manager
+ *
+ * ## Example
+ *
+ * ```javascript
+ * const result = await downloadPackageManager({
+ *   name: "pnpm",
+ *   version: "latest",
+ * });
+ * console.log(`Package manager name: ${result.name}`);
+ * console.log(`Package manager install directory: ${result.install_dir}`);
+ * console.log(`Package manager binary prefix: ${result.bin_prefix}`);
+ * console.log(`Package manager package name: ${result.package_name}`);
+ * console.log(`Package manager version: ${result.version}`);
+ * ```
+ */
+export declare function downloadPackageManager(options: DownloadPackageManagerOptions): Promise<DownloadPackageManagerResult>
+
+export interface DownloadPackageManagerOptions {
+  name: string
+  version: string
+  expectedHash?: string
+}
+
+export interface DownloadPackageManagerResult {
+  name: string
+  installDir: string
+  binPrefix: string
+  packageName: string
+  version: string
+}
+
+/**
  * Result returned by JavaScript resolver functions.
  *
  * This structure contains the information needed to execute a tool:

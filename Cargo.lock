@@ -4123,6 +4123,7 @@ dependencies = [
  "vite_path",
  "vite_str",
  "vite_task",
+ "vite_workspace",
 ]
 
 [[package]]

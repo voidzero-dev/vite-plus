@@ -25,6 +25,7 @@ vite_install = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }
 vite_task = { workspace = true }
+vite_workspace = { workspace = true }
 
 [build-dependencies]
 napi-build = { workspace = true }

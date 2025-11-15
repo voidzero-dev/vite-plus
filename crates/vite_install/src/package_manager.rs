@@ -92,37 +92,15 @@ impl PackageManagerBuilder {
     /// Detect the package manager from the current working directory.
     pub async fn build(self) -> Result<PackageManager, Error> {
         let workspace_root = find_workspace_root(&self.cwd)?;
-        let (package_manager_type, mut version, mut hash) =
+        let (package_manager_type, version_or_latest, hash) =
             get_package_manager_type_and_version(&workspace_root, self.client_override)?;
 
-        let mut package_name = package_manager_type.to_string();
-        let mut should_update_package_manager_field = false;
-
-        if version == "latest" {
-            version = get_latest_version(package_manager_type).await?;
-            should_update_package_manager_field = true;
-            hash = None; // Reset hash when fetching latest since hash is version-specific
-        }
-
-        // handle yarn >= 2.0.0 to use `@yarnpkg/cli-dist` as package name
-        // @see https://github.com/nodejs/corepack/blob/main/config.json#L135
-        if matches!(package_manager_type, PackageManagerType::Yarn) {
-            let version_req = VersionReq::parse(">=2.0.0")?;
-            if version_req.matches(&Version::parse(&version)?) {
-                package_name = "@yarnpkg/cli-dist".to_string();
-            }
-        }
-
         // only download the package manager if it's not already downloaded
-        let install_dir = download_package_manager(
-            package_manager_type,
-            &package_name,
-            &version,
-            hash.as_deref(),
-        )
-        .await?;
+        let (install_dir, package_name, version) =
+            download_package_manager(package_manager_type, &version_or_latest, hash.as_deref())
+                .await?;
 
-        if should_update_package_manager_field {
+        if version_or_latest != version {
             // auto set `packageManager` field in package.json
             let package_json_path = workspace_root.path.join("package.json");
             set_package_manager_field(&package_json_path, package_manager_type, &version).await?;
@@ -130,7 +108,7 @@ impl PackageManagerBuilder {
 
         Ok(PackageManager {
             client: package_manager_type,
-            package_name: package_name.into(),
+            package_name,
             version,
             hash,
             bin_name: package_manager_type.to_string().into(),
@@ -200,7 +178,7 @@ impl PackageManager {
 }
 
 /// Get the package manager name, version and optional hash from the workspace root.
-fn get_package_manager_type_and_version(
+pub fn get_package_manager_type_and_version(
     workspace_root: &WorkspaceRoot,
     default: Option<PackageManagerType>,
 ) -> Result<(PackageManagerType, Str, Option<Str>), Error> {
@@ -321,17 +299,32 @@ async fn get_latest_version(package_manager_type: PackageManagerType) -> Result<
 
 /// Download the package manager and extract it to the cache directory.
 /// Return the install directory, e.g. $`CACHE_DIR/vite/package_manager/pnpm/10.0.0/pnpm`
-async fn download_package_manager(
+pub async fn download_package_manager(
     package_manager_type: PackageManagerType,
-    package_name: &str,
-    version: &str,
+    version_or_latest: &str,
     expected_hash: Option<&str>,
-) -> Result<AbsolutePathBuf, Error> {
-    let tgz_url = get_npm_package_tgz_url(package_name, version);
+) -> Result<(AbsolutePathBuf, Str, Str), Error> {
+    let version: Str = if version_or_latest == "latest" {
+        get_latest_version(package_manager_type).await?
+    } else {
+        version_or_latest.into()
+    };
+
+    let mut package_name: Str = package_manager_type.to_string().into();
+    // handle yarn >= 2.0.0 to use `@yarnpkg/cli-dist` as package name
+    // @see https://github.com/nodejs/corepack/blob/main/config.json#L135
+    if matches!(package_manager_type, PackageManagerType::Yarn) {
+        let version_req = VersionReq::parse(">=2.0.0")?;
+        if version_req.matches(&Version::parse(&version)?) {
+            package_name = "@yarnpkg/cli-dist".into();
+        }
+    }
+
+    let tgz_url = get_npm_package_tgz_url(&package_name, &version);
     let cache_dir = get_cache_dir()?;
     let bin_name = package_manager_type.to_string();
     // $CACHE_DIR/vite/package_manager/pnpm/10.0.0
-    let target_dir = cache_dir.join("package_manager").join(&bin_name).join(version);
+    let target_dir = cache_dir.join("package_manager").join(&bin_name).join(&version);
     let install_dir = target_dir.join(&bin_name);
 
     // If all shims are already exists, return the target directory
@@ -342,7 +335,7 @@ async fn download_package_manager(
         && is_exists_file(bin_file.with_extension("cmd"))?
         && is_exists_file(bin_file.with_extension("ps1"))?
     {
-        return Ok(install_dir);
+        return Ok((install_dir, package_name, version));
     }
 
     // $CACHE_DIR/vite/package_manager/pnpm/{tmp_name}
@@ -360,7 +353,7 @@ async fn download_package_manager(
             {
                 Error::PackageManagerVersionNotFound {
                     name: package_manager_type.to_string().into(),
-                    version: version.into(),
+                    version: version.clone(),
                     url: tgz_url.into(),
                 }
             } else {
@@ -388,7 +381,7 @@ async fn download_package_manager(
     // the installation while we were downloading
     if is_exists_file(&bin_file)? {
         tracing::debug!("bin_file already exists after lock acquisition, skip rename");
-        return Ok(install_dir);
+        return Ok((install_dir, package_name, version));
     }
 
     // rename $target_dir_tmp to $target_dir
@@ -400,7 +393,7 @@ async fn download_package_manager(
     tracing::debug!("Create shim files for {}", bin_name);
     create_shim_files(package_manager_type, &bin_prefix).await?;
 
-    Ok(install_dir)
+    Ok((install_dir, package_name, version))
 }
 
 /// Remove the directory and all its contents.
@@ -1365,24 +1358,23 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_package_manager() {
-        let result =
-            download_package_manager(PackageManagerType::Yarn, "@yarnpkg/cli-dist", "4.9.2", None)
-                .await;
+        let result = download_package_manager(PackageManagerType::Yarn, "4.9.2", None).await;
         assert!(result.is_ok());
-        let target_dir = result.unwrap();
+        let (target_dir, package_name, version) = result.unwrap();
         println!("result: {target_dir:?}");
         assert!(is_exists_file(target_dir.join("bin/yarn")).unwrap());
         assert!(is_exists_file(target_dir.join("bin/yarn.cmd")).unwrap());
+        assert_eq!(package_name, "@yarnpkg/cli-dist");
+        assert_eq!(version, "4.9.2");
 
         // again should skip download
-        let result =
-            download_package_manager(PackageManagerType::Yarn, "@yarnpkg/cli-dist", "4.9.2", None)
-                .await;
+        let result = download_package_manager(PackageManagerType::Yarn, "4.9.2", None).await;
         assert!(result.is_ok());
-        let target_dir = result.unwrap();
+        let (target_dir, package_name, version) = result.unwrap();
         assert!(is_exists_file(target_dir.join("bin/yarn")).unwrap());
         assert!(is_exists_file(target_dir.join("bin/yarn.cmd")).unwrap());
-
+        assert_eq!(package_name, "@yarnpkg/cli-dist");
+        assert_eq!(version, "4.9.2");
         remove_dir_all_force(target_dir).await.unwrap();
     }
 
