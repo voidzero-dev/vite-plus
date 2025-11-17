@@ -104,6 +104,10 @@
       "default": "./dist/rolldown/parse-ast-index.mjs",
       "types": "./dist/rolldown/parse-ast-index.d.mts"
     },
+    "./rolldown/plugins": {
+      "default": "./dist/rolldown/plugins-index.mjs",
+      "types": "./dist/rolldown/plugins-index.d.mts"
+    },
     "./rolldown/pluginutils": {
       "default": "./dist/pluginutils/index.js",
       "types": "./dist/pluginutils/index.d.ts"
@@ -354,7 +358,7 @@
     "@babel/parser": "^7.28.4",
     "@napi-rs/cli": "^3.4.1",
     "@oxc-node/core": "^0.0.32",
-    "@oxc-project/types": "=0.96.0",
+    "@oxc-project/types": "=0.97.0",
     "@vitest/browser": "^4.0.9",
     "@vitest/browser-playwright": "^4.0.9",
     "@voidzero-dev/vite-plus-tools": "workspace:",
@@ -372,7 +376,7 @@
     "tsdown": "0.16.0",
     "rolldown-vite": "^7.1.19",
     "vitepress": "2.0.0-alpha.12",
-    "vitest": "^4.0.6"
+    "vitest": "^4.0.9"
   },
   "optionalDependencies": {
     "fsevents": "~2.3.3"
