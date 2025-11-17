@@ -360,7 +360,7 @@ async function bundleVitepress() {
 }
 
 async function bundleVitest() {
-  const vitestSourceDir = resolve(projectDir, 'node_modules/vitest');
+  const vitestSourceDir = resolve(projectDir, 'node_modules/vitest-dev');
   const vitestDestDir = join(projectDir, 'dist/vitest');
 
   await mkdir(vitestDestDir, { recursive: true });

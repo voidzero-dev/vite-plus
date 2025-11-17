@@ -104,7 +104,7 @@ catalog:
   vitepress: 2.0.0-alpha.12
   vitepress-plugin-group-icons: ^1.0.0
   vitepress-plugin-llms: ^1.1.0
-  vitest: ^4.0.9
+  vitest: ^4.0.1
   vue: ^3.5.21
   web-tree-sitter: ^0.25.0
   ws: ^8.18.1
@@ -133,7 +133,10 @@ minimumReleaseAgeExclude:
   - vitest
 overrides:
   rolldown: 'workspace:rolldown@*'
-  vite: 'workspace:rolldown-vite@*'
+  vite: 'workspace:@voidzero-dev/vite-plus@*'
+  vitest: 'workspace:@voidzero-dev/vite-plus@*'
+  rolldown-vite: 'workspace:@voidzero-dev/vite-plus@*'
+  vitest-dev: 'npm:vitest@*'
 packageExtensions:
   sass-embedded:
     peerDependencies:
@@ -149,3 +152,7 @@ peerDependencyRules:
   allowedVersions:
     rolldown: '*'
     vite: '*'
+  allowAny:
+    - vite
+    - vitest
+    - rolldown

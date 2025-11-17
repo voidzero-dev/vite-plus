@@ -16,6 +16,8 @@
     "fast-string-truncated-width": "^1.2.1"
   },
   "devDependencies": {
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "vue": "catalog:",
+    "vite": "catalog:"
   }
 }

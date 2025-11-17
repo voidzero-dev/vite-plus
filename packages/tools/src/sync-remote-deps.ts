@@ -843,7 +843,7 @@ export async function syncRemote() {
     'packages',
     'cli',
     'node_modules',
-    'vitest',
+    'vitest-dev',
     'package.json',
   );
 

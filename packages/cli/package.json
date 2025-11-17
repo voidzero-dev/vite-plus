@@ -242,6 +242,7 @@
     "@edge-runtime/vm": "*",
     "@types/debug": "^4.1.12",
     "@types/node": "^20.19.0 || >=22.12.0",
+    "@vitejs/devtools": "^0.0.0-alpha.10",
     "@vitest/browser-playwright": "4.0.9",
     "@vitest/browser-preview": "4.0.9",
     "@vitest/browser-webdriverio": "4.0.9",
@@ -252,7 +253,7 @@
     "jsdom": "*",
     "less": "^4.0.0",
     "markdown-it-mathjax3": "^4",
-    "oxc-minify": "^0.97.0",
+    "oxc-minify": "^0.82.1",
     "postcss": "^8",
     "publint": "^0.3.0",
     "sass": "^1.70.0",
@@ -278,6 +279,9 @@
       "optional": true
     },
     "@types/node": {
+      "optional": true
+    },
+    "@vitejs/devtools": {
       "optional": true
     },
     "@vitest/browser-playwright": {
@@ -375,7 +379,7 @@
     "tsdown": "0.16.0",
     "rolldown-vite": "^7.1.19",
     "vitepress": "2.0.0-alpha.12",
-    "vitest": "^4.0.9"
+    "vitest-dev": "^4.0.9"
   },
   "optionalDependencies": {
     "fsevents": "~2.3.3"

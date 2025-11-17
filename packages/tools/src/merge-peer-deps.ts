@@ -172,7 +172,7 @@ export function mergePeerDeps() {
   );
   const vitestPackagePath = join(
     rootDir,
-    'packages/cli/node_modules/vitest/package.json',
+    'packages/cli/node_modules/vitest-dev/package.json',
   );
   const rolldownVitePackagePath = join(
     rootDir,
