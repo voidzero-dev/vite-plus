@@ -132,9 +132,8 @@ minimumReleaseAgeExclude:
   - vitepress
   - vitest
 overrides:
-  rolldown: 'workspace:*'
-  vite: 'file:./packages/cli'
-  vitest: ^4.0.9
+  rolldown: 'workspace:rolldown@*'
+  vite: 'workspace:rolldown-vite@*'
 packageExtensions:
   sass-embedded:
     peerDependencies:
