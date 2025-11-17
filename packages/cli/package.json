@@ -228,7 +228,6 @@
     "tinyexec": "^0.3.2",
     "tinyglobby": "^0.2.15",
     "tinyrainbow": "^3.0.3",
-    "vite": "^6.0.0 || ^7.0.0",
     "why-is-node-running": "^2.3.0",
     "@vitest/expect": "4.0.9",
     "@vitest/pretty-format": "4.0.9",
