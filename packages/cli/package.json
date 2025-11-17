@@ -253,7 +253,7 @@
     "jsdom": "*",
     "less": "^4.0.0",
     "markdown-it-mathjax3": "^4",
-    "oxc-minify": "^0.96.0",
+    "oxc-minify": "^0.97.0",
     "postcss": "^8",
     "publint": "^0.3.0",
     "sass": "^1.70.0",

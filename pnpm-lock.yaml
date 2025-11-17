@@ -283,7 +283,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.9
-        version: 4.0.9(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.10.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)
+        version: 4.0.9(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.10.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.97.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)
 
   docs:
     devDependencies:
@@ -423,8 +423,8 @@ importers:
         specifier: ^7.1.2
         version: 7.2.0
       oxc-minify:
-        specifier: ^0.96.0
-        version: 0.96.0
+        specifier: ^0.97.0
+        version: 0.97.0
       oxfmt:
         specifier: ^0.9.0
         version: 0.9.0
@@ -560,10 +560,10 @@ importers:
         version: 0.16.0(@arethetypeswrong/core@0.18.2)(ms@2.1.3)(oxc-resolver@11.13.0)(publint@0.3.15)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)
       vitepress:
         specifier: 2.0.0-alpha.12
-        version: 2.0.0-alpha.12(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)
+        version: 2.0.0-alpha.12(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.97.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)
       vitest:
         specifier: ^4.0.9
-        version: 4.0.9(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)
+        version: 4.0.9(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.97.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)
     optionalDependencies:
       fsevents:
         specifier: ~2.3.3
@@ -792,7 +792,7 @@ importers:
         version: link:../packages/cli
       vitest:
         specifier: ^4.0.9
-        version: 4.0.9(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)
+        version: 4.0.9(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.97.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)
 
   rolldown-vite/packages/create-vite:
     devDependencies:
@@ -855,7 +855,7 @@ importers:
         version: 5.44.0
       vite:
         specifier: file:../../../packages/cli
-        version: '@voidzero-dev/vite-plus@file:packages/cli(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.10.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(@voidzero-dev/vite-plus@0.0.0)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)'
+        version: '@voidzero-dev/vite-plus@file:packages/cli(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.10.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(@voidzero-dev/vite-plus@0.0.0)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.97.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)'
     devDependencies:
       '@vitejs/plugin-legacy-for-rolldown-vite':
         specifier: https://pkg.pr.new/vitejs/rolldown-vite/@vitejs/plugin-legacy@a2594ec
@@ -1174,7 +1174,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.9
-        version: 4.0.9(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.10.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)
+        version: 4.0.9(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.10.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.97.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)
 
   rolldown/packages/rolldown:
     dependencies:
@@ -2943,34 +2943,16 @@ packages:
   '@octokit/types@14.1.0':
     resolution: {integrity: sha512-1y6DgTy8Jomcpu33N+p5w58l6xyt55Ar2I91RPiIA0xCJBXyUAhXCcmZaDWSANiha7R9a6qJJ2CRomGPZ6f46g==}
 
-  '@oxc-minify/binding-android-arm64@0.96.0':
-    resolution: {integrity: sha512-lzeIEMu/v6Y+La5JSesq4hvyKtKBq84cgQpKYTYM/yGuNk2tfd5Ha31hnC+mTh48lp/5vZH+WBfjVUjjINCfug==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [android]
-
   '@oxc-minify/binding-android-arm64@0.97.0':
     resolution: {integrity: sha512-2bv8ZKm53PKJ7+0o7X813um9lRJ/EYjFyf09x2Q7OKfOLiAcWrFoLWmO5PJcCMpf+V2EFTp9UuapHzocuShBgw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [android]
 
-  '@oxc-minify/binding-darwin-arm64@0.96.0':
-    resolution: {integrity: sha512-i0LkJAUXb4BeBFrJQbMKQPoxf8+cFEffDyLSb7NEzzKuPcH8qrVsnEItoOzeAdYam8Sr6qCHVwmBNEQzl7PWpw==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [darwin]
-
   '@oxc-minify/binding-darwin-arm64@0.97.0':
     resolution: {integrity: sha512-NlFViKlJawMD7GTLlSyG1RaYOLzqpM8pEw7oTzR9Si/kPaScgsB6E+F1d3AFPl7fmOG7iIxvhdI+ftlMZmniVA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
-    os: [darwin]
-
-  '@oxc-minify/binding-darwin-x64@0.96.0':
-    resolution: {integrity: sha512-C5vI0WPR+KPIFAD5LMOJk2J8iiT+Nv65vDXmemzXEXouzfEOLYNqnW+u6NSsccpuZHHWAiLyPFkYvKFduveAUQ==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
     os: [darwin]
 
   '@oxc-minify/binding-darwin-x64@0.97.0':
@@ -2979,32 +2961,14 @@ packages:
     cpu: [x64]
     os: [darwin]
 
-  '@oxc-minify/binding-freebsd-x64@0.96.0':
-    resolution: {integrity: sha512-3//5DNx+xUjVBMLLk2sl6hfe4fwfENJtjVQUBXjxzwPuv8xgZUqASG4cRG3WqG5Qe8dV6SbCI4EgKQFjO4KCZA==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
-    os: [freebsd]
-
   '@oxc-minify/binding-freebsd-x64@0.97.0':
     resolution: {integrity: sha512-uMPakX5o7/MuvJ0uvgahDAMBIHFjMQ7ecrOing6zpnhqhJpLH6y2aMbFn9I0IlrCYTWPaEdmskGMUYKi031X4g==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [freebsd]
 
-  '@oxc-minify/binding-linux-arm-gnueabihf@0.96.0':
-    resolution: {integrity: sha512-WXChFKV7VdDk1NePDK1J31cpSvxACAVztJ7f7lJVYBTkH+iz5D0lCqPcE7a9eb7nC3xvz4yk7DM6dA9wlUQkQg==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm]
-    os: [linux]
-
   '@oxc-minify/binding-linux-arm-gnueabihf@0.97.0':
     resolution: {integrity: sha512-132F111xtBpPQSN0gkWa2fp8bkpCVJzki0HWp+943Sy0c5muAE0OkZM8UYgPbE9VfyinuG2awawiheWk9QFeyA==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm]
-    os: [linux]
-
-  '@oxc-minify/binding-linux-arm-musleabihf@0.96.0':
-    resolution: {integrity: sha512-7B18glYMX4Z/YoqgE3VRLs/2YhVLxlxNKSgrtsRpuR8xv58xca+hEhiFwZN1Rn+NSMZ29Z33LWD7iYWnqYFvRA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm]
     os: [linux]
@@ -3015,26 +2979,12 @@ packages:
     cpu: [arm]
     os: [linux]
 
-  '@oxc-minify/binding-linux-arm64-gnu@0.96.0':
-    resolution: {integrity: sha512-Yl+KcTldsEJNcaYxxonwAXZ2q3gxIzn3kXYQWgKWdaGIpNhOCWqF+KE5WLsldoh5Ro5SHtomvb8GM6cXrIBMog==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
   '@oxc-minify/binding-linux-arm64-gnu@0.97.0':
     resolution: {integrity: sha512-ojC0lP/uZm4yzL+t/Y1iCNkOv3ADe1csHpGP49lG+M8zCyWTNfJZTgBxA9GO/gGoVzBQ0lcytdVbXLx9WtG3NA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
-
-  '@oxc-minify/binding-linux-arm64-musl@0.96.0':
-    resolution: {integrity: sha512-rNqoFWOWaxwMmUY5fspd/h5HfvgUlA3sv9CUdA2MpnHFiyoJNovR7WU8tGh+Yn0qOAs0SNH0a05gIthHig14IA==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [linux]
-    libc: [musl]
 
   '@oxc-minify/binding-linux-arm64-musl@0.97.0':
     resolution: {integrity: sha512-RU/XPyPoLUZnlu0yKyjhd9RhDtA9br6SfkdDZo+/vKEYZ7H2YQdMrSix1rYQIV9usPN0oBVHN/r0RKclAu2K+Q==}
@@ -3043,24 +2993,10 @@ packages:
     os: [linux]
     libc: [musl]
 
-  '@oxc-minify/binding-linux-riscv64-gnu@0.96.0':
-    resolution: {integrity: sha512-3paajIuzGnukHwSI3YBjYVqbd72pZd8NJxaayaNFR0AByIm8rmIT5RqFXbq8j2uhtpmNdZRXiu0em1zOmIScWA==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [riscv64]
-    os: [linux]
-    libc: [glibc]
-
   '@oxc-minify/binding-linux-riscv64-gnu@0.97.0':
     resolution: {integrity: sha512-YuV2MmzulecouWxVAsTdkHtlLNtBfNG+lbMVgHjQeFgo+bGMD2GcmyVFQ29hsBgemeLXMm7xxn/4/xnQlqKZ5w==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [riscv64]
-    os: [linux]
-    libc: [glibc]
-
-  '@oxc-minify/binding-linux-s390x-gnu@0.96.0':
-    resolution: {integrity: sha512-9ESrpkB2XG0lQ89JlsxlZa86iQCOs+jkDZLl6O+u5wb7ynUy21bpJJ1joauCOSYIOUlSy3+LbtJLiqi7oSQt5Q==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
@@ -3071,26 +3007,12 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@oxc-minify/binding-linux-x64-gnu@0.96.0':
-    resolution: {integrity: sha512-UMM1jkns+p+WwwmdjC5giI3SfR2BCTga18x3C0cAu6vDVf4W37uTZeTtSIGmwatTBbgiq++Te24/DE0oCdm1iQ==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
   '@oxc-minify/binding-linux-x64-gnu@0.97.0':
     resolution: {integrity: sha512-4RMxc/CY+5bWdn/5oYjWKji/q2FVQ6kl9LBeGhbAbS/GlH5T1/uhK8qg7HlYt5Sh3K+z6yxBcgZh+0wF7wnbWg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
-
-  '@oxc-minify/binding-linux-x64-musl@0.96.0':
-    resolution: {integrity: sha512-8b1naiC7MdP7xeMi7cQ5tb9W1rZAP9Qz/jBRqp1Y5EOZ1yhSGnf1QWuZ/0pCc+XiB9vEHXEY3Aki/H+86m2eOg==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
-    os: [linux]
-    libc: [musl]
 
   '@oxc-minify/binding-linux-x64-musl@0.97.0':
     resolution: {integrity: sha512-ABrWgMvZLaZhh4aq5hX9aKR4dlE4erB2ypE1ZonTPHa1/uA5r7d0uyQq6gC2AcZsjXziPhdJVdykvY1/Xo5azg==}
@@ -3099,32 +3021,15 @@ packages:
     os: [linux]
     libc: [musl]
 
-  '@oxc-minify/binding-wasm32-wasi@0.96.0':
-    resolution: {integrity: sha512-bjGDjkGzo3GWU9Vg2qiFUrfoo5QxojPNV/2RHTlbIB5FWkkV4ExVjsfyqihFiAuj0NXIZqd2SAiEq9htVd3RFw==}
-    engines: {node: '>=14.0.0'}
-    cpu: [wasm32]
-
   '@oxc-minify/binding-wasm32-wasi@0.97.0':
     resolution: {integrity: sha512-I8VNYDzmLTOqEIxisGzeE/3MKTNYK0tuc5bENBPLEWzO3wTti8Ol0+o/2ytJJ+9whXUbHibGIUdBlvZnyDqt2g==}
     engines: {node: '>=14.0.0'}
     cpu: [wasm32]
 
-  '@oxc-minify/binding-win32-arm64-msvc@0.96.0':
-    resolution: {integrity: sha512-4L4DlHUT47qMWQuTyUghpncR3NZHWtxvd0G1KgSjVgXf+cXzFdWQCWZZtCU0yrmOoVCNUf4S04IFCJyAe+Ie7A==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [win32]
-
   '@oxc-minify/binding-win32-arm64-msvc@0.97.0':
     resolution: {integrity: sha512-hwoy2tQLQUODXoHGIp3eYs67+jxn6bZ0bU4eZPfpkPYQQBaM5Oxrr/GAT/GRRlIilM4JqPgBBq1+lODPYbtiSQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
-    os: [win32]
-
-  '@oxc-minify/binding-win32-x64-msvc@0.96.0':
-    resolution: {integrity: sha512-T2ijfqZLpV2bgGGocXV4SXTuMoouqN0asYTIm+7jVOLvT5XgDogf3ZvCmiEnSWmxl21+r5wHcs8voU2iUROXAg==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
     os: [win32]
 
   '@oxc-minify/binding-win32-x64-msvc@0.97.0':
@@ -4556,7 +4461,7 @@ packages:
       jsdom: '*'
       less: ^4.0.0
       markdown-it-mathjax3: ^4
-      oxc-minify: ^0.96.0
+      oxc-minify: ^0.97.0
       postcss: ^8
       publint: ^0.3.0
       sass: ^1.70.0
@@ -6755,10 +6660,6 @@ packages:
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
-
-  oxc-minify@0.96.0:
-    resolution: {integrity: sha512-dXeeGrfPJJ4rMdw+NrqiCRtbzVX2ogq//R0Xns08zql2HjV3Zi2SBJ65saqfDaJzd2bcHqvGWH+M44EQCHPAcA==}
-    engines: {node: ^20.19.0 || >=22.12.0}
 
   oxc-minify@0.97.0:
     resolution: {integrity: sha512-QvZwjfhN/YH01EqMGJT0EUTd8QORT5gPlhxLBpOl7B83jDEq8hYVylYbvTUGJRXri0roqUvuuIg6BEDERPhycA==}
@@ -10062,81 +9963,40 @@ snapshots:
     dependencies:
       '@octokit/openapi-types': 25.1.0
 
-  '@oxc-minify/binding-android-arm64@0.96.0':
-    optional: true
-
   '@oxc-minify/binding-android-arm64@0.97.0':
-    optional: true
-
-  '@oxc-minify/binding-darwin-arm64@0.96.0':
     optional: true
 
   '@oxc-minify/binding-darwin-arm64@0.97.0':
     optional: true
 
-  '@oxc-minify/binding-darwin-x64@0.96.0':
-    optional: true
-
   '@oxc-minify/binding-darwin-x64@0.97.0':
-    optional: true
-
-  '@oxc-minify/binding-freebsd-x64@0.96.0':
     optional: true
 
   '@oxc-minify/binding-freebsd-x64@0.97.0':
     optional: true
 
-  '@oxc-minify/binding-linux-arm-gnueabihf@0.96.0':
-    optional: true
-
   '@oxc-minify/binding-linux-arm-gnueabihf@0.97.0':
-    optional: true
-
-  '@oxc-minify/binding-linux-arm-musleabihf@0.96.0':
     optional: true
 
   '@oxc-minify/binding-linux-arm-musleabihf@0.97.0':
     optional: true
 
-  '@oxc-minify/binding-linux-arm64-gnu@0.96.0':
-    optional: true
-
   '@oxc-minify/binding-linux-arm64-gnu@0.97.0':
-    optional: true
-
-  '@oxc-minify/binding-linux-arm64-musl@0.96.0':
     optional: true
 
   '@oxc-minify/binding-linux-arm64-musl@0.97.0':
     optional: true
 
-  '@oxc-minify/binding-linux-riscv64-gnu@0.96.0':
-    optional: true
-
   '@oxc-minify/binding-linux-riscv64-gnu@0.97.0':
-    optional: true
-
-  '@oxc-minify/binding-linux-s390x-gnu@0.96.0':
     optional: true
 
   '@oxc-minify/binding-linux-s390x-gnu@0.97.0':
     optional: true
 
-  '@oxc-minify/binding-linux-x64-gnu@0.96.0':
-    optional: true
-
   '@oxc-minify/binding-linux-x64-gnu@0.97.0':
     optional: true
 
-  '@oxc-minify/binding-linux-x64-musl@0.96.0':
-    optional: true
-
   '@oxc-minify/binding-linux-x64-musl@0.97.0':
-    optional: true
-
-  '@oxc-minify/binding-wasm32-wasi@0.96.0':
-    dependencies:
-      '@napi-rs/wasm-runtime': 1.0.7
     optional: true
 
   '@oxc-minify/binding-wasm32-wasi@0.97.0':
@@ -10144,13 +10004,7 @@ snapshots:
       '@napi-rs/wasm-runtime': 1.0.7
     optional: true
 
-  '@oxc-minify/binding-win32-arm64-msvc@0.96.0':
-    optional: true
-
   '@oxc-minify/binding-win32-arm64-msvc@0.97.0':
-    optional: true
-
-  '@oxc-minify/binding-win32-x64-msvc@0.96.0':
     optional: true
 
   '@oxc-minify/binding-win32-x64-msvc@0.97.0':
@@ -11181,7 +11035,7 @@ snapshots:
       regenerator-runtime: 0.14.1
       systemjs: 6.15.1
       terser: 5.44.0
-      vite: '@voidzero-dev/vite-plus@file:packages/cli(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.10.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(@voidzero-dev/vite-plus@0.0.0)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)'
+      vite: '@voidzero-dev/vite-plus@file:packages/cli(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.10.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(@voidzero-dev/vite-plus@0.0.0)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.97.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)'
     transitivePeerDependencies:
       - supports-color
 
@@ -11307,7 +11161,7 @@ snapshots:
       '@vitest/pretty-format': 4.0.9
       tinyrainbow: 3.0.3
 
-  '@voidzero-dev/vite-plus@file:packages/cli(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(@voidzero-dev/vite-plus@0.0.0)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)':
+  '@voidzero-dev/vite-plus@file:packages/cli(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(@voidzero-dev/vite-plus@0.0.0)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.97.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)':
     dependencies:
       '@docsearch/css': 4.3.2
       '@docsearch/js': 4.3.2
@@ -11368,98 +11222,7 @@ snapshots:
       jsdom: 27.1.0
       less: 4.4.2
       markdown-it-mathjax3: 4.3.2
-      oxc-minify: 0.96.0
-      postcss: 8.5.6
-      publint: 0.3.15
-      sass: 1.93.3
-      sass-embedded: 1.93.3(source-map-js@1.2.1)
-      stylus: 0.64.0
-      sugarss: 5.0.1(postcss@8.5.6)
-      terser: 5.44.0
-      tsx: 4.20.6
-      typescript: 5.9.3
-      unplugin-lightningcss: 0.4.3
-      unplugin-unused: 0.5.5
-      unrun: 0.2.1
-      yaml: 2.8.1
-    transitivePeerDependencies:
-      - async-validator
-      - axios
-      - change-case
-      - drauu
-      - fuse.js
-      - idb-keyval
-      - jwt-decode
-      - msw
-      - nprogress
-      - qrcode
-      - sortablejs
-      - supports-color
-      - universal-cookie
-      - vite
-
-  '@voidzero-dev/vite-plus@file:packages/cli(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.10.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(@voidzero-dev/vite-plus@0.0.0)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)':
-    dependencies:
-      '@docsearch/css': 4.3.2
-      '@docsearch/js': 4.3.2
-      '@iconify-json/simple-icons': 1.2.58
-      '@oxc-project/types': 0.97.0
-      '@shikijs/core': 3.15.0
-      '@shikijs/transformers': 3.15.0
-      '@shikijs/types': 3.15.0
-      '@types/markdown-it': 14.1.2
-      '@vitejs/plugin-vue': 6.0.1(@voidzero-dev/vite-plus@0.0.0)(vue@3.5.24(typescript@5.9.3))
-      '@vitest/expect': 4.0.9
-      '@vitest/mocker': 4.0.9(@voidzero-dev/vite-plus@0.0.0)
-      '@vitest/pretty-format': 4.0.9
-      '@vitest/runner': 4.0.9
-      '@vitest/snapshot': 4.0.9
-      '@vitest/spy': 4.0.9
-      '@vitest/utils': 4.0.9
-      '@vue/devtools-api': 8.0.3
-      '@vue/shared': 3.5.24
-      '@vueuse/core': 13.9.0(vue@3.5.24(typescript@5.9.3))
-      '@vueuse/integrations': 13.9.0(focus-trap@7.6.6)(vue@3.5.24(typescript@5.9.3))
-      debug: 4.4.3(supports-color@8.1.1)
-      es-module-lexer: 1.7.0
-      expect-type: 1.2.2
-      focus-trap: 7.6.6
-      lightningcss: 1.30.2
-      magic-string: 0.30.21
-      mark.js: 8.11.1
-      minisearch: 7.2.0
-      oxfmt: 0.9.0
-      oxlint: 1.28.0(oxlint-tsgolint@0.4.0)
-      oxlint-tsgolint: 0.4.0
-      pathe: 2.0.3
-      picomatch: 4.0.3
-      semver: 7.7.3
-      shiki: 3.15.0
-      std-env: 3.10.0
-      tinybench: 2.9.0
-      tinyexec: 0.3.2
-      tinyglobby: 0.2.15
-      tinyrainbow: 3.0.3
-      tree-kill: 1.2.2
-      vue: 3.5.24(typescript@5.9.3)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@arethetypeswrong/core': 0.18.2
-      '@edge-runtime/vm': 5.0.0
-      '@types/debug': 4.1.12
-      '@types/node': 24.10.0
-      '@vitest/browser-playwright': 4.0.9(@voidzero-dev/vite-plus@0.0.0)(playwright@1.56.1)(vitest@4.0.9)
-      '@vitest/browser-preview': 4.0.9(@voidzero-dev/vite-plus@0.0.0)(vitest@4.0.9)
-      '@vitest/browser-webdriverio': 4.0.9(@voidzero-dev/vite-plus@0.0.0)(vitest@4.0.9)(webdriverio@9.20.0)
-      '@vitest/ui': 4.0.9(vitest@4.0.9)
-      esbuild: 0.25.8
-      fsevents: 2.3.3
-      happy-dom: 20.0.10
-      jiti: 2.6.1
-      jsdom: 27.1.0
-      less: 4.4.2
-      markdown-it-mathjax3: 4.3.2
-      oxc-minify: 0.96.0
+      oxc-minify: 0.97.0
       postcss: 8.5.6
       publint: 0.3.15
       sass: 1.93.3
@@ -13812,24 +13575,6 @@ snapshots:
       type-check: 0.4.0
       word-wrap: 1.2.5
 
-  oxc-minify@0.96.0:
-    optionalDependencies:
-      '@oxc-minify/binding-android-arm64': 0.96.0
-      '@oxc-minify/binding-darwin-arm64': 0.96.0
-      '@oxc-minify/binding-darwin-x64': 0.96.0
-      '@oxc-minify/binding-freebsd-x64': 0.96.0
-      '@oxc-minify/binding-linux-arm-gnueabihf': 0.96.0
-      '@oxc-minify/binding-linux-arm-musleabihf': 0.96.0
-      '@oxc-minify/binding-linux-arm64-gnu': 0.96.0
-      '@oxc-minify/binding-linux-arm64-musl': 0.96.0
-      '@oxc-minify/binding-linux-riscv64-gnu': 0.96.0
-      '@oxc-minify/binding-linux-s390x-gnu': 0.96.0
-      '@oxc-minify/binding-linux-x64-gnu': 0.96.0
-      '@oxc-minify/binding-linux-x64-musl': 0.96.0
-      '@oxc-minify/binding-wasm32-wasi': 0.96.0
-      '@oxc-minify/binding-win32-arm64-msvc': 0.96.0
-      '@oxc-minify/binding-win32-x64-msvc': 0.96.0
-
   oxc-minify@0.97.0:
     optionalDependencies:
       '@oxc-minify/binding-android-arm64': 0.97.0
@@ -15252,7 +14997,7 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.2
 
-  vitepress@2.0.0-alpha.12(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1):
+  vitepress@2.0.0-alpha.12(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.97.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1):
     dependencies:
       '@docsearch/css': 4.3.2
       '@docsearch/js': 4.3.2
@@ -15270,11 +15015,11 @@ snapshots:
       mark.js: 8.11.1
       minisearch: 7.2.0
       shiki: 3.15.0
-      vite: '@voidzero-dev/vite-plus@file:packages/cli(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(@voidzero-dev/vite-plus@0.0.0)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)'
+      vite: '@voidzero-dev/vite-plus@file:packages/cli(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(@voidzero-dev/vite-plus@0.0.0)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.97.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)'
       vue: 3.5.24(typescript@5.9.3)
     optionalDependencies:
       markdown-it-mathjax3: 4.3.2
-      oxc-minify: 0.96.0
+      oxc-minify: 0.97.0
       postcss: 8.5.6
     transitivePeerDependencies:
       - '@arethetypeswrong/core'
@@ -15380,7 +15125,7 @@ snapshots:
       - unrun
       - yaml
 
-  vitest@4.0.9(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1):
+  vitest@4.0.9(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.97.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1):
     dependencies:
       '@vitest/expect': 4.0.9
       '@vitest/mocker': 4.0.9(@voidzero-dev/vite-plus@0.0.0)
@@ -15400,78 +15145,12 @@ snapshots:
       tinyexec: 0.3.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.0.3
-      vite: '@voidzero-dev/vite-plus@file:packages/cli(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(@voidzero-dev/vite-plus@0.0.0)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)'
+      vite: '@voidzero-dev/vite-plus@file:packages/cli(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@22.19.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(@voidzero-dev/vite-plus@0.0.0)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.97.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)'
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@edge-runtime/vm': 5.0.0
       '@types/debug': 4.1.12
       '@types/node': 22.19.0
-      '@vitest/browser-playwright': 4.0.9(@voidzero-dev/vite-plus@0.0.0)(playwright@1.56.1)(vitest@4.0.9)
-      '@vitest/browser-preview': 4.0.9(@voidzero-dev/vite-plus@0.0.0)(vitest@4.0.9)
-      '@vitest/browser-webdriverio': 4.0.9(@voidzero-dev/vite-plus@0.0.0)(vitest@4.0.9)(webdriverio@9.20.0)
-      '@vitest/ui': 4.0.9(vitest@4.0.9)
-      happy-dom: 20.0.10
-      jsdom: 27.1.0
-    transitivePeerDependencies:
-      - '@arethetypeswrong/core'
-      - async-validator
-      - axios
-      - change-case
-      - drauu
-      - esbuild
-      - fuse.js
-      - idb-keyval
-      - jiti
-      - jwt-decode
-      - less
-      - markdown-it-mathjax3
-      - msw
-      - nprogress
-      - oxc-minify
-      - postcss
-      - publint
-      - qrcode
-      - sass
-      - sass-embedded
-      - sortablejs
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-      - tsx
-      - typescript
-      - universal-cookie
-      - unplugin-lightningcss
-      - unplugin-unused
-      - unrun
-      - yaml
-
-  vitest@4.0.9(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.10.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1):
-    dependencies:
-      '@vitest/expect': 4.0.9
-      '@vitest/mocker': 4.0.9(@voidzero-dev/vite-plus@0.0.0)
-      '@vitest/pretty-format': 4.0.9
-      '@vitest/runner': 4.0.9
-      '@vitest/snapshot': 4.0.9
-      '@vitest/spy': 4.0.9
-      '@vitest/utils': 4.0.9
-      debug: 4.4.3(supports-color@8.1.1)
-      es-module-lexer: 1.7.0
-      expect-type: 1.2.2
-      magic-string: 0.30.21
-      pathe: 2.0.3
-      picomatch: 4.0.3
-      std-env: 3.10.0
-      tinybench: 2.9.0
-      tinyexec: 0.3.2
-      tinyglobby: 0.2.15
-      tinyrainbow: 3.0.3
-      vite: '@voidzero-dev/vite-plus@file:packages/cli(@arethetypeswrong/core@0.18.2)(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.10.0)(@vitest/browser-playwright@4.0.9)(@vitest/browser-preview@4.0.9)(@vitest/browser-webdriverio@4.0.9)(@vitest/ui@4.0.9)(@voidzero-dev/vite-plus@0.0.0)(esbuild@0.25.8)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@27.1.0)(less@4.4.2)(markdown-it-mathjax3@4.3.2)(oxc-minify@0.96.0)(postcss@8.5.6)(publint@0.3.15)(sass-embedded@1.93.3(source-map-js@1.2.1))(sass@1.93.3)(stylus@0.64.0)(sugarss@5.0.1(postcss@8.5.6))(terser@5.44.0)(tsx@4.20.6)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.5)(unrun@0.2.1)(yaml@2.8.1)'
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@edge-runtime/vm': 5.0.0
-      '@types/debug': 4.1.12
-      '@types/node': 24.10.0
       '@vitest/browser-playwright': 4.0.9(@voidzero-dev/vite-plus@0.0.0)(playwright@1.56.1)(vitest@4.0.9)
       '@vitest/browser-preview': 4.0.9(@voidzero-dev/vite-plus@0.0.0)(vitest@4.0.9)
       '@vitest/browser-webdriverio': 4.0.9(@voidzero-dev/vite-plus@0.0.0)(vitest@4.0.9)(webdriverio@9.20.0)
