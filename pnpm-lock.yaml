@@ -157,8 +157,8 @@ catalogs:
       specifier: ^1.28.0
       version: 1.28.0
     oxlint-tsgolint:
-      specifier: ^0.4.0
-      version: 0.4.0
+      specifier: ^0.7.0
+      version: 0.7.0
     pathe:
       specifier: ^2.0.3
       version: 2.0.3
@@ -277,7 +277,7 @@ importers:
         version: 0.9.0
       oxlint:
         specifier: 'catalog:'
-        version: 1.28.0(oxlint-tsgolint@0.5.1)
+        version: 1.28.0(oxlint-tsgolint@0.7.0)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -585,10 +585,10 @@ importers:
         version: 7.0.6
       oxlint:
         specifier: 'catalog:'
-        version: 1.28.0(oxlint-tsgolint@0.4.0)
+        version: 1.28.0(oxlint-tsgolint@0.7.0)
       oxlint-tsgolint:
         specifier: 'catalog:'
-        version: 0.4.0
+        version: 0.7.0
       rolldown-vite:
         specifier: workspace:*
         version: link:../../rolldown-vite/packages/vite
@@ -6687,6 +6687,10 @@ packages:
 
   oxlint-tsgolint@0.5.1:
     resolution: {integrity: sha512-C1MgHZRjs1uWJzRybwxlqHm2qvv8KrX0sEfZIaIWphJ9FJG5aUqEkGGa2Oug48hUgNbFgNB+KUpO7d8+7raAZQ==}
+    hasBin: true
+
+  oxlint-tsgolint@0.7.0:
+    resolution: {integrity: sha512-/bQym+gjssCWyKBJ30U0vJxojPx5fJQ2DFCARdjibvB0/DGbCRzZhJU5gZVs1gMnr9nBDz0+OUo1LZVZl3LDPw==}
     hasBin: true
 
   oxlint@1.28.0:
@@ -13682,6 +13686,8 @@ snapshots:
       '@oxlint-tsgolint/win32-arm64': 0.5.1
       '@oxlint-tsgolint/win32-x64': 0.5.1
 
+  oxlint-tsgolint@0.7.0: {}
+
   oxlint@1.28.0(oxlint-tsgolint@0.4.0):
     optionalDependencies:
       '@oxlint/darwin-arm64': 1.28.0
@@ -13705,6 +13711,18 @@ snapshots:
       '@oxlint/win32-arm64': 1.28.0
       '@oxlint/win32-x64': 1.28.0
       oxlint-tsgolint: 0.5.1
+
+  oxlint@1.28.0(oxlint-tsgolint@0.7.0):
+    optionalDependencies:
+      '@oxlint/darwin-arm64': 1.28.0
+      '@oxlint/darwin-x64': 1.28.0
+      '@oxlint/linux-arm64-gnu': 1.28.0
+      '@oxlint/linux-arm64-musl': 1.28.0
+      '@oxlint/linux-x64-gnu': 1.28.0
+      '@oxlint/linux-x64-musl': 1.28.0
+      '@oxlint/win32-arm64': 1.28.0
+      '@oxlint/win32-x64': 1.28.0
+      oxlint-tsgolint: 0.7.0
 
   p-limit@3.1.0:
     dependencies:
