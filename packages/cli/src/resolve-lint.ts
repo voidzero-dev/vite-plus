@@ -33,9 +33,6 @@ export async function lint(): Promise<{
   return {
     binPath,
     // TODO: provide envs inference API
-    envs: {
-      ...DEFAULT_ENVS,
-      OXLINT_TSGOLINT_PATH: resolve('oxlint-tsgolint/bin/tsgolint.js'),
-    },
+    envs: DEFAULT_ENVS,
   };
 }

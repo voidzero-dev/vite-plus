@@ -10809,7 +10809,7 @@ snapshots:
 
   '@types/fs-extra@9.0.13':
     dependencies:
-      '@types/node': 24.10.0
+      '@types/node': 22.19.1
 
   '@types/glob@9.0.0':
     dependencies:
@@ -10873,7 +10873,7 @@ snapshots:
   '@types/rimraf@3.0.2':
     dependencies:
       '@types/glob': 9.0.0
-      '@types/node': 24.10.0
+      '@types/node': 22.19.1
 
   '@types/semver@7.7.1': {}
 

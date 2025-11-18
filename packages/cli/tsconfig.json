@@ -5,8 +5,9 @@
     "moduleResolution": "bundler",
     "composite": true,
     "outDir": "./dist",
-    "noEmit": false,
+    "noEmit": true,
     "allowImportingTsExtensions": false,
+    "skipLibCheck": true,
     "rootDir": "./src",
     "experimentalDecorators": true,
     "customConditions": ["dev"]
