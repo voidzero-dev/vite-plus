@@ -125,10 +125,6 @@
       "types": "./dist/vitest/dist/suite.d.ts",
       "default": "./dist/vitest/dist/suite.js"
     },
-    "./test": {
-      "import": "./dist/test.js",
-      "types": "./dist/test.d.ts"
-    },
     "./tsdown/run": {
       "default": "./dist/tsdown/run.js"
     },

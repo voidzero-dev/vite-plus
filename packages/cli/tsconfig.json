@@ -5,7 +5,7 @@
     "moduleResolution": "bundler",
     "composite": true,
     "outDir": "./dist",
-    "noEmit": true,
+    "noEmit": false,
     "allowImportingTsExtensions": false,
     "skipLibCheck": true,
     "rootDir": "./src",
@@ -13,5 +13,5 @@
     "customConditions": ["dev"]
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist/**/*"]
 }

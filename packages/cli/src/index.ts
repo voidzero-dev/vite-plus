@@ -1,4 +1,3 @@
-export * from '@voidzero-dev/vite-plus/test';
 export {
   type Alias,
   type AliasOptions,
@@ -217,3 +216,4 @@ export {
   type WebSocketServer,
   withFilter,
 } from '@voidzero-dev/vite-plus/vite';
+export * from 'vitest-dev';

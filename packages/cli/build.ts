@@ -46,8 +46,8 @@ async function buildNapiBinding() {
 
 async function buildCli() {
   await build({
-    input: ['./src/bin.ts', './src/index.ts', './src/test.ts', './src/config.ts'],
-    external: [/^node:/, 'vitest', './vitest/dist/config.js'],
+    input: ['./src/bin.ts', './src/index.ts', './src/config.ts'],
+    external: [/^node:/, 'vitest-dev', './vitest/dist/config.js', './vitest/dist/index.js'],
     plugins: [
       {
         name: 'rewrite-import-path',
@@ -56,7 +56,7 @@ async function buildCli() {
           const { magicString } = meta;
           if (moduleInfo?.isEntry && magicString) {
             magicString.replaceAll(`'vite'`, `'${pkgJson.name}/vite'`);
-            magicString.replaceAll(`export * from 'vitest';`, `export * from '${pkgJson.name}/vitest';`);
+            magicString.replaceAll(`export * from 'vitest-dev';`, `export * from './vitest/dist/index.js';`);
             return {
               code: magicString,
             };
