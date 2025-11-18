@@ -202,7 +202,6 @@ jobs:
 
       - name: Run CLI lint
         run: pnpm lint
-        if: ${{ matrix.os != 'windows-latest' }}
 
       - name: Install Playwright browsers
         run: pnpx playwright install chromium

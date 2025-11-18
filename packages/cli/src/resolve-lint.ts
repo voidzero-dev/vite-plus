@@ -30,9 +30,14 @@ export async function lint(): Promise<{
   // Resolve the oxlint binary directly (it's a native executable)
   const binPath = resolve('oxlint/bin/oxlint');
 
-  return {
+  const result = {
     binPath,
     // TODO: provide envs inference API
     envs: DEFAULT_ENVS,
   };
+  if (process.platform !== 'win32') {
+    // @ts-expect-error - OXLINT_TSGOLINT_PATH is not defined in DEFAULT_ENVS
+    result.envs.OXLINT_TSGOLINT_PATH = resolve('oxlint-tsgolint/bin/tsgolint.js');
+  }
+  return result;
 }
