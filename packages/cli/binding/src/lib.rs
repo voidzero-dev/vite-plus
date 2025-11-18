@@ -15,6 +15,7 @@
 
 mod cli;
 mod commands;
+mod migration;
 mod package_manager;
 mod utils;
 
@@ -29,7 +30,10 @@ use vite_path::current_dir;
 use vite_task::ResolveCommandResult;
 
 use crate::cli::{Args, CliOptions as ViteTaskCliOptions, Commands};
-pub use crate::package_manager::{detect_workspace, download_package_manager};
+pub use crate::{
+    migration::rewrite_package_json_scripts,
+    package_manager::{detect_workspace, download_package_manager},
+};
 
 /// Module initialization - sets up tracing for debugging
 #[napi_derive::module_init]

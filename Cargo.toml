@@ -69,6 +69,7 @@ vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
 vite_glob = { git = "https://github.com/voidzero-dev/vite-task", rev = "edf07c7eac63aa24fe07ab4ff1039f682e48d6c3" }
 vite_install = { path = "crates/vite_install" }
+vite_migration = { path = "crates/vite_migration" }
 vite_path = { git = "https://github.com/voidzero-dev/vite-task", rev = "edf07c7eac63aa24fe07ab4ff1039f682e48d6c3" }
 vite_str = { git = "https://github.com/voidzero-dev/vite-task", rev = "edf07c7eac63aa24fe07ab4ff1039f682e48d6c3" }
 vite_task = { git = "https://github.com/voidzero-dev/vite-task", rev = "edf07c7eac63aa24fe07ab4ff1039f682e48d6c3" }
@@ -76,6 +77,9 @@ vite_workspace = { git = "https://github.com/voidzero-dev/vite-task", rev = "edf
 wax = "0.6.0"
 which = "8.0.0"
 
+ast-grep-config = "0.40.0"
+ast-grep-core = "0.40.0"
+ast-grep-language = "0.40.0"
 napi = { version = "3.0.0", default-features = false, features = ["async", "error_anyhow"] }
 napi-build = "2"
 napi-derive = { version = "3.0.0", default-features = false, features = ["type-def", "strict"] }

@@ -1,0 +1,118 @@
+# vite => vite dev
+---
+id: replace-vite-alone
+language: bash
+rule:
+  kind: command
+  has:
+    kind: command_name
+    regex: '^vite$'
+  not:
+    has:
+      kind: word
+      field: argument
+fix: vite dev
+
+# vite [OPTIONS] => vite dev [OPTIONS]
+---
+id: replace-vite-with-args
+language: bash
+severity: info
+rule:
+  pattern: vite $$$ARGS
+  not:
+    # ignore non-flag arguments
+    regex: 'vite\s+[^-]'
+fix: vite dev $$$ARGS
+
+# oxlint => vite lint
+---
+id: replace-oxlint-alone
+language: bash
+rule:
+  kind: command
+  has:
+    kind: command_name
+    regex: '^oxlint$'
+  not:
+    has:
+      kind: word
+      field: argument
+fix: vite lint
+
+# oxlint [OPTIONS] => vite lint [OPTIONS]
+---
+id: replace-oxlint-with-args
+language: bash
+rule:
+  pattern: oxlint $$$ARGS
+fix: vite lint $$$ARGS
+
+# oxfmt => vite fmt
+---
+id: replace-oxfmt-alone
+language: bash
+rule:
+  kind: command
+  has:
+    kind: command_name
+    regex: '^oxfmt$'
+  not:
+    has:
+      kind: word
+      field: argument
+fix: vite fmt
+
+# oxfmt [OPTIONS] => vite fmt [OPTIONS]
+---
+id: replace-oxfmt-with-args
+language: bash
+rule:
+  pattern: oxfmt $$$ARGS
+fix: vite fmt $$$ARGS
+
+# vitest => vite test
+---
+id: replace-vitest-alone
+language: bash
+rule:
+  kind: command
+  has:
+    kind: command_name
+    regex: '^vitest$'
+  not:
+    has:
+      kind: word
+      field: argument
+fix: vite test
+
+# vitest [OPTIONS] => vite test [OPTIONS]
+---
+id: replace-vitest-with-args
+language: bash
+rule:
+  pattern: vitest $$$ARGS
+fix: vite test $$$ARGS
+
+# tsdown => vite lib
+---
+id: replace-tsdown-alone
+language: bash
+rule:
+  kind: command
+  has:
+    kind: command_name
+    regex: '^tsdown$'
+  not:
+    has:
+      kind: word
+      field: argument
+fix: vite lib
+
+# tsdown [OPTIONS] => vite lib [OPTIONS]
+---
+id: replace-tsdown-with-args
+language: bash
+rule:
+  pattern: tsdown $$$ARGS
+fix: vite lib $$$ARGS

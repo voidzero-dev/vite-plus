@@ -144,7 +144,7 @@ export async function executeMonorepoTemplate(
   const appPackageName = workspaceInfo.monorepoScope ? `${workspaceInfo.monorepoScope}/website` : 'website';
   setPackageName(path.join(fullPath, appDir), appPackageName);
   // Perform auto-migration on the created app
-  migrateToVitePlus(
+  await migrateToVitePlus(
     appDir,
     fullPath, // The monorepo directory
     true, // Always in monorepo context
@@ -172,7 +172,7 @@ export async function executeMonorepoTemplate(
   const libraryPackageName = workspaceInfo.monorepoScope ? `${workspaceInfo.monorepoScope}/utils` : 'utils';
   setPackageName(path.join(fullPath, libraryDir), libraryPackageName);
   // Perform auto-migration on the created library
-  migrateToVitePlus(
+  await migrateToVitePlus(
     libraryDir,
     fullPath, // The monorepo directory
     true, // Always in monorepo context

@@ -22,6 +22,7 @@ tracing-subscriber = { workspace = true }
 vite_command = { workspace = true }
 vite_error = { workspace = true }
 vite_install = { workspace = true }
+vite_migration = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }
 vite_task = { workspace = true }

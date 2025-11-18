@@ -15,7 +15,8 @@
   "files": [
     "bin",
     "dist",
-    "templates"
+    "templates",
+    "rules"
   ],
   "scripts": {
     "build": "rolldown -c rolldown.config.ts",

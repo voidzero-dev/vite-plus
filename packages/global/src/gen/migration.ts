@@ -4,9 +4,11 @@ import path from 'node:path';
 import * as prompts from '@clack/prompts';
 import colors from 'picocolors';
 
+import { rewritePackageJsonScripts } from '@voidzero-dev/vite-plus/binding';
 import type { WorkspaceInfo } from './types.ts';
-import { editJsonFile, editOrCreateFile, readJsonFile, templatesDir } from './utils.ts';
+import { editJsonFile, editOrCreateFile, pkgRoot, readJsonFile, templatesDir } from './utils.ts';
 
+const rulesDir = path.join(pkgRoot, 'rules');
 const { gray } = colors;
 const viteTools = ['vite', 'vitest', 'oxlint', 'oxfmt', 'tsdown'];
 
@@ -33,9 +35,15 @@ export function detectStandaloneViteTools(projectDir: string, cwd: string): stri
   return detected;
 }
 
+export async function migratePackageJson(jsonFile: string): Promise<boolean> {
+  const rulesYamlPath = path.join(rulesDir, 'package-json-scripts.yml');
+  return await rewritePackageJsonScripts(jsonFile, rulesYamlPath);
+}
+
 // Migrate standalone vite tools to vite-plus
-export function migrateToVitePlus(projectDir: string, cwd: string, isMonorepo: boolean): void {
-  const packageJsonPath = path.join(cwd, projectDir, 'package.json');
+export async function migrateToVitePlus(projectDir: string, cwd: string, isMonorepo: boolean): Promise<void> {
+  const packageJsonFile = path.join(projectDir, 'package.json');
+  const packageJsonPath = path.join(cwd, packageJsonFile);
   editJsonFile(packageJsonPath, (pkg) => {
     // Track where vite was originally located (dependencies or devDependencies)
     const viteInDependencies = !!pkg.dependencies?.['vite'];
@@ -79,31 +87,13 @@ export function migrateToVitePlus(projectDir: string, cwd: string, isMonorepo: b
       });
     }
 
-    // Update scripts if needed
-    // TODO: use ast-grep to update scripts
-    if (pkg.scripts) {
-      // Update common script patterns
-      if (pkg.scripts.dev === 'vite') {
-        pkg.scripts.dev = 'vite dev';
-      }
-      if (pkg.scripts.dev === 'tsdown --watch') {
-        pkg.scripts.dev = 'vite lib --watch';
-      }
-      if (pkg.scripts.build === 'tsdown') {
-        pkg.scripts.build = 'vite lib';
-      }
-      if (pkg.scripts.test === 'vitest' || pkg.scripts.test === 'vitest run') {
-        pkg.scripts.test = 'vite test';
-      }
-      if (pkg.scripts.lint === 'oxlint') {
-        pkg.scripts.lint = 'vite lint';
-      }
-      if (pkg.scripts.format === 'oxfmt') {
-        pkg.scripts.format = 'vite fmt';
-      }
-    }
     return pkg;
   });
+
+  const updated = await migratePackageJson(packageJsonPath);
+  if (updated) {
+    prompts.log.info(`  ${gray('•')} Updated ${packageJsonFile} scripts`);
+  }
 }
 
 // Perform auto-migration with prompts and feedback
@@ -116,7 +106,7 @@ export async function performAutoMigration(
     return; // No migration needed
   }
 
-  migrateToVitePlus(projectDir, workspaceInfo.rootDir, workspaceInfo.isMonorepo);
+  await migrateToVitePlus(projectDir, workspaceInfo.rootDir, workspaceInfo.isMonorepo);
   prompts.log.success(`Migrated to vite-plus ${gray('✓')}`);
   prompts.log.info(`  ${gray('•')} Removed: ${standaloneTools.join(', ')}`);
   prompts.log.info(

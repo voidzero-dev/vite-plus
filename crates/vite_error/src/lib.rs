@@ -126,5 +126,8 @@ pub enum Error {
     CannotFindBinaryPath(Str),
 
     #[error(transparent)]
+    AstGrepConfigError(#[from] ast_grep_config::RuleConfigError),
+
+    #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
 }
