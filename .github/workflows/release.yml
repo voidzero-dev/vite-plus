@@ -5,6 +5,9 @@ on:
 
 permissions: {}
 
+env:
+  RELEASE_BUILD: 'true'
+
 jobs:
   build-rust:
     runs-on: ${{ matrix.settings.os }}

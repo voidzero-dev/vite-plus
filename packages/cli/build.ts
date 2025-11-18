@@ -266,9 +266,13 @@ async function bundleRolldown() {
 
   // Rewrite @rolldown/pluginutils imports
   for (const file of rolldownFiles) {
-    const source = await readFile(file, 'utf-8');
-    if (source.includes('"@rolldown/pluginutils"')) {
-      await writeFile(file, source.replaceAll('"@rolldown/pluginutils"', `"${pkgJson.name}/rolldown/pluginutils"`));
+    if (file.endsWith('.mjs') || file.endsWith('.js')) {
+      const source = await readFile(file, 'utf-8');
+      let newSource = source.replaceAll('"@rolldown/pluginutils"', `"${pkgJson.name}/rolldown/pluginutils"`);
+      if (process.env.RELEASE_BUILD) {
+        newSource = newSource.replaceAll(`__require("../rolldown-binding`, `__require("./rolldown-binding`);
+      }
+      await writeFile(file, newSource);
     }
   }
 }

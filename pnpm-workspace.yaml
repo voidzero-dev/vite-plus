@@ -5,6 +5,7 @@ packages:
   - rolldown/packages/*
   - rolldown-vite
   - rolldown-vite/packages/*
+
 catalog:
   '@babel/core': ^7.24.7
   '@babel/preset-env': ^7.24.7
@@ -14,13 +15,13 @@ catalog:
   '@napi-rs/wasm-runtime': ^1.0.0
   '@oxc-node/cli': ^0.0.34
   '@oxc-node/core': ^0.0.34
-  '@oxc-project/runtime': =0.97.0
-  '@oxc-project/types': =0.97.0
+  '@oxc-project/runtime': '=0.98.0'
+  '@oxc-project/types': '=0.98.0'
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
   '@rollup/plugin-node-resolve': ^16.0.0
-  '@std/yaml': 'npm:@jsr/std__yaml@^1.0.10'
+  '@std/yaml': npm:@jsr/std__yaml@^1.0.10
   '@types/babel__core': 7.20.5
   '@types/connect': ^3.4.38
   '@types/cross-spawn': ^6.0.6
@@ -69,12 +70,12 @@ catalog:
   mocha: ^11.0.0
   mri: ^1.2.0
   next: ^15.4.3
-  oxc-minify: ^0.97.0
-  oxc-parser: =0.97.0
-  oxc-transform: =0.97.0
-  oxfmt: ^0.9.0
-  oxlint: ^1.28.0
-  oxlint-tsgolint: ^0.7.0
+  oxc-minify: ^0.98.0
+  oxc-parser: '=0.98.0'
+  oxc-transform: '=0.98.0'
+  oxfmt: ^0.14.0
+  oxlint: ^1.29.0
+  oxlint-tsgolint: ^0.7.1
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -109,15 +110,26 @@ catalog:
   web-tree-sitter: ^0.25.0
   ws: ^8.18.1
   zx: ^8.1.2
+
 catalogMode: prefer
+
 ignoreScripts: true
+
 minimumReleaseAge: 1440
+
 minimumReleaseAgeExclude:
   - '@napi-rs/*'
   - '@oxc-project/*'
   - '@rolldown/*'
   - '@vitest/*'
   - '@types/*'
+  - '@oxlint/*'
+  - '@oxc-minify/*'
+  - '@oxc-parser/*'
+  - '@oxc-resolver/*'
+  - '@oxc-transform/*'
+  - '@oxfmt/*'
+  - '@oxlint-tsgolint/*'
   - create-vite
   - oxc-minify
   - oxc-parser
@@ -131,12 +143,14 @@ minimumReleaseAgeExclude:
   - vite
   - vitepress
   - vitest
+
 overrides:
-  rolldown: 'workspace:rolldown@*'
-  vite: 'workspace:@voidzero-dev/vite-plus@*'
-  vitest: 'workspace:@voidzero-dev/vite-plus@*'
-  rolldown-vite: 'workspace:@voidzero-dev/vite-plus@*'
-  vitest-dev: 'npm:vitest@*'
+  rolldown: workspace:rolldown@*
+  rolldown-vite: workspace:@voidzero-dev/vite-plus@*
+  vite: workspace:@voidzero-dev/vite-plus@*
+  vitest: workspace:@voidzero-dev/vite-plus@*
+  vitest-dev: npm:vitest@*
+
 packageExtensions:
   sass-embedded:
     peerDependencies:
@@ -144,15 +158,19 @@ packageExtensions:
     peerDependenciesMeta:
       source-map-js:
         optional: true
+
 patchedDependencies:
-  sirv@3.0.2: rolldown-vite/patches/sirv@3.0.2.patch
   chokidar@3.6.0: rolldown-vite/patches/chokidar@3.6.0.patch
   dotenv-expand@12.0.3: rolldown-vite/patches/dotenv-expand@12.0.3.patch
+  sirv@3.0.2: rolldown-vite/patches/sirv@3.0.2.patch
+
 peerDependencyRules:
-  allowedVersions:
-    rolldown: '*'
-    vite: '*'
   allowAny:
     - vite
     - vitest
     - rolldown
+  allowedVersions:
+    rolldown: '*'
+    vite: '*'
+    oxc-minify: '*'
+    oxlint-tsgolint: '*'
