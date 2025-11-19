@@ -1,5 +1,5 @@
 {
   "scripts": {
-    "read_colon_in_name": "node -e 'try { fs.readFileSync(\\\"node:fs\\\") } catch {}'"
+    "read_colon_in_name": "node -e 'try { fs.readFileSync(process.argv[1]) } catch {}' 'node:fs'"
   }
 }
