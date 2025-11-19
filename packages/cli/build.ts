@@ -1,4 +1,4 @@
-import { copyFile, cp, mkdir, readFile, stat, writeFile, glob as fsGlob } from 'node:fs/promises';
+import { copyFile, cp, glob as fsGlob, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join, parse, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
