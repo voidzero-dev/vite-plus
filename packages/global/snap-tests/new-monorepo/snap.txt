@@ -57,7 +57,6 @@ qwik-ts        qwik
 README.md
 apps
 package.json
-packages
 pnpm-workspace.yaml
 tsconfig.json
 vite.config.ts
@@ -115,8 +114,6 @@ vite.config.ts
 .
 ..
 my-app
-next
-spa
 website
 
 > cd hello-vite-plus && vp new --lib packages/my-lib --template react # add lib
@@ -145,7 +142,6 @@ website
 > cd hello-vite-plus && ls -a packages && cat packages/my-lib/package.json # check package.json
 .
 ..
-logger
 my-lib
 {
   "name": "my-lib",
