@@ -5,7 +5,6 @@ packages:
   - rolldown/packages/*
   - rolldown-vite
   - rolldown-vite/packages/*
-
 catalog:
   '@babel/core': ^7.24.7
   '@babel/preset-env': ^7.24.7
@@ -15,20 +14,20 @@ catalog:
   '@napi-rs/wasm-runtime': ^1.0.0
   '@oxc-node/cli': ^0.0.34
   '@oxc-node/core': ^0.0.34
-  '@oxc-project/runtime': '=0.98.0'
-  '@oxc-project/types': '=0.98.0'
+  '@oxc-project/runtime': =0.98.0
+  '@oxc-project/types': =0.98.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
   '@rollup/plugin-node-resolve': ^16.0.0
-  '@std/yaml': npm:@jsr/std__yaml@^1.0.10
+  '@std/yaml': 'npm:@jsr/std__yaml@^1.0.10'
   '@types/babel__core': 7.20.5
   '@types/connect': ^3.4.38
   '@types/cross-spawn': ^6.0.6
   '@types/fs-extra': ^11.0.4
   '@types/lodash-es': ^4.17.12
   '@types/mocha': 10.0.10
-  '@types/node': 24.10.0
+  '@types/node': 24.10.1
   '@types/picomatch': ^4.0.0
   '@types/react': ^19.1.8
   '@types/react-dom': ^19.1.6
@@ -61,7 +60,7 @@ catalog:
   fixturify: ^3.0.0
   follow-redirects: ^1.15.6
   fs-extra: ^11.2.0
-  glob: ^11.0.0
+  glob: ^12.0.0
   husky: ^9.1.7
   lint-staged: ^16.2.6
   lodash-es: ^4.17.21
@@ -70,9 +69,9 @@ catalog:
   mocha: ^11.0.0
   mri: ^1.2.0
   next: ^15.4.3
-  oxc-minify: ^0.98.0
-  oxc-parser: '=0.98.0'
-  oxc-transform: '=0.98.0'
+  oxc-minify: =0.97.0
+  oxc-parser: =0.98.0
+  oxc-transform: =0.98.0
   oxfmt: ^0.14.0
   oxlint: ^1.29.0
   oxlint-tsgolint: ^0.7.1
@@ -85,7 +84,7 @@ catalog:
   remark-parse: ^11.0.0
   remeda: ^2.10.0
   rolldown: ^1.0.0-beta.45
-  rolldown-plugin-dts: ^0.17.0
+  rolldown-plugin-dts: ^0.18.0
   rolldown-vite: ^7.1.19
   rollup: ^4.18.0
   semver: ^7.7.3
@@ -97,7 +96,7 @@ catalog:
   terser: ^5.31.1
   tinybench: ^5.0.0
   tinyexec: ^1.0.1
-  tsdown: 0.16.0
+  tsdown: 0.16.5
   tsx: ^4.20.6
   typescript: ^5.9.3
   unified: ^11.0.5
@@ -110,13 +109,9 @@ catalog:
   web-tree-sitter: ^0.25.0
   ws: ^8.18.1
   zx: ^8.1.2
-
 catalogMode: prefer
-
 ignoreScripts: true
-
 minimumReleaseAge: 1440
-
 minimumReleaseAgeExclude:
   - '@napi-rs/*'
   - '@oxc-project/*'
@@ -138,18 +133,17 @@ minimumReleaseAgeExclude:
   - oxlint
   - oxlint-tsgolint
   - rolldown
+  - rolldown-plugin-dts
   - rolldown-vite
   - tsdown
   - vite
   - vitepress
   - vitest
-
 overrides:
-  rolldown: workspace:rolldown@*
-  vite: workspace:@voidzero-dev/vite-plus@*
-  vitest: workspace:@voidzero-dev/vite-plus@*
-  vitest-dev: npm:vitest@*
-
+  rolldown: 'workspace:rolldown@*'
+  vite: 'workspace:@voidzero-dev/vite-plus@*'
+  vitest: 'workspace:@voidzero-dev/vite-plus@*'
+  vitest-dev: 'npm:vitest@*'
 packageExtensions:
   sass-embedded:
     peerDependencies:
@@ -157,12 +151,10 @@ packageExtensions:
     peerDependenciesMeta:
       source-map-js:
         optional: true
-
 patchedDependencies:
+  sirv@3.0.2: rolldown-vite/patches/sirv@3.0.2.patch
   chokidar@3.6.0: rolldown-vite/patches/chokidar@3.6.0.patch
   dotenv-expand@12.0.3: rolldown-vite/patches/dotenv-expand@12.0.3.patch
-  sirv@3.0.2: rolldown-vite/patches/sirv@3.0.2.patch
-
 peerDependencyRules:
   allowAny:
     - vite
