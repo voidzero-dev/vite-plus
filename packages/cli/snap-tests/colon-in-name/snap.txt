@@ -1,0 +1,33 @@
+> vite run read_colon_in_name
+$ node -e 'try { fs.readFileSync("node:fs") } catch {}'
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] read_colon_in_name: $ node -e 'try { fs.readFileSync("node:fs") } catch {}' ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> vite run read_colon_in_name
+$ node -e 'try { fs.readFileSync("node:fs") } catch {}' (✓ cache hit, replaying)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate, <variable>ms saved in total
+
+Task Details:
+────────────────────────────────────────────────
+  [1] read_colon_in_name: $ node -e 'try { fs.readFileSync("node:fs") } catch {}' ✓
+      → Cache hit - output replayed - <variable>ms saved
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
