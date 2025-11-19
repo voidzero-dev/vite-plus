@@ -47,7 +47,7 @@ export async function lint(): Promise<{
       ...DEFAULT_ENVS,
       OXLINT_TSGOLINT_PATH: process.platform !== 'win32'
         ? oxlintTsgolintPath
-        : relative(process.cwd(), oxlintTsgolintPath),
+        : `.\\${relative(process.cwd(), oxlintTsgolintPath)}`,
     },
   };
   return result;
