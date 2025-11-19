@@ -1,5 +1,5 @@
 > vp run read_colon_in_name
-$ node -e 'try { fs.readFileSync(process.argv[1]) } catch {}' 'node:fs'
+$ node read_node_fs.js
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -11,12 +11,12 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] read_colon_in_name: $ node -e 'try { fs.readFileSync(process.argv[1]) } catch {}' 'node:fs' ✓
+  [1] read_colon_in_name: $ node read_node_fs.js ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vp run read_colon_in_name
-$ node -e 'try { fs.readFileSync(process.argv[1]) } catch {}' 'node:fs' (✓ cache hit, replaying)
+$ node read_node_fs.js (✓ cache hit, replaying)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -28,6 +28,6 @@ Performance:  100% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] read_colon_in_name: $ node -e 'try { fs.readFileSync(process.argv[1]) } catch {}' 'node:fs' ✓
+  [1] read_colon_in_name: $ node read_node_fs.js ✓
       → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
