@@ -432,6 +432,7 @@ function mergePackageExports(
   const cliOwnExports = new Set([
     '.',
     './bin',
+    './binding',
     './test',
     './client',
     './vite',

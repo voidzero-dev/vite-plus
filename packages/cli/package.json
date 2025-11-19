@@ -11,12 +11,12 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./bin": {
+      "import": "./dist/bin.js"
+    },
     "./binding": {
       "import": "./dist/binding.js",
       "types": "./dist/binding.d.ts"
-    },
-    "./bin": {
-      "import": "./dist/bin.js"
     },
     "./browser": {
       "types": "./dist/vitest/browser/context.d.ts",

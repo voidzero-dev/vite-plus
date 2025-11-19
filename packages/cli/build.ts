@@ -46,7 +46,7 @@ async function buildNapiBinding() {
 
 async function buildCli() {
   await build({
-    input: ['./src/bin.ts', './src/index.ts', './src/config.ts', './src/binding.ts'],
+    input: ['./src/bin.ts', './src/index.ts', './src/config.ts'],
     external: [/^node:/, 'vitest-dev', './vitest/dist/config.js', './vitest/dist/index.js'],
     plugins: [
       {
@@ -89,6 +89,8 @@ async function buildCli() {
   });
 
   await cp(join(rolldownViteSourceDir, 'client.d.ts'), join(projectDir, 'dist', 'vite', 'client.d.ts'));
+  await cp(join(projectDir, 'binding', 'index.d.ts'), join(projectDir, 'dist', 'binding.d.ts'));
+  await cp(join(projectDir, 'binding', 'index.js'), join(projectDir, 'dist', 'binding.js'));
 }
 
 async function buildVite() {

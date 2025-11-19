@@ -13,7 +13,7 @@ export default defineConfig({
       './rolldown/**',
       './rolldown-vite/**',
       // FIXME: Error: failed to prepare the command for injection: Invalid argument (os error 22)
-      'packages/cli/src/__tests__/',
+      'packages/cli/binding/__tests__/',
     ],
   },
 });

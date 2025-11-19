@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { expect, test } from 'vitest';
 
-import { runCommand } from '../binding.js';
+import { runCommand } from '../index.js';
 
 test('should run command successfully', async () => {
   const result = await runCommand({
