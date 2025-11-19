@@ -11,6 +11,9 @@
  * provides ESLint-compatible linting with significantly better performance.
  */
 
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { DEFAULT_ENVS, resolve } from './utils.js';
 
 /**
@@ -33,11 +36,16 @@ export async function lint(): Promise<{
   const result = {
     binPath,
     // TODO: provide envs inference API
-    envs: DEFAULT_ENVS,
+    envs: {
+      ...DEFAULT_ENVS,
+      OXLINT_TSGOLINT_PATH: join(
+        dirname(fileURLToPath(import.meta.url)),
+        '..',
+        'node_modules',
+        '.bin',
+        `tsgolint${process.platform === 'win32' ? '.cmd' : ''}`,
+      ),
+    },
   };
-  if (process.platform !== 'win32') {
-    // @ts-expect-error - OXLINT_TSGOLINT_PATH is not defined in DEFAULT_ENVS
-    result.envs.OXLINT_TSGOLINT_PATH = resolve('oxlint-tsgolint/bin/tsgolint.js');
-  }
   return result;
 }
