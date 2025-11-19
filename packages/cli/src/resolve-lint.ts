@@ -12,6 +12,7 @@
  */
 
 import { dirname, join } from 'node:path';
+import { relative } from 'node:path/win32';
 import { fileURLToPath } from 'node:url';
 
 import { DEFAULT_ENVS, resolve } from './utils.js';
@@ -32,19 +33,21 @@ export async function lint(): Promise<{
 }> {
   // Resolve the oxlint binary directly (it's a native executable)
   const binPath = resolve('oxlint/bin/oxlint');
-
+  const oxlintTsgolintPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'node_modules',
+    '.bin',
+    `tsgolint${process.platform === 'win32' ? '.cmd' : ''}`,
+  );
   const result = {
     binPath,
     // TODO: provide envs inference API
     envs: {
       ...DEFAULT_ENVS,
-      OXLINT_TSGOLINT_PATH: join(
-        dirname(fileURLToPath(import.meta.url)),
-        '..',
-        'node_modules',
-        '.bin',
-        `tsgolint${process.platform === 'win32' ? '.cmd' : ''}`,
-      ),
+      OXLINT_TSGOLINT_PATH: process.platform !== 'win32'
+        ? oxlintTsgolintPath
+        : relative(process.cwd(), oxlintTsgolintPath),
     },
   };
   return result;
