@@ -1,4 +1,4 @@
-import { copyFile, cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readFile, stat, writeFile, glob as fsGlob } from 'node:fs/promises';
 import { join, parse, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -370,15 +370,14 @@ async function bundleVitest() {
   await mkdir(vitestDestDir, { recursive: true });
 
   // Get all vitest files excluding node_modules and package.json
-  const vitestFiles = await glob(join(vitestSourceDir, '**/*'), {
-    absolute: true,
-    ignore: [
+  const vitestFiles = fsGlob(join(vitestSourceDir, '**/*'), {
+    exclude: [
       join(vitestSourceDir, 'node_modules/**'),
       join(vitestSourceDir, 'package.json'),
     ],
   });
 
-  for (const file of vitestFiles) {
+  for await (const file of vitestFiles) {
     const stats = await stat(file);
     if (!stats.isFile()) continue;
 
