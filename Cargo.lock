@@ -4391,7 +4391,6 @@ dependencies = [
  "ast-grep-core",
  "ast-grep-language",
  "serde_json",
- "tokio",
  "vite_error",
 ]
 

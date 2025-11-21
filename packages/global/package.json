@@ -36,11 +36,14 @@
     "@types/cross-spawn": "catalog:",
     "@types/validate-npm-package-name": "catalog:",
     "@voidzero-dev/vite-plus-tools": "workspace:",
+    "detect-indent": "catalog:",
+    "detect-newline": "catalog:",
     "glob": "catalog:",
     "minimatch": "catalog:",
     "mri": "catalog:",
     "picocolors": "catalog:",
-    "rolldown": "workspace:*"
+    "rolldown": "workspace:*",
+    "yaml": "catalog:"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

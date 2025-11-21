@@ -21,21 +21,10 @@ vite.config.ts
   "engines": {
     "node": ">=22.12.0"
   },
+  "packageManager": "pnpm@<semver>",
   "devDependencies": {
-    "vite-plus": "catalog:"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "catalog:",
-      "vitest": "catalog:"
-    },
-    "peerDependencyRules": {
-      "allowAny": [
-        "vite"
-      ]
-    }
-  },
-  "packageManager": "pnpm@<semver>"
+    "@voidzero-dev/vite-plus": "catalog:"
+  }
 }
 
 > cat vite-plus-monorepo/pnpm-workspace.yaml # check workspace config
@@ -44,14 +33,24 @@ packages:
   - packages/*
   - tools/*
 
+catalogMode: prefer
+
 catalog:
   '@types/node': ^24
-  vite-plus: npm:@voidzero-dev/vite-plus@latest
-  vite: npm:@voidzero-dev/vite-plus@latest
-  vitest: npm:@voidzero-dev/vite-plus@latest
   typescript: ^5
-
-catalogMode: prefer
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  '@voidzero-dev/vite-plus': latest
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'
 
 > cat vite-plus-monorepo/.npmrc # check .npmrc
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
@@ -107,8 +106,7 @@ vite-plus-generator
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "typescript": "catalog:",
-    "vite-plus": "catalog:"
+    "typescript": "catalog:"
   }
 }
 
@@ -135,19 +133,8 @@ vite.config.ts
   "engines": {
     "node": ">=22.12.0"
   },
+  "packageManager": "pnpm@<semver>",
   "devDependencies": {
-    "vite-plus": "catalog:"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "catalog:",
-      "vitest": "catalog:"
-    },
-    "peerDependencyRules": {
-      "allowAny": [
-        "vite"
-      ]
-    }
-  },
-  "packageManager": "pnpm@<semver>"
+    "@voidzero-dev/vite-plus": "catalog:"
+  }
 }

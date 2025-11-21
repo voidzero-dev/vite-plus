@@ -93,26 +93,3 @@ language: bash
 rule:
   pattern: vitest $$$ARGS
 fix: vite test $$$ARGS
-
-# tsdown => vite lib
----
-id: replace-tsdown-alone
-language: bash
-rule:
-  kind: command
-  has:
-    kind: command_name
-    regex: '^tsdown$'
-  not:
-    has:
-      kind: word
-      field: argument
-fix: vite lib
-
-# tsdown [OPTIONS] => vite lib [OPTIONS]
----
-id: replace-tsdown-with-args
-language: bash
-rule:
-  pattern: tsdown $$$ARGS
-fix: vite lib $$$ARGS

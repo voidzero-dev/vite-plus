@@ -1,0 +1,28 @@
+> vp migration # migration work with lintstagedrc.json
+> cat .lintstagedrc.json # check lintstagedrc.json
+{
+  "*.js": "vite lint --fix"
+}
+
+> cat package.json # check package.json
+{
+  "name": "migration-lintstagedrc",
+  "lint-staged": {
+    "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
+      "vite fmt --staged",
+      "eslint --fix"
+    ],
+    "*.@(js|ts|tsx)": [
+      "vite lint --fix"
+    ]
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "devDependencies": {
+    "@voidzero-dev/vite-plus": "latest"
+  }
+}

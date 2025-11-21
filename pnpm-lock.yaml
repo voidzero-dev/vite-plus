@@ -105,6 +105,12 @@ catalogs:
     cross-spawn:
       specifier: ^7.0.5
       version: 7.0.6
+    detect-indent:
+      specifier: ^7.0.2
+      version: 7.0.2
+    detect-newline:
+      specifier: ^4.0.1
+      version: 4.0.1
     esbuild:
       specifier: ^0.27.0
       version: 0.27.0
@@ -228,6 +234,9 @@ catalogs:
     ws:
       specifier: ^8.18.1
       version: 8.18.3
+    yaml:
+      specifier: ^2.8.1
+      version: 2.8.1
 
 overrides:
   rolldown: workspace:rolldown@*
@@ -485,6 +494,12 @@ importers:
       '@voidzero-dev/vite-plus-tools':
         specifier: 'workspace:'
         version: link:../tools
+      detect-indent:
+        specifier: 'catalog:'
+        version: 7.0.2
+      detect-newline:
+        specifier: 'catalog:'
+        version: 4.0.1
       glob:
         specifier: 'catalog:'
         version: 13.0.0
@@ -500,6 +515,9 @@ importers:
       rolldown:
         specifier: workspace:rolldown@*
         version: link:../../rolldown/packages/rolldown
+      yaml:
+        specifier: 'catalog:'
+        version: 2.8.1
 
   packages/test:
     dependencies:
@@ -5220,6 +5238,10 @@ packages:
   destr@2.0.5:
     resolution: {integrity: sha512-ugFTXCtDZunbzasqBxrK93Ik/DRYsO6S/fedkWEMKqt04xZ4csmnmwGDBAb07QWNaGMAmnTIemsYZCksjATwsA==}
 
+  detect-indent@7.0.2:
+    resolution: {integrity: sha512-y+8xyqdGLL+6sh0tVeHcfP/QDd8gUgbasolJJpY7NgeQGSZ739bDtSiaiDgtoicy+mtYB81dKLxO9xRhCyIB3A==}
+    engines: {node: '>=12.20'}
+
   detect-libc@1.0.3:
     resolution: {integrity: sha512-pGjwhsmsp4kL2RTz08wcOlGN83otlqHeD/Z5T8GXZB+/YcpQ/dgo+lbU8ZsGxV0HIvqqxo9l7mqYwyYMD9bKDg==}
     engines: {node: '>=0.10'}
@@ -5228,6 +5250,10 @@ packages:
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
+
+  detect-newline@4.0.1:
+    resolution: {integrity: sha512-qE3Veg1YXzGHQhlA6jzebZN2qVf6NX+A7m7qlhCGG30dJixrAQhYOsJjsnBjJkCSmuOPpCk30145fr8FV0bzog==}
+    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
@@ -11855,10 +11881,14 @@ snapshots:
 
   destr@2.0.5: {}
 
+  detect-indent@7.0.2: {}
+
   detect-libc@1.0.3:
     optional: true
 
   detect-libc@2.1.2: {}
+
+  detect-newline@4.0.1: {}
 
   devlop@1.1.0:
     dependencies:

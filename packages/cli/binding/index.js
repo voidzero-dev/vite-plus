@@ -744,10 +744,9 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`);
 }
 
-const { detectWorkspace, downloadPackageManager, rewritePackageJsonScripts, run, runCommand } =
-  nativeBinding;
+const { detectWorkspace, downloadPackageManager, rewriteScripts, run, runCommand } = nativeBinding;
 export { detectWorkspace };
 export { downloadPackageManager };
-export { rewritePackageJsonScripts };
+export { rewriteScripts };
 export { run };
 export { runCommand };

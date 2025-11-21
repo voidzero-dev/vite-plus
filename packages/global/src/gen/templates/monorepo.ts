@@ -5,14 +5,10 @@ import path from 'node:path';
 import * as prompts from '@clack/prompts';
 import spawn from 'cross-spawn';
 
+import { rewriteMonorepoProject } from '../../migration/migrator.ts';
+import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
+import type { ExecutionResult } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
-import { migrateToVitePlus } from '../migration.ts';
-import {
-  type BuiltinTemplateInfo,
-  type ExecutionResult,
-  PackageManager,
-  type WorkspaceInfo,
-} from '../types.ts';
 import {
   copyDir,
   editJsonFile,
@@ -23,6 +19,7 @@ import {
   templatesDir,
 } from '../utils.ts';
 import { runRemoteTemplateCommand } from './remote.ts';
+import { type BuiltinTemplateInfo } from './types.ts';
 
 // Execute vite:monorepo - copy from templates/monorepo
 export async function executeMonorepoTemplate(
@@ -143,13 +140,10 @@ export async function executeMonorepoTemplate(
   const appPackageName = workspaceInfo.monorepoScope
     ? `${workspaceInfo.monorepoScope}/website`
     : 'website';
-  setPackageName(path.join(fullPath, appDir), appPackageName);
+  const appProjectPath = path.join(fullPath, appDir);
+  setPackageName(appProjectPath, appPackageName);
   // Perform auto-migration on the created app
-  await migrateToVitePlus(
-    appDir,
-    fullPath, // The monorepo directory
-    true, // Always in monorepo context
-  );
+  rewriteMonorepoProject(appProjectPath, workspaceInfo.packageManager);
 
   // Automatically create a default library in packages/utils
   prompts.log.step('Creating default library in packages/utils...');
@@ -172,13 +166,10 @@ export async function executeMonorepoTemplate(
   const libraryPackageName = workspaceInfo.monorepoScope
     ? `${workspaceInfo.monorepoScope}/utils`
     : 'utils';
-  setPackageName(path.join(fullPath, libraryDir), libraryPackageName);
+  const libraryProjectPath = path.join(fullPath, libraryDir);
+  setPackageName(libraryProjectPath, libraryPackageName);
   // Perform auto-migration on the created library
-  await migrateToVitePlus(
-    libraryDir,
-    fullPath, // The monorepo directory
-    true, // Always in monorepo context
-  );
+  rewriteMonorepoProject(libraryProjectPath, workspaceInfo.packageManager);
 
   return { exitCode: 0, projectDir: templateInfo.targetDir };
 }

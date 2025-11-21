@@ -1,15 +1,11 @@
-use std::path::Path;
-
 use ast_grep_config::{GlobalRules, RuleConfig, from_yaml_string};
 use ast_grep_core::replacer::Replacer;
 use ast_grep_language::{LanguageExt, SupportLang};
-use serde_json::Value;
-use tokio::fs;
+use serde_json::{Map, Value};
 use vite_error::Error;
 
 /// load script rules from yaml file
-async fn load_ast_grep_rules(yaml_path: &Path) -> Result<Vec<RuleConfig<SupportLang>>, Error> {
-    let yaml = fs::read_to_string(yaml_path).await?;
+fn load_ast_grep_rules(yaml: &str) -> Result<Vec<RuleConfig<SupportLang>>, Error> {
     let globals = GlobalRules::default();
     let rules: Vec<RuleConfig<SupportLang>> = from_yaml_string::<SupportLang>(&yaml, &globals)?;
     Ok(rules)
@@ -59,46 +55,55 @@ fn rewrite_script(script: &str, rules: &[RuleConfig<SupportLang>]) -> String {
     current
 }
 
-/// rewrite scripts in package.json using rules from rules_yaml_path
-pub async fn rewrite_package_json_scripts(
-    package_json_path: &Path,
-    rules_yaml_path: &Path,
-) -> Result<bool, Error> {
-    let content = fs::read_to_string(package_json_path).await?;
-    let mut json: Value = serde_json::from_str(&content)?;
-    let rules = load_ast_grep_rules(rules_yaml_path).await?;
+/// rewrite scripts json content using rules from rules_yaml
+pub fn rewrite_scripts(scripts_json: &str, rules_yaml: &str) -> Result<Option<String>, Error> {
+    let mut scripts: Map<String, Value> = serde_json::from_str(scripts_json)?;
+    let rules = load_ast_grep_rules(rules_yaml)?;
 
     let mut updated = false;
     // get scripts field (object)
-    if let Some(scripts) = json.get_mut("scripts").and_then(Value::as_object_mut) {
-        let keys: Vec<String> = scripts.keys().cloned().collect();
-        for key in keys {
-            if let Some(Value::String(script)) = scripts.get(&key) {
-                let new_script = rewrite_script(script, &rules);
-                if new_script != *script {
+    // let keys: Vec<String> = scripts.keys().cloned().collect();
+    for value in scripts.values_mut() {
+        if value.is_array() {
+            // lint-staged scripts can be an array of strings
+            // https://github.com/lint-staged/lint-staged?tab=readme-ov-file#packagejson-example
+            if let Some(sub_scripts) = value.as_array_mut() {
+                for sub_script in sub_scripts.iter_mut() {
+                    if sub_script.is_string()
+                        && let Some(raw_script) = sub_script.as_str()
+                    {
+                        let new_script = rewrite_script(raw_script, &rules);
+                        if new_script != raw_script {
+                            updated = true;
+                            *sub_script = Value::String(new_script);
+                        }
+                    }
+                }
+            }
+        } else if value.is_string() {
+            if let Some(raw_script) = value.as_str() {
+                let new_script = rewrite_script(raw_script, &rules);
+                if new_script != raw_script {
                     updated = true;
-                    scripts.insert(key.clone(), Value::String(new_script));
+                    *value = Value::String(new_script);
                 }
             }
         }
     }
 
     if updated {
-        // write back to file
-        let new_content = serde_json::to_string_pretty(&json)?;
-        fs::write(package_json_path, new_content).await?;
+        let new_content = serde_json::to_string_pretty(&scripts)?;
+        Ok(Some(new_content))
+    } else {
+        Ok(None)
     }
-
-    Ok(updated)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_rewrite_script() {
-        let yaml = r#"
+    const RULES_YAML: &str = r#"
 # vite => vite dev
 ---
 id: replace-vite-alone
@@ -148,10 +153,13 @@ language: bash
 rule:
   pattern: oxlint $$$ARGS
 fix: vite lint $$$ARGS
-"#;
+    "#;
+
+    #[test]
+    fn test_rewrite_script() {
         let globals = GlobalRules::default();
         let rules: Vec<RuleConfig<SupportLang>> =
-            from_yaml_string::<SupportLang>(&yaml, &globals).unwrap();
+            from_yaml_string::<SupportLang>(&RULES_YAML, &globals).unwrap();
         // vite commands
         assert_eq!(rewrite_script("vite", &rules), "vite dev");
         assert_eq!(rewrite_script("vite dev", &rules), "vite dev");
@@ -229,5 +237,64 @@ fix: vite lint $$$ARGS
             rewrite_script("npm run type-check && oxlint --type-aware", &rules),
             "npm run type-check && vite lint --type-aware"
         );
+    }
+
+    #[test]
+    fn test_rewrite_package_json_scripts_success() {
+        let package_json_scripts = r#"
+{
+    "dev": "vite"
+}
+        "#;
+        let updated = rewrite_scripts(package_json_scripts, &RULES_YAML)
+            .expect("failed to rewrite package.json scripts");
+        assert!(updated.is_some());
+        assert_eq!(
+            updated.unwrap(),
+            r#"
+{
+  "dev": "vite dev"
+}
+        "#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_rewrite_package_json_scripts_lint_staged() {
+        let package_json_scripts = r#"
+        {
+            "*.js": ["oxlint --fix --type-aware", "oxfmt --fix"],
+            "*.ts": "oxfmt --fix"
+        }
+        "#;
+        let updated = rewrite_scripts(package_json_scripts, &RULES_YAML)
+            .expect("failed to rewrite package.json scripts");
+        assert!(updated.is_some());
+        assert_eq!(
+            updated.unwrap(),
+            r#"
+{
+  "*.js": [
+    "vite lint --fix --type-aware",
+    "oxfmt --fix"
+  ],
+  "*.ts": "oxfmt --fix"
+}
+        "#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_rewrite_package_json_scripts_no_update() {
+        let package_json_scripts = r#"
+        {
+            "foo": "bar"
+        }
+        "#;
+        let updated = rewrite_scripts(package_json_scripts, &RULES_YAML)
+            .expect("failed to rewrite package.json scripts");
+        assert!(updated.is_none());
     }
 }

@@ -3,11 +3,8 @@ packages:
   - packages/*
   - tools/*
 
+catalogMode: prefer
+
 catalog:
   '@types/node': ^24
-  vite-plus: npm:@voidzero-dev/vite-plus@latest
-  vite: npm:@voidzero-dev/vite-plus@latest
-  vitest: npm:@voidzero-dev/vite-plus@latest
   typescript: ^5
-
-catalogMode: prefer

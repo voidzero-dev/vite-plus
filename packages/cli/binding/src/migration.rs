@@ -1,35 +1,26 @@
-use std::path::PathBuf;
-
 use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
 
-/// Rewrite package.json scripts using rules from rules_yaml_path
+/// Rewrite scripts json content using rules from rules_yaml
 ///
 /// # Arguments
 ///
-/// * `package_json_path` - The path to the package.json file
-/// * `rules_yaml_path` - The path to the ast-grep rules.yaml file
+/// * `scripts_json` - The scripts section of the package.json file as a JSON string
+/// * `rules_yaml` - The ast-grep rules.yaml as a YAML string
 ///
 /// # Returns
 ///
-/// * `updated` - Whether the package.json scripts were updated
+/// * `updated` - The updated scripts section of the package.json file as a JSON string, or `null` if no updates were made
 ///
 /// # Example
 ///
 /// ```javascript
-/// const updated = await rewritePackageJsonScripts("package.json", "rules.yaml");
+/// const updated = rewriteScripts("scripts section json content here", "ast-grep rules yaml content here");
 /// console.log(`Updated: ${updated}`);
 /// ```
 #[napi]
-pub async fn rewrite_package_json_scripts(
-    package_json_path: String,
-    rules_yaml_path: String,
-) -> Result<bool> {
-    let package_json_path = PathBuf::from(&package_json_path);
-    let rules_yaml_path = PathBuf::from(&rules_yaml_path);
+pub fn rewrite_scripts(scripts_json: String, rules_yaml: String) -> Result<Option<String>> {
     let updated =
-        vite_migration::rewrite_package_json_scripts(&package_json_path, &rules_yaml_path)
-            .await
-            .map_err(anyhow::Error::from)?;
+        vite_migration::rewrite_scripts(&scripts_json, &rules_yaml).map_err(anyhow::Error::from)?;
     Ok(updated)
 }

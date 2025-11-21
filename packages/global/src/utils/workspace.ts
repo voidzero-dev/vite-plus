@@ -4,6 +4,7 @@ import path from 'node:path';
 import { detectWorkspace as detectWorkspaceBinding } from '@voidzero-dev/vite-plus/binding';
 import { globSync } from 'glob';
 import { minimatch } from 'minimatch';
+import { Scalar, YAMLSeq } from 'yaml';
 
 import {
   DependencyType,
@@ -11,9 +12,10 @@ import {
   type WorkspaceInfo,
   type WorkspaceInfoOptional,
   type WorkspacePackage,
-} from './types.ts';
-import { getScopeFromPackageName } from './utils.ts';
-import { editJsonFile, editOrCreateYamlFile, readJsonFile, readYamlFile } from './utils.ts';
+} from '../types/index.ts';
+import { editJsonFile, readJsonFile } from './json.ts';
+import { getScopeFromPackageName } from './package.ts';
+import { editYamlFile, readYamlFile } from './yaml.ts';
 
 export function findPackageJsonFilesFromPatterns(patterns: string[], cwd: string): string[] {
   if (patterns.length === 0) {
@@ -180,13 +182,14 @@ export function updateWorkspaceConfig(projectPath: string, workspaceInfo: Worksp
   }
 
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
-    editOrCreateYamlFile<{ packages?: string[] }>(
-      path.join(workspaceInfo.rootDir, 'pnpm-workspace.yaml'),
-      (workspaceConfig) => {
-        workspaceConfig.packages = [...(workspaceConfig.packages || []), pattern];
-        return workspaceConfig;
-      },
-    );
+    editYamlFile(path.join(workspaceInfo.rootDir, 'pnpm-workspace.yaml'), (doc) => {
+      let packages = doc.getIn(['packages']) as YAMLSeq<Scalar<string>>;
+      if (!packages) {
+        packages = new YAMLSeq<Scalar<string>>();
+      }
+      packages.add(new Scalar(pattern));
+      doc.setIn(['packages'], packages);
+    });
   } else {
     // Update package.json workspaces
     editJsonFile<{ workspaces?: string[] }>(

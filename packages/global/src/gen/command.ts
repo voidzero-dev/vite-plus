@@ -4,7 +4,12 @@ import path from 'node:path';
 import { runCommand as runCommandWithFspy } from '@voidzero-dev/vite-plus/binding';
 import spawn from 'cross-spawn';
 
-import type { ExecutionResult, WorkspaceInfo } from './types.ts';
+import type { WorkspaceInfo } from '../types/index.ts';
+
+export interface ExecutionResult {
+  exitCode: number;
+  projectDir?: string;
+}
 
 export interface RunCommandOptions {
   command: string;
@@ -98,35 +103,6 @@ export async function runCommand(options: RunCommandOptions): Promise<ExecutionR
   const promise = new Promise<ExecutionResult>((resolve, reject) => {
     child.on('close', (code) => {
       resolve({ exitCode: code ?? 0 });
-    });
-    child.on('error', (err) => {
-      reject(err);
-    });
-  });
-  return await promise;
-}
-
-export async function runCommandSilently(options: RunCommandOptions): Promise<RunCommandResult> {
-  const child = spawn(options.command, options.args, {
-    stdio: 'pipe',
-    cwd: options.cwd,
-    env: options.envs,
-  });
-  const promise = new Promise<RunCommandResult>((resolve, reject) => {
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    child.stdout?.on('data', (data) => {
-      stdout.push(data);
-    });
-    child.stderr?.on('data', (data) => {
-      stderr.push(data);
-    });
-    child.on('close', (code) => {
-      resolve({
-        exitCode: code ?? 0,
-        stdout: Buffer.concat(stdout),
-        stderr: Buffer.concat(stderr),
-      });
     });
     child.on('error', (err) => {
       reject(err);

@@ -31,7 +31,7 @@ use vite_task::ResolveCommandResult;
 
 use crate::cli::{Args, CliOptions as ViteTaskCliOptions, Commands};
 pub use crate::{
-    migration::rewrite_package_json_scripts,
+    migration::rewrite_scripts,
     package_manager::{detect_workspace, download_package_manager},
 };
 

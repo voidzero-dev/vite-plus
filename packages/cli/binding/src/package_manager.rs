@@ -1,6 +1,6 @@
 use napi::{Error, anyhow, bindgen_prelude::*};
 use napi_derive::napi;
-use vite_error::Error::UnsupportedPackageManager;
+use vite_error::Error::{UnrecognizedPackageManager, UnsupportedPackageManager};
 use vite_install::{PackageManagerType, get_package_manager_type_and_version};
 use vite_path::AbsolutePathBuf;
 use vite_workspace::{Error::PackageJsonNotFound, WorkspaceFile, find_workspace_root};
@@ -150,12 +150,14 @@ pub async fn detect_workspace(cwd: String) -> Result<DetectWorkspaceResult> {
             is_monorepo,
             root: Some(workspace_root_path),
         }),
-        Err(UnsupportedPackageManager(_)) => Ok(DetectWorkspaceResult {
-            package_manager_name: None,
-            package_manager_version: None,
-            is_monorepo,
-            root: Some(workspace_root_path),
-        }),
+        Err(UnsupportedPackageManager(_) | UnrecognizedPackageManager) => {
+            Ok(DetectWorkspaceResult {
+                package_manager_name: None,
+                package_manager_version: None,
+                is_monorepo,
+                root: Some(workspace_root_path),
+            })
+        }
         Err(e) => {
             return Err(anyhow::Error::from(e).into());
         }

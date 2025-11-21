@@ -3,8 +3,10 @@ import path from 'node:path';
 
 import * as prompts from '@clack/prompts';
 
-import type { BuiltinTemplateInfo, ExecutionResult, WorkspaceInfo } from '../types.ts';
+import type { WorkspaceInfo } from '../../types/index.ts';
+import type { ExecutionResult } from '../command.ts';
 import { copyDir, editJsonFile, templatesDir } from '../utils.ts';
+import type { BuiltinTemplateInfo } from './types.ts';
 
 // Execute generator scaffold template
 export async function executeGeneratorScaffold(

@@ -51,6 +51,8 @@ catalog:
   cross-spawn: ^7.0.5
   debug: ^4.4.3
   dedent: ^1.5.3
+  detect-indent: ^7.0.2
+  detect-newline: ^4.0.1
   diff: ^8.0.0
   esbuild: ^0.27.0
   estree-toolkit: ^1.7.8
@@ -61,6 +63,7 @@ catalog:
   fs-extra: ^11.2.0
   glob: ^13.0.0
   husky: ^9.1.7
+  jsonc-parser: ^3.3.1
   lint-staged: ^16.2.6
   lodash-es: ^4.17.21
   micromatch: ^4.0.9
@@ -107,6 +110,7 @@ catalog:
   vue: ^3.5.21
   web-tree-sitter: ^0.25.0
   ws: ^8.18.1
+  yaml: ^2.8.1
   zx: ^8.1.2
 catalogMode: prefer
 ignoreScripts: true
@@ -116,6 +120,7 @@ minimumReleaseAgeExclude:
   - '@oxc-project/*'
   - '@rolldown/*'
   - '@vitest/*'
+  - '@vitejs/*'
   - '@types/*'
   - '@oxlint/*'
   - '@oxc-minify/*'

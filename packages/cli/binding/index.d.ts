@@ -138,28 +138,25 @@ export interface PathAccess {
 }
 
 /**
- * Rewrite package.json scripts using rules from rules_yaml_path
+ * Rewrite scripts json content using rules from rules_yaml
  *
  * # Arguments
  *
- * * `package_json_path` - The path to the package.json file
- * * `rules_yaml_path` - The path to the ast-grep rules.yaml file
+ * * `scripts_json` - The scripts section of the package.json file as a JSON string
+ * * `rules_yaml` - The ast-grep rules.yaml as a YAML string
  *
  * # Returns
  *
- * * `updated` - Whether the package.json scripts were updated
+ * * `updated` - The updated scripts section of the package.json file as a JSON string, or `null` if no updates were made
  *
  * # Example
  *
  * ```javascript
- * const updated = await rewritePackageJsonScripts("package.json", "rules.yaml");
+ * const updated = rewriteScripts("scripts section json content here", "ast-grep rules yaml content here");
  * console.log(`Updated: ${updated}`);
  * ```
  */
-export declare function rewritePackageJsonScripts(
-  packageJsonPath: string,
-  rulesYamlPath: string,
-): Promise<boolean>;
+export declare function rewriteScripts(scriptsJson: string, rulesYaml: string): string | null;
 
 /**
  * Main entry point for the CLI, called from JavaScript.

@@ -1,15 +1,12 @@
 import assert from 'node:assert';
 import path from 'node:path';
 
-import {
-  BuiltinTemplate,
-  type BuiltinTemplateInfo,
-  type ExecutionResult,
-  type WorkspaceInfo,
-} from '../types.ts';
+import type { WorkspaceInfo } from '../../types/index.ts';
+import type { ExecutionResult } from '../command.ts';
 import { setPackageName } from '../utils.ts';
 import { executeGeneratorScaffold } from './generator.ts';
 import { runRemoteTemplateCommand } from './remote.ts';
+import { BuiltinTemplate, type BuiltinTemplateInfo } from './types.ts';
 
 export async function executeBuiltinTemplate(
   workspaceInfo: WorkspaceInfo,

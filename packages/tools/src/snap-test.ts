@@ -202,8 +202,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
 
     let commandLine = `> ${cmd.command}`;
     if (exitCode !== 0) {
-      commandLine =
-        (exitCode === undefined ? '[timeout]' : `[${exitCode}]`) + commandLine;
+      commandLine = (exitCode === undefined ? '[timeout]' : `[${exitCode}]`) + commandLine;
     } else {
       // only allow ignore output if the command is successful
       if (cmd.ignoreOutput) {

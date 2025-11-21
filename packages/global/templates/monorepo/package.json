@@ -14,23 +14,5 @@
   },
   "engines": {
     "node": ">=22.12.0"
-  },
-  "devDependencies": {
-    "vite-plus": "catalog:"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "catalog:",
-      "vitest": "catalog:"
-    },
-    "peerDependencyRules": {
-      "allowAny": [
-        "vite"
-      ]
-    }
-  },
-  "resolutions": {
-    "vite": "catalog:",
-    "vitest": "catalog:"
   }
 }
