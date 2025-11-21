@@ -47,9 +47,9 @@ export interface CliOptions {
  *
  * ```javascript
  * const result = await detectWorkspace("/path/to/workspace");
- * console.log(`Package manager name: ${result.package_manager_name}`);
- * console.log(`Package manager version: ${result.package_manager_version}`);
- * console.log(`Is monorepo: ${result.is_monorepo}`);
+ * console.log(`Package manager name: ${result.packageManagerName}`);
+ * console.log(`Package manager version: ${result.packageManagerVersion}`);
+ * console.log(`Is monorepo: ${result.isMonorepo}`);
  * console.log(`Workspace root: ${result.root}`);
  * ```
  */
@@ -89,9 +89,9 @@ export interface DetectWorkspaceResult {
  *   version: "latest",
  * });
  * console.log(`Package manager name: ${result.name}`);
- * console.log(`Package manager install directory: ${result.install_dir}`);
- * console.log(`Package manager binary prefix: ${result.bin_prefix}`);
- * console.log(`Package manager package name: ${result.package_name}`);
+ * console.log(`Package manager install directory: ${result.installDir}`);
+ * console.log(`Package manager binary prefix: ${result.binPrefix}`);
+ * console.log(`Package manager package name: ${result.packageName}`);
  * console.log(`Package manager version: ${result.version}`);
  * ```
  */
