@@ -21,7 +21,7 @@ runs:
         fi
         pnpm --filter rolldown build-node
         pnpm --filter rolldown-vite build-types
-        CC=clang pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }} --use-napi-cross
+        CC=x86_64-unknown-linux-gnu-cc pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }} --use-napi-cross
       env:
         TARGET_CC: clang
 
