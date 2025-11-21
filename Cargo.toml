@@ -41,7 +41,7 @@ criterion = { version = "0.7", features = ["html_reports"] }
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 directories = "6.0.0"
 flate2 = "1.0.35"
-fspy = { git = "https://github.com/voidzero-dev/vite-task", rev = "96bd2eba19cdbfd7612057b41debc0fbb692d1be" }
+fspy = { git = "https://github.com/voidzero-dev/vite-task", rev = "edf07c7eac63aa24fe07ab4ff1039f682e48d6c3" }
 futures-util = "0.3.31"
 hex = "0.4.3"
 httpmock = "0.7"
@@ -67,12 +67,12 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "serde"] }
 vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
-vite_glob = { git = "https://github.com/voidzero-dev/vite-task", rev = "96bd2eba19cdbfd7612057b41debc0fbb692d1be" }
+vite_glob = { git = "https://github.com/voidzero-dev/vite-task", rev = "edf07c7eac63aa24fe07ab4ff1039f682e48d6c3" }
 vite_install = { path = "crates/vite_install" }
-vite_path = { git = "https://github.com/voidzero-dev/vite-task", rev = "96bd2eba19cdbfd7612057b41debc0fbb692d1be" }
-vite_str = { git = "https://github.com/voidzero-dev/vite-task", rev = "96bd2eba19cdbfd7612057b41debc0fbb692d1be" }
-vite_task = { git = "https://github.com/voidzero-dev/vite-task", rev = "96bd2eba19cdbfd7612057b41debc0fbb692d1be" }
-vite_workspace = { git = "https://github.com/voidzero-dev/vite-task", rev = "96bd2eba19cdbfd7612057b41debc0fbb692d1be" }
+vite_path = { git = "https://github.com/voidzero-dev/vite-task", rev = "edf07c7eac63aa24fe07ab4ff1039f682e48d6c3" }
+vite_str = { git = "https://github.com/voidzero-dev/vite-task", rev = "edf07c7eac63aa24fe07ab4ff1039f682e48d6c3" }
+vite_task = { git = "https://github.com/voidzero-dev/vite-task", rev = "edf07c7eac63aa24fe07ab4ff1039f682e48d6c3" }
+vite_workspace = { git = "https://github.com/voidzero-dev/vite-task", rev = "edf07c7eac63aa24fe07ab4ff1039f682e48d6c3" }
 wax = "0.6.0"
 which = "8.0.0"
 
