@@ -18,7 +18,9 @@ test('should run command successfully', async () => {
 
 // write file on the temp directory
 test('should write file on the temp directory', async () => {
-  const tempDir = await fs.realpath(await fs.mkdtemp(path.join(tmpdir(), 'vite-plus-test-')));
+  const tempDir = await fs.realpath(
+    await fs.mkdtemp(path.join(tmpdir(), 'vite-plus-test-')),
+  );
   const result = await runCommand({
     binName: 'node',
     args: ['-e', `fs.writeFileSync("test.txt", "Hello, world!")`],
@@ -26,13 +28,17 @@ test('should write file on the temp directory', async () => {
     cwd: tempDir,
   });
   expect(result).toMatchSnapshot();
-  expect(await fs.readFile(path.join(tempDir, 'test.txt'), 'utf-8')).toBe('Hello, world!');
+  expect(await fs.readFile(path.join(tempDir, 'test.txt'), 'utf-8')).toBe(
+    'Hello, world!',
+  );
   await fs.rm(tempDir, { recursive: true });
 });
 
 // read file on the temp directory
 test('should read file on the temp directory', async () => {
-  const tempDir = await fs.realpath(await fs.mkdtemp(path.join(tmpdir(), 'vite-plus-test-')));
+  const tempDir = await fs.realpath(
+    await fs.mkdtemp(path.join(tmpdir(), 'vite-plus-test-')),
+  );
   await fs.writeFile(path.join(tempDir, 'test.txt'), 'Hello, world!');
   const result = await runCommand({
     binName: 'node',
@@ -46,10 +52,15 @@ test('should read file on the temp directory', async () => {
 
 // write and read file on the temp directory
 test('should write and read file on the temp directory', async () => {
-  const tempDir = await fs.realpath(await fs.mkdtemp(path.join(tmpdir(), 'vite-plus-test-')));
+  const tempDir = await fs.realpath(
+    await fs.mkdtemp(path.join(tmpdir(), 'vite-plus-test-')),
+  );
   const result = await runCommand({
     binName: 'node',
-    args: ['-e', `fs.writeFileSync("test.txt", "Hello, world!"); fs.readFileSync("test.txt", "utf-8")`],
+    args: [
+      '-e',
+      `fs.writeFileSync("test.txt", "Hello, world!"); fs.readFileSync("test.txt", "utf-8")`,
+    ],
     envs: {},
     cwd: tempDir,
   });

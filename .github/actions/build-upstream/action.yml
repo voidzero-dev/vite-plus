@@ -21,6 +21,8 @@ runs:
         fi
         pnpm --filter rolldown build-node
         pnpm --filter rolldown-vite build-types
+        pnpm --filter=@voidzero-dev/vite-plus-core build
+        pnpm --filter=@voidzero-dev/vite-plus-test build
         CC=clang pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }} --use-napi-cross
       env:
         TARGET_CC: clang
@@ -35,6 +37,8 @@ runs:
         fi
         pnpm --filter rolldown build-node
         pnpm --filter rolldown-vite build-types
+        pnpm --filter=@voidzero-dev/vite-plus-core build
+        pnpm --filter=@voidzero-dev/vite-plus-test build
         TARGET_CFLAGS="-D_BSD_SOURCE" pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }} --use-napi-cross
       env:
         TARGET_CC: clang
@@ -49,4 +53,6 @@ runs:
         fi
         pnpm --filter rolldown build-node
         pnpm --filter rolldown-vite build-types
+        pnpm --filter=@voidzero-dev/vite-plus-core build
+        pnpm --filter=@voidzero-dev/vite-plus-test build
         pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }}

@@ -25,7 +25,9 @@ describe('formatTargetDir', () => {
     expect(formatTargetDir('./foo/@my-scope/my-package')).matchSnapshot();
     expect(formatTargetDir('./foo/bar/@scope/my-package')).matchSnapshot();
     expect(formatTargetDir('./foo/bar/@scope/my-package/')).matchSnapshot();
-    expect(formatTargetDir('./foo/bar/@scope/my-package/sub-package')).matchSnapshot();
+    expect(
+      formatTargetDir('./foo/bar/@scope/my-package/sub-package'),
+    ).matchSnapshot();
   });
 
   it('should format target dir with invalid package name', () => {

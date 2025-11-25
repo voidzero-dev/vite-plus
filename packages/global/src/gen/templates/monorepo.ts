@@ -7,7 +7,12 @@ import spawn from 'cross-spawn';
 
 import { discoverTemplate } from '../discovery.ts';
 import { migrateToVitePlus } from '../migration.ts';
-import { type BuiltinTemplateInfo, type ExecutionResult, PackageManager, type WorkspaceInfo } from '../types.ts';
+import {
+  type BuiltinTemplateInfo,
+  type ExecutionResult,
+  PackageManager,
+  type WorkspaceInfo,
+} from '../types.ts';
 import {
   copyDir,
   editJsonFile,
@@ -30,7 +35,9 @@ export async function executeMonorepoTemplate(
   assert(templateInfo.packageName, 'packageName is required');
   assert(templateInfo.targetDir, 'targetDir is required');
 
-  workspaceInfo.monorepoScope = getScopeFromPackageName(templateInfo.packageName);
+  workspaceInfo.monorepoScope = getScopeFromPackageName(
+    templateInfo.packageName,
+  );
   const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
 
   // Copy template files
@@ -124,12 +131,11 @@ export async function executeMonorepoTemplate(
   prompts.log.step('Creating default application in apps/website...');
 
   const appDir = 'apps/website';
-  const appTemplateInfo = discoverTemplate('create-vite@latest', [
-    appDir,
-    '--template',
-    'vanilla-ts',
-    '--no-interactive',
-  ], workspaceInfo);
+  const appTemplateInfo = discoverTemplate(
+    'create-vite@latest',
+    [appDir, '--template', 'vanilla-ts', '--no-interactive'],
+    workspaceInfo,
+  );
   const appResult = await runRemoteTemplateCommand(
     workspaceInfo,
     fullPath,
@@ -137,11 +143,15 @@ export async function executeMonorepoTemplate(
   );
 
   if (appResult.exitCode !== 0) {
-    prompts.log.error(`Failed to create default application: ${appResult.exitCode}`);
+    prompts.log.error(
+      `Failed to create default application: ${appResult.exitCode}`,
+    );
     return appResult;
   }
 
-  const appPackageName = workspaceInfo.monorepoScope ? `${workspaceInfo.monorepoScope}/website` : 'website';
+  const appPackageName = workspaceInfo.monorepoScope
+    ? `${workspaceInfo.monorepoScope}/website`
+    : 'website';
   setPackageName(path.join(fullPath, appDir), appPackageName);
   // Perform auto-migration on the created app
   await migrateToVitePlus(
@@ -153,23 +163,26 @@ export async function executeMonorepoTemplate(
   // Automatically create a default library in packages/utils
   prompts.log.step('Creating default library in packages/utils...');
   const libraryDir = 'packages/utils';
-  const libraryTemplateInfo = discoverTemplate('create-tsdown@latest', [
-    libraryDir,
-    '--template',
-    'default',
-    '--no-interactive',
-  ], workspaceInfo);
+  const libraryTemplateInfo = discoverTemplate(
+    'create-tsdown@latest',
+    [libraryDir, '--template', 'default', '--no-interactive'],
+    workspaceInfo,
+  );
   const libraryResult = await runRemoteTemplateCommand(
     workspaceInfo,
     fullPath,
     libraryTemplateInfo,
   );
   if (libraryResult.exitCode !== 0) {
-    prompts.log.error(`Failed to create default library, exit code: ${libraryResult.exitCode}`);
+    prompts.log.error(
+      `Failed to create default library, exit code: ${libraryResult.exitCode}`,
+    );
     return libraryResult;
   }
 
-  const libraryPackageName = workspaceInfo.monorepoScope ? `${workspaceInfo.monorepoScope}/utils` : 'utils';
+  const libraryPackageName = workspaceInfo.monorepoScope
+    ? `${workspaceInfo.monorepoScope}/utils`
+    : 'utils';
   setPackageName(path.join(fullPath, libraryDir), libraryPackageName);
   // Perform auto-migration on the created library
   await migrateToVitePlus(

@@ -11,21 +11,24 @@
  */
 export interface CliOptions {
   /** Resolver function for the lint tool (oxlint) */
-  lint: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
+  lint: (err: Error | null) => Promise<JsCommandResolvedResult>;
   /** Resolver function for the fmt tool (oxfmt) */
-  fmt: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
+  fmt: (err: Error | null) => Promise<JsCommandResolvedResult>;
   /** Resolver function for the vite tool (used for build/dev) */
-  vite: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
+  vite: (err: Error | null) => Promise<JsCommandResolvedResult>;
   /** Resolver function for the test tool (vitest) */
-  test: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
+  test: (err: Error | null) => Promise<JsCommandResolvedResult>;
   /** Resolver function for the lib tool (tsdown) */
-  lib: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
+  lib: (err: Error | null) => Promise<JsCommandResolvedResult>;
   /** Resolver function for the doc tool (vitepress) */
-  doc: ((err: Error | null, ) => Promise<JsCommandResolvedResult>)
+  doc: (err: Error | null) => Promise<JsCommandResolvedResult>;
   /** Optional working directory override */
-  cwd?: string
+  cwd?: string;
   /** Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side */
-  resolveUniversalViteConfig: ((err: Error | null, arg: string) => Promise<string>)
+  resolveUniversalViteConfig: (
+    err: Error | null,
+    arg: string,
+  ) => Promise<string>;
 }
 
 /**
@@ -53,13 +56,15 @@ export interface CliOptions {
  * console.log(`Workspace root: ${result.root}`);
  * ```
  */
-export declare function detectWorkspace(cwd: string): Promise<DetectWorkspaceResult>
+export declare function detectWorkspace(
+  cwd: string,
+): Promise<DetectWorkspaceResult>;
 
 export interface DetectWorkspaceResult {
-  packageManagerName?: string
-  packageManagerVersion?: string
-  isMonorepo: boolean
-  root?: string
+  packageManagerName?: string;
+  packageManagerVersion?: string;
+  isMonorepo: boolean;
+  root?: string;
 }
 
 /**
@@ -95,20 +100,22 @@ export interface DetectWorkspaceResult {
  * console.log(`Package manager version: ${result.version}`);
  * ```
  */
-export declare function downloadPackageManager(options: DownloadPackageManagerOptions): Promise<DownloadPackageManagerResult>
+export declare function downloadPackageManager(
+  options: DownloadPackageManagerOptions,
+): Promise<DownloadPackageManagerResult>;
 
 export interface DownloadPackageManagerOptions {
-  name: string
-  version: string
-  expectedHash?: string
+  name: string;
+  version: string;
+  expectedHash?: string;
 }
 
 export interface DownloadPackageManagerResult {
-  name: string
-  installDir: string
-  binPrefix: string
-  packageName: string
-  version: string
+  name: string;
+  installDir: string;
+  binPrefix: string;
+  packageName: string;
+  version: string;
 }
 
 /**
@@ -120,19 +127,19 @@ export interface DownloadPackageManagerResult {
  */
 export interface JsCommandResolvedResult {
   /** Absolute path to the tool's executable or script */
-  binPath: string
+  binPath: string;
   /** Environment variables to set when running the tool */
-  envs: Record<string, string>
+  envs: Record<string, string>;
 }
 
 /** Access modes for a path. */
 export interface PathAccess {
   /** Whether the path was read */
-  read: boolean
+  read: boolean;
   /** Whether the path was written */
-  write: boolean
+  write: boolean;
   /** Whether the path was read as a directory */
-  readDir: boolean
+  readDir: boolean;
 }
 
 /**
@@ -154,7 +161,10 @@ export interface PathAccess {
  * console.log(`Updated: ${updated}`);
  * ```
  */
-export declare function rewritePackageJsonScripts(packageJsonPath: string, rulesYamlPath: string): Promise<boolean>
+export declare function rewritePackageJsonScripts(
+  packageJsonPath: string,
+  rulesYamlPath: string,
+): Promise<boolean>;
 
 /**
  * Main entry point for the CLI, called from JavaScript.
@@ -177,7 +187,7 @@ export declare function rewritePackageJsonScripts(packageJsonPath: string, rules
  * Errors from JavaScript resolvers are converted to specific error types
  * (e.g., `LintFailed`, `ViteError`) to provide better error messages.
  */
-export declare function run(options: CliOptions): Promise<number>
+export declare function run(options: CliOptions): Promise<number>;
 
 /**
  * Run a command with fspy tracking, callable from JavaScript.
@@ -213,7 +223,9 @@ export declare function run(options: CliOptions): Promise<number>
  * console.log(`Path accesses:`, result.pathAccesses);
  * ```
  */
-export declare function runCommand(options: RunCommandOptions): Promise<RunCommandResult>
+export declare function runCommand(
+  options: RunCommandOptions,
+): Promise<RunCommandResult>;
 
 /**
  * Input parameters for running a command with fspy tracking.
@@ -226,13 +238,13 @@ export declare function runCommand(options: RunCommandOptions): Promise<RunComma
  */
 export interface RunCommandOptions {
   /** The name of the binary to execute */
-  binName: string
+  binName: string;
   /** Command line arguments to pass to the binary */
-  args: Array<string>
+  args: Array<string>;
   /** Environment variables to set when executing the command */
-  envs: Record<string, string>
+  envs: Record<string, string>;
   /** The current working directory for the command */
-  cwd: string
+  cwd: string;
 }
 
 /**
@@ -244,7 +256,7 @@ export interface RunCommandOptions {
  */
 export interface RunCommandResult {
   /** The exit code of the command */
-  exitCode: number
+  exitCode: number;
   /** Map of relative paths to their access modes */
-  pathAccesses: Record<string, PathAccess>
+  pathAccesses: Record<string, PathAccess>;
 }

@@ -14,17 +14,30 @@ import {
   type WorkspacePackage,
 } from './types.ts';
 import { getScopeFromPackageName } from './utils.ts';
-import { editJsonFile, editOrCreateYamlFile, readJsonFile, readYamlFile } from './utils.ts';
+import {
+  editJsonFile,
+  editOrCreateYamlFile,
+  readJsonFile,
+  readYamlFile,
+} from './utils.ts';
 
-export function findPackageJsonFilesFromPatterns(patterns: string[], cwd: string): string[] {
+export function findPackageJsonFilesFromPatterns(
+  patterns: string[],
+  cwd: string,
+): string[] {
   if (patterns.length === 0) {
     return [];
   }
-  return globSync(patterns.map(pattern => `${pattern}/package.json`), { absolute: true, cwd });
+  return globSync(
+    patterns.map((pattern) => `${pattern}/package.json`),
+    { absolute: true, cwd },
+  );
 }
 
 // Detect if we're in a monorepo and get workspace info
-export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOptional> {
+export async function detectWorkspace(
+  rootDir: string,
+): Promise<WorkspaceInfoOptional> {
   const bindingResult = await detectWorkspaceBinding(rootDir);
   const result: WorkspaceInfoOptional = {
     rootDir,
@@ -55,7 +68,9 @@ export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOpt
     const pnpmWorkspaceFile = path.join(result.rootDir, 'pnpm-workspace.yaml');
     const packageJsonFile = path.join(result.rootDir, 'package.json');
     if (fs.existsSync(pnpmWorkspaceFile)) {
-      const workspaceConfig = readYamlFile<{ packages?: string[] }>(pnpmWorkspaceFile);
+      const workspaceConfig = readYamlFile<{ packages?: string[] }>(
+        pnpmWorkspaceFile,
+      );
       if (Array.isArray(workspaceConfig.packages)) {
         result.workspacePatterns = workspaceConfig.packages;
       }
@@ -86,14 +101,20 @@ export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOpt
     if (pkg.name) {
       result.monorepoScope = getScopeFromPackageName(pkg.name);
     }
-    result.packages = discoverWorkspacePackages(result.workspacePatterns, result.rootDir);
+    result.packages = discoverWorkspacePackages(
+      result.workspacePatterns,
+      result.rootDir,
+    );
   }
 
   return result;
 }
 
 // Discover all workspace packages
-export function discoverWorkspacePackages(workspacePatterns: string[], rootDir: string): WorkspacePackage[] {
+export function discoverWorkspacePackages(
+  workspacePatterns: string[],
+  rootDir: string,
+): WorkspacePackage[] {
   const packages: WorkspacePackage[] = [];
 
   if (workspacePatterns.length === 0) {
@@ -101,26 +122,29 @@ export function discoverWorkspacePackages(workspacePatterns: string[], rootDir: 
   }
 
   // Find all package.json files in the workspace
-  const packageJsonRelativePaths = globSync(workspacePatterns.map(pattern => `${pattern}/package.json`), {
-    absolute: false,
-    cwd: rootDir,
-  });
+  const packageJsonRelativePaths = globSync(
+    workspacePatterns.map((pattern) => `${pattern}/package.json`),
+    {
+      absolute: false,
+      cwd: rootDir,
+    },
+  );
   for (const packageJsonRelativePath of packageJsonRelativePaths) {
     const packageJsonPath = path.join(rootDir, packageJsonRelativePath);
-    const pkg = readJsonFile<
-      {
-        name?: string;
-        description?: string;
-        version?: string;
-        dependencies?: Record<string, string>;
-        keywords?: string[];
-      }
-    >(packageJsonPath);
+    const pkg = readJsonFile<{
+      name?: string;
+      description?: string;
+      version?: string;
+      dependencies?: Record<string, string>;
+      keywords?: string[];
+    }>(packageJsonPath);
     if (!pkg.name) {
       continue;
     }
-    const isTemplatePackage = pkg.keywords?.includes('vite-plus-template') ||
-      pkg.keywords?.includes('bingo-template') || !!pkg.dependencies?.bingo;
+    const isTemplatePackage =
+      pkg.keywords?.includes('vite-plus-template') ||
+      pkg.keywords?.includes('bingo-template') ||
+      !!pkg.dependencies?.bingo;
     packages.push({
       name: pkg.name,
       path: path.dirname(packageJsonRelativePath),
@@ -141,15 +165,18 @@ export function updatePackageJsonWithDeps(
   dependencyType: DependencyType,
 ) {
   const packageJsonPath = path.join(rootDir, projectDir, 'package.json');
-  editJsonFile<{ [key in DependencyType]?: Record<string, string> }>(packageJsonPath, (pkg) => {
-    if (!pkg[dependencyType]) {
-      pkg[dependencyType] = {};
-    }
-    for (const dep of dependencies) {
-      pkg[dependencyType][dep] = 'workspace:*';
-    }
-    return pkg;
-  });
+  editJsonFile<{ [key in DependencyType]?: Record<string, string> }>(
+    packageJsonPath,
+    (pkg) => {
+      if (!pkg[dependencyType]) {
+        pkg[dependencyType] = {};
+      }
+      for (const dep of dependencies) {
+        pkg[dependencyType][dep] = 'workspace:*';
+      }
+      return pkg;
+    },
+  );
 }
 
 // Update workspace configuration to include new project
@@ -178,15 +205,21 @@ export function updateWorkspaceConfig(
     editOrCreateYamlFile<{ packages?: string[] }>(
       path.join(workspaceInfo.rootDir, 'pnpm-workspace.yaml'),
       (workspaceConfig) => {
-        workspaceConfig.packages = [...(workspaceConfig.packages || []), pattern];
+        workspaceConfig.packages = [
+          ...(workspaceConfig.packages || []),
+          pattern,
+        ];
         return workspaceConfig;
       },
     );
   } else {
     // Update package.json workspaces
-    editJsonFile<{ workspaces?: string[] }>(path.join(workspaceInfo.rootDir, 'package.json'), (pkg) => {
-      pkg.workspaces = [...(pkg.workspaces || []), pattern];
-      return pkg;
-    });
+    editJsonFile<{ workspaces?: string[] }>(
+      path.join(workspaceInfo.rootDir, 'package.json'),
+      (pkg) => {
+        pkg.workspaces = [...(pkg.workspaces || []), pattern];
+        return pkg;
+      },
+    );
   }
 }

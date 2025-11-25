@@ -7,5 +7,10 @@ export const ANSI = {
 };
 
 export function getScreenDimensions() {
-  return { top: 0, left: 0, width: process.stdout.columns, height: process.stdout.rows };
+  return {
+    top: 0,
+    left: 0,
+    width: process.stdout.columns,
+    height: process.stdout.rows,
+  };
 }

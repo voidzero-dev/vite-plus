@@ -25,7 +25,8 @@ describe('migratePackageJson', () => {
             lib_watch: 'tsdown --watch',
             preview: 'vite preview',
             optimize: 'vite optimize',
-            build: 'pnpm install &&vite build -r && vite run build --watch && tsdown && tsc || exit 1',
+            build:
+              'pnpm install &&vite build -r && vite run build --watch && tsdown && tsc || exit 1',
             dev: 'vite',
             dev_help: 'vite --help && vite -h',
             dev_port: 'vite --port 3000',
@@ -37,16 +38,22 @@ describe('migratePackageJson', () => {
             dev_profile: 'vite --profile',
             dev_stats: 'vite --stats',
             dev_analyze: 'vite --analyze',
-            ready: 'oxlint --fix --type-aware && vitest run && tsdown && oxfmt --fix',
-            ready_new: 'vite install && vite fmt && vite lint --type-aware && vite test -r && vite build -r',
+            ready:
+              'oxlint --fix --type-aware && vitest run && tsdown && oxfmt --fix',
+            ready_new:
+              'vite install && vite fmt && vite lint --type-aware && vite test -r && vite build -r',
           },
         },
         null,
         2,
       ),
     );
-    const updated = await migratePackageJson(path.join(tempDir, 'package.json'));
-    const scripts = JSON.parse(await fs.readFile(path.join(tempDir, 'package.json'), 'utf-8')).scripts;
+    const updated = await migratePackageJson(
+      path.join(tempDir, 'package.json'),
+    );
+    const scripts = JSON.parse(
+      await fs.readFile(path.join(tempDir, 'package.json'), 'utf-8'),
+    ).scripts;
     await fs.rm(tempDir, { recursive: true });
     expect(updated).toBe(true);
     expect(scripts).toMatchSnapshot();

@@ -1,7 +1,12 @@
 import assert from 'node:assert';
 import path from 'node:path';
 
-import { BuiltinTemplate, type BuiltinTemplateInfo, type ExecutionResult, type WorkspaceInfo } from '../types.ts';
+import {
+  BuiltinTemplate,
+  type BuiltinTemplateInfo,
+  type ExecutionResult,
+  type WorkspaceInfo,
+} from '../types.ts';
 import { setPackageName } from '../utils.ts';
 import { executeGeneratorScaffold } from './generator.ts';
 import { runRemoteTemplateCommand } from './remote.ts';
@@ -25,7 +30,11 @@ export async function executeBuiltinTemplate(
     templateInfo.command = 'create-tsdown@latest';
     if (!templateInfo.interactive) {
       // set default template for tsdown
-      if (!templateInfo.args.find(arg => arg.startsWith('--template') || arg.startsWith('-t'))) {
+      if (
+        !templateInfo.args.find(
+          (arg) => arg.startsWith('--template') || arg.startsWith('-t'),
+        )
+      ) {
         templateInfo.args.push('--template', 'default');
       }
     }
@@ -37,7 +46,12 @@ export async function executeBuiltinTemplate(
   }
 
   // Handle remote/external templates with fspy monitoring
-  const result = await runRemoteTemplateCommand(workspaceInfo, workspaceInfo.rootDir, templateInfo, false);
+  const result = await runRemoteTemplateCommand(
+    workspaceInfo,
+    workspaceInfo.rootDir,
+    templateInfo,
+    false,
+  );
   const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
   // set package name in the project directory
   setPackageName(fullPath, templateInfo.packageName);

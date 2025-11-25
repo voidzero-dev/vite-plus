@@ -147,7 +147,8 @@ class MonorepoGenerator {
       const hasVitePlusConfig = Math.random() > 0.3;
 
       // Select dependencies from packages created before this one
-      const dependencies = i === 0 ? [] : this.selectDependencies(i, allPackageNames.slice(0, i));
+      const dependencies =
+        i === 0 ? [] : this.selectDependencies(i, allPackageNames.slice(0, i));
 
       this.packages.set(packageName, {
         name: packageName,
@@ -181,9 +182,15 @@ class MonorepoGenerator {
 
         // Create the scenario: A has build, B doesn't, C has build
         const scriptName = this.getRandomElement(this.SCRIPT_NAMES);
-        pkgA.scripts[scriptName] = this.generateScriptCommand(scriptName, nameA);
+        pkgA.scripts[scriptName] = this.generateScriptCommand(
+          scriptName,
+          nameA,
+        );
         delete pkgB.scripts[scriptName]; // B doesn't have the script
-        pkgC.scripts[scriptName] = this.generateScriptCommand(scriptName, nameC);
+        pkgC.scripts[scriptName] = this.generateScriptCommand(
+          scriptName,
+          nameC,
+        );
       }
     }
   }
@@ -201,10 +208,13 @@ class MonorepoGenerator {
       version: '1.0.0',
       main: 'src/index.js',
       scripts: pkg.scripts,
-      dependencies: pkg.dependencies.reduce((deps, dep) => {
-        deps[`@monorepo/${dep}`] = 'workspace:*';
-        return deps;
-      }, {} as Record<string, string>),
+      dependencies: pkg.dependencies.reduce(
+        (deps, dep) => {
+          deps[`@monorepo/${dep}`] = 'workspace:*';
+          return deps;
+        },
+        {} as Record<string, string>,
+      ),
     };
 
     fs.writeFileSync(
@@ -352,11 +362,9 @@ module.exports = { ${pkg.name.replace('-', '_')} };
     console.log('\nStatistics:');
     console.log(`- Total packages: ${this.packages.size}`);
     console.log(
-      `- Average dependencies per package: ${
-        (
-          totalDeps / this.packages.size
-        ).toFixed(2)
-      }`,
+      `- Average dependencies per package: ${(
+        totalDeps / this.packages.size
+      ).toFixed(2)}`,
     );
     console.log(`- Max dependencies in a package: ${maxDeps}`);
     console.log(`- Packages with vite-plus.json: ${packagesWithVitePlus}`);

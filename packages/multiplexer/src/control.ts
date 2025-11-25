@@ -44,7 +44,8 @@ export class ControlPanel {
 
   getDimensions(): Dimensions {
     const screen = getScreenDimensions();
-    const width = Math.max(...this.items.map((item) => item.name.length)) +
+    const width =
+      Math.max(...this.items.map((item) => item.name.length)) +
       DIVIDER_WIDTH +
       2;
     const height = 1;
@@ -80,9 +81,10 @@ export class ControlPanel {
       return isSelected ? `${ANSI.reverse}${text}` : text;
     });
 
-    const lines = this.position === 'top' || this.position === 'bottom'
-      ? [names.join(' • ')]
-      : names;
+    const lines =
+      this.position === 'top' || this.position === 'bottom'
+        ? [names.join(' • ')]
+        : names;
 
     lines.forEach((line, lineIndex) => {
       readline.cursorTo(

@@ -45,9 +45,10 @@ export async function lint(): Promise<{
     // TODO: provide envs inference API
     envs: {
       ...DEFAULT_ENVS,
-      OXLINT_TSGOLINT_PATH: process.platform !== 'win32'
-        ? oxlintTsgolintPath
-        : `.\\${relative(process.cwd(), oxlintTsgolintPath)}`,
+      OXLINT_TSGOLINT_PATH:
+        process.platform !== 'win32'
+          ? oxlintTsgolintPath
+          : `.\\${relative(process.cwd(), oxlintTsgolintPath)}`,
     },
   };
   return result;

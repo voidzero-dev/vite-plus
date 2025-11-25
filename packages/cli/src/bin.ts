@@ -17,18 +17,23 @@ import { lint } from './resolve-lint.js';
 import { test } from './resolve-test.js';
 import { vite } from './resolve-vite.js';
 
-async function resolveUniversalViteConfig(err: null | Error, viteConfigCwd: string) {
+async function resolveUniversalViteConfig(
+  err: null | Error,
+  viteConfigCwd: string,
+) {
   if (err) {
     throw err;
   }
   try {
-    const { resolveConfig } = await import('./config.js');
+    const { resolveConfig } = await import('./index.js');
     const config = await resolveConfig({ root: viteConfigCwd }, 'build');
 
-    return Promise.resolve(JSON.stringify({
-      lint: config.lint,
-      fmt: config.fmt,
-    }));
+    return Promise.resolve(
+      JSON.stringify({
+        lint: config.lint,
+        fmt: config.fmt,
+      }),
+    );
   } catch (err) {
     console.error('[vite+] resolve universal vite config error:', err);
     throw err;
@@ -45,9 +50,10 @@ run({
   test, // Resolves vitest binary for test commands
   doc, // Resolves vitepress binary for doc commands
   resolveUniversalViteConfig,
-}).then((exitCode) => {
-  process.exit(exitCode);
 })
+  .then((exitCode) => {
+    process.exit(exitCode);
+  })
   .catch((err) => {
     console.error('[vite+] run error:', err);
     process.exit(1);

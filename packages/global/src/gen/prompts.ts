@@ -20,12 +20,14 @@ export async function promptPackageNameAndTargetDir(
       message: 'Package name:',
       placeholder: defaultPackageName,
       defaultValue: defaultPackageName,
-      validate: value => {
+      validate: (value) => {
         if (value.length === 0) return;
 
         const result = validateNpmPackageName(value);
         if (result.validForNewPackages) return;
-        return result.errors?.[0] ?? result.warnings?.[0] ?? 'Invalid package name';
+        return (
+          result.errors?.[0] ?? result.warnings?.[0] ?? 'Invalid package name'
+        );
       },
     });
     if (prompts.isCancel(selected)) {
@@ -43,12 +45,17 @@ export async function promptPackageNameAndTargetDir(
   return { packageName, targetDir };
 }
 
-export async function checkProjectDirExists(projectDirFullPath: string, interactive?: boolean) {
+export async function checkProjectDirExists(
+  projectDirFullPath: string,
+  interactive?: boolean,
+) {
   if (!fs.existsSync(projectDirFullPath) || isEmpty(projectDirFullPath)) {
     return;
   }
   if (!interactive) {
-    prompts.log.info('Use --directory to specify a different location or remove the directory first');
+    prompts.log.info(
+      'Use --directory to specify a different location or remove the directory first',
+    );
     cancelAndExit(`Target directory "${projectDirFullPath}" is not empty`, 1);
   }
 
@@ -80,7 +87,10 @@ export async function checkProjectDirExists(projectDirFullPath: string, interact
   }
 }
 
-export function cancelAndExit(message = 'Operation cancelled', exitCode = 0): never {
+export function cancelAndExit(
+  message = 'Operation cancelled',
+  exitCode = 0,
+): never {
   prompts.cancel(message);
   process.exit(exitCode);
 }

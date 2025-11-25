@@ -28,13 +28,13 @@ interface PackageJson {
   [key: string]: any;
 }
 
-type ExportValue = string | { [condition: string]: string | ExportValue } | null;
+type ExportValue =
+  | string
+  | { [condition: string]: string | ExportValue }
+  | null;
 
-const ROLLDOWN_REPO = 'git@github.com:rolldown/rolldown.git';
-const ROLLDOWN_VITE_REPO = 'git@github.com:vitejs/rolldown-vite.git';
 const ROLLDOWN_DIR = 'rolldown';
 const ROLLDOWN_VITE_DIR = 'rolldown-vite';
-const ROLLDOWN_VITE_BRANCH = 'rolldown-vite';
 const CLI_PACKAGE_PATH = 'packages/cli';
 
 function log(message: string) {
@@ -123,7 +123,12 @@ function cloneOrResetRepo(
   }
 }
 
-function cloneRepo(repoUrl: string, dir: string, branch: string, hash?: string) {
+function cloneRepo(
+  repoUrl: string,
+  dir: string,
+  branch: string,
+  hash?: string,
+) {
   log(`Cloning ${repoUrl} (${branch}) into ${dir}...`);
   execCommand(`git clone --branch ${branch} ${repoUrl} ${dir}`);
   if (hash) {
@@ -145,9 +150,8 @@ function transformRolldownExport(
   }
 
   // Transform export path: . -> ./rolldown, ./foo -> ./rolldown/foo
-  const newExportPath = exportPath === '.'
-    ? './rolldown'
-    : `./rolldown${exportPath.slice(1)}`;
+  const newExportPath =
+    exportPath === '.' ? './rolldown' : `./rolldown${exportPath.slice(1)}`;
 
   // Transform export value
   const transformValue = (value: ExportValue): ExportValue => {
@@ -183,21 +187,29 @@ function transformRolldownExport(
   if (typeof newValue === 'string') {
     // Convert string to object with default and types
     if (newValue.endsWith('.mjs')) {
-      return [newExportPath, {
-        default: newValue,
-        types: newValue.replace(/\.mjs$/, '.d.mts'),
-      }];
+      return [
+        newExportPath,
+        {
+          default: newValue,
+          types: newValue.replace(/\.mjs$/, '.d.mts'),
+        },
+      ];
     } else if (newValue.endsWith('.js')) {
-      return [newExportPath, {
-        default: newValue,
-        types: newValue.replace(/\.js$/, '.d.ts'),
-      }];
+      return [
+        newExportPath,
+        {
+          default: newValue,
+          types: newValue.replace(/\.js$/, '.d.ts'),
+        },
+      ];
     }
     return [newExportPath, newValue];
   }
 
   if (newValue && typeof newValue === 'object') {
-    const importPath = ('import' in newValue ? newValue.import : newValue.default) as string | undefined;
+    const importPath = (
+      'import' in newValue ? newValue.import : newValue.default
+    ) as string | undefined;
     if (importPath && !('types' in newValue)) {
       if (importPath.endsWith('.mjs')) {
         newValue.types = importPath.replace(/\.mjs$/, '.d.mts');
@@ -220,9 +232,10 @@ function transformPluginutilsExport(
   }
 
   // Transform . -> ./rolldown/pluginutils
-  const newExportPath = exportPath === '.'
-    ? './rolldown/pluginutils'
-    : `./rolldown/pluginutils${exportPath.slice(1)}`;
+  const newExportPath =
+    exportPath === '.'
+      ? './rolldown/pluginutils'
+      : `./rolldown/pluginutils${exportPath.slice(1)}`;
 
   // Transform paths
   const transformValue = (value: ExportValue): ExportValue => {
@@ -254,16 +267,21 @@ function transformPluginutilsExport(
   if (typeof newValue === 'string') {
     // Convert string to object with default and types
     if (newValue.endsWith('.js')) {
-      return [newExportPath, {
-        default: newValue,
-        types: newValue.replace(/\.js$/, '.d.ts'),
-      }];
+      return [
+        newExportPath,
+        {
+          default: newValue,
+          types: newValue.replace(/\.js$/, '.d.ts'),
+        },
+      ];
     }
     return [newExportPath, newValue];
   }
 
   if (newValue && typeof newValue === 'object') {
-    const importPath = ('import' in newValue ? newValue.import : newValue.default) as string | undefined;
+    const importPath = (
+      'import' in newValue ? newValue.import : newValue.default
+    ) as string | undefined;
     if (importPath && !('types' in newValue)) {
       if (importPath.endsWith('.js')) {
         newValue.types = importPath.replace(/\.js$/, '.d.ts');
@@ -339,79 +357,26 @@ function transformViteExport(
   if (typeof newValue === 'string') {
     // Convert string to object with import and types
     if (newValue.endsWith('.js')) {
-      return [newExportPath, {
-        import: newValue,
-        types: newValue.replace(/\.js$/, '.d.ts'),
-      }];
+      return [
+        newExportPath,
+        {
+          import: newValue,
+          types: newValue.replace(/\.js$/, '.d.ts'),
+        },
+      ];
     }
     return [newExportPath, newValue];
   }
 
   if (newValue && typeof newValue === 'object') {
-    const importPath = ('import' in newValue ? newValue.import : newValue.default) as string | undefined;
-    if (importPath && !('types' in newValue) && typeof importPath === 'string') {
-      if (importPath.endsWith('.js')) {
-        newValue.types = importPath.replace(/\.js$/, '.d.ts');
-      }
-    }
-  }
-
-  return [newExportPath, newValue];
-}
-
-function transformVitestExport(
-  exportPath: string,
-  exportValue: ExportValue,
-): [string, ExportValue] {
-  // Skip package.json
-  if (exportPath === './package.json') {
-    return ['', null];
-  }
-
-  // Special case: rename "." to "./vitest" to avoid conflict with CLI's main export
-  const newExportPath = exportPath === '.' ? './vitest' : exportPath;
-
-  // Transform paths in values by prepending dist/vitest/ after ./
-  const transformValue = (value: ExportValue): ExportValue => {
-    if (typeof value === 'string') {
-      // Transform all relative paths by prepending dist/vitest/
-      if (value.startsWith('./')) {
-        return value.replace(/^\.\//, './dist/vitest/');
-      }
-      return value;
-    }
-
-    if (value && typeof value === 'object') {
-      const result: Record<string, any> = {};
-      for (const [key, val] of Object.entries(value)) {
-        const transformed = transformValue(val);
-        if (transformed !== null) {
-          result[key] = transformed;
-        }
-      }
-      return Object.keys(result).length > 0 ? result : null;
-    }
-
-    return value;
-  };
-
-  const newValue = transformValue(exportValue);
-
-  // Add types if only a string path is specified or if types are missing
-  if (typeof newValue === 'string') {
-    // Convert string to object with import and types
-    if (newValue.endsWith('.js')) {
-      return [newExportPath, {
-        import: newValue,
-        types: newValue.replace(/\.js$/, '.d.ts'),
-      }];
-    }
-    return [newExportPath, newValue];
-  }
-
-  if (newValue && typeof newValue === 'object') {
-    const importPath = ('import' in newValue ? newValue.import : newValue.default) as string | undefined;
-    if (importPath && !('types' in newValue) && typeof importPath === 'string') {
+    const importPath = (
+      'import' in newValue ? newValue.import : newValue.default
+    ) as string | undefined;
+    if (
+      importPath &&
+      !('types' in newValue) &&
+      typeof importPath === 'string'
+    ) {
       if (importPath.endsWith('.js')) {
         newValue.types = importPath.replace(/\.js$/, '.d.ts');
       }
@@ -426,7 +391,6 @@ function mergePackageExports(
   rolldownPkg: PackageJson,
   rolldownVitePkg: PackageJson,
   pluginutilsPkg: PackageJson,
-  vitestPackage: PackageJson,
 ): Record<string, any> {
   const result: Record<string, any> = {};
   const cliOwnExports = new Set([
@@ -498,31 +462,22 @@ function mergePackageExports(
     }
   }
 
-  // Add vitest exports
-  if (vitestPackage.exports) {
-    for (const [path, value] of Object.entries(vitestPackage.exports).filter(([path]) => path !== './config')) {
-      const [newPath, newValue] = transformVitestExport(path, value);
-      if (newPath && newValue !== null) {
-        if (result[newPath] && !cliOwnExports.has(newPath)) {
-          conflicts.push(`${newPath} (from vitest ${path})`);
-        } else if (!cliOwnExports.has(newPath)) {
-          result[newPath] = newValue;
-        }
-      }
-    }
-  }
-
   if (conflicts.length > 0) {
-    error(`Export conflicts detected:\n${conflicts.map(c => `  - ${c}`).join('\n')}`);
+    error(
+      `Export conflicts detected:\n${conflicts.map((c) => `  - ${c}`).join('\n')}`,
+    );
   }
 
   // Sort exports by key
   return Object.keys(result)
     .sort()
-    .reduce((sorted, key) => {
-      sorted[key] = result[key];
-      return sorted;
-    }, {} as Record<string, any>);
+    .reduce(
+      (sorted, key) => {
+        sorted[key] = result[key];
+        return sorted;
+      },
+      {} as Record<string, any>,
+    );
 }
 
 function mergeSemverVersions(
@@ -539,9 +494,7 @@ function mergeSemverVersions(
   const isExact2 = v2.startsWith('=');
   if (isExact1 || isExact2) {
     if (isExact1 && isExact2 && v1 !== v2) {
-      error(
-        `Incompatible exact versions for ${packageName}: ${v1} vs ${v2}`,
-      );
+      error(`Incompatible exact versions for ${packageName}: ${v1} vs ${v2}`);
     }
     return isExact1 ? v1 : v2;
   }
@@ -559,7 +512,9 @@ function mergeSemverVersions(
   const range2 = semver.validRange(v2);
 
   if (!range1 || !range2) {
-    log(`Warning: Could not parse semver for ${packageName}: ${v1}, ${v2}. Using ${v1}`);
+    log(
+      `Warning: Could not parse semver for ${packageName}: ${v1}, ${v2}. Using ${v1}`,
+    );
     return v1;
   }
 
@@ -646,26 +601,31 @@ function mergePnpmWorkspaces(
   // Sort catalog keys alphabetically
   result.catalog = Object.keys(catalog)
     .sort()
-    .reduce((sorted, key) => {
-      sorted[key] = catalog[key];
-      return sorted;
-    }, {} as Record<string, string>);
+    .reduce(
+      (sorted, key) => {
+        sorted[key] = catalog[key];
+        return sorted;
+      },
+      {} as Record<string, string>,
+    );
 
   // Merge minimumReleaseAgeExclude
   const excludeSet = new Set(main.minimumReleaseAgeExclude || []);
 
-  (rolldown.minimumReleaseAgeExclude || []).forEach((item) => excludeSet.add(item));
-  (rolldownVite.minimumReleaseAgeExclude || []).forEach((item) => excludeSet.add(item));
+  (rolldown.minimumReleaseAgeExclude || []).forEach((item) =>
+    excludeSet.add(item),
+  );
+  (rolldownVite.minimumReleaseAgeExclude || []).forEach((item) =>
+    excludeSet.add(item),
+  );
   result.minimumReleaseAgeExclude = Array.from(excludeSet);
 
   // Copy patchedDependencies from rolldown-vite (with path prefix)
   if (rolldownVite.patchedDependencies) {
     result.patchedDependencies = {};
-    for (
-      const [dep, patchPath] of Object.entries(
-        rolldownVite.patchedDependencies,
-      )
-    ) {
+    for (const [dep, patchPath] of Object.entries(
+      rolldownVite.patchedDependencies,
+    )) {
       // Prepend rolldown-vite directory to patch paths
       result.patchedDependencies[dep] = patchPath.startsWith('./')
         ? `./${ROLLDOWN_VITE_DIR}/${patchPath.slice(2)}`
@@ -705,7 +665,7 @@ function mergePnpmWorkspaces(
 export async function syncRemote() {
   const { values } = parseArgs({
     options: {
-      'clean': {
+      clean: {
         type: 'boolean',
       },
       'update-hashes': {
@@ -727,22 +687,25 @@ export async function syncRemote() {
       log(`Removed ${ROLLDOWN_DIR}`);
     }
     if (existsSync(join(rootDir, ROLLDOWN_VITE_DIR))) {
-      rmSync(join(rootDir, ROLLDOWN_VITE_DIR), { recursive: true, force: true });
+      rmSync(join(rootDir, ROLLDOWN_VITE_DIR), {
+        recursive: true,
+        force: true,
+      });
       log(`Removed ${ROLLDOWN_VITE_DIR}`);
     }
   }
 
   // Clone or reset repos
   cloneOrResetRepo(
-    ROLLDOWN_REPO,
+    upstreamVersions.rolldown.repo,
     join(rootDir, ROLLDOWN_DIR),
-    'main',
+    upstreamVersions.rolldown.branch,
     upstreamVersions.rolldown.hash,
   );
   cloneOrResetRepo(
-    ROLLDOWN_VITE_REPO,
+    upstreamVersions['rolldown-vite'].repo,
     join(rootDir, ROLLDOWN_VITE_DIR),
-    ROLLDOWN_VITE_BRANCH,
+    upstreamVersions['rolldown-vite'].branch,
     upstreamVersions['rolldown-vite'].hash,
   );
 
@@ -839,14 +802,6 @@ export async function syncRemote() {
     'pluginutils',
     'package.json',
   );
-  const vitestPackagePath = join(
-    rootDir,
-    'packages',
-    'cli',
-    'node_modules',
-    'vitest-dev',
-    'package.json',
-  );
 
   const cliPackage = JSON.parse(
     readFileSync(cliPackagePath, 'utf-8'),
@@ -860,16 +815,12 @@ export async function syncRemote() {
   const pluginutilsPackage = JSON.parse(
     readFileSync(pluginutilsPackagePath, 'utf-8'),
   ) as PackageJson;
-  const vitestPackage = JSON.parse(
-    readFileSync(vitestPackagePath, 'utf-8'),
-  ) as PackageJson;
 
   const mergedExports = mergePackageExports(
     cliPackage,
     rolldownPackage,
     rolldownVitePackage,
     pluginutilsPackage,
-    vitestPackage,
   );
 
   // Update CLI package.json with merged exports

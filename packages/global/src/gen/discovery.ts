@@ -1,7 +1,12 @@
 import path from 'node:path';
 
 import { prependToPathToEnvs } from './command.ts';
-import { BuiltinTemplate, type TemplateInfo, TemplateType, type WorkspaceInfo } from './types.ts';
+import {
+  BuiltinTemplate,
+  type TemplateInfo,
+  TemplateType,
+  type WorkspaceInfo,
+} from './types.ts';
 import { readJsonFile } from './utils.ts';
 
 // Check if template name is a GitHub URL
@@ -36,9 +41,12 @@ export function discoverTemplate(
   workspaceInfo: WorkspaceInfo,
   interactive?: boolean,
 ): TemplateInfo {
-  const envs = prependToPathToEnvs(workspaceInfo.downloadPackageManager.binPrefix, {
-    ...process.env,
-  });
+  const envs = prependToPathToEnvs(
+    workspaceInfo.downloadPackageManager.binPrefix,
+    {
+      ...process.env,
+    },
+  );
   const parentDir = inferParentDir(templateName, workspaceInfo);
   // Check for built-in templates
   if (templateName.startsWith('vite:')) {
@@ -68,13 +76,20 @@ export function discoverTemplate(
   }
 
   // Check for local package
-  const localPackage = workspaceInfo.packages.find(pkg => pkg.name === templateName);
+  const localPackage = workspaceInfo.packages.find(
+    (pkg) => pkg.name === templateName,
+  );
   if (localPackage) {
-    const localPackagePath = path.join(workspaceInfo.rootDir, localPackage.path);
+    const localPackagePath = path.join(
+      workspaceInfo.rootDir,
+      localPackage.path,
+    );
     const packageJsonPath = path.join(localPackagePath, 'package.json');
-    const pkg = readJsonFile<
-      { dependencies?: Record<string, string>; keywords?: string[]; bin?: Record<string, string> | string }
-    >(packageJsonPath);
+    const pkg = readJsonFile<{
+      dependencies?: Record<string, string>;
+      keywords?: string[];
+      bin?: Record<string, string> | string;
+    }>(packageJsonPath);
     let binPath = '';
     if (pkg.bin) {
       if (typeof pkg.bin === 'string') {
@@ -114,7 +129,10 @@ export function discoverTemplate(
 }
 
 // Infer the parent directory of the generated package based on the template name
-function inferParentDir(templateName: string, workspaceInfo: WorkspaceInfo): string | undefined {
+function inferParentDir(
+  templateName: string,
+  workspaceInfo: WorkspaceInfo,
+): string | undefined {
   if (workspaceInfo.parentDirs.length === 0) {
     return;
   }

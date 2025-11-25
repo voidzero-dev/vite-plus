@@ -1,0 +1,8 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "ignorePatterns": [
+    "packages/cli/binding/index.d.ts",
+    "packages/cli/binding/index.js"
+  ],
+  "singleQuote": true
+}

@@ -13,7 +13,7 @@
     "install-global-cli": "npm install -g ./packages/global",
     "typecheck": "tsc -b tsconfig.json",
     "lint": "vite lint --type-aware --threads 4",
-    "test": "vite test run && pnpm --filter=@voidzero-dev/vite-plus test && pnpm -r snap-test",
+    "test": "vite test run && pnpm -r snap-test",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -27,14 +27,15 @@
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "workspace:@voidzero-dev/vite-plus-test@*"
   },
   "lint-staged": {
-    "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
+    "*.@(yml|yaml|md|json|html|toml)": [
       "dprint fmt --staged"
     ],
     "*.@(js|ts|tsx)": [
-      "oxlint -- --fix"
+      "oxlint -- --fix",
+      "oxfmt"
     ],
     "*.rs": [
       "cargo fmt --"

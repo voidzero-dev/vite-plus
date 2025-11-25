@@ -10,6 +10,7 @@
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
     "@std/yaml": "catalog:",
+    "@voidzero-dev/vite-plus-test": "workspace:*",
     "@types/semver": "catalog:",
     "minimatch": "catalog:",
     "semver": "catalog:"

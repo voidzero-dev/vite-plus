@@ -6,7 +6,8 @@ export const BuiltinTemplate = {
   application: 'vite:application',
   library: 'vite:library',
 } as const;
-export type BuiltinTemplate = (typeof BuiltinTemplate)[keyof typeof BuiltinTemplate];
+export type BuiltinTemplate =
+  (typeof BuiltinTemplate)[keyof typeof BuiltinTemplate];
 
 export const TemplateType = {
   builtin: 'builtin',
@@ -36,7 +37,8 @@ export const PackageManager = {
   npm: 'npm',
   yarn: 'yarn',
 } as const;
-export type PackageManager = (typeof PackageManager)[keyof typeof PackageManager];
+export type PackageManager =
+  (typeof PackageManager)[keyof typeof PackageManager];
 
 export const DependencyType = {
   dependencies: 'dependencies',
@@ -44,7 +46,8 @@ export const DependencyType = {
   peerDependencies: 'peerDependencies',
   optionalDependencies: 'optionalDependencies',
 } as const;
-export type DependencyType = (typeof DependencyType)[keyof typeof DependencyType];
+export type DependencyType =
+  (typeof DependencyType)[keyof typeof DependencyType];
 
 export interface WorkspaceInfo {
   rootDir: string;
@@ -65,7 +68,8 @@ export interface WorkspaceInfo {
   packages: WorkspacePackage[];
 }
 
-export interface WorkspaceInfoOptional extends Omit<WorkspaceInfo, 'packageManager' | 'downloadPackageManager'> {
+export interface WorkspaceInfoOptional
+  extends Omit<WorkspaceInfo, 'packageManager' | 'downloadPackageManager'> {
   packageManager?: PackageManager;
 }
 

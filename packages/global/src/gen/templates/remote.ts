@@ -1,7 +1,11 @@
 import * as prompts from '@clack/prompts';
 import colors from 'picocolors';
 
-import { formatDlxCommand, runCommand, runCommandAndDetectProjectDir } from '../command.ts';
+import {
+  formatDlxCommand,
+  runCommand,
+  runCommandAndDetectProjectDir,
+} from '../command.ts';
 import type { ExecutionResult, TemplateInfo, WorkspaceInfo } from '../types.ts';
 
 const { gray, yellow } = colors;
@@ -39,13 +43,17 @@ export async function executeRemoteTemplate(
   // Provide troubleshooting tips
   if (exitCode === 127) {
     prompts.log.info(yellow('\nTroubleshooting:'));
-    prompts.log.info(`  ${gray('•')} Command not found. Make sure Node.js is installed`);
+    prompts.log.info(
+      `  ${gray('•')} Command not found. Make sure Node.js is installed`,
+    );
     // prompts.log.info(`  ${gray('•')} Check if ${command} is available in PATH`);
   } else if (isGitHubTemplate && exitCode !== 0) {
     prompts.log.info(yellow('\nTroubleshooting:'));
     prompts.log.info(`  ${gray('•')} Make sure the GitHub repository exists`);
     prompts.log.info(`  ${gray('•')} Check your internet connection`);
-    prompts.log.info(`  ${gray('•')} Repository might be private (requires authentication)`);
+    prompts.log.info(
+      `  ${gray('•')} Repository might be private (requires authentication)`,
+    );
   }
   return result;
 }
@@ -61,15 +69,25 @@ export async function runRemoteTemplateCommand(
   const remotePackageName = templateInfo.command;
   const execArgs = [...templateInfo.args];
   const envs = templateInfo.envs;
-  const { command, args } = formatDlxCommand(remotePackageName, execArgs, workspaceInfo);
+  const { command, args } = formatDlxCommand(
+    remotePackageName,
+    execArgs,
+    workspaceInfo,
+  );
   prompts.log.info(`Running: ${gray(`${command} ${args.join(' ')}`)}`);
   if (detectCreatedProjectDir) {
-    return await runCommandAndDetectProjectDir({ command, args, cwd, envs }, templateInfo.parentDir);
+    return await runCommandAndDetectProjectDir(
+      { command, args, cwd, envs },
+      templateInfo.parentDir,
+    );
   }
   return await runCommand({ command, args, cwd, envs });
 }
 
-function autoFixRemoteTemplateCommand(templateInfo: TemplateInfo, workspaceInfo: WorkspaceInfo) {
+function autoFixRemoteTemplateCommand(
+  templateInfo: TemplateInfo,
+  workspaceInfo: WorkspaceInfo,
+) {
   // @tanstack/create-start@latest, create-vite@latest
   let packageName = templateInfo.command;
   const indexOfAt = packageName.indexOf('@', 2);

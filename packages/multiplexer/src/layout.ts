@@ -34,9 +34,10 @@ export function getPanelDimensions(
     dimensions.push({
       width: width + (col < fillX ? 1 : 0),
       height: height + (row < fillY ? 1 : 0),
-      left: col === 0
-        ? screen.left
-        : previous.left + previous.width + DIVIDER_WIDTH,
+      left:
+        col === 0
+          ? screen.left
+          : previous.left + previous.width + DIVIDER_WIDTH,
       top: row === 0 ? screen.top : above.top + above.height + DIVIDER_WIDTH,
     });
   }
@@ -80,18 +81,22 @@ export class LayoutEngine {
     const dim = this.controlPanel.getDimensions();
     const pos = this.controlPanel.position;
     return {
-      top: pos === 'bottom' || pos === 'right' || pos === 'left'
-        ? 0
-        : dim.height + DIVIDER_WIDTH,
-      left: pos === 'top' || pos === 'right' || pos === 'bottom'
-        ? 0
-        : dim.width + DIVIDER_WIDTH,
-      width: pos === 'top' || pos === 'bottom'
-        ? screen.width
-        : Math.max(0, screen.width - dim.width - DIVIDER_WIDTH),
-      height: pos === 'left' || pos === 'right'
-        ? screen.height
-        : Math.max(0, screen.height - dim.height - DIVIDER_WIDTH),
+      top:
+        pos === 'bottom' || pos === 'right' || pos === 'left'
+          ? 0
+          : dim.height + DIVIDER_WIDTH,
+      left:
+        pos === 'top' || pos === 'right' || pos === 'bottom'
+          ? 0
+          : dim.width + DIVIDER_WIDTH,
+      width:
+        pos === 'top' || pos === 'bottom'
+          ? screen.width
+          : Math.max(0, screen.width - dim.width - DIVIDER_WIDTH),
+      height:
+        pos === 'left' || pos === 'right'
+          ? screen.height
+          : Math.max(0, screen.height - dim.height - DIVIDER_WIDTH),
     };
   }
 
@@ -121,7 +126,9 @@ export class LayoutEngine {
 
   selectNextPanel(direction: number) {
     const count = this.controlPanel.items.length;
-    this.setSelectedIndex((this.selectedPanelIndex + direction + count) % count);
+    this.setSelectedIndex(
+      (this.selectedPanelIndex + direction + count) % count,
+    );
     if (this.isGrid) this.controlPanel.render();
     else this.render();
   }
@@ -207,9 +214,10 @@ export class LayoutEngine {
     );
 
     const top = this.controlPanel.position === 'top' ? dim.height : 0;
-    const bottom = this.controlPanel.position === 'bottom'
-      ? process.stdout.rows - dim.height
-      : process.stdout.rows;
+    const bottom =
+      this.controlPanel.position === 'bottom'
+        ? process.stdout.rows - dim.height
+        : process.stdout.rows;
     if (isRight) verticals.add(dim.left);
     for (const left of verticals) {
       for (let j = top; j < bottom; j++) {
@@ -227,17 +235,18 @@ export class LayoutEngine {
         const pos = isLeft ? left - dim.width : left;
         const isStart = pos === 1 || top - dim.height === 1;
         const isEnd = pos === divider.length || top === dim.top;
-        const char = isLeft || isRight
-          ? isStart
-            ? '├'
-            : isEnd
-            ? '┤'
-            : '┼'
-          : isStart
-          ? '┬'
-          : isEnd
-          ? '┴'
-          : '┼';
+        const char =
+          isLeft || isRight
+            ? isStart
+              ? '├'
+              : isEnd
+                ? '┤'
+                : '┼'
+            : isStart
+              ? '┬'
+              : isEnd
+                ? '┴'
+                : '┼';
         divider = divider.substring(0, pos - 1) + char + divider.substring(pos);
       }
       readline.cursorTo(process.stdout, isLeft ? dim.width : 0, top - 1);
@@ -249,7 +258,9 @@ export class LayoutEngine {
     console.clear();
     this.controlPanel.render();
     const dimensions = this.getPanelDimensions();
-    this.panels.forEach((panel, index) => panel.setDimensions(dimensions[index]));
+    this.panels.forEach((panel, index) =>
+      panel.setDimensions(dimensions[index]),
+    );
     for (const panel of this.panels) panel.render();
     this.renderDividers();
   }

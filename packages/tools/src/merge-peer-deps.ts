@@ -18,7 +18,11 @@ function error(message: string): never {
   process.exit(1);
 }
 
-function mergeSemverVersions(v1: string, v2: string, packageName: string): string {
+function mergeSemverVersions(
+  v1: string,
+  v2: string,
+  packageName: string,
+): string {
   // Handle special cases
   if (v1 === v2) return v1;
 
@@ -27,9 +31,7 @@ function mergeSemverVersions(v1: string, v2: string, packageName: string): strin
   const isExact2 = v2.startsWith('=');
   if (isExact1 || isExact2) {
     if (isExact1 && isExact2 && v1 !== v2) {
-      error(
-        `Incompatible exact versions for ${packageName}: ${v1} vs ${v2}`,
-      );
+      error(`Incompatible exact versions for ${packageName}: ${v1} vs ${v2}`);
     }
     return isExact1 ? v1 : v2;
   }
@@ -61,7 +63,9 @@ function mergeSemverVersions(v1: string, v2: string, packageName: string): strin
   const range2 = semver.validRange(v2);
 
   if (!range1 || !range2) {
-    log(`Warning: Could not parse semver for ${packageName}: ${v1}, ${v2}. Using ${v1}`);
+    log(
+      `Warning: Could not parse semver for ${packageName}: ${v1}, ${v2}. Using ${v1}`,
+    );
     return v1;
   }
 
@@ -101,7 +105,9 @@ function mergeSemverVersions(v1: string, v2: string, packageName: string): strin
   return v1;
 }
 
-function mergePeerDependencies(packages: PackageJson[]): Record<string, string> {
+function mergePeerDependencies(
+  packages: PackageJson[],
+): Record<string, string> {
   const result: Record<string, string> = {};
 
   for (const pkg of packages) {
@@ -120,10 +126,13 @@ function mergePeerDependencies(packages: PackageJson[]): Record<string, string> 
   // Sort alphabetically
   return Object.keys(result)
     .sort()
-    .reduce((sorted, key) => {
-      sorted[key] = result[key];
-      return sorted;
-    }, {} as Record<string, string>);
+    .reduce(
+      (sorted, key) => {
+        sorted[key] = result[key];
+        return sorted;
+      },
+      {} as Record<string, string>,
+    );
 }
 
 function mergePeerDependenciesMeta(
@@ -149,10 +158,13 @@ function mergePeerDependenciesMeta(
   // Sort alphabetically
   return Object.keys(result)
     .sort()
-    .reduce((sorted, key) => {
-      sorted[key] = result[key];
-      return sorted;
-    }, {} as Record<string, { optional?: boolean }>);
+    .reduce(
+      (sorted, key) => {
+        sorted[key] = result[key];
+        return sorted;
+      },
+      {} as Record<string, { optional?: boolean }>,
+    );
 }
 
 export function mergePeerDeps() {
@@ -209,7 +221,9 @@ export function mergePeerDeps() {
   const mergedPeerDepsMeta = mergePeerDependenciesMeta(packages);
 
   log(`Merged ${Object.keys(mergedPeerDeps).length} peerDependencies`);
-  log(`Merged ${Object.keys(mergedPeerDepsMeta).length} peerDependenciesMeta entries`);
+  log(
+    `Merged ${Object.keys(mergedPeerDepsMeta).length} peerDependenciesMeta entries`,
+  );
 
   // Read CLI package.json
   const cliPackage = JSON.parse(

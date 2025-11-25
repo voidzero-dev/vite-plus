@@ -28,7 +28,12 @@ export async function doc(): Promise<{
   envs: Record<string, string>;
 }> {
   // VitePress's CLI binary is located at bin/vitepress.js relative to the package root
-  const binPath = join(dirname(fileURLToPath(import.meta.url)), 'vitepress', 'node', 'cli.js');
+  const binPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    'vitepress',
+    'node',
+    'cli.js',
+  );
 
   return {
     binPath,

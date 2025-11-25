@@ -8,19 +8,11 @@
     "noEmit": false,
     "allowImportingTsExtensions": false,
     "skipLibCheck": true,
-    "rootDir": "./src",
+    "rootDir": ".",
+    "resolveJsonModule": true,
     "experimentalDecorators": true,
-    "customConditions": ["dev"],
-    "preserveSymlinks": true
+    "customConditions": ["dev"]
   },
-  "include": ["src"],
   "exclude": ["node_modules", "dist/**/*"],
-  "references": [
-    {
-      "path": "../core"
-    },
-    {
-      "path": "../test"
-    }
-  ]
+  "include": ["./**/*.ts", "package.json"]
 }

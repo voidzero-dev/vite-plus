@@ -38,7 +38,8 @@ export async function multiplex(commands: Command[][]) {
   for (const cmds of commands) engine.addCommands(cmds);
 
   for (const cmds of commands) {
-    const start = (command: Command) => new Promise((resolve) => engine.run(command, resolve));
+    const start = (command: Command) =>
+      new Promise((resolve) => engine.run(command, resolve));
     const promises = cmds.map(start);
     engine.render();
     await Promise.all(promises);

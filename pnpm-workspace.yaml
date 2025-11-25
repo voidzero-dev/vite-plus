@@ -95,7 +95,7 @@ catalog:
   terser: ^5.31.1
   tinybench: ^5.0.0
   tinyexec: ^1.0.1
-  tsdown: 0.16.5
+  tsdown: ^0.16.6
   tsx: ^4.20.6
   typescript: ^5.9.3
   unified: ^11.0.5
@@ -140,9 +140,10 @@ minimumReleaseAgeExclude:
   - vitest
 overrides:
   rolldown: 'workspace:rolldown@*'
-  vite: 'workspace:@voidzero-dev/vite-plus@*'
-  vitest: 'workspace:@voidzero-dev/vite-plus@*'
-  vitest-dev: 'npm:vitest@*'
+  vite: 'workspace:@voidzero-dev/vite-plus-core@*'
+  vitest: 'workspace:@voidzero-dev/vite-plus-test@*'
+  vitest-dev: 'npm:vitest@^4.0.13'
+  '@rolldown/pluginutils': 'workspace:@rolldown/pluginutils@*'
 packageExtensions:
   sass-embedded:
     peerDependencies:
@@ -160,7 +161,7 @@ peerDependencyRules:
     - vitest
     - rolldown
   allowedVersions:
-    rolldown: '*'
     vite: '*'
     oxc-minify: '*'
     oxlint-tsgolint: '*'
+    rolldown: '*'

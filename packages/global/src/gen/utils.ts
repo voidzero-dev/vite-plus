@@ -38,7 +38,10 @@ export function editFile(file: string, callback: (content: string) => string) {
   fs.writeFileSync(file, callback(content), 'utf-8');
 }
 
-export function editOrCreateFile(file: string, callback: (content: string) => string) {
+export function editOrCreateFile(
+  file: string,
+  callback: (content: string) => string,
+) {
   if (!fs.existsSync(file)) {
     fs.writeFileSync(file, '', 'utf-8');
   }
@@ -50,13 +53,19 @@ export function readYamlFile<T = Record<string, any>>(file: string): T {
   return parseYaml(content) as T;
 }
 
-export function editYamlFile<T = Record<string, any>>(file: string, callback: (content: T) => T) {
+export function editYamlFile<T = Record<string, any>>(
+  file: string,
+  callback: (content: T) => T,
+) {
   const yaml = readYamlFile<T>(file);
   const newYaml = callback(yaml);
   fs.writeFileSync(file, stringifyYaml(newYaml), 'utf-8');
 }
 
-export function editOrCreateYamlFile<T = Record<string, any>>(file: string, callback: (content: T) => T) {
+export function editOrCreateYamlFile<T = Record<string, any>>(
+  file: string,
+  callback: (content: T) => T,
+) {
   if (!fs.existsSync(file)) {
     fs.writeFileSync(file, '', 'utf-8');
   }
@@ -68,7 +77,10 @@ export function readJsonFile<T = Record<string, any>>(file: string): T {
   return JSON.parse(content) as T;
 }
 
-export function editJsonFile<T = Record<string, any>>(file: string, callback: (content: T) => T) {
+export function editJsonFile<T = Record<string, any>>(
+  file: string,
+  callback: (content: T) => T,
+) {
   const json = readJsonFile<T>(file);
   const newJson = callback(json);
   fs.writeFileSync(file, JSON.stringify(newJson, null, 2) + '\n', 'utf-8');
@@ -113,14 +125,26 @@ export function emptyDir(dir: string) {
  * ./foo/bar/@scope/my-package -> { directory: './foo/bar/my-package', packageName: '@scope/my-package' }
  * ```
  */
-export function formatTargetDir(input: string): { directory: string; packageName: string; error?: string } {
+export function formatTargetDir(input: string): {
+  directory: string;
+  packageName: string;
+  error?: string;
+} {
   let targetDir = path.normalize(input.trim());
   const parsed = path.parse(targetDir);
   if (parsed.root || path.isAbsolute(targetDir)) {
-    return { directory: '', packageName: '', error: 'Absolute path is not allowed' };
+    return {
+      directory: '',
+      packageName: '',
+      error: 'Absolute path is not allowed',
+    };
   }
   if (targetDir.includes('..')) {
-    return { directory: '', packageName: '', error: 'Relative path contains ".." which is not allowed' };
+    return {
+      directory: '',
+      packageName: '',
+      error: 'Relative path contains ".." which is not allowed',
+    };
   }
   let packageName = parsed.base;
   const parentName = path.basename(parsed.dir);
@@ -133,8 +157,13 @@ export function formatTargetDir(input: string): { directory: string; packageName
   const result = validateNpmPackageName(packageName);
   if (!result.validForNewPackages) {
     // invalid package name
-    const message = result.errors?.[0] ?? result.warnings?.[0] ?? 'Invalid package name';
-    return { directory: '', packageName: '', error: `Parsed package name "${packageName}" is invalid: ${message}` };
+    const message =
+      result.errors?.[0] ?? result.warnings?.[0] ?? 'Invalid package name';
+    return {
+      directory: '',
+      packageName: '',
+      error: `Parsed package name "${packageName}" is invalid: ${message}`,
+    };
   }
   return { directory: targetDir, packageName };
 }
@@ -158,7 +187,7 @@ export function getScopeFromPackageName(packageName: string) {
 
 export const RENAME_FILES: Record<string, string> = {
   _gitignore: '.gitignore',
-  '_npmrc': '.npmrc',
+  _npmrc: '.npmrc',
   '_yarnrc.yml': '.yarnrc.yml',
 };
 
@@ -171,19 +200,28 @@ export function renameFiles(projectDir: string) {
   }
 }
 
-export function setPackageManager(projectDir: string, downloadPackageManager: DownloadPackageManagerResult) {
+export function setPackageManager(
+  projectDir: string,
+  downloadPackageManager: DownloadPackageManagerResult,
+) {
   // set package manager
-  editJsonFile<{ packageManager?: string }>(path.join(projectDir, 'package.json'), (pkg) => {
-    if (!pkg.packageManager) {
-      pkg.packageManager = `${downloadPackageManager.name}@${downloadPackageManager.version}`;
-    }
-    return pkg;
-  });
+  editJsonFile<{ packageManager?: string }>(
+    path.join(projectDir, 'package.json'),
+    (pkg) => {
+      if (!pkg.packageManager) {
+        pkg.packageManager = `${downloadPackageManager.name}@${downloadPackageManager.version}`;
+      }
+      return pkg;
+    },
+  );
 }
 
 export function setPackageName(projectDir: string, packageName: string) {
-  editJsonFile<{ name?: string }>(path.join(projectDir, 'package.json'), (pkg) => {
-    pkg.name = packageName;
-    return pkg;
-  });
+  editJsonFile<{ name?: string }>(
+    path.join(projectDir, 'package.json'),
+    (pkg) => {
+      pkg.name = packageName;
+      return pkg;
+    },
+  );
 }

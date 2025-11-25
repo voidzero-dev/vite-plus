@@ -14,7 +14,7 @@ For more info, run any command with the `--help` flag:
 
 Options:
   -c, --config <filename>   Use a custom config file 
-  --config-loader <loader>  Config loader to use: auto, native, unconfig (default: auto)
+  --config-loader <loader>  Config loader to use: auto, native, unrun (default: auto)
   --no-config               Disable config file (default: true)
   -f, --format <format>     Bundle format: esm, cjs, iife, umd (default: esm)
   --clean                   Clean output directory, --no-clean to disable 
@@ -300,5 +300,7 @@ Options:
   --configLoader <loader>                               Use bundle to bundle the config with esbuild or runner (experimental) to process it on the fly. This is only available in vite version <semver> and above. (default: bundle) 
   --standalone                                          Start Vitest without running tests. Tests will be running only on change. This option is ignored when CLI file filters are passed. (default: false) 
   --mergeReports [path]                                 Path to a blob reports directory. If this options is used, Vitest won't run any tests, it will only report previously recorded tests 
+  --clearCache                                          Delete all Vitest caches, including experimental.fsModuleCache, without running any tests. This will reduce the performance in the subsequent test run. 
+  --experimental <features>                             Experimental features.. Use '--help --experimental' for more info. 
   -h, --help                                            Display this message 
 

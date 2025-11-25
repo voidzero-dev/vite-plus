@@ -10,9 +10,8 @@
  */
 
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-import { DEFAULT_ENVS } from './utils.js';
+import { DEFAULT_ENVS, resolve } from './utils.js';
 
 /**
  * Resolves the Vite binary path and environment variables.
@@ -30,18 +29,19 @@ export async function vite(): Promise<{
   envs: Record<string, string>;
 }> {
   // Vite's CLI binary is located at bin/vite.js relative to the package root
-  const binPath = join(dirname(fileURLToPath(import.meta.url)), 'vite', 'node', 'cli.js');
+  const vitePackagePath = dirname(resolve('@voidzero-dev/vite-plus-core'));
+  const binPath = join(vitePackagePath, 'cli.js');
 
   return {
     binPath,
     // Pass through source map debugging environment variable if set
     envs: process.env.DEBUG_DISABLE_SOURCE_MAP
       ? {
-        ...DEFAULT_ENVS,
-        DEBUG_DISABLE_SOURCE_MAP: process.env.DEBUG_DISABLE_SOURCE_MAP,
-      }
+          ...DEFAULT_ENVS,
+          DEBUG_DISABLE_SOURCE_MAP: process.env.DEBUG_DISABLE_SOURCE_MAP,
+        }
       : {
-        ...DEFAULT_ENVS,
-      },
+          ...DEFAULT_ENVS,
+        },
   };
 }

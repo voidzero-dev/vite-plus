@@ -83,7 +83,9 @@ export async function snapTest() {
   );
 
   // Clean up the temporary directory on exit
-  process.on('exit', () => fs.rmSync(tempTmpDir, { recursive: true, force: true }));
+  process.on('exit', () =>
+    fs.rmSync(tempTmpDir, { recursive: true, force: true }),
+  );
 
   const casesDir = path.resolve('snap-tests');
 
@@ -123,17 +125,27 @@ interface Steps {
 }
 
 async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
-  const steps: Steps = JSON.parse(await fsPromises.readFile(`${casesDir}/${name}/steps.json`, 'utf-8'));
-  if (steps.ignoredPlatforms !== undefined && steps.ignoredPlatforms.includes(process.platform)) {
+  const steps: Steps = JSON.parse(
+    await fsPromises.readFile(`${casesDir}/${name}/steps.json`, 'utf-8'),
+  );
+  if (
+    steps.ignoredPlatforms !== undefined &&
+    steps.ignoredPlatforms.includes(process.platform)
+  ) {
     console.log('%s skipped on platform %s', name, process.platform);
     return;
   }
 
   console.log('%s started', name);
   const caseTmpDir = `${tempTmpDir}/${name}`;
-  await fsPromises.cp(`${casesDir}/${name}`, caseTmpDir, { recursive: true, errorOnExist: true });
+  await fsPromises.cp(`${casesDir}/${name}`, caseTmpDir, {
+    recursive: true,
+    errorOnExist: true,
+  });
 
-  const passThroughEnvs = Object.fromEntries(Object.entries(process.env).filter(([key]) => isPassThroughEnv(key)));
+  const passThroughEnvs = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => isPassThroughEnv(key)),
+  );
   const env: Record<string, string> = {
     ...passThroughEnvs,
     // Indicate CLI is running in test mode, so that it prints more detailed outputs.
@@ -196,7 +208,8 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
 
     let commandLine = `> ${cmd.command}`;
     if (exitCode !== 0) {
-      commandLine = (exitCode === undefined ? '[timeout]' : `[${exitCode}]`) + commandLine;
+      commandLine =
+        (exitCode === undefined ? '[timeout]' : `[${exitCode}]`) + commandLine;
     }
     newSnap.push(commandLine);
     if (output.length > 0) {

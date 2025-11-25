@@ -21,6 +21,12 @@
       "path": "./packages/cli"
     },
     {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/test"
+    },
+    {
       "path": "./packages/global"
     },
     {

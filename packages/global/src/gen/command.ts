@@ -45,7 +45,11 @@ export async function runCommandAndDetectProjectDir(
 
   for (const [filePath, pathAccess] of Object.entries(result.pathAccesses)) {
     // Look for package.json writes
-    if (pathAccess.write && filePath.endsWith('package.json') && !filePath.includes('node_modules')) {
+    if (
+      pathAccess.write &&
+      filePath.endsWith('package.json') &&
+      !filePath.includes('node_modules')
+    ) {
       // Extract directory from package.json path
       const dir = path.dirname(filePath);
 
@@ -85,7 +89,9 @@ export interface RunCommandResult extends ExecutionResult {
   stderr: Buffer;
 }
 
-export async function runCommand(options: RunCommandOptions): Promise<ExecutionResult> {
+export async function runCommand(
+  options: RunCommandOptions,
+): Promise<ExecutionResult> {
   const child = spawn(options.command, options.args, {
     stdio: 'inherit',
     cwd: options.cwd,
@@ -102,7 +108,9 @@ export async function runCommand(options: RunCommandOptions): Promise<ExecutionR
   return await promise;
 }
 
-export async function runCommandSilently(options: RunCommandOptions): Promise<RunCommandResult> {
+export async function runCommandSilently(
+  options: RunCommandOptions,
+): Promise<RunCommandResult> {
   const child = spawn(options.command, options.args, {
     stdio: 'pipe',
     cwd: options.cwd,
@@ -118,7 +126,11 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
       stderr.push(data);
     });
     child.on('close', (code) => {
-      resolve({ exitCode: code ?? 0, stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) });
+      resolve({
+        exitCode: code ?? 0,
+        stdout: Buffer.concat(stdout),
+        stderr: Buffer.concat(stderr),
+      });
     });
     child.on('error', (err) => {
       reject(err);
@@ -147,7 +159,11 @@ export function getPackageRunner(workspaceInfo: WorkspaceInfo) {
 }
 
 // TODO: will use `vite dlx` instead, see https://github.com/voidzero-dev/vite-task/issues/27
-export function formatDlxCommand(packageName: string, args: string[], workspaceInfo: WorkspaceInfo) {
+export function formatDlxCommand(
+  packageName: string,
+  args: string[],
+  workspaceInfo: WorkspaceInfo,
+) {
   const runner = getPackageRunner(workspaceInfo);
   const dlxArgs = runner.command === 'npm' ? ['--', ...args] : args;
   return {
@@ -156,11 +172,13 @@ export function formatDlxCommand(packageName: string, args: string[], workspaceI
   };
 }
 
-export function prependToPathToEnvs(extraPath: string, envs: NodeJS.ProcessEnv) {
+export function prependToPathToEnvs(
+  extraPath: string,
+  envs: NodeJS.ProcessEnv,
+) {
   const delimiter = path.delimiter;
-  const pathKey = Object.keys(envs).find(
-    (key) => key.toLowerCase() === 'path',
-  ) ?? 'PATH';
+  const pathKey =
+    Object.keys(envs).find((key) => key.toLowerCase() === 'path') ?? 'PATH';
 
   const current = envs[pathKey] ?? '';
 
