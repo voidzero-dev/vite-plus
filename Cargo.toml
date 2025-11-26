@@ -33,7 +33,10 @@ cargo_common_metadata = "allow"
 
 [workspace.dependencies]
 anyhow = "1.0.98"
-# https://github.com/ast-grep/ast-grep/pull/2359
+# Temporary fork of ast-grep dependencies using a specific commit from https://github.com/fengmk2/ast-grep.git.
+# Reason: Waiting for upstream PR #2359 (https://github.com/ast-grep/ast-grep/pull/2359) to be merged.
+# The commit 2f4c6924438a72e136485f0e14cd136b2e17d8d3 includes necessary fixes/features not yet available in the official release.
+# Safe to migrate back to the official ast-grep release once PR #2359 is merged and a new version is published.
 ast-grep-config = { git = "https://github.com/fengmk2/ast-grep.git", rev = "2f4c6924438a72e136485f0e14cd136b2e17d8d3" }
 ast-grep-core = { git = "https://github.com/fengmk2/ast-grep.git", rev = "2f4c6924438a72e136485f0e14cd136b2e17d8d3" }
 ast-grep-language = { git = "https://github.com/fengmk2/ast-grep.git", rev = "2f4c6924438a72e136485f0e14cd136b2e17d8d3", default-features = false, features = ["lang-bash"] }
