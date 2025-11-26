@@ -127,6 +127,50 @@ export interface JsCommandResolvedResult {
   envs: Record<string, string>;
 }
 
+/**
+ * Merge JSON configuration file into vite config file
+ *
+ * This function reads the files from disk and merges the JSON config
+ * into the vite configuration file.
+ *
+ * # Arguments
+ *
+ * * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
+ * * `json_config_path` - Path to the JSON config file (e.g., .oxlintrc, .oxfmtrc)
+ * * `config_key` - The key to use in the vite config (e.g., "lint", "format")
+ *
+ * # Returns
+ *
+ * Returns a `MergeJsonConfigResult` containing:
+ * - `content`: The updated vite config content
+ * - `updated`: Whether any changes were made
+ * - `usesFunctionCallback`: Whether the config uses a function callback
+ *
+ * # Example
+ *
+ * ```javascript
+ * const result = mergeJsonConfig('vite.config.ts', '.oxlintrc', 'lint');
+ * if (result.updated) {
+ *     fs.writeFileSync('vite.config.ts', result.content);
+ * }
+ * ```
+ */
+export declare function mergeJsonConfig(
+  viteConfigPath: string,
+  jsonConfigPath: string,
+  configKey: string,
+): MergeJsonConfigResult;
+
+/** Result of merging JSON config into vite config */
+export interface MergeJsonConfigResult {
+  /** The updated vite config content */
+  content: string;
+  /** Whether any changes were made */
+  updated: boolean;
+  /** Whether the config uses a function callback */
+  usesFunctionCallback: boolean;
+}
+
 /** Access modes for a path. */
 export interface PathAccess {
   /** Whether the path was read */

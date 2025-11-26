@@ -1,0 +1,72 @@
+# Simple ast-grep rule for adding lint config to defineConfig
+#
+# This rule is designed to be used programmatically where the
+# __OXLINT_CONFIG__ placeholder is replaced with actual content.
+#
+# Usage:
+#   1. Read .oxlintrc content and convert to TypeScript
+#   2. Replace __OXLINT_CONFIG__ in this file with the converted content
+#   3. Run: sg scan -r oxlint-simple.yaml vite.config.ts -U
+#
+# Example:
+#   # Create a rule with actual config content
+#   cat > /tmp/oxlint-rule.yaml << 'EOF'
+#   ---
+#   id: merge-oxlint-to-vite-config
+#   language: TypeScript
+#   rule:
+#     pattern: |
+#       defineConfig({
+#         $$$CONFIG
+#       })
+#   fix: |-
+#     defineConfig({
+#       $$$CONFIG
+#       lint: {
+#         rules: {
+#           'no-console': 'warn',
+#         },
+#       },
+#     })
+#   EOF
+#   sg scan -r /tmp/oxlint-rule.yaml vite.config.ts -U
+#
+# Note: This rule handles the common case where defineConfig receives
+# an object literal directly. For function callbacks or complex patterns,
+# manual migration may be needed.
+
+---
+id: merge-oxlint-to-vite-config
+language: TypeScript
+severity: info
+message: 'Merge .oxlintrc configuration into vite.config.ts'
+note: |
+  This rule adds the lint configuration from .oxlintrc to the
+  defineConfig call in vite.config.ts.
+
+  Before: defineConfig({ plugins: [...] })
+  After:  defineConfig({ plugins: [...], lint: {...} })
+
+rule:
+  # Match defineConfig call with object argument
+  # Using multiline pattern to correctly capture the content
+  pattern: |
+    defineConfig({
+      $$$CONFIG
+    })
+
+fix: |-
+  defineConfig({
+    $$$CONFIG
+    // lint configuration (migrated from .oxlintrc)
+    lint: __OXLINT_CONFIG__,
+  })
+
+files:
+  - '**/vite.config.ts'
+  - '**/vite.config.mts'
+  - '**/vite.config.js'
+  - '**/vite.config.mjs'
+ignores:
+  - '**/node_modules/**'
+  - '**/dist/**'

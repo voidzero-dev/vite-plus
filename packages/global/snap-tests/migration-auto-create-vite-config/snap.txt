@@ -1,0 +1,35 @@
+> vp migration # migration should auto create vite.config.ts and remove oxlintrc and oxfmtrc
+┌  Vite+ Migration
+│
+●  Using default package manager: pnpm
+│
+◆  ✅ Merged .oxlintrc.json into vite.config.ts
+│
+◆  ✅ Merged .oxfmtrc.json into vite.config.ts
+│
+└  ✨ Migration completed!
+
+
+> cat vite.config.ts # check vite.config.ts
+import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  format: {
+    printWidth: 100,
+    tabWidth: 2,
+    semi: true,
+    singleQuote: true,
+    trailingComma: 'es5',
+  },
+  lint: {
+    rules: {
+      'no-unused-vars': 'error',
+    },
+  },
+});
+
+> cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed
+cat: .oxlintrc.json: No such file or directory
+
+> cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is removed
+cat: .oxfmtrc.json: No such file or directory

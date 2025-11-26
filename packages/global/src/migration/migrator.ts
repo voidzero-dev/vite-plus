@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { rewriteScripts, type DownloadPackageManagerResult } from '@voidzero-dev/vite-plus/binding';
+import * as prompts from '@clack/prompts';
+import { mergeJsonConfig, rewriteScripts, type DownloadPackageManagerResult } from '@voidzero-dev/vite-plus/binding';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
 import { PackageManager, type WorkspaceInfo } from '../types/index.ts';
@@ -12,6 +13,7 @@ import {
   rulesDir,
   type YamlDocument,
 } from '../utils/index.ts';
+import { detectConfigs } from './detector.ts';
 
 const VITE_PLUS_NAME = '@voidzero-dev/vite-plus';
 const VITE_PLUS_VERSION = 'latest';
@@ -88,6 +90,7 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
   // set .npmrc to use vite-plus
   rewriteNpmrc(projectPath);
   rewriteLintStagedConfigFile(projectPath);
+  rewriteViteConfigFile(projectPath);
   // set package manager
   setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
 }
@@ -116,6 +119,7 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
   // set .npmrc to use vite-plus
   rewriteNpmrc(workspaceInfo.rootDir);
   rewriteLintStagedConfigFile(workspaceInfo.rootDir);
+  rewriteViteConfigFile(workspaceInfo.rootDir);
   // set package manager
   setPackageManager(workspaceInfo.rootDir, workspaceInfo.downloadPackageManager);
 }
@@ -399,6 +403,53 @@ function rewriteNpmrc(projectPath: string): void {
   }
   if (changed) {
     fs.writeFileSync(npmrcPath, content);
+  }
+}
+
+function rewriteViteConfigFile(projectPath: string): void {
+  const configs = detectConfigs(projectPath);
+  if (!configs.oxfmtConfig && !configs.oxlintConfig) {
+    return;
+  }
+  if (!configs.viteConfig) {
+    // create vite.config.ts
+    configs.viteConfig = path.join(projectPath, 'vite.config.ts');
+    fs.writeFileSync(
+      configs.viteConfig,
+      `import { defineConfig } from '${VITE_PLUS_NAME}';
+
+export default defineConfig({});
+`,
+    );
+  }
+  if (configs.oxlintConfig) {
+    // merge oxlint config into vite.config.ts
+    mergeAndRemoveJsonConfig(projectPath, configs.viteConfig, configs.oxlintConfig, 'lint');
+  }
+  if (configs.oxfmtConfig) {
+    // merge oxfmt config into vite.config.ts
+    mergeAndRemoveJsonConfig(projectPath, configs.viteConfig, configs.oxfmtConfig, 'format');
+  }
+}
+
+function mergeAndRemoveJsonConfig(
+  projectPath: string,
+  viteConfigPath: string,
+  jsonConfigPath: string,
+  configKey: string,
+): void {
+  const result = mergeJsonConfig(viteConfigPath, jsonConfigPath, configKey);
+  const jsonConfigRelativePath = path.relative(projectPath, jsonConfigPath);
+  const viteConfigRelativePath = path.relative(projectPath, viteConfigPath);
+  if (result.updated) {
+    fs.writeFileSync(viteConfigPath, result.content);
+    fs.unlinkSync(jsonConfigPath);
+    prompts.log.success(`✅ Merged ${jsonConfigRelativePath} into ${viteConfigRelativePath}`);
+  } else {
+    prompts.log.warn(`❌ Failed to merge ${jsonConfigRelativePath} into ${viteConfigRelativePath}`);
+    prompts.log.info(
+      `Please complete the merge manually and follow the instructions in the documentation: https://viteplus.dev/config/`,
+    );
   }
 }
 
