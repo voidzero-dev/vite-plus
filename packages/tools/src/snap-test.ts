@@ -184,9 +184,9 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
         stdin: null,
         // Declared to be `Writable` but `FileHandle` works too.
         // @ts-expect-error
-        stderr: cmd.ignoreOutput ? null : outputStream,
+        stderr: outputStream,
         // @ts-expect-error
-        stdout: cmd.ignoreOutput ? null : outputStream,
+        stdout: outputStream,
         glob: {
           // Disable glob expansion. Pass args like '--filter=*' as-is.
           isGlobPattern: () => false,
@@ -198,11 +198,17 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
 
     await outputStream.close();
 
-    const output = readFileSync(outputStreamPath, 'utf-8');
+    let output = readFileSync(outputStreamPath, 'utf-8');
 
     let commandLine = `> ${cmd.command}`;
     if (exitCode !== 0) {
-      commandLine = (exitCode === undefined ? '[timeout]' : `[${exitCode}]`) + commandLine;
+      commandLine =
+        (exitCode === undefined ? '[timeout]' : `[${exitCode}]`) + commandLine;
+    } else {
+      // only allow ignore output if the command is successful
+      if (cmd.ignoreOutput) {
+        output = '';
+      }
     }
     newSnap.push(commandLine);
     if (output.length > 0) {
