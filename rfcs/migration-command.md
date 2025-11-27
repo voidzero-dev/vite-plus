@@ -197,7 +197,8 @@ Next steps:
 **Important**:
 
 - `overrides.vite` ensures any dependency requiring `vite` gets `vite-plus` instead
-- Code using `import from 'vite'` automatically resolves to vite-plus
+- rewrite `import from 'vite'` to `import from 'vite-plus'` on `vite.config.ts`
+- rewrite `import from 'vitest/config'` to `import from 'vite-plus'` on `vitest.config.ts` or `vite.config.ts`
 
 **Note**: For Yarn, use `resolutions` instead of `overrides`.
 
@@ -257,12 +258,67 @@ export default defineConfig({
   plugins: [],
 
   // Oxfmt configuration
-  format: {
+  fmt: {
     printWidth: 100,
     tabWidth: 2,
     semi: true,
     singleQuote: true,
     trailingComma: 'es5',
+  },
+});
+```
+
+### import namespace change to vite-plus
+
+effect files:
+
+- vitest.config.ts
+- vite.config.ts
+
+**Before (import from 'vitest/config'):**
+
+```typescript
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    globals: true,
+  },
+});
+```
+
+**After (import from 'vite-plus'):**
+
+```typescript
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  test: {
+    globals: true,
+  },
+});
+```
+
+**Before (import from 'vite'):**
+
+```typescript
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  test: {
+    globals: true,
+  },
+});
+```
+
+**After (import from 'vite-plus'):**
+
+```typescript
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  test: {
+    globals: true,
   },
 });
 ```
@@ -296,7 +352,7 @@ my-package/
 ```typescript
 // Import from 'vite' still works - overrides maps it to vite-plus
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   // Vite configuration
@@ -318,12 +374,24 @@ export default defineConfig({
   },
 
   // format configuration (merged from .oxfmtrc)
-  format: {
+  fmt: {
     printWidth: 100,
     tabWidth: 2,
     semi: true,
     singleQuote: true,
     trailingComma: 'es5',
+  },
+});
+```
+
+**vitest.config.ts (after migration):**
+
+```typescript
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  test: {
+    globals: true,
   },
 });
 ```

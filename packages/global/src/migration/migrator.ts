@@ -2,7 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@clack/prompts';
-import { mergeJsonConfig, rewriteScripts, type DownloadPackageManagerResult } from '@voidzero-dev/vite-plus/binding';
+import {
+  mergeJsonConfig,
+  rewriteScripts,
+  rewriteImport,
+  type DownloadPackageManagerResult,
+} from '@voidzero-dev/vite-plus/binding';
+import semver from 'semver';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
 import { PackageManager, type WorkspaceInfo } from '../types/index.ts';
@@ -13,7 +19,7 @@ import {
   rulesDir,
   type YamlDocument,
 } from '../utils/index.ts';
-import { detectConfigs } from './detector.ts';
+import { detectConfigs, detectPackageMetadata } from './detector.ts';
 
 const VITE_PLUS_NAME = '@voidzero-dev/vite-plus';
 const VITE_PLUS_VERSION = 'latest';
@@ -22,6 +28,39 @@ const OVERRIDE_PACKAGES = {
   vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
 } as const;
 const REMOVE_PACKAGES = ['oxlint', 'oxlint-tsgolint', 'oxfmt'];
+
+/**
+ * Check the vite version is supported by migration
+ * @param projectPath - The path to the project
+ * @returns true if the vite version is supported by migration
+ */
+export function checkViteVersion(projectPath: string): boolean {
+  return checkPackageVersion(projectPath, 'vite', '7.0.0');
+}
+
+export function checkVitestVersion(projectPath: string): boolean {
+  return checkPackageVersion(projectPath, 'vitest', '4.0.0');
+}
+
+/**
+ * Check the package version is supported by migration
+ * @param projectPath - The path to the project
+ * @param name - The name of the package
+ * @param minVersion - The minimum version of the package
+ * @returns true if the package version is supported by migration
+ */
+function checkPackageVersion(projectPath: string, name: string, minVersion: string): boolean {
+  const metadata = detectPackageMetadata(projectPath, name);
+  if (!metadata || metadata.name !== name) {
+    return true;
+  }
+  if (semver.satisfies(metadata.version, `<${minVersion}`)) {
+    prompts.log.error(`❌ ${name} version ${metadata.version} is not supported by migration`);
+    prompts.log.info(`Please upgrade ${name} to version >=${minVersion} first`);
+    return false;
+  }
+  return true;
+}
 
 /**
  * Rewrite standalone project to add vite-plus dependencies
@@ -129,6 +168,8 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
  * @param projectPath - The path to the project
  */
 export function rewriteMonorepoProject(projectPath: string, packageManager: PackageManager): void {
+  rewriteViteConfigFile(projectPath);
+
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return;
@@ -140,14 +181,24 @@ export function rewriteMonorepoProject(projectPath: string, packageManager: Pack
     scripts?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
     const isNpm = packageManager === PackageManager.npm;
+    let needVitePlus = false;
     for (const [key, value] of Object.entries(OVERRIDE_PACKAGES)) {
       const version = isNpm ? value : 'catalog:';
       if (pkg.devDependencies?.[key]) {
         pkg.devDependencies[key] = version;
+        needVitePlus = true;
       }
       if (pkg.dependencies?.[key]) {
         pkg.dependencies[key] = version;
+        needVitePlus = true;
       }
+    }
+    if (needVitePlus) {
+      // add vite-plus to devDependencies to let vite config `import` rewrite work
+      pkg.devDependencies = {
+        ...pkg.devDependencies,
+        [VITE_PLUS_NAME]: isNpm ? VITE_PLUS_VERSION : 'catalog:',
+      };
     }
 
     // rewrite scripts in package.json
@@ -203,7 +254,16 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
 
     // minimumReleaseAgeExclude
     if (doc.has('minimumReleaseAge')) {
-      // add @voidzero-dev/*, vite, vitest to minimumReleaseAgeExclude
+      // add @voidzero-dev/*, oxlint, oxlint-tsgolint, oxfmt to minimumReleaseAgeExclude
+      const excludes = [
+        '@voidzero-dev/*',
+        'oxlint',
+        '@oxlint/*',
+        'oxlint-tsgolint',
+        '@oxlint-tsgolint/*',
+        'oxfmt',
+        '@oxfmt/*',
+      ];
       let minimumReleaseAgeExclude = doc.getIn(['minimumReleaseAgeExclude']) as YAMLSeq<
         Scalar<string>
       >;
@@ -211,12 +271,9 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
         minimumReleaseAgeExclude = new YAMLSeq();
       }
       const existing = new Set(minimumReleaseAgeExclude.items.map((n) => n.value));
-      if (!existing.has('@voidzero-dev/*')) {
-        minimumReleaseAgeExclude.add(scalarString('@voidzero-dev/*'));
-      }
-      for (const key of Object.keys(OVERRIDE_PACKAGES)) {
-        if (!existing.has(key)) {
-          minimumReleaseAgeExclude.add(scalarString(key));
+      for (const exclude of excludes) {
+        if (!existing.has(exclude)) {
+          minimumReleaseAgeExclude.add(scalarString(exclude));
         }
       }
       doc.setIn(['minimumReleaseAgeExclude'], minimumReleaseAgeExclude);
@@ -406,21 +463,38 @@ function rewriteNpmrc(projectPath: string): void {
   }
 }
 
+/**
+ * Rewrite vite.config.ts to use vite-plus
+ * - rewrite `import from 'vite'` to `import from 'vite-plus'`
+ * - rewrite `import from 'vitest/config'` to `import from 'vite-plus'`
+ * - merge oxlint config into vite.config.ts
+ * - merge oxfmt config into vite.config.ts
+ */
 function rewriteViteConfigFile(projectPath: string): void {
   const configs = detectConfigs(projectPath);
+  if (configs.viteConfig) {
+    rewriteViteConfigImport(projectPath, configs.viteConfig);
+  }
+  if (configs.vitestConfig) {
+    rewriteViteConfigImport(projectPath, configs.vitestConfig);
+  }
+
   if (!configs.oxfmtConfig && !configs.oxlintConfig) {
     return;
   }
   if (!configs.viteConfig) {
+    // TODO: handle typescript or javascript
     // create vite.config.ts
-    configs.viteConfig = path.join(projectPath, 'vite.config.ts');
+    configs.viteConfig = 'vite.config.ts';
+    const viteConfigPath = path.join(projectPath, 'vite.config.ts');
     fs.writeFileSync(
-      configs.viteConfig,
+      viteConfigPath,
       `import { defineConfig } from '${VITE_PLUS_NAME}';
 
 export default defineConfig({});
 `,
     );
+    prompts.log.success(`✅ Created vite.config.ts in ${configs.viteConfig}`);
   }
   if (configs.oxlintConfig) {
     // merge oxlint config into vite.config.ts
@@ -428,7 +502,7 @@ export default defineConfig({});
   }
   if (configs.oxfmtConfig) {
     // merge oxfmt config into vite.config.ts
-    mergeAndRemoveJsonConfig(projectPath, configs.viteConfig, configs.oxfmtConfig, 'format');
+    mergeAndRemoveJsonConfig(projectPath, configs.viteConfig, configs.oxfmtConfig, 'fmt');
   }
 }
 
@@ -438,18 +512,27 @@ function mergeAndRemoveJsonConfig(
   jsonConfigPath: string,
   configKey: string,
 ): void {
-  const result = mergeJsonConfig(viteConfigPath, jsonConfigPath, configKey);
-  const jsonConfigRelativePath = path.relative(projectPath, jsonConfigPath);
-  const viteConfigRelativePath = path.relative(projectPath, viteConfigPath);
+  const fullViteConfigPath = path.join(projectPath, viteConfigPath);
+  const fullJsonConfigPath = path.join(projectPath, jsonConfigPath);
+  const result = mergeJsonConfig(fullViteConfigPath, fullJsonConfigPath, configKey);
   if (result.updated) {
-    fs.writeFileSync(viteConfigPath, result.content);
-    fs.unlinkSync(jsonConfigPath);
-    prompts.log.success(`✅ Merged ${jsonConfigRelativePath} into ${viteConfigRelativePath}`);
+    fs.writeFileSync(fullViteConfigPath, result.content);
+    fs.unlinkSync(fullJsonConfigPath);
+    prompts.log.success(`✅ Merged ${jsonConfigPath} into ${viteConfigPath}`);
   } else {
-    prompts.log.warn(`❌ Failed to merge ${jsonConfigRelativePath} into ${viteConfigRelativePath}`);
+    prompts.log.warn(`❌ Failed to merge ${jsonConfigPath} into ${viteConfigPath}`);
     prompts.log.info(
       `Please complete the merge manually and follow the instructions in the documentation: https://viteplus.dev/config/`,
     );
+  }
+}
+
+function rewriteViteConfigImport(projectPath: string, viteConfigPath: string): void {
+  const fullPath = path.join(projectPath, viteConfigPath);
+  const result = rewriteImport(fullPath);
+  if (result.updated) {
+    fs.writeFileSync(fullPath, result.content);
+    prompts.log.success(`✅ Rewrote import in ${viteConfigPath}`);
   }
 }
 

@@ -83,3 +83,39 @@ pub fn merge_json_config(
         uses_function_callback: result.uses_function_callback,
     })
 }
+
+/// Result of rewriting imports in vite config
+#[napi(object)]
+pub struct RewriteResult {
+    /// The updated vite config content
+    pub content: String,
+    /// Whether any changes were made
+    pub updated: bool,
+}
+
+/// Rewrite imports in vite config from 'vite' or 'vitest/config' to '@voidzero-dev/vite-plus'
+///
+/// # Arguments
+///
+/// * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
+///
+/// # Returns
+///
+/// Returns a `RewriteResult` containing:
+/// - `content`: The updated vite config content
+/// - `updated`: Whether any changes were made
+///
+/// # Example
+///
+/// ```javascript
+/// const result = rewriteImport('vite.config.ts');
+/// if (result.updated) {
+///     fs.writeFileSync('vite.config.ts', result.content);
+/// }
+/// ```
+#[napi]
+pub fn rewrite_import(vite_config_path: String) -> Result<RewriteResult> {
+    let result = vite_migration::rewrite_import(Path::new(&vite_config_path))
+        .map_err(anyhow::Error::from)?;
+    Ok(RewriteResult { content: result.content, updated: result.updated })
+}

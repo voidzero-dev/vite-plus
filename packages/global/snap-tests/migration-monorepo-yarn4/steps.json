@@ -1,0 +1,15 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp migration # migration should merge vite.config.ts and remove oxlintrc",
+    "cat vite.config.ts # check vite.config.ts",
+    "cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed",
+    "cat package.json # check package.json",
+    "cat .yarnrc.yml # check .yarnrc.yml",
+    "cat .npmrc # check .npmrc",
+    "cat packages/app/package.json # check app package.json",
+    "cat packages/utils/package.json # check utils package.json"
+  ]
+}

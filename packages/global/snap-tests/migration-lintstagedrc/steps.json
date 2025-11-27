@@ -1,4 +1,7 @@
 {
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
   "commands": [
     "vp migration -h # migration help message",
     "vp migration # migration work with lintstagedrc.json",

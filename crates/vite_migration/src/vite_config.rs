@@ -1,10 +1,50 @@
 use std::path::Path;
 
 use ast_grep_config::{GlobalRules, RuleConfig, from_yaml_string};
-use ast_grep_core::replacer::Replacer;
 use ast_grep_language::{LanguageExt, SupportLang};
 use serde_json::Value;
 use vite_error::Error;
+
+use crate::ast_grep;
+
+/// ast-grep rules for rewriting imports to @voidzero-dev/vite-plus
+///
+/// This rewrites:
+/// - `import { ... } from 'vite'` → `import { ... } from '@voidzero-dev/vite-plus'`
+/// - `import { ... } from 'vitest/config'` → `import { ... } from '@voidzero-dev/vite-plus'`
+const REWRITE_IMPORT_RULES: &str = r#"---
+id: rewrite-vitest-config-import
+language: TypeScript
+rule:
+  pattern: "'vitest/config'"
+  inside:
+    kind: import_statement
+fix: "'@voidzero-dev/vite-plus'"
+---
+id: rewrite-vitest-config-import-double-quotes
+language: TypeScript
+rule:
+  pattern: '"vitest/config"'
+  inside:
+    kind: import_statement
+fix: '"@voidzero-dev/vite-plus"'
+---
+id: rewrite-vite-import
+language: TypeScript
+rule:
+  pattern: "'vite'"
+  inside:
+    kind: import_statement
+fix: "'@voidzero-dev/vite-plus'"
+---
+id: rewrite-vite-import-double-quotes
+language: TypeScript
+rule:
+  pattern: '"vite"'
+  inside:
+    kind: import_statement
+fix: '"@voidzero-dev/vite-plus"'
+"#;
 
 /// Result of merging JSON config into vite config
 #[derive(Debug)]
@@ -15,6 +55,15 @@ pub struct MergeResult {
     pub updated: bool,
     /// Whether the config uses a function callback
     pub uses_function_callback: bool,
+}
+
+/// Result of rewriting imports in vite config
+#[derive(Debug)]
+pub struct RewriteResult {
+    /// The updated vite config content
+    pub content: String,
+    /// Whether any changes were made
+    pub updated: bool,
 }
 
 /// Merge a JSON configuration file into vite.config.ts or vite.config.js
@@ -81,6 +130,48 @@ pub fn merge_json_config(
     merge_json_config_content(&vite_config_content, &ts_config, config_key)
 }
 
+/// Rewrite imports in vite config file from 'vite' or 'vitest/config' to '@voidzero-dev/vite-plus'
+///
+/// This function reads a vite configuration file and rewrites the import statements
+/// to use '@voidzero-dev/vite-plus' instead of 'vite' or 'vitest/config'.
+///
+/// # Arguments
+///
+/// * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
+///
+/// # Returns
+///
+/// Returns a `RewriteResult` containing:
+/// - `content`: The updated vite config content
+/// - `updated`: Whether any changes were made
+///
+/// # Example
+///
+/// ```ignore
+/// use std::path::Path;
+/// use vite_migration::rewrite_import;
+///
+/// let result = rewrite_import(Path::new("vite.config.ts"))?;
+/// if result.updated {
+///     std::fs::write("vite.config.ts", &result.content)?;
+/// }
+/// ```
+pub fn rewrite_import(vite_config_path: &Path) -> Result<RewriteResult, Error> {
+    // Read the vite config file
+    let vite_config_content = std::fs::read_to_string(vite_config_path)?;
+
+    // Rewrite the imports
+    rewrite_import_content(&vite_config_content)
+}
+
+/// Rewrite imports in vite config content from 'vite' or 'vitest/config' to '@voidzero-dev/vite-plus'
+///
+/// This is the internal function that performs the actual rewrite using ast-grep.
+fn rewrite_import_content(vite_config_content: &str) -> Result<RewriteResult, Error> {
+    let (content, updated) = ast_grep::apply_rules(vite_config_content, REWRITE_IMPORT_RULES)?;
+    Ok(RewriteResult { content, updated })
+}
+
 /// Merge JSON configuration into vite config content
 ///
 /// This is the internal function that performs the actual merge using ast-grep.
@@ -106,52 +197,10 @@ fn merge_json_config_content(
     // Generate the ast-grep rules with the actual config
     let rule_yaml = generate_merge_rule(ts_config, config_key);
 
-    // Load and apply the rules
-    let globals = GlobalRules::default();
-    let rules: Vec<RuleConfig<SupportLang>> =
-        from_yaml_string::<SupportLang>(&rule_yaml, &globals)?;
-
     // Apply the transformation
-    let mut current = vite_config_content.to_string();
-    let mut updated = false;
+    let (content, updated) = ast_grep::apply_rules(vite_config_content, &rule_yaml)?;
 
-    for rule in &rules {
-        // Only handle TypeScript rules
-        if rule.language != SupportLang::TypeScript {
-            continue;
-        }
-
-        // Parse current config with TypeScript language
-        let grep = rule.language.ast_grep(&current);
-        let root = grep.root();
-
-        let matcher = &rule.matcher;
-
-        // Get the fixer if available
-        let fixers = match rule.get_fixer() {
-            Ok(f) if !f.is_empty() => f,
-            _ => continue,
-        };
-
-        // Collect all matches and their replacements
-        let mut replacements = Vec::new();
-        for node in root.find_all(matcher) {
-            let range = node.range();
-            let replacement_bytes = fixers[0].generate_replacement(&node);
-            let replacement_str = String::from_utf8_lossy(&replacement_bytes).to_string();
-            replacements.push((range.start, range.end, replacement_str));
-        }
-
-        // Replace from back to front to maintain correct positions
-        replacements.sort_by_key(|(start, _, _)| std::cmp::Reverse(*start));
-
-        for (start, end, replacement) in replacements {
-            current.replace_range(start..end, &replacement);
-            updated = true;
-        }
-    }
-
-    Ok(MergeResult { content: current, updated, uses_function_callback })
+    Ok(MergeResult { content, updated, uses_function_callback })
 }
 
 /// Check if the vite config uses a function callback pattern
@@ -443,6 +492,10 @@ fn escape_single_quotes(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+
+    use tempfile::tempdir;
+
     use super::*;
 
     #[test]
@@ -912,18 +965,15 @@ export default defineConfig({
 
     #[test]
     fn test_merge_json_config_with_files() {
-        use std::io::Write;
+        // Create temporary directory (automatically cleaned up when dropped)
+        let temp_dir = tempdir().unwrap();
 
-        // Create temporary files
-        let temp_dir = std::env::temp_dir().join("vite_migration_test");
-        std::fs::create_dir_all(&temp_dir).unwrap();
-
-        let vite_config_path = temp_dir.join("vite.config.ts");
-        let oxlint_config_path = temp_dir.join(".oxlintrc");
+        let vite_config_path = temp_dir.path().join("vite.config.ts");
+        let oxlint_config_path = temp_dir.path().join(".oxlintrc");
 
         // Write test vite config
         let mut vite_file = std::fs::File::create(&vite_config_path).unwrap();
-        writeln!(
+        write!(
             vite_file,
             r#"import {{ defineConfig }} from 'vite';
 
@@ -935,7 +985,7 @@ export default defineConfig({{
 
         // Write test oxlint config
         let mut oxlint_file = std::fs::File::create(&oxlint_config_path).unwrap();
-        writeln!(
+        write!(
             oxlint_file,
             r#"{{
   "rules": {{
@@ -964,11 +1014,8 @@ export default defineConfig({
     ignorePatterns: ['dist', 'node_modules'],
   },
   plugins: [],
-});
-"#
+});"#
         );
-        // Clean up
-        std::fs::remove_dir_all(&temp_dir).ok();
     }
 
     #[test]
@@ -1085,6 +1132,138 @@ export default defineConfig({
   },
   plugins: [],
 })"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vite() {
+        let vite_config = r#"import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [],
+});"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from '@voidzero-dev/vite-plus'
+
+export default defineConfig({
+  plugins: [],
+});"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vite_double_quotes() {
+        let vite_config = r#"import { defineConfig } from "vite";
+
+export default defineConfig({
+  plugins: [],
+});"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from "@voidzero-dev/vite-plus";
+
+export default defineConfig({
+  plugins: [],
+});"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config() {
+        let vite_config = r#"import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    globals: true,
+  },
+});"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  test: {
+    globals: true,
+  },
+});"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_multiple_imports() {
+        let vite_config = r#"import { defineConfig, loadEnv, type UserWorkspaceConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig, loadEnv, type UserWorkspaceConfig } from '@voidzero-dev/vite-plus';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+});"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_already_vite_plus() {
+        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  plugins: [],
+});"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_rewrite_import_with_file() {
+        // Create temporary directory (automatically cleaned up when dropped)
+        let temp_dir = tempdir().unwrap();
+
+        let vite_config_path = temp_dir.path().join("vite.config.ts");
+
+        // Write test vite config
+        let mut vite_file = std::fs::File::create(&vite_config_path).unwrap();
+        write!(
+            vite_file,
+            r#"import {{ defineConfig }} from 'vite';
+
+export default defineConfig({{
+  plugins: [],
+}});"#
+        )
+        .unwrap();
+
+        // Run the rewrite
+        let result = rewrite_import(&vite_config_path).unwrap();
+
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  plugins: [],
+});"#
         );
     }
 }

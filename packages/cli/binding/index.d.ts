@@ -182,6 +182,38 @@ export interface PathAccess {
 }
 
 /**
+ * Rewrite imports in vite config from 'vite' or 'vitest/config' to '@voidzero-dev/vite-plus'
+ *
+ * # Arguments
+ *
+ * * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
+ *
+ * # Returns
+ *
+ * Returns a `RewriteResult` containing:
+ * - `content`: The updated vite config content
+ * - `updated`: Whether any changes were made
+ *
+ * # Example
+ *
+ * ```javascript
+ * const result = rewriteImport('vite.config.ts');
+ * if (result.updated) {
+ *     fs.writeFileSync('vite.config.ts', result.content);
+ * }
+ * ```
+ */
+export declare function rewriteImport(viteConfigPath: string): RewriteResult;
+
+/** Result of rewriting imports in vite config */
+export interface RewriteResult {
+  /** The updated vite config content */
+  content: string;
+  /** Whether any changes were made */
+  updated: boolean;
+}
+
+/**
  * Rewrite scripts json content using rules from rules_yaml
  *
  * # Arguments

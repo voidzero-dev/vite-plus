@@ -1,8 +1,10 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
 export interface ConfigFiles {
   viteConfig?: string;
+  vitestConfig?: string;
   oxlintConfig?: string;
   oxfmtConfig?: string;
 }
@@ -20,18 +22,15 @@ export function detectConfigs(projectPath: string): ConfigFiles {
     }
   }
 
-  // TODO: Check for vitest.config.*
+  // Check for vitest.config.*
   // https://vitest.dev/config/
-  // const vitestConfigs = [
-  //   'vitest.config.ts',
-  //   'vitest.config.js',
-  // ];
-  // for (const config of vitestConfigs) {
-  //   if (fs.existsSync(path.join(projectPath, config))) {
-  //     configs.vitestConfig = config;
-  //     break;
-  //   }
-  // }
+  const vitestConfigs = ['vitest.config.ts', 'vitest.config.js'];
+  for (const config of vitestConfigs) {
+    if (fs.existsSync(path.join(projectPath, config))) {
+      configs.vitestConfig = config;
+      break;
+    }
+  }
 
   // TODO: Check for tsdown.config.*
   // https://tsdown.dev/options/config-file
@@ -74,4 +73,28 @@ export function detectConfigs(projectPath: string): ConfigFiles {
   }
 
   return configs;
+}
+
+const require = createRequire(import.meta.url);
+
+interface PackageMetadata {
+  name: string;
+  version: string;
+}
+
+export function detectPackageMetadata(
+  projectPath: string,
+  packageName: string,
+): PackageMetadata | void {
+  try {
+    const pkgFilePath = require.resolve(`${packageName}/package.json`, { paths: [projectPath] });
+    const pkg = JSON.parse(fs.readFileSync(pkgFilePath, 'utf8'));
+    return {
+      name: pkg.name,
+      version: pkg.version,
+    };
+  } catch {
+    // ignore MODULE_NOT_FOUND error
+    return;
+  }
 }

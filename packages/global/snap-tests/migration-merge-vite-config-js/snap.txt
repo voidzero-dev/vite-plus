@@ -1,4 +1,4 @@
-> vp migration # migration should auto create vite.config.ts and remove oxlintrc and oxfmtrc
+> vp migration # migration should merge vite.config.js and remove oxlintrc
 ┌  Vite+ Migration
 │
 ●  Using default package manager: pnpm
@@ -7,43 +7,37 @@
 │
 ●  pnpm@<semver> installed
 │
-◆  ✅ Created vite.config.ts in vite.config.ts
-│
-◆  ✅ Merged .oxlintrc.json into vite.config.ts
-│
-◆  ✅ Merged .oxfmtrc.json into vite.config.ts
+◆  ✅ Merged .oxlintrc.json into vite.config.js
 │
 └  ✨ Migration completed!
 
 
-> cat vite.config.ts # check vite.config.ts
-import { defineConfig } from '@voidzero-dev/vite-plus';
+> cat vite.config.js # check vite.config.js
+import react from '@vitejs/plugin-react';
 
-export default defineConfig({
-  fmt: {
-    printWidth: 100,
-    tabWidth: 2,
-    semi: true,
-    singleQuote: true,
-    trailingComma: 'es5',
-  },
+export default {
   lint: {
     rules: {
       'no-unused-vars': 'error',
     },
   },
-});
+  plugins: [react()],
+}
 
 > cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed
 cat: .oxlintrc.json: No such file or directory
 
-> cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is removed
-cat: .oxfmtrc.json: No such file or directory
-
 > cat package.json # check package.json
 {
   "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "@vitejs/plugin-react": "^4.2.0",
     "@voidzero-dev/vite-plus": "latest"
+  },
+  "scripts": {
+    "dev": "vite dev --port 3000",
+    "build": "vite build",
+    "lint": "vite lint"
   },
   "pnpm": {
     "overrides": {

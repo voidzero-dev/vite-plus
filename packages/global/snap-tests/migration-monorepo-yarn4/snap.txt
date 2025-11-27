@@ -1,0 +1,117 @@
+> vp migration # migration should merge vite.config.ts and remove oxlintrc
+┌  Vite+ Migration
+│
+●  yarn@<semver> installing...
+│
+●  yarn@<semver> installed
+│
+◆  ✅ Rewrote import in vite.config.ts
+│
+◆  ✅ Merged .oxlintrc.json into vite.config.ts
+│
+└  ✨ Migration completed!
+
+
+> cat vite.config.ts # check vite.config.ts
+import react from '@vitejs/plugin-react';
+import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  lint: {
+    rules: {
+      'no-unused-vars': 'error',
+    },
+  },
+  plugins: [react()],
+});
+
+> cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed
+cat: .oxlintrc.json: No such file or directory
+
+> cat package.json # check package.json
+{
+  "name": "migration-monorepo-yarn4",
+  "version": "1.0.0",
+  "packageManager": "yarn@<semver>",
+  "dependencies": {
+    "testnpm2": "1.0.0",
+    "vite": "catalog:"
+  },
+  "devDependencies": {
+    "vitest": "catalog:",
+    "@voidzero-dev/vite-plus": "catalog:"
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "test:run": "vite test run",
+    "test:ui": "vite test --ui",
+    "test:coverage": "vite test run --coverage",
+    "test:watch": "vite test --watch",
+    "test": "vite test",
+    "lint": "vite lint",
+    "fmt": "vite fmt"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "resolutions": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  }
+}
+
+> cat .yarnrc.yml # check .yarnrc.yml
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  '@voidzero-dev/vite-plus': latest
+npmScopes:
+  voidzero-dev:
+    npmRegistryServer: https://npm.pkg.github.com
+    npmAuthToken: ${GITHUB_TOKEN}
+
+> cat .npmrc # check .npmrc
+@voidzero-dev:registry=https://npm.pkg.github.com/
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+> cat packages/app/package.json # check app package.json
+{
+  "name": "app",
+  "dependencies": {
+    "testnpm2": "catalog:",
+    "test-vite-plus-install": "1.0.0",
+    "@vite-plus-test/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "@voidzero-dev/vite-plus": "catalog:"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-other-optional": "1.0.0"
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "test": "vite test"
+  }
+}
+
+> cat packages/utils/package.json # check utils package.json
+{
+  "name": "@vite-plus-test/utils",
+  "dependencies": {
+    "testnpm2": "1.0.0"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "@voidzero-dev/vite-plus": "catalog:"
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "test": "vite test"
+  }
+}

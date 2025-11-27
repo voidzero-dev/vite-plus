@@ -748,6 +748,7 @@ const {
   detectWorkspace,
   downloadPackageManager,
   mergeJsonConfig,
+  rewriteImport,
   rewriteScripts,
   run,
   runCommand,
@@ -755,6 +756,7 @@ const {
 export { detectWorkspace };
 export { downloadPackageManager };
 export { mergeJsonConfig };
+export { rewriteImport };
 export { rewriteScripts };
 export { run };
 export { runCommand };

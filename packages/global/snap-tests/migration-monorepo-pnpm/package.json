@@ -1,0 +1,25 @@
+{
+  "name": "migration-monorepo-pnpm",
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.18.0",
+  "dependencies": {
+    "testnpm2": "1.0.0",
+    "vite": "catalog:"
+  },
+  "devDependencies": {
+    "vitest": "catalog:",
+    "oxlint": "catalog:",
+    "oxfmt": "catalog:"
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest --watch",
+    "test": "vitest",
+    "lint": "oxlint",
+    "fmt": "oxfmt"
+  }
+}

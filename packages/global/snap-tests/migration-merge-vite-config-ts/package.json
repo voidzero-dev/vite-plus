@@ -1,0 +1,25 @@
+{
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "oxlint": "1",
+    "oxfmt": "1"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest --watch",
+    "test": "vitest",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "lint:type-aware": "oxlint --type-aware",
+    "fmt": "oxfmt",
+    "fmt:fix": "oxfmt --fix",
+    "fmt:staged": "oxfmt --staged",
+    "fmt:staged:fix": "oxfmt --staged --fix"
+  }
+}

@@ -1,0 +1,13 @@
+packages:
+  - packages/*
+
+catalog:
+  testnpm2: ^1.0.0
+  # test comment here to check if the comment is preserved
+  vite: ^7.0.0
+  vitest: ^4.0.0
+  oxlint: ^1.0.0
+  oxfmt: ^1.0.0
+  oxlint-tsgolint: ^1.0.0
+
+minimumReleaseAge: 1440

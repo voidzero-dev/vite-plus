@@ -1,0 +1,21 @@
+> vp install # install dependencies first
+[1]> vp migration # migration should fail because vitest version is not supported
+┌  Vite+ Migration
+│
+●  pnpm@<semver> installing...
+│
+●  pnpm@<semver> installed
+│
+■  ❌ vitest version <semver> is not supported by migration
+│
+●  Please upgrade vitest to version >=4.0.0 first
+└  The project is not supported by migration
+
+
+> cat package.json # check package.json is not updated
+{
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  },
+  "packageManager": "pnpm@<semver>"
+}

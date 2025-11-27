@@ -5,7 +5,7 @@ import mri from 'mri';
 import colors from 'picocolors';
 import semver from 'semver';
 
-import type { WorkspaceInfo } from '../types/index.ts';
+import { PackageManager, type WorkspaceInfo } from '../types/index.ts';
 import {
   defaultInteractive,
   detectWorkspace,
@@ -13,8 +13,14 @@ import {
   downloadPackageManager,
   runViteInstall,
   upgradeYarn,
+  cancelAndExit,
 } from '../utils/index.ts';
-import { rewriteMonorepo, rewriteStandaloneProject } from './migrator.ts';
+import {
+  checkVitestVersion,
+  checkViteVersion,
+  rewriteMonorepo,
+  rewriteStandaloneProject,
+} from './migrator.ts';
 
 const { cyan, green, gray } = colors;
 
@@ -106,20 +112,50 @@ async function main() {
     downloadPackageManager: downloadResult,
   };
 
+  // run vite install first to ensure the project is ready
+  await runViteInstall(workspaceInfo.rootDir, options.interactive);
+  // check vite and vitest version is supported by migration
+  const isViteSupported = checkViteVersion(workspaceInfo.rootDir);
+  const isVitestSupported = checkVitestVersion(workspaceInfo.rootDir);
+  if (!isViteSupported || !isVitestSupported) {
+    cancelAndExit('The project is not supported by migration', 1);
+  }
+
   // support catalog require yarn@>=4.10.0 https://yarnpkg.com/features/catalogs
   // if `yarn<4.10.0 && yarn>=4.0.0`, upgrade yarn to stable version
-  if (packageManager === 'yarn' && semver.satisfies(downloadResult.version, '>=4.0.0 <4.10.0')) {
-    await upgradeYarn(projectPath, options.interactive);
+  if (
+    packageManager === PackageManager.yarn &&
+    semver.satisfies(downloadResult.version, '>=4.0.0 <4.10.0')
+  ) {
+    await upgradeYarn(workspaceInfo.rootDir, options.interactive);
+  } else if (
+    packageManager === PackageManager.pnpm &&
+    semver.satisfies(downloadResult.version, '< 9.5.0')
+  ) {
+    // required pnpm@>=9.5.0 to support catalog https://pnpm.io/9.x/catalogs
+    prompts.log.error(
+      `❌ pnpm@${downloadResult.version} is not supported by migration, please upgrade pnpm to >=9.5.0 first`,
+    );
+    cancelAndExit('The project is not supported by migration', 1);
+  } else if (
+    packageManager === PackageManager.npm &&
+    semver.satisfies(downloadResult.version, '< 8.3.0')
+  ) {
+    // required npm@>=8.3.0 to support overrides https://github.com/npm/cli/releases/tag/v8.3.0
+    prompts.log.error(
+      `❌ npm@${downloadResult.version} is not supported by migration, please upgrade npm to >=8.3.0 first`,
+    );
+    cancelAndExit('The project is not supported by migration', 1);
   }
 
   if (workspaceInfo.isMonorepo) {
     rewriteMonorepo(workspaceInfo);
   } else {
-    rewriteStandaloneProject(projectPath, workspaceInfo);
+    rewriteStandaloneProject(workspaceInfo.rootDir, workspaceInfo);
   }
 
-  await runViteInstall(projectPath, options.interactive);
-
+  // reinstall after migration
+  await runViteInstall(workspaceInfo.rootDir, options.interactive);
   prompts.outro(green('✨ Migration completed!'));
 }
 

@@ -1,0 +1,15 @@
+{
+  "name": "@vite-plus-test/utils",
+  "dependencies": {
+    "testnpm2": "1.0.0"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "test": "vitest"
+  }
+}

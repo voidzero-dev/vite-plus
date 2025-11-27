@@ -1,0 +1,6 @@
+{
+  "devDependencies": {
+    "vite": "^7.0.0"
+  },
+  "packageManager": "npm@8.2.0"
+}

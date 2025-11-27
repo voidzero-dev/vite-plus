@@ -1,0 +1,18 @@
+[1]> vp migration # migration should fail because pnpm version is not supported
+┌  Vite+ Migration
+│
+●  pnpm@<semver> installing...
+│
+●  pnpm@<semver> installed
+│
+■  ❌ pnpm@<semver> is not supported by migration, please upgrade pnpm to >=9.5.0 first
+└  The project is not supported by migration
+
+
+> cat package.json # check package.json is not updated
+{
+  "devDependencies": {
+    "vite": "^7.0.0"
+  },
+  "packageManager": "pnpm@<semver>"
+}
