@@ -4,13 +4,13 @@
   },
   "commands": [
     {
-      "command": "vp gen vite:library --no-interactive # create vite library with default values",
+      "command": "vp gen vite:library # create vite library with default values",
       "ignoreOutput": true
     },
     "ls vite-plus-library/package.json # check package.json",
     "cat vite-plus-library/.npmrc # check .npmrc",
     {
-      "command": "vp gen vite:library --no-interactive --directory my-vue -- --template vue # create vite library with custom template",
+      "command": "vp gen vite:library --directory my-vue -- --template vue # create vite library with custom template",
       "ignoreOutput": true
     },
     "ls my-vue/package.json # check package.json"

@@ -11,11 +11,24 @@ fn load_ast_grep_rules(yaml: &str) -> Result<Vec<RuleConfig<SupportLang>>, Error
     Ok(rules)
 }
 
+// Marker to replace "cross-env " before ast-grep processing
+// Using a fake env var assignment that won't match our rules
+const CROSS_ENV_MARKER: &str = "__CROSS_ENV__=1 ";
+const CROSS_ENV_REPLACEMENT: &str = "cross-env ";
+
 /// rewrite a single script command string using rules
 fn rewrite_script(script: &str, rules: &[RuleConfig<SupportLang>]) -> String {
-    // current stores the current script text, and update it when the rule matches
-    let mut current = script.to_string();
+    // Only handle cross-env replacement if it's present in the script
+    let has_cross_env = script.contains(CROSS_ENV_REPLACEMENT);
 
+    // Step 1: Replace "cross-env " with marker so ast-grep can see the actual commands
+    let mut current = if has_cross_env {
+        script.replace(CROSS_ENV_REPLACEMENT, CROSS_ENV_MARKER)
+    } else {
+        script.to_string()
+    };
+
+    // Step 2: Process with ast-grep
     for rule in rules {
         // only handle bash rules
         if rule.language != SupportLang::Bash {
@@ -52,7 +65,8 @@ fn rewrite_script(script: &str, rules: &[RuleConfig<SupportLang>]) -> String {
         }
     }
 
-    current
+    // Step 3: Replace marker back with "cross-env " (only if we replaced it)
+    if has_cross_env { current.replace(CROSS_ENV_MARKER, CROSS_ENV_REPLACEMENT) } else { current }
 }
 
 /// rewrite scripts json content using rules from rules_yaml
@@ -62,7 +76,7 @@ pub fn rewrite_scripts(scripts_json: &str, rules_yaml: &str) -> Result<Option<St
 
     let mut updated = false;
     // get scripts field (object)
-    // let keys: Vec<String> = scripts.keys().cloned().collect();
+
     for value in scripts.values_mut() {
         if value.is_array() {
             // lint-staged scripts can be an array of strings
@@ -104,55 +118,40 @@ mod tests {
     use super::*;
 
     const RULES_YAML: &str = r#"
-# vite => vite dev
+# vite => vite dev (handles all cases: with/without env var prefix and flag args)
+# Match command_name to preserve env var prefix and arguments
+# Excludes subcommands like "vite build", "vite test", etc.
 ---
-id: replace-vite-alone
+id: replace-vite
 language: bash
 rule:
-  kind: command
-  has:
-    kind: command_name
-    regex: '^vite$'
-  not:
-    has:
-      kind: word
-      field: argument
+  kind: command_name
+  regex: '^vite$'
+  inside:
+    kind: command
+    not:
+      # ignore non-flag arguments (subcommands like build, test, etc.)
+      regex: 'vite\s+[^-]'
 fix: vite dev
 
-# vite [OPTIONS] => vite dev [OPTIONS]
+# oxlint => vite lint (handles all cases: with/without env var prefix and args)
+# Match command_name to preserve env var prefix and arguments
 ---
-id: replace-vite-with-args
-language: bash
-severity: info
-rule:
-  pattern: vite $$$ARGS
-  not:
-    # ignore non-flag arguments
-    regex: 'vite\s+[^-]'
-fix: vite dev $$$ARGS
-
-# oxlint => vite lint
----
-id: replace-oxlint-alone
+id: replace-oxlint
 language: bash
 rule:
-  kind: command
-  has:
-    kind: command_name
-    regex: '^oxlint$'
-  not:
-    has:
-      kind: word
-      field: argument
+  kind: command_name
+  regex: '^oxlint$'
 fix: vite lint
 
-# oxlint [OPTIONS] => vite lint [OPTIONS]
+# vitest => vite test
 ---
-id: replace-oxlint-with-args
+id: replace-vitest
 language: bash
 rule:
-  pattern: oxlint $$$ARGS
-fix: vite lint $$$ARGS
+  kind: command_name
+  regex: '^vitest$'
+fix: vite test
     "#;
 
     #[test]
@@ -225,6 +224,21 @@ fix: vite lint $$$ARGS
             ),
             "if [ -f file.txt ]; then vite dev --port 3000 && npm run lint; fi"
         );
+        // env variable commands
+        assert_eq!(
+            rewrite_script("NODE_ENV=test VITE_CJS_IGNORE_WARNING=true vite", &rules),
+            "NODE_ENV=test VITE_CJS_IGNORE_WARNING=true vite dev"
+        );
+        assert_eq!(
+            rewrite_script("FOO=bar vite --port 3000", &rules),
+            "FOO=bar vite dev --port 3000"
+        );
+        // env variable with oxlint commands
+        assert_eq!(rewrite_script("DEBUG=1 oxlint", &rules), "DEBUG=1 vite lint");
+        assert_eq!(
+            rewrite_script("NODE_ENV=test oxlint --type-aware", &rules),
+            "NODE_ENV=test vite lint --type-aware"
+        );
         // oxlint commands
         assert_eq!(rewrite_script("oxlint", &rules), "vite lint");
         assert_eq!(rewrite_script("oxlint --type-aware", &rules), "vite lint --type-aware");
@@ -254,6 +268,54 @@ fix: vite lint $$$ARGS
             r#"
 {
   "dev": "vite dev"
+}
+        "#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_rewrite_package_json_scripts_with_env_variable_success() {
+        let package_json_scripts = r#"
+{
+  "dev:cjs": "VITE_CJS_IGNORE_WARNING=true vite",
+  "lint": "VITE_CJS_IGNORE_WARNING=true FOO=bar oxlint --fix"
+}
+        "#;
+        let updated = rewrite_scripts(package_json_scripts, &RULES_YAML)
+            .expect("failed to rewrite package.json scripts");
+        assert!(updated.is_some());
+        assert_eq!(
+            updated.unwrap(),
+            r#"
+{
+  "dev:cjs": "VITE_CJS_IGNORE_WARNING=true vite dev",
+  "lint": "VITE_CJS_IGNORE_WARNING=true FOO=bar vite lint --fix"
+}
+        "#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_rewrite_package_json_scripts_using_cross_env() {
+        let package_json_scripts = r#"
+{
+  "dev:cjs": "cross-env VITE_CJS_IGNORE_WARNING=true vite && cross-env FOO=bar vitest run",
+  "lint": "cross-env VITE_CJS_IGNORE_WARNING=true FOO=bar oxlint --fix",
+  "test": "vite build && cross-env FOO=bar vitest run && echo ' cross-env test done ' || echo ' cross-env test failed '"
+}
+        "#;
+        let updated = rewrite_scripts(package_json_scripts, &RULES_YAML)
+            .expect("failed to rewrite package.json scripts");
+        assert!(updated.is_some());
+        assert_eq!(
+            updated.unwrap(),
+            r#"
+{
+  "dev:cjs": "cross-env VITE_CJS_IGNORE_WARNING=true vite dev && cross-env FOO=bar vite test run",
+  "lint": "cross-env VITE_CJS_IGNORE_WARNING=true FOO=bar vite lint --fix",
+  "test": "vite build && cross-env FOO=bar vite test run && echo ' cross-env test done ' || echo ' cross-env test failed '"
 }
         "#
             .trim()

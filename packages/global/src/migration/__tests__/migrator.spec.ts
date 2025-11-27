@@ -19,6 +19,8 @@ describe('rewritePackageJson', () => {
         optimize: 'vite optimize',
         build: 'pnpm install &&vite build -r && vite run build --watch && tsdown && tsc || exit 1',
         dev: 'vite',
+        dev_cjs: 'VITE_CJS_IGNORE_WARNING=true vite',
+        dev_cjs_cross_env: 'cross-env VITE_CJS_IGNORE_WARNING=true vite',
         dev_help: 'vite --help && vite -h',
         dev_port: 'vite --port 3000',
         dev_host: 'vite --host 0.0.0.0',
@@ -30,6 +32,8 @@ describe('rewritePackageJson', () => {
         dev_stats: 'vite --stats',
         dev_analyze: 'vite --analyze',
         ready: 'oxlint --fix --type-aware && vitest run && tsdown && oxfmt --fix',
+        ready_env:
+          'NODE_ENV=test FOO=bar oxlint --fix --type-aware && NODE_ENV=test FOO=bar vitest run && NODE_ENV=test FOO=bar tsdown && NODE_ENV=test FOO=bar oxfmt --fix',
         ready_new:
           'vite install && vite fmt && vite lint --type-aware && vite test -r && vite build -r',
       },

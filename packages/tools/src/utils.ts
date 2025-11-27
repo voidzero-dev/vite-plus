@@ -93,6 +93,8 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(homedir(), '<homedir>')
       // remove the newline after "Checking formatting..."
       .replaceAll(`Checking formatting...\n`, 'Checking formatting...')
+      // remove warning <name>@<semver>: No license field
+      .replaceAll(/warning .+?: No license field\n/g, '')
   );
 }
 

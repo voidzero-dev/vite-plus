@@ -71,7 +71,25 @@ export async function runViteInstall(cwd: string, interactive?: boolean) {
     spinner.stop(`Install failed`);
     prompts.log.info(stdout.toString());
     prompts.log.error(stderr.toString());
-    prompts.log.info(`You may need to run it manually in ${cwd}`);
+    prompts.log.info(`You may need to run "vite install" manually in ${cwd}`);
+  }
+}
+
+export async function upgradeYarn(cwd: string, interactive?: boolean) {
+  const spinner = getSpinner(interactive);
+  spinner.start(`Running yarn set version stable...`);
+  const { exitCode, stderr, stdout } = await runCommandSilently({
+    command: 'yarn',
+    args: ['set', 'version', 'stable'],
+    cwd,
+    envs: process.env,
+  });
+  if (exitCode === 0) {
+    spinner.stop(`Yarn upgraded to stable version`);
+  } else {
+    spinner.stop(`yarn upgrade failed`);
+    prompts.log.info(stdout.toString());
+    prompts.log.error(stderr.toString());
   }
 }
 

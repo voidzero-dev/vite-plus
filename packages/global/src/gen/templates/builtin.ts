@@ -21,9 +21,10 @@ export async function executeBuiltinTemplate(
 
   if (templateInfo.command === BuiltinTemplate.application) {
     templateInfo.command = 'create-vite@latest';
-  }
-
-  if (templateInfo.command === BuiltinTemplate.library) {
+    if (!templateInfo.interactive) {
+      templateInfo.args.push('--no-interactive');
+    }
+  } else if (templateInfo.command === BuiltinTemplate.library) {
     templateInfo.command = 'create-tsdown@latest';
     if (!templateInfo.interactive) {
       // set default template for tsdown
@@ -34,9 +35,6 @@ export async function executeBuiltinTemplate(
   }
 
   templateInfo.args.unshift(templateInfo.targetDir);
-  if (!templateInfo.interactive) {
-    templateInfo.args.push('--no-interactive');
-  }
 
   // Handle remote/external templates with fspy monitoring
   const result = await runRemoteTemplateCommand(

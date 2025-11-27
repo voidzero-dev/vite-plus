@@ -4,6 +4,7 @@ exports[`rewritePackageJson > should remove vite tools from devDependencies and 
 {
   "dependencies": {
     "foo": "1.0.0",
+    "tsdown": "1.0.0",
   },
   "devDependencies": {},
 }
@@ -22,6 +23,8 @@ exports[`rewritePackageJson > should rewrite package.json scripts 1`] = `
     "build": "pnpm install &&vite build -r && vite run build --watch && tsdown && tsc || exit 1",
     "dev": "vite dev",
     "dev_analyze": "vite dev --analyze",
+    "dev_cjs": "VITE_CJS_IGNORE_WARNING=true vite dev",
+    "dev_cjs_cross_env": "cross-env VITE_CJS_IGNORE_WARNING=true vite dev",
     "dev_debug": "vite dev --debug",
     "dev_help": "vite dev --help && vite dev -h",
     "dev_host": "vite dev --host 0.0.0.0",
@@ -41,6 +44,7 @@ exports[`rewritePackageJson > should rewrite package.json scripts 1`] = `
     "optimize": "vite optimize",
     "preview": "vite preview",
     "ready": "vite lint --fix --type-aware && vite test run && tsdown && vite fmt --fix",
+    "ready_env": "NODE_ENV=test FOO=bar vite lint --fix --type-aware && NODE_ENV=test FOO=bar vite test run && NODE_ENV=test FOO=bar tsdown && NODE_ENV=test FOO=bar vite fmt --fix",
     "ready_new": "vite install && vite fmt && vite lint --type-aware && vite test -r && vite build -r",
     "test": "vite test",
     "test_run": "vite test run && vite test --ui",

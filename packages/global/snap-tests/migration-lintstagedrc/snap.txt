@@ -1,7 +1,7 @@
 > vp migration -h # migration help message
 Usage: vite migration [PATH] [OPTIONS]
 
-Migrate standalone vite, vitest, tsdown, oxlint, and oxfmt to unified vite-plus.
+Migrate standalone vite, vitest, oxlint, and oxfmt to unified vite-plus.
 
 Arguments:
   PATH                       Target directory to migrate (default: current directory)
@@ -15,7 +15,7 @@ Examples:
   vite migration
 
   # Migrate specific directory
-  vite migration path/to/my-app
+  vite migration my-app
 
   # Non-interactive mode
   vite migration --no-interactive
@@ -60,5 +60,6 @@ Aliases: migrate
   },
   "devDependencies": {
     "@voidzero-dev/vite-plus": "latest"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }

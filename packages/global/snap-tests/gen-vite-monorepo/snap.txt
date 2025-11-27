@@ -21,10 +21,10 @@ vite.config.ts
   "engines": {
     "node": ">=22.12.0"
   },
-  "packageManager": "pnpm@<semver>",
   "devDependencies": {
     "@voidzero-dev/vite-plus": "catalog:"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 
 > cat vite-plus-monorepo/pnpm-workspace.yaml # check workspace config
@@ -53,9 +53,8 @@ peerDependencyRules:
     vitest: '*'
 
 > cat vite-plus-monorepo/.npmrc # check .npmrc
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 @voidzero-dev:registry=https://npm.pkg.github.com/
-
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 > test -d vite-plus-monorepo/.git && echo 'Git initialized' || echo 'No git' # check git init
 Git initialized
 
@@ -133,8 +132,8 @@ vite.config.ts
   "engines": {
     "node": ">=22.12.0"
   },
-  "packageManager": "pnpm@<semver>",
   "devDependencies": {
     "@voidzero-dev/vite-plus": "catalog:"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }

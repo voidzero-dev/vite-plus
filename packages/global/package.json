@@ -32,8 +32,8 @@
   },
   "devDependencies": {
     "@clack/prompts": "catalog:",
-    "@std/yaml": "catalog:",
     "@types/cross-spawn": "catalog:",
+    "@types/semver": "catalog:",
     "@types/validate-npm-package-name": "catalog:",
     "@voidzero-dev/vite-plus-tools": "workspace:",
     "detect-indent": "catalog:",
@@ -43,6 +43,7 @@
     "mri": "catalog:",
     "picocolors": "catalog:",
     "rolldown": "workspace:*",
+    "semver": "catalog:",
     "yaml": "catalog:"
   },
   "engines": {

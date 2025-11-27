@@ -3,5 +3,5 @@
 my-vite-app/package.json
 
 > cat my-vite-app/.npmrc # check .npmrc
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 @voidzero-dev:registry=https://npm.pkg.github.com/
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}

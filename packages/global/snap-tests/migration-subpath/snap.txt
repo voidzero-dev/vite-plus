@@ -30,5 +30,6 @@
   },
   "devDependencies": {
     "@voidzero-dev/vite-plus": "latest"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }

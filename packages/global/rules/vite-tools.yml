@@ -1,95 +1,43 @@
-# vite => vite dev
+# vite => vite dev (handles all cases: with/without env var prefix and flag args)
+# Match command_name to preserve env var prefix and arguments
+# Excludes subcommands like "vite build", "vite test", etc.
 ---
-id: replace-vite-alone
+id: replace-vite
 language: bash
 rule:
-  kind: command
-  has:
-    kind: command_name
-    regex: '^vite$'
-  not:
-    has:
-      kind: word
-      field: argument
+  kind: command_name
+  regex: '^vite$'
+  inside:
+    kind: command
+    not:
+      # ignore non-flag arguments (subcommands like build, test, etc.)
+      regex: 'vite\s+[^-]'
 fix: vite dev
 
-# vite [OPTIONS] => vite dev [OPTIONS]
+# oxlint => vite lint (handles all cases: with/without env var prefix and args)
+# Match command_name to preserve env var prefix and arguments
 ---
-id: replace-vite-with-args
-language: bash
-severity: info
-rule:
-  pattern: vite $$$ARGS
-  not:
-    # ignore non-flag arguments
-    regex: 'vite\s+[^-]'
-fix: vite dev $$$ARGS
-
-# oxlint => vite lint
----
-id: replace-oxlint-alone
+id: replace-oxlint
 language: bash
 rule:
-  kind: command
-  has:
-    kind: command_name
-    regex: '^oxlint$'
-  not:
-    has:
-      kind: word
-      field: argument
+  kind: command_name
+  regex: '^oxlint$'
 fix: vite lint
-
-# oxlint [OPTIONS] => vite lint [OPTIONS]
----
-id: replace-oxlint-with-args
-language: bash
-rule:
-  pattern: oxlint $$$ARGS
-fix: vite lint $$$ARGS
 
 # oxfmt => vite fmt
 ---
-id: replace-oxfmt-alone
+id: replace-oxfmt
 language: bash
 rule:
-  kind: command
-  has:
-    kind: command_name
-    regex: '^oxfmt$'
-  not:
-    has:
-      kind: word
-      field: argument
+  kind: command_name
+  regex: '^oxfmt$'
 fix: vite fmt
-
-# oxfmt [OPTIONS] => vite fmt [OPTIONS]
----
-id: replace-oxfmt-with-args
-language: bash
-rule:
-  pattern: oxfmt $$$ARGS
-fix: vite fmt $$$ARGS
 
 # vitest => vite test
 ---
-id: replace-vitest-alone
+id: replace-vitest
 language: bash
 rule:
-  kind: command
-  has:
-    kind: command_name
-    regex: '^vitest$'
-  not:
-    has:
-      kind: word
-      field: argument
+  kind: command_name
+  regex: '^vitest$'
 fix: vite test
-
-# vitest [OPTIONS] => vite test [OPTIONS]
----
-id: replace-vitest-with-args
-language: bash
-rule:
-  pattern: vitest $$$ARGS
-fix: vite test $$$ARGS

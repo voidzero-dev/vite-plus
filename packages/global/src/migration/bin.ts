@@ -3,6 +3,7 @@ import path from 'node:path';
 import * as prompts from '@clack/prompts';
 import mri from 'mri';
 import colors from 'picocolors';
+import semver from 'semver';
 
 import type { WorkspaceInfo } from '../types/index.ts';
 import {
@@ -11,6 +12,7 @@ import {
   selectPackageManager,
   downloadPackageManager,
   runViteInstall,
+  upgradeYarn,
 } from '../utils/index.ts';
 import { rewriteMonorepo, rewriteStandaloneProject } from './migrator.ts';
 
@@ -20,7 +22,7 @@ const { cyan, green, gray } = colors;
 const helpMessage = `\
 Usage: vite migration [PATH] [OPTIONS]
 
-Migrate standalone vite, vitest, tsdown, oxlint, and oxfmt to unified vite-plus.
+Migrate standalone vite, vitest, oxlint, and oxfmt to unified vite-plus.
 
 Arguments:
   PATH                       Target directory to migrate (default: current directory)
@@ -34,7 +36,7 @@ Examples:
   vite migration
 
   ${gray('# Migrate specific directory')}
-  vite migration path/to/my-app
+  vite migration my-app
 
   ${gray('# Non-interactive mode')}
   vite migration --no-interactive
@@ -91,6 +93,7 @@ async function main() {
   // Prompt for package manager or use default
   const packageManager =
     workspaceInfoOptional.packageManager ?? (await selectPackageManager(options.interactive));
+
   // ensure the package manager is installed by vite-plus
   const downloadResult = await downloadPackageManager(
     packageManager,
@@ -102,6 +105,12 @@ async function main() {
     packageManager,
     downloadPackageManager: downloadResult,
   };
+
+  // support catalog require yarn@>=4.10.0 https://yarnpkg.com/features/catalogs
+  // if `yarn<4.10.0 && yarn>=4.0.0`, upgrade yarn to stable version
+  if (packageManager === 'yarn' && semver.satisfies(downloadResult.version, '>=4.0.0 <4.10.0')) {
+    await upgradeYarn(projectPath, options.interactive);
+  }
 
   if (workspaceInfo.isMonorepo) {
     rewriteMonorepo(workspaceInfo);

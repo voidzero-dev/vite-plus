@@ -19,6 +19,7 @@ import {
   updatePackageJsonWithDeps,
   updateWorkspaceConfig,
   runViteInstall,
+  templatesDir,
 } from '../utils/index.ts';
 import type { ExecutionResult } from './command.ts';
 import { discoverTemplate } from './discovery.ts';
@@ -29,7 +30,7 @@ import {
   executeRemoteTemplate,
 } from './templates/index.ts';
 import { BuiltinTemplate, TemplateType } from './templates/types.ts';
-import { formatTargetDir, setPackageManager, templatesDir } from './utils.ts';
+import { formatTargetDir } from './utils.ts';
 
 const { blue, cyan, green, gray, blueBright } = colors;
 
@@ -512,8 +513,6 @@ Use \`vite gen --list\` to list all available templates, or run \`vite gen --hel
   } else {
     // single project
     rewriteStandaloneProject(fullPath, workspaceInfo);
-    // set package manager in the project directory
-    setPackageManager(fullPath, workspaceInfo.downloadPackageManager);
     // install dependencies in the project directory
     await runViteInstall(fullPath, options.interactive);
   }

@@ -4,8 +4,9 @@ import path from 'node:path';
 import * as prompts from '@clack/prompts';
 
 import type { WorkspaceInfo } from '../../types/index.ts';
+import { editJsonFile, templatesDir } from '../../utils/index.ts';
 import type { ExecutionResult } from '../command.ts';
-import { copyDir, editJsonFile, templatesDir } from '../utils.ts';
+import { copyDir } from '../utils.ts';
 import type { BuiltinTemplateInfo } from './types.ts';
 
 // Execute generator scaffold template

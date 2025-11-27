@@ -1,18 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { parse as parseYaml, stringify as stringifyYaml } from '@std/yaml';
-import type { DownloadPackageManagerResult } from '@voidzero-dev/vite-plus/binding';
 import validateNpmPackageName from 'validate-npm-package-name';
 
-// Get the package root directory (packages/global)
-// Built files are in dist/, templates are in templates/
-// So from dist/ we need to go up to the package root
-export const pkgRoot = import.meta.dirname.endsWith('dist')
-  ? path.dirname(import.meta.dirname)
-  : path.join(import.meta.dirname, '../..');
-
-export const templatesDir = path.join(pkgRoot, 'templates');
+import { editJsonFile } from '../utils/index.ts';
 
 // Helper functions for file operations
 export function copy(src: string, dest: string) {
@@ -30,67 +21,6 @@ export function copyDir(srcDir: string, destDir: string) {
     const srcFile = path.resolve(srcDir, file);
     const destFile = path.resolve(destDir, file);
     copy(srcFile, destFile);
-  }
-}
-
-export function editFile(file: string, callback: (content: string) => string) {
-  const content = fs.readFileSync(file, 'utf-8');
-  fs.writeFileSync(file, callback(content), 'utf-8');
-}
-
-export function editOrCreateFile(file: string, callback: (content: string) => string) {
-  if (!fs.existsSync(file)) {
-    fs.writeFileSync(file, '', 'utf-8');
-  }
-  editFile(file, callback);
-}
-
-export function readYamlFile<T = Record<string, any>>(file: string): T {
-  const content = fs.readFileSync(file, 'utf-8');
-  return parseYaml(content) as T;
-}
-
-export function editYamlFile<T = Record<string, any>>(file: string, callback: (content: T) => T) {
-  const yaml = readYamlFile<T>(file);
-  const newYaml = callback(yaml);
-  fs.writeFileSync(file, stringifyYaml(newYaml), 'utf-8');
-}
-
-export function editOrCreateYamlFile<T = Record<string, any>>(
-  file: string,
-  callback: (content: T) => T,
-) {
-  if (!fs.existsSync(file)) {
-    fs.writeFileSync(file, '', 'utf-8');
-  }
-  editYamlFile(file, callback);
-}
-
-export function readJsonFile<T = Record<string, any>>(file: string): T {
-  const content = fs.readFileSync(file, 'utf-8');
-  return JSON.parse(content) as T;
-}
-
-export function editJsonFile<T = Record<string, any>>(file: string, callback: (content: T) => T) {
-  const json = readJsonFile<T>(file);
-  const newJson = callback(json);
-  fs.writeFileSync(file, JSON.stringify(newJson, null, 2) + '\n', 'utf-8');
-}
-
-export function isEmpty(path: string) {
-  const files = fs.readdirSync(path);
-  return files.length === 0 || (files.length === 1 && files[0] === '.git');
-}
-
-export function emptyDir(dir: string) {
-  if (!fs.existsSync(dir)) {
-    return;
-  }
-  for (const file of fs.readdirSync(dir)) {
-    if (file === '.git') {
-      continue;
-    }
-    fs.rmSync(path.resolve(dir, file), { recursive: true, force: true });
   }
 }
 
@@ -166,41 +96,6 @@ export function getProjectDirFromPackageName(packageName: string) {
     return packageName.split('/')[1];
   }
   return packageName;
-}
-
-export function getScopeFromPackageName(packageName: string) {
-  if (packageName.startsWith('@')) {
-    return packageName.split('/')[0];
-  }
-  return '';
-}
-
-export const RENAME_FILES: Record<string, string> = {
-  _gitignore: '.gitignore',
-  _npmrc: '.npmrc',
-  '_yarnrc.yml': '.yarnrc.yml',
-};
-
-export function renameFiles(projectDir: string) {
-  for (const [from, to] of Object.entries(RENAME_FILES)) {
-    const fromPath = path.join(projectDir, from);
-    if (fs.existsSync(fromPath)) {
-      fs.renameSync(fromPath, path.join(projectDir, to));
-    }
-  }
-}
-
-export function setPackageManager(
-  projectDir: string,
-  downloadPackageManager: DownloadPackageManagerResult,
-) {
-  // set package manager
-  editJsonFile<{ packageManager?: string }>(path.join(projectDir, 'package.json'), (pkg) => {
-    if (!pkg.packageManager) {
-      pkg.packageManager = `${downloadPackageManager.name}@${downloadPackageManager.version}`;
-    }
-    return pkg;
-  });
 }
 
 export function setPackageName(projectDir: string, packageName: string) {

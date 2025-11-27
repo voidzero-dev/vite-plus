@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { rewriteScripts } from '@voidzero-dev/vite-plus/binding';
+import { rewriteScripts, type DownloadPackageManagerResult } from '@voidzero-dev/vite-plus/binding';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
 import { PackageManager, type WorkspaceInfo } from '../types/index.ts';
@@ -10,7 +10,7 @@ import {
   editJsonFile,
   editYamlFile,
   rulesDir,
-  templatesDir,
+  type YamlDocument,
 } from '../utils/index.ts';
 
 const VITE_PLUS_NAME = '@voidzero-dev/vite-plus';
@@ -19,7 +19,7 @@ const OVERRIDE_PACKAGES = {
   vite: 'npm:@voidzero-dev/vite-plus-core@latest',
   vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
 } as const;
-const REMOVE_PACKAGES = ['oxlint', 'oxlint-tsgolint', 'oxfmt', 'tsdown'];
+const REMOVE_PACKAGES = ['oxlint', 'oxlint-tsgolint', 'oxfmt'];
 
 /**
  * Rewrite standalone project to add vite-plus dependencies
@@ -88,6 +88,8 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
   // set .npmrc to use vite-plus
   rewriteNpmrc(projectPath);
   rewriteLintStagedConfigFile(projectPath);
+  // set package manager
+  setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
 }
 
 /**
@@ -114,6 +116,8 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
   // set .npmrc to use vite-plus
   rewriteNpmrc(workspaceInfo.rootDir);
   rewriteLintStagedConfigFile(workspaceInfo.rootDir);
+  // set package manager
+  setPackageManager(workspaceInfo.rootDir, workspaceInfo.downloadPackageManager);
 }
 
 /**
@@ -160,15 +164,7 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
 
   editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
     // catalog
-    for (const [key, value] of Object.entries(OVERRIDE_PACKAGES)) {
-      doc.setIn(['catalog', key], scalarString(value));
-    }
-    doc.setIn(['catalog', scalarString(VITE_PLUS_NAME)], VITE_PLUS_VERSION);
-    for (const name of REMOVE_PACKAGES) {
-      doc.deleteIn(['catalog', name]);
-    }
-
-    // TODO: rewrite `catalogs` when OVERRIDE_PACKAGES exists in catalog
+    rewriteCatalog(doc);
 
     // overrides
     for (const key of Object.keys(OVERRIDE_PACKAGES)) {
@@ -236,10 +232,38 @@ function rewriteYarnrcYml(projectPath: string): void {
 
   editYamlFile(yarnrcYmlPath, (doc) => {
     // catalog
-    for (const [key, value] of Object.entries(OVERRIDE_PACKAGES)) {
-      doc.setIn(['catalog', key], scalarString(value));
+    rewriteCatalog(doc);
+
+    // TODO: remove this when vite-plus is released to npm
+    // npmScopes:
+    //   voidzero-dev:
+    //     npmRegistryServer: 'https://npm.pkg.github.com'
+    //     npmAuthToken: '${GITHUB_TOKEN}'
+    doc.setIn(
+      ['npmScopes', 'voidzero-dev', 'npmRegistryServer'],
+      scalarString('https://npm.pkg.github.com'),
+    );
+    // don't set if it already exists
+    if (!doc.getIn(['npmScopes', 'voidzero-dev', 'npmAuthToken'])) {
+      doc.setIn(['npmScopes', 'voidzero-dev', 'npmAuthToken'], scalarString('${GITHUB_TOKEN}'));
     }
   });
+}
+
+/**
+ * Rewrite catalog in pnpm-workspace.yaml or .yarnrc.yml
+ * @param doc - The document to rewrite
+ */
+function rewriteCatalog(doc: YamlDocument): void {
+  for (const [key, value] of Object.entries(OVERRIDE_PACKAGES)) {
+    doc.setIn(['catalog', key], scalarString(value));
+  }
+  doc.setIn(['catalog', VITE_PLUS_NAME], scalarString(VITE_PLUS_VERSION));
+  for (const name of REMOVE_PACKAGES) {
+    doc.deleteIn(['catalog', name]);
+  }
+
+  // TODO: rewrite `catalogs` when OVERRIDE_PACKAGES exists in catalog
 }
 
 /**
@@ -263,8 +287,9 @@ function rewriteRootWorkspacePackageJson(
     if (packageManager === PackageManager.yarn) {
       pkg.resolutions = {
         ...pkg.resolutions,
-        vite: 'catalog:',
-        vitest: 'catalog:',
+        // FIXME: yarn don't support catalog on resolutions
+        // https://github.com/yarnpkg/berry/issues/6979
+        ...OVERRIDE_PACKAGES,
       };
     } else if (packageManager === PackageManager.npm) {
       pkg.overrides = {
@@ -344,17 +369,48 @@ function rewriteLintStagedConfigFile(projectPath: string): void {
 }
 
 // TODO: should remove this function after vite-plus is released to npm
+/**
+ * Rewrite .npmrc to add custom registry and auth token
+ * ```
+ * @voidzero-dev:registry=https://npm.pkg.github.com/
+ * //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+ * ```
+ * @param projectPath - The path to the project
+ */
 function rewriteNpmrc(projectPath: string): void {
   const npmrcPath = path.join(projectPath, '.npmrc');
   if (!fs.existsSync(npmrcPath)) {
     fs.writeFileSync(npmrcPath, '');
   }
 
-  const npmrc = fs.readFileSync(path.join(templatesDir, 'config/_npmrc'), 'utf-8');
+  let changed = false;
   let content = fs.readFileSync(npmrcPath, 'utf-8');
-  if (content.includes(npmrc)) {
-    return;
+  const customRegistry = `@voidzero-dev:registry=https://npm.pkg.github.com/`;
+  if (!content.includes(customRegistry)) {
+    content = content ? `${content.trimEnd()}\n${customRegistry}` : customRegistry;
+    changed = true;
   }
-  content = content ? `${content.trimEnd()}\n${npmrc}` : npmrc;
-  fs.writeFileSync(npmrcPath, content);
+  // don't set if it already exists
+  let customAuthToken = '//npm.pkg.github.com/:_authToken=';
+  if (!content.includes(customAuthToken)) {
+    customAuthToken += '${GITHUB_TOKEN}';
+    content = content ? `${content.trimEnd()}\n${customAuthToken}` : customAuthToken;
+    changed = true;
+  }
+  if (changed) {
+    fs.writeFileSync(npmrcPath, content);
+  }
+}
+
+function setPackageManager(
+  projectDir: string,
+  downloadPackageManager: DownloadPackageManagerResult,
+) {
+  // set package manager
+  editJsonFile<{ packageManager?: string }>(path.join(projectDir, 'package.json'), (pkg) => {
+    if (!pkg.packageManager) {
+      pkg.packageManager = `${downloadPackageManager.name}@${downloadPackageManager.version}`;
+    }
+    return pkg;
+  });
 }
