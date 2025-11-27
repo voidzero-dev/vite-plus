@@ -30,11 +30,7 @@ export async function executeBuiltinTemplate(
     templateInfo.command = 'create-tsdown@latest';
     if (!templateInfo.interactive) {
       // set default template for tsdown
-      if (
-        !templateInfo.args.find(
-          (arg) => arg.startsWith('--template') || arg.startsWith('-t'),
-        )
-      ) {
+      if (!templateInfo.args.find((arg) => arg.startsWith('--template') || arg.startsWith('-t'))) {
         templateInfo.args.push('--template', 'default');
       }
     }

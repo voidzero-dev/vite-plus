@@ -30,9 +30,6 @@
       "path": "./packages/global"
     },
     {
-      "path": "./packages/multiplexer"
-    },
-    {
       "path": "./packages/tools"
     }
   ]

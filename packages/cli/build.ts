@@ -39,16 +39,9 @@ async function buildNapiBinding() {
 }
 
 async function buildCli() {
-  const tsconfig = readJsonConfigFile(
-    join(projectDir, 'tsconfig.json'),
-    sys.readFile,
-  );
+  const tsconfig = readJsonConfigFile(join(projectDir, 'tsconfig.json'), sys.readFile);
 
-  const { options, fileNames } = parseJsonSourceFileConfigFileContent(
-    tsconfig,
-    sys,
-    projectDir,
-  );
+  const { options, fileNames } = parseJsonSourceFileConfigFileContent(tsconfig, sys, projectDir);
 
   const host = createCompilerHost(options);
 

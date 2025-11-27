@@ -110,23 +110,19 @@
   "peerDependencies": {
     "@edge-runtime/vm": "*",
     "@opentelemetry/api": "^1.9.0",
-    "@types/debug": "^4.1.12",
     "@types/node": "^20.0.0 || ^22.0.0 || >=24.0.0",
     "happy-dom": "*",
     "jsdom": "*",
-    "@vitest/browser-playwright": "4.0.13",
-    "@vitest/browser-preview": "4.0.13",
-    "@vitest/browser-webdriverio": "4.0.13",
-    "@vitest/ui": "4.0.13"
+    "@vitest/browser-playwright": "4.0.14",
+    "@vitest/browser-preview": "4.0.14",
+    "@vitest/browser-webdriverio": "4.0.14",
+    "@vitest/ui": "4.0.14"
   },
   "peerDependenciesMeta": {
     "@edge-runtime/vm": {
       "optional": true
     },
     "@opentelemetry/api": {
-      "optional": true
-    },
-    "@types/debug": {
       "optional": true
     },
     "@types/node": {
@@ -152,10 +148,10 @@
     }
   },
   "dependencies": {
-    "debug": "^4.4.3",
     "es-module-lexer": "^1.7.0",
     "expect-type": "^1.2.2",
     "magic-string": "^0.30.21",
+    "obug": "^2.1.1",
     "pathe": "^2.0.3",
     "picomatch": "^4.0.3",
     "std-env": "^3.10.0",
@@ -164,18 +160,18 @@
     "tinyglobby": "^0.2.15",
     "tinyrainbow": "^3.0.3",
     "why-is-node-running": "^2.3.0",
-    "@vitest/mocker": "4.0.13",
-    "@vitest/pretty-format": "4.0.13",
-    "@vitest/runner": "4.0.13",
-    "@vitest/spy": "4.0.13",
-    "@vitest/utils": "4.0.13",
-    "@vitest/snapshot": "4.0.13",
-    "@vitest/expect": "4.0.13",
+    "@vitest/expect": "4.0.14",
+    "@vitest/pretty-format": "4.0.14",
+    "@vitest/snapshot": "4.0.14",
+    "@vitest/runner": "4.0.14",
+    "@vitest/spy": "4.0.14",
+    "@vitest/mocker": "4.0.14",
+    "@vitest/utils": "4.0.14",
     "@voidzero-dev/vite-plus-core": "workspace:*"
   },
   "devDependencies": {
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
-    "vitest-dev": "^4.0.13"
+    "vitest-dev": "^4.0.14"
   }
 }

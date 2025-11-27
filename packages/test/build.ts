@@ -1,11 +1,4 @@
-import {
-  copyFile,
-  glob as fsGlob,
-  mkdir,
-  readFile,
-  stat,
-  writeFile,
-} from 'node:fs/promises';
+import { copyFile, glob as fsGlob, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join, parse, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -86,20 +79,11 @@ async function bundleVitest() {
       content = content
         .replaceAll(/from ['"]vite['"]/g, `from '${CORE_PACKAGE_NAME}'`)
         .replaceAll(/import\(['"]vite['"]\)/g, `import('${CORE_PACKAGE_NAME}')`)
-        .replaceAll(
-          /require\(['"]vite['"]\)/g,
-          `require('${CORE_PACKAGE_NAME}')`,
-        )
+        .replaceAll(/require\(['"]vite['"]\)/g, `require('${CORE_PACKAGE_NAME}')`)
         .replaceAll(/require\("vite"\)/g, `require("${CORE_PACKAGE_NAME}")`)
         .replaceAll(`import 'vite';`, `import '${CORE_PACKAGE_NAME}';`)
-        .replaceAll(
-          `'vite/module-runner'`,
-          `'${CORE_PACKAGE_NAME}/module-runner'`,
-        )
-        .replaceAll(
-          `declare module "vite"`,
-          `declare module "${CORE_PACKAGE_NAME}"`,
-        );
+        .replaceAll(`'vite/module-runner'`, `'${CORE_PACKAGE_NAME}/module-runner'`)
+        .replaceAll(`declare module "vite"`, `declare module "${CORE_PACKAGE_NAME}"`);
       await writeFile(destPath, content, 'utf-8');
     } else {
       await copyFile(file, destPath);

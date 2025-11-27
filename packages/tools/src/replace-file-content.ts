@@ -13,9 +13,7 @@ export function replaceFileContent() {
   const newValue = positionals[2];
 
   if (!filename || !searchValue || !newValue) {
-    console.error(
-      'Usage: tool replace-file-content <filename> <searchValue> <newValue>',
-    );
+    console.error('Usage: tool replace-file-content <filename> <searchValue> <newValue>');
     console.error(
       'Example: tool replace-file-content example.toml \'version = "0.0.0"\' \'version = "0.0.1"\'',
     );

@@ -2,27 +2,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@clack/prompts';
+import { rewritePackageJsonScripts } from '@voidzero-dev/vite-plus/binding';
 import colors from 'picocolors';
 
-import { rewritePackageJsonScripts } from '@voidzero-dev/vite-plus/binding';
 import type { WorkspaceInfo } from './types.ts';
-import {
-  editJsonFile,
-  editOrCreateFile,
-  pkgRoot,
-  readJsonFile,
-  templatesDir,
-} from './utils.ts';
+import { editJsonFile, editOrCreateFile, pkgRoot, readJsonFile, templatesDir } from './utils.ts';
 
 const rulesDir = path.join(pkgRoot, 'rules');
 const { gray } = colors;
 const viteTools = ['vite', 'vitest', 'oxlint', 'oxfmt', 'tsdown'];
 
 // Detect standalone vite-related tools in project
-export function detectStandaloneViteTools(
-  projectDir: string,
-  cwd: string,
-): string[] {
+export function detectStandaloneViteTools(projectDir: string, cwd: string): string[] {
   const packageJsonPath = path.join(cwd, projectDir, 'package.json');
 
   if (!fs.existsSync(packageJsonPath)) {
@@ -95,10 +86,7 @@ export async function migrateToVitePlus(
 
       // set .npmrc to use vite-plus
       editOrCreateFile(path.join(cwd, projectDir, '.npmrc'), (content) => {
-        const npmrc = fs.readFileSync(
-          path.join(templatesDir, 'config/_npmrc'),
-          'utf-8',
-        );
+        const npmrc = fs.readFileSync(path.join(templatesDir, 'config/_npmrc'), 'utf-8');
         return content ? `${content.trimEnd()}\n${npmrc}` : npmrc;
       });
     }
@@ -113,30 +101,18 @@ export async function migrateToVitePlus(
 }
 
 // Perform auto-migration with prompts and feedback
-export async function performAutoMigration(
-  workspaceInfo: WorkspaceInfo,
-  projectDir: string,
-) {
-  const standaloneTools = detectStandaloneViteTools(
-    projectDir,
-    workspaceInfo.rootDir,
-  );
+export async function performAutoMigration(workspaceInfo: WorkspaceInfo, projectDir: string) {
+  const standaloneTools = detectStandaloneViteTools(projectDir, workspaceInfo.rootDir);
   if (standaloneTools.length === 0) {
     return; // No migration needed
   }
 
-  await migrateToVitePlus(
-    projectDir,
-    workspaceInfo.rootDir,
-    workspaceInfo.isMonorepo,
-  );
+  await migrateToVitePlus(projectDir, workspaceInfo.rootDir, workspaceInfo.isMonorepo);
   prompts.log.success(`Migrated to vite-plus ${gray('✓')}`);
   prompts.log.info(`  ${gray('•')} Removed: ${standaloneTools.join(', ')}`);
   prompts.log.info(
     `  ${gray('•')} Added: vite ${gray(
-      workspaceInfo.isMonorepo
-        ? '(catalog:)'
-        : '(npm:@voidzero-dev/vite-plus@latest)',
+      workspaceInfo.isMonorepo ? '(catalog:)' : '(npm:@voidzero-dev/vite-plus@latest)',
     )}`,
   );
 }

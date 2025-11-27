@@ -1,14 +1,15 @@
-import { npath } from '@yarnpkg/fslib';
-import { execute } from '@yarnpkg/shell';
 import { randomUUID } from 'node:crypto';
 import fs, { readFileSync } from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import { open } from 'node:fs/promises';
 import { cpus, tmpdir } from 'node:os';
 import path from 'node:path';
+import { setTimeout } from 'node:timers/promises';
 import { debuglog, parseArgs } from 'node:util';
 
-import { setTimeout } from 'node:timers/promises';
+import { npath } from '@yarnpkg/fslib';
+import { execute } from '@yarnpkg/shell';
+
 import { isPassThroughEnv, replaceUnstableOutput } from './utils';
 
 const debug = debuglog('vite-plus/snap-test');
@@ -56,9 +57,7 @@ async function runWithConcurrencyLimit(
   await Promise.all(executing);
 
   if (errors.length > 0) {
-    throw new Error(
-      `${errors.length} test case(s) failed. First error: ${errors[0].message}`,
-    );
+    throw new Error(`${errors.length} test case(s) failed. First error: ${errors[0].message}`);
   }
 }
 
@@ -83,9 +82,7 @@ export async function snapTest() {
   );
 
   // Clean up the temporary directory on exit
-  process.on('exit', () =>
-    fs.rmSync(tempTmpDir, { recursive: true, force: true }),
-  );
+  process.on('exit', () => fs.rmSync(tempTmpDir, { recursive: true, force: true }));
 
   const casesDir = path.resolve('snap-tests');
 
@@ -128,10 +125,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
   const steps: Steps = JSON.parse(
     await fsPromises.readFile(`${casesDir}/${name}/steps.json`, 'utf-8'),
   );
-  if (
-    steps.ignoredPlatforms !== undefined &&
-    steps.ignoredPlatforms.includes(process.platform)
-  ) {
+  if (steps.ignoredPlatforms !== undefined && steps.ignoredPlatforms.includes(process.platform)) {
     console.log('%s skipped on platform %s', name, process.platform);
     return;
   }
@@ -208,8 +202,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
 
     let commandLine = `> ${cmd.command}`;
     if (exitCode !== 0) {
-      commandLine =
-        (exitCode === undefined ? '[timeout]' : `[${exitCode}]`) + commandLine;
+      commandLine = (exitCode === undefined ? '[timeout]' : `[${exitCode}]`) + commandLine;
     }
     newSnap.push(commandLine);
     if (output.length > 0) {

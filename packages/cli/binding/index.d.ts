@@ -25,10 +25,7 @@ export interface CliOptions {
   /** Optional working directory override */
   cwd?: string;
   /** Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side */
-  resolveUniversalViteConfig: (
-    err: Error | null,
-    arg: string,
-  ) => Promise<string>;
+  resolveUniversalViteConfig: (err: Error | null, arg: string) => Promise<string>;
 }
 
 /**
@@ -56,9 +53,7 @@ export interface CliOptions {
  * console.log(`Workspace root: ${result.root}`);
  * ```
  */
-export declare function detectWorkspace(
-  cwd: string,
-): Promise<DetectWorkspaceResult>;
+export declare function detectWorkspace(cwd: string): Promise<DetectWorkspaceResult>;
 
 export interface DetectWorkspaceResult {
   packageManagerName?: string;
@@ -223,9 +218,7 @@ export declare function run(options: CliOptions): Promise<number>;
  * console.log(`Path accesses:`, result.pathAccesses);
  * ```
  */
-export declare function runCommand(
-  options: RunCommandOptions,
-): Promise<RunCommandResult>;
+export declare function runCommand(options: RunCommandOptions): Promise<RunCommandResult>;
 
 /**
  * Input parameters for running a command with fspy tracking.

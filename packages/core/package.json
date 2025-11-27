@@ -7,15 +7,11 @@
   "exports": {
     ".": "./dist/vite/node/index.js",
     "./client": {
-      "types": "./dist/vite/client.d.ts"
+      "types": "./client.d.ts"
     },
-    "./module-runner": "./dist/vite/node/module-runner.js",
-    "./internal": "./dist/vite/node/internal.js",
     "./dist/client/*": "./dist/vite/client/*",
-    "./types/*": {
-      "types": "./dist/vite/types/*"
-    },
-    "./types/internal/*": null,
+    "./internal": "./dist/vite/node/internal.js",
+    "./module-runner": "./dist/vite/node/module-runner.js",
     "./package.json": "./package.json",
     "./rolldown": {
       "default": "./dist/rolldown/index.mjs",
@@ -51,7 +47,11 @@
     "./rolldown/pluginutils": {
       "default": "./dist/pluginutils/index.js",
       "types": "./dist/pluginutils/index.d.ts"
-    }
+    },
+    "./types/*": {
+      "types": "./dist/vite/types/*"
+    },
+    "./types/internal/*": null
   },
   "imports": {
     "#module-sync-enabled": {
@@ -86,7 +86,7 @@
   },
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
-    "@vitejs/devtools": "^0.0.0-alpha.17",
+    "@vitejs/devtools": "^0.0.0-alpha.18",
     "publint": "^0.3.0",
     "typescript": "^5.0.0",
     "unplugin-lightningcss": "^0.4.0",

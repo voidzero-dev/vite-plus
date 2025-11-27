@@ -14,8 +14,8 @@ catalog:
   '@napi-rs/wasm-runtime': ^1.0.0
   '@oxc-node/cli': ^0.0.34
   '@oxc-node/core': ^0.0.34
-  '@oxc-project/runtime': =0.98.0
-  '@oxc-project/types': =0.98.0
+  '@oxc-project/runtime': =0.99.0
+  '@oxc-project/types': =0.99.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
@@ -59,7 +59,7 @@ catalog:
   fixturify: ^3.0.0
   follow-redirects: ^1.15.6
   fs-extra: ^11.2.0
-  glob: ^12.0.0
+  glob: ^13.0.0
   husky: ^9.1.7
   lint-staged: ^16.2.6
   lodash-es: ^4.17.21
@@ -69,11 +69,11 @@ catalog:
   mri: ^1.2.0
   next: ^15.4.3
   oxc-minify: =0.97.0
-  oxc-parser: =0.98.0
-  oxc-transform: =0.98.0
-  oxfmt: ^0.14.0
-  oxlint: ^1.29.0
-  oxlint-tsgolint: ^0.7.1
+  oxc-parser: =0.99.0
+  oxc-transform: =0.99.0
+  oxfmt: ^0.15.0
+  oxlint: ^1.30.0
+  oxlint-tsgolint: ^0.8.3
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -82,7 +82,6 @@ catalog:
   react-dom: ^19.1.0
   remark-parse: ^11.0.0
   remeda: ^2.10.0
-  rolldown: ^1.0.0-beta.45
   rolldown-plugin-dts: ^0.18.0
   rolldown-vite: ^7.1.19
   rollup: ^4.18.0
@@ -142,7 +141,7 @@ overrides:
   rolldown: 'workspace:rolldown@*'
   vite: 'workspace:@voidzero-dev/vite-plus-core@*'
   vitest: 'workspace:@voidzero-dev/vite-plus-test@*'
-  vitest-dev: 'npm:vitest@^4.0.13'
+  vitest-dev: 'npm:vitest@^4.0.14'
   '@rolldown/pluginutils': 'workspace:@rolldown/pluginutils@*'
 packageExtensions:
   sass-embedded:

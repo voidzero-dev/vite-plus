@@ -1,10 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { detectWorkspace as detectWorkspaceBinding } from '@voidzero-dev/vite-plus/binding';
 import { globSync } from 'glob';
 import { minimatch } from 'minimatch';
-
-import { detectWorkspace as detectWorkspaceBinding } from '@voidzero-dev/vite-plus/binding';
 
 import {
   DependencyType,
@@ -14,17 +13,9 @@ import {
   type WorkspacePackage,
 } from './types.ts';
 import { getScopeFromPackageName } from './utils.ts';
-import {
-  editJsonFile,
-  editOrCreateYamlFile,
-  readJsonFile,
-  readYamlFile,
-} from './utils.ts';
+import { editJsonFile, editOrCreateYamlFile, readJsonFile, readYamlFile } from './utils.ts';
 
-export function findPackageJsonFilesFromPatterns(
-  patterns: string[],
-  cwd: string,
-): string[] {
+export function findPackageJsonFilesFromPatterns(patterns: string[], cwd: string): string[] {
   if (patterns.length === 0) {
     return [];
   }
@@ -35,9 +26,7 @@ export function findPackageJsonFilesFromPatterns(
 }
 
 // Detect if we're in a monorepo and get workspace info
-export async function detectWorkspace(
-  rootDir: string,
-): Promise<WorkspaceInfoOptional> {
+export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOptional> {
   const bindingResult = await detectWorkspaceBinding(rootDir);
   const result: WorkspaceInfoOptional = {
     rootDir,
@@ -68,9 +57,7 @@ export async function detectWorkspace(
     const pnpmWorkspaceFile = path.join(result.rootDir, 'pnpm-workspace.yaml');
     const packageJsonFile = path.join(result.rootDir, 'package.json');
     if (fs.existsSync(pnpmWorkspaceFile)) {
-      const workspaceConfig = readYamlFile<{ packages?: string[] }>(
-        pnpmWorkspaceFile,
-      );
+      const workspaceConfig = readYamlFile<{ packages?: string[] }>(pnpmWorkspaceFile);
       if (Array.isArray(workspaceConfig.packages)) {
         result.workspacePatterns = workspaceConfig.packages;
       }
@@ -101,10 +88,7 @@ export async function detectWorkspace(
     if (pkg.name) {
       result.monorepoScope = getScopeFromPackageName(pkg.name);
     }
-    result.packages = discoverWorkspacePackages(
-      result.workspacePatterns,
-      result.rootDir,
-    );
+    result.packages = discoverWorkspacePackages(result.workspacePatterns, result.rootDir);
   }
 
   return result;
@@ -165,25 +149,19 @@ export function updatePackageJsonWithDeps(
   dependencyType: DependencyType,
 ) {
   const packageJsonPath = path.join(rootDir, projectDir, 'package.json');
-  editJsonFile<{ [key in DependencyType]?: Record<string, string> }>(
-    packageJsonPath,
-    (pkg) => {
-      if (!pkg[dependencyType]) {
-        pkg[dependencyType] = {};
-      }
-      for (const dep of dependencies) {
-        pkg[dependencyType][dep] = 'workspace:*';
-      }
-      return pkg;
-    },
-  );
+  editJsonFile<{ [key in DependencyType]?: Record<string, string> }>(packageJsonPath, (pkg) => {
+    if (!pkg[dependencyType]) {
+      pkg[dependencyType] = {};
+    }
+    for (const dep of dependencies) {
+      pkg[dependencyType][dep] = 'workspace:*';
+    }
+    return pkg;
+  });
 }
 
 // Update workspace configuration to include new project
-export function updateWorkspaceConfig(
-  projectPath: string,
-  workspaceInfo: WorkspaceInfo,
-) {
+export function updateWorkspaceConfig(projectPath: string, workspaceInfo: WorkspaceInfo) {
   // Check if project path matches any workspace pattern
   for (const pattern of workspaceInfo.workspacePatterns) {
     if (minimatch(projectPath, pattern)) {
@@ -205,10 +183,7 @@ export function updateWorkspaceConfig(
     editOrCreateYamlFile<{ packages?: string[] }>(
       path.join(workspaceInfo.rootDir, 'pnpm-workspace.yaml'),
       (workspaceConfig) => {
-        workspaceConfig.packages = [
-          ...(workspaceConfig.packages || []),
-          pattern,
-        ];
+        workspaceConfig.packages = [...(workspaceConfig.packages || []), pattern];
         return workspaceConfig;
       },
     );

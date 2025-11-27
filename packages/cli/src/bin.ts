@@ -17,10 +17,7 @@ import { lint } from './resolve-lint.js';
 import { test } from './resolve-test.js';
 import { vite } from './resolve-vite.js';
 
-async function resolveUniversalViteConfig(
-  err: null | Error,
-  viteConfigCwd: string,
-) {
+async function resolveUniversalViteConfig(err: null | Error, viteConfigCwd: string) {
   if (err) {
     throw err;
   }

@@ -1,11 +1,4 @@
-import {
-  copyFile,
-  cp,
-  mkdir,
-  readFile,
-  stat,
-  writeFile,
-} from 'node:fs/promises';
+import { copyFile, cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join, parse, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,23 +20,9 @@ const rolldownPluginUtilsDir = resolve(
   'pluginutils',
 );
 
-const rolldownSourceDir = resolve(
-  projectDir,
-  '..',
-  '..',
-  'rolldown',
-  'packages',
-  'rolldown',
-);
+const rolldownSourceDir = resolve(projectDir, '..', '..', 'rolldown', 'packages', 'rolldown');
 
-const rolldownViteSourceDir = resolve(
-  projectDir,
-  '..',
-  '..',
-  'rolldown-vite',
-  'packages',
-  'vite',
-);
+const rolldownViteSourceDir = resolve(projectDir, '..', '..', 'rolldown-vite', 'packages', 'vite');
 
 const tsdownSourceDir = resolve(projectDir, 'node_modules/tsdown');
 
@@ -171,21 +150,14 @@ async function buildVite() {
 
   // Copy additional vite files
 
-  await cp(
-    join(rolldownViteSourceDir, 'misc'),
-    join(projectDir, 'dist/vite/misc'),
-    {
-      recursive: true,
-    },
-  );
+  await cp(join(rolldownViteSourceDir, 'misc'), join(projectDir, 'dist/vite/misc'), {
+    recursive: true,
+  });
 
   // Copy and rewrite .d.ts files
-  const dtsFiles = await glob(
-    join(rolldownViteSourceDir, 'dist', 'node', '**/*.d.ts'),
-    {
-      absolute: true,
-    },
-  );
+  const dtsFiles = await glob(join(rolldownViteSourceDir, 'dist', 'node', '**/*.d.ts'), {
+    absolute: true,
+  });
 
   for (const dtsFile of dtsFiles) {
     const file = await readFile(dtsFile, 'utf-8');
@@ -207,12 +179,9 @@ async function buildVite() {
   }
 
   // Copy type files
-  const srcTypeFiles = await glob(
-    join(rolldownViteSourceDir, 'types', '**/*.d.ts'),
-    {
-      absolute: true,
-    },
-  );
+  const srcTypeFiles = await glob(join(rolldownViteSourceDir, 'types', '**/*.d.ts'), {
+    absolute: true,
+  });
 
   await mkdir(join(projectDir, 'dist/vite/types'), { recursive: true });
 
@@ -236,13 +205,9 @@ async function buildVite() {
 async function bundleRolldownPluginutils() {
   await mkdir(join(projectDir, 'dist', 'pluginutils'), { recursive: true });
 
-  await cp(
-    join(rolldownPluginUtilsDir, 'dist'),
-    join(projectDir, 'dist', 'pluginutils'),
-    {
-      recursive: true,
-    },
-  );
+  await cp(join(rolldownPluginUtilsDir, 'dist'), join(projectDir, 'dist', 'pluginutils'), {
+    recursive: true,
+  });
 }
 
 async function bundleRolldown() {
@@ -306,12 +271,9 @@ async function bundleVitepress() {
   await mkdir(vitepressDestDir, { recursive: true });
 
   // Copy dist directory
-  const vitepressDistFiles = await glob(
-    join(vitepressSourceDir, 'dist', '**/*'),
-    {
-      absolute: true,
-    },
-  );
+  const vitepressDistFiles = await glob(join(vitepressSourceDir, 'dist', '**/*'), {
+    absolute: true,
+  });
 
   for (const file of vitepressDistFiles) {
     const stats = await stat(file);
@@ -325,18 +287,9 @@ async function bundleVitepress() {
     // Rewrite vite imports in .js and .mjs files
     if (file.endsWith('.js') || file.endsWith('.mjs')) {
       let content = await readFile(file, 'utf-8');
-      content = content.replaceAll(
-        /from ['"]vite['"]/g,
-        `from '${pkgJson.name}/vite'`,
-      );
-      content = content.replaceAll(
-        /import\(['"]vite['"]\)/g,
-        `import('${pkgJson.name}/vite')`,
-      );
-      content = content.replaceAll(
-        /require\(['"]vite['"]\)/g,
-        `require('${pkgJson.name}/vite')`,
-      );
+      content = content.replaceAll(/from ['"]vite['"]/g, `from '${pkgJson.name}/vite'`);
+      content = content.replaceAll(/import\(['"]vite['"]\)/g, `import('${pkgJson.name}/vite')`);
+      content = content.replaceAll(/require\(['"]vite['"]\)/g, `require('${pkgJson.name}/vite')`);
       await writeFile(destPath, content, 'utf-8');
     } else {
       await copyFile(file, destPath);
@@ -344,11 +297,7 @@ async function bundleVitepress() {
   }
 
   // Copy top-level .d.ts files
-  const vitepressTypeFiles = [
-    'client.d.ts',
-    'theme.d.ts',
-    'theme-without-fonts.d.ts',
-  ];
+  const vitepressTypeFiles = ['client.d.ts', 'theme.d.ts', 'theme-without-fonts.d.ts'];
   for (const typeFile of vitepressTypeFiles) {
     const sourcePath = join(vitepressSourceDir, typeFile);
     const destPath = join(vitepressDestDir, typeFile);

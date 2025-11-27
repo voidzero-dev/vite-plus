@@ -25,9 +25,7 @@ export async function promptPackageNameAndTargetDir(
 
         const result = validateNpmPackageName(value);
         if (result.validForNewPackages) return;
-        return (
-          result.errors?.[0] ?? result.warnings?.[0] ?? 'Invalid package name'
-        );
+        return result.errors?.[0] ?? result.warnings?.[0] ?? 'Invalid package name';
       },
     });
     if (prompts.isCancel(selected)) {
@@ -45,10 +43,7 @@ export async function promptPackageNameAndTargetDir(
   return { packageName, targetDir };
 }
 
-export async function checkProjectDirExists(
-  projectDirFullPath: string,
-  interactive?: boolean,
-) {
+export async function checkProjectDirExists(projectDirFullPath: string, interactive?: boolean) {
   if (!fs.existsSync(projectDirFullPath) || isEmpty(projectDirFullPath)) {
     return;
   }
@@ -87,10 +82,7 @@ export async function checkProjectDirExists(
   }
 }
 
-export function cancelAndExit(
-  message = 'Operation cancelled',
-  exitCode = 0,
-): never {
+export function cancelAndExit(message = 'Operation cancelled', exitCode = 0): never {
   prompts.cancel(message);
   process.exit(exitCode);
 }

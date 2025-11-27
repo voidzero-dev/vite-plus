@@ -16,15 +16,7 @@ class MonorepoGenerator {
   private readonly PACKAGE_COUNT = 1000;
   private readonly MAX_DEPS_PER_PACKAGE = 8;
   private readonly MIN_DEPS_PER_PACKAGE = 2;
-  private readonly SCRIPT_NAMES = [
-    'build',
-    'test',
-    'lint',
-    'dev',
-    'start',
-    'prepare',
-    'compile',
-  ];
+  private readonly SCRIPT_NAMES = ['build', 'test', 'lint', 'dev', 'start', 'prepare', 'compile'];
   private readonly CATEGORIES = ['core', 'util', 'feature', 'service', 'app'];
 
   constructor(private rootDir: string) {}
@@ -43,10 +35,7 @@ class MonorepoGenerator {
     return `${category}-${paddedIndex}`;
   }
 
-  private generateScriptCommand(
-    scriptName: string,
-    packageName: string,
-  ): string {
+  private generateScriptCommand(scriptName: string, packageName: string): string {
     const commands = [
       `echo "Running ${scriptName} for ${packageName}"`,
       `node scripts/${scriptName}.js`,
@@ -87,14 +76,8 @@ class MonorepoGenerator {
     return scripts;
   }
 
-  private selectDependencies(
-    currentIndex: number,
-    availablePackages: string[],
-  ): string[] {
-    const numDeps = this.getRandomInt(
-      this.MIN_DEPS_PER_PACKAGE,
-      this.MAX_DEPS_PER_PACKAGE,
-    );
+  private selectDependencies(currentIndex: number, availablePackages: string[]): string[] {
+    const numDeps = this.getRandomInt(this.MIN_DEPS_PER_PACKAGE, this.MAX_DEPS_PER_PACKAGE);
     const dependencies = new Set<string>();
 
     // Create a complex graph by selecting dependencies from different layers
@@ -108,10 +91,7 @@ class MonorepoGenerator {
       return [];
     }
 
-    while (
-      dependencies.size < numDeps &&
-      dependencies.size < eligiblePackages.length
-    ) {
+    while (dependencies.size < numDeps && dependencies.size < eligiblePackages.length) {
       const dep = this.getRandomElement(eligiblePackages);
       dependencies.add(dep);
     }
@@ -147,8 +127,7 @@ class MonorepoGenerator {
       const hasVitePlusConfig = Math.random() > 0.3;
 
       // Select dependencies from packages created before this one
-      const dependencies =
-        i === 0 ? [] : this.selectDependencies(i, allPackageNames.slice(0, i));
+      const dependencies = i === 0 ? [] : this.selectDependencies(i, allPackageNames.slice(0, i));
 
       this.packages.set(packageName, {
         name: packageName,
@@ -182,15 +161,9 @@ class MonorepoGenerator {
 
         // Create the scenario: A has build, B doesn't, C has build
         const scriptName = this.getRandomElement(this.SCRIPT_NAMES);
-        pkgA.scripts[scriptName] = this.generateScriptCommand(
-          scriptName,
-          nameA,
-        );
+        pkgA.scripts[scriptName] = this.generateScriptCommand(scriptName, nameA);
         delete pkgB.scripts[scriptName]; // B doesn't have the script
-        pkgC.scripts[scriptName] = this.generateScriptCommand(
-          scriptName,
-          nameC,
-        );
+        pkgC.scripts[scriptName] = this.generateScriptCommand(scriptName, nameC);
       }
     }
   }
@@ -217,10 +190,7 @@ class MonorepoGenerator {
       ),
     };
 
-    fs.writeFileSync(
-      path.join(packageDir, 'package.json'),
-      JSON.stringify(packageJson, null, 2),
-    );
+    fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify(packageJson, null, 2));
 
     // Write source file
     const indexContent = `// ${pkg.name} module
@@ -303,10 +273,7 @@ module.exports = { ${pkg.name.replace('-', '_')} };
     const pnpmWorkspace = `packages:
   - 'packages/*'
 `;
-    fs.writeFileSync(
-      path.join(this.rootDir, 'pnpm-workspace.yaml'),
-      pnpmWorkspace,
-    );
+    fs.writeFileSync(path.join(this.rootDir, 'pnpm-workspace.yaml'), pnpmWorkspace);
 
     // Write root vite-plus.json
     const rootVitePlusConfig = {
@@ -331,9 +298,7 @@ module.exports = { ${pkg.name.replace('-', '_')} };
       JSON.stringify(rootVitePlusConfig, null, 2),
     );
 
-    console.log(
-      `Successfully generated monorepo with ${this.PACKAGE_COUNT} packages!`,
-    );
+    console.log(`Successfully generated monorepo with ${this.PACKAGE_COUNT} packages!`);
     console.log(`Location: ${this.rootDir}`);
 
     // Print some statistics
@@ -362,9 +327,7 @@ module.exports = { ${pkg.name.replace('-', '_')} };
     console.log('\nStatistics:');
     console.log(`- Total packages: ${this.packages.size}`);
     console.log(
-      `- Average dependencies per package: ${(
-        totalDeps / this.packages.size
-      ).toFixed(2)}`,
+      `- Average dependencies per package: ${(totalDeps / this.packages.size).toFixed(2)}`,
     );
     console.log(`- Max dependencies in a package: ${maxDeps}`);
     console.log(`- Packages with vite-plus.json: ${packagesWithVitePlus}`);

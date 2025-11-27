@@ -89,9 +89,7 @@ export interface RunCommandResult extends ExecutionResult {
   stderr: Buffer;
 }
 
-export async function runCommand(
-  options: RunCommandOptions,
-): Promise<ExecutionResult> {
+export async function runCommand(options: RunCommandOptions): Promise<ExecutionResult> {
   const child = spawn(options.command, options.args, {
     stdio: 'inherit',
     cwd: options.cwd,
@@ -108,9 +106,7 @@ export async function runCommand(
   return await promise;
 }
 
-export async function runCommandSilently(
-  options: RunCommandOptions,
-): Promise<RunCommandResult> {
+export async function runCommandSilently(options: RunCommandOptions): Promise<RunCommandResult> {
   const child = spawn(options.command, options.args, {
     stdio: 'pipe',
     cwd: options.cwd,
@@ -172,13 +168,9 @@ export function formatDlxCommand(
   };
 }
 
-export function prependToPathToEnvs(
-  extraPath: string,
-  envs: NodeJS.ProcessEnv,
-) {
+export function prependToPathToEnvs(extraPath: string, envs: NodeJS.ProcessEnv) {
   const delimiter = path.delimiter;
-  const pathKey =
-    Object.keys(envs).find((key) => key.toLowerCase() === 'path') ?? 'PATH';
+  const pathKey = Object.keys(envs).find((key) => key.toLowerCase() === 'path') ?? 'PATH';
 
   const current = envs[pathKey] ?? '';
 

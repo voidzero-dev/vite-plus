@@ -2,7 +2,7 @@
   "name": "vite-plus-monorepo",
   "license": "BUSL-1.1",
   "private": true,
-  "packageManager": "pnpm@10.22.0",
+  "packageManager": "pnpm@10.23.0",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },
@@ -27,7 +27,8 @@
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "typescript": "catalog:",
-    "vitest": "workspace:@voidzero-dev/vite-plus-test@*"
+    "vite": "catalog:",
+    "vitest": "catalog:"
   },
   "lint-staged": {
     "*.@(yml|yaml|md|json|html|toml)": [

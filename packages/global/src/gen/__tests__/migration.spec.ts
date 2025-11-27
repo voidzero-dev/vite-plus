@@ -38,8 +38,7 @@ describe('migratePackageJson', () => {
             dev_profile: 'vite --profile',
             dev_stats: 'vite --stats',
             dev_analyze: 'vite --analyze',
-            ready:
-              'oxlint --fix --type-aware && vitest run && tsdown && oxfmt --fix',
+            ready: 'oxlint --fix --type-aware && vitest run && tsdown && oxfmt --fix',
             ready_new:
               'vite install && vite fmt && vite lint --type-aware && vite test -r && vite build -r',
           },
@@ -48,9 +47,7 @@ describe('migratePackageJson', () => {
         2,
       ),
     );
-    const updated = await migratePackageJson(
-      path.join(tempDir, 'package.json'),
-    );
+    const updated = await migratePackageJson(path.join(tempDir, 'package.json'));
     const scripts = JSON.parse(
       await fs.readFile(path.join(tempDir, 'package.json'), 'utf-8'),
     ).scripts;

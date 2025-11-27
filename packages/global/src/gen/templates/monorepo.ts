@@ -22,7 +22,6 @@ import {
   setPackageName,
   templatesDir,
 } from '../utils.ts';
-
 import { runRemoteTemplateCommand } from './remote.ts';
 
 // Execute vite:monorepo - copy from templates/monorepo
@@ -35,9 +34,7 @@ export async function executeMonorepoTemplate(
   assert(templateInfo.packageName, 'packageName is required');
   assert(templateInfo.targetDir, 'targetDir is required');
 
-  workspaceInfo.monorepoScope = getScopeFromPackageName(
-    templateInfo.packageName,
-  );
+  workspaceInfo.monorepoScope = getScopeFromPackageName(templateInfo.packageName);
   const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
 
   // Copy template files
@@ -136,16 +133,10 @@ export async function executeMonorepoTemplate(
     [appDir, '--template', 'vanilla-ts', '--no-interactive'],
     workspaceInfo,
   );
-  const appResult = await runRemoteTemplateCommand(
-    workspaceInfo,
-    fullPath,
-    appTemplateInfo,
-  );
+  const appResult = await runRemoteTemplateCommand(workspaceInfo, fullPath, appTemplateInfo);
 
   if (appResult.exitCode !== 0) {
-    prompts.log.error(
-      `Failed to create default application: ${appResult.exitCode}`,
-    );
+    prompts.log.error(`Failed to create default application: ${appResult.exitCode}`);
     return appResult;
   }
 
@@ -174,9 +165,7 @@ export async function executeMonorepoTemplate(
     libraryTemplateInfo,
   );
   if (libraryResult.exitCode !== 0) {
-    prompts.log.error(
-      `Failed to create default library, exit code: ${libraryResult.exitCode}`,
-    );
+    prompts.log.error(`Failed to create default library, exit code: ${libraryResult.exitCode}`);
     return libraryResult;
   }
 

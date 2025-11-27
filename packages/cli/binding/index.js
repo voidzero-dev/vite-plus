@@ -82,8 +82,7 @@ function requireNative() {
       }
       try {
         const binding = require('@vite-plus-android-arm64');
-        const bindingPackageVersion =
-          require('@vite-plus-android-arm64/package.json').version;
+        const bindingPackageVersion = require('@vite-plus-android-arm64/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -105,8 +104,7 @@ function requireNative() {
       }
       try {
         const binding = require('@vite-plus-android-arm-eabi');
-        const bindingPackageVersion =
-          require('@vite-plus-android-arm-eabi/package.json').version;
+        const bindingPackageVersion = require('@vite-plus-android-arm-eabi/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -121,9 +119,7 @@ function requireNative() {
         loadErrors.push(e);
       }
     } else {
-      loadErrors.push(
-        new Error(`Unsupported architecture on Android ${process.arch}`),
-      );
+      loadErrors.push(new Error(`Unsupported architecture on Android ${process.arch}`));
     }
   } else if (process.platform === 'win32') {
     if (process.arch === 'x64') {
@@ -138,8 +134,7 @@ function requireNative() {
         }
         try {
           const binding = require('@vite-plus-win32-x64-gnu');
-          const bindingPackageVersion =
-            require('@vite-plus-win32-x64-gnu/package.json').version;
+          const bindingPackageVersion = require('@vite-plus-win32-x64-gnu/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -161,8 +156,7 @@ function requireNative() {
         }
         try {
           const binding = require('@vite-plus-win32-x64-msvc');
-          const bindingPackageVersion =
-            require('@vite-plus-win32-x64-msvc/package.json').version;
+          const bindingPackageVersion = require('@vite-plus-win32-x64-msvc/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -185,8 +179,7 @@ function requireNative() {
       }
       try {
         const binding = require('@vite-plus-win32-ia32-msvc');
-        const bindingPackageVersion =
-          require('@vite-plus-win32-ia32-msvc/package.json').version;
+        const bindingPackageVersion = require('@vite-plus-win32-ia32-msvc/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -208,8 +201,7 @@ function requireNative() {
       }
       try {
         const binding = require('@vite-plus-win32-arm64-msvc');
-        const bindingPackageVersion =
-          require('@vite-plus-win32-arm64-msvc/package.json').version;
+        const bindingPackageVersion = require('@vite-plus-win32-arm64-msvc/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -224,9 +216,7 @@ function requireNative() {
         loadErrors.push(e);
       }
     } else {
-      loadErrors.push(
-        new Error(`Unsupported architecture on Windows: ${process.arch}`),
-      );
+      loadErrors.push(new Error(`Unsupported architecture on Windows: ${process.arch}`));
     }
   } else if (process.platform === 'darwin') {
     try {
@@ -236,8 +226,7 @@ function requireNative() {
     }
     try {
       const binding = require('@vite-plus-darwin-universal');
-      const bindingPackageVersion =
-        require('@vite-plus-darwin-universal/package.json').version;
+      const bindingPackageVersion = require('@vite-plus-darwin-universal/package.json').version;
       if (
         bindingPackageVersion !== '0.0.0' &&
         process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -259,8 +248,7 @@ function requireNative() {
       }
       try {
         const binding = require('@vite-plus-darwin-x64');
-        const bindingPackageVersion =
-          require('@vite-plus-darwin-x64/package.json').version;
+        const bindingPackageVersion = require('@vite-plus-darwin-x64/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -282,8 +270,7 @@ function requireNative() {
       }
       try {
         const binding = require('@vite-plus-darwin-arm64');
-        const bindingPackageVersion =
-          require('@vite-plus-darwin-arm64/package.json').version;
+        const bindingPackageVersion = require('@vite-plus-darwin-arm64/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -298,9 +285,7 @@ function requireNative() {
         loadErrors.push(e);
       }
     } else {
-      loadErrors.push(
-        new Error(`Unsupported architecture on macOS: ${process.arch}`),
-      );
+      loadErrors.push(new Error(`Unsupported architecture on macOS: ${process.arch}`));
     }
   } else if (process.platform === 'freebsd') {
     if (process.arch === 'x64') {
@@ -311,8 +296,7 @@ function requireNative() {
       }
       try {
         const binding = require('@vite-plus-freebsd-x64');
-        const bindingPackageVersion =
-          require('@vite-plus-freebsd-x64/package.json').version;
+        const bindingPackageVersion = require('@vite-plus-freebsd-x64/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -334,8 +318,7 @@ function requireNative() {
       }
       try {
         const binding = require('@vite-plus-freebsd-arm64');
-        const bindingPackageVersion =
-          require('@vite-plus-freebsd-arm64/package.json').version;
+        const bindingPackageVersion = require('@vite-plus-freebsd-arm64/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -350,9 +333,7 @@ function requireNative() {
         loadErrors.push(e);
       }
     } else {
-      loadErrors.push(
-        new Error(`Unsupported architecture on FreeBSD: ${process.arch}`),
-      );
+      loadErrors.push(new Error(`Unsupported architecture on FreeBSD: ${process.arch}`));
     }
   } else if (process.platform === 'linux') {
     if (process.arch === 'x64') {
@@ -364,8 +345,7 @@ function requireNative() {
         }
         try {
           const binding = require('@vite-plus-linux-x64-musl');
-          const bindingPackageVersion =
-            require('@vite-plus-linux-x64-musl/package.json').version;
+          const bindingPackageVersion = require('@vite-plus-linux-x64-musl/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -387,8 +367,7 @@ function requireNative() {
         }
         try {
           const binding = require('@vite-plus-linux-x64-gnu');
-          const bindingPackageVersion =
-            require('@vite-plus-linux-x64-gnu/package.json').version;
+          const bindingPackageVersion = require('@vite-plus-linux-x64-gnu/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -412,8 +391,7 @@ function requireNative() {
         }
         try {
           const binding = require('@vite-plus-linux-arm64-musl');
-          const bindingPackageVersion =
-            require('@vite-plus-linux-arm64-musl/package.json').version;
+          const bindingPackageVersion = require('@vite-plus-linux-arm64-musl/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -435,8 +413,7 @@ function requireNative() {
         }
         try {
           const binding = require('@vite-plus-linux-arm64-gnu');
-          const bindingPackageVersion =
-            require('@vite-plus-linux-arm64-gnu/package.json').version;
+          const bindingPackageVersion = require('@vite-plus-linux-arm64-gnu/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -603,8 +580,7 @@ function requireNative() {
       }
       try {
         const binding = require('@vite-plus-linux-ppc64-gnu');
-        const bindingPackageVersion =
-          require('@vite-plus-linux-ppc64-gnu/package.json').version;
+        const bindingPackageVersion = require('@vite-plus-linux-ppc64-gnu/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -626,8 +602,7 @@ function requireNative() {
       }
       try {
         const binding = require('@vite-plus-linux-s390x-gnu');
-        const bindingPackageVersion =
-          require('@vite-plus-linux-s390x-gnu/package.json').version;
+        const bindingPackageVersion = require('@vite-plus-linux-s390x-gnu/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -642,9 +617,7 @@ function requireNative() {
         loadErrors.push(e);
       }
     } else {
-      loadErrors.push(
-        new Error(`Unsupported architecture on Linux: ${process.arch}`),
-      );
+      loadErrors.push(new Error(`Unsupported architecture on Linux: ${process.arch}`));
     }
   } else if (process.platform === 'openharmony') {
     if (process.arch === 'arm64') {
@@ -655,8 +628,7 @@ function requireNative() {
       }
       try {
         const binding = require('@vite-plus-openharmony-arm64');
-        const bindingPackageVersion =
-          require('@vite-plus-openharmony-arm64/package.json').version;
+        const bindingPackageVersion = require('@vite-plus-openharmony-arm64/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -678,8 +650,7 @@ function requireNative() {
       }
       try {
         const binding = require('@vite-plus-openharmony-x64');
-        const bindingPackageVersion =
-          require('@vite-plus-openharmony-x64/package.json').version;
+        const bindingPackageVersion = require('@vite-plus-openharmony-x64/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -701,8 +672,7 @@ function requireNative() {
       }
       try {
         const binding = require('@vite-plus-openharmony-arm');
-        const bindingPackageVersion =
-          require('@vite-plus-openharmony-arm/package.json').version;
+        const bindingPackageVersion = require('@vite-plus-openharmony-arm/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -717,15 +687,11 @@ function requireNative() {
         loadErrors.push(e);
       }
     } else {
-      loadErrors.push(
-        new Error(`Unsupported architecture on OpenHarmony: ${process.arch}`),
-      );
+      loadErrors.push(new Error(`Unsupported architecture on OpenHarmony: ${process.arch}`));
     }
   } else {
     loadErrors.push(
-      new Error(
-        `Unsupported OS: ${process.platform}, architecture: ${process.arch}`,
-      ),
+      new Error(`Unsupported OS: ${process.platform}, architecture: ${process.arch}`),
     );
   }
 }
@@ -755,9 +721,7 @@ if (!nativeBinding || process.env.NAPI_RS_FORCE_WASI) {
     }
   }
   if (process.env.NAPI_RS_FORCE_WASI === 'error' && !wasiBinding) {
-    const error = new Error(
-      'WASI binding not found and NAPI_RS_FORCE_WASI is set to error',
-    );
+    const error = new Error('WASI binding not found and NAPI_RS_FORCE_WASI is set to error');
     error.cause = wasiBindingError;
     throw error;
   }
@@ -780,13 +744,8 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`);
 }
 
-const {
-  detectWorkspace,
-  downloadPackageManager,
-  rewritePackageJsonScripts,
-  run,
-  runCommand,
-} = nativeBinding;
+const { detectWorkspace, downloadPackageManager, rewritePackageJsonScripts, run, runCommand } =
+  nativeBinding;
 export { detectWorkspace };
 export { downloadPackageManager };
 export { rewritePackageJsonScripts };

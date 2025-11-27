@@ -1,6 +1,7 @@
-import { Minimatch } from 'minimatch';
 import { homedir } from 'node:os';
 import path from 'node:path';
+
+import { Minimatch } from 'minimatch';
 
 export function replaceUnstableOutput(output: string, cwd?: string) {
   if (cwd) {
@@ -30,17 +31,11 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
         'Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done',
       )
       // ignore pnpm progress
-      .replaceAll(
-        /Progress: resolved \d+, reused \d+, downloaded \d+, added \d+\n/g,
-        '',
-      )
+      .replaceAll(/Progress: resolved \d+, reused \d+, downloaded \d+, added \d+\n/g, '')
       // ignore pnpm warn
       .replaceAll(/ ?WARN\s+Skip\s+adding .+?\n/g, '')
       .replaceAll(/ ?WARN\s+Request\s+took .+?\n/g, '')
-      .replaceAll(
-        /Scope: all \d+ workspace projects/g,
-        'Scope: all <variable> workspace projects',
-      )
+      .replaceAll(/Scope: all \d+ workspace projects/g, 'Scope: all <variable> workspace projects')
       .replaceAll(/\++\n/g, '+<repeat>\n')
       // ignore pnpm registry request error warning log
       .replaceAll(/ ?WARN\s+GET\s+https:\/\/registry\..+?\n/g, '')
@@ -70,10 +65,7 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
         /(removed \d+ package), and audited \d+ packages( in <variable>(?:s|ms|µs))\n/g,
         '$1$2\n',
       )
-      .replaceAll(
-        /(up to date), audited \d+ packages( in <variable>(?:s|ms|µs))\n/g,
-        '$1$2\n',
-      )
+      .replaceAll(/(up to date), audited \d+ packages( in <variable>(?:s|ms|µs))\n/g, '$1$2\n')
       .replaceAll(
         /(added \d+ packages?), and audited \d+ packages( in <variable>(?:s|ms|µs))\n/g,
         '$1$2\n',
@@ -99,6 +91,8 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/"integrity": "(\w+)-.+?"/g, '"integrity": "$1-<hash>"')
       // replace homedir; e.g.: /Users/foo/Library/pnpm/global/5/node_modules/testnpm2 => <homedir>/Library/pnpm/global/5/node_modules/testnpm2
       .replaceAll(homedir(), '<homedir>')
+      // remove the newline after "Checking formatting..."
+      .replaceAll(`Checking formatting...\n`, 'Checking formatting...')
   );
 }
 

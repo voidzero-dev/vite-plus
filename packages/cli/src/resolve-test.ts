@@ -27,11 +27,7 @@ export async function test(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
-  const binPath = join(
-    dirname(resolve('@voidzero-dev/vite-plus-test')),
-    'dist',
-    'cli.js',
-  );
+  const binPath = join(dirname(resolve('@voidzero-dev/vite-plus-test')), 'dist', 'cli.js');
 
   return {
     binPath,

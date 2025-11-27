@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
 import * as semver from 'semver';
 
 interface PackageJson {
@@ -18,11 +19,7 @@ function error(message: string): never {
   process.exit(1);
 }
 
-function mergeSemverVersions(
-  v1: string,
-  v2: string,
-  packageName: string,
-): string {
+function mergeSemverVersions(v1: string, v2: string, packageName: string): string {
   // Handle special cases
   if (v1 === v2) return v1;
 
@@ -63,9 +60,7 @@ function mergeSemverVersions(
   const range2 = semver.validRange(v2);
 
   if (!range1 || !range2) {
-    log(
-      `Warning: Could not parse semver for ${packageName}: ${v1}, ${v2}. Using ${v1}`,
-    );
+    log(`Warning: Could not parse semver for ${packageName}: ${v1}, ${v2}. Using ${v1}`);
     return v1;
   }
 
@@ -105,9 +100,7 @@ function mergeSemverVersions(
   return v1;
 }
 
-function mergePeerDependencies(
-  packages: PackageJson[],
-): Record<string, string> {
+function mergePeerDependencies(packages: PackageJson[]): Record<string, string> {
   const result: Record<string, string> = {};
 
   for (const pkg of packages) {
@@ -174,22 +167,10 @@ export function mergePeerDeps() {
 
   // Paths to package.json files
   const cliPackagePath = join(rootDir, 'packages/cli/package.json');
-  const vitepressPackagePath = join(
-    rootDir,
-    'packages/cli/node_modules/vitepress/package.json',
-  );
-  const tsdownPackagePath = join(
-    rootDir,
-    'packages/cli/node_modules/tsdown/package.json',
-  );
-  const vitestPackagePath = join(
-    rootDir,
-    'packages/cli/node_modules/vitest-dev/package.json',
-  );
-  const rolldownVitePackagePath = join(
-    rootDir,
-    'rolldown-vite/packages/vite/package.json',
-  );
+  const vitepressPackagePath = join(rootDir, 'packages/cli/node_modules/vitepress/package.json');
+  const tsdownPackagePath = join(rootDir, 'packages/cli/node_modules/tsdown/package.json');
+  const vitestPackagePath = join(rootDir, 'packages/cli/node_modules/vitest-dev/package.json');
+  const rolldownVitePackagePath = join(rootDir, 'rolldown-vite/packages/vite/package.json');
 
   // Check if all files exist
   const packagePaths = [
@@ -221,25 +202,17 @@ export function mergePeerDeps() {
   const mergedPeerDepsMeta = mergePeerDependenciesMeta(packages);
 
   log(`Merged ${Object.keys(mergedPeerDeps).length} peerDependencies`);
-  log(
-    `Merged ${Object.keys(mergedPeerDepsMeta).length} peerDependenciesMeta entries`,
-  );
+  log(`Merged ${Object.keys(mergedPeerDepsMeta).length} peerDependenciesMeta entries`);
 
   // Read CLI package.json
-  const cliPackage = JSON.parse(
-    readFileSync(cliPackagePath, 'utf-8'),
-  ) as PackageJson;
+  const cliPackage = JSON.parse(readFileSync(cliPackagePath, 'utf-8')) as PackageJson;
 
   // Update with merged dependencies
   cliPackage.peerDependencies = mergedPeerDeps;
   cliPackage.peerDependenciesMeta = mergedPeerDepsMeta;
 
   // Write back to CLI package.json
-  writeFileSync(
-    cliPackagePath,
-    JSON.stringify(cliPackage, null, 2) + '\n',
-    'utf-8',
-  );
+  writeFileSync(cliPackagePath, JSON.stringify(cliPackage, null, 2) + '\n', 'utf-8');
 
   log('✓ peerDependencies merged successfully!');
   log('✓ Done!');

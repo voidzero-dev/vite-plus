@@ -3,11 +3,7 @@ import path from 'node:path';
 
 import * as prompts from '@clack/prompts';
 
-import type {
-  BuiltinTemplateInfo,
-  ExecutionResult,
-  WorkspaceInfo,
-} from '../types.ts';
+import type { BuiltinTemplateInfo, ExecutionResult, WorkspaceInfo } from '../types.ts';
 import { copyDir, editJsonFile, templatesDir } from '../utils.ts';
 
 // Execute generator scaffold template

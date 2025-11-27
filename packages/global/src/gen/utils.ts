@@ -38,10 +38,7 @@ export function editFile(file: string, callback: (content: string) => string) {
   fs.writeFileSync(file, callback(content), 'utf-8');
 }
 
-export function editOrCreateFile(
-  file: string,
-  callback: (content: string) => string,
-) {
+export function editOrCreateFile(file: string, callback: (content: string) => string) {
   if (!fs.existsSync(file)) {
     fs.writeFileSync(file, '', 'utf-8');
   }
@@ -53,10 +50,7 @@ export function readYamlFile<T = Record<string, any>>(file: string): T {
   return parseYaml(content) as T;
 }
 
-export function editYamlFile<T = Record<string, any>>(
-  file: string,
-  callback: (content: T) => T,
-) {
+export function editYamlFile<T = Record<string, any>>(file: string, callback: (content: T) => T) {
   const yaml = readYamlFile<T>(file);
   const newYaml = callback(yaml);
   fs.writeFileSync(file, stringifyYaml(newYaml), 'utf-8');
@@ -77,10 +71,7 @@ export function readJsonFile<T = Record<string, any>>(file: string): T {
   return JSON.parse(content) as T;
 }
 
-export function editJsonFile<T = Record<string, any>>(
-  file: string,
-  callback: (content: T) => T,
-) {
+export function editJsonFile<T = Record<string, any>>(file: string, callback: (content: T) => T) {
   const json = readJsonFile<T>(file);
   const newJson = callback(json);
   fs.writeFileSync(file, JSON.stringify(newJson, null, 2) + '\n', 'utf-8');
@@ -157,8 +148,7 @@ export function formatTargetDir(input: string): {
   const result = validateNpmPackageName(packageName);
   if (!result.validForNewPackages) {
     // invalid package name
-    const message =
-      result.errors?.[0] ?? result.warnings?.[0] ?? 'Invalid package name';
+    const message = result.errors?.[0] ?? result.warnings?.[0] ?? 'Invalid package name';
     return {
       directory: '',
       packageName: '',
@@ -205,23 +195,17 @@ export function setPackageManager(
   downloadPackageManager: DownloadPackageManagerResult,
 ) {
   // set package manager
-  editJsonFile<{ packageManager?: string }>(
-    path.join(projectDir, 'package.json'),
-    (pkg) => {
-      if (!pkg.packageManager) {
-        pkg.packageManager = `${downloadPackageManager.name}@${downloadPackageManager.version}`;
-      }
-      return pkg;
-    },
-  );
+  editJsonFile<{ packageManager?: string }>(path.join(projectDir, 'package.json'), (pkg) => {
+    if (!pkg.packageManager) {
+      pkg.packageManager = `${downloadPackageManager.name}@${downloadPackageManager.version}`;
+    }
+    return pkg;
+  });
 }
 
 export function setPackageName(projectDir: string, packageName: string) {
-  editJsonFile<{ name?: string }>(
-    path.join(projectDir, 'package.json'),
-    (pkg) => {
-      pkg.name = packageName;
-      return pkg;
-    },
-  );
+  editJsonFile<{ name?: string }>(path.join(projectDir, 'package.json'), (pkg) => {
+    pkg.name = packageName;
+    return pkg;
+  });
 }
