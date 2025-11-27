@@ -26,10 +26,7 @@ Arguments:
   PATH                       Target directory to migrate (default: current directory)
 
 Options:
-  --dry-run                  Preview changes without applying them
   --no-interactive           Run in non-interactive mode (skip prompts and use defaults)
-  --all                      Migrate all packages in workspace (monorepo)
-  --tools                    Migrate specific tools only (comma-separated: vite,vitest,tsdown,oxlint,oxfmt)
   -h, --help                 Show this help message
 
 Examples:
@@ -39,12 +36,6 @@ Examples:
   ${gray('# Migrate specific directory')}
   vite migration path/to/my-app
 
-  ${gray('# Preview changes without applying')}
-  vite migration --dry-run
-
-  ${gray('# Migrate specific tools only')}
-  vite migration --tools=vite,vitest
-
   ${gray('# Non-interactive mode')}
   vite migration --no-interactive
 
@@ -52,7 +43,6 @@ Aliases: ${gray('migrate')}
 `;
 
 export interface MigrationOptions {
-  dryRun?: boolean;
   interactive: boolean;
   help?: boolean;
 }
@@ -61,16 +51,11 @@ function parseArgs() {
   const args = process.argv.slice(3); // Skip 'node', 'vite', 'migration'
 
   const parsed = mri<{
-    'dry-run'?: boolean;
-    all?: boolean;
-    tools?: string;
-    check?: boolean;
     help?: boolean;
     interactive?: boolean;
   }>(args, {
     alias: { h: 'help' },
-    boolean: ['help', 'dry-run', 'all', 'check', 'interactive'],
-    string: ['tools'],
+    boolean: ['help', 'interactive'],
     default: { interactive: defaultInteractive() },
   });
 
@@ -84,7 +69,6 @@ function parseArgs() {
   return {
     projectPath,
     options: {
-      dryRun: parsed['dry-run'],
       interactive: parsed.interactive,
       help: parsed.help,
     } as MigrationOptions,

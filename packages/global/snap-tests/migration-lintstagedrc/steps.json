@@ -1,9 +1,7 @@
 {
   "commands": [
-    {
-      "command": "vp migration # migration work with lintstagedrc.json",
-      "ignoreOutput": true
-    },
+    "vp migration -h # migration help message",
+    "vp migration # migration work with lintstagedrc.json",
     "cat .lintstagedrc.json # check lintstagedrc.json",
     "cat package.json # check package.json"
   ]

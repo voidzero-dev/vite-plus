@@ -1,0 +1,34 @@
+> vp migration foo # migration work with subpath
+┌  Vite+ Migration
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+└  ✨ Migration completed!
+
+
+> cat foo/package.json # check package.json
+{
+  "name": "migration-subpath",
+  "lint-staged": {
+    "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
+      "vite fmt --staged",
+      "eslint --fix"
+    ],
+    "*.@(js|ts|tsx)": [
+      "vite lint --fix"
+    ]
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "devDependencies": {
+    "@voidzero-dev/vite-plus": "latest"
+  }
+}

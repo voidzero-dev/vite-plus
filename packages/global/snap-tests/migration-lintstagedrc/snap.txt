@@ -1,4 +1,40 @@
+> vp migration -h # migration help message
+Usage: vite migration [PATH] [OPTIONS]
+
+Migrate standalone vite, vitest, tsdown, oxlint, and oxfmt to unified vite-plus.
+
+Arguments:
+  PATH                       Target directory to migrate (default: current directory)
+
+Options:
+  --no-interactive           Run in non-interactive mode (skip prompts and use defaults)
+  -h, --help                 Show this help message
+
+Examples:
+  # Migrate current package
+  vite migration
+
+  # Migrate specific directory
+  vite migration path/to/my-app
+
+  # Non-interactive mode
+  vite migration --no-interactive
+
+Aliases: migrate
+
+
 > vp migration # migration work with lintstagedrc.json
+┌  Vite+ Migration
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+└  ✨ Migration completed!
+
+
 > cat .lintstagedrc.json # check lintstagedrc.json
 {
   "*.js": "vite lint --fix"
