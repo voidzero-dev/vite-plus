@@ -218,6 +218,79 @@ jobs:
           RUST_BACKTRACE=1 pnpm --filter=@voidzero-dev/vite-plus test && pnpm -r snap-test
           git diff --exit-code
 
+  e2e-test:
+    name: ${{ matrix.project.name }} E2E test
+    needs:
+      - download-previous-rolldown-binaries
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - name: vibe-dashboard
+            node-version: 24
+            command: vite run ready
+          - name: skeleton
+            node-version: 22
+            command: |
+              pnpm run --filter="@skeletonlabs/*" --sequential build
+              pnpm test
+    if: ${{ github.ref_name == 'main' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./.github/actions/clone
+        with:
+          ecosystem-ci-project: ${{ matrix.project.name }}
+
+      - name: Configure Git for access to vite-task
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: e2e-test
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
+
+      - name: Build with upstream
+        uses: ./.github/actions/build-upstream
+        with:
+          target: x86_64-unknown-linux-gnu
+
+      - name: Build all packages
+        run: pnpm bootstrap-cli:ci
+
+      - name: Pack packages into tgz
+        run: |
+          mkdir -p tmp/tgz
+          cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          cd packages/test && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          cd packages/global && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          ls -la tmp/tgz
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: ${{ matrix.project.node-version }}
+          package-manager-cache: false
+
+      - name: Install vite-plus from tgz in ${{ matrix.project.name }}
+        working-directory: ecosystem-ci/${{ matrix.project.name }}
+        run: |
+          node ../patch-project.ts ${{ matrix.project.name }}
+          pnpm install --no-frozen-lockfile
+          pnpm playwright install --with-deps
+
+      - name: Run vite-plus commands in ${{ matrix.project.name }}
+        working-directory: ecosystem-ci/${{ matrix.project.name }}
+        run: ${{ matrix.project.command }}
+
   install-e2e-test:
     name: vite install E2E test
     # FIXME: Error: spawnSync esbuild ENOTSOCK
