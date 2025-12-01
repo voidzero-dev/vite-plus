@@ -7,7 +7,7 @@
   "exports": {
     ".": "./dist/vite/node/index.js",
     "./client": {
-      "types": "./client.d.ts"
+      "types": "./dist/vite/client.d.ts"
     },
     "./dist/client/*": "./dist/vite/client/*",
     "./internal": "./dist/vite/node/internal.js",
