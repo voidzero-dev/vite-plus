@@ -2,7 +2,6 @@
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "ignorePatterns": [
     "tmp/**",
-    "ecosystem-ci/outline/**",
     "ecosystem-ci/vibe-dashboard/**"
   ],
   "singleQuote": true,
