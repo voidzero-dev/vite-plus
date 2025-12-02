@@ -1,16 +1,10 @@
-use std::{collections::HashMap, future::Future, iter::once};
+use std::{future::Future, iter::once};
 
 use petgraph::stable_graph::StableGraph;
-use serde::{Deserialize, Serialize};
 use vite_error::Error as ViteError;
 use vite_task::{
     Error, ExecutionPlan, ExecutionSummary, ResolveCommandResult, ResolvedTask, Workspace,
 };
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LintConfig {
-    pub rules: HashMap<String, String>,
-}
 
 #[tracing::instrument(skip(resolve_lint_command, workspace))]
 pub async fn lint<

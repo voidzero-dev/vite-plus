@@ -1,17 +1,10 @@
-use std::{collections::HashMap, future::Future, iter::once};
+use std::{future::Future, iter::once};
 
 use petgraph::stable_graph::StableGraph;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use vite_error::Error as ViteError;
 use vite_task::{
     Error, ExecutionPlan, ExecutionSummary, ResolveCommandResult, ResolvedTask, Workspace,
 };
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FmtConfig {
-    pub rules: HashMap<String, Value>,
-}
 
 #[tracing::instrument(skip(resolve_fmt_command, workspace))]
 pub async fn fmt<

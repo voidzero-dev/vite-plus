@@ -18,28 +18,16 @@ use vite_task::{
 };
 
 use crate::commands::{
-    add::AddCommand,
-    dedupe::DedupeCommand,
-    doc::doc as doc_cmd,
-    fmt::{FmtConfig, fmt},
-    install::InstallCommand,
-    lib_cmd::lib,
-    link::LinkCommand,
-    lint::{LintConfig, lint},
-    outdated::OutdatedCommand,
-    pm::PmCommand,
-    remove::RemoveCommand,
-    test::test,
-    unlink::UnlinkCommand,
-    update::UpdateCommand,
-    vite::vite as vite_cmd,
-    why::WhyCommand,
+    add::AddCommand, dedupe::DedupeCommand, doc::doc as doc_cmd, fmt::fmt, install::InstallCommand,
+    lib_cmd::lib, link::LinkCommand, lint::lint, outdated::OutdatedCommand, pm::PmCommand,
+    remove::RemoveCommand, test::test, unlink::UnlinkCommand, update::UpdateCommand,
+    vite::vite as vite_cmd, why::WhyCommand,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResolvedUniversalViteConfig {
-    pub lint: Option<LintConfig>,
-    pub fmt: Option<FmtConfig>,
+    pub lint: Option<serde_json::Value>,
+    pub fmt: Option<serde_json::Value>,
 }
 
 #[derive(Parser, Debug)]
@@ -993,9 +981,29 @@ pub async fn main<
         }
         Commands::Fmt { args } => {
             let workspace = Workspace::partial_load(cwd)?;
+            let vite_config = read_vite_config_from_workspace_root(
+                workspace.root_dir(),
+                options.as_ref().map(|o| &o.resolve_universal_vite_config),
+            )
+            .await?;
             let fmt_fn =
                 options.map(|o| o.fmt).expect("fmt command requires CliOptions to be provided");
-
+            let resolved_vite_config: Option<ResolvedUniversalViteConfig> = vite_config
+                .map(|vite_config| {
+                    serde_json::from_str(&vite_config).inspect_err(|_| {
+                        tracing::error!("Failed to parse vite config: {vite_config}");
+                    })
+                })
+                .transpose()?;
+            let fmt_config = resolved_vite_config.and_then(|c| c.fmt);
+            if let Some(fmt_config) = fmt_config {
+                let oxfmt_config_path = workspace.cache_path().join(".oxfmtrc.json");
+                write(&oxfmt_config_path, serde_json::to_string(&fmt_config)?).await?;
+                args.extend_from_slice(&[
+                    "--config".to_string(),
+                    oxfmt_config_path.as_path().to_string_lossy().into_owned(),
+                ]);
+            }
             let summary = fmt(fmt_fn, &workspace, args).await?;
             workspace.unload().await?;
             summary

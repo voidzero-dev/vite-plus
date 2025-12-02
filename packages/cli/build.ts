@@ -1,3 +1,4 @@
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -32,8 +33,18 @@ async function buildNapiBinding() {
   });
 
   const outputs = await task;
+  const fmtConfigPath = join(projectDir, '../../node_modules/.vite/task-cache/.oxfmtrc.json');
+  if (!existsSync(fmtConfigPath)) {
+    const viteConfig = await import('../../vite.config');
+    mkdirSync(dirname(fmtConfigPath), { recursive: true });
+    writeFileSync(fmtConfigPath, JSON.stringify(viteConfig.default.fmt, null, 2));
+  }
   await format(
-    outputs.filter((o) => o.kind !== 'node').map((o) => o.path),
+    [
+      '-c',
+      '../../node_modules/.vite/task-cache/.oxfmtrc.json',
+      ...outputs.filter((o) => o.kind !== 'node').map((o) => o.path),
+    ],
     formatEmbeddedCode,
   );
 }

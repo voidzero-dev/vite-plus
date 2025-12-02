@@ -1,26 +1,16 @@
 import { defineConfig } from '@voidzero-dev/vite-plus-test/config';
 
-// replace it with the real oxlint config in the future
-export type LintConfig = {
-  rules: {
-    [key: string]: string;
-  };
-};
-
-export type FmtConfig = {
-  rules: {
-    [key: string]: string;
-  };
-};
+import type { OxfmtConfig } from './oxfmt-config';
+import type { OxlintConfig } from './oxlint-config';
 
 declare module '@voidzero-dev/vite-plus-core' {
   interface UserConfig {
     /**
      * Options for oxlint
      */
-    lint?: LintConfig;
+    lint?: OxlintConfig;
 
-    fmt?: FmtConfig;
+    fmt?: OxfmtConfig;
   }
 }
 
