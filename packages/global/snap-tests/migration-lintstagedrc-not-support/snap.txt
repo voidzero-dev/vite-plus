@@ -1,0 +1,49 @@
+> vp migration # migration should not support non-json format lintstagedrc
+┌  Vite+ Migration
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+▲  ❌ .lintstagedrc is not JSON format file, auto migration is not supported
+│
+▲  ❌ .lintstagedrc.yaml is not supported by auto migration
+│
+▲  ❌ lint-staged.config.mjs is not supported by auto migration
+│
+▲  Please migrate the lint-staged config manually, see https://viteplus.dev/migration/#lint-staged for more details
+│
+└  ✨ Migration completed!
+
+
+> cat .lintstagedrc # check .lintstagedrc is not updated
+"*.js":
+  - oxlint
+  - oxfmt
+
+> cat .lintstagedrc.yaml # check .lintstagedrc.yaml is not updated
+'*.js':
+  - oxlint
+  - oxfmt
+
+> cat lint-staged.config.mjs # check lint-staged.config.mjs is not updated
+export default {
+  '*.js': ['oxlint', 'oxfmt'],
+};
+
+> cat package.json # check package.json
+{
+  "name": "migration-lintstagedrc-not-support",
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "devDependencies": {
+    "@voidzero-dev/vite-plus": "latest"
+  },
+  "packageManager": "pnpm@<semver>"
+}

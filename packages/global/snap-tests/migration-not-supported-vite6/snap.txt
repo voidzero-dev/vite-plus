@@ -6,10 +6,10 @@
 │
 ●  pnpm@<semver> installed
 │
-■  ❌ vite version <semver> is not supported by migration
+■  ❌ vite@<semver> in package.json is not supported by auto migration
 │
 ●  Please upgrade vite to version >=7.0.0 first
-└  The project is not supported by migration
+└  The project is not supported by auto migration
 
 
 > cat package.json # check package.json is not updated

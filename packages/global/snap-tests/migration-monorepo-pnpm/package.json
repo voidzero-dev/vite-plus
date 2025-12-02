@@ -6,6 +6,11 @@
     "testnpm2": "1.0.0",
     "vite": "catalog:"
   },
+  "resolutions": {
+    "vue": "3.5.25",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  },
   "devDependencies": {
     "vitest": "catalog:",
     "oxlint": "catalog:",

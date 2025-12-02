@@ -112,15 +112,6 @@ async function main() {
     downloadPackageManager: downloadResult,
   };
 
-  // run vite install first to ensure the project is ready
-  await runViteInstall(workspaceInfo.rootDir, options.interactive);
-  // check vite and vitest version is supported by migration
-  const isViteSupported = checkViteVersion(workspaceInfo.rootDir);
-  const isVitestSupported = checkVitestVersion(workspaceInfo.rootDir);
-  if (!isViteSupported || !isVitestSupported) {
-    cancelAndExit('The project is not supported by migration', 1);
-  }
-
   // support catalog require yarn@>=4.10.0 https://yarnpkg.com/features/catalogs
   // if `yarn<4.10.0 && yarn>=4.0.0`, upgrade yarn to stable version
   if (
@@ -134,18 +125,27 @@ async function main() {
   ) {
     // required pnpm@>=9.5.0 to support catalog https://pnpm.io/9.x/catalogs
     prompts.log.error(
-      `❌ pnpm@${downloadResult.version} is not supported by migration, please upgrade pnpm to >=9.5.0 first`,
+      `❌ pnpm@${downloadResult.version} is not supported by auto migration, please upgrade pnpm to >=9.5.0 first`,
     );
-    cancelAndExit('The project is not supported by migration', 1);
+    cancelAndExit('The project is not supported by auto migration', 1);
   } else if (
     packageManager === PackageManager.npm &&
     semver.satisfies(downloadResult.version, '< 8.3.0')
   ) {
     // required npm@>=8.3.0 to support overrides https://github.com/npm/cli/releases/tag/v8.3.0
     prompts.log.error(
-      `❌ npm@${downloadResult.version} is not supported by migration, please upgrade npm to >=8.3.0 first`,
+      `❌ npm@${downloadResult.version} is not supported by auto migration, please upgrade npm to >=8.3.0 first`,
     );
-    cancelAndExit('The project is not supported by migration', 1);
+    cancelAndExit('The project is not supported by auto migration', 1);
+  }
+
+  // run vite install first to ensure the project is ready
+  await runViteInstall(workspaceInfo.rootDir, options.interactive);
+  // check vite and vitest version is supported by migration
+  const isViteSupported = checkViteVersion(workspaceInfo.rootDir);
+  const isVitestSupported = checkVitestVersion(workspaceInfo.rootDir);
+  if (!isViteSupported || !isVitestSupported) {
+    cancelAndExit('The project is not supported by auto migration', 1);
   }
 
   if (workspaceInfo.isMonorepo) {

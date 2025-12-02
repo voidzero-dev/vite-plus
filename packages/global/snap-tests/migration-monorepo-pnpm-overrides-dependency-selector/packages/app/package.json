@@ -1,0 +1,13 @@
+{
+  "name": "app",
+  "devDependencies": {
+    "vite": "catalog:"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-other-optional": "1.0.0"
+  },
+  "scripts": {
+    "dev": "vite --port 3000",
+    "build": "vite build"
+  }
+}

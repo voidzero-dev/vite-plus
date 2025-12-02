@@ -18,6 +18,8 @@ import {
   editYamlFile,
   rulesDir,
   type YamlDocument,
+  isJsonFile,
+  displayRelative,
 } from '../utils/index.ts';
 import { detectConfigs, detectPackageMetadata } from './detector.ts';
 
@@ -29,11 +31,6 @@ const OVERRIDE_PACKAGES = {
 } as const;
 const REMOVE_PACKAGES = ['oxlint', 'oxlint-tsgolint', 'oxfmt'];
 
-/**
- * Check the vite version is supported by migration
- * @param projectPath - The path to the project
- * @returns true if the vite version is supported by migration
- */
 export function checkViteVersion(projectPath: string): boolean {
   return checkPackageVersion(projectPath, 'vite', '7.0.0');
 }
@@ -43,11 +40,11 @@ export function checkVitestVersion(projectPath: string): boolean {
 }
 
 /**
- * Check the package version is supported by migration
+ * Check the package version is supported by auto migration
  * @param projectPath - The path to the project
  * @param name - The name of the package
  * @param minVersion - The minimum version of the package
- * @returns true if the package version is supported by migration
+ * @returns true if the package version is supported by auto migration
  */
 function checkPackageVersion(projectPath: string, name: string, minVersion: string): boolean {
   const metadata = detectPackageMetadata(projectPath, name);
@@ -55,7 +52,10 @@ function checkPackageVersion(projectPath: string, name: string, minVersion: stri
     return true;
   }
   if (semver.satisfies(metadata.version, `<${minVersion}`)) {
-    prompts.log.error(`❌ ${name} version ${metadata.version} is not supported by migration`);
+    const packageJsonFilePath = path.join(projectPath, 'package.json');
+    prompts.log.error(
+      `❌ ${name}@${metadata.version} in ${displayRelative(packageJsonFilePath)} is not supported by auto migration`,
+    );
     prompts.log.info(`Please upgrade ${name} to version >=${minVersion} first`);
     return false;
   }
@@ -105,24 +105,24 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
           ...OVERRIDE_PACKAGES,
         },
       };
-    }
-
-    for (const [key, version] of Object.entries(OVERRIDE_PACKAGES)) {
-      if (pkg.devDependencies?.[key]) {
-        pkg.devDependencies[key] = version;
-      }
-      if (pkg.dependencies?.[key]) {
-        pkg.dependencies[key] = version;
+      // remove packages from `resolutions` field if they exist
+      // https://pnpm.io/9.x/package_json#resolutions
+      for (const key of [...Object.keys(OVERRIDE_PACKAGES), ...REMOVE_PACKAGES]) {
+        if (pkg.resolutions?.[key]) {
+          delete pkg.resolutions[key];
+        }
       }
     }
 
-    // add vite-plus to devDependencies
-    pkg.devDependencies = {
-      ...pkg.devDependencies,
-      [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
-    };
+    rewritePackageJson(pkg, packageManager);
 
-    rewritePackageJson(pkg);
+    // ensure vite-plus is in devDependencies
+    if (!pkg.devDependencies?.[VITE_PLUS_NAME]) {
+      pkg.devDependencies = {
+        ...pkg.devDependencies,
+        [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
+      };
+    }
     return pkg;
   });
 
@@ -180,29 +180,8 @@ export function rewriteMonorepoProject(projectPath: string, packageManager: Pack
     dependencies?: Record<string, string>;
     scripts?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
-    const isNpm = packageManager === PackageManager.npm;
-    let needVitePlus = false;
-    for (const [key, value] of Object.entries(OVERRIDE_PACKAGES)) {
-      const version = isNpm ? value : 'catalog:';
-      if (pkg.devDependencies?.[key]) {
-        pkg.devDependencies[key] = version;
-        needVitePlus = true;
-      }
-      if (pkg.dependencies?.[key]) {
-        pkg.dependencies[key] = version;
-        needVitePlus = true;
-      }
-    }
-    if (needVitePlus) {
-      // add vite-plus to devDependencies to let vite config `import` rewrite work
-      pkg.devDependencies = {
-        ...pkg.devDependencies,
-        [VITE_PLUS_NAME]: isNpm ? VITE_PLUS_VERSION : 'catalog:',
-      };
-    }
-
     // rewrite scripts in package.json
-    rewritePackageJson(pkg);
+    rewritePackageJson(pkg, packageManager, true);
     return pkg;
   });
 }
@@ -223,7 +202,17 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
 
     // overrides
     for (const key of Object.keys(OVERRIDE_PACKAGES)) {
-      doc.setIn(['overrides', key], scalarString('catalog:'));
+      doc.setIn(['overrides', scalarString(key)], scalarString('catalog:'));
+    }
+    // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:rolldown-vite@7.0.12"
+    const overrides = doc.getIn(['overrides']) as YAMLMap<Scalar<string>, Scalar<string>>;
+    for (const item of overrides.items) {
+      if (item.key.value.includes('>')) {
+        const splits = item.key.value.split('>');
+        if (splits[splits.length - 1].trim() === 'vite') {
+          overrides.delete(item.key);
+        }
+      }
     }
 
     // peerDependencyRules.allowAny
@@ -248,6 +237,7 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
       allowedVersions = new YAMLMap<Scalar<string>, Scalar<string>>();
     }
     for (const key of Object.keys(OVERRIDE_PACKAGES)) {
+      // - vite: '*'
       allowedVersions.set(scalarString(key), scalarString('*'));
     }
     doc.setIn(['peerDependencyRules', 'allowedVersions'], allowedVersions);
@@ -344,6 +334,9 @@ function rewriteRootWorkspacePackageJson(
     resolutions?: Record<string, string>;
     overrides?: Record<string, string>;
     devDependencies?: Record<string, string>;
+    pnpm?: {
+      overrides?: Record<string, string>;
+    };
   }>(packageJsonPath, (pkg) => {
     if (packageManager === PackageManager.yarn) {
       pkg.resolutions = {
@@ -357,14 +350,37 @@ function rewriteRootWorkspacePackageJson(
         ...pkg.overrides,
         ...OVERRIDE_PACKAGES,
       };
+    } else if (packageManager === PackageManager.pnpm) {
+      // pnpm use overrides field at pnpm-workspace.yaml
+      // so we don't need to set overrides field at package.json
+      // remove packages from `resolutions` field and `pnpm.overrides` field if they exist
+      // https://pnpm.io/9.x/package_json#resolutions
+      for (const key of [...Object.keys(OVERRIDE_PACKAGES), ...REMOVE_PACKAGES]) {
+        if (pkg.pnpm?.overrides?.[key]) {
+          delete pkg.pnpm.overrides[key];
+        }
+        if (pkg.resolutions?.[key]) {
+          delete pkg.resolutions[key];
+        }
+      }
+      // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:rolldown-vite@7.0.12"
+      for (const key in pkg.pnpm?.overrides) {
+        if (key.includes('>')) {
+          const splits = key.split('>');
+          if (splits[splits.length - 1].trim() === 'vite') {
+            delete pkg.pnpm.overrides[key];
+          }
+        }
+      }
     }
-    // pnpm use overrides field at pnpm-workspace.yaml
 
-    // add vite-plus to devDependencies
-    pkg.devDependencies = {
-      ...pkg.devDependencies,
-      [VITE_PLUS_NAME]: packageManager === PackageManager.npm ? VITE_PLUS_VERSION : 'catalog:',
-    };
+    // ensure vite-plus is in devDependencies
+    if (!pkg.devDependencies?.[VITE_PLUS_NAME]) {
+      pkg.devDependencies = {
+        ...pkg.devDependencies,
+        [VITE_PLUS_NAME]: packageManager === PackageManager.npm ? VITE_PLUS_VERSION : 'catalog:',
+      };
+    }
     return pkg;
   });
 
@@ -374,12 +390,16 @@ function rewriteRootWorkspacePackageJson(
 
 const RULES_YAML_PATH = path.join(rulesDir, 'vite-tools.yml');
 
-export function rewritePackageJson(pkg: {
-  scripts?: Record<string, string>;
-  'lint-staged'?: Record<string, string | string[]>;
-  devDependencies?: Record<string, string>;
-  dependencies?: Record<string, string>;
-}): void {
+export function rewritePackageJson(
+  pkg: {
+    scripts?: Record<string, string>;
+    'lint-staged'?: Record<string, string | string[]>;
+    devDependencies?: Record<string, string>;
+    dependencies?: Record<string, string>;
+  },
+  packageManager: PackageManager,
+  isMonorepo?: boolean,
+): void {
   if (pkg.scripts) {
     const updated = rewriteScripts(
       JSON.stringify(pkg.scripts),
@@ -398,34 +418,95 @@ export function rewritePackageJson(pkg: {
       pkg['lint-staged'] = JSON.parse(updated);
     }
   }
+  const supportCatalog = isMonorepo && packageManager !== PackageManager.npm;
+  let needVitePlus = false;
+  for (const [key, version] of Object.entries(OVERRIDE_PACKAGES)) {
+    const value = supportCatalog ? 'catalog:' : version;
+    if (pkg.devDependencies?.[key]) {
+      pkg.devDependencies[key] = value;
+      needVitePlus = true;
+    }
+    if (pkg.dependencies?.[key]) {
+      pkg.dependencies[key] = value;
+      needVitePlus = true;
+    }
+  }
   // remove packages that are replaced with vite-plus
   for (const name of REMOVE_PACKAGES) {
     if (pkg.devDependencies?.[name]) {
       delete pkg.devDependencies[name];
+      needVitePlus = true;
     }
     if (pkg.dependencies?.[name]) {
       delete pkg.dependencies[name];
+      needVitePlus = true;
     }
+  }
+  if (needVitePlus) {
+    // add vite-plus to devDependencies
+    const version = supportCatalog ? 'catalog:' : VITE_PLUS_VERSION;
+    pkg.devDependencies = {
+      ...pkg.devDependencies,
+      [VITE_PLUS_NAME]: version,
+    };
   }
 }
 
-// https://github.com/lint-staged/lint-staged?tab=readme-ov-file#configuration
+// https://github.com/lint-staged/lint-staged#configuration
 // only support json format
 function rewriteLintStagedConfigFile(projectPath: string): void {
-  const names = ['.lintstagedrc.json', '.lintstagedrc'];
-  for (const name of names) {
-    const lintStagedConfigJsonPath = path.join(projectPath, name);
-    if (fs.existsSync(lintStagedConfigJsonPath)) {
-      editJsonFile<Record<string, string | string[]>>(lintStagedConfigJsonPath, (config) => {
-        const updated = rewriteScripts(
-          JSON.stringify(config),
-          fs.readFileSync(RULES_YAML_PATH, 'utf8'),
-        );
-        if (updated) {
-          return JSON.parse(updated);
-        }
-      });
+  let hasUnsupported = false;
+  const filenames = ['.lintstagedrc.json', '.lintstagedrc'];
+  for (const filename of filenames) {
+    const lintStagedConfigJsonPath = path.join(projectPath, filename);
+    if (!fs.existsSync(lintStagedConfigJsonPath)) {
+      continue;
     }
+    if (filename === '.lintstagedrc' && !isJsonFile(lintStagedConfigJsonPath)) {
+      prompts.log.warn(
+        `❌ ${displayRelative(lintStagedConfigJsonPath)} is not JSON format file, auto migration is not supported`,
+      );
+      hasUnsupported = true;
+      continue;
+    }
+    editJsonFile<Record<string, string | string[]>>(lintStagedConfigJsonPath, (config) => {
+      const updated = rewriteScripts(
+        JSON.stringify(config),
+        fs.readFileSync(RULES_YAML_PATH, 'utf8'),
+      );
+      if (updated) {
+        prompts.log.success(
+          `✅ Rewrote lint-staged config in ${displayRelative(lintStagedConfigJsonPath)}`,
+        );
+        return JSON.parse(updated);
+      }
+    });
+  }
+  // others non-json files
+  const others = [
+    '.lintstagedrc.yaml',
+    '.lintstagedrc.yml',
+    'lintstagedrc.mjs',
+    'lint-staged.config.mjs',
+    'lintstagedrc.cjs',
+    'lint-staged.config.cjs',
+    '.lintstagedrc.js',
+    'lint-staged.config.js',
+  ];
+  for (const filename of others) {
+    const lintStagedConfigPath = path.join(projectPath, filename);
+    if (!fs.existsSync(lintStagedConfigPath)) {
+      continue;
+    }
+    prompts.log.warn(
+      `❌ ${displayRelative(lintStagedConfigPath)} is not supported by auto migration`,
+    );
+    hasUnsupported = true;
+  }
+  if (hasUnsupported) {
+    prompts.log.warn(
+      `Please migrate the lint-staged config manually, see https://viteplus.dev/migration/#lint-staged for more details`,
+    );
   }
 }
 
@@ -494,13 +575,14 @@ function rewriteViteConfigFile(projectPath: string): void {
 export default defineConfig({});
 `,
     );
-    prompts.log.success(`✅ Created vite.config.ts in ${configs.viteConfig}`);
+    prompts.log.success(`✅ Created vite.config.ts in ${displayRelative(viteConfigPath)}`);
   }
   if (configs.oxlintConfig) {
     // merge oxlint config into vite.config.ts
     mergeAndRemoveJsonConfig(projectPath, configs.viteConfig, configs.oxlintConfig, 'lint');
   }
   if (configs.oxfmtConfig) {
+    // TODO: handle jsonc file
     // merge oxfmt config into vite.config.ts
     mergeAndRemoveJsonConfig(projectPath, configs.viteConfig, configs.oxfmtConfig, 'fmt');
   }
@@ -518,9 +600,13 @@ function mergeAndRemoveJsonConfig(
   if (result.updated) {
     fs.writeFileSync(fullViteConfigPath, result.content);
     fs.unlinkSync(fullJsonConfigPath);
-    prompts.log.success(`✅ Merged ${jsonConfigPath} into ${viteConfigPath}`);
+    prompts.log.success(
+      `✅ Merged ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
+    );
   } else {
-    prompts.log.warn(`❌ Failed to merge ${jsonConfigPath} into ${viteConfigPath}`);
+    prompts.log.warn(
+      `❌ Failed to merge ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
+    );
     prompts.log.info(
       `Please complete the merge manually and follow the instructions in the documentation: https://viteplus.dev/config/`,
     );
@@ -532,7 +618,7 @@ function rewriteViteConfigImport(projectPath: string, viteConfigPath: string): v
   const result = rewriteImport(fullPath);
   if (result.updated) {
     fs.writeFileSync(fullPath, result.content);
-    prompts.log.success(`✅ Rewrote import in ${viteConfigPath}`);
+    prompts.log.success(`✅ Rewrote import in ${displayRelative(fullPath)}`);
   }
 }
 

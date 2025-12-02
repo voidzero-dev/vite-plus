@@ -30,3 +30,12 @@ export function editJsonFile<T = Record<string, any>>(
     writeJsonFile(file, newJson);
   }
 }
+
+export function isJsonFile(file: string): boolean {
+  try {
+    readJsonFile(file);
+    return true;
+  } catch {
+    return false;
+  }
+}

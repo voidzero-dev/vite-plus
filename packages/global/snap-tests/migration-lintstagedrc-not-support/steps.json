@@ -1,0 +1,12 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp migration # migration should not support non-json format lintstagedrc",
+    "cat .lintstagedrc # check .lintstagedrc is not updated",
+    "cat .lintstagedrc.yaml # check .lintstagedrc.yaml is not updated",
+    "cat lint-staged.config.mjs # check lint-staged.config.mjs is not updated",
+    "cat package.json # check package.json"
+  ]
+}

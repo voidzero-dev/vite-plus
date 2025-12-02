@@ -1,12 +1,50 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`rewritePackageJson > should remove vite tools from devDependencies and dependencies 1`] = `
+exports[`rewritePackageJson > should rewrite devDependencies and dependencies on npm monorepo project 1`] = `
 {
   "dependencies": {
     "foo": "1.0.0",
     "tsdown": "1.0.0",
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@voidzero-dev/vite-plus": "latest",
+  },
+}
+`;
+
+exports[`rewritePackageJson > should rewrite devDependencies and dependencies on pnpm monorepo project 1`] = `
+{
+  "dependencies": {
+    "foo": "1.0.0",
+    "tsdown": "1.0.0",
+  },
+  "devDependencies": {
+    "@voidzero-dev/vite-plus": "catalog:",
+  },
+}
+`;
+
+exports[`rewritePackageJson > should rewrite devDependencies and dependencies on standalone project 1`] = `
+{
+  "dependencies": {
+    "foo": "1.0.0",
+    "tsdown": "1.0.0",
+  },
+  "devDependencies": {
+    "@voidzero-dev/vite-plus": "latest",
+  },
+}
+`;
+
+exports[`rewritePackageJson > should rewrite devDependencies and dependencies on yarn monorepo project 1`] = `
+{
+  "dependencies": {
+    "foo": "1.0.0",
+    "tsdown": "1.0.0",
+  },
+  "devDependencies": {
+    "@voidzero-dev/vite-plus": "catalog:",
+  },
 }
 `;
 

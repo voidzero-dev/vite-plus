@@ -10,6 +10,9 @@
     "cat package.json # check package.json",
     "cat pnpm-workspace.yaml # check pnpm-workspace.yaml",
     "cat packages/app/package.json # check app package.json",
-    "cat packages/utils/package.json # check utils package.json"
+    "cat packages/utils/package.json # check utils package.json",
+    "cat packages/only-oxlint/package.json # check only-oxlint package.json",
+    "cat packages/only-oxlint/vite.config.ts # check only-oxlint vite.config.ts",
+    "cat packages/only-oxlint/.oxlintrc.json && exit 1 || true # check only-oxlint .oxlintrc.json is removed"
   ]
 }

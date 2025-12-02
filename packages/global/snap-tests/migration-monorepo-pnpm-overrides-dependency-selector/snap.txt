@@ -1,0 +1,77 @@
+> vp migration # migration should merge pnpm overrides with dependency selector
+┌  Vite+ Migration
+│
+●  pnpm@<semver> installing...
+│
+●  pnpm@<semver> installed
+│
+◆  ✅ Rewrote import in vite.config.ts
+│
+└  ✨ Migration completed!
+
+
+> cat vite.config.ts # check vite.config.ts
+import react from '@vitejs/plugin-react';
+import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  plugins: [react()],
+});
+
+> cat package.json # check package.json
+{
+  "name": "migration-monorepo-pnpm-overrides-dependency-selector",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>+sha512.cf9998222162dd85864d0a8102e7892e7ba4ceadebbf5a31f9c2fce48dfce317a9c53b9f6464d1ef9042cba2e02ae02a9f7c143a2b438cd93c91840f0192b9dd",
+  "devDependencies": {
+    "vite": "catalog:",
+    "@voidzero-dev/vite-plus": "catalog:"
+  },
+  "scripts": {
+    "dev": "vite dev"
+  },
+  "pnpm": {
+    "overrides": {
+      "react-click-away-listener>react": "0.0.0-experimental-7dc903cd-20251203",
+      "supertest>superagent": "9.0.2"
+    }
+  }
+}
+
+> cat pnpm-workspace.yaml # check pnpm-workspace.yaml
+packages:
+  - packages/*
+
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  '@voidzero-dev/vite-plus': latest
+
+overrides:
+  '@vitejs/plugin-react>vite': 'npm:rolldown-vite@<semver>'
+  'supertest>superagent': '9.0.2'
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'
+
+> cat packages/app/package.json # check app package.json
+{
+  "name": "app",
+  "devDependencies": {
+    "vite": "catalog:",
+    "@voidzero-dev/vite-plus": "catalog:"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-other-optional": "1.0.0"
+  },
+  "scripts": {
+    "dev": "vite dev --port 3000",
+    "build": "vite build"
+  }
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { PackageManager } from '../../types/index.ts';
 import { rewritePackageJson } from '../migrator.ts';
 
 describe('rewritePackageJson', () => {
@@ -42,11 +43,11 @@ describe('rewritePackageJson', () => {
         '*.ts': 'oxfmt --fix',
       },
     };
-    rewritePackageJson(pkg);
+    rewritePackageJson(pkg, PackageManager.npm);
     expect(pkg).toMatchSnapshot();
   });
 
-  it('should remove vite tools from devDependencies and dependencies', async () => {
+  it('should rewrite devDependencies and dependencies on standalone project', async () => {
     const pkg = {
       devDependencies: {
         oxlint: '1.0.0',
@@ -57,7 +58,52 @@ describe('rewritePackageJson', () => {
         tsdown: '1.0.0',
       },
     };
-    rewritePackageJson(pkg);
+    rewritePackageJson(pkg, PackageManager.pnpm);
+    expect(pkg).toMatchSnapshot();
+  });
+
+  it('should rewrite devDependencies and dependencies on pnpm monorepo project', async () => {
+    const pkg = {
+      devDependencies: {
+        oxlint: '1.0.0',
+        oxfmt: '1.0.0',
+      },
+      dependencies: {
+        foo: '1.0.0',
+        tsdown: '1.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+    expect(pkg).toMatchSnapshot();
+  });
+
+  it('should rewrite devDependencies and dependencies on npm monorepo project', async () => {
+    const pkg = {
+      devDependencies: {
+        oxlint: '1.0.0',
+        oxfmt: '1.0.0',
+      },
+      dependencies: {
+        foo: '1.0.0',
+        tsdown: '1.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.npm, true);
+    expect(pkg).toMatchSnapshot();
+  });
+
+  it('should rewrite devDependencies and dependencies on yarn monorepo project', async () => {
+    const pkg = {
+      devDependencies: {
+        oxlint: '1.0.0',
+        oxfmt: '1.0.0',
+      },
+      dependencies: {
+        foo: '1.0.0',
+        tsdown: '1.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.yarn, true);
     expect(pkg).toMatchSnapshot();
   });
 });

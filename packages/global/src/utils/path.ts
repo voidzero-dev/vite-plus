@@ -9,3 +9,7 @@ export const pkgRoot = import.meta.dirname.endsWith('dist')
 
 export const templatesDir = path.join(pkgRoot, 'templates');
 export const rulesDir = path.join(pkgRoot, 'rules');
+
+export function displayRelative(to: string, from = process.cwd()): string {
+  return path.relative(from, to).replaceAll('\\', '/');
+}

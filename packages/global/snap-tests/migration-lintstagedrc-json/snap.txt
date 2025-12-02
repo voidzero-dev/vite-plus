@@ -32,6 +32,8 @@ Aliases: migrate
 │
 ●  pnpm@<semver> installed
 │
+◆  ✅ Rewrote lint-staged config in .lintstagedrc.json
+│
 └  ✨ Migration completed!
 
 

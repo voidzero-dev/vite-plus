@@ -11,6 +11,10 @@
 │
 ◆  ✅ Merged .oxfmtrc.json into vite.config.ts
 │
+◆  ✅ Created vite.config.ts in packages/only-oxlint/vite.config.ts
+│
+◆  ✅ Merged packages/only-oxlint/.oxlintrc.json into packages/only-oxlint/vite.config.ts
+│
 └  ✨ Migration completed!
 
 
@@ -48,6 +52,9 @@ cat: .oxfmtrc.json: No such file or directory
   "dependencies": {
     "testnpm2": "1.0.0",
     "vite": "catalog:"
+  },
+  "resolutions": {
+    "vue": "3.5.25"
   },
   "devDependencies": {
     "vitest": "catalog:",
@@ -138,3 +145,29 @@ minimumReleaseAgeExclude:
     "test": "vite test"
   }
 }
+
+> cat packages/only-oxlint/package.json # check only-oxlint package.json
+{
+  "name": "@vite-plus-test/only-oxlint",
+  "devDependencies": {
+    "@voidzero-dev/vite-plus": "catalog:"
+  },
+  "scripts": {
+    "lint": "vite lint --fix"
+  }
+}
+
+> cat packages/only-oxlint/vite.config.ts # check only-oxlint vite.config.ts
+import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  lint: {
+    rules: {
+      'no-unused-vars': 'warn',
+    },
+  },
+  
+});
+
+> cat packages/only-oxlint/.oxlintrc.json && exit 1 || true # check only-oxlint .oxlintrc.json is removed
+cat: packages/only-oxlint/.oxlintrc.json: No such file or directory

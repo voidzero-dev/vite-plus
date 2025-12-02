@@ -181,7 +181,7 @@ fn rewrite_import_content(vite_config_content: &str) -> Result<RewriteResult, Er
 ///
 /// * `vite_config_content` - The content of the vite.config.ts or vite.config.js file
 /// * `ts_config` - The config as a TypeScript object literal string
-/// * `config_key` - The key to use in the vite config (e.g., "lint", "format")
+/// * `config_key` - The key to use in the vite config (e.g., "lint", "fmt")
 ///
 /// # Returns
 ///

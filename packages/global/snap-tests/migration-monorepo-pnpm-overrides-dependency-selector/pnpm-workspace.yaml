@@ -1,0 +1,11 @@
+packages:
+  - packages/*
+
+catalog:
+  vite: 'npm:rolldown-vite@7.0.12'
+
+overrides:
+  'vite-plugin-svgr>vite': 'npm:rolldown-vite@7.0.12'
+  '@vitejs/plugin-react>vite': 'npm:rolldown-vite@7.0.12'
+  'vite-plugin-svgr>foo>vite': 'npm:rolldown-vite@7.0.12'
+  'supertest>superagent': '9.0.2'
