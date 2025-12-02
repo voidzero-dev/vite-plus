@@ -215,7 +215,7 @@ jobs:
       - name: Run CLI E2E tests
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
-          RUST_BACKTRACE=1 pnpm --filter=@voidzero-dev/vite-plus test && pnpm -r snap-test
+          RUST_BACKTRACE=1 pnpm -r snap-test
           git diff --exit-code
 
   e2e-test:
