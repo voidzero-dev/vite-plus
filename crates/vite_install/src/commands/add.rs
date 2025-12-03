@@ -46,6 +46,8 @@ impl PackageManager {
         cwd: impl AsRef<AbsolutePath>,
     ) -> Result<ExitStatus, Error> {
         // Validate catalog flags are only used with pnpm
+        // Note: Both --catalog and --save-catalog are converted to save_catalog_name = Some("")
+        // in execute_add_command, so this check covers all catalog-related flags
         if options.save_catalog_name.is_some() && self.client != PackageManagerType::Pnpm {
             return Err(Error::UnsupportedPackageManager(
                 "The --catalog/--save-catalog/--save-catalog-name flag is only supported by pnpm"
