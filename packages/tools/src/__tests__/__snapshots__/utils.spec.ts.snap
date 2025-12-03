@@ -20,6 +20,12 @@ added 3 packages in <variable>ms
 Done in <variable>ms"
 `;
 
+exports[`replaceUnstableOutput() > replace ignore npm notice access token expired or revoked warning log 1`] = `
+"line 1
+line 2
+line 3"
+`;
+
 exports[`replaceUnstableOutput() > replace ignore npm registry domain 1`] = `
 "https://registry.<domain>/testnpm2
 https://registry.<domain>/debug

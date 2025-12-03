@@ -170,6 +170,18 @@ npm notice integrity: sha512-qugLL42iCblSD[...]Gfk6HJodp2ZOQ==
     `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
+
+  test('replace ignore npm notice access token expired or revoked warning log', () => {
+    const output = `
+line 1
+npm notice Access token expired or revoked. Please try logging in again.
+npm notice Access token expired or revoked. Please try logging in again.
+line 2
+npm notice Access token expired or revoked. Please try logging in again.
+line 3
+    `;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
 });
 
 describe('isPassThroughEnv()', () => {
