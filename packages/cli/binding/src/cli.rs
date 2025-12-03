@@ -150,7 +150,7 @@ pub enum Commands {
         /// Save the new dependency to the default catalog (pnpm-only)
         #[arg(long)]
         save_catalog: bool,
-        /// Alias for --save-catalog (pnpm-only)
+        /// Alias for --save-catalog, saves to default catalog (pnpm-only)
         #[arg(long, conflicts_with = "save_catalog")]
         catalog: bool,
 
