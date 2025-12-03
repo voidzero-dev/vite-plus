@@ -285,9 +285,11 @@ function transformViteExport(exportPath: string, exportValue: ExportValue): [str
       // Transform types paths
       if (value.startsWith('./types/')) {
         return value.replace(/^\.\/types\//, './dist/vite/types/');
+      } else if (value.startsWith('./dist')) {
+        return value.replace(/^\.\/dist\//, './dist/vite/');
       }
 
-      return value.replace(/^\.\/dist\//, './dist/vite/');
+      return `./dist/vite/${value.slice(2)}`;
     }
 
     if (value && typeof value === 'object') {

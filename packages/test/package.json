@@ -113,10 +113,10 @@
     "@types/node": "^20.0.0 || ^22.0.0 || >=24.0.0",
     "happy-dom": "*",
     "jsdom": "*",
-    "@vitest/browser-playwright": "4.0.14",
-    "@vitest/browser-preview": "4.0.14",
-    "@vitest/browser-webdriverio": "4.0.14",
-    "@vitest/ui": "4.0.14"
+    "@vitest/browser-playwright": "4.0.15",
+    "@vitest/browser-preview": "4.0.15",
+    "@vitest/ui": "4.0.15",
+    "@vitest/browser-webdriverio": "4.0.15"
   },
   "peerDependenciesMeta": {
     "@edge-runtime/vm": {
@@ -156,22 +156,22 @@
     "picomatch": "^4.0.3",
     "std-env": "^3.10.0",
     "tinybench": "^2.9.0",
-    "tinyexec": "^0.3.2",
+    "tinyexec": "^1.0.2",
     "tinyglobby": "^0.2.15",
     "tinyrainbow": "^3.0.3",
     "why-is-node-running": "^2.3.0",
-    "@vitest/expect": "4.0.14",
-    "@vitest/pretty-format": "4.0.14",
-    "@vitest/snapshot": "4.0.14",
-    "@vitest/runner": "4.0.14",
-    "@vitest/spy": "4.0.14",
-    "@vitest/mocker": "4.0.14",
-    "@vitest/utils": "4.0.14",
+    "@vitest/expect": "4.0.15",
+    "@vitest/pretty-format": "4.0.15",
+    "@vitest/runner": "4.0.15",
+    "@vitest/mocker": "4.0.15",
+    "@vitest/snapshot": "4.0.15",
+    "@vitest/utils": "4.0.15",
+    "@vitest/spy": "4.0.15",
     "@voidzero-dev/vite-plus-core": "workspace:*"
   },
   "devDependencies": {
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
-    "vitest-dev": "^4.0.14"
+    "vitest-dev": "^4.0.15"
   }
 }
