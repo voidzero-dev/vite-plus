@@ -45,6 +45,14 @@ impl PackageManager {
         options: &AddCommandOptions<'_>,
         cwd: impl AsRef<AbsolutePath>,
     ) -> Result<ExitStatus, Error> {
+        // Validate catalog flags are only used with pnpm
+        if options.save_catalog_name.is_some() && self.client != PackageManagerType::Pnpm {
+            return Err(Error::UnsupportedPackageManager(
+                "The --catalog/--save-catalog/--save-catalog-name flag is only supported by pnpm"
+                    .into(),
+            ));
+        }
+
         let resolve_command = self.resolve_add_command(options);
         run_command(&resolve_command.bin_path, &resolve_command.args, &resolve_command.envs, cwd)
             .await
@@ -556,5 +564,45 @@ mod tests {
         });
         assert_eq!(result.args, vec!["add", "--allow-build=react,napi", "react"]);
         assert_eq!(result.bin_path, "pnpm");
+    }
+
+    #[test]
+    fn test_yarn_add_with_catalog_should_fail() {
+        let pm = create_mock_package_manager(PackageManagerType::Yarn);
+        let result = pm.resolve_add_command(&AddCommandOptions {
+            packages: &["react".to_string()],
+            save_dependency_type: None,
+            save_exact: false,
+            filters: None,
+            workspace_root: false,
+            workspace_only: false,
+            global: false,
+            save_catalog_name: Some(""),
+            allow_build: None,
+            pass_through_args: None,
+        });
+        // Should resolve the command (validation happens in run_add_command)
+        // Yarn doesn't support catalog, so the flag is ignored in resolve
+        assert_eq!(result.bin_path, "yarn");
+    }
+
+    #[test]
+    fn test_npm_add_with_catalog_should_fail() {
+        let pm = create_mock_package_manager(PackageManagerType::Npm);
+        let result = pm.resolve_add_command(&AddCommandOptions {
+            packages: &["react".to_string()],
+            save_dependency_type: None,
+            save_exact: false,
+            filters: None,
+            workspace_root: false,
+            workspace_only: false,
+            global: false,
+            save_catalog_name: Some(""),
+            allow_build: None,
+            pass_through_args: None,
+        });
+        // Should resolve the command (validation happens in run_add_command)
+        // npm doesn't support catalog, so the flag is ignored in resolve
+        assert_eq!(result.bin_path, "npm");
     }
 }

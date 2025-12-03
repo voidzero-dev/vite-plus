@@ -147,9 +147,12 @@ pub enum Commands {
         /// Example: `vite add vue --save-catalog-name vue3`
         #[arg(long, value_name = "CATALOG_NAME")]
         save_catalog_name: Option<String>,
-        /// Save the new dependency to the default catalog
+        /// Save the new dependency to the default catalog (pnpm-only)
         #[arg(long)]
         save_catalog: bool,
+        /// Alias for --save-catalog (pnpm-only)
+        #[arg(long, conflicts_with = "save_catalog")]
+        catalog: bool,
 
         /// A list of package names allowed to run postinstall
         #[arg(long, value_name = "NAMES")]
@@ -1076,6 +1079,7 @@ pub async fn main<
                 save_optional,
                 save_exact,
                 save_catalog,
+                catalog,
                 save_catalog_name,
                 global,
                 allow_build,
@@ -1090,7 +1094,7 @@ pub async fn main<
                     save_peer,
                     save_optional,
                     save_exact,
-                    save_catalog,
+                    save_catalog || catalog,
                     save_catalog_name.as_deref(),
                     filter.as_deref(),
                     workspace_root,
@@ -1116,6 +1120,7 @@ pub async fn main<
             save_optional,
             save_exact,
             save_catalog,
+            catalog,
             save_catalog_name,
             global,
             allow_build,
@@ -1129,7 +1134,7 @@ pub async fn main<
                 *save_peer,
                 *save_optional,
                 *save_exact,
-                *save_catalog,
+                *save_catalog || *catalog,
                 save_catalog_name.as_deref(),
                 filter.as_deref(),
                 *workspace_root,
@@ -2225,6 +2230,38 @@ mod tests {
             } else {
                 panic!("Expected Add command");
             }
+        }
+
+        #[test]
+        fn test_args_add_command_with_catalog_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "add", "--catalog", "react"]).unwrap();
+            if let Commands::Add { catalog, save_catalog, packages, .. } = &args.commands {
+                assert!(catalog);
+                assert!(!save_catalog);
+                assert_eq!(packages, &vec!["react"]);
+            } else {
+                panic!("Expected Add command");
+            }
+        }
+
+        #[test]
+        fn test_args_add_command_with_save_catalog_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "add", "--save-catalog", "vue"]).unwrap();
+            if let Commands::Add { catalog, save_catalog, packages, .. } = &args.commands {
+                assert!(!catalog);
+                assert!(save_catalog);
+                assert_eq!(packages, &vec!["vue"]);
+            } else {
+                panic!("Expected Add command");
+            }
+        }
+
+        #[test]
+        fn test_args_add_command_catalog_conflicts_with_save_catalog() {
+            let result =
+                Args::try_parse_from(&["vite-plus", "add", "--catalog", "--save-catalog", "react"]);
+            // Should fail due to conflict
+            assert!(result.is_err());
         }
     }
 
