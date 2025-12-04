@@ -1,0 +1,26 @@
+name: 'Download Rolldown Binaries'
+description: 'Download previous release rolldown binaries and upload as artifact'
+
+inputs:
+  github-token:
+    description: 'GitHub token for accessing GitHub Package Registry'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install previous release
+      shell: bash
+      run: |
+        echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> ~/.npmrc
+        echo "@voidzero-dev:registry=https://npm.pkg.github.com/" >> ~/.npmrc
+        export VERSION=$(npm view --json @voidzero-dev/vite-plus-core | jq -r '.version')
+        npm pack "@voidzero-dev/vite-plus-core@${VERSION}"
+        tar -xzf voidzero-dev-vite-plus-core-${VERSION}.tgz
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: rolldown-binaries
+        path: ./package/dist/rolldown/shared/rolldown-binding.*.node
+        if-no-files-found: error
