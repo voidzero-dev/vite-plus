@@ -1,23 +1,220 @@
-import { copyFile, glob as fsGlob, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { join, parse, resolve, dirname } from 'node:path';
+// Build Script for @voidzero-dev/vite-plus-test
+//
+// Bundles vitest and @vitest/* dependencies with browser/Node.js separation.
+//
+// ┌─────────────────────────────────────────────────────────────────────┐
+// │                          BUILD FLOW                                 │
+// ├─────────────────────────────────────────────────────────────────────┤
+// │  1. bundleVitest()           Copy vitest-dev → dist/                │
+// │  2. copyVitestPackages()     Copy @vitest/* → dist/@vitest/         │
+// │  3. collectLeafDependencies() Parse imports with oxc-parser         │
+// │  4. bundleLeafDeps()         Bundle chai, pathe, etc → dist/vendor/ │
+// │  5. rewriteVitestImports()   Rewrite @vitest/*, vitest/*, vite      │
+// │  6. patchVitestPkgRootPaths() Fix distRoot for relocated files      │
+// │  7. patchVitestBrowserPackage() Inject vendor-aliases plugin        │
+// │  8. patchPlaywrightLocators() Fix browser-safe imports              │
+// │  9. Post-processing:                                                │
+// │     - patchVendorPaths()                                            │
+// │     - createBrowserCompatShim()                                     │
+// │     - createModuleRunnerStub()   Browser-safe stub                  │
+// │     - createNodeEntry()          index-node.js with browser-provider│
+// │     - copyBrowserClientFiles()                                      │
+// │     - createPluginExports()      dist/plugins/* for pnpm overrides  │
+// │     - mergePackageJson()                                            │
+// │     - validateExternalDeps()                                        │
+// └─────────────────────────────────────────────────────────────────────┘
+//
+// Output Structure:
+//   dist/@vitest/*     - Copied packages (browser/Node.js safe)
+//   dist/vendor/*      - Bundled leaf dependencies
+//   dist/plugins/*     - Shims for pnpm overrides
+//   dist/index.js      - Browser-safe entry
+//   dist/index-node.js - Node.js entry (includes browser-provider)
+//
+// Key Design:
+//   - COPY @vitest/* to preserve browser/Node.js separation
+//   - BUNDLE only leaf deps (chai, etc.) to reduce install size
+//   - Separate entries prevent __vite__injectQuery errors in browser
+
+import {
+  copyFile,
+  glob as fsGlob,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
+import { builtinModules } from 'node:module';
+import { basename, join, parse, resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { parseSync } from 'oxc-parser';
+import { build } from 'rolldown';
+
+import pkg from './package.json' with { type: 'json' };
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
 const vitestSourceDir = resolve(projectDir, 'node_modules/vitest-dev');
+const distDir = resolve(projectDir, 'dist');
+const vendorDir = resolve(distDir, 'vendor');
 
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 
-await bundleVitest();
-await mergePackageJson();
+// @vitest/* packages to copy (not bundle) to preserve browser/Node.js separation
+// These are copied from node_modules to dist/@vitest/ to avoid shared chunks
+// that mix Node.js-only code with browser code
+const VITEST_PACKAGES_TO_COPY = [
+  '@vitest/runner',
+  '@vitest/utils',
+  '@vitest/spy',
+  '@vitest/expect',
+  '@vitest/snapshot',
+  '@vitest/mocker',
+  '@vitest/pretty-format',
+  '@vitest/browser',
+  '@vitest/browser-playwright',
+] as const;
 
-async function mergePackageJson() {
+// Mapping from @vitest/* package specifiers to their paths within dist/@vitest/
+// Used for import rewriting and vendor-aliases plugin
+const VITEST_PACKAGE_TO_PATH: Record<string, string> = {
+  // @vitest/runner
+  '@vitest/runner': '@vitest/runner/index.js',
+  '@vitest/runner/utils': '@vitest/runner/utils.js',
+  '@vitest/runner/types': '@vitest/runner/types.js',
+  // @vitest/utils
+  '@vitest/utils': '@vitest/utils/index.js',
+  '@vitest/utils/source-map': '@vitest/utils/source-map.js',
+  '@vitest/utils/error': '@vitest/utils/error.js',
+  '@vitest/utils/helpers': '@vitest/utils/helpers.js',
+  '@vitest/utils/display': '@vitest/utils/display.js',
+  '@vitest/utils/timers': '@vitest/utils/timers.js',
+  '@vitest/utils/highlight': '@vitest/utils/highlight.js',
+  '@vitest/utils/offset': '@vitest/utils/offset.js',
+  '@vitest/utils/resolver': '@vitest/utils/resolver.js',
+  '@vitest/utils/serialize': '@vitest/utils/serialize.js',
+  '@vitest/utils/constants': '@vitest/utils/constants.js',
+  '@vitest/utils/diff': '@vitest/utils/diff.js',
+  // @vitest/spy
+  '@vitest/spy': '@vitest/spy/index.js',
+  // @vitest/expect
+  '@vitest/expect': '@vitest/expect/index.js',
+  // @vitest/snapshot
+  '@vitest/snapshot': '@vitest/snapshot/index.js',
+  '@vitest/snapshot/environment': '@vitest/snapshot/environment.js',
+  '@vitest/snapshot/manager': '@vitest/snapshot/manager.js',
+  // @vitest/mocker
+  '@vitest/mocker': '@vitest/mocker/index.js',
+  '@vitest/mocker/node': '@vitest/mocker/node.js',
+  '@vitest/mocker/browser': '@vitest/mocker/browser.js',
+  '@vitest/mocker/redirect': '@vitest/mocker/redirect.js',
+  '@vitest/mocker/automock': '@vitest/mocker/automock.js',
+  '@vitest/mocker/register': '@vitest/mocker/register.js',
+  // @vitest/pretty-format
+  '@vitest/pretty-format': '@vitest/pretty-format/index.js',
+  // @vitest/browser
+  '@vitest/browser': '@vitest/browser/index.js',
+  '@vitest/browser/context': '@vitest/browser/context.js',
+  '@vitest/browser/client': '@vitest/browser/client.js',
+  '@vitest/browser/locators': '@vitest/browser/locators.js',
+  // @vitest/browser-playwright
+  '@vitest/browser-playwright': '@vitest/browser-playwright/index.js',
+  '@vitest/browser-playwright/context': '@vitest/browser-playwright/context.d.ts',
+};
+
+// Packages that should NOT be bundled into dist/vendor/ (remain external at runtime)
+// There are two categories:
+// 1. Runtime deps (also in package.json dependencies) - installed with the package, not bundled
+// 2. Peer/optional deps (also in peerDependencies) - users must install themselves
+const EXTERNAL_BLOCKLIST = new Set([
+  // Our own packages - resolved at runtime
+  CORE_PACKAGE_NAME,
+  `${CORE_PACKAGE_NAME}/module-runner`,
+  'vite',
+  'vitest',
+
+  // Peer dependencies - consumers must provide these
+  '@edge-runtime/vm',
+  '@opentelemetry/api',
+  'happy-dom',
+  'jsdom',
+
+  // Optional dependencies with bundling issues or native bindings
+  'debug', // environment detection broken when bundled
+  'playwright', // native bindings
+
+  // Runtime deps (in package.json dependencies) - not bundled, resolved at install time
+  'sirv',
+  'ws',
+  'pixelmatch',
+  'pngjs',
+
+  // MSW (Mock Service Worker) - optional peer dep of @vitest/mocker
+  'msw',
+  'msw/browser',
+  'msw/core/http',
+]);
+
+// CJS packages that need their default export destructured to named exports
+const CJS_REEXPORT_PACKAGES = new Set(['expect-type']);
+
+// Node built-in modules (including node: prefix variants)
+const NODE_BUILTINS = new Set([...builtinModules, ...builtinModules.map((m) => `node:${m}`)]);
+
+// Step 1: Copy vitest-dev dist files (rewriting vite -> core package)
+await bundleVitest();
+
+// Step 2: Copy @vitest/* packages from node_modules to dist/@vitest/
+// This preserves the original file structure to maintain browser/Node.js separation
+await copyVitestPackages();
+
+// Step 2.5: Convert tabs to spaces in all copied JS files for consistent formatting
+await convertTabsToSpaces();
+
+// Step 3: Collect leaf dependencies from copied @vitest/* files
+// These are external packages like tinyrainbow, pathe, chai, etc.
+const leafDeps = await collectLeafDependencies();
+
+// Step 4: Bundle only leaf dependencies into dist/vendor/
+// Unlike bundling @vitest/* directly, this avoids shared chunks that mix browser/Node.js code
+const leafDepToVendorPath = await bundleLeafDeps(leafDeps);
+
+// Step 5: Rewrite imports in copied @vitest/* and vitest-dev files
+// - @vitest/* -> relative paths to dist/@vitest/
+// - leaf deps -> relative paths to dist/vendor/
+// - vite -> @voidzero-dev/vite-plus-core
+await rewriteVitestImports(leafDepToVendorPath);
+
+// Step 6: Fix pkgRoot resolution in all @vitest/* packages
+// Files are now at dist/@vitest/*/index.js, so "../.." needs to become "../../.."
+await patchVitestPkgRootPaths();
+
+// Step 7: Patch @vitest/browser package (vendor-aliases plugin, exclude list)
+await patchVitestBrowserPackage();
+
+// Step 8: Patch @vitest/browser-playwright/locators.js for browser-safe imports
+await patchPlaywrightLocators();
+
+// Step 9: Post-processing
+await patchVendorPaths();
+await createBrowserCompatShim();
+await createModuleRunnerStub();
+await createNodeEntry();
+await copyBrowserClientFiles();
+const pluginExports = await createPluginExports();
+await mergePackageJson(pluginExports);
+await validateExternalDeps();
+
+async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimFile: string }>) {
   const vitestPackageJsonPath = join(vitestSourceDir, 'package.json');
   const destPackageJsonPath = resolve(projectDir, 'package.json');
 
   const vitestPkg = JSON.parse(await readFile(vitestPackageJsonPath, 'utf-8'));
   const destPkg = JSON.parse(await readFile(destPackageJsonPath, 'utf-8'));
 
-  // Fields to merge from vitest-dev package.json
+  // Fields to merge from vitest-dev package.json (excluding dependencies since we bundle them)
   const fieldsToMerge = [
     'imports',
     'exports',
@@ -27,7 +224,6 @@ async function mergePackageJson() {
     'engines',
     'peerDependencies',
     'peerDependenciesMeta',
-    'dependencies',
   ] as const;
 
   for (const field of fieldsToMerge) {
@@ -36,10 +232,90 @@ async function mergePackageJson() {
     }
   }
 
-  // Replace vite dependency with @voidzero-dev/vite-plus-core
-  if (destPkg.dependencies && destPkg.dependencies.vite) {
-    delete destPkg.dependencies.vite;
-    destPkg.dependencies[CORE_PACKAGE_NAME] = 'workspace:*';
+  // Remove bundled @vitest/* packages from peerDependencies
+  // @vitest/browser-playwright is now bundled, so users don't need to install it
+  const bundledPeerDeps = ['@vitest/browser-playwright'];
+  if (destPkg.peerDependencies) {
+    for (const dep of bundledPeerDeps) {
+      delete destPkg.peerDependencies[dep];
+    }
+  }
+  if (destPkg.peerDependenciesMeta) {
+    for (const dep of bundledPeerDeps) {
+      delete destPkg.peerDependenciesMeta[dep];
+    }
+  }
+
+  // Add @vitest/browser compatible export (for when this package overrides @vitest/browser)
+  // The main "." export is what's used when code imports from @vitest/browser
+  if (destPkg.exports) {
+    // Add conditional Node.js export to the main entry
+    // Node.js code (like @vitest/browser-playwright) uses index-node.js which includes
+    // browser-provider exports. Browser code uses index.js which is safe.
+    // This separation prevents Node.js-only code (like __vite__injectQuery) from being
+    // loaded in the browser, which would cause "Identifier already declared" errors.
+    if (destPkg.exports['.'] && destPkg.exports['.'].import) {
+      destPkg.exports['.'].import = {
+        types: destPkg.exports['.'].import.types,
+        node: './dist/index-node.js',
+        default: destPkg.exports['.'].import.default,
+      };
+    }
+
+    destPkg.exports['./browser-compat'] = {
+      default: './dist/browser-compat.js',
+    };
+
+    // Add @vitest/browser-compatible subpath exports
+    // These are needed when this package is used as a pnpm override for @vitest/browser
+    // Files are copied to dist/ (not dist/vendor/) to match path resolution in bundled code
+    destPkg.exports['./client'] = {
+      default: './dist/client.js',
+    };
+    destPkg.exports['./context'] = {
+      types: './browser/context.d.ts',
+      default: './dist/context.js',
+    };
+    destPkg.exports['./locators'] = {
+      default: './dist/locators.js',
+    };
+    destPkg.exports['./matchers'] = {
+      default: './dist/dummy.js', // Placeholder
+    };
+    destPkg.exports['./utils'] = {
+      default: './dist/dummy.js', // Placeholder
+    };
+
+    // Add @vitest/browser-playwright compatible export
+    // Users can import { playwright } from 'vitest/browser-playwright'
+    destPkg.exports['./browser-playwright'] = {
+      types: './dist/@vitest/browser-playwright/index.d.ts',
+      default: './dist/@vitest/browser-playwright/index.js',
+    };
+
+    // Add plugin exports for all bundled @vitest/* packages
+    // This allows pnpm overrides to redirect: @vitest/runner -> vitest/plugins/runner
+    for (const { exportPath, shimFile } of pluginExports) {
+      destPkg.exports[exportPath] = {
+        default: shimFile,
+      };
+    }
+  }
+
+  // Merge vitest dependencies into devDependencies (since we bundle them)
+  // Skip packages that are already in dependencies (runtime deps)
+  if (vitestPkg.dependencies) {
+    destPkg.devDependencies = destPkg.devDependencies || {};
+    for (const [dep, version] of Object.entries(vitestPkg.dependencies)) {
+      // Skip vite - we use our own core package
+      if (dep === 'vite') continue;
+      // Skip packages already in dependencies (they're runtime deps, not dev-only)
+      if (destPkg.dependencies && destPkg.dependencies[dep]) continue;
+      // Don't override existing devDependencies
+      if (!destPkg.devDependencies[dep]) {
+        destPkg.devDependencies[dep] = version;
+      }
+    }
   }
 
   await writeFile(destPackageJsonPath, JSON.stringify(destPkg, null, 2) + '\n');
@@ -89,4 +365,1384 @@ async function bundleVitest() {
       await copyFile(file, destPath);
     }
   }
+}
+
+/**
+ * Copy @vitest/* packages from node_modules to dist/@vitest/
+ * This preserves the original file structure to maintain browser/Node.js separation.
+ * Unlike bundling with Rolldown, copying avoids creating shared chunks that mix
+ * Node.js-only code with browser code.
+ */
+async function copyVitestPackages() {
+  console.log('\nCopying @vitest/* packages to dist/@vitest/...');
+
+  const vitestDir = resolve(distDir, '@vitest');
+  await rm(vitestDir, { recursive: true, force: true });
+  await mkdir(vitestDir, { recursive: true });
+
+  let totalCopied = 0;
+
+  for (const pkg of VITEST_PACKAGES_TO_COPY) {
+    const pkgName = pkg.replace('@vitest/', '');
+    const srcDir = resolve(projectDir, `node_modules/${pkg}/dist`);
+    const destPkgDir = resolve(vitestDir, pkgName);
+
+    try {
+      await stat(srcDir);
+    } catch {
+      console.log(`  Warning: ${pkg} not installed, skipping`);
+      continue;
+    }
+
+    console.log(`  Copying ${pkg}...`);
+    const copied = await copyDirRecursive(srcDir, destPkgDir);
+    totalCopied += copied;
+    console.log(`    -> ${copied} files`);
+  }
+
+  console.log(`\nCopied ${totalCopied} files to dist/@vitest/`);
+}
+
+/**
+ * Recursively copy a directory
+ */
+async function copyDirRecursive(srcDir: string, destDir: string): Promise<number> {
+  await mkdir(destDir, { recursive: true });
+  const entries = await readdir(srcDir, { withFileTypes: true });
+  let count = 0;
+
+  for (const entry of entries) {
+    const srcPath = join(srcDir, entry.name);
+    const destPath = join(destDir, entry.name);
+
+    if (entry.isDirectory()) {
+      count += await copyDirRecursive(srcPath, destPath);
+    } else if (entry.isFile()) {
+      await copyFile(srcPath, destPath);
+      count++;
+    }
+  }
+
+  return count;
+}
+
+/**
+ * Collect leaf dependencies from copied @vitest/* files AND vitest core dist files.
+ * These are external packages that should be bundled (tinyrainbow, pathe, chai, expect-type, etc.)
+ * but NOT @vitest/*, vitest/*, vite/*, node built-ins, or blocklisted packages.
+ */
+async function collectLeafDependencies(): Promise<Set<string>> {
+  console.log('\nCollecting leaf dependencies from dist/...');
+
+  const leafDeps = new Set<string>();
+  const vitestDir = resolve(distDir, '@vitest');
+
+  // Scan both @vitest/* packages AND vitest core dist files
+  const jsFiles = fsGlob([
+    join(vitestDir, '**/*.js'),
+    join(distDir, '*.js'),
+    join(distDir, 'chunks/*.js'),
+  ]);
+
+  for await (const file of jsFiles) {
+    const content = await readFile(file, 'utf-8');
+    const result = parseSync(file, content, { sourceType: 'module' });
+
+    // Collect ESM static imports
+    for (const imp of result.module.staticImports) {
+      const specifier = imp.moduleRequest.value;
+      if (isLeafDependency(specifier)) {
+        leafDeps.add(specifier);
+      }
+    }
+
+    // Collect ESM static exports (re-exports)
+    for (const exp of result.module.staticExports) {
+      for (const entry of exp.entries) {
+        if (entry.moduleRequest) {
+          const specifier = entry.moduleRequest.value;
+          if (isLeafDependency(specifier)) {
+            leafDeps.add(specifier);
+          }
+        }
+      }
+    }
+
+    // Collect dynamic imports (only string literals)
+    for (const dynImp of result.module.dynamicImports) {
+      const rawText = content.slice(dynImp.moduleRequest.start, dynImp.moduleRequest.end);
+      if (
+        (rawText.startsWith("'") && rawText.endsWith("'")) ||
+        (rawText.startsWith('"') && rawText.endsWith('"'))
+      ) {
+        const specifier = rawText.slice(1, -1);
+        if (isLeafDependency(specifier)) {
+          leafDeps.add(specifier);
+        }
+      }
+    }
+  }
+
+  console.log(`Found ${leafDeps.size} leaf dependencies:`);
+  for (const dep of leafDeps) {
+    console.log(`  - ${dep}`);
+  }
+
+  return leafDeps;
+}
+
+/**
+ * Check if a specifier is a leaf dependency that should be bundled.
+ * Leaf deps are external packages that are NOT:
+ * - @vitest/* (we copy these)
+ * - vitest or vitest/* (we copy vitest-dev)
+ * - vite or vite/* (we use our core package)
+ * - Node.js built-ins
+ * - Blocklisted packages
+ * - Relative paths
+ */
+function isLeafDependency(specifier: string): boolean {
+  // Relative paths
+  if (specifier.startsWith('.') || specifier.startsWith('/')) {
+    return false;
+  }
+  // @vitest/* packages (we copy these)
+  if (specifier.startsWith('@vitest/')) {
+    return false;
+  }
+  // vitest or vitest/* (we copy vitest-dev)
+  if (specifier === 'vitest' || specifier.startsWith('vitest/')) {
+    return false;
+  }
+  // vite or vite/* (we use our core package)
+  if (specifier === 'vite' || specifier.startsWith('vite/')) {
+    return false;
+  }
+  // Node.js built-ins
+  if (NODE_BUILTINS.has(specifier)) {
+    return false;
+  }
+  // Blocklisted packages
+  if (EXTERNAL_BLOCKLIST.has(specifier)) {
+    return false;
+  }
+  // Node.js subpath imports (#module-evaluator, etc.)
+  if (specifier.startsWith('#')) {
+    return false;
+  }
+  // Invalid specifiers
+  if (!/^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*/.test(specifier)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Bundle only leaf dependencies into dist/vendor/.
+ * Only bundles non-@vitest deps (tinyrainbow, pathe, chai, etc.)
+ * to avoid shared chunks that mix Node.js and browser code.
+ */
+async function bundleLeafDeps(leafDeps: Set<string>): Promise<Map<string, string>> {
+  console.log('\nBundling leaf dependencies...');
+
+  await rm(vendorDir, { recursive: true, force: true });
+  await mkdir(vendorDir, { recursive: true });
+
+  const specifierToVendorPath = new Map<string, string>();
+
+  if (leafDeps.size === 0) {
+    console.log('  No leaf dependencies to bundle.');
+    return specifierToVendorPath;
+  }
+
+  // Build input object with all leaf deps
+  const input: Record<string, string> = {};
+  for (const dep of leafDeps) {
+    const safeName = safeFileName(dep);
+    input[safeName] = dep;
+  }
+
+  try {
+    await build({
+      input,
+      output: {
+        dir: vendorDir,
+        format: 'esm',
+        entryFileNames: '[name].mjs',
+        chunkFileNames: 'shared-[hash].mjs',
+      },
+      platform: 'node',
+      treeshake: false,
+      external: [
+        // Keep node built-ins external
+        ...NODE_BUILTINS,
+        // Keep blocklisted packages external
+        ...EXTERNAL_BLOCKLIST,
+        // Keep @vitest/* external (we copy them)
+        /@vitest\//,
+        // Keep vitest external (we copy it)
+        /^vitest(\/.*)?$/,
+        // Keep vite external (we use core package)
+        /^vite(\/.*)?$/,
+      ],
+      resolve: {
+        conditionNames: ['node', 'import', 'default'],
+      },
+      logLevel: 'warn',
+    });
+
+    // Register all specifiers
+    for (const dep of leafDeps) {
+      const safeName = safeFileName(dep);
+      const vendorFilePath = join(vendorDir, `${safeName}.mjs`);
+      specifierToVendorPath.set(dep, vendorFilePath);
+      console.log(`  -> vendor/${safeName}.mjs`);
+
+      // Fix CJS packages that need named exports extracted from default
+      if (CJS_REEXPORT_PACKAGES.has(dep)) {
+        await fixCjsNamedExports(vendorFilePath, dep);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to bundle leaf dependencies:', error);
+    throw error;
+  }
+
+  console.log(`\nBundled ${specifierToVendorPath.size} leaf dependencies.`);
+  return specifierToVendorPath;
+}
+
+/**
+ * Rewrite imports in all copied @vitest/* files and vitest-dev dist files.
+ * This handles:
+ * - @vitest/* -> relative paths to dist/@vitest/
+ * - vitest/* -> relative paths to dist/
+ * - vite -> @voidzero-dev/vite-plus-core
+ * - leaf deps -> relative paths to dist/vendor/
+ */
+async function rewriteVitestImports(leafDepToVendorPath: Map<string, string>) {
+  console.log('\nRewriting imports in @vitest/* and vitest core files...');
+
+  const vitestDir = resolve(distDir, '@vitest');
+  let rewrittenCount = 0;
+
+  // Scan both @vitest/* packages AND vitest core dist files
+  const jsFiles = fsGlob([
+    join(vitestDir, '**/*.js'),
+    join(distDir, '*.js'),
+    join(distDir, 'chunks/*.js'),
+  ]);
+
+  for await (const file of jsFiles) {
+    let content = await readFile(file, 'utf-8');
+    const fileDir = dirname(file);
+
+    // Build specifier map for this file
+    const specifierMap = new Map<string, string>();
+
+    // Add @vitest/* mappings (relative paths)
+    for (const [pkg, destPath] of Object.entries(VITEST_PACKAGE_TO_PATH)) {
+      const absoluteDest = resolve(distDir, destPath);
+      let relativePath = relative(fileDir, absoluteDest);
+      relativePath = relativePath.split('\\').join('/'); // Windows fix
+      if (!relativePath.startsWith('.')) {
+        relativePath = './' + relativePath;
+      }
+      specifierMap.set(pkg, absoluteDest);
+    }
+
+    // Add vitest/* mappings (relative to dist/)
+    const vitestSubpathRewrites: Record<string, string> = {
+      vitest: resolve(distDir, 'index.js'),
+      'vitest/node': resolve(distDir, 'node.js'),
+      'vitest/config': resolve(distDir, 'config.js'),
+      // vitest/browser exports page, server, etc from @vitest/browser
+      'vitest/browser': resolve(distDir, '@vitest/browser/index.js'),
+      // vitest/internal/browser exports browser-safe __INTERNAL and stringify (NOT @vitest/browser/index.js which has Node.js code)
+      'vitest/internal/browser': resolve(distDir, 'browser.js'),
+      'vitest/runners': resolve(distDir, 'runners.js'),
+      'vitest/suite': resolve(distDir, 'suite.js'),
+      'vitest/environments': resolve(distDir, 'environments.js'),
+      'vitest/coverage': resolve(distDir, 'coverage.js'),
+      'vitest/reporters': resolve(distDir, 'reporters.js'),
+      'vitest/snapshot': resolve(distDir, 'snapshot.js'),
+      'vitest/mocker': resolve(distDir, 'mocker.js'),
+    };
+    for (const [specifier, absolutePath] of Object.entries(vitestSubpathRewrites)) {
+      specifierMap.set(specifier, absolutePath);
+    }
+
+    // Add leaf dep mappings (relative to vendor/)
+    for (const [specifier, vendorPath] of leafDepToVendorPath) {
+      specifierMap.set(specifier, vendorPath);
+    }
+
+    // Rewrite using AST
+    const rewritten = rewriteImportsWithAst(content, file, false, specifierMap);
+
+    // Also rewrite vite -> core package (simple string replacement since it's a package name)
+    let finalContent = rewritten
+      .replaceAll(/from ['"]vite['"]/g, `from '${CORE_PACKAGE_NAME}'`)
+      .replaceAll(/import\(['"]vite['"]\)/g, `import('${CORE_PACKAGE_NAME}')`)
+      .replaceAll(`'vite/module-runner'`, `'${CORE_PACKAGE_NAME}/module-runner'`);
+
+    // Special handling for @vitest/browser files that import from ./index.js (Node.js-only)
+    // Replace: import{server,page,utils}from'./index.js' with browser-safe stubs
+    if (file.includes('@vitest/browser') || file.includes('@vitest\\browser')) {
+      // Replace server import with browser-safe stub
+      const serverStub = `const server = {
+  get browser() { return window.__vitest_browser_runner__?.config?.browser?.name; },
+  get config() { return window.__vitest_browser_runner__?.config || {}; },
+  get commands() { return window.__vitest_browser_runner__?.commands || {}; },
+  get provider() { return window.__vitest_browser_runner__?.provider; },
+}`;
+      // Handle combined import: import{server,page,utils}from'./index.js'
+      finalContent = finalContent.replace(
+        /import\s*\{\s*server\s*,\s*page\s*,\s*utils\s*\}\s*from\s*['"]\.\/index\.js['"];?/g,
+        `${serverStub};const page = window.__vitest_browser_runner__?.page || {};const utils = window.__vitest_browser_runner__?.utils || {};`,
+      );
+      // Handle individual server import: import{server}from'./index.js'
+      finalContent = finalContent.replace(
+        /import\s*\{\s*server\s*\}\s*from\s*['"]\.\/index\.js['"];?/g,
+        serverStub + ';',
+      );
+      // Remove side-effect imports from ./index.js (Node.js-only)
+      finalContent = finalContent.replace(/import\s*['"]\.\/index\.js['"];?/g, '');
+
+      // Handle tester chunk imports from ../../index.js (browser needs virtual module interception)
+      // The tester chunk is in client/__vitest_browser__/ and imports from ../../index.js
+      // Change to 'vitest/browser' so the virtual module plugin can intercept at runtime
+      finalContent = finalContent.replace(
+        /import\s*\{\s*userEvent\s*,\s*page\s*,\s*server\s*\}\s*from\s*['"]\.\.\/\.\.\/index\.js['"];?/g,
+        "import { userEvent, page, server } from 'vitest/browser';",
+      );
+    }
+
+    // Special handling for @vitest/mocker entry files that have redundant side-effect imports
+    // The original files have: import 'magic-string'; export {...} from './chunk-automock.js'; import 'estree-walker';
+    // This is problematic because:
+    // 1. Side-effect imports are redundant (chunk files already import what they need)
+    // 2. Having imports after exports can confuse some module parsers
+    // Fix: Remove redundant side-effect imports from vendor deps in entry files
+    if (file.includes('@vitest/mocker') || file.includes('@vitest\\mocker')) {
+      // Get the base filename
+      const baseName = file.split(/[/\\]/).pop();
+      // Only process entry files (not chunk files)
+      if (baseName && !baseName.startsWith('chunk-')) {
+        // Remove side-effect imports from vendor deps (these are redundant since chunk files import them)
+        finalContent = finalContent.replace(/import\s*['"][^'"]*vendor[^'"]*\.mjs['"];?\s*/g, '');
+      }
+    }
+
+    if (finalContent !== content) {
+      await writeFile(file, finalContent, 'utf-8');
+      rewrittenCount++;
+    }
+  }
+
+  console.log(`  Rewrote imports in ${rewrittenCount} files`);
+
+  // Also rewrite imports in the main vitest-dev dist files
+  console.log('\nRewriting imports in vitest-dev dist files...');
+  let mainRewrittenCount = 0;
+
+  const mainJsFiles = fsGlob(join(distDir, '*.js'));
+  const chunksJsFiles = fsGlob(join(distDir, 'chunks', '*.js'));
+  const workersJsFiles = fsGlob(join(distDir, 'workers', '*.js'));
+
+  for await (const file of mainJsFiles) {
+    const rewritten = await rewriteDistFile(file, leafDepToVendorPath);
+    if (rewritten) mainRewrittenCount++;
+  }
+  for await (const file of chunksJsFiles) {
+    const rewritten = await rewriteDistFile(file, leafDepToVendorPath);
+    if (rewritten) mainRewrittenCount++;
+  }
+  for await (const file of workersJsFiles) {
+    const rewritten = await rewriteDistFile(file, leafDepToVendorPath);
+    if (rewritten) mainRewrittenCount++;
+  }
+
+  console.log(`  Rewrote imports in ${mainRewrittenCount} dist files`);
+}
+
+/**
+ * Rewrite imports in a vitest-dev dist file.
+ * Returns true if the file was modified.
+ */
+async function rewriteDistFile(
+  file: string,
+  leafDepToVendorPath: Map<string, string>,
+): Promise<boolean> {
+  let content = await readFile(file, 'utf-8');
+
+  // Build specifier map
+  const specifierMap = new Map<string, string>();
+
+  // Add @vitest/* mappings
+  for (const [pkg, destPath] of Object.entries(VITEST_PACKAGE_TO_PATH)) {
+    const absoluteDest = resolve(distDir, destPath);
+    specifierMap.set(pkg, absoluteDest);
+  }
+
+  // Add leaf dep mappings
+  for (const [specifier, vendorPath] of leafDepToVendorPath) {
+    specifierMap.set(specifier, vendorPath);
+  }
+
+  // Add vitest/* subpath mappings
+  // NOTE: Do NOT include 'vitest/browser' - it must be handled by
+  // the vitest:browser:virtual-module:context plugin at runtime
+  const vitestSubpathRewrites: Record<string, string> = {
+    vitest: resolve(distDir, 'index.js'),
+    'vitest/node': resolve(distDir, 'node.js'),
+    'vitest/config': resolve(distDir, 'config.js'),
+    // 'vitest/browser' - intentionally omitted, handled by virtual module plugin
+    'vitest/internal/browser': resolve(distDir, 'browser.js'),
+    'vitest/runners': resolve(distDir, 'runners.js'),
+    'vitest/suite': resolve(distDir, 'suite.js'),
+    'vitest/environments': resolve(distDir, 'environments.js'),
+    'vitest/coverage': resolve(distDir, 'coverage.js'),
+    'vitest/reporters': resolve(distDir, 'reporters.js'),
+    'vitest/snapshot': resolve(distDir, 'snapshot.js'),
+    'vitest/mocker': resolve(distDir, 'mocker.js'),
+  };
+  for (const [specifier, absolutePath] of Object.entries(vitestSubpathRewrites)) {
+    specifierMap.set(specifier, absolutePath);
+  }
+
+  // Add mappings for ./vendor/vitest_*.mjs relative imports
+  // These are vitest-dev's bundled @vitest/* packages that we've copied to dist/@vitest/
+  const vendorToVitest: Record<string, string> = {
+    './vendor/vitest_runner.mjs': resolve(distDir, '@vitest/runner/index.js'),
+    './vendor/vitest_runners.mjs': resolve(distDir, 'runners.js'),
+    './vendor/vitest_browser.mjs': resolve(distDir, '@vitest/browser/context.js'),
+    './vendor/vitest_internal_browser.mjs': resolve(distDir, 'browser.js'),
+    './vendor/vitest_utils.mjs': resolve(distDir, '@vitest/utils/index.js'),
+    './vendor/vitest_spy.mjs': resolve(distDir, '@vitest/spy/index.js'),
+    './vendor/vitest_snapshot.mjs': resolve(distDir, '@vitest/snapshot/index.js'),
+    './vendor/vitest_expect.mjs': resolve(distDir, '@vitest/expect/index.js'),
+  };
+  for (const [vendorPath, destPath] of Object.entries(vendorToVitest)) {
+    specifierMap.set(vendorPath, destPath);
+  }
+
+  let rewritten = rewriteImportsWithAst(content, file, false, specifierMap);
+
+  // Strip module-runner side-effect import from index.js
+  // This import is Node.js-only and causes browser tests to hang when vitest/index.js
+  // is loaded in browser context (to get describe, it, expect, etc.)
+  // The module-runner contains Node.js code (process.platform, etc.) that browsers can't execute
+  if (basename(file) === 'index.js') {
+    rewritten = rewritten.replace(
+      /import\s*['"]@voidzero-dev\/vite-plus-core\/module-runner['"];?\s*/g,
+      '',
+    );
+  }
+
+  if (rewritten !== content) {
+    await writeFile(file, rewritten, 'utf-8');
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Rewrite imports using oxc-parser AST for precise replacements
+ */
+function rewriteImportsWithAst(
+  content: string,
+  filePath: string,
+  isCjs: boolean,
+  specifierToVendorPath: Map<string, string>,
+): string {
+  // Use Map to deduplicate replacements by start position
+  const replacementMap = new Map<number, [number, number, string]>();
+
+  // Helper to get relative path for a specifier
+  const getRelativePath = (specifier: string): string | null => {
+    const vendorPath = specifierToVendorPath.get(specifier);
+    if (!vendorPath) return null;
+    let relativePath = relative(dirname(filePath), vendorPath);
+    // Normalize to forward slashes for ES module imports (Windows uses backslashes)
+    relativePath = relativePath.split('\\').join('/');
+    if (!relativePath.startsWith('.')) {
+      relativePath = './' + relativePath;
+    }
+    return relativePath;
+  };
+
+  // Helper to add replacement (deduplicates by start position)
+  const addReplacement = (start: number, end: number, newValue: string) => {
+    if (!replacementMap.has(start)) {
+      replacementMap.set(start, [start, end, newValue]);
+    }
+  };
+
+  // Parse with oxc-parser
+  const result = parseSync(filePath, content, {
+    sourceType: isCjs ? 'script' : 'module',
+  });
+
+  // Collect ESM static imports
+  for (const imp of result.module.staticImports) {
+    const specifier = imp.moduleRequest.value;
+    const relativePath = getRelativePath(specifier);
+    if (relativePath) {
+      // Replace the module request (including quotes)
+      addReplacement(imp.moduleRequest.start, imp.moduleRequest.end, `'${relativePath}'`);
+    }
+  }
+
+  // Collect ESM static exports (re-exports)
+  for (const exp of result.module.staticExports) {
+    for (const entry of exp.entries) {
+      if (entry.moduleRequest) {
+        const specifier = entry.moduleRequest.value;
+        const relativePath = getRelativePath(specifier);
+        if (relativePath) {
+          addReplacement(entry.moduleRequest.start, entry.moduleRequest.end, `'${relativePath}'`);
+        }
+      }
+    }
+  }
+
+  // Collect dynamic imports (only string literals)
+  for (const dynImp of result.module.dynamicImports) {
+    const rawText = content.slice(dynImp.moduleRequest.start, dynImp.moduleRequest.end);
+    if (
+      (rawText.startsWith("'") && rawText.endsWith("'")) ||
+      (rawText.startsWith('"') && rawText.endsWith('"'))
+    ) {
+      const specifier = rawText.slice(1, -1);
+      const relativePath = getRelativePath(specifier);
+      if (relativePath) {
+        addReplacement(dynImp.moduleRequest.start, dynImp.moduleRequest.end, `'${relativePath}'`);
+      }
+    }
+  }
+
+  // For CJS files, also handle require() calls using regex (oxc-parser doesn't track these)
+  if (isCjs) {
+    const requireRegex = /require\s*\(\s*(['"])([^'"]+)\1\s*\)/g;
+    let match;
+    while ((match = requireRegex.exec(content)) !== null) {
+      const specifier = match[2];
+      const relativePath = getRelativePath(specifier);
+      if (relativePath) {
+        // Calculate the position of just the string literal (including quotes)
+        const stringStart = match.index + match[0].indexOf(match[1]);
+        const stringEnd = stringStart + match[1].length + specifier.length + match[1].length;
+        addReplacement(stringStart, stringEnd, `'${relativePath}'`);
+      }
+    }
+  }
+
+  // Sort replacements in reverse order (end to start) to preserve positions
+  const replacements = [...replacementMap.values()].sort((a, b) => b[0] - a[0]);
+
+  // Apply replacements
+  let result_content = content;
+  for (const [start, end, newValue] of replacements) {
+    result_content = result_content.slice(0, start) + newValue + result_content.slice(end);
+  }
+
+  return result_content;
+}
+
+/**
+ * Fix CJS packages that only export default - extract named exports from the default export
+ */
+async function fixCjsNamedExports(vendorFilePath: string, specifier: string) {
+  let content = await readFile(vendorFilePath, 'utf-8');
+
+  // Match pattern like: export default require_xxx();
+  // and: export {  };
+  const defaultExportMatch = content.match(/export default (require_\w+)\(\);/);
+  const emptyExportMatch = content.match(/export \{\s*\};/);
+
+  if (defaultExportMatch && emptyExportMatch) {
+    const requireFn = defaultExportMatch[1];
+    console.log(`      Fixing CJS named exports for ${specifier}...`);
+
+    // Replace empty export with named exports from the default
+    content = content.replace(
+      /export default (require_\w+)\(\);\s*\nexport \{\s*\};/,
+      `const __cjs_export__ = ${requireFn}();\nexport const { expectTypeOf } = __cjs_export__;\nexport default __cjs_export__;`,
+    );
+
+    await writeFile(vendorFilePath, content, 'utf-8');
+  }
+}
+
+/**
+ * Create a safe filename from a specifier
+ */
+function safeFileName(specifier: string): string {
+  return specifier.replace(/[@/]/g, '_').replace(/^_/, '');
+}
+
+/**
+ * Patch pkgRoot/distRoot paths in vendor files.
+ * The bundled code assumes files are in dist/, but vendor files are in dist/vendor/
+ * So "../.." needs to become "../../.." to correctly resolve to package root.
+ * Also patches relative file references like "context.js" to "../context.js".
+ */
+async function patchVendorPaths() {
+  console.log('\nPatching vendor paths...');
+
+  // Patterns that need one more level up due to vendor subdirectory
+  const pathPatterns = [
+    // Package root calculation: "../.." -> "../../.."
+    {
+      original: `resolve$1(fileURLToPath(import.meta.url), "../..")`,
+      fixed: `resolve$1(fileURLToPath(import.meta.url), "../../..")`,
+    },
+    // context.js reference: "context.js" -> "../context.js"
+    // This is used in browser server to resolve the vitest/browser/context export
+    {
+      original: `resolve$1(__dirname$1, "context.js")`,
+      fixed: `resolve$1(__dirname$1, "../context.js")`,
+    },
+  ];
+
+  const vendorFiles = fsGlob(join(vendorDir, '*.mjs'));
+  let patchedCount = 0;
+
+  for await (const file of vendorFiles) {
+    let content = await readFile(file, 'utf-8');
+    let modified = false;
+
+    for (const { original, fixed } of pathPatterns) {
+      if (content.includes(original)) {
+        content = content.replaceAll(original, fixed);
+        modified = true;
+      }
+    }
+
+    if (modified) {
+      await writeFile(file, content, 'utf-8');
+      console.log(`  Patched paths in ${relative(distDir, file)}`);
+      patchedCount++;
+    }
+  }
+
+  if (patchedCount === 0) {
+    console.log('  No vendor files needed path patching');
+  } else {
+    console.log(`  Successfully patched ${patchedCount} file(s)`);
+  }
+}
+
+/**
+ * Convert tabs to spaces in all JS files in dist/ for consistent formatting.
+ * This allows our patching code to use space-based patterns instead of tabs.
+ */
+async function convertTabsToSpaces() {
+  console.log('\nConverting tabs to spaces in dist/...');
+
+  let convertedCount = 0;
+
+  for await (const file of fsGlob(resolve(distDir, '**/*.js'))) {
+    const content = await readFile(file, 'utf-8');
+    if (content.includes('\t')) {
+      const converted = content.replace(/\t/g, '  ');
+      await writeFile(file, converted);
+      convertedCount++;
+    }
+  }
+
+  console.log(`  Converted ${convertedCount} files`);
+}
+
+/**
+ * Fix pkgRoot path resolution in all `@vitest/*` packages.
+ * The original packages use resolve(import.meta.url, "../..") to find their package root.
+ * But our files are at `dist/@vitest/star/index.js`, so we need to go up 3 levels, not 2.
+ */
+async function patchVitestPkgRootPaths() {
+  console.log('\nFixing distRoot paths in @vitest/* packages...');
+
+  const vitestDir = resolve(distDir, '@vitest');
+  let patchedCount = 0;
+
+  for (const pkg of VITEST_PACKAGES_TO_COPY) {
+    const pkgName = pkg.replace('@vitest/', '');
+    const indexPath = join(vitestDir, pkgName, 'index.js');
+
+    try {
+      await stat(indexPath);
+    } catch {
+      continue;
+    }
+
+    let content = await readFile(indexPath, 'utf-8');
+
+    // The original @vitest/browser had index.js in the dist/ folder, so:
+    //   pkgRoot = resolve(import.meta.url, "../..") -> @vitest/browser
+    //   distRoot = resolve(pkgRoot, "dist") -> @vitest/browser/dist
+    // But our file is at dist/@vitest/browser/index.js, so distRoot should just be
+    // the directory containing index.js (not pkgRoot/dist)
+    // Replace both lines with just making distRoot = dirname of index.js
+    // Use regex to handle both top-level and indented occurrences
+    const oldPattern =
+      /( *)const pkgRoot = resolve\(fileURLToPath\(import\.meta\.url\), "\.\.\/\.\."\);\n\1const distRoot = resolve\(pkgRoot, "dist"\);/g;
+    const newContent = content.replace(
+      oldPattern,
+      '$1const distRoot = dirname(fileURLToPath(import.meta.url));',
+    );
+
+    if (newContent !== content) {
+      await writeFile(indexPath, newContent, 'utf-8');
+      const matchCount = (content.match(oldPattern) || []).length;
+      console.log(`  Fixed ${pkg}/index.js (${matchCount} occurrences)`);
+      patchedCount++;
+    }
+  }
+
+  console.log(`  Patched ${patchedCount} packages`);
+}
+
+/**
+ * Patch the copied @vitest/browser package to:
+ * 1. Inject vitest:vendor-aliases plugin for @vitest/* resolution
+ * 2. Add native deps to the exclude list
+ * 3. Remove include patterns for bundled deps
+ */
+async function patchVitestBrowserPackage() {
+  console.log('\nPatching @vitest/browser package...');
+
+  const browserIndexPath = join(distDir, '@vitest/browser/index.js');
+
+  try {
+    await stat(browserIndexPath);
+  } catch {
+    console.log('  Warning: @vitest/browser not found in dist, skipping');
+    return;
+  }
+
+  let content = await readFile(browserIndexPath, 'utf-8');
+
+  // 1. Inject vitest:vendor-aliases plugin into BrowserPlugin return array
+  // This allows imports like @vitest/runner to be resolved to our copied @vitest files
+  const mappingEntries = Object.entries(VITEST_PACKAGE_TO_PATH)
+    .filter(([pkg]) => pkg.startsWith('@vitest/'))
+    .map(([pkg, file]) => `'${pkg}': resolve(distRoot, '${file}')`)
+    .join(',\n      ');
+
+  // distRoot is @vitest/browser/ so we need to go up two levels to reach the actual dist root
+  const vendorAliasesPlugin = `{
+    name: 'vitest:vendor-aliases',
+    enforce: 'pre',
+    resolveId(id) {
+      // distRoot is @vitest/browser/, packageRoot is the actual dist/ directory
+      const packageRoot = resolve(distRoot, '../..');
+      // Resolve module-runner to a browser-safe stub
+      // This is critical: module-runner contains Node.js-only code (process.platform, etc.)
+      // that causes browsers to hang when loaded
+      if (id === '${CORE_PACKAGE_NAME}/module-runner' || id === 'vite/module-runner') {
+        return resolve(packageRoot, 'module-runner-stub.js');
+      }
+      // Mark vite/core as external to prevent Node.js-only code from being bundled
+      // This prevents __vite__injectQuery duplication errors in browser tests
+      if (id === '${CORE_PACKAGE_NAME}' || id === 'vite') {
+        return { id, external: true };
+      }
+      const vendorMap = {
+      ${mappingEntries}
+      };
+      if (vendorMap[id]) {
+        return vendorMap[id];
+      }
+    }
+  }`;
+
+  // Find BrowserPlugin return array and inject plugin
+  const pluginArrayPattern = /(return \[)(\n +\{\n +enforce: "pre",\n +name: "vitest:browser",)/;
+  if (pluginArrayPattern.test(content)) {
+    content = content.replace(pluginArrayPattern, `$1\n    ${vendorAliasesPlugin},$2`);
+    console.log('  Injected vitest:vendor-aliases plugin');
+  } else {
+    console.log('  Warning: Could not find browser plugin array to inject vendor-aliases');
+  }
+
+  // 2. Patch exclude list to add native deps
+  // Pattern: const exclude = ["vitest", ...
+  const excludePattern = /(const exclude = \[)(\n?\s*"vitest",)/;
+  // Exclude packages that:
+  // - @vitest/browser: needs our resolveId plugin
+  // - vite: Node.js only
+  // - @voidzero-dev/vite-plus-core: our Node.js core package
+  // - @voidzero-dev/vite-plus-core/module-runner: pulled by index.js -> evaluatedModules
+  // - lightningcss: has native bindings
+  // - @tailwindcss/oxide: has native bindings
+  // - tailwindcss: pulls in @tailwindcss/oxide
+  // Also exclude @vitest/ui (optional peer dependency) and its subpath
+  // Also exclude @vitest/mocker/node which imports @voidzero-dev/vite-plus-core
+  const excludeReplacement =
+    '$1\n          "@vitest/browser",\n          "@vitest/ui",\n          "@vitest/ui/reporter",\n          "@vitest/mocker/node",\n          "vite",\n          "@voidzero-dev/vite-plus-core",\n          "@voidzero-dev/vite-plus-core/module-runner",\n          "lightningcss",\n          "@tailwindcss/oxide",\n          "tailwindcss",$2';
+  if (excludePattern.test(content)) {
+    content = content.replace(excludePattern, excludeReplacement);
+    console.log('  Patched exclude list with native deps');
+  } else {
+    console.log('  Warning: Could not find exclude array to patch');
+  }
+
+  // 3. Remove include patterns that reference bundled deps
+  // These patterns like "vitest > expect-type" don't work with our bundled setup
+  // since the deps are already bundled into vendor files
+  const includePatterns = [
+    '"vitest > expect-type"',
+    '"vitest > @vitest/snapshot > magic-string"',
+    '"vitest > @vitest/expect > chai"',
+  ];
+  for (const pattern of includePatterns) {
+    content = content.replace(
+      new RegExp(`\\s*${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')},?`, 'g'),
+      '',
+    );
+  }
+  console.log('  Removed bundled deps from include list');
+
+  await writeFile(browserIndexPath, content, 'utf-8');
+  console.log('  Successfully patched @vitest/browser/index.js');
+}
+
+/**
+ * Patch @vitest/browser-playwright/locators.js to use browser-safe imports.
+ *
+ * The original file imports from '../browser/index.js' which is Node.js server code.
+ * We need to change it to import from browser-safe files instead.
+ */
+async function patchPlaywrightLocators() {
+  console.log('\nPatching @vitest/browser-playwright/locators.js...');
+
+  const locatorsPath = join(distDir, '@vitest/browser-playwright/locators.js');
+
+  try {
+    await stat(locatorsPath);
+  } catch {
+    console.log('  Warning: locators.js not found, skipping');
+    return;
+  }
+
+  let content = await readFile(locatorsPath, 'utf-8');
+
+  // 1. Change import of `page, server` from '../browser/index.js' to just `page` from '../browser/context.js'
+  // The server import is only used for server.config.browser.locators.testIdAttribute
+  // We'll inline the access via window.__vitest_worker__.config
+  const serverImportPattern = /import \{ page, server \} from ['"]\.\.\/browser\/index\.js['"];?/;
+  if (serverImportPattern.test(content)) {
+    content = content.replace(serverImportPattern, `import { page } from '../browser/context.js';`);
+    console.log('  Changed server import to browser-safe context import');
+  } else {
+    console.log('  Warning: Could not find server import to patch');
+  }
+
+  // 2. Replace server.config.browser.locators.testIdAttribute with browser-accessible version
+  // The browser has access to config via window.__vitest_worker__
+  const testIdAttrPattern = /server\.config\.browser\.locators\.testIdAttribute/g;
+  if (testIdAttrPattern.test(content)) {
+    content = content.replace(
+      testIdAttrPattern,
+      `window.__vitest_worker__.config.browser.locators.testIdAttribute`,
+    );
+    console.log('  Replaced server.config access with browser-safe window access');
+  } else {
+    console.log('  Warning: Could not find testIdAttribute pattern to patch');
+  }
+
+  await writeFile(locatorsPath, content, 'utf-8');
+  console.log('  Successfully patched @vitest/browser-playwright/locators.js');
+}
+
+/**
+ * Create browser-compat.js shim that re-exports @vitest/browser compatible symbols.
+ * This allows our package to be used as an override for @vitest/browser.
+ */
+async function createBrowserCompatShim() {
+  console.log('\nCreating browser-compat shim...');
+
+  const browserIndexPath = join(distDir, '@vitest/browser/index.js');
+
+  try {
+    await stat(browserIndexPath);
+  } catch {
+    console.log('  Warning: @vitest/browser/index.js not found, skipping');
+    return;
+  }
+
+  const browserSymbols = [
+    'resolveScreenshotPath',
+    'defineBrowserProvider',
+    'parseKeyDef',
+    'defineBrowserCommand',
+  ];
+
+  const shimContent = `// Re-export @vitest/browser compatible symbols
+// This allows this package to be used as an override for @vitest/browser
+export { ${browserSymbols.join(', ')} } from './@vitest/browser/index.js';
+`;
+
+  const shimPath = join(distDir, 'browser-compat.js');
+  await writeFile(shimPath, shimContent, 'utf-8');
+  console.log(`  Created ${relative(projectDir, shimPath)}`);
+}
+
+/**
+ * Create a browser-safe stub for module-runner.
+ * The real module-runner contains Node.js-only code (process.platform, Buffer, etc.)
+ * that causes browsers to hang when loaded. This stub provides empty/placeholder
+ * exports so that browser code can import without errors.
+ */
+async function createModuleRunnerStub() {
+  console.log('\nCreating browser-safe module-runner stub...');
+
+  const stubContent = `// Browser-safe stub for module-runner
+// The real module-runner contains Node.js-only code that crashes browsers
+// This stub provides placeholder exports for browser compatibility
+
+// Stub class - browser doesn't actually use these
+export class EvaluatedModules {
+  constructor() {
+    this.idToModuleMap = new Map();
+    this.fileToModulesMap = new Map();
+    this.urlToIdModuleMap = new Map();
+  }
+  getModuleById() { return undefined; }
+  getModulesByFile() { return []; }
+  getModuleByUrl() { return undefined; }
+  ensureModule() { return {}; }
+  invalidateModule() {}
+  clear() {}
+}
+
+export class ModuleRunner {
+  constructor() {}
+  async import() { throw new Error('ModuleRunner is not available in browser'); }
+  evaluatedModules = new EvaluatedModules();
+}
+
+export class ESModulesEvaluator {
+  constructor() {}
+  async runExternalModule() { return {}; }
+  async runViteModule() { return {}; }
+}
+
+// Stub functions
+export function createDefaultImportMeta() { return {}; }
+export function createNodeImportMeta() { return {}; }
+export function createWebSocketModuleRunnerTransport() { return {}; }
+export function normalizeModuleId(id) { return id; }
+
+// SSR-related constants (browser doesn't use these)
+export const ssrDynamicImportKey = '__vite_ssr_dynamic_import__';
+export const ssrExportAllKey = '__vite_ssr_exportAll__';
+export const ssrExportNameKey = '__vite_ssr_export__';
+export const ssrImportKey = '__vite_ssr_import__';
+export const ssrImportMetaKey = '__vite_ssr_import_meta__';
+export const ssrModuleExportsKey = '__vite_ssr_exports__';
+`;
+
+  const stubPath = join(distDir, 'module-runner-stub.js');
+  await writeFile(stubPath, stubContent, 'utf-8');
+  console.log(`  Created ${relative(projectDir, stubPath)}`);
+}
+
+/**
+ * Create a Node.js-specific entry that includes @vitest/browser symbols.
+ * Browser code will use index.js (no browser-provider imports) to avoid loading Node.js code.
+ * Node.js code (like @vitest/browser-playwright) will use index-node.js which includes
+ * the browser symbols needed for pnpm override compatibility.
+ *
+ * This separation is critical because @vitest/browser/index.js imports from vitest/node,
+ * which contains Node.js-only code (including __vite__injectQuery) that crashes browsers.
+ */
+async function createNodeEntry() {
+  console.log('\nCreating Node.js-specific entry for @vitest/browser override...');
+
+  const browserIndexPath = join(distDir, '@vitest/browser/index.js');
+
+  try {
+    await stat(browserIndexPath);
+  } catch {
+    console.log('  Warning: @vitest/browser/index.js not found, skipping');
+    return;
+  }
+
+  const browserSymbols = [
+    'resolveScreenshotPath',
+    'defineBrowserProvider',
+    'parseKeyDef',
+    'defineBrowserCommand',
+  ];
+
+  // Create index-node.js that re-exports everything from index.js plus browser symbols
+  const nodeEntry = `// Node.js-specific entry that includes @vitest/browser provider symbols
+// Browser code should use index.js which doesn't pull in Node.js-only code
+export * from './index.js';
+
+// Re-export @vitest/browser symbols for pnpm override compatibility
+// These are only needed when this package overrides @vitest/browser in Node.js context
+export { ${browserSymbols.join(', ')} } from './@vitest/browser/index.js';
+`;
+
+  const nodeEntryPath = join(distDir, 'index-node.js');
+  await writeFile(nodeEntryPath, nodeEntry, 'utf-8');
+  console.log(`  Created dist/index-node.js with @vitest/browser exports`);
+}
+
+/**
+ * Copy ALL files from @vitest/browser's dist to our dist.
+ * The bundled code in dist/vendor/ calculates paths like:
+ *   pkgRoot = resolve(import.meta.url, "../..") -> package root
+ *   distRoot = resolve(pkgRoot, "dist") -> dist/
+ * Then looks for client/ files at distRoot, so we copy to dist/ not dist/vendor/.
+ */
+async function copyBrowserClientFiles() {
+  console.log('\nCopying @vitest/browser files to dist...');
+
+  // Find @vitest/browser's dist directory
+  const vitestBrowserDist = resolve(projectDir, 'node_modules/@vitest/browser/dist');
+
+  // Check if it exists
+  try {
+    await stat(vitestBrowserDist);
+  } catch {
+    console.log('  Warning: @vitest/browser not installed, skipping');
+    return;
+  }
+
+  // Copy all files from @vitest/browser/dist to our dist/
+  // The bundled code at dist/vendor/ resolves paths relative to dist/
+  // Use recursive directory traversal to include dotfiles (glob doesn't handle them well)
+  let copiedCount = 0;
+
+  // Rewrite imports in copied JS files to use our dist files
+  // The relative path depends on the file's location relative to dist/
+  function rewriteImports(content: string, destPath: string): string {
+    const fileDir = parse(destPath).dir;
+
+    // Calculate relative path from file location to vendor directory
+    const vendorPath = join(distDir, 'vendor');
+    let relativeToVendor = relative(fileDir, vendorPath);
+    // Ensure path starts with ./ for relative imports
+    if (!relativeToVendor.startsWith('.')) {
+      relativeToVendor = './' + relativeToVendor;
+    }
+
+    // Calculate relative path from file location to dist directory
+    let relativeToDist = relative(fileDir, distDir);
+    if (!relativeToDist.startsWith('.')) {
+      relativeToDist = './' + relativeToDist;
+    }
+
+    // Rewrite @vitest/* imports to use our copied @vitest files
+    for (const [pkg, distPath] of Object.entries(VITEST_PACKAGE_TO_PATH)) {
+      if (!pkg.startsWith('@vitest/')) continue;
+      // Pattern: from"@vitest/runner" or from "@vitest/runner"
+      const importPattern = new RegExp(`from\\s*["']${pkg.replace('/', '\\/')}["']`, 'g');
+      content = content.replace(importPattern, `from"${relativeToDist}/${distPath}"`);
+    }
+
+    // Rewrite vitest/* subpath imports to use our dist files
+    // These are the actual entry points for vitest's browser-safe exports
+    const vitestSubpathRewrites: Record<string, string> = {
+      'vitest/browser': `${relativeToDist}/context.js`, // vitest/browser exports context API
+      'vitest/internal/browser': `${relativeToDist}/browser.js`,
+      'vitest/runners': `${relativeToDist}/runners.js`,
+    };
+    for (const [specifier, destFile] of Object.entries(vitestSubpathRewrites)) {
+      const importPattern = new RegExp(`from\\s*["']${specifier.replace('/', '\\/')}["']`, 'g');
+      content = content.replace(importPattern, `from"${destFile}"`);
+    }
+
+    // Special handling for @vitest/browser/client -> our client.js
+    // This is needed because the browser client files import from @vitest/browser/client
+    const browserClientPattern = /from\s*["']@vitest\/browser\/client["']/g;
+    content = content.replace(browserClientPattern, `from"${relativeToDist}/client.js"`);
+
+    // Handle imports from ./index.js which is Node.js-only code
+    // In browser context, 'server' should read from __vitest_browser_runner__ at runtime
+    // Replace: import{server}from'./index.js' with a browser-safe stub
+    const serverStub = `const server = {
+  get browser() { return window.__vitest_browser_runner__?.config?.browser?.name; },
+  get config() { return window.__vitest_browser_runner__?.config || {}; },
+  get commands() { return window.__vitest_browser_runner__?.commands || {}; },
+  get provider() { return window.__vitest_browser_runner__?.provider; },
+};`;
+    content = content.replace(
+      /import\s*\{\s*server\s*\}\s*from\s*['"]\.\/index\.js['"];?/g,
+      serverStub,
+    );
+
+    // Remove side-effect imports from ./index.js (Node.js-only)
+    // Pattern: import'./index.js'; at the end of an import statement
+    content = content.replace(/import\s*['"]\.\/index\.js['"];?/g, '');
+
+    return content;
+  }
+
+  async function copyDirRecursive(srcDir: string, destDir: string) {
+    const entries = await readdir(srcDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const srcPath = join(srcDir, entry.name);
+      const destPath = join(destDir, entry.name);
+
+      if (entry.isDirectory()) {
+        await mkdir(destPath, { recursive: true });
+        await copyDirRecursive(srcPath, destPath);
+      } else if (entry.isFile()) {
+        // Skip if file already exists (our bundled code takes precedence)
+        try {
+          await stat(destPath);
+          continue;
+        } catch {
+          // File doesn't exist, copy it
+        }
+        await mkdir(parse(destPath).dir, { recursive: true });
+
+        // For JS files, rewrite imports; otherwise just copy
+        if (entry.name.endsWith('.js')) {
+          let content = await readFile(srcPath, 'utf-8');
+          content = rewriteImports(content, destPath);
+          await writeFile(destPath, content, 'utf-8');
+        } else {
+          await copyFile(srcPath, destPath);
+        }
+        copiedCount++;
+      }
+    }
+  }
+
+  await copyDirRecursive(vitestBrowserDist, distDir);
+
+  // Create dummy.js for placeholder exports (matchers, utils)
+  const dummyContent = '// Placeholder for browser compatibility\nexport {};\n';
+  await writeFile(join(distDir, 'dummy.js'), dummyContent, 'utf-8');
+
+  console.log(`  Copied ${copiedCount} files from @vitest/browser to dist`);
+
+  // Create vendor stubs for browser packages that aren't bundled
+  // Other dist files reference these vendor paths but we don't bundle browser packages
+  // to avoid Node.js code leakage. Instead, we create stubs that re-export from actual dist files.
+  console.log('  Creating vendor stubs for browser packages...');
+  const browserVendorStubs = [
+    {
+      vendorFile: 'vitest_browser.mjs',
+      // vitest/browser exports the context API (page, server, userEvent)
+      content: `// Stub for browser context - re-exports from our context.js
+export * from '../context.js';
+`,
+    },
+    {
+      vendorFile: 'vitest_internal_browser.mjs',
+      // vitest/internal/browser is browser.js
+      content: `// Stub for internal browser API - re-exports from our browser.js
+export * from '../browser.js';
+`,
+    },
+    {
+      vendorFile: 'vitest_runners.mjs',
+      // vitest/runners
+      content: `// Stub for runners - re-exports from our runners.js
+export * from '../runners.js';
+`,
+    },
+    {
+      vendorFile: 'vitest_runner.mjs',
+      // @vitest/runner (note: singular, not plural like vitest_runners which is vitest/runners)
+      content: `// Stub for @vitest/runner - re-exports from our copied @vitest/runner
+export * from '../@vitest/runner/index.js';
+`,
+    },
+  ];
+
+  for (const { vendorFile, content } of browserVendorStubs) {
+    const stubPath = join(distDir, 'vendor', vendorFile);
+    await writeFile(stubPath, content, 'utf-8');
+  }
+  console.log(`  Created ${browserVendorStubs.length} vendor stubs`);
+}
+
+/**
+ * Create /plugins/* exports for all copied @vitest/* packages.
+ * This allows pnpm overrides to redirect @vitest/* imports to our copied versions.
+ * e.g., @vitest/runner -> vitest/plugins/runner
+ *       @vitest/utils/error -> vitest/plugins/utils-error
+ */
+async function createPluginExports() {
+  console.log('\nCreating plugin exports for @vitest/* packages...');
+
+  const pluginsDir = join(distDir, 'plugins');
+  // Clean up stale plugin files from previous builds
+  await rm(pluginsDir, { recursive: true, force: true });
+  await mkdir(pluginsDir, { recursive: true });
+
+  const createdExports: Array<{ exportPath: string; shimFile: string }> = [];
+
+  for (const [pkg, distPath] of Object.entries(VITEST_PACKAGE_TO_PATH)) {
+    // Only create exports for @vitest/* packages
+    if (!pkg.startsWith('@vitest/')) {
+      continue;
+    }
+    // Convert @vitest/runner -> runner, @vitest/utils/error -> utils-error
+    const exportName = pkg.replace('@vitest/', '').replace('/', '-');
+    const shimFileName = `${exportName}.mjs`;
+    const shimPath = join(pluginsDir, shimFileName);
+
+    // Create the shim file that re-exports everything from @vitest/
+    const shimContent = `// Re-export ${pkg} from copied @vitest package
+export * from '../${distPath}';
+`;
+
+    await writeFile(shimPath, shimContent, 'utf-8');
+    createdExports.push({
+      exportPath: `./plugins/${exportName}`,
+      shimFile: `./dist/plugins/${shimFileName}`,
+    });
+    console.log(`  Created plugins/${shimFileName} -> ${distPath}`);
+  }
+
+  return createdExports;
+}
+
+/**
+ * Validate that all external dependencies in dist are listed in package.json
+ */
+async function validateExternalDeps() {
+  console.log('\nValidating external dependencies...');
+
+  // Collect all declared dependencies
+  const declaredDeps = new Set<string>([
+    ...Object.keys(pkg.dependencies || {}),
+    ...Object.keys(pkg.peerDependencies || {}),
+  ]);
+
+  // Also include self-references
+  declaredDeps.add(pkg.name);
+  declaredDeps.add('vitest'); // Self-reference via vitest name
+
+  // Collect all external specifiers from ALL dist files (including vendor)
+  const externalSpecifiers = new Map<string, Set<string>>(); // specifier -> files
+
+  const allJsFiles = fsGlob(join(distDir, '**/*.{js,mjs,cjs}'));
+
+  for await (const file of allJsFiles) {
+    const content = await readFile(file, 'utf-8');
+    const isCjs = file.endsWith('.cjs');
+
+    // Parse with oxc-parser
+    const result = parseSync(file, content, {
+      sourceType: isCjs ? 'script' : 'module',
+    });
+
+    const specifiers = new Set<string>();
+
+    // Collect ESM static imports
+    for (const imp of result.module.staticImports) {
+      specifiers.add(imp.moduleRequest.value);
+    }
+
+    // Collect ESM static exports (re-exports)
+    for (const exp of result.module.staticExports) {
+      for (const entry of exp.entries) {
+        if (entry.moduleRequest) {
+          specifiers.add(entry.moduleRequest.value);
+        }
+      }
+    }
+
+    // Collect dynamic imports (only string literals)
+    for (const dynImp of result.module.dynamicImports) {
+      const rawText = content.slice(dynImp.moduleRequest.start, dynImp.moduleRequest.end);
+      if (
+        (rawText.startsWith("'") && rawText.endsWith("'")) ||
+        (rawText.startsWith('"') && rawText.endsWith('"'))
+      ) {
+        specifiers.add(rawText.slice(1, -1));
+      }
+    }
+
+    // For CJS files, also scan for require() calls
+    if (isCjs) {
+      const requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+      let match;
+      while ((match = requireRegex.exec(content)) !== null) {
+        specifiers.add(match[1]);
+      }
+    }
+
+    // Filter and record external specifiers
+    for (const specifier of specifiers) {
+      // Skip relative paths
+      if (specifier.startsWith('.') || specifier.startsWith('/')) continue;
+      // Skip node built-ins
+      if (NODE_BUILTINS.has(specifier)) continue;
+      // Skip Node.js subpath imports
+      if (specifier.startsWith('#')) continue;
+
+      // Get the package name (handle scoped packages and subpaths)
+      const packageName = getPackageName(specifier);
+      if (!packageName) continue;
+
+      // Check if it's declared
+      if (declaredDeps.has(packageName)) continue;
+      // Check if it's in the blocklist (intentionally external)
+      if (EXTERNAL_BLOCKLIST.has(packageName) || EXTERNAL_BLOCKLIST.has(specifier)) continue;
+
+      // Record undeclared external
+      if (!externalSpecifiers.has(specifier)) {
+        externalSpecifiers.set(specifier, new Set());
+      }
+      externalSpecifiers.get(specifier)!.add(relative(distDir, file));
+    }
+  }
+
+  if (externalSpecifiers.size === 0) {
+    console.log('  ✓ All external dependencies are declared in package.json');
+    return;
+  }
+
+  // Group by package name
+  const byPackage = new Map<string, Set<string>>();
+  for (const [specifier, _files] of externalSpecifiers) {
+    const packageName = getPackageName(specifier)!;
+    if (!byPackage.has(packageName)) {
+      byPackage.set(packageName, new Set());
+    }
+    byPackage.get(packageName)!.add(specifier);
+  }
+
+  console.log(`\n  ⚠ Found ${byPackage.size} undeclared external dependencies:\n`);
+  for (const [packageName, specifiers] of [...byPackage.entries()].sort()) {
+    const files = externalSpecifiers.get([...specifiers][0])!;
+    console.log(`    ${packageName}`);
+    for (const specifier of specifiers) {
+      if (specifier !== packageName) {
+        console.log(`      - ${specifier}`);
+      }
+    }
+    console.log(
+      `      (used in: ${[...files].slice(0, 3).join(', ')}${files.size > 3 ? '...' : ''})`,
+    );
+  }
+}
+
+/**
+ * Extract the package name from a specifier (handles scoped packages and subpaths)
+ */
+function getPackageName(specifier: string): string | null {
+  // Scoped package: @scope/name or @scope/name/subpath
+  if (specifier.startsWith('@')) {
+    const parts = specifier.split('/');
+    if (parts.length >= 2) {
+      return `${parts[0]}/${parts[1]}`;
+    }
+    return null;
+  }
+  // Regular package: name or name/subpath
+  const parts = specifier.split('/');
+  return parts[0] || null;
 }

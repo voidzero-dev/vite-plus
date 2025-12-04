@@ -20,6 +20,7 @@
     ".": {
       "import": {
         "types": "./dist/index.d.ts",
+        "node": "./dist/index-node.js",
         "default": "./dist/index.js"
       },
       "require": {
@@ -96,6 +97,128 @@
     "./worker": {
       "types": "./worker.d.ts",
       "default": "./dist/worker.js"
+    },
+    "./browser-compat": {
+      "default": "./dist/browser-compat.js"
+    },
+    "./client": {
+      "default": "./dist/client.js"
+    },
+    "./context": {
+      "types": "./browser/context.d.ts",
+      "default": "./dist/context.js"
+    },
+    "./locators": {
+      "default": "./dist/locators.js"
+    },
+    "./matchers": {
+      "default": "./dist/dummy.js"
+    },
+    "./utils": {
+      "default": "./dist/dummy.js"
+    },
+    "./browser-playwright": {
+      "types": "./dist/@vitest/browser-playwright/index.d.ts",
+      "default": "./dist/@vitest/browser-playwright/index.js"
+    },
+    "./plugins/runner": {
+      "default": "./dist/plugins/runner.mjs"
+    },
+    "./plugins/runner-utils": {
+      "default": "./dist/plugins/runner-utils.mjs"
+    },
+    "./plugins/runner-types": {
+      "default": "./dist/plugins/runner-types.mjs"
+    },
+    "./plugins/utils": {
+      "default": "./dist/plugins/utils.mjs"
+    },
+    "./plugins/utils-source-map": {
+      "default": "./dist/plugins/utils-source-map.mjs"
+    },
+    "./plugins/utils-error": {
+      "default": "./dist/plugins/utils-error.mjs"
+    },
+    "./plugins/utils-helpers": {
+      "default": "./dist/plugins/utils-helpers.mjs"
+    },
+    "./plugins/utils-display": {
+      "default": "./dist/plugins/utils-display.mjs"
+    },
+    "./plugins/utils-timers": {
+      "default": "./dist/plugins/utils-timers.mjs"
+    },
+    "./plugins/utils-highlight": {
+      "default": "./dist/plugins/utils-highlight.mjs"
+    },
+    "./plugins/utils-offset": {
+      "default": "./dist/plugins/utils-offset.mjs"
+    },
+    "./plugins/utils-resolver": {
+      "default": "./dist/plugins/utils-resolver.mjs"
+    },
+    "./plugins/utils-serialize": {
+      "default": "./dist/plugins/utils-serialize.mjs"
+    },
+    "./plugins/utils-constants": {
+      "default": "./dist/plugins/utils-constants.mjs"
+    },
+    "./plugins/utils-diff": {
+      "default": "./dist/plugins/utils-diff.mjs"
+    },
+    "./plugins/spy": {
+      "default": "./dist/plugins/spy.mjs"
+    },
+    "./plugins/expect": {
+      "default": "./dist/plugins/expect.mjs"
+    },
+    "./plugins/snapshot": {
+      "default": "./dist/plugins/snapshot.mjs"
+    },
+    "./plugins/snapshot-environment": {
+      "default": "./dist/plugins/snapshot-environment.mjs"
+    },
+    "./plugins/snapshot-manager": {
+      "default": "./dist/plugins/snapshot-manager.mjs"
+    },
+    "./plugins/mocker": {
+      "default": "./dist/plugins/mocker.mjs"
+    },
+    "./plugins/mocker-node": {
+      "default": "./dist/plugins/mocker-node.mjs"
+    },
+    "./plugins/mocker-browser": {
+      "default": "./dist/plugins/mocker-browser.mjs"
+    },
+    "./plugins/mocker-redirect": {
+      "default": "./dist/plugins/mocker-redirect.mjs"
+    },
+    "./plugins/mocker-automock": {
+      "default": "./dist/plugins/mocker-automock.mjs"
+    },
+    "./plugins/mocker-register": {
+      "default": "./dist/plugins/mocker-register.mjs"
+    },
+    "./plugins/pretty-format": {
+      "default": "./dist/plugins/pretty-format.mjs"
+    },
+    "./plugins/browser": {
+      "default": "./dist/plugins/browser.mjs"
+    },
+    "./plugins/browser-context": {
+      "default": "./dist/plugins/browser-context.mjs"
+    },
+    "./plugins/browser-client": {
+      "default": "./dist/plugins/browser-client.mjs"
+    },
+    "./plugins/browser-locators": {
+      "default": "./dist/plugins/browser-locators.mjs"
+    },
+    "./plugins/browser-playwright": {
+      "default": "./dist/plugins/browser-playwright.mjs"
+    },
+    "./plugins/browser-playwright-context": {
+      "default": "./dist/plugins/browser-playwright-context.mjs"
     }
   },
   "main": "./dist/index.js",
@@ -113,7 +236,6 @@
     "@types/node": "^20.0.0 || ^22.0.0 || >=24.0.0",
     "happy-dom": "*",
     "jsdom": "*",
-    "@vitest/browser-playwright": "4.0.15",
     "@vitest/browser-preview": "4.0.15",
     "@vitest/ui": "4.0.15",
     "@vitest/browser-webdriverio": "4.0.15"
@@ -126,9 +248,6 @@
       "optional": true
     },
     "@types/node": {
-      "optional": true
-    },
-    "@vitest/browser-playwright": {
       "optional": true
     },
     "@vitest/browser-preview": {
@@ -148,30 +267,40 @@
     }
   },
   "dependencies": {
+    "@voidzero-dev/vite-plus-core": "workspace:*",
     "es-module-lexer": "^1.7.0",
     "expect-type": "^1.2.2",
-    "magic-string": "^0.30.21",
     "obug": "^2.1.1",
-    "pathe": "^2.0.3",
     "picomatch": "^4.0.3",
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0",
+    "sirv": "^3.0.2",
     "std-env": "^3.10.0",
     "tinybench": "^2.9.0",
     "tinyexec": "^1.0.2",
     "tinyglobby": "^0.2.15",
-    "tinyrainbow": "^3.0.3",
-    "why-is-node-running": "^2.3.0",
-    "@vitest/expect": "4.0.15",
-    "@vitest/pretty-format": "4.0.15",
-    "@vitest/runner": "4.0.15",
-    "@vitest/mocker": "4.0.15",
-    "@vitest/snapshot": "4.0.15",
-    "@vitest/utils": "4.0.15",
-    "@vitest/spy": "4.0.15",
-    "@voidzero-dev/vite-plus-core": "workspace:*"
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
-    "vitest-dev": "^4.0.15"
+    "@vitest/browser": "4.0.15",
+    "@vitest/browser-playwright": "4.0.15",
+    "@vitest/expect": "4.0.15",
+    "@vitest/mocker": "4.0.15",
+    "@vitest/pretty-format": "4.0.15",
+    "@vitest/runner": "4.0.15",
+    "@vitest/snapshot": "4.0.15",
+    "@vitest/spy": "4.0.15",
+    "@vitest/utils": "4.0.15",
+    "chai": "^6.2.1",
+    "estree-walker": "^3.0.3",
+    "magic-string": "^0.30.21",
+    "oxc-parser": "catalog:",
+    "pathe": "^2.0.3",
+    "rolldown": "workspace:*",
+    "tinyrainbow": "^3.0.3",
+    "vitest-dev": "^4.0.15",
+    "why-is-node-running": "^2.3.0"
   }
 }
