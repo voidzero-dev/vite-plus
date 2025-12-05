@@ -99,11 +99,11 @@ pub struct RewriteResult {
 ///     Path::new(".oxlintrc"),
 ///     "lint",
 /// )?;
-///
-/// // Merge oxfmt config with "format" key
+/// // Merge oxfmt config with "fmt" key
 /// let result = merge_json_config(
 ///     Path::new("vite.config.ts"),
 ///     Path::new(".oxfmtrc.json"),
+///     "fmt",
 ///     "format",
 /// )?;
 ///
