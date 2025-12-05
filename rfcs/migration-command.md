@@ -416,8 +416,8 @@ peerDependencyRules:
     - vite
     - vitest
   allowedVersions:
-    vite: 'npm:@voidzero-dev/vite-plus-core@*'
-    vitest: 'npm:@voidzero-dev/vite-plus-test@*'
+    vite: '*'
+    vitest: '*'
 ```
 
 ### for npm

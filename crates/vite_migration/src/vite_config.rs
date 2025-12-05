@@ -78,7 +78,7 @@ pub struct RewriteResult {
 ///
 /// * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
 /// * `json_config_path` - Path to the JSON config file (e.g., .oxlintrc.json, .oxfmtrc.json)
-/// * `config_key` - The key to use in the vite config (e.g., "lint", "format")
+/// * `config_key` - The key to use in the vite config (e.g., "lint", "fmt")
 ///
 /// # Returns
 ///
