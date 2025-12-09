@@ -163,7 +163,7 @@
     "magic-string": "^0.30.21",
     "picocolors": "^1.1.1",
     "rolldown": "workspace:*",
-    "rolldown-vite": "workspace:*",
+    "vite": "workspace:*",
     "rollup": "^4.18.0",
     "rollup-plugin-license": "^3.6.0",
     "tinyglobby": "^0.2.15",

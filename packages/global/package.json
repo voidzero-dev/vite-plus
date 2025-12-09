@@ -27,7 +27,7 @@
     "cross-spawn": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
-    "rolldown-vite": "workspace:*",
+    "vite": "workspace:*",
     "validate-npm-package-name": "catalog:"
   },
   "devDependencies": {

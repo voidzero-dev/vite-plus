@@ -83,8 +83,8 @@ function cloneOrResetRepo(repoUrl: string, dir: string, branch: string = 'main',
         return;
       }
 
-      // Fetch latest commits
-      execCommand('git fetch origin', dir);
+      // Fetch latest commits and tags
+      execCommand('git fetch origin --tags', dir);
 
       if (hash) {
         // Reset to specific hash
@@ -93,11 +93,24 @@ function cloneOrResetRepo(repoUrl: string, dir: string, branch: string = 'main',
         execCommand(`git reset --hard ${hash}`, dir);
         log(`${dir} reset to ${hash.substring(0, 8)}`);
       } else {
-        // Reset to latest
+        // Reset to latest - check if branch is a tag or a branch
         log(`Resetting ${dir} to latest ${branch}...`);
-        execCommand(`git checkout ${branch}`, dir);
-        execCommand(`git reset --hard origin/${branch}`, dir);
-        log(`${dir} reset to latest ${branch}`);
+        const isTag =
+          spawnSync('git', ['tag', '-l', branch], {
+            cwd: dir,
+            encoding: 'utf-8',
+          }).stdout.trim() === branch;
+
+        if (isTag) {
+          // For tags, just checkout the tag directly
+          execCommand(`git checkout ${branch}`, dir);
+          log(`${dir} reset to tag ${branch}`);
+        } else {
+          // For branches, reset to origin/branch
+          execCommand(`git checkout ${branch}`, dir);
+          execCommand(`git reset --hard origin/${branch}`, dir);
+          log(`${dir} reset to latest ${branch}`);
+        }
       }
     } catch (err: any) {
       log(`Failed to reset ${dir} (${err.message}), removing and re-cloning...`);

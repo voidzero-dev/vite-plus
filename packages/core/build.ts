@@ -112,26 +112,16 @@ async function buildVite() {
             }
           },
         },
-        ...config.plugins
-          .filter((plugin) => {
-            return !(
-              typeof plugin === 'object' &&
-              plugin !== null &&
-              'name' in plugin &&
-              plugin.name === 'rollup-plugin-license'
-            );
-          })
-          .map((plugin) => {
-            if (
-              typeof plugin === 'object' &&
-              plugin !== null &&
-              'name' in plugin &&
-              plugin.name === 'externalize-vite'
-            ) {
-              return RewriteImportsPlugin;
-            }
-            return plugin;
-          }),
+        // Add RewriteImportsPlugin to handle vite/rolldown import rewrites
+        RewriteImportsPlugin,
+        ...config.plugins.filter((plugin) => {
+          return !(
+            typeof plugin === 'object' &&
+            plugin !== null &&
+            'name' in plugin &&
+            plugin.name === 'rollup-plugin-license'
+          );
+        }),
       ];
     }
 
@@ -171,8 +161,10 @@ async function buildVite() {
     await writeFile(
       dstFilePath,
       file
-        .replaceAll(`"rolldown-vite/`, `"${pkgJson.name}/`)
-        .replaceAll(`"rolldown-vite"`, `"${pkgJson.name}/vite"`)
+        // Handle vite v8+ imports (official vite repo uses 'vite' package name)
+        .replaceAll(`"vite/`, `"${pkgJson.name}/`)
+        .replaceAll(`"vite"`, `"${pkgJson.name}"`)
+        // Handle rolldown imports
         .replaceAll(`"rolldown/`, `"${pkgJson.name}/rolldown/`)
         .replaceAll(`"rolldown"`, `"${pkgJson.name}/rolldown"`),
     );

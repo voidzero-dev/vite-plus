@@ -142,6 +142,7 @@ minimumReleaseAgeExclude:
   - vite
   - vitepress
   - vitest
+  - unrun
 overrides:
   '@rolldown/pluginutils': 'workspace:@rolldown/pluginutils@*'
   rolldown: 'workspace:rolldown@*'

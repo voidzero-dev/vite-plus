@@ -208,7 +208,7 @@ Options:
   --base <path>                 [string] public base path (default: /) 
   -l, --logLevel <level>        [string] info | warn | error | silent 
   --clearScreen                 [boolean] allow/disable clear screen when logging 
-  --configLoader <loader>       [string] use 'bundle' to bundle the config with esbuild, or 'runner' (experimental) to process it on the fly, or 'native' (experimental) to load using the native runtime (default: bundle) 
+  --configLoader <loader>       [string] use 'bundle' to bundle the config with Rolldown, or 'runner' (experimental) to process it on the fly, or 'native' (experimental) to load using the native runtime (default: bundle) 
   -d, --debug [feat]            [string | boolean] show debug logs 
   -f, --filter <filter>         [string] filter debug logs 
   -m, --mode <mode>             [string] set env mode 

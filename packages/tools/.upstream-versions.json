@@ -1,12 +1,12 @@
 {
   "rolldown": {
-    "repo": "git@github.com:rolldown/rolldown.git",
+    "repo": "https://github.com/rolldown/rolldown.git",
     "branch": "main",
     "hash": "c013fc844242178da7c4e9a7ec9f24697efcd726"
   },
   "rolldown-vite": {
-    "repo": "git@github.com:vitejs/rolldown-vite.git",
-    "branch": "rolldown-vite",
-    "hash": "ef44d7526b86704667168418f0ed9a0300652297"
+    "repo": "https://github.com/vitejs/vite.git",
+    "branch": "main",
+    "hash": "08c74cc54b1892e1d2f29840c18ef61f05963301"
   }
 }

@@ -37,7 +37,7 @@
     "rolldown": "workspace:*",
     "rolldown-plugin-dts": "catalog:",
     "tsdown": "catalog:",
-    "rolldown-vite": "workspace:*"
+    "vite": "workspace:*"
   },
   "napi": {
     "binaryName": "vite-plus",
