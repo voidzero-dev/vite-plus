@@ -171,7 +171,7 @@ impl PackageManager {
             }
         }
 
-        // if the workspace is a monorepo, keep workspace packages parent directories to watch new package was added
+        // if the workspace is a monorepo, keep workspace packages' parent directories to watch for new packages being added
         if self.is_monorepo {
             // TODO(@fengmk2): should use a more efficient way to get the workspace packages parent directories
             let package_graph = get_package_graph(&self.workspace_root)?;
