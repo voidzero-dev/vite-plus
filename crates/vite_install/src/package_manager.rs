@@ -14,7 +14,7 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
 #[cfg(test)]
 use vite_workspace::find_package_root;
-use vite_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
+use vite_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root, get_package_graph};
 
 use crate::{
     config::{get_cache_dir, get_npm_package_tgz_url, get_npm_package_version_url},
@@ -68,6 +68,8 @@ pub struct PackageManager {
     pub hash: Option<Str>,
     pub bin_name: Str,
     pub workspace_root: AbsolutePathBuf,
+    /// Whether the workspace is a monorepo.
+    pub is_monorepo: bool,
     pub install_dir: AbsolutePathBuf,
 }
 
@@ -106,6 +108,11 @@ impl PackageManagerBuilder {
             set_package_manager_field(&package_json_path, package_manager_type, &version).await?;
         }
 
+        let is_monorepo = matches!(
+            workspace_root.workspace_file,
+            WorkspaceFile::PnpmWorkspaceYaml(_) | WorkspaceFile::NpmWorkspaceJson(_)
+        );
+
         Ok(PackageManager {
             client: package_manager_type,
             package_name,
@@ -113,6 +120,7 @@ impl PackageManagerBuilder {
             hash,
             bin_name: package_manager_type.to_string().into(),
             workspace_root: workspace_root.path.to_absolute_path_buf(),
+            is_monorepo,
             install_dir,
         })
     }
@@ -129,9 +137,9 @@ impl PackageManager {
     }
 
     #[must_use]
-    pub fn get_fingerprint_ignores(&self) -> Vec<Str> {
+    pub fn get_fingerprint_ignores(&self) -> Result<Vec<Str>, Error> {
         let mut ignores: Vec<Str> = vec![
-            // ignore all files by default
+            // ignore all files by default, the package manager will traverse all subdirectories
             "**/*".into(),
             // keep all package.json files except under node_modules
             "!**/package.json".into(),
@@ -162,6 +170,24 @@ impl PackageManager {
                 ignores.push("!**/npm-shrinkwrap.json".into());
             }
         }
+
+        // if the workspace is a monorepo, keep workspace packages parent directories to watch new package was added
+        if self.is_monorepo {
+            // TODO(@fengmk2): should use a more efficient way to get the workspace packages parent directories
+            let package_graph = get_package_graph(&self.workspace_root)?;
+            for node_index in package_graph.node_indices() {
+                let package_info = &package_graph[node_index];
+                if let Some(parent_path) = package_info.path.as_path().parent() {
+                    let rule: Str = format!("!{}", parent_path.display()).into();
+                    // check if the rule is already in the ignores
+                    if ignores.contains(&rule) {
+                        continue;
+                    }
+                    ignores.push(rule);
+                }
+            }
+        }
+
         // ignore all files under node_modules
         // e.g. node_modules/mqtt/package.json
         ignores.push("**/node_modules/**/*".into());
@@ -173,7 +199,7 @@ impl PackageManager {
         // e.g. node_modules/mqtt/node_modules/mqtt-packet/node_modules
         ignores.push("**/node_modules/**/node_modules/**".into());
 
-        ignores
+        Ok(ignores)
     }
 }
 
@@ -1559,7 +1585,10 @@ mod tests {
 
         use super::*;
 
-        fn create_mock_package_manager(pm_type: PackageManagerType) -> PackageManager {
+        fn create_mock_package_manager(
+            pm_type: PackageManagerType,
+            is_monorepo: bool,
+        ) -> PackageManager {
             let temp_dir = create_temp_dir();
             let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
             let install_dir = temp_dir_path.join("install");
@@ -1571,14 +1600,64 @@ mod tests {
                 hash: None,
                 bin_name: pm_type.to_string().into(),
                 workspace_root: temp_dir_path,
+                is_monorepo,
                 install_dir,
             }
         }
 
         #[test]
+        fn test_get_fingerprint_ignores_monorepo() {
+            let pm = create_mock_package_manager(PackageManagerType::Pnpm, true);
+            fs::create_dir_all(pm.workspace_root.join("packages/app"))
+                .expect("Failed to create packages/app directory");
+            // create pnpm-workspace.yaml
+            fs::write(
+                pm.workspace_root.join("pnpm-workspace.yaml"),
+                "packages:
+              - 'packages/*'
+            ",
+            )
+            .expect("Failed to write pnpm-workspace.yaml");
+            // create package.json
+            fs::write(pm.workspace_root.join("package.json"), "{\"name\": \"test-package\"}")
+                .expect("Failed to write package.json");
+            // create packages/app/package.json
+            fs::write(
+                pm.workspace_root.join("packages/app/package.json"),
+                "{\"name\": \"test-package-app\"}",
+            )
+            .expect("Failed to write packages/app/package.json");
+            // mkdir packages/app
+            fs::create_dir_all(pm.workspace_root.join("packages/app"))
+                .expect("Failed to create packages/app directory");
+            let ignores = pm.get_fingerprint_ignores().expect("Should get fingerprint ignores");
+            let matcher = GlobPatternSet::new(&ignores).expect("Should compile patterns");
+            assert!(!matcher.is_match("packages"), "Should not ignore packages directory");
+            assert!(matcher.is_match("packages/app"), "Should ignore packages/app directory");
+            assert_eq!(
+                ignores,
+                [
+                    "**/*",
+                    "!**/package.json",
+                    "!**/.npmrc",
+                    "!**/pnpm-workspace.yaml",
+                    "!**/pnpm-lock.yaml",
+                    "!**/.pnpmfile.cjs",
+                    "!**/pnpmfile.cjs",
+                    "!**/.pnp.cjs",
+                    "!packages",
+                    "**/node_modules/**/*",
+                    "!**/node_modules",
+                    "!**/node_modules/@*",
+                    "**/node_modules/**/node_modules/**"
+                ]
+            );
+        }
+
+        #[test]
         fn test_pnpm_fingerprint_ignores() {
-            let pm = create_mock_package_manager(PackageManagerType::Pnpm);
-            let ignores = pm.get_fingerprint_ignores();
+            let pm = create_mock_package_manager(PackageManagerType::Pnpm, false);
+            let ignores = pm.get_fingerprint_ignores().expect("Should get fingerprint ignores");
             let matcher = GlobPatternSet::new(&ignores).expect("Should compile patterns");
 
             // Should ignore most files in node_modules
@@ -1662,8 +1741,8 @@ mod tests {
 
         #[test]
         fn test_yarn_fingerprint_ignores() {
-            let pm = create_mock_package_manager(PackageManagerType::Yarn);
-            let ignores = pm.get_fingerprint_ignores();
+            let pm = create_mock_package_manager(PackageManagerType::Yarn, false);
+            let ignores = pm.get_fingerprint_ignores().expect("Should get fingerprint ignores");
             let matcher = GlobPatternSet::new(&ignores).expect("Should compile patterns");
 
             // Should ignore most files in node_modules
@@ -1735,8 +1814,8 @@ mod tests {
 
         #[test]
         fn test_npm_fingerprint_ignores() {
-            let pm = create_mock_package_manager(PackageManagerType::Npm);
-            let ignores = pm.get_fingerprint_ignores();
+            let pm = create_mock_package_manager(PackageManagerType::Npm, false);
+            let ignores = pm.get_fingerprint_ignores().expect("Should get fingerprint ignores");
             let matcher = GlobPatternSet::new(&ignores).expect("Should compile patterns");
 
             // Should ignore most files in node_modules

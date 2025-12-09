@@ -61,7 +61,7 @@ impl InstallCommand {
             resolve_command.args.iter(),
             ResolveCommandResult { bin_path: resolve_command.bin_path, envs: resolve_command.envs },
             self.ignore_replay,
-            Some(package_manager.get_fingerprint_ignores()),
+            Some(package_manager.get_fingerprint_ignores()?),
         )?;
         let mut task_graph: StableGraph<ResolvedTask, ()> = Default::default();
         task_graph.add_node(resolved_task);

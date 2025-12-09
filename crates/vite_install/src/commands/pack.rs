@@ -209,6 +209,7 @@ mod tests {
             hash: None,
             bin_name: pm_type.to_string().into(),
             workspace_root: temp_dir_path.clone(),
+            is_monorepo: false,
             install_dir,
         }
     }
@@ -497,6 +498,7 @@ mod tests {
             hash: None,
             bin_name: "npm".into(),
             workspace_root: temp_dir_path.clone(),
+            is_monorepo: false,
             install_dir,
         };
 
@@ -531,6 +533,7 @@ mod tests {
             hash: None,
             bin_name: "pnpm".into(),
             workspace_root: temp_dir_path.clone(),
+            is_monorepo: false,
             install_dir,
         };
 

@@ -162,6 +162,8 @@ const DEFAULT_PASSTHROUGH_ENVS = [
   'OXLINT_*',
   // Rust specific
   'RUST_*',
+  // Vite specific
+  'VITE_*',
 ].map((env) => new Minimatch(env));
 
 export function isPassThroughEnv(env: string) {

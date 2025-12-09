@@ -1,0 +1,6 @@
+{
+  "name": "command-install-bug-31",
+  "version": "1.0.0",
+  "description": "bug fix https://github.com/voidzero-dev/vite-task/issues/31",
+  "packageManager": "pnpm@10.24.0"
+}
