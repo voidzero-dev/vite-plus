@@ -16,13 +16,6 @@ declare module '@voidzero-dev/vite-plus-core' {
 
 export * from '@voidzero-dev/vite-plus-core';
 
+export * from '@voidzero-dev/vite-plus-test/config';
+
 export { defineConfig };
-// TODO: how to keep sync with vitest exports?
-export {
-  configDefaults,
-  coverageConfigDefaults,
-  defaultExclude,
-  defaultInclude,
-  defaultBrowserPort,
-  defineProject,
-} from '@voidzero-dev/vite-plus-test/config';
