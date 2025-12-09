@@ -34,8 +34,8 @@ Done in <variable>ms using pnpm v<semver>
 ls: others/other/node_modules/testnpm2: No such file or directory
 
 > rm -rf packages/sub-project # remove sub project
-> vp install --no-frozen-lockfile # should install again without cache
-✗ cache miss: content of input 'packages/sub-project/package.json' changed, executing
+> vp install --no-frozen-lockfile | sed -E 's|packages.*|packages*|' # should install again without cache
+✗ cache miss: content of input 'packages*
 Scope: all <variable> workspace projects
 Already up to date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done

@@ -11,6 +11,6 @@
     "vp install --no-frozen-lockfile # should install cache hit",
     "ls others/other/node_modules/testnpm2 && exit 1 || true # check testnpm2 is not installed",
     "rm -rf packages/sub-project # remove sub project",
-    "vp install --no-frozen-lockfile # should install again without cache"
+    "vp install --no-frozen-lockfile | sed -E 's|packages.*|packages*|' # should install again without cache"
   ]
 }

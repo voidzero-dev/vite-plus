@@ -1586,10 +1586,10 @@ mod tests {
         use super::*;
 
         fn create_mock_package_manager(
+            temp_dir: TempDir,
             pm_type: PackageManagerType,
             is_monorepo: bool,
         ) -> PackageManager {
-            let temp_dir = create_temp_dir();
             let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
             let install_dir = temp_dir_path.join("install");
 
@@ -1607,15 +1607,17 @@ mod tests {
 
         #[test]
         fn test_get_fingerprint_ignores_monorepo() {
-            let pm = create_mock_package_manager(PackageManagerType::Pnpm, true);
+            let temp_dir: TempDir = create_temp_dir();
+            let pm = create_mock_package_manager(temp_dir, PackageManagerType::Pnpm, true);
+            // mkdir packages/app
             fs::create_dir_all(pm.workspace_root.join("packages/app"))
                 .expect("Failed to create packages/app directory");
             // create pnpm-workspace.yaml
             fs::write(
                 pm.workspace_root.join("pnpm-workspace.yaml"),
                 "packages:
-              - 'packages/*'
-            ",
+  - 'packages/*'
+",
             )
             .expect("Failed to write pnpm-workspace.yaml");
             // create package.json
@@ -1627,9 +1629,6 @@ mod tests {
                 "{\"name\": \"test-package-app\"}",
             )
             .expect("Failed to write packages/app/package.json");
-            // mkdir packages/app
-            fs::create_dir_all(pm.workspace_root.join("packages/app"))
-                .expect("Failed to create packages/app directory");
             let ignores = pm.get_fingerprint_ignores().expect("Should get fingerprint ignores");
             let matcher = GlobPatternSet::new(&ignores).expect("Should compile patterns");
             assert!(!matcher.is_match("packages"), "Should not ignore packages directory");
@@ -1656,7 +1655,8 @@ mod tests {
 
         #[test]
         fn test_pnpm_fingerprint_ignores() {
-            let pm = create_mock_package_manager(PackageManagerType::Pnpm, false);
+            let temp_dir: TempDir = create_temp_dir();
+            let pm = create_mock_package_manager(temp_dir, PackageManagerType::Pnpm, false);
             let ignores = pm.get_fingerprint_ignores().expect("Should get fingerprint ignores");
             let matcher = GlobPatternSet::new(&ignores).expect("Should compile patterns");
 
@@ -1741,7 +1741,8 @@ mod tests {
 
         #[test]
         fn test_yarn_fingerprint_ignores() {
-            let pm = create_mock_package_manager(PackageManagerType::Yarn, false);
+            let temp_dir: TempDir = create_temp_dir();
+            let pm = create_mock_package_manager(temp_dir, PackageManagerType::Yarn, false);
             let ignores = pm.get_fingerprint_ignores().expect("Should get fingerprint ignores");
             let matcher = GlobPatternSet::new(&ignores).expect("Should compile patterns");
 
@@ -1814,7 +1815,8 @@ mod tests {
 
         #[test]
         fn test_npm_fingerprint_ignores() {
-            let pm = create_mock_package_manager(PackageManagerType::Npm, false);
+            let temp_dir: TempDir = create_temp_dir();
+            let pm = create_mock_package_manager(temp_dir, PackageManagerType::Npm, false);
             let ignores = pm.get_fingerprint_ignores().expect("Should get fingerprint ignores");
             let matcher = GlobPatternSet::new(&ignores).expect("Should compile patterns");
 
