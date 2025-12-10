@@ -63,6 +63,7 @@
     "./binding": {
       "import": "./binding/index.js",
       "types": "./binding/index.d.ts"
-    }
+    },
+    "./package.json": "./package.json"
   }
 }
