@@ -19,19 +19,19 @@
     "rules"
   ],
   "scripts": {
-    "build": "rolldown -c rolldown.config.ts",
+    "build": "rolldown -c rolldown.config.ts && oxnode -C dev ./build.ts",
+    "copy-binding": "cp ./binding/*.node ./dist",
     "snap-test": "tool snap-test"
   },
   "dependencies": {
-    "@voidzero-dev/vite-plus": "workspace:*",
     "cross-spawn": "catalog:",
-    "oxlint": "catalog:",
-    "oxlint-tsgolint": "catalog:",
-    "vite": "workspace:*",
+    "picocolors": "catalog:",
     "validate-npm-package-name": "catalog:"
   },
   "devDependencies": {
     "@clack/prompts": "catalog:",
+    "@napi-rs/cli": "catalog:",
+    "@oxc-node/core": "catalog:",
     "@types/cross-spawn": "catalog:",
     "@types/semver": "catalog:",
     "@types/validate-npm-package-name": "catalog:",
@@ -41,12 +41,24 @@
     "glob": "catalog:",
     "minimatch": "catalog:",
     "mri": "catalog:",
-    "picocolors": "catalog:",
+    "oxfmt": "catalog:",
     "rolldown": "workspace:*",
     "semver": "catalog:",
     "yaml": "catalog:"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "napi": {
+    "binaryName": "vite-plus-global",
+    "packageName": "@vite-plus/global",
+    "targets": [
+      "aarch64-apple-darwin",
+      "x86_64-apple-darwin",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-pc-windows-msvc",
+      "x86_64-pc-windows-msvc"
+    ]
   }
 }

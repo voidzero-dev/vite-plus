@@ -1,10 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { runCommand as runCommandWithFspy } from '@voidzero-dev/vite-plus/binding';
 import spawn from 'cross-spawn';
 
-import type { WorkspaceInfo } from '../types/index.ts';
+import { runCommand as runCommandWithFspy } from '../../binding/index.js';
+import type { WorkspaceInfo } from '../types/index.js';
 
 export interface ExecutionResult {
   exitCode: number;

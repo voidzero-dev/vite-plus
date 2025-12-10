@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 
 export interface ConfigFiles {
@@ -73,28 +72,4 @@ export function detectConfigs(projectPath: string): ConfigFiles {
   }
 
   return configs;
-}
-
-const require = createRequire(import.meta.url);
-
-interface PackageMetadata {
-  name: string;
-  version: string;
-}
-
-export function detectPackageMetadata(
-  projectPath: string,
-  packageName: string,
-): PackageMetadata | void {
-  try {
-    const pkgFilePath = require.resolve(`${packageName}/package.json`, { paths: [projectPath] });
-    const pkg = JSON.parse(fs.readFileSync(pkgFilePath, 'utf8'));
-    return {
-      name: pkg.name,
-      version: pkg.version,
-    };
-  } catch {
-    // ignore MODULE_NOT_FOUND error
-    return;
-  }
 }

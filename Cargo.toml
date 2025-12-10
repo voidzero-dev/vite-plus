@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["bench", "crates/*", "packages/cli/binding"]
+members = ["bench", "crates/*", "packages/cli/binding", "packages/global/binding"]
 
 [workspace.package]
 authors = ["Vite+ Authors"]
@@ -61,7 +61,6 @@ semver = "1.0.26"
 serde = "1.0.219"
 serde_json = "1.0.140"
 serde_yml = "0.0.12"
-serial_test = "3.2.0"
 sha1 = "0.10.6"
 sha2 = "0.10.9"
 tar = "0.4.43"

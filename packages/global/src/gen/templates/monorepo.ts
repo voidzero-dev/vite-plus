@@ -5,14 +5,14 @@ import path from 'node:path';
 import * as prompts from '@clack/prompts';
 import spawn from 'cross-spawn';
 
-import { rewriteMonorepoProject } from '../../migration/migrator.ts';
-import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
-import { editJsonFile, templatesDir } from '../../utils/index.ts';
-import type { ExecutionResult } from '../command.ts';
-import { discoverTemplate } from '../discovery.ts';
-import { copyDir, setPackageName } from '../utils.ts';
-import { runRemoteTemplateCommand } from './remote.ts';
-import { type BuiltinTemplateInfo } from './types.ts';
+import { rewriteMonorepoProject } from '../../migration/migrator.js';
+import { PackageManager, type WorkspaceInfo } from '../../types/index.js';
+import { editJsonFile, templatesDir } from '../../utils/index.js';
+import type { ExecutionResult } from '../command.js';
+import { discoverTemplate } from '../discovery.js';
+import { copyDir, setPackageName } from '../utils.js';
+import { runRemoteTemplateCommand } from './remote.js';
+import { type BuiltinTemplateInfo } from './types.js';
 
 // Execute vite:monorepo - copy from templates/monorepo
 export async function executeMonorepoTemplate(

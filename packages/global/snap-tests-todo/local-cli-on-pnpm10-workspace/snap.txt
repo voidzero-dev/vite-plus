@@ -1,0 +1,31 @@
+> vp fmt && cat package.json # should fmt in workspace root and auto add vite-plus to devDependencies
+┌  Vite+ Local CLI "@voidzero-dev/vite-plus" not found
+│
+●  Running "vite add -D @voidzero-dev/vite-plus -w"...
+│
+●  @voidzero-dev/vite-plus added
+│
+└  Using Vite+ Local CLI
+
+
+{
+  "name": "local-cli-on-pnpm10-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "testnpm2": "*"
+  },
+  "devDependencies": {
+    "@voidzero-dev/vite-plus": "0.0.0-<hash>"
+  }
+}
+
+> cd packages/utils && vp fmt && cat package.json # should fmt in specific package and not add vite-plus to devDependencies
+
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "*"
+  }
+}

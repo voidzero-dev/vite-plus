@@ -9,8 +9,6 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
-crossterm = { workspace = true }
-fspy = { workspace = true }
 napi = { workspace = true }
 napi-derive = { workspace = true }
 petgraph = { workspace = true }
@@ -19,20 +17,16 @@ serde_json = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-vite_command = { workspace = true }
 vite_error = { workspace = true }
 vite_install = { workspace = true }
-vite_migration = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }
 vite_task = { workspace = true }
-vite_workspace = { workspace = true }
 
 [build-dependencies]
 napi-build = { workspace = true }
 
 [dev-dependencies]
-serial_test = { workspace = true }
 tempfile = { workspace = true }
 
 [lib]

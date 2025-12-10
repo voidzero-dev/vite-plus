@@ -3,8 +3,8 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp run test-task",
+    "vite run test-task",
     "tool replace-file-content main.js foo bar",
-    "vp run test-task"
+    "vite run test-task"
   ]
 }

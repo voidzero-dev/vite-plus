@@ -1,3 +1,3 @@
-export * from './builtin.ts';
-export * from './monorepo.ts';
-export * from './remote.ts';
+export * from './builtin.js';
+export * from './monorepo.js';
+export * from './remote.js';

@@ -3,11 +3,11 @@ import path from 'node:path';
 
 import * as prompts from '@clack/prompts';
 
-import type { WorkspaceInfo } from '../../types/index.ts';
-import { editJsonFile, templatesDir } from '../../utils/index.ts';
-import type { ExecutionResult } from '../command.ts';
-import { copyDir } from '../utils.ts';
-import type { BuiltinTemplateInfo } from './types.ts';
+import type { WorkspaceInfo } from '../../types/index.js';
+import { editJsonFile, templatesDir } from '../../utils/index.js';
+import type { ExecutionResult } from '../command.js';
+import { copyDir } from '../utils.js';
+import type { BuiltinTemplateInfo } from './types.js';
 
 // Execute generator scaffold template
 export async function executeGeneratorScaffold(

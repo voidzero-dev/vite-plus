@@ -24,6 +24,7 @@ runs:
         pnpm --filter=@voidzero-dev/vite-plus-core build
         pnpm --filter=@voidzero-dev/vite-plus-test build
         CC=clang pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }} --use-napi-cross
+        CC=clang pnpm --filter=@voidzero-dev/global build --target ${{ inputs.target }} --use-napi-cross
       env:
         TARGET_CC: clang
 
@@ -40,6 +41,7 @@ runs:
         pnpm --filter=@voidzero-dev/vite-plus-core build
         pnpm --filter=@voidzero-dev/vite-plus-test build
         TARGET_CFLAGS="-D_BSD_SOURCE" pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }} --use-napi-cross
+        TARGET_CFLAGS="-D_BSD_SOURCE" pnpm --filter=@voidzero-dev/global build --target ${{ inputs.target }} --use-napi-cross
       env:
         TARGET_CC: clang
 
@@ -56,3 +58,4 @@ runs:
         pnpm --filter=@voidzero-dev/vite-plus-core build
         pnpm --filter=@voidzero-dev/vite-plus-test build
         pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }}
+        pnpm --filter=@voidzero-dev/global build --target ${{ inputs.target }}

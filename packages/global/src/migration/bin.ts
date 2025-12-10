@@ -5,7 +5,7 @@ import mri from 'mri';
 import colors from 'picocolors';
 import semver from 'semver';
 
-import { PackageManager, type WorkspaceInfo } from '../types/index.ts';
+import { PackageManager, type WorkspaceInfo } from '../types/index.js';
 import {
   defaultInteractive,
   detectWorkspace,
@@ -14,13 +14,13 @@ import {
   runViteInstall,
   upgradeYarn,
   cancelAndExit,
-} from '../utils/index.ts';
+} from '../utils/index.js';
 import {
   checkVitestVersion,
   checkViteVersion,
   rewriteMonorepo,
   rewriteStandaloneProject,
-} from './migrator.ts';
+} from './migrator.js';
 
 const { cyan, green, gray } = colors;
 

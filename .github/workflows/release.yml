@@ -62,7 +62,9 @@ jobs:
         run: pnpm --filter rolldown build-binding:release --target x86_64-unknown-linux-gnu
 
       - name: Set binding version
-        run: pnpm exec tool replace-file-content packages/cli/binding/Cargo.toml 'version = "0.0.0"' 'version = "0.0.0-${{ github.sha }}"'
+        run: |
+          pnpm exec tool replace-file-content packages/cli/binding/Cargo.toml 'version = "0.0.0"' 'version = "0.0.0-${{ github.sha }}"'
+          pnpm exec tool replace-file-content packages/global/binding/Cargo.toml 'version = "0.0.0"' 'version = "0.0.0-${{ github.sha }}"'
 
       - name: Configure Git for access to vite-task
         run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
@@ -73,15 +75,18 @@ jobs:
           target: ${{ matrix.settings.target }}
           build-rolldown-native: 'true'
 
-      - name: Build global cli
-        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
-        run: pnpm --filter @voidzero-dev/global build
-
-      - name: Upload Vite+ artifact
+      - name: Upload Vite+ cli binding artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: vite-plus-native-${{ matrix.settings.target }}
           path: ./packages/cli/binding/*.node
+          if-no-files-found: error
+
+      - name: Upload Vite+ global binding artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vite-plus-global-native-${{ matrix.settings.target }}
+          path: ./packages/global/binding/*.node
           if-no-files-found: error
 
       - name: Upload rolldown artifact
@@ -90,6 +95,7 @@ jobs:
           name: rolldown-native-${{ matrix.settings.target }}
           path: ./rolldown/packages/rolldown/src/*.node
           if-no-files-found: error
+
       - name: Remove .node files before upload dist
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         run: |
@@ -134,34 +140,46 @@ jobs:
       - name: Configure Git for access to vite-task
         run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - name: Download cli dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: packages/cli/dist
           pattern: cli
           merge-multiple: true
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - name: Download cli binding
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: packages/cli/binding
           pattern: vite-plus-native-*
           merge-multiple: true
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - name: Download core dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: packages/core/dist
           pattern: core
           merge-multiple: true
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - name: Download rolldown native
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: packages/core/dist/rolldown/shared
           pattern: rolldown-native-*
           merge-multiple: true
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - name: Download global dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: packages/global/dist
           pattern: global
+          merge-multiple: true
+
+      - name: Download global binding to dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: packages/global/dist
+          pattern: vite-plus-global-native-*
           merge-multiple: true
 
       - name: Set npm packages version

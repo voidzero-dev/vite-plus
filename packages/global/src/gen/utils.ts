@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import validateNpmPackageName from 'validate-npm-package-name';
 
-import { editJsonFile } from '../utils/index.ts';
+import { editJsonFile } from '../utils/index.js';
 
 // Helper functions for file operations
 export function copy(src: string, dest: string) {

@@ -2,16 +2,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@clack/prompts';
+import semver from 'semver';
+import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
+
 import {
   mergeJsonConfig,
   rewriteScripts,
   rewriteImport,
   type DownloadPackageManagerResult,
-} from '@voidzero-dev/vite-plus/binding';
-import semver from 'semver';
-import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
-
-import { PackageManager, type WorkspaceInfo } from '../types/index.ts';
+} from '../../binding/index.js';
+import { PackageManager, type WorkspaceInfo } from '../types/index.js';
 import {
   scalarString,
   editJsonFile,
@@ -20,11 +20,12 @@ import {
   type YamlDocument,
   isJsonFile,
   displayRelative,
-} from '../utils/index.ts';
-import { detectConfigs, detectPackageMetadata } from './detector.ts';
+  detectPackageMetadata,
+  VITE_PLUS_NAME,
+  VITE_PLUS_VERSION,
+} from '../utils/index.js';
+import { detectConfigs } from './detector.js';
 
-const VITE_PLUS_NAME = '@voidzero-dev/vite-plus';
-const VITE_PLUS_VERSION = 'latest';
 const OVERRIDE_PACKAGES = {
   vite: 'npm:@voidzero-dev/vite-plus-core@latest',
   vitest: 'npm:@voidzero-dev/vite-plus-test@latest',

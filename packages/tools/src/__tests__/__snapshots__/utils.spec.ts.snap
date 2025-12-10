@@ -102,6 +102,11 @@ exports[`replaceUnstableOutput() > replace unstable tmpdir with realpath 1`] = `
 <cwd>/../other/bar.txt"
 `;
 
+exports[`replaceUnstableOutput() > replace unstable vite-plus hash version 1`] = `
+""@voidzero-dev/vite-plus": "^0.0.0-<hash>"
+"@voidzero-dev/vite-plus-core": "^0.0.0-<hash>""
+`;
+
 exports[`replaceUnstableOutput() > replace yarn YN0000: └ Completed with duration to empty string 1`] = `
 "➤ YN0000: └ Completed
 ➤ YN0000: └ Completed

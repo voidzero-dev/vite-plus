@@ -1,0 +1,11 @@
+{
+  "ignoredPlatforms": [],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp fmt && cat package.json # should fmt in workspace root and auto add vite-plus to devDependencies",
+    "cat package.json # check vite-plus is added to devDependencies",
+    "cd packages/utils && vp fmt && cat package.json # should fmt in specific package and not add vite-plus to devDependencies"
+  ]
+}

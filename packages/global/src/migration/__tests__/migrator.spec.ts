@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { PackageManager } from '../../types/index.ts';
-import { rewritePackageJson } from '../migrator.ts';
+import { PackageManager } from '../../types/index.js';
+import { rewritePackageJson } from '../migrator.js';
 
 describe('rewritePackageJson', () => {
   it('should rewrite package.json scripts', async () => {

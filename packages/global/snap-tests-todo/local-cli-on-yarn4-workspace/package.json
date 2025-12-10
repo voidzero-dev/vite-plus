@@ -1,0 +1,11 @@
+{
+  "name": "local-cli-on-yarn4-workspace",
+  "version": "1.0.0",
+  "packageManager": "yarn@4.10.3",
+  "workspaces": [
+    "packages/*"
+  ],
+  "dependencies": {
+    "testnpm2": "*"
+  }
+}

@@ -1,21 +1,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { detectWorkspace as detectWorkspaceBinding } from '@voidzero-dev/vite-plus/binding';
 import { globSync } from 'glob';
 import { minimatch } from 'minimatch';
 import { Scalar, YAMLSeq } from 'yaml';
 
+import { detectWorkspace as detectWorkspaceBinding } from '../../binding/index.js';
 import {
   DependencyType,
   PackageManager,
   type WorkspaceInfo,
   type WorkspaceInfoOptional,
   type WorkspacePackage,
-} from '../types/index.ts';
-import { editJsonFile, readJsonFile } from './json.ts';
-import { getScopeFromPackageName } from './package.ts';
-import { editYamlFile, readYamlFile } from './yaml.ts';
+} from '../types/index.js';
+import { editJsonFile, readJsonFile } from './json.js';
+import { getScopeFromPackageName } from './package.js';
+import { editYamlFile, readYamlFile } from './yaml.js';
 
 export function findPackageJsonFilesFromPatterns(patterns: string[], cwd: string): string[] {
   if (patterns.length === 0) {

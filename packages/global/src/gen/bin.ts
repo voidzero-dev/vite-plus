@@ -9,8 +9,8 @@ import {
   rewriteMonorepo,
   rewriteMonorepoProject,
   rewriteStandaloneProject,
-} from '../migration/migrator.ts';
-import { DependencyType, type WorkspaceInfo } from '../types/index.ts';
+} from '../migration/migrator.js';
+import { DependencyType, type WorkspaceInfo } from '../types/index.js';
 import {
   defaultInteractive,
   detectWorkspace,
@@ -20,17 +20,17 @@ import {
   updateWorkspaceConfig,
   runViteInstall,
   templatesDir,
-} from '../utils/index.ts';
-import type { ExecutionResult } from './command.ts';
-import { discoverTemplate } from './discovery.ts';
-import { cancelAndExit, checkProjectDirExists, promptPackageNameAndTargetDir } from './prompts.ts';
+} from '../utils/index.js';
+import type { ExecutionResult } from './command.js';
+import { discoverTemplate } from './discovery.js';
+import { cancelAndExit, checkProjectDirExists, promptPackageNameAndTargetDir } from './prompts.js';
 import {
   executeBuiltinTemplate,
   executeMonorepoTemplate,
   executeRemoteTemplate,
-} from './templates/index.ts';
-import { BuiltinTemplate, TemplateType } from './templates/types.ts';
-import { formatTargetDir } from './utils.ts';
+} from './templates/index.js';
+import { BuiltinTemplate, TemplateType } from './templates/types.js';
+import { formatTargetDir } from './utils.js';
 
 const { blue, cyan, green, gray, blueBright } = colors;
 

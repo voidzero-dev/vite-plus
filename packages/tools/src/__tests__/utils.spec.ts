@@ -182,6 +182,14 @@ line 3
     `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
+
+  test('replace unstable vite-plus hash version', () => {
+    const output = `
+"@voidzero-dev/vite-plus": "^0.0.0-aa9f90fe23216b8ad85b0ba4fc1bccb0614afaf0"
+"@voidzero-dev/vite-plus-core": "^0.0.0-43b91ac4e4bc63ba78dee8a813806bdbaa7a4378"
+    `;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
 });
 
 describe('isPassThroughEnv()', () => {

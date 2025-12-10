@@ -5,7 +5,7 @@ import * as prompts from '@clack/prompts';
 import colors from 'picocolors';
 import validateNpmPackageName from 'validate-npm-package-name';
 
-import { getProjectDirFromPackageName } from './utils.ts';
+import { getProjectDirFromPackageName } from './utils.js';
 
 const { cyan } = colors;
 

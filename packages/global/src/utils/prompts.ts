@@ -1,9 +1,9 @@
 import * as prompts from '@clack/prompts';
-import { downloadPackageManager as downloadPackageManagerBinding } from '@voidzero-dev/vite-plus/binding';
 import colors from 'picocolors';
 
-import { PackageManager } from '../types/index.ts';
-import { runCommandSilently } from './command.ts';
+import { downloadPackageManager as downloadPackageManagerBinding } from '../../binding/index.js';
+import { PackageManager } from '../types/index.js';
+import { runCommandSilently } from './command.js';
 
 const { cyan } = colors;
 
@@ -98,7 +98,7 @@ export function defaultInteractive() {
   return !process.env.CI && process.stdin.isTTY;
 }
 
-function getSpinner(interactive?: boolean) {
+export function getSpinner(interactive?: boolean) {
   if (interactive) {
     return prompts.spinner();
   }

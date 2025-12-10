@@ -1,14 +1,14 @@
 import * as prompts from '@clack/prompts';
 import colors from 'picocolors';
 
-import type { WorkspaceInfo } from '../../types/index.ts';
+import type { WorkspaceInfo } from '../../types/index.js';
 import {
   type ExecutionResult,
   formatDlxCommand,
   runCommand,
   runCommandAndDetectProjectDir,
-} from '../command.ts';
-import type { TemplateInfo } from './types.ts';
+} from '../command.js';
+import type { TemplateInfo } from './types.js';
 
 const { gray, yellow } = colors;
 

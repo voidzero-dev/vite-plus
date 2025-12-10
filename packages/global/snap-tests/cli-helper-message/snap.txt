@@ -1,16 +1,9 @@
 > vp -h # show help message
-Usage: vp [OPTIONS] [TASK] [-- <TASK_ARGS>...] <COMMAND>
+vite+/<semver>
+
+Usage: vp <COMMAND>
 
 Commands:
-  run       
-  lint      
-  fmt       
-  build     
-  test      
-  lib       Lib command, build a library
-  dev       
-  doc       Doc command, build documentation
-  cache     Manage the task cache
   install   Install command. It will be passed to the package manager's install command currently
   add       Add packages to dependencies
   remove    Remove packages from dependencies
@@ -21,17 +14,21 @@ Commands:
   link      Link packages for local development
   unlink    Unlink packages
   pm        Package manager utilities
-  help      Print this message or the help of the given subcommand(s)
-
-Arguments:
-  [TASK]          
-  [TASK_ARGS]...  Optional arguments for the tasks, captured after '--'
+  gen       Generate a new project
+  migrate   Migrate an existing project to vite+<repeat>
+  cache     Manage the task cache
+  dev       Run development server
+  build     Build application
+  test      Run test
+  lint      Lint code
+  fmt       Format code
+  lib       Build library
+  doc       Build documentation
+  run       Run tasks
 
 Options:
-  -d, --debug     Display cache for debugging
-      --no-debug  
-  -h, --help      Print help
-  -V, --version   Print version
+  -h, --help     Print help
+  -V, --version  Print version
 
 > vp pm -h # show pm help message
 Package manager utilities
@@ -47,7 +44,6 @@ Commands:
   owner    Manage package owners
   cache    Manage package cache
   config   Manage package manager configuration
-  help     Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help

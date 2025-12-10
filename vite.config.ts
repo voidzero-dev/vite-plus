@@ -13,7 +13,7 @@ export default (<UserConfig>{
       './rolldown/**',
       './rolldown-vite/**',
       // FIXME: Error: failed to prepare the command for injection: Invalid argument (os error 22)
-      'packages/cli/binding/__tests__/',
+      'packages/*/binding/__tests__/',
     ],
   },
   fmt: {

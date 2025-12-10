@@ -41,3 +41,19 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
   });
   return await promise;
 }
+
+export async function runCommand(options: RunCommandOptions): Promise<number> {
+  const child = spawn(options.command, options.args, {
+    stdio: 'inherit',
+    cwd: options.cwd,
+    env: options.envs,
+  });
+  return new Promise<number>((resolve, reject) => {
+    child.on('close', (code) => {
+      resolve(code ?? 0);
+    });
+    child.on('error', (err) => {
+      reject(err);
+    });
+  });
+}

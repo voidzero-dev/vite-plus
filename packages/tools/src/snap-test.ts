@@ -166,6 +166,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
 
   const newSnap: string[] = [];
 
+  const startTime = Date.now();
   const cwd = npath.toPortablePath(caseTmpDir);
   for (const command of steps.commands) {
     const cmd = typeof command === 'string' ? { command } : command;
@@ -220,5 +221,5 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
   const newSnapContent = newSnap.join('\n');
 
   await fsPromises.writeFile(`${casesDir}/${name}/snap.txt`, newSnapContent);
-  console.log('%s finished', name);
+  console.log('%s finished in %dms', name, Date.now() - startTime);
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatTargetDir, getProjectDirFromPackageName } from '../utils.ts';
+import { formatTargetDir, getProjectDirFromPackageName } from '../utils.js';
 
 describe('getProjectDirFromPackageName', () => {
   it('should get project dir from package name', () => {

@@ -9,8 +9,8 @@
   "type": "module",
   "scripts": {
     "bootstrap-cli": "pnpm --filter=@voidzero-dev/* build && pnpm install-global-cli",
-    "bootstrap-cli:ci": "pnpm --filter=@voidzero-dev/global build && pnpm install-global-cli",
-    "install-global-cli": "npm install -g ./packages/global",
+    "bootstrap-cli:ci": "pnpm install-global-cli",
+    "install-global-cli": "pnpm --filter=@voidzero-dev/global copy-binding && npm install -g ./packages/global",
     "typecheck": "tsc -b tsconfig.json",
     "lint": "vite lint --type-aware --threads 4",
     "test": "vite test run && pnpm -r snap-test",

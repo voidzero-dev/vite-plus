@@ -15,25 +15,17 @@
 
 mod cli;
 mod commands;
-mod migration;
-mod package_manager;
-mod utils;
 
 use std::{collections::HashMap, sync::Arc};
 
 use clap::Parser as _;
 use napi::{anyhow, bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
-pub use utils::run_command;
 use vite_error::Error;
 use vite_path::current_dir;
 use vite_task::ResolveCommandResult;
 
 use crate::cli::{Args, CliOptions as ViteTaskCliOptions, Commands};
-pub use crate::{
-    migration::{merge_json_config, rewrite_import, rewrite_scripts},
-    package_manager::{detect_workspace, download_package_manager},
-};
 
 /// Module initialization - sets up tracing for debugging
 #[napi_derive::module_init]

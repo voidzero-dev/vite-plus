@@ -8,6 +8,5 @@
     "allowImportingTsExtensions": true
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist"],
-  "references": [{ "path": "../cli" }]
+  "exclude": ["node_modules", "dist/**/*", "**/__tests__/**"]
 }

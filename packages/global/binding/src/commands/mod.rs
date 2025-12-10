@@ -1,0 +1,10 @@
+pub(crate) mod add;
+pub(crate) mod dedupe;
+pub(crate) mod install;
+pub(crate) mod link;
+pub(crate) mod outdated;
+pub(crate) mod pm;
+pub(crate) mod remove;
+pub(crate) mod unlink;
+pub(crate) mod update;
+pub(crate) mod why;

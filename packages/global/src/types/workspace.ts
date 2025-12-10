@@ -1,6 +1,5 @@
-import type { DownloadPackageManagerResult } from '@voidzero-dev/vite-plus/binding';
-
-import type { PackageManager } from './package.ts';
+import type { DownloadPackageManagerResult } from '../../binding/index.js';
+import type { PackageManager } from './package.js';
 
 export interface WorkspacePackage {
   name: string;

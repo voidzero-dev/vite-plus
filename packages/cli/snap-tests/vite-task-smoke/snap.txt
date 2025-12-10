@@ -1,4 +1,4 @@
-> vp run test-task
+> vite run test-task
 $ echo hello
 hello
 
@@ -23,7 +23,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > tool replace-file-content main.js foo bar
-> vp run test-task
+> vite run test-task
 $ echo hello (✓ cache hit, replaying)
 hello
 

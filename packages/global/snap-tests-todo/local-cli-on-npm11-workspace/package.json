@@ -1,0 +1,11 @@
+{
+  "name": "local-cli-on-npm11-workspace",
+  "version": "1.0.0",
+  "packageManager": "npm@11.7.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "dependencies": {
+    "testnpm2": "*"
+  }
+}

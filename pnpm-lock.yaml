@@ -463,28 +463,25 @@ importers:
 
   packages/global:
     dependencies:
-      '@voidzero-dev/vite-plus':
-        specifier: workspace:*
-        version: link:../cli
       cross-spawn:
         specifier: 'catalog:'
         version: 7.0.6
-      oxlint:
+      picocolors:
         specifier: 'catalog:'
-        version: 1.31.0(oxlint-tsgolint@0.8.3)
-      oxlint-tsgolint:
-        specifier: 'catalog:'
-        version: 0.8.3
+        version: 1.1.1
       validate-npm-package-name:
         specifier: 'catalog:'
         version: 7.0.0
-      vite:
-        specifier: workspace:@voidzero-dev/vite-plus-core@*
-        version: link:../core
     devDependencies:
       '@clack/prompts':
         specifier: 'catalog:'
         version: 0.11.0
+      '@napi-rs/cli':
+        specifier: 'catalog:'
+        version: 3.4.1(@emnapi/runtime@1.7.1)(@types/node@24.10.1)(node-addon-api@7.1.1)
+      '@oxc-node/core':
+        specifier: 'catalog:'
+        version: 0.0.34
       '@types/cross-spawn':
         specifier: 'catalog:'
         version: 6.0.6
@@ -512,9 +509,9 @@ importers:
       mri:
         specifier: 'catalog:'
         version: 1.2.0
-      picocolors:
+      oxfmt:
         specifier: 'catalog:'
-        version: 1.1.1
+        version: 0.16.0
       rolldown:
         specifier: workspace:rolldown@*
         version: link:../../rolldown/packages/rolldown
