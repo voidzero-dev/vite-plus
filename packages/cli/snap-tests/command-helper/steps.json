@@ -4,6 +4,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
+    "vite -h # help message",
     "vite lib -h # lib help message",
     "vite fmt -h # fmt help message",
     "vite lint -h # lint help message",

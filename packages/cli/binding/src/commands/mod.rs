@@ -1,16 +1,7 @@
-pub(crate) mod add;
-pub(crate) mod dedupe;
 pub(crate) mod doc;
 pub(crate) mod fmt;
 pub(crate) mod install;
 pub(crate) mod lib_cmd;
-pub(crate) mod link;
 pub(crate) mod lint;
-pub(crate) mod outdated;
-pub(crate) mod pm;
-pub(crate) mod remove;
 pub(crate) mod test;
-pub(crate) mod unlink;
-pub(crate) mod update;
 pub(crate) mod vite;
-pub(crate) mod why;
