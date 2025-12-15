@@ -39,7 +39,6 @@ devDependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
-
 > vp why testnpm2 # should show why package is installed
 Legend: production dependency, optional only, dev only
 

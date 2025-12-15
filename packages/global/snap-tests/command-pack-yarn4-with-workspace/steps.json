@@ -4,7 +4,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp install --mode=update-lockfile # should install packages first",
+    "vp install -- --mode=update-lockfile # should install packages first",
     "vp pm pack # should pack current workspace root",
     "vp pm pack --recursive # should pack all packages in workspace (uses workspaces foreach --all pack)",
     "vp pm pack --filter app # should pack specific package (uses workspaces foreach --all --include app pack)",

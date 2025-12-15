@@ -2,7 +2,6 @@
 
 added 4 packages in <variable>ms
 
-
 > vp pm list --json # should list current workspace root dependencies
 {
   "version": "1.0.0",

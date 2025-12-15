@@ -3,12 +3,10 @@ name = "vite-plus-benches"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
-vite_path = { workspace = true }
-vite_task = { workspace = true }
-
 [dev-dependencies]
 criterion = { workspace = true }
+vite_path = { workspace = true }
+vite_task = { workspace = true }
 
 [[bench]]
 name = "workspace_load"

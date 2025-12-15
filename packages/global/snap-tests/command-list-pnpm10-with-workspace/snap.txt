@@ -6,7 +6,6 @@ Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <
 
 Done in <variable>ms using pnpm v<semver>
 
-
 > vp pm list # should list current workspace root dependencies
 > vp pm list --recursive # should list all packages in workspace recursively
 Legend: production dependency, optional only, dev only

@@ -8,7 +8,6 @@ info No lockfile found.
 success Saved lockfile.
 Done in <variable>ms.
 
-
 > vp pm list # should list installed packages
 yarn list v<semver>
 ├─ test-vite-plus-package@<semver>

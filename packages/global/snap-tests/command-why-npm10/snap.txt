@@ -2,7 +2,6 @@
 
 added 3 packages in <variable>ms
 
-
 > vp why testnpm2 # should show why package is installed (uses npm explain)
 testnpm2@<semver>
 node_modules/testnpm2

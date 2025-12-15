@@ -2,7 +2,6 @@
 
 added 6 packages in <variable>ms
 
-
 > vp why testnpm2 --filter app # should check why in specific workspace using --workspace
 testnpm2@<semver>
 node_modules/testnpm2

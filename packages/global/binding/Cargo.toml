@@ -9,7 +9,6 @@ clap = { workspace = true, features = ["derive", "help"] }
 fspy = { workspace = true }
 napi = { workspace = true }
 napi-derive = { workspace = true }
-petgraph = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -18,7 +17,6 @@ vite_error = { workspace = true }
 vite_install = { workspace = true }
 vite_migration = { workspace = true }
 vite_path = { workspace = true }
-vite_task = { workspace = true }
 vite_workspace = { workspace = true }
 
 [build-dependencies]

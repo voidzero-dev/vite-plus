@@ -9,7 +9,6 @@ dependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
-
 > vp why testnpm2 -w # should check why in workspace root
 Legend: production dependency, optional only, dev only
 

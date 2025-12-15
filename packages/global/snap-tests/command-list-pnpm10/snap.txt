@@ -12,7 +12,6 @@ devDependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
-
 > vp pm list --help # should show help
 List installed packages
 

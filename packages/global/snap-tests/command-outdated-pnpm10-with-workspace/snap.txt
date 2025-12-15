@@ -9,7 +9,6 @@ dependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
-
 [1]> vp outdated testnpm2 -w # should outdated in workspace root
 ┌──────────┬─────────┬────────┐
 │ Package  │ Current │ Latest │

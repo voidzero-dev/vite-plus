@@ -2,7 +2,7 @@ pub mod add;
 pub mod cache;
 pub mod config;
 pub mod dedupe;
-mod install;
+pub mod install;
 pub mod link;
 pub mod list;
 pub mod outdated;

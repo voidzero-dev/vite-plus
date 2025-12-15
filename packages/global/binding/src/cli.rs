@@ -2,9 +2,10 @@ use std::process::ExitStatus;
 
 use clap::{Parser, Subcommand};
 use vite_error::Error;
-use vite_install::commands::{add::SaveDependencyType, outdated::Format};
+use vite_install::commands::{
+    add::SaveDependencyType, install::InstallCommandOptions, outdated::Format,
+};
 use vite_path::AbsolutePathBuf;
-use vite_task::{ExecutionSummary, TaskCache, Workspace};
 
 use crate::commands::{
     add::AddCommand, dedupe::DedupeCommand, install::InstallCommand, link::LinkCommand,
@@ -32,13 +33,104 @@ pub struct Args {
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     // package manager commands
-    /// Install command.
-    /// It will be passed to the package manager's install command currently.
-    #[command(disable_help_flag = true, alias = "i")]
+    /// Install all dependencies, or add packages if package names are provided
+    #[command(alias = "i")]
     Install {
-        /// Arguments to pass to vite install
-        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
+        /// Do not install devDependencies
+        #[arg(short = 'P', long)]
+        prod: bool,
+
+        /// Only install devDependencies (install) / Save to devDependencies (add)
+        #[arg(short = 'D', long)]
+        dev: bool,
+
+        /// Do not install optionalDependencies
+        #[arg(long)]
+        no_optional: bool,
+
+        /// Fail if lockfile needs to be updated (CI mode)
+        #[arg(long, overrides_with = "no_frozen_lockfile")]
+        frozen_lockfile: bool,
+
+        /// Allow lockfile updates (opposite of --frozen-lockfile)
+        #[arg(long, overrides_with = "frozen_lockfile")]
+        no_frozen_lockfile: bool,
+
+        /// Only update lockfile, don't install
+        #[arg(long)]
+        lockfile_only: bool,
+
+        /// Use cached packages when available
+        #[arg(long)]
+        prefer_offline: bool,
+
+        /// Only use packages already in cache
+        #[arg(long)]
+        offline: bool,
+
+        /// Force reinstall all dependencies
+        #[arg(short = 'f', long)]
+        force: bool,
+
+        /// Do not run lifecycle scripts
+        #[arg(long)]
+        ignore_scripts: bool,
+
+        /// Don't read or generate lockfile
+        #[arg(long)]
+        no_lockfile: bool,
+
+        /// Fix broken lockfile entries (pnpm and yarn@2+ only)
+        #[arg(long)]
+        fix_lockfile: bool,
+
+        /// Create flat node_modules (pnpm only)
+        #[arg(long)]
+        shamefully_hoist: bool,
+
+        /// Re-run resolution for peer dependency analysis (pnpm only)
+        #[arg(long)]
+        resolution_only: bool,
+
+        /// Suppress output (silent mode)
+        #[arg(long)]
+        silent: bool,
+
+        /// Filter packages in monorepo (can be used multiple times)
+        #[arg(long, value_name = "PATTERN")]
+        filter: Option<Vec<String>>,
+
+        /// Install in workspace root only
+        #[arg(short = 'w', long)]
+        workspace_root: bool,
+
+        /// Save exact version (only when adding packages)
+        #[arg(short = 'E', long)]
+        save_exact: bool,
+
+        /// Save to peerDependencies (only when adding packages)
+        #[arg(long)]
+        save_peer: bool,
+
+        /// Save to optionalDependencies (only when adding packages)
+        #[arg(short = 'O', long)]
+        save_optional: bool,
+
+        /// Save the new dependency to the default catalog (only when adding packages)
+        #[arg(long)]
+        save_catalog: bool,
+
+        /// Install globally (only when adding packages)
+        #[arg(short = 'g', long)]
+        global: bool,
+
+        /// Packages to add (if provided, acts as `vite add`)
+        #[arg(required = false)]
+        packages: Option<Vec<String>>,
+
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
     },
     /// Add packages to dependencies
     Add {
@@ -356,11 +448,6 @@ pub enum Commands {
         #[arg(required = true)]
         directory: String,
     },
-    /// Manage the task cache
-    Cache {
-        #[clap(subcommand)]
-        subcmd: CacheSubcommand,
-    },
 
     // below commands only used to show help message, not actually executed
     /// Run development server
@@ -379,6 +466,8 @@ pub enum Commands {
     Doc,
     /// Run tasks
     Run,
+    /// Manage the task cache
+    Cache,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -695,117 +784,85 @@ pub enum OwnerCommands {
     },
 }
 
-impl Commands {
-    /// Check if this command is a package manager command that should skip auto-install
-    pub fn is_package_manager_command(&self) -> bool {
-        matches!(
-            self,
-            Commands::Install { .. }
-                | Commands::Add { .. }
-                | Commands::Remove { .. }
-                | Commands::Dedupe { .. }
-                | Commands::Outdated { .. }
-                | Commands::Why { .. }
-                | Commands::Link { .. }
-                | Commands::Unlink { .. }
-                | Commands::Pm(..)
-        )
-    }
-}
-
-#[derive(Subcommand, Debug)]
-pub enum CacheSubcommand {
-    /// Clean up all the cache
-    Clean,
-    /// View the cache entries in json for debugging purpose
-    View,
-}
-
-/// Automatically run install command
-async fn auto_install(workspace_root: &AbsolutePathBuf) -> Result<(), Error> {
-    // Skip if we're already running inside a vite_task execution to prevent nested installs
-    if std::env::var("VITE_TASK_EXECUTION_ENV").is_ok_and(|v| v == "1") {
-        tracing::debug!("Skipping auto-install: already running inside vite_task execution");
-        return Ok(());
-    }
-
-    tracing::debug!("Running install automatically...");
-    let _exit_status = InstallCommand::builder(workspace_root.clone())
-        .ignore_replay()
-        .build()
-        .execute(&vec![])
-        .await?;
-    // For auto-install, we don't propagate exit failures to avoid breaking the main command
-    Ok(())
-}
-
 #[tracing::instrument]
 pub async fn main(cwd: AbsolutePathBuf, mut args: Args) -> Result<std::process::ExitStatus, Error> {
-    // Auto-install dependencies if needed, but skip for package manager commands, or if `VITE_DISABLE_AUTO_INSTALL=1` is set.
-    if !args.commands.is_package_manager_command()
-        && std::env::var_os("VITE_DISABLE_AUTO_INSTALL") != Some("1".into())
-    {
-        auto_install(&cwd).await?;
-    }
-
-    let summary: ExecutionSummary = match &mut args.commands {
-        Commands::Cache { subcmd } => {
-            let cache_path = Workspace::get_cache_path(&cwd)?;
-            match subcmd {
-                CacheSubcommand::Clean => {
-                    std::fs::remove_dir_all(&cache_path)?;
-                }
-                CacheSubcommand::View => {
-                    let cache = TaskCache::load_from_path(cache_path)?;
-                    cache.list(std::io::stdout()).await?;
-                }
-            }
-            return Ok(ExitStatus::default());
-        }
-
+    match &mut args.commands {
         // package manager commands
-        Commands::Install { args } => {
-            // Check if args contain packages - if yes, redirect to Add command
+        Commands::Install {
+            prod,
+            dev,
+            no_optional,
+            frozen_lockfile,
+            no_frozen_lockfile,
+            lockfile_only,
+            prefer_offline,
+            offline,
+            force,
+            ignore_scripts,
+            no_lockfile,
+            fix_lockfile,
+            shamefully_hoist,
+            resolution_only,
+            silent,
+            filter,
+            workspace_root,
+            save_exact,
+            save_peer,
+            save_optional,
+            save_catalog,
+            global,
+            packages,
+            pass_through_args,
+        } => {
+            // If packages are provided, redirect to Add command
             // This allows `vite install <packages>` to work as an alias for `vite add <packages>`
-            if let Some(Commands::Add {
-                filter,
-                workspace_root,
-                workspace,
-                packages,
-                save_prod,
-                save_dev,
-                save_peer,
-                save_optional,
-                save_exact,
-                save_catalog,
-                save_catalog_name,
-                global,
-                allow_build,
-                pass_through_args,
-            }) = parse_install_as_add(args)
-            {
-                let exit_status = execute_add_command(
-                    cwd,
-                    &packages,
-                    save_prod,
-                    save_dev,
-                    save_peer,
-                    save_optional,
-                    save_exact,
-                    save_catalog,
-                    save_catalog_name.as_deref(),
-                    filter.as_deref(),
-                    workspace_root,
-                    workspace,
-                    global,
-                    allow_build.as_deref(),
-                    pass_through_args.as_deref(),
-                )
-                .await?;
-                return Ok(exit_status);
-            } else {
-                InstallCommand::builder(cwd).build().execute(args).await?
+            if let Some(pkgs) = packages {
+                if !pkgs.is_empty() {
+                    let exit_status = execute_add_command(
+                        cwd,
+                        pkgs,
+                        *prod,             // save_prod (maps from --prod/-P)
+                        *dev,              // save_dev (maps from --dev/-D)
+                        *save_peer,        // save_peer
+                        *save_optional,    // save_optional
+                        *save_exact,       // save_exact
+                        *save_catalog,     // save_catalog
+                        None,              // save_catalog_name
+                        filter.as_deref(), // filter
+                        *workspace_root,   // workspace_root
+                        false,             // workspace (pnpm-specific, not in install)
+                        *global,           // global
+                        None,              // allow_build
+                        pass_through_args.as_deref(),
+                    )
+                    .await?;
+                    return Ok(exit_status);
+                }
             }
+
+            // No packages provided, run regular install
+            let options = InstallCommandOptions {
+                prod: *prod,
+                dev: *dev,
+                no_optional: *no_optional,
+                frozen_lockfile: *frozen_lockfile,
+                no_frozen_lockfile: *no_frozen_lockfile,
+                lockfile_only: *lockfile_only,
+                prefer_offline: *prefer_offline,
+                offline: *offline,
+                force: *force,
+                ignore_scripts: *ignore_scripts,
+                no_lockfile: *no_lockfile,
+                fix_lockfile: *fix_lockfile,
+                shamefully_hoist: *shamefully_hoist,
+                resolution_only: *resolution_only,
+                silent: *silent,
+                filters: filter.as_deref(),
+                workspace_root: *workspace_root,
+                pass_through_args: pass_through_args.as_deref(),
+            };
+            let exit_status = InstallCommand::new(cwd).execute(&options).await?;
+            return Ok(exit_status);
         }
         Commands::Add {
             filter,
@@ -995,29 +1052,6 @@ pub async fn main(cwd: AbsolutePathBuf, mut args: Args) -> Result<std::process::
         }
         _ => unreachable!(),
     };
-
-    // Return the first non-zero exit status, or zero if all succeeded
-    Ok(summary
-        .execution_statuses
-        .iter()
-        .find_map(|status| {
-            #[cfg(unix)]
-            use std::os::unix::process::ExitStatusExt;
-            #[cfg(windows)]
-            use std::os::windows::process::ExitStatusExt;
-
-            // Err(ExecutionFailure) can be skipped because currently the only variant of `ExecutionFailure` is
-            // `SkippedDueToFailedDependency`, which means there must be at least one task with non-zero exit status.
-            if let Ok(exit_status) = status.execution_result
-                && let exit_status = ExitStatus::from_raw(exit_status as _)
-                && !exit_status.success()
-            {
-                Some(exit_status)
-            } else {
-                None
-            }
-        })
-        .unwrap_or_default())
 }
 
 pub fn init_tracing() {
@@ -1049,27 +1083,6 @@ pub fn init_tracing() {
             .with(tracing_subscriber::fmt::layer())
             .init();
     });
-}
-
-/// Check if install args contain packages (non-flag arguments).
-/// If packages are detected, reparse as Add command.
-fn parse_install_as_add(args: &[String]) -> Option<Commands> {
-    // Check if there are any non-flag arguments (potential package names)
-    let has_packages = args.iter().any(|arg| !arg.starts_with('-'));
-
-    if !has_packages {
-        return None;
-    }
-
-    // Reconstruct command line with "add" subcommand
-    let mut cmd_args = vec!["vite".to_string(), "add".to_string()];
-    cmd_args.extend_from_slice(args);
-
-    // Try to parse as Add command
-    match Args::try_parse_from(&cmd_args) {
-        Ok(parsed_args) => Some(parsed_args.commands),
-        Err(_) => None, // If parsing fails, fall back to regular install
-    }
 }
 
 /// Execute add command with the given parameters
@@ -1127,110 +1140,298 @@ mod tests {
 
     use super::*;
 
-    #[tokio::test]
-    async fn test_auto_install_skipped_conditions() {
-        use vite_path::AbsolutePathBuf;
-
-        // Test auto_install function directly
-        let test_workspace = if cfg!(windows) {
-            AbsolutePathBuf::new("C:\\test-workspace-not-exists".into()).unwrap()
-        } else {
-            AbsolutePathBuf::new("/test-workspace-not-exists".into()).unwrap()
-        };
-
-        // Without the environment variable, auto_install should attempt to run
-        // (it may fail due to invalid workspace, but that's expected)
-        unsafe {
-            std::env::remove_var("VITE_TASK_EXECUTION_ENV");
-        }
-        let result_without_env = auto_install(&test_workspace).await;
-        // Should attempt to run (and likely fail with workspace error, which is fine)
-        assert!(result_without_env.is_err());
-
-        // With environment variable set to different value, auto_install should still attempt to run
-        unsafe {
-            std::env::set_var("VITE_TASK_EXECUTION_ENV", "0");
-        }
-        let result_with_wrong_value = auto_install(&test_workspace).await;
-        // Should attempt to run (and likely fail with workspace error, which is fine)
-        assert!(result_with_wrong_value.is_err());
-
-        // With environment variable set to "1", auto_install should be skipped (return Ok)
-        unsafe {
-            std::env::set_var("VITE_TASK_EXECUTION_ENV", "1");
-        }
-        let result_with_correct_value = auto_install(&test_workspace).await;
-        assert!(result_with_correct_value.is_ok());
-
-        // Clean up
-        unsafe {
-            std::env::remove_var("VITE_TASK_EXECUTION_ENV");
-        }
-    }
-
-    mod install_as_add_tests {
+    mod install_command_tests {
         use super::*;
 
         #[test]
-        fn test_parse_install_as_add_with_packages() {
-            let args = vec!["react".to_string(), "react-dom".to_string()];
-            let result = parse_install_as_add(&args);
-            assert!(result.is_some());
-            if let Some(Commands::Add { packages, save_dev, save_exact, .. }) = result {
-                assert_eq!(packages, vec!["react", "react-dom"]);
-                assert!(!save_dev);
+        fn test_args_install_command_basic() {
+            let args = Args::try_parse_from(&["vite-plus", "install"]).unwrap();
+            if let Commands::Install { prod, dev, frozen_lockfile, filter, .. } = &args.commands {
+                assert!(!prod);
+                assert!(!dev);
+                assert!(!frozen_lockfile);
+                assert!(filter.is_none());
+            } else {
+                panic!("Expected Install command");
+            }
+        }
+
+        #[test]
+        fn test_args_install_command_with_prod() {
+            let args = Args::try_parse_from(&["vite-plus", "install", "--prod"]).unwrap();
+            if let Commands::Install { prod, dev, .. } = &args.commands {
+                assert!(prod);
+                assert!(!dev);
+            } else {
+                panic!("Expected Install command");
+            }
+        }
+
+        #[test]
+        fn test_args_install_command_with_frozen_lockfile() {
+            let args =
+                Args::try_parse_from(&["vite-plus", "install", "--frozen-lockfile"]).unwrap();
+            if let Commands::Install { frozen_lockfile, no_frozen_lockfile, .. } = &args.commands {
+                assert!(frozen_lockfile);
+                assert!(!no_frozen_lockfile);
+            } else {
+                panic!("Expected Install command");
+            }
+        }
+
+        #[test]
+        fn test_args_install_command_with_no_frozen_lockfile() {
+            let args =
+                Args::try_parse_from(&["vite-plus", "install", "--no-frozen-lockfile"]).unwrap();
+            if let Commands::Install { frozen_lockfile, no_frozen_lockfile, .. } = &args.commands {
+                assert!(!frozen_lockfile);
+                assert!(no_frozen_lockfile);
+            } else {
+                panic!("Expected Install command");
+            }
+        }
+
+        #[test]
+        fn test_args_install_command_frozen_lockfile_override() {
+            // --no-frozen-lockfile should override --frozen-lockfile when both are specified
+            // Last one wins due to overrides_with
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "install",
+                "--frozen-lockfile",
+                "--no-frozen-lockfile",
+            ])
+            .unwrap();
+            if let Commands::Install { frozen_lockfile, no_frozen_lockfile, .. } = &args.commands {
+                // With overrides_with, the last flag wins and resets the other
+                assert!(!frozen_lockfile);
+                assert!(no_frozen_lockfile);
+            } else {
+                panic!("Expected Install command");
+            }
+
+            // Reverse order: --frozen-lockfile after --no-frozen-lockfile
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "install",
+                "--no-frozen-lockfile",
+                "--frozen-lockfile",
+            ])
+            .unwrap();
+            if let Commands::Install { frozen_lockfile, no_frozen_lockfile, .. } = &args.commands {
+                assert!(frozen_lockfile);
+                assert!(!no_frozen_lockfile);
+            } else {
+                panic!("Expected Install command");
+            }
+        }
+
+        #[test]
+        fn test_args_install_command_with_filter() {
+            let args = Args::try_parse_from(&["vite-plus", "install", "--filter", "app"]).unwrap();
+            if let Commands::Install { filter, .. } = &args.commands {
+                assert_eq!(filter.as_ref().unwrap(), &vec!["app".to_string()]);
+            } else {
+                panic!("Expected Install command");
+            }
+        }
+
+        #[test]
+        fn test_args_install_command_with_multiple_filters() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "install",
+                "--filter",
+                "app",
+                "--filter",
+                "web",
+            ])
+            .unwrap();
+            if let Commands::Install { filter, .. } = &args.commands {
+                assert_eq!(filter.as_ref().unwrap(), &vec!["app".to_string(), "web".to_string()]);
+            } else {
+                panic!("Expected Install command");
+            }
+        }
+
+        #[test]
+        fn test_args_install_command_alias() {
+            let args = Args::try_parse_from(&["vite-plus", "i"]).unwrap();
+            assert!(matches!(args.commands, Commands::Install { .. }));
+        }
+
+        #[test]
+        fn test_args_install_command_with_all_options() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "install",
+                "--prod",
+                "--frozen-lockfile",
+                "--prefer-offline",
+                "--ignore-scripts",
+                "--filter",
+                "app",
+                "-w",
+            ])
+            .unwrap();
+            if let Commands::Install {
+                prod,
+                frozen_lockfile,
+                prefer_offline,
+                ignore_scripts,
+                filter,
+                workspace_root,
+                ..
+            } = &args.commands
+            {
+                assert!(prod);
+                assert!(frozen_lockfile);
+                assert!(prefer_offline);
+                assert!(ignore_scripts);
+                assert_eq!(filter.as_ref().unwrap(), &vec!["app".to_string()]);
+                assert!(workspace_root);
+            } else {
+                panic!("Expected Install command");
+            }
+        }
+
+        #[test]
+        fn test_args_install_command_with_packages() {
+            // vite install <packages> should be parsed as Install with packages
+            let args =
+                Args::try_parse_from(&["vite-plus", "install", "react", "react-dom"]).unwrap();
+            if let Commands::Install { packages, dev, save_exact, .. } = &args.commands {
+                assert_eq!(
+                    packages.as_ref().unwrap(),
+                    &vec!["react".to_string(), "react-dom".to_string()]
+                );
+                assert!(!dev);
                 assert!(!save_exact);
             } else {
-                panic!("Expected Add command");
+                panic!("Expected Install command");
             }
         }
 
         #[test]
-        fn test_parse_install_as_add_with_dev_flag() {
-            let args = vec!["-D".to_string(), "typescript".to_string()];
-            let result = parse_install_as_add(&args);
-            assert!(result.is_some());
-            if let Some(Commands::Add { packages, save_dev, .. }) = result {
-                assert_eq!(packages, vec!["typescript"]);
-                assert!(save_dev);
+        fn test_args_install_command_with_packages_and_dev_flag() {
+            // vite install -D <packages> should work like vite add -D <packages>
+            let args = Args::try_parse_from(&["vite-plus", "install", "-D", "typescript"]).unwrap();
+            if let Commands::Install { packages, dev, .. } = &args.commands {
+                assert_eq!(packages.as_ref().unwrap(), &vec!["typescript".to_string()]);
+                assert!(dev);
             } else {
-                panic!("Expected Add command");
+                panic!("Expected Install command");
             }
         }
 
         #[test]
-        fn test_parse_install_as_add_without_packages() {
-            let args = vec![];
-            let result = parse_install_as_add(&args);
-            assert!(result.is_none());
-        }
-
-        #[test]
-        fn test_parse_install_as_add_with_only_flags() {
-            let args = vec!["--some-install-flag".to_string()];
-            let result = parse_install_as_add(&args);
-            assert!(result.is_none());
-        }
-
-        #[test]
-        fn test_parse_install_as_add_complex() {
-            let args = vec![
-                "-D".to_string(),
-                "-E".to_string(),
-                "--filter".to_string(),
-                "app".to_string(),
-                "typescript".to_string(),
-                "eslint".to_string(),
-            ];
-            let result = parse_install_as_add(&args);
-            assert!(result.is_some());
-            if let Some(Commands::Add { packages, save_dev, save_exact, filter, .. }) = result {
-                assert_eq!(packages, vec!["typescript", "eslint"]);
-                assert!(save_dev);
+        fn test_args_install_command_with_packages_and_exact_flag() {
+            // vite install -E <packages> should work like vite add -E <packages>
+            let args =
+                Args::try_parse_from(&["vite-plus", "install", "-E", "lodash@4.17.21"]).unwrap();
+            if let Commands::Install { packages, save_exact, .. } = &args.commands {
+                assert_eq!(packages.as_ref().unwrap(), &vec!["lodash@4.17.21".to_string()]);
                 assert!(save_exact);
-                assert_eq!(filter.unwrap(), vec!["app"]);
             } else {
-                panic!("Expected Add command");
+                panic!("Expected Install command");
+            }
+        }
+
+        #[test]
+        fn test_args_install_command_with_packages_and_global_flag() {
+            // vite install -g <packages> should work like vite add -g <packages>
+            let args = Args::try_parse_from(&["vite-plus", "install", "-g", "typescript"]).unwrap();
+            if let Commands::Install { packages, global, .. } = &args.commands {
+                assert_eq!(packages.as_ref().unwrap(), &vec!["typescript".to_string()]);
+                assert!(global);
+            } else {
+                panic!("Expected Install command");
+            }
+        }
+
+        #[test]
+        fn test_args_install_command_with_packages_complex() {
+            // Complex example: vite install -D -E --filter app typescript eslint
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "install",
+                "-D",
+                "-E",
+                "--filter",
+                "app",
+                "typescript",
+                "eslint",
+            ])
+            .unwrap();
+            if let Commands::Install { packages, dev, save_exact, filter, .. } = &args.commands {
+                assert_eq!(
+                    packages.as_ref().unwrap(),
+                    &vec!["typescript".to_string(), "eslint".to_string()]
+                );
+                assert!(dev);
+                assert!(save_exact);
+                assert_eq!(filter.as_ref().unwrap(), &vec!["app".to_string()]);
+            } else {
+                panic!("Expected Install command");
+            }
+        }
+
+        #[test]
+        fn test_args_install_command_with_packages_and_save_peer_flag() {
+            // vite install --save-peer <packages> should work like vite add --save-peer <packages>
+            let args =
+                Args::try_parse_from(&["vite-plus", "install", "--save-peer", "react"]).unwrap();
+            if let Commands::Install { packages, save_peer, .. } = &args.commands {
+                assert_eq!(packages.as_ref().unwrap(), &vec!["react".to_string()]);
+                assert!(save_peer);
+            } else {
+                panic!("Expected Install command");
+            }
+        }
+
+        #[test]
+        fn test_args_install_command_with_packages_and_save_catalog_flag() {
+            // vite install --save-catalog <packages> should work like vite add --save-catalog <packages>
+            let args =
+                Args::try_parse_from(&["vite-plus", "install", "--save-catalog", "react"]).unwrap();
+            if let Commands::Install { packages, save_catalog, .. } = &args.commands {
+                assert_eq!(packages.as_ref().unwrap(), &vec!["react".to_string()]);
+                assert!(save_catalog);
+            } else {
+                panic!("Expected Install command");
+            }
+        }
+
+        #[test]
+        fn test_args_install_command_with_packages_and_save_optional_flag() {
+            // vite install -O <packages> should work like vite add -O <packages>
+            let args = Args::try_parse_from(&["vite-plus", "install", "-O", "fsevents"]).unwrap();
+            if let Commands::Install { packages, save_optional, .. } = &args.commands {
+                assert_eq!(packages.as_ref().unwrap(), &vec!["fsevents".to_string()]);
+                assert!(save_optional);
+            } else {
+                panic!("Expected Install command");
+            }
+
+            // Also test long form
+            let args =
+                Args::try_parse_from(&["vite-plus", "install", "--save-optional", "fsevents"])
+                    .unwrap();
+            if let Commands::Install { packages, save_optional, .. } = &args.commands {
+                assert_eq!(packages.as_ref().unwrap(), &vec!["fsevents".to_string()]);
+                assert!(save_optional);
+            } else {
+                panic!("Expected Install command");
+            }
+        }
+
+        #[test]
+        fn test_args_install_command_with_silent_flag() {
+            let args = Args::try_parse_from(&["vite-plus", "install", "--silent"]).unwrap();
+            if let Commands::Install { silent, .. } = &args.commands {
+                assert!(silent);
+            } else {
+                panic!("Expected Install command");
             }
         }
     }

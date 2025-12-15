@@ -4255,7 +4255,6 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
- "petgraph 0.8.3",
  "tempfile",
  "tokio",
  "tracing",
@@ -4265,7 +4264,6 @@ dependencies = [
  "vite_install",
  "vite_migration",
  "vite_path",
- "vite_task",
  "vite_workspace",
 ]
 

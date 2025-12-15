@@ -2,7 +2,6 @@
 
 added 3 packages in <variable>ms
 
-
 > vp pm list --json # should list installed packages
 {
   "version": "1.0.0",

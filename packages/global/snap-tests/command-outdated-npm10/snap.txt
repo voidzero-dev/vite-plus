@@ -2,7 +2,6 @@
 
 added 4 packages in <variable>ms
 
-
 [1]> vp outdated testnpm2 # should outdated package
 Package   Current  Wanted  Latest  Location               Depended by
 testnpm2    <semver>   <semver>   <semver>  node_modules/testnpm2  command-outdated-npm10
