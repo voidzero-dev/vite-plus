@@ -43,14 +43,13 @@ Usage: vp add <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 For more information, try '--help'.
 
-> vp add testnpm2 urllib -D -- --loglevel=verbose --verbose && cat package.json # should add package as dev dependencies
+> vp add testnpm2 -D -- --loglevel=verbose --verbose && cat package.json # should add package as dev dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 devDependencies:
 + testnpm2 <semver>
-+ urllib <semver>
 
 Done in <variable>ms using pnpm v<semver>
 {
@@ -58,8 +57,7 @@ Done in <variable>ms using pnpm v<semver>
   "version": "1.0.0",
   "packageManager": "pnpm@<semver>",
   "devDependencies": {
-    "testnpm2": "^1.0.1",
-    "urllib": "^4.8.2"
+    "testnpm2": "^1.0.1"
   }
 }
 
@@ -77,8 +75,7 @@ Done in <variable>ms using pnpm v<semver>
   "version": "1.0.0",
   "packageManager": "pnpm@<semver>",
   "devDependencies": {
-    "testnpm2": "^1.0.1",
-    "urllib": "^4.8.2"
+    "testnpm2": "^1.0.1"
   },
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
@@ -103,8 +100,7 @@ Done in <variable>ms using pnpm v<semver>
   "packageManager": "pnpm@<semver>",
   "devDependencies": {
     "test-vite-plus-package": "1.0.0",
-    "testnpm2": "^1.0.1",
-    "urllib": "^4.8.2"
+    "testnpm2": "^1.0.1"
   },
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
@@ -129,8 +125,7 @@ Done in <variable>ms using pnpm v<semver>
   "packageManager": "pnpm@<semver>",
   "devDependencies": {
     "test-vite-plus-package": "1.0.0",
-    "testnpm2": "^1.0.1",
-    "urllib": "^4.8.2"
+    "testnpm2": "^1.0.1"
   },
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
@@ -150,8 +145,7 @@ Done in <variable>ms using pnpm v<semver>
   "packageManager": "pnpm@<semver>",
   "devDependencies": {
     "test-vite-plus-package": "1.0.0",
-    "testnpm2": "^1.0.1",
-    "urllib": "^4.8.2"
+    "testnpm2": "^1.0.1"
   },
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
