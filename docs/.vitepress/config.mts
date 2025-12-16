@@ -52,6 +52,10 @@ export default defineConfig({
               text: 'Getting Started',
               link: '/guide/',
             },
+            {
+              text: 'Migration',
+              link: '/guide/migration',
+            },
           ],
         },
         {
