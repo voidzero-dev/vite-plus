@@ -21,7 +21,8 @@
     "dist",
     "binding/index.d.ts",
     "binding/index.js",
-    "binding/*.node"
+    "binding/*.node",
+    "dist/test"
   ],
   "dependencies": {
     "@voidzero-dev/vite-plus-core": "workspace:*",
@@ -64,6 +65,207 @@
       "import": "./binding/index.js",
       "types": "./binding/index.d.ts"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./test": {
+      "import": {
+        "types": "./dist/test/index.d.ts",
+        "node": "./dist/test/index.js",
+        "default": "./dist/test/index.js"
+      },
+      "require": {
+        "types": "./dist/test/index.d.cts",
+        "default": "./dist/test/index.cjs"
+      }
+    },
+    "./test/browser": {
+      "types": "./dist/test/browser.d.ts",
+      "default": "./dist/test/browser.js"
+    },
+    "./test/optional-types.js": {
+      "types": "./dist/test/optional-types.js.d.ts"
+    },
+    "./test/globals": {
+      "types": "./dist/test/globals.d.ts"
+    },
+    "./test/jsdom": {
+      "types": "./dist/test/jsdom.d.ts"
+    },
+    "./test/importMeta": {
+      "types": "./dist/test/importMeta.d.ts"
+    },
+    "./test/import-meta": {
+      "types": "./dist/test/import-meta.d.ts"
+    },
+    "./test/node": {
+      "types": "./dist/test/node.d.ts",
+      "default": "./dist/test/node.js"
+    },
+    "./test/internal/browser": {
+      "types": "./dist/test/internal/browser.d.ts",
+      "default": "./dist/test/internal/browser.js"
+    },
+    "./test/internal/module-runner": {
+      "types": "./dist/test/internal/module-runner.d.ts",
+      "default": "./dist/test/internal/module-runner.js"
+    },
+    "./test/runners": {
+      "types": "./dist/test/runners.d.ts",
+      "default": "./dist/test/runners.js"
+    },
+    "./test/suite": {
+      "types": "./dist/test/suite.d.ts",
+      "default": "./dist/test/suite.js"
+    },
+    "./test/environments": {
+      "types": "./dist/test/environments.d.ts",
+      "default": "./dist/test/environments.js"
+    },
+    "./test/config": {
+      "types": "./dist/test/config.d.ts",
+      "default": "./dist/test/config.js",
+      "require": "./dist/test/config.cjs"
+    },
+    "./test/coverage": {
+      "types": "./dist/test/coverage.d.ts",
+      "default": "./dist/test/coverage.js"
+    },
+    "./test/reporters": {
+      "types": "./dist/test/reporters.d.ts",
+      "default": "./dist/test/reporters.js"
+    },
+    "./test/snapshot": {
+      "types": "./dist/test/snapshot.d.ts",
+      "default": "./dist/test/snapshot.js"
+    },
+    "./test/mocker": {
+      "types": "./dist/test/mocker.d.ts",
+      "default": "./dist/test/mocker.js"
+    },
+    "./test/worker": {
+      "types": "./dist/test/worker.d.ts",
+      "default": "./dist/test/worker.js"
+    },
+    "./test/browser-compat": {
+      "default": "./dist/test/browser-compat.js"
+    },
+    "./test/client": {
+      "default": "./dist/test/client.js"
+    },
+    "./test/context": {
+      "types": "./dist/test/context.d.ts",
+      "default": "./dist/test/context.js"
+    },
+    "./test/locators": {
+      "default": "./dist/test/locators.js"
+    },
+    "./test/matchers": {
+      "default": "./dist/test/matchers.js"
+    },
+    "./test/utils": {
+      "default": "./dist/test/utils.js"
+    },
+    "./test/browser-playwright": {
+      "types": "./dist/test/browser-playwright.d.ts",
+      "default": "./dist/test/browser-playwright.js"
+    },
+    "./test/plugins/runner": {
+      "default": "./dist/test/plugins/runner.js"
+    },
+    "./test/plugins/runner-utils": {
+      "default": "./dist/test/plugins/runner-utils.js"
+    },
+    "./test/plugins/runner-types": {
+      "default": "./dist/test/plugins/runner-types.js"
+    },
+    "./test/plugins/utils": {
+      "default": "./dist/test/plugins/utils.js"
+    },
+    "./test/plugins/utils-source-map": {
+      "default": "./dist/test/plugins/utils-source-map.js"
+    },
+    "./test/plugins/utils-error": {
+      "default": "./dist/test/plugins/utils-error.js"
+    },
+    "./test/plugins/utils-helpers": {
+      "default": "./dist/test/plugins/utils-helpers.js"
+    },
+    "./test/plugins/utils-display": {
+      "default": "./dist/test/plugins/utils-display.js"
+    },
+    "./test/plugins/utils-timers": {
+      "default": "./dist/test/plugins/utils-timers.js"
+    },
+    "./test/plugins/utils-highlight": {
+      "default": "./dist/test/plugins/utils-highlight.js"
+    },
+    "./test/plugins/utils-offset": {
+      "default": "./dist/test/plugins/utils-offset.js"
+    },
+    "./test/plugins/utils-resolver": {
+      "default": "./dist/test/plugins/utils-resolver.js"
+    },
+    "./test/plugins/utils-serialize": {
+      "default": "./dist/test/plugins/utils-serialize.js"
+    },
+    "./test/plugins/utils-constants": {
+      "default": "./dist/test/plugins/utils-constants.js"
+    },
+    "./test/plugins/utils-diff": {
+      "default": "./dist/test/plugins/utils-diff.js"
+    },
+    "./test/plugins/spy": {
+      "default": "./dist/test/plugins/spy.js"
+    },
+    "./test/plugins/expect": {
+      "default": "./dist/test/plugins/expect.js"
+    },
+    "./test/plugins/snapshot": {
+      "default": "./dist/test/plugins/snapshot.js"
+    },
+    "./test/plugins/snapshot-environment": {
+      "default": "./dist/test/plugins/snapshot-environment.js"
+    },
+    "./test/plugins/snapshot-manager": {
+      "default": "./dist/test/plugins/snapshot-manager.js"
+    },
+    "./test/plugins/mocker": {
+      "default": "./dist/test/plugins/mocker.js"
+    },
+    "./test/plugins/mocker-node": {
+      "default": "./dist/test/plugins/mocker-node.js"
+    },
+    "./test/plugins/mocker-browser": {
+      "default": "./dist/test/plugins/mocker-browser.js"
+    },
+    "./test/plugins/mocker-redirect": {
+      "default": "./dist/test/plugins/mocker-redirect.js"
+    },
+    "./test/plugins/mocker-automock": {
+      "default": "./dist/test/plugins/mocker-automock.js"
+    },
+    "./test/plugins/mocker-register": {
+      "default": "./dist/test/plugins/mocker-register.js"
+    },
+    "./test/plugins/pretty-format": {
+      "default": "./dist/test/plugins/pretty-format.js"
+    },
+    "./test/plugins/browser": {
+      "default": "./dist/test/plugins/browser.js"
+    },
+    "./test/plugins/browser-context": {
+      "default": "./dist/test/plugins/browser-context.js"
+    },
+    "./test/plugins/browser-client": {
+      "default": "./dist/test/plugins/browser-client.js"
+    },
+    "./test/plugins/browser-locators": {
+      "default": "./dist/test/plugins/browser-locators.js"
+    },
+    "./test/plugins/browser-playwright": {
+      "default": "./dist/test/plugins/browser-playwright.js"
+    },
+    "./test/plugins/browser-playwright-context": {
+      "default": "./dist/test/plugins/browser-playwright-context.js"
+    }
   }
 }
