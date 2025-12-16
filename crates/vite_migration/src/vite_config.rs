@@ -11,39 +11,110 @@ use crate::ast_grep;
 ///
 /// This rewrites:
 /// - `import { ... } from 'vite'` → `import { ... } from '@voidzero-dev/vite-plus'`
+/// - `import { ... } from 'vite/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/{name}'`
+/// - `import { ... } from 'vitest'` → `import { ... } from '@voidzero-dev/vite-plus/test'`
 /// - `import { ... } from 'vitest/config'` → `import { ... } from '@voidzero-dev/vite-plus'`
+/// - `import { ... } from 'vitest/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/{name}'`
+/// - `import { ... } from '@vitest/browser'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser'`
+/// - `import { ... } from '@vitest/browser/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser/{name}'`
+/// - `import { ... } from '@vitest/browser-playwright'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-playwright'`
+/// - `import { ... } from '@vitest/browser-playwright/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-playwright/{name}'`
 const REWRITE_IMPORT_RULES: &str = r#"---
 id: rewrite-vitest-config-import
 language: TypeScript
 rule:
-  pattern: "'vitest/config'"
+  pattern: $STR
+  kind: string
+  regex: ^['"]vitest/config['"]$
   inside:
     kind: import_statement
-fix: "'@voidzero-dev/vite-plus'"
----
-id: rewrite-vitest-config-import-double-quotes
-language: TypeScript
-rule:
-  pattern: '"vitest/config"'
-  inside:
-    kind: import_statement
-fix: '"@voidzero-dev/vite-plus"'
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vitest/config
+      by: "@voidzero-dev/vite-plus"
+fix: $NEW_IMPORT
 ---
 id: rewrite-vite-import
 language: TypeScript
 rule:
-  pattern: "'vite'"
+  pattern: $STR
+  kind: string
+  regex: ^['"]vite['"]$
   inside:
     kind: import_statement
-fix: "'@voidzero-dev/vite-plus'"
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vite
+      by: "@voidzero-dev/vite-plus"
+fix: $NEW_IMPORT
 ---
-id: rewrite-vite-import-double-quotes
+id: rewrite-vitest-import
 language: TypeScript
 rule:
-  pattern: '"vite"'
+  pattern: $STR
+  kind: string
+  regex: ^['"]vitest['"]$
   inside:
     kind: import_statement
-fix: '"@voidzero-dev/vite-plus"'
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vitest
+      by: "@voidzero-dev/vite-plus/test"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-scoped-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/(browser-playwright|browser)(/.*)?['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/"
+      by: "@voidzero-dev/vite-plus/test/"
+fix: $NEW_IMPORT
+---
+id: rewrite-vite-subpath-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vite/.+['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vite/
+      by: "@voidzero-dev/vite-plus/"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-subpath-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vitest/.+['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vitest/
+      by: "@voidzero-dev/vite-plus/test/"
+fix: $NEW_IMPORT
 "#;
 
 /// Result of merging JSON config into vite config
@@ -1263,6 +1334,254 @@ export default defineConfig({{
 
 export default defineConfig({
   plugins: [],
+});"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest() {
+        let vite_config = r#"import { describe, it, expect } from 'vitest';
+
+describe('test', () => {
+  it('should work', () => {
+    expect(true).toBe(true);
+  });
+});"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { describe, it, expect } from '@voidzero-dev/vite-plus/test';
+
+describe('test', () => {
+  it('should work', () => {
+    expect(true).toBe(true);
+  });
+});"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_double_quotes() {
+        let vite_config = r#"import { describe, it, expect } from "vitest";
+
+describe('test', () => {});"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { describe, it, expect } from "@voidzero-dev/vite-plus/test";
+
+describe('test', () => {});"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser() {
+        let vite_config = r#"import { page } from '@vitest/browser';
+
+export default page;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { page } from '@voidzero-dev/vite-plus/test/browser';
+
+export default page;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_double_quotes() {
+        let vite_config = r#"import { page } from "@vitest/browser";
+
+export default page;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { page } from "@voidzero-dev/vite-plus/test/browser";
+
+export default page;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_playwright() {
+        let vite_config = r#"import { playwright } from '@vitest/browser-playwright';
+
+export default playwright;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { playwright } from '@voidzero-dev/vite-plus/test/browser-playwright';
+
+export default playwright;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_playwright_double_quotes() {
+        let vite_config = r#"import { playwright } from "@vitest/browser-playwright";
+
+export default playwright;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { playwright } from "@voidzero-dev/vite-plus/test/browser-playwright";
+
+export default playwright;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_subpath() {
+        let vite_config = r#"import { context } from '@vitest/browser/context';
+
+export default context;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { context } from '@voidzero-dev/vite-plus/test/browser/context';
+
+export default context;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_playwright_subpath() {
+        let vite_config = r#"import { something } from "@vitest/browser-playwright/context";
+
+export default something;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { something } from "@voidzero-dev/vite-plus/test/browser-playwright/context";
+
+export default something;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vite_subpath() {
+        let vite_config = r#"import { ModuleRunner } from 'vite/module-runner';
+
+export default ModuleRunner;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { ModuleRunner } from '@voidzero-dev/vite-plus/module-runner';
+
+export default ModuleRunner;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vite_subpath_double_quotes() {
+        let vite_config = r#"import { ModuleRunner } from "vite/module-runner";
+
+export default ModuleRunner;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { ModuleRunner } from "@voidzero-dev/vite-plus/module-runner";
+
+export default ModuleRunner;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_subpath() {
+        // Test vitest/node subpath
+        let vite_config = r#"import { startVitest } from 'vitest/node';
+
+export default startVitest;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { startVitest } from '@voidzero-dev/vite-plus/test/node';
+
+export default startVitest;"#
+        );
+
+        // Test vitest/plugins/runner subpath
+        let vite_config = r#"import { somePlugin } from 'vitest/plugins/runner';
+
+export default somePlugin;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { somePlugin } from '@voidzero-dev/vite-plus/test/plugins/runner';
+
+export default somePlugin;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_subpath_double_quotes() {
+        let vite_config = r#"import { startVitest } from "vitest/node";
+
+export default startVitest;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { startVitest } from "@voidzero-dev/vite-plus/test/node";
+
+export default startVitest;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_mixed_imports() {
+        // Test multiple different imports in the same file
+        let vite_config = r#"import { defineConfig } from 'vite';
+import { ModuleRunner } from 'vite/module-runner';
+import { describe, it, expect } from 'vitest';
+import { startVitest } from 'vitest/node';
+import { page } from '@vitest/browser';
+import { playwright } from '@vitest/browser-playwright';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+import { ModuleRunner } from '@voidzero-dev/vite-plus/module-runner';
+import { describe, it, expect } from '@voidzero-dev/vite-plus/test';
+import { startVitest } from '@voidzero-dev/vite-plus/test/node';
+import { page } from '@voidzero-dev/vite-plus/test/browser';
+import { playwright } from '@voidzero-dev/vite-plus/test/browser-playwright';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
 });"#
         );
     }

@@ -1,0 +1,16 @@
+{
+  "name": "migration-from-vitest",
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0",
+    "@vitest/browser": "^4.0.0",
+    "@vitest/browser-playwright": "^4.0.0"
+  },
+  "scripts": {
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest --watch",
+    "test": "vitest"
+  }
+}
