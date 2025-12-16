@@ -11,6 +11,8 @@ if (command === 'gen' || command === 'g' || command === 'generate' || command ==
   import('./migration/bin.js');
 } else if (LOCAL_CLI_COMMANDS.includes(command)) {
   import('./local/bin.js');
+} else if (command === '--version' || command === '-V') {
+  import('./version.js');
 } else {
   // Delegate to rust commands
   import('./global/bin.js');

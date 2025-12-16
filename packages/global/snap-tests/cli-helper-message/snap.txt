@@ -31,7 +31,9 @@ Options:
   -V, --version  Print version
 
 > vp -V # show version
-vite-plus-global-cli <semver>
+Vite+ Version:
+- Local: Not found
+- Global: v<semver>
 
 > vp install -h # show install help message
 Install all dependencies, or add packages if package names are provided
