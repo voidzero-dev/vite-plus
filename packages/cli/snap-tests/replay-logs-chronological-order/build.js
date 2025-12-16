@@ -43,7 +43,7 @@ async function main() {
     await exec(...command);
   }
 
-  // wait for 100ms to make sure the logs are printed in echo.js flush to stdout before the main process ends
+  // Wait for 100ms to ensure all child process output streams (e.g., from echo.js via console.warn to stderr) are fully flushed to the parent process before exiting.
   await scheduler.wait(100);
   console.log('[build.js] main process end');
 }
