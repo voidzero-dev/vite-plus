@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { scheduler } from 'node:timers/promises';
 
 async function main() {
   const commands = [
@@ -42,6 +43,8 @@ async function main() {
     await exec(...command);
   }
 
+  // wait for 100ms to make sure the logs are printed in echo.js flush to stdout before the main process ends
+  await scheduler.wait(100);
   console.log('[build.js] main process end');
 }
 
