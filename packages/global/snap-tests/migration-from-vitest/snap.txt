@@ -17,8 +17,8 @@ import { join } from 'node:path';
 
 import { foo } from '@foo/vite-plugin-foo';
 import { playwright } from '@voidzero-dev/vite-plus/test/browser-playwright';
-import { userEvent } from '@voidzero-dev/vite-plus/test/browser/context';
 import { server } from '@voidzero-dev/vite-plus/test/browser-playwright/context';
+import { userEvent } from '@voidzero-dev/vite-plus/test/browser/context';
 import { defineConfig } from '@voidzero-dev/vite-plus';
 
 export default defineConfig({
@@ -62,13 +62,13 @@ export default defineConfig({
 }
 
 > cat test/hello.ts # check test/hello.ts
-import { test, describe, expect, it } from 'vitest'
-import { server } from '@vitest/browser-playwright/context'
+import { server } from '@vitest/browser-playwright/context';
+import { test, describe, expect, it } from 'vitest';
 
-const { readFile } = server.commands
+const { readFile } = server.commands;
 
 describe('Hello', () => {
-	it('should return the correct result', () => {
-		expect(true).toBe(true)
-	})
-})
+  it('should return the correct result', () => {
+    expect(true).toBe(true);
+  });
+});
