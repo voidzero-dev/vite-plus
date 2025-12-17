@@ -1,11 +1,11 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ast_grep_config::{GlobalRules, RuleConfig, from_yaml_string};
 use ast_grep_language::{LanguageExt, SupportLang};
 use serde_json::Value;
 use vite_error::Error;
 
-use crate::ast_grep;
+use crate::{ast_grep, file_walker};
 
 /// ast-grep rules for rewriting imports to @voidzero-dev/vite-plus
 ///
@@ -137,6 +137,17 @@ pub struct RewriteResult {
     pub updated: bool,
 }
 
+/// Result of rewriting imports in multiple files
+#[derive(Debug)]
+pub struct BatchRewriteResult {
+    /// Files that were modified
+    pub modified_files: Vec<PathBuf>,
+    /// Files that had no changes
+    pub unchanged_files: Vec<PathBuf>,
+    /// Files that had errors (path, error message)
+    pub errors: Vec<(PathBuf, String)>,
+}
+
 /// Merge a JSON configuration file into vite.config.ts or vite.config.js
 ///
 /// This function reads a JSON configuration file and merges it into the vite
@@ -233,6 +244,67 @@ pub fn rewrite_import(vite_config_path: &Path) -> Result<RewriteResult, Error> {
 
     // Rewrite the imports
     rewrite_import_content(&vite_config_content)
+}
+
+/// Rewrite imports in all TypeScript/JavaScript files under a directory
+///
+/// This function finds all TypeScript and JavaScript files in the specified directory
+/// (respecting `.gitignore` rules), applies the import rewrite rules to each file,
+/// and writes the modified content back to disk.
+///
+/// # Arguments
+///
+/// * `root` - The root directory to search for files
+///
+/// # Returns
+///
+/// Returns a `BatchRewriteResult` containing:
+/// - `modified_files`: Files that were changed
+/// - `unchanged_files`: Files that required no changes
+/// - `errors`: Files that had errors during processing
+///
+/// # Example
+///
+/// ```ignore
+/// use std::path::Path;
+/// use vite_migration::rewrite_imports_in_directory;
+///
+/// let result = rewrite_imports_in_directory(Path::new("./src"))?;
+/// println!("Modified {} files", result.modified_files.len());
+/// for file in &result.modified_files {
+///     println!("  {}", file.display());
+/// }
+/// ```
+pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, Error> {
+    let walk_result = file_walker::find_ts_files(root)?;
+
+    let mut result = BatchRewriteResult {
+        modified_files: Vec::new(),
+        unchanged_files: Vec::new(),
+        errors: Vec::new(),
+    };
+
+    for file_path in walk_result.files {
+        match rewrite_import(&file_path) {
+            Ok(rewrite_result) => {
+                if rewrite_result.updated {
+                    // Write the modified content back
+                    if let Err(e) = std::fs::write(&file_path, &rewrite_result.content) {
+                        result.errors.push((file_path, e.to_string()));
+                    } else {
+                        result.modified_files.push(file_path);
+                    }
+                } else {
+                    result.unchanged_files.push(file_path);
+                }
+            }
+            Err(e) => {
+                result.errors.push((file_path, e.to_string()));
+            }
+        }
+    }
+
+    Ok(result)
 }
 
 /// Rewrite imports in vite config content from 'vite' or 'vitest/config' to '@voidzero-dev/vite-plus'
@@ -1584,5 +1656,141 @@ export default defineConfig({
   plugins: [react()],
 });"#
         );
+    }
+
+    #[test]
+    fn test_rewrite_imports_in_directory() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // Create src directory
+        fs::create_dir(temp.path().join("src")).unwrap();
+
+        // Create test files with vite/vitest imports
+        fs::write(
+            temp.path().join("src/config.ts"),
+            r#"import { defineConfig } from 'vite';
+export default defineConfig({});"#,
+        )
+        .unwrap();
+
+        fs::write(
+            temp.path().join("src/test.ts"),
+            r#"import { describe, it } from 'vitest';
+describe('test', () => {});"#,
+        )
+        .unwrap();
+
+        // Create a file without vite imports (should be unchanged)
+        fs::write(
+            temp.path().join("src/utils.ts"),
+            r#"export function add(a: number, b: number) {
+  return a + b;
+}"#,
+        )
+        .unwrap();
+
+        // Create node_modules (should be ignored)
+        fs::create_dir(temp.path().join("node_modules")).unwrap();
+        fs::write(
+            temp.path().join("node_modules/pkg.ts"),
+            r#"import { defineConfig } from 'vite';"#,
+        )
+        .unwrap();
+
+        // Create .gitignore
+        fs::write(temp.path().join(".gitignore"), "node_modules/").unwrap();
+
+        // Run the batch rewrite
+        let result = super::rewrite_imports_in_directory(temp.path()).unwrap();
+
+        // Should have 2 modified files (config.ts and test.ts)
+        assert_eq!(result.modified_files.len(), 2);
+        // Should have 1 unchanged file (utils.ts)
+        assert_eq!(result.unchanged_files.len(), 1);
+        // Should have no errors
+        assert!(result.errors.is_empty());
+
+        // Verify the files were actually modified
+        let config_content = fs::read_to_string(temp.path().join("src/config.ts")).unwrap();
+        assert!(config_content.contains("@voidzero-dev/vite-plus"));
+
+        let test_content = fs::read_to_string(temp.path().join("src/test.ts")).unwrap();
+        assert!(test_content.contains("@voidzero-dev/vite-plus/test"));
+
+        // Verify utils.ts was not modified
+        let utils_content = fs::read_to_string(temp.path().join("src/utils.ts")).unwrap();
+        assert!(!utils_content.contains("@voidzero-dev/vite-plus"));
+    }
+
+    #[test]
+    fn test_rewrite_imports_in_directory_empty() {
+        let temp = tempdir().unwrap();
+
+        let result = super::rewrite_imports_in_directory(temp.path()).unwrap();
+
+        assert!(result.modified_files.is_empty());
+        assert!(result.unchanged_files.is_empty());
+        assert!(result.errors.is_empty());
+    }
+
+    #[test]
+    fn test_rewrite_imports_in_directory_nested() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // Create nested directory structure
+        fs::create_dir_all(temp.path().join("src/components/Button")).unwrap();
+        fs::create_dir_all(temp.path().join("tests/unit")).unwrap();
+
+        // Create files at various depths
+        fs::write(
+            temp.path().join("vite.config.ts"),
+            r#"import { defineConfig } from 'vite';
+export default defineConfig({});"#,
+        )
+        .unwrap();
+
+        fs::write(
+            temp.path().join("src/index.ts"),
+            r#"import { createServer } from 'vite';
+export { createServer };"#,
+        )
+        .unwrap();
+
+        fs::write(
+            temp.path().join("src/components/Button/Button.tsx"),
+            r#"import React from 'react';
+export const Button = () => <button>Click</button>;"#,
+        )
+        .unwrap();
+
+        fs::write(
+            temp.path().join("tests/unit/app.test.ts"),
+            r#"import { describe, it, expect } from 'vitest';
+import { page } from '@vitest/browser';
+
+describe('app', () => {
+  it('works', () => {
+    expect(true).toBe(true);
+  });
+});"#,
+        )
+        .unwrap();
+
+        let result = super::rewrite_imports_in_directory(temp.path()).unwrap();
+
+        // vite.config.ts, src/index.ts, tests/unit/app.test.ts should be modified
+        assert_eq!(result.modified_files.len(), 3);
+        // Button.tsx has no vite imports
+        assert_eq!(result.unchanged_files.len(), 1);
+        assert!(result.errors.is_empty());
+
+        // Verify nested file was modified
+        let test_content = fs::read_to_string(temp.path().join("tests/unit/app.test.ts")).unwrap();
+        assert!(test_content.contains("@voidzero-dev/vite-plus/test"));
+        assert!(test_content.contains("@voidzero-dev/vite-plus/test/browser"));
     }
 }

@@ -12,6 +12,7 @@ anyhow = { workspace = true }
 ast-grep-config = { workspace = true }
 bincode = { workspace = true }
 bstr = { workspace = true }
+ignore = { workspace = true }
 nix = { workspace = true }
 rusqlite = { workspace = true }
 semver = { workspace = true }

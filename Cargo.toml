@@ -48,6 +48,7 @@ fspy = { git = "https://github.com/voidzero-dev/vite-task", rev = "edf07c7eac63a
 futures-util = "0.3.31"
 hex = "0.4.3"
 httpmock = "0.7"
+ignore = "0.4"
 indoc = "2.0.5"
 napi = { version = "3.0.0", default-features = false, features = ["async", "error_anyhow"] }
 napi-build = "2"

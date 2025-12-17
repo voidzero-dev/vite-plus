@@ -55,6 +55,9 @@ pub enum Error {
     WaxWalk(#[from] wax::WalkError),
 
     #[error(transparent)]
+    IgnoreError(#[from] ignore::Error),
+
+    #[error(transparent)]
     SerdeYml(#[from] serde_yml::Error),
 
     #[error(transparent)]
