@@ -533,12 +533,6 @@ importers:
       '@types/node':
         specifier: ^20.0.0 || ^22.0.0 || >=24.0.0
         version: 22.19.1
-      '@vitest/browser-preview':
-        specifier: 4.0.15
-        version: 4.0.15(vite@packages+core)(vitest@4.0.15)
-      '@vitest/browser-webdriverio':
-        specifier: 4.0.15
-        version: 4.0.15(vite@packages+core)(vitest@4.0.15)(webdriverio@9.20.1)
       '@vitest/ui':
         specifier: 4.0.15
         version: 4.0.15(vitest@4.0.15)
@@ -600,6 +594,12 @@ importers:
       '@vitest/browser-playwright':
         specifier: 4.0.15
         version: 4.0.15(playwright@1.57.0)(vite@packages+core)(vitest@4.0.15)
+      '@vitest/browser-preview':
+        specifier: 4.0.15
+        version: 4.0.15(vite@packages+core)(vitest@4.0.15)
+      '@vitest/browser-webdriverio':
+        specifier: 4.0.15
+        version: 4.0.15(vite@packages+core)(vitest@4.0.15)(webdriverio@9.20.1)
       '@vitest/expect':
         specifier: 4.0.15
         version: 4.0.15

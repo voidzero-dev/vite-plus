@@ -16,19 +16,21 @@ This approach avoids the critical issue of Rolldown creating shared chunks that 
 
 ### Copied Packages (`dist/@vitest/`)
 
-These 9 `@vitest/*` packages are **copied** (not bundled) to preserve their original file structure:
+These 11 `@vitest/*` packages are **copied** (not bundled) to preserve their original file structure:
 
-| Package                      | Purpose                                              |
-| ---------------------------- | ---------------------------------------------------- |
-| `@vitest/runner`             | Test runner core                                     |
-| `@vitest/utils`              | Utilities (source-map, error, display, timers, etc.) |
-| `@vitest/spy`                | Spy/mock implementation                              |
-| `@vitest/expect`             | Assertion library                                    |
-| `@vitest/snapshot`           | Snapshot testing                                     |
-| `@vitest/mocker`             | Module mocking (node, browser, automock)             |
-| `@vitest/pretty-format`      | Output formatting                                    |
-| `@vitest/browser`            | Browser testing support                              |
-| `@vitest/browser-playwright` | Playwright integration                               |
+| Package                       | Purpose                                              |
+| ----------------------------- | ---------------------------------------------------- |
+| `@vitest/runner`              | Test runner core                                     |
+| `@vitest/utils`               | Utilities (source-map, error, display, timers, etc.) |
+| `@vitest/spy`                 | Spy/mock implementation                              |
+| `@vitest/expect`              | Assertion library                                    |
+| `@vitest/snapshot`            | Snapshot testing                                     |
+| `@vitest/mocker`              | Module mocking (node, browser, automock)             |
+| `@vitest/pretty-format`       | Output formatting                                    |
+| `@vitest/browser`             | Browser testing support                              |
+| `@vitest/browser-playwright`  | Playwright integration                               |
+| `@vitest/browser-webdriverio` | WebdriverIO integration                              |
+| `@vitest/browser-preview`     | Preview (testing-library) integration                |
 
 **Why copy instead of bundle?** Bundling would create shared chunks that mix browser-safe and Node.js-only code. Copying preserves the original separation.
 
@@ -73,6 +75,7 @@ These packages are explicitly kept external in `EXTERNAL_BLOCKLIST` during the R
 | Package            | Reason                                    |
 | ------------------ | ----------------------------------------- |
 | `playwright`       | Native bindings, user must install        |
+| `webdriverio`      | Native bindings, user must install        |
 | `debug`            | Environment detection breaks when bundled |
 | `happy-dom`        | Optional peer dependency                  |
 | `jsdom`            | Optional peer dependency                  |
@@ -102,19 +105,21 @@ For maintainers developing the vitest/vite migration feature, here are the trans
 
 ### Import Rewrites
 
-| Original Import                     | Rewritten Import                                         |
-| ----------------------------------- | -------------------------------------------------------- |
-| `from "@vitest/browser-playwright"` | `from "@voidzero-dev/vite-plus-test/browser-playwright"` |
-| `from "vite"`                       | `from "@voidzero-dev/vite-plus-core"`                    |
-| `from "vite/module-runner"`         | `from "@voidzero-dev/vite-plus-core/module-runner"`      |
+| Original Import                      | Rewritten Import                                          |
+| ------------------------------------ | --------------------------------------------------------- |
+| `from "@vitest/browser-playwright"`  | `from "@voidzero-dev/vite-plus-test/browser-playwright"`  |
+| `from "@vitest/browser-webdriverio"` | `from "@voidzero-dev/vite-plus-test/browser-webdriverio"` |
+| `from "@vitest/browser-preview"`     | `from "@voidzero-dev/vite-plus-test/browser-preview"`     |
+| `from "vite"`                        | `from "@voidzero-dev/vite-plus-core"`                     |
+| `from "vite/module-runner"`          | `from "@voidzero-dev/vite-plus-core/module-runner"`       |
 
-**Note:** When using pnpm overrides, you have three options for the playwright import:
+**Note:** When using pnpm overrides, you have three options for browser provider imports:
 
-- `vitest/browser-playwright` - works when `vitest` is overridden to our package (Recommended)
+- `vitest/browser-playwright` (or `vitest/browser-webdriverio`, `vitest/browser-preview`) - works when `vitest` is overridden to our package (Recommended)
 - `@voidzero-dev/vite-plus-test/browser-playwright` - direct import from test package
 - `@voidzero-dev/vite-plus/test/plugins/browser-playwright` - direct import from CLI package
 
-Importing from `@vitest/browser-playwright` requires an additional override for that specific package.
+Importing from `@vitest/browser-*` packages directly requires additional overrides for those specific packages.
 
 ### package.json Changes
 
@@ -124,7 +129,9 @@ Importing from `@vitest/browser-playwright` requires an additional override for 
 {
   "devDependencies": {
     "@vitest/browser": "...", // Remove
-    "@vitest/browser-playwright": "...", // Remove
+    "@vitest/browser-playwright": "...", // Remove (if using playwright)
+    "@vitest/browser-webdriverio": "...", // Remove (if using webdriverio)
+    "@vitest/browser-preview": "...", // Remove (if using testing-library)
     "@vitest/ui": "..." // Remove (peer dep, not bundled but optional)
   }
 }
@@ -139,6 +146,8 @@ overrides:
   vitest: 'file:path/to/vite-plus-test.tgz'
   '@vitest/browser': 'file:path/to/vite-plus-test.tgz'
   '@vitest/browser-playwright': 'file:path/to/vite-plus-test.tgz'
+  '@vitest/browser-webdriverio': 'file:path/to/vite-plus-test.tgz'
+  '@vitest/browser-preview': 'file:path/to/vite-plus-test.tgz'
 ```
 
 Or using npm package names:
@@ -149,12 +158,14 @@ overrides:
   vitest: 'npm:@voidzero-dev/vite-plus-test'
   '@vitest/browser': 'npm:@voidzero-dev/vite-plus-test'
   '@vitest/browser-playwright': 'npm:@voidzero-dev/vite-plus-test'
+  '@vitest/browser-webdriverio': 'npm:@voidzero-dev/vite-plus-test'
+  '@vitest/browser-preview': 'npm:@voidzero-dev/vite-plus-test'
 ```
 
 ### Config File Updates
 
 ```typescript
-// Before
+// Before (playwright)
 import { playwright } from '@vitest/browser-playwright';
 
 // After - Option 1 (Recommended): Via vitest subpath (works when vitest is overridden)
@@ -167,21 +178,35 @@ import { playwright } from '@voidzero-dev/vite-plus-test/browser-playwright';
 import { playwright } from '@voidzero-dev/vite-plus/test/plugins/browser-playwright';
 ```
 
+Similarly for WebdriverIO:
+
+```typescript
+import { webdriverio } from 'vitest/browser-webdriverio';
+```
+
+And for Preview (testing-library):
+
+```typescript
+import { preview } from 'vitest/browser-preview';
+```
+
 ### Plugin Exports for pnpm Overrides
 
 The package provides `./plugins/*` exports to enable pnpm overrides for all `@vitest/*` packages:
 
 ```
-@vitest/runner          -> @voidzero-dev/vite-plus-test/plugins/runner
-@vitest/utils           -> @voidzero-dev/vite-plus-test/plugins/utils
-@vitest/utils/error     -> @voidzero-dev/vite-plus-test/plugins/utils-error
-@vitest/spy             -> @voidzero-dev/vite-plus-test/plugins/spy
-@vitest/expect          -> @voidzero-dev/vite-plus-test/plugins/expect
-@vitest/snapshot        -> @voidzero-dev/vite-plus-test/plugins/snapshot
-@vitest/mocker          -> @voidzero-dev/vite-plus-test/plugins/mocker
-@vitest/pretty-format   -> @voidzero-dev/vite-plus-test/plugins/pretty-format
-@vitest/browser         -> @voidzero-dev/vite-plus-test/plugins/browser
-@vitest/browser-playwright -> @voidzero-dev/vite-plus-test/plugins/browser-playwright
+@vitest/runner              -> @voidzero-dev/vite-plus-test/plugins/runner
+@vitest/utils               -> @voidzero-dev/vite-plus-test/plugins/utils
+@vitest/utils/error         -> @voidzero-dev/vite-plus-test/plugins/utils-error
+@vitest/spy                 -> @voidzero-dev/vite-plus-test/plugins/spy
+@vitest/expect              -> @voidzero-dev/vite-plus-test/plugins/expect
+@vitest/snapshot            -> @voidzero-dev/vite-plus-test/plugins/snapshot
+@vitest/mocker              -> @voidzero-dev/vite-plus-test/plugins/mocker
+@vitest/pretty-format       -> @voidzero-dev/vite-plus-test/plugins/pretty-format
+@vitest/browser             -> @voidzero-dev/vite-plus-test/plugins/browser
+@vitest/browser-playwright  -> @voidzero-dev/vite-plus-test/plugins/browser-playwright
+@vitest/browser-webdriverio -> @voidzero-dev/vite-plus-test/plugins/browser-webdriverio
+@vitest/browser-preview     -> @voidzero-dev/vite-plus-test/plugins/browser-preview
 ```
 
 ---
@@ -348,6 +373,8 @@ const VITEST_PACKAGES_TO_COPY = [
   '@vitest/pretty-format',
   '@vitest/browser',
   '@vitest/browser-playwright',
+  '@vitest/browser-webdriverio',
+  '@vitest/browser-preview',
 ];
 
 // Packages that must NOT be bundled (from build.ts lines 131-158)
@@ -367,6 +394,7 @@ const EXTERNAL_BLOCKLIST = new Set([
   // Optional dependencies with bundling issues or native bindings
   'debug', // environment detection broken when bundled
   'playwright', // native bindings
+  'webdriverio', // native bindings
 
   // Runtime deps (in package.json dependencies) - not bundled, resolved at install time
   'sirv',

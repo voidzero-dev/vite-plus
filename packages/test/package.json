@@ -121,6 +121,14 @@
       "types": "./dist/@vitest/browser-playwright/index.d.ts",
       "default": "./dist/@vitest/browser-playwright/index.js"
     },
+    "./browser-webdriverio": {
+      "types": "./dist/@vitest/browser-webdriverio/index.d.ts",
+      "default": "./dist/@vitest/browser-webdriverio/index.js"
+    },
+    "./browser-preview": {
+      "types": "./dist/@vitest/browser-preview/index.d.ts",
+      "default": "./dist/@vitest/browser-preview/index.js"
+    },
     "./plugins/runner": {
       "default": "./dist/plugins/runner.mjs"
     },
@@ -219,6 +227,18 @@
     },
     "./plugins/browser-playwright-context": {
       "default": "./dist/plugins/browser-playwright-context.mjs"
+    },
+    "./plugins/browser-webdriverio": {
+      "default": "./dist/plugins/browser-webdriverio.mjs"
+    },
+    "./plugins/browser-webdriverio-context": {
+      "default": "./dist/plugins/browser-webdriverio-context.mjs"
+    },
+    "./plugins/browser-preview": {
+      "default": "./dist/plugins/browser-preview.mjs"
+    },
+    "./plugins/browser-preview-context": {
+      "default": "./dist/plugins/browser-preview-context.mjs"
     }
   },
   "main": "./dist/index.js",
@@ -236,9 +256,7 @@
     "@types/node": "^20.0.0 || ^22.0.0 || >=24.0.0",
     "happy-dom": "*",
     "jsdom": "*",
-    "@vitest/browser-preview": "4.0.15",
-    "@vitest/ui": "4.0.15",
-    "@vitest/browser-webdriverio": "4.0.15"
+    "@vitest/ui": "4.0.15"
   },
   "peerDependenciesMeta": {
     "@edge-runtime/vm": {
@@ -248,12 +266,6 @@
       "optional": true
     },
     "@types/node": {
-      "optional": true
-    },
-    "@vitest/browser-preview": {
-      "optional": true
-    },
-    "@vitest/browser-webdriverio": {
       "optional": true
     },
     "@vitest/ui": {
@@ -286,6 +298,8 @@
     "@oxc-node/core": "catalog:",
     "@vitest/browser": "4.0.15",
     "@vitest/browser-playwright": "4.0.15",
+    "@vitest/browser-preview": "4.0.15",
+    "@vitest/browser-webdriverio": "4.0.15",
     "@vitest/expect": "4.0.15",
     "@vitest/mocker": "4.0.15",
     "@vitest/pretty-format": "4.0.15",

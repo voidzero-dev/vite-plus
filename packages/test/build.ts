@@ -12,7 +12,7 @@
 // │  5. rewriteVitestImports()   Rewrite @vitest/*, vitest/*, vite      │
 // │  6. patchVitestPkgRootPaths() Fix distRoot for relocated files      │
 // │  7. patchVitestBrowserPackage() Inject vendor-aliases plugin        │
-// │  8. patchPlaywrightLocators() Fix browser-safe imports              │
+// │  8. patchBrowserProviderLocators() Fix browser-safe imports         │
 // │  9. Post-processing:                                                │
 // │     - patchVendorPaths()                                            │
 // │     - createBrowserCompatShim()                                     │
@@ -75,6 +75,8 @@ const VITEST_PACKAGES_TO_COPY = [
   '@vitest/pretty-format',
   '@vitest/browser',
   '@vitest/browser-playwright',
+  '@vitest/browser-webdriverio',
+  '@vitest/browser-preview',
 ] as const;
 
 // Mapping from @vitest/* package specifiers to their paths within dist/@vitest/
@@ -122,6 +124,12 @@ const VITEST_PACKAGE_TO_PATH: Record<string, string> = {
   // @vitest/browser-playwright
   '@vitest/browser-playwright': '@vitest/browser-playwright/index.js',
   '@vitest/browser-playwright/context': '@vitest/browser-playwright/context.d.ts',
+  // @vitest/browser-webdriverio
+  '@vitest/browser-webdriverio': '@vitest/browser-webdriverio/index.js',
+  '@vitest/browser-webdriverio/context': '@vitest/browser-webdriverio/context.d.ts',
+  // @vitest/browser-preview
+  '@vitest/browser-preview': '@vitest/browser-preview/index.js',
+  '@vitest/browser-preview/context': '@vitest/browser-preview/context.d.ts',
 };
 
 // Packages that should NOT be bundled into dist/vendor/ (remain external at runtime)
@@ -144,6 +152,7 @@ const EXTERNAL_BLOCKLIST = new Set([
   // Optional dependencies with bundling issues or native bindings
   'debug', // environment detection broken when bundled
   'playwright', // native bindings
+  'webdriverio', // native bindings
 
   // Runtime deps (in package.json dependencies) - not bundled, resolved at install time
   'sirv',
@@ -194,8 +203,8 @@ await patchVitestPkgRootPaths();
 // Step 7: Patch @vitest/browser package (vendor-aliases plugin, exclude list)
 await patchVitestBrowserPackage();
 
-// Step 8: Patch @vitest/browser-playwright/locators.js for browser-safe imports
-await patchPlaywrightLocators();
+// Step 8: Patch browser provider locators.js files for browser-safe imports
+await patchBrowserProviderLocators();
 
 // Step 9: Post-processing
 await patchVendorPaths();
@@ -233,8 +242,12 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
   }
 
   // Remove bundled @vitest/* packages from peerDependencies
-  // @vitest/browser-playwright is now bundled, so users don't need to install it
-  const bundledPeerDeps = ['@vitest/browser-playwright'];
+  // These browser provider packages are now bundled, so users don't need to install them
+  const bundledPeerDeps = [
+    '@vitest/browser-playwright',
+    '@vitest/browser-webdriverio',
+    '@vitest/browser-preview',
+  ];
   if (destPkg.peerDependencies) {
     for (const dep of bundledPeerDeps) {
       delete destPkg.peerDependencies[dep];
@@ -291,6 +304,20 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
     destPkg.exports['./browser-playwright'] = {
       types: './dist/@vitest/browser-playwright/index.d.ts',
       default: './dist/@vitest/browser-playwright/index.js',
+    };
+
+    // Add @vitest/browser-webdriverio compatible export
+    // Users can import { webdriverio } from 'vitest/browser-webdriverio'
+    destPkg.exports['./browser-webdriverio'] = {
+      types: './dist/@vitest/browser-webdriverio/index.d.ts',
+      default: './dist/@vitest/browser-webdriverio/index.js',
+    };
+
+    // Add @vitest/browser-preview compatible export
+    // Users can import { preview } from 'vitest/browser-preview'
+    destPkg.exports['./browser-preview'] = {
+      types: './dist/@vitest/browser-preview/index.d.ts',
+      default: './dist/@vitest/browser-preview/index.js',
     };
 
     // Add plugin exports for all bundled @vitest/* packages
@@ -1272,51 +1299,93 @@ async function patchVitestBrowserPackage() {
 }
 
 /**
- * Patch @vitest/browser-playwright/locators.js to use browser-safe imports.
+ * Patch browser provider locators.js files to use browser-safe imports.
  *
- * The original file imports from '../browser/index.js' which is Node.js server code.
- * We need to change it to import from browser-safe files instead.
+ * The original files import from '../browser/index.js' which includes Node.js server code.
+ * We need to change them to import from browser-safe files instead.
+ *
+ * Providers handled:
+ *   - @vitest/browser-playwright: import { page, server } from '../browser/index.js';
+ *   - @vitest/browser-webdriverio: import { page, server, utils } from '../browser/index.js';
+ *   - @vitest/browser-preview: import { page, server, utils, userEvent } from '../browser/index.js';
  */
-async function patchPlaywrightLocators() {
-  console.log('\nPatching @vitest/browser-playwright/locators.js...');
+async function patchBrowserProviderLocators() {
+  console.log('\nPatching browser provider locators.js files...');
 
-  const locatorsPath = join(distDir, '@vitest/browser-playwright/locators.js');
+  const providers = [
+    { name: 'browser-playwright', extraImports: [] as string[] },
+    { name: 'browser-webdriverio', extraImports: ['utils'] },
+    { name: 'browser-preview', extraImports: ['utils', 'userEvent'] },
+  ];
 
-  try {
-    await stat(locatorsPath);
-  } catch {
-    console.log('  Warning: locators.js not found, skipping');
-    return;
+  for (const provider of providers) {
+    const locatorsPath = join(distDir, `@vitest/${provider.name}/locators.js`);
+
+    try {
+      await stat(locatorsPath);
+    } catch {
+      console.log(`  Warning: @vitest/${provider.name}/locators.js not found, skipping`);
+      continue;
+    }
+
+    let content = await readFile(locatorsPath, 'utf-8');
+    let patched = false;
+
+    // 1. Patch the vitest/browser import to separate page (from context.js) and other imports
+    // After rewriteVitestImports(), the import is: import { page, server, ... } from '../browser/index.js';
+    // We need:
+    //   - page from '../browser/context.js' (browser-safe)
+    //   - server removed (we'll use window.__vitest_worker__.config instead)
+    //   - other imports (utils, userEvent) still from '../browser/index.js'
+
+    if (provider.extraImports.length === 0) {
+      // playwright: just import page from context.js
+      const serverImportPattern =
+        /import \{ page, server \} from ['"]\.\.\/browser\/index\.js['"];?/;
+      if (serverImportPattern.test(content)) {
+        content = content.replace(
+          serverImportPattern,
+          `import { page } from '../browser/context.js';`,
+        );
+        console.log(`  [${provider.name}] Changed server import to browser-safe context import`);
+        patched = true;
+      }
+    } else {
+      // webdriverio/preview: import page from context.js, keep other imports from index.js
+      const extraImportsStr = provider.extraImports.join(', ');
+      const importPattern = new RegExp(
+        `import \\{ page, server, ${extraImportsStr.replace(/, /g, ', ')} \\} from ['"]\\.\\.\/browser\/index\\.js['"];?`,
+      );
+      if (importPattern.test(content)) {
+        const replacement = `import { page } from '../browser/context.js';\nimport { ${extraImportsStr} } from '../browser/index.js';`;
+        content = content.replace(importPattern, replacement);
+        console.log(
+          `  [${provider.name}] Split imports: page from context.js, {${extraImportsStr}} from index.js`,
+        );
+        patched = true;
+      }
+    }
+
+    if (!patched) {
+      console.log(`  Warning: [${provider.name}] Could not find server import to patch`);
+    }
+
+    // 2. Replace all server.config references with browser-accessible window.__vitest_worker__.config
+    // This handles both:
+    //   - server.config.browser.locators.testIdAttribute
+    //   - server.config.browser.ui
+    const serverConfigPattern = /server\.config\./g;
+    const matchCount = (content.match(serverConfigPattern) || []).length;
+    if (matchCount > 0) {
+      content = content.replace(serverConfigPattern, `window.__vitest_worker__.config.`);
+      console.log(
+        `  [${provider.name}] Replaced ${matchCount} server.config references with window.__vitest_worker__.config`,
+      );
+    }
+
+    await writeFile(locatorsPath, content, 'utf-8');
+    console.log(`  Successfully patched @vitest/${provider.name}/locators.js`);
   }
-
-  let content = await readFile(locatorsPath, 'utf-8');
-
-  // 1. Change import of `page, server` from '../browser/index.js' to just `page` from '../browser/context.js'
-  // The server import is only used for server.config.browser.locators.testIdAttribute
-  // We'll inline the access via window.__vitest_worker__.config
-  const serverImportPattern = /import \{ page, server \} from ['"]\.\.\/browser\/index\.js['"];?/;
-  if (serverImportPattern.test(content)) {
-    content = content.replace(serverImportPattern, `import { page } from '../browser/context.js';`);
-    console.log('  Changed server import to browser-safe context import');
-  } else {
-    console.log('  Warning: Could not find server import to patch');
-  }
-
-  // 2. Replace server.config.browser.locators.testIdAttribute with browser-accessible version
-  // The browser has access to config via window.__vitest_worker__
-  const testIdAttrPattern = /server\.config\.browser\.locators\.testIdAttribute/g;
-  if (testIdAttrPattern.test(content)) {
-    content = content.replace(
-      testIdAttrPattern,
-      `window.__vitest_worker__.config.browser.locators.testIdAttribute`,
-    );
-    console.log('  Replaced server.config access with browser-safe window access');
-  } else {
-    console.log('  Warning: Could not find testIdAttribute pattern to patch');
-  }
-
-  await writeFile(locatorsPath, content, 'utf-8');
-  console.log('  Successfully patched @vitest/browser-playwright/locators.js');
 }
 
 /**

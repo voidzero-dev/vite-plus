@@ -168,6 +168,14 @@
       "types": "./dist/test/browser-playwright.d.ts",
       "default": "./dist/test/browser-playwright.js"
     },
+    "./test/browser-webdriverio": {
+      "types": "./dist/test/browser-webdriverio.d.ts",
+      "default": "./dist/test/browser-webdriverio.js"
+    },
+    "./test/browser-preview": {
+      "types": "./dist/test/browser-preview.d.ts",
+      "default": "./dist/test/browser-preview.js"
+    },
     "./test/plugins/runner": {
       "default": "./dist/test/plugins/runner.js"
     },
@@ -266,6 +274,18 @@
     },
     "./test/plugins/browser-playwright-context": {
       "default": "./dist/test/plugins/browser-playwright-context.js"
+    },
+    "./test/plugins/browser-webdriverio": {
+      "default": "./dist/test/plugins/browser-webdriverio.js"
+    },
+    "./test/plugins/browser-webdriverio-context": {
+      "default": "./dist/test/plugins/browser-webdriverio-context.js"
+    },
+    "./test/plugins/browser-preview": {
+      "default": "./dist/test/plugins/browser-preview.js"
+    },
+    "./test/plugins/browser-preview-context": {
+      "default": "./dist/test/plugins/browser-preview-context.js"
     }
   }
 }
