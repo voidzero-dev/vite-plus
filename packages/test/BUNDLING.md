@@ -108,7 +108,12 @@ For maintainers developing the vitest/vite migration feature, here are the trans
 | `from "vite"`                       | `from "@voidzero-dev/vite-plus-core"`                    |
 | `from "vite/module-runner"`         | `from "@voidzero-dev/vite-plus-core/module-runner"`      |
 
-**Note:** pnpm overrides don't affect Node.js module resolution at config load time, so config files must use the `@voidzero-dev/vite-plus-test/browser-playwright` import path.
+**Note:** When using pnpm overrides, you have two options for the playwright import:
+
+- `vitest/browser-playwright` - works when `vitest` is overridden to our package
+- `@voidzero-dev/vite-plus-test/browser-playwright` - always works (direct import)
+
+Importing from `@vitest/browser-playwright` requires an additional override for that specific package.
 
 ### package.json Changes
 
@@ -151,8 +156,11 @@ overrides:
 // Before
 import { playwright } from '@vitest/browser-playwright';
 
-// After
+// After - Option 1: Direct import (always works)
 import { playwright } from '@voidzero-dev/vite-plus-test/browser-playwright';
+
+// After - Option 2: Via vitest subpath (works when vitest is overridden)
+import { playwright } from 'vitest/browser-playwright';
 ```
 
 ### Plugin Exports for pnpm Overrides
@@ -315,7 +323,11 @@ This is achieved through:
 1. Conditional exports in package.json (`"node": "./dist/index-node.js"`)
 2. Browser-safe stubs for `module-runner`
 3. Import rewriting to prevent Node.js code from being pulled into browser bundles
-4. `vendor-aliases` plugin injection to resolve imports at runtime
+4. `vendor-aliases` plugin injection to resolve imports at runtime:
+   - Handles `@vitest/*` imports → resolves to copied `dist/@vitest/` files
+   - Handles `vitest/*` subpaths → resolves to dist files (enables `vitest/browser-playwright` usage)
+   - Handles `@voidzero-dev/vite-plus-test/*` subpaths → maps to equivalent vitest paths
+   - Intercepts `vitest/browser` → returns virtual module ID for BrowserContext plugin
 
 ### Key Constants
 
