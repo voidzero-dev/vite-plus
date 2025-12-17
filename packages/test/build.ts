@@ -1148,6 +1148,37 @@ async function patchVitestBrowserPackage() {
       if (id === '${CORE_PACKAGE_NAME}' || id === 'vite') {
         return { id, external: true };
       }
+      // Handle vitest/browser and @voidzero-dev/vite-plus-test/browser
+      // Return virtual module ID so BrowserContext plugin can load it
+      if (id === 'vitest/browser' || id === '@voidzero-dev/vite-plus-test/browser') {
+        return '\\0vitest/browser';
+      }
+      // Handle vitest/* subpaths (resolve to our dist files)
+      const vitestSubpathMap = {
+        'vitest': resolve(packageRoot, 'index.js'),
+        'vitest/node': resolve(packageRoot, 'node.js'),
+        'vitest/config': resolve(packageRoot, 'config.js'),
+        'vitest/internal/browser': resolve(packageRoot, 'browser.js'),
+        'vitest/runners': resolve(packageRoot, 'runners.js'),
+        'vitest/suite': resolve(packageRoot, 'suite.js'),
+        'vitest/environments': resolve(packageRoot, 'environments.js'),
+        'vitest/coverage': resolve(packageRoot, 'coverage.js'),
+        'vitest/reporters': resolve(packageRoot, 'reporters.js'),
+        'vitest/snapshot': resolve(packageRoot, 'snapshot.js'),
+        'vitest/mocker': resolve(packageRoot, 'mocker.js'),
+      };
+      if (vitestSubpathMap[id]) {
+        return vitestSubpathMap[id];
+      }
+      // Handle @voidzero-dev/vite-plus-test/* subpaths (same as vitest/*)
+      if (id.startsWith('@voidzero-dev/vite-plus-test/')) {
+        const subpath = id.slice('@voidzero-dev/vite-plus-test/'.length);
+        const vitestEquiv = 'vitest/' + subpath;
+        if (vitestSubpathMap[vitestEquiv]) {
+          return vitestSubpathMap[vitestEquiv];
+        }
+      }
+      // Handle @vitest/* packages (resolve to our copied files)
       const vendorMap = {
       ${mappingEntries}
       };
@@ -1203,6 +1234,19 @@ async function patchVitestBrowserPackage() {
     );
   }
   console.log('  Removed bundled deps from include list');
+
+  // 4. Patch BrowserContext to also handle @voidzero-dev/vite-plus-test/browser
+  // This allows direct imports from our package without requiring vitest override
+  const browserContextPattern = /if \(id === ID_CONTEXT\) \{/;
+  if (browserContextPattern.test(content)) {
+    content = content.replace(
+      browserContextPattern,
+      `if (id === ID_CONTEXT || id === "@voidzero-dev/vite-plus-test/browser") {`,
+    );
+    console.log('  Patched BrowserContext to handle @voidzero-dev/vite-plus-test/browser');
+  } else {
+    console.log('  Warning: Could not find BrowserContext pattern to patch');
+  }
 
   await writeFile(browserIndexPath, content, 'utf-8');
   console.log('  Successfully patched @vitest/browser/index.js');
