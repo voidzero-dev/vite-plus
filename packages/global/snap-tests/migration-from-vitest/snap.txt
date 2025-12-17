@@ -7,7 +7,10 @@
 │
 ●  pnpm@<semver> installed
 │
-◆  ✅ Rewrote import in vitest.config.ts
+◆  ✅ Rewrote imports in 2 file(s)
+│
+●    test/hello.ts
+│    vitest.config.ts
 │
 └  ✨ Migration completed!
 
@@ -41,8 +44,6 @@ export default defineConfig({
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "@vitest/browser": "^4.0.0",
-    "@vitest/browser-playwright": "^4.0.0",
     "@voidzero-dev/vite-plus": "latest"
   },
   "scripts": {
@@ -62,8 +63,8 @@ export default defineConfig({
 }
 
 > cat test/hello.ts # check test/hello.ts
-import { server } from '@vitest/browser-playwright/context';
-import { test, describe, expect, it } from 'vitest';
+import { server } from '@voidzero-dev/vite-plus/test/browser-playwright/context';
+import { test, describe, expect, it } from '@voidzero-dev/vite-plus/test';
 
 const { readFile } = server.commands;
 

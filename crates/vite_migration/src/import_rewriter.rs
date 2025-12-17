@@ -116,7 +116,7 @@ fix: $NEW_IMPORT
 
 /// Result of rewriting imports in a file
 #[derive(Debug)]
-pub struct RewriteResult {
+struct RewriteResult {
     /// The updated file content
     pub content: String,
     /// Whether any changes were made
@@ -132,40 +132,6 @@ pub struct BatchRewriteResult {
     pub unchanged_files: Vec<PathBuf>,
     /// Files that had errors (path, error message)
     pub errors: Vec<(PathBuf, String)>,
-}
-
-/// Rewrite imports in a TypeScript/JavaScript file from vite/vitest to @voidzero-dev/vite-plus
-///
-/// This function reads a file and rewrites the import statements
-/// to use '@voidzero-dev/vite-plus' instead of 'vite', 'vitest', or '@vitest/*'.
-///
-/// # Arguments
-///
-/// * `file_path` - Path to the TypeScript/JavaScript file
-///
-/// # Returns
-///
-/// Returns a `RewriteResult` containing:
-/// - `content`: The updated file content
-/// - `updated`: Whether any changes were made
-///
-/// # Example
-///
-/// ```ignore
-/// use std::path::Path;
-/// use vite_migration::rewrite_import;
-///
-/// let result = rewrite_import(Path::new("src/app.ts"))?;
-/// if result.updated {
-///     std::fs::write("src/app.ts", &result.content)?;
-/// }
-/// ```
-pub fn rewrite_import(file_path: &Path) -> Result<RewriteResult, Error> {
-    // Read the file
-    let content = std::fs::read_to_string(file_path)?;
-
-    // Rewrite the imports
-    rewrite_import_content(&content)
 }
 
 /// Rewrite imports in all TypeScript/JavaScript files under a directory
@@ -227,6 +193,40 @@ pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, E
     }
 
     Ok(result)
+}
+
+/// Rewrite imports in a TypeScript/JavaScript file from vite/vitest to @voidzero-dev/vite-plus
+///
+/// This function reads a file and rewrites the import statements
+/// to use '@voidzero-dev/vite-plus' instead of 'vite', 'vitest', or '@vitest/*'.
+///
+/// # Arguments
+///
+/// * `file_path` - Path to the TypeScript/JavaScript file
+///
+/// # Returns
+///
+/// Returns a `RewriteResult` containing:
+/// - `content`: The updated file content
+/// - `updated`: Whether any changes were made
+///
+/// # Example
+///
+/// ```ignore
+/// use std::path::Path;
+/// use vite_migration::rewrite_import;
+///
+/// let result = rewrite_import(Path::new("src/app.ts"))?;
+/// if result.updated {
+///     std::fs::write("src/app.ts", &result.content)?;
+/// }
+/// ```
+fn rewrite_import(file_path: &Path) -> Result<RewriteResult, Error> {
+    // Read the file
+    let content = std::fs::read_to_string(file_path)?;
+
+    // Rewrite the imports
+    rewrite_import_content(&content)
 }
 
 /// Rewrite imports in content from vite/vitest to @voidzero-dev/vite-plus

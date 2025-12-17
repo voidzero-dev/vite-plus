@@ -5,8 +5,6 @@
 │
 ●  pnpm@<semver> installed
 │
-◆  ✅ Rewrote import in vite.config.ts
-│
 ◆  ✅ Merged .oxlintrc.json into vite.config.ts
 │
 ◆  ✅ Merged .oxfmtrc.json into vite.config.ts
@@ -14,6 +12,10 @@
 ◆  ✅ Created vite.config.ts in packages/only-oxlint/vite.config.ts
 │
 ◆  ✅ Merged packages/only-oxlint/.oxlintrc.json into packages/only-oxlint/vite.config.ts
+│
+◆  ✅ Rewrote imports in 1 file(s)
+│
+●    vite.config.ts
 │
 └  ✨ Migration completed!
 

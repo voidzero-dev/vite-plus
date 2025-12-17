@@ -84,38 +84,67 @@ pub fn merge_json_config(
     })
 }
 
-/// Result of rewriting imports in vite config
+/// Error from batch import rewriting
 #[napi(object)]
-pub struct RewriteResult {
-    /// The updated vite config content
-    pub content: String,
-    /// Whether any changes were made
-    pub updated: bool,
+pub struct BatchRewriteError {
+    /// The file path that had an error
+    pub path: String,
+    /// The error message
+    pub message: String,
 }
 
-/// Rewrite imports in vite config from 'vite' or 'vitest/config' to '@voidzero-dev/vite-plus'
+/// Result of rewriting imports in multiple files
+#[napi(object)]
+pub struct BatchRewriteResult {
+    /// Files that were modified
+    pub modified_files: Vec<String>,
+    /// Files that had errors
+    pub errors: Vec<BatchRewriteError>,
+}
+
+/// Rewrite imports in all TypeScript/JavaScript files under a directory
+///
+/// This function finds all TypeScript and JavaScript files in the specified directory
+/// (respecting `.gitignore` rules), applies the import rewrite rules to each file,
+/// and writes the modified content back to disk.
 ///
 /// # Arguments
 ///
-/// * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
+/// * `root` - The root directory to search for files
 ///
 /// # Returns
 ///
-/// Returns a `RewriteResult` containing:
-/// - `content`: The updated vite config content
-/// - `updated`: Whether any changes were made
+/// Returns a `BatchRewriteResult` containing:
+/// - `modifiedFiles`: Files that were changed
+/// - `errors`: Files that had errors during processing
 ///
 /// # Example
 ///
 /// ```javascript
-/// const result = rewriteImport('vite.config.ts');
-/// if (result.updated) {
-///     fs.writeFileSync('vite.config.ts', result.content);
+/// const result = rewriteImportsInDirectory('./src');
+/// console.log(`Modified ${result.modifiedFiles.length} files`);
+/// for (const file of result.modifiedFiles) {
+///     console.log(`  ${file}`);
 /// }
 /// ```
 #[napi]
-pub fn rewrite_import(vite_config_path: String) -> Result<RewriteResult> {
-    let result = vite_migration::rewrite_import(Path::new(&vite_config_path))
+pub fn rewrite_imports_in_directory(root: String) -> Result<BatchRewriteResult> {
+    let result = vite_migration::rewrite_imports_in_directory(Path::new(&root))
         .map_err(anyhow::Error::from)?;
-    Ok(RewriteResult { content: result.content, updated: result.updated })
+
+    Ok(BatchRewriteResult {
+        modified_files: result
+            .modified_files
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect(),
+        errors: result
+            .errors
+            .iter()
+            .map(|(p, m)| BatchRewriteError {
+                path: p.to_string_lossy().to_string(),
+                message: m.clone(),
+            })
+            .collect(),
+    })
 }

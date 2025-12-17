@@ -5,9 +5,11 @@
 │
 ●  yarn@<semver> installed
 │
-◆  ✅ Rewrote import in vite.config.ts
-│
 ◆  ✅ Merged .oxlintrc.json into vite.config.ts
+│
+◆  ✅ Rewrote imports in 1 file(s)
+│
+●    vite.config.ts
 │
 └  ✨ Migration completed!
 

@@ -8,7 +8,7 @@ import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 import {
   mergeJsonConfig,
   rewriteScripts,
-  rewriteImport,
+  rewriteImportsInDirectory,
   type DownloadPackageManagerResult,
 } from '../../binding/index.js';
 import { PackageManager, type WorkspaceInfo } from '../types/index.js';
@@ -30,7 +30,14 @@ const OVERRIDE_PACKAGES = {
   vite: 'npm:@voidzero-dev/vite-plus-core@latest',
   vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
 } as const;
-const REMOVE_PACKAGES = ['oxlint', 'oxlint-tsgolint', 'oxfmt'];
+// packages that are replaced with vite-plus
+const REMOVE_PACKAGES = [
+  'oxlint',
+  'oxlint-tsgolint',
+  'oxfmt',
+  '@vitest/browser',
+  '@vitest/browser-playwright',
+] as const;
 
 export function checkViteVersion(projectPath: string): boolean {
   return checkPackageVersion(projectPath, 'vite', '7.0.0');
@@ -130,7 +137,9 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
   // set .npmrc to use vite-plus
   rewriteNpmrc(projectPath);
   rewriteLintStagedConfigFile(projectPath);
-  rewriteViteConfigFile(projectPath);
+  mergeViteConfigFiles(projectPath);
+  // rewrite imports in all TypeScript/JavaScript files
+  rewriteAllImports(projectPath);
   // set package manager
   setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
 }
@@ -159,7 +168,9 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
   // set .npmrc to use vite-plus
   rewriteNpmrc(workspaceInfo.rootDir);
   rewriteLintStagedConfigFile(workspaceInfo.rootDir);
-  rewriteViteConfigFile(workspaceInfo.rootDir);
+  mergeViteConfigFiles(workspaceInfo.rootDir);
+  // rewrite imports in all TypeScript/JavaScript files
+  rewriteAllImports(workspaceInfo.rootDir);
   // set package manager
   setPackageManager(workspaceInfo.rootDir, workspaceInfo.downloadPackageManager);
 }
@@ -169,7 +180,7 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
  * @param projectPath - The path to the project
  */
 export function rewriteMonorepoProject(projectPath: string, packageManager: PackageManager): void {
-  rewriteViteConfigFile(projectPath);
+  mergeViteConfigFiles(projectPath);
 
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -546,21 +557,10 @@ function rewriteNpmrc(projectPath: string): void {
 }
 
 /**
- * Rewrite vite.config.ts to use vite-plus
- * - rewrite `import from 'vite'` to `import from 'vite-plus'`
- * - rewrite `import from 'vitest/config'` to `import from 'vite-plus'`
- * - merge oxlint config into vite.config.ts
- * - merge oxfmt config into vite.config.ts
+ * Merge oxlint and oxfmt config into vite.config.ts
  */
-function rewriteViteConfigFile(projectPath: string): void {
+function mergeViteConfigFiles(projectPath: string): void {
   const configs = detectConfigs(projectPath);
-  if (configs.viteConfig) {
-    rewriteViteConfigImport(projectPath, configs.viteConfig);
-  }
-  if (configs.vitestConfig) {
-    rewriteViteConfigImport(projectPath, configs.vitestConfig);
-  }
-
   if (!configs.oxfmtConfig && !configs.oxlintConfig) {
     return;
   }
@@ -614,12 +614,24 @@ function mergeAndRemoveJsonConfig(
   }
 }
 
-function rewriteViteConfigImport(projectPath: string, viteConfigPath: string): void {
-  const fullPath = path.join(projectPath, viteConfigPath);
-  const result = rewriteImport(fullPath);
-  if (result.updated) {
-    fs.writeFileSync(fullPath, result.content);
-    prompts.log.success(`✅ Rewrote import in ${displayRelative(fullPath)}`);
+/**
+ * Rewrite imports in all TypeScript/JavaScript files under a directory
+ * This rewrites vite/vitest imports to @voidzero-dev/vite-plus
+ * @param projectPath - The root directory to search for files
+ */
+function rewriteAllImports(projectPath: string): void {
+  const result = rewriteImportsInDirectory(projectPath);
+
+  if (result.modifiedFiles.length > 0) {
+    prompts.log.success(`✅ Rewrote imports in ${result.modifiedFiles.length} file(s)`);
+    prompts.log.info(result.modifiedFiles.map((file) => `  ${displayRelative(file)}`).join('\n'));
+  }
+
+  if (result.errors.length > 0) {
+    prompts.log.warn(`⚠️ ${result.errors.length} file(s) had errors:`);
+    for (const error of result.errors) {
+      prompts.log.error(`  ${displayRelative(error.path)}: ${error.message}`);
+    }
   }
 }
 

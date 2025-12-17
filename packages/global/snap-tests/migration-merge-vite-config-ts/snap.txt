@@ -7,13 +7,14 @@
 │
 ●  pnpm@<semver> installed
 │
-◆  ✅ Rewrote import in vite.config.ts
-│
-◆  ✅ Rewrote import in vitest.config.ts
-│
 ◆  ✅ Merged .oxlintrc.json into vite.config.ts
 │
 ◆  ✅ Merged .oxfmtrc.json into vite.config.ts
+│
+◆  ✅ Rewrote imports in 2 file(s)
+│
+●    vite.config.ts
+│    vitest.config.ts
 │
 └  ✨ Migration completed!
 
