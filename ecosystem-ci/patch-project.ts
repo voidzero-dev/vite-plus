@@ -132,27 +132,40 @@ async function patchSkeleton() {
 
   // Patch pnpm-workspace.yaml
   const pnpmWorkspacePath = join(projectDir, 'skeleton', 'pnpm-workspace.yaml');
-  const pnpmWorkspaceContent = fs
+  let pnpmWorkspaceContent = fs
     .readFileSync(pnpmWorkspacePath, 'utf8')
     .replace(`trustPolicy: no-downgrade`, '\n')
     .replace(
       /'@vitest\/browser-playwright': [\d.]+/,
       `'@vitest/browser-playwright': ${vitestVersion}`,
     );
-  const appendContent = `
-minimumReleaseAgeExclude:
-  - '@voidzero-dev/*'
-  - '@vitest/*'
-  - oxlint
-  - oxfmt
-  - oxlint-tsgolint
 
+  // Add entries to existing minimumReleaseAgeExclude if it exists, otherwise append new section
+  const newExcludes = ["'@voidzero-dev/*'", "'@vitest/*'", 'oxlint', 'oxfmt', 'oxlint-tsgolint'];
+  if (pnpmWorkspaceContent.includes('minimumReleaseAgeExclude:')) {
+    // Find the minimumReleaseAgeExclude section and add new entries
+    pnpmWorkspaceContent = pnpmWorkspaceContent.replace(
+      /minimumReleaseAgeExclude:\n((?:  - .+\n)+)/,
+      (_, existingEntries) => {
+        const newEntriesStr = newExcludes.map((e) => `  - ${e}\n`).join('');
+        return `minimumReleaseAgeExclude:\n${existingEntries}${newEntriesStr}`;
+      },
+    );
+  } else {
+    pnpmWorkspaceContent += `\nminimumReleaseAgeExclude:\n${newExcludes.map((e) => `  - ${e}`).join('\n')}\n`;
+  }
+
+  // Add peerDependencyRules if not present
+  if (!pnpmWorkspaceContent.includes('peerDependencyRules:')) {
+    pnpmWorkspaceContent += `
 peerDependencyRules:
   allowAny:
     - vite
     - vitest
 `;
-  fs.writeFileSync(pnpmWorkspacePath, pnpmWorkspaceContent + appendContent);
+  }
+
+  fs.writeFileSync(pnpmWorkspacePath, pnpmWorkspaceContent);
 
   // Update vite.config.ts files to import from vitest/browser-playwright instead of @vitest/browser-playwright
   // This is needed because pnpm overrides don't affect Node.js module resolution at config load time
