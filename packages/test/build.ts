@@ -1148,9 +1148,10 @@ async function patchVitestBrowserPackage() {
       if (id === '${CORE_PACKAGE_NAME}' || id === 'vite') {
         return { id, external: true };
       }
-      // Handle vitest/browser and @voidzero-dev/vite-plus-test/browser
+      // Handle vitest/browser and package aliases
       // Return virtual module ID so BrowserContext plugin can load it
-      if (id === 'vitest/browser' || id === '@voidzero-dev/vite-plus-test/browser') {
+      // Supports: vitest/browser, @voidzero-dev/vite-plus-test/browser, @voidzero-dev/vite-plus/test/browser
+      if (id === 'vitest/browser' || id === '@voidzero-dev/vite-plus-test/browser' || id === '@voidzero-dev/vite-plus/test/browser') {
         return '\\0vitest/browser';
       }
       // Handle vitest/* subpaths (resolve to our dist files)
@@ -1173,6 +1174,14 @@ async function patchVitestBrowserPackage() {
       // Handle @voidzero-dev/vite-plus-test/* subpaths (same as vitest/*)
       if (id.startsWith('@voidzero-dev/vite-plus-test/')) {
         const subpath = id.slice('@voidzero-dev/vite-plus-test/'.length);
+        const vitestEquiv = 'vitest/' + subpath;
+        if (vitestSubpathMap[vitestEquiv]) {
+          return vitestSubpathMap[vitestEquiv];
+        }
+      }
+      // Handle @voidzero-dev/vite-plus/test/* subpaths (CLI package paths, same as vitest/*)
+      if (id.startsWith('@voidzero-dev/vite-plus/test/')) {
+        const subpath = id.slice('@voidzero-dev/vite-plus/test/'.length);
         const vitestEquiv = 'vitest/' + subpath;
         if (vitestSubpathMap[vitestEquiv]) {
           return vitestSubpathMap[vitestEquiv];
@@ -1235,15 +1244,16 @@ async function patchVitestBrowserPackage() {
   }
   console.log('  Removed bundled deps from include list');
 
-  // 4. Patch BrowserContext to also handle @voidzero-dev/vite-plus-test/browser
+  // 4. Patch BrowserContext to also handle our package aliases as fallback
   // This allows direct imports from our package without requiring vitest override
+  // Supports: @voidzero-dev/vite-plus-test/browser, @voidzero-dev/vite-plus/test/browser
   const browserContextPattern = /if \(id === ID_CONTEXT\) \{/;
   if (browserContextPattern.test(content)) {
     content = content.replace(
       browserContextPattern,
-      `if (id === ID_CONTEXT || id === "@voidzero-dev/vite-plus-test/browser") {`,
+      `if (id === ID_CONTEXT || id === "@voidzero-dev/vite-plus-test/browser" || id === "@voidzero-dev/vite-plus/test/browser") {`,
     );
-    console.log('  Patched BrowserContext to handle @voidzero-dev/vite-plus-test/browser');
+    console.log('  Patched BrowserContext to handle package aliases');
   } else {
     console.log('  Warning: Could not find BrowserContext pattern to patch');
   }
