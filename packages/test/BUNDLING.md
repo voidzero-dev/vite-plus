@@ -112,7 +112,7 @@ For maintainers developing the vitest/vite migration feature, here are the trans
 
 - `vitest/browser-playwright` - works when `vitest` is overridden to our package (Recommended)
 - `@voidzero-dev/vite-plus-test/browser-playwright` - direct import from test package
-- `@voidzero-dev/vite-plus/test/browser-playwright` - direct import from CLI package
+- `@voidzero-dev/vite-plus/test/plugins/browser-playwright` - direct import from CLI package
 
 Importing from `@vitest/browser-playwright` requires an additional override for that specific package.
 
@@ -164,7 +164,7 @@ import { playwright } from 'vitest/browser-playwright';
 import { playwright } from '@voidzero-dev/vite-plus-test/browser-playwright';
 
 // After - Option 3: Direct import from CLI package
-import { playwright } from '@voidzero-dev/vite-plus/test/browser-playwright';
+import { playwright } from '@voidzero-dev/vite-plus/test/plugins/browser-playwright';
 ```
 
 ### Plugin Exports for pnpm Overrides
