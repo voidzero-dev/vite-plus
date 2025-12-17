@@ -1203,7 +1203,10 @@ async function patchVitestBrowserPackage() {
     content = content.replace(pluginArrayPattern, `$1\n    ${vendorAliasesPlugin},$2`);
     console.log('  Injected vitest:vendor-aliases plugin');
   } else {
-    console.log('  Warning: Could not find browser plugin array to inject vendor-aliases');
+    throw new Error(
+      'Failed to inject vendor-aliases plugin in @vitest/browser/index.js: pattern not found. ' +
+        'This likely means vitest code has changed and the patch needs to be updated.',
+    );
   }
 
   // 2. Patch exclude list to add native deps
@@ -1225,7 +1228,10 @@ async function patchVitestBrowserPackage() {
     content = content.replace(excludePattern, excludeReplacement);
     console.log('  Patched exclude list with native deps');
   } else {
-    console.log('  Warning: Could not find exclude array to patch');
+    throw new Error(
+      'Failed to patch exclude list in @vitest/browser/index.js: pattern not found. ' +
+        'This likely means vitest code has changed and the patch needs to be updated.',
+    );
   }
 
   // 3. Remove include patterns that reference bundled deps
@@ -1255,7 +1261,10 @@ async function patchVitestBrowserPackage() {
     );
     console.log('  Patched BrowserContext to handle package aliases');
   } else {
-    console.log('  Warning: Could not find BrowserContext pattern to patch');
+    throw new Error(
+      'Failed to patch BrowserContext in @vitest/browser/index.js: pattern not found. ' +
+        'This likely means vitest code has changed and the patch needs to be updated.',
+    );
   }
 
   await writeFile(browserIndexPath, content, 'utf-8');
