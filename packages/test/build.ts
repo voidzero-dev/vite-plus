@@ -209,6 +209,7 @@ await createBrowserCompatShim();
 await createModuleRunnerStub();
 await createNodeEntry();
 await copyBrowserClientFiles();
+await createBrowserEntryFiles();
 const pluginExports = await createPluginExports();
 await mergePackageJson(pluginExports);
 await validateExternalDeps();
@@ -1714,6 +1715,38 @@ export * from '../@vitest/runner/index.js';
     await writeFile(stubPath, content, 'utf-8');
   }
   console.log(`  Created ${browserVendorStubs.length} vendor stubs`);
+}
+
+/**
+ * Create browser/ directory at package root with context files.
+ * The package exports "./browser" pointing to these files:
+ *   - browser/context.js: Runtime guard (throws if used outside browser mode)
+ *   - browser/context.d.ts: Re-exports types from dist/@vitest/browser/context.d.ts
+ *
+ * These files are NOT tracked in git (.gitignore excludes browser/)
+ * but ARE included in the package (package.json files: ["browser/**"])
+ */
+async function createBrowserEntryFiles() {
+  console.log('\nCreating browser/ entry files...');
+
+  const browserDir = resolve(projectDir, 'browser');
+  await mkdir(browserDir, { recursive: true });
+
+  // 1. Copy context.js from @vitest/browser (runtime guard)
+  const srcContextJs = resolve(projectDir, 'node_modules/@vitest/browser/context.js');
+  const destContextJs = join(browserDir, 'context.js');
+  await copyFile(srcContextJs, destContextJs);
+  console.log('  Created browser/context.js');
+
+  // 2. Create context.d.ts that re-exports from our bundled types
+  const contextDtsContent = `// Re-export browser context types from bundled @vitest/browser package
+// This provides: page, userEvent, server, commands, utils, locators, cdp, Locator, etc.
+// The bundled context.d.ts has imports rewritten to point to our dist files
+export * from '../dist/@vitest/browser/context.d.ts'
+`;
+  const destContextDts = join(browserDir, 'context.d.ts');
+  await writeFile(destContextDts, contextDtsContent, 'utf-8');
+  console.log('  Created browser/context.d.ts');
 }
 
 /**
