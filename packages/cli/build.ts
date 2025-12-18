@@ -156,7 +156,11 @@ async function createShimForExport(
     // Check if it's a type-only export
     if (exportValue.endsWith('.d.ts')) {
       const dtsPath = join(shimDirForFile, `${baseFileName}.d.ts`);
-      await writeFile(dtsPath, `export * from '${testImportSpecifier}';\n`);
+      // Include side-effect import to preserve module augmentations (e.g., toMatchSnapshot on Assertion)
+      await writeFile(
+        dtsPath,
+        `import '${testImportSpecifier}';\nexport * from '${testImportSpecifier}';\n`,
+      );
       return { types: `./dist/test/${shimBaseName}.d.ts` };
     }
 
@@ -184,7 +188,11 @@ async function createShimForExport(
 
     if (value.types && typeof value.types === 'string') {
       const dtsPath = join(shimDirForFile, `${baseFileName}.d.ts`);
-      await writeFile(dtsPath, `export * from '${testImportSpecifier}';\n`);
+      // Include side-effect import to preserve module augmentations (e.g., toMatchSnapshot on Assertion)
+      await writeFile(
+        dtsPath,
+        `import '${testImportSpecifier}';\nexport * from '${testImportSpecifier}';\n`,
+      );
       (result as Record<string, string>).types = `./dist/test/${shimBaseName}.d.ts`;
     }
 
@@ -220,7 +228,11 @@ async function createConditionalShim(
   // Handle top-level types (flat structure like { types, require, default })
   if (value.types && typeof value.types === 'string' && !value.import) {
     const dtsPath = join(shimDir, `${baseFileName}.d.ts`);
-    await writeFile(dtsPath, `export * from '${testImportSpecifier}';\n`);
+    // Include side-effect import to preserve module augmentations (e.g., toMatchSnapshot on Assertion)
+    await writeFile(
+      dtsPath,
+      `import '${testImportSpecifier}';\nexport * from '${testImportSpecifier}';\n`,
+    );
     (result as Record<string, string>).types = `./dist/test/${shimBaseName}.d.ts`;
   }
 
@@ -244,7 +256,11 @@ async function createConditionalShim(
 
       if (importValue.types && typeof importValue.types === 'string') {
         const dtsPath = join(shimDir, `${baseFileName}.d.ts`);
-        await writeFile(dtsPath, `export * from '${testImportSpecifier}';\n`);
+        // Include side-effect import to preserve module augmentations (e.g., toMatchSnapshot on Assertion)
+        await writeFile(
+          dtsPath,
+          `import '${testImportSpecifier}';\nexport * from '${testImportSpecifier}';\n`,
+        );
         importResult.types = `./dist/test/${shimBaseName}.d.ts`;
       }
 
@@ -276,7 +292,11 @@ async function createConditionalShim(
 
       if (requireValue.types && typeof requireValue.types === 'string') {
         const dctsPath = join(shimDir, `${baseFileName}.d.cts`);
-        await writeFile(dctsPath, `export * from '${testImportSpecifier}';\n`);
+        // Include side-effect import to preserve module augmentations (e.g., toMatchSnapshot on Assertion)
+        await writeFile(
+          dctsPath,
+          `import '${testImportSpecifier}';\nexport * from '${testImportSpecifier}';\n`,
+        );
         requireResult.types = `./dist/test/${shimBaseName}.d.cts`;
       }
 

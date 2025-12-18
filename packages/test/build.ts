@@ -211,6 +211,8 @@ await createModuleRunnerStub();
 await createNodeEntry();
 await copyBrowserClientFiles();
 await createBrowserEntryFiles();
+await patchModuleAugmentations();
+await patchChaiTypeReference();
 const pluginExports = await createPluginExports();
 await mergePackageJson(pluginExports);
 await validateExternalDeps();
@@ -1814,6 +1816,94 @@ export * from '../dist/@vitest/browser/context.d.ts'
   const destContextDts = join(browserDir, 'context.d.ts');
   await writeFile(destContextDts, contextDtsContent, 'utf-8');
   console.log('  Created browser/context.d.ts');
+}
+
+/**
+ * Patch module augmentations in global.d.*.d.ts files to use relative paths.
+ *
+ * The original vitest types use module augmentation like:
+ *   declare module "@vitest/expect" { interface Assertion<T> { toMatchSnapshot: ... } }
+ *
+ * Since we bundle @vitest/* packages inside dist/@vitest/*, the bare specifier
+ * "@vitest/expect" doesn't exist as a package for consumers. This breaks the
+ * module augmentation - TypeScript can't find @vitest/expect to augment.
+ *
+ * The fix: Change module augmentation to use relative paths that TypeScript CAN resolve:
+ *   declare module "../@vitest/expect/index.js" { ... }
+ *
+ * This makes TypeScript augment the same module that our index.d.ts imports from,
+ * so the augmented properties (toMatchSnapshot, toMatchInlineSnapshot, etc.)
+ * appear on the Assertion type that consumers import.
+ */
+async function patchModuleAugmentations() {
+  console.log('\nPatching module augmentations in global.d.*.d.ts files...');
+
+  const chunksDir = join(distDir, 'chunks');
+  const globalDtsFiles: string[] = [];
+
+  // Find all global.d.*.d.ts files
+  for await (const file of fsGlob(join(chunksDir, 'global.d.*.d.ts'))) {
+    globalDtsFiles.push(file);
+  }
+
+  if (globalDtsFiles.length === 0) {
+    console.log('  No global.d.*.d.ts files found');
+    return;
+  }
+
+  // Module augmentation mappings: bare specifier -> relative path from chunks/
+  const augmentationMappings: Record<string, string> = {
+    '@vitest/expect': '../@vitest/expect/index.js',
+    '@vitest/runner': '../@vitest/runner/index.js',
+  };
+
+  for (const file of globalDtsFiles) {
+    let content = await readFile(file, 'utf-8');
+    let modified = false;
+
+    for (const [bareSpecifier, relativePath] of Object.entries(augmentationMappings)) {
+      const oldPattern = `declare module "${bareSpecifier}"`;
+      const newPattern = `declare module "${relativePath}"`;
+
+      if (content.includes(oldPattern)) {
+        content = content.replaceAll(oldPattern, newPattern);
+        modified = true;
+        console.log(`  Patched: ${bareSpecifier} -> ${relativePath} in ${basename(file)}`);
+      }
+    }
+
+    if (modified) {
+      await writeFile(file, content, 'utf-8');
+    }
+  }
+}
+
+/**
+ * Add triple-slash reference to @types/chai in @vitest/expect types.
+ *
+ * The @vitest/expect types use the Chai namespace (e.g., Chai.Assertion) which
+ * is defined in @types/chai. Without a reference directive, TypeScript won't
+ * automatically find the Chai types, causing the `not` property and other
+ * chai-specific features to be missing from the Assertion interface.
+ */
+async function patchChaiTypeReference() {
+  console.log('\nAdding @types/chai reference to @vitest/expect types...');
+
+  const expectIndexDts = join(distDir, '@vitest/expect/index.d.ts');
+
+  let content = await readFile(expectIndexDts, 'utf-8');
+
+  // Check if reference already exists
+  if (content.includes('/// <reference types="chai"')) {
+    console.log('  Reference already exists, skipping');
+    return;
+  }
+
+  // Add triple-slash reference at the top
+  content = `/// <reference types="chai" />\n${content}`;
+
+  await writeFile(expectIndexDts, content, 'utf-8');
+  console.log('  Added /// <reference types="chai" /> to @vitest/expect/index.d.ts');
 }
 
 /**

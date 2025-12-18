@@ -270,6 +270,7 @@
     }
   },
   "dependencies": {
+    "@types/chai": "^5.2.2",
     "@voidzero-dev/vite-plus-core": "workspace:*",
     "es-module-lexer": "^1.7.0",
     "expect-type": "^1.2.2",

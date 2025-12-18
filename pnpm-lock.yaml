@@ -530,6 +530,9 @@ importers:
       '@opentelemetry/api':
         specifier: ^1.9.0
         version: 1.9.0
+      '@types/chai':
+        specifier: ^5.2.2
+        version: 5.2.3
       '@types/node':
         specifier: ^20.0.0 || ^22.0.0 || >=24.0.0
         version: 22.19.1
