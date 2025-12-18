@@ -123,13 +123,10 @@ const VITEST_PACKAGE_TO_PATH: Record<string, string> = {
   '@vitest/browser/locators': '@vitest/browser/locators.js',
   // @vitest/browser-playwright
   '@vitest/browser-playwright': '@vitest/browser-playwright/index.js',
-  '@vitest/browser-playwright/context': '@vitest/browser-playwright/context.d.ts',
   // @vitest/browser-webdriverio
   '@vitest/browser-webdriverio': '@vitest/browser-webdriverio/index.js',
-  '@vitest/browser-webdriverio/context': '@vitest/browser-webdriverio/context.d.ts',
   // @vitest/browser-preview
   '@vitest/browser-preview': '@vitest/browser-preview/index.js',
-  '@vitest/browser-preview/context': '@vitest/browser-preview/context.d.ts',
 };
 
 // Packages that should NOT be bundled into dist/vendor/ (remain external at runtime)
@@ -425,6 +422,21 @@ async function copyVitestPackages() {
     const copied = await copyDirRecursive(srcDir, destPkgDir);
     totalCopied += copied;
     console.log(`    -> ${copied} files`);
+
+    // Copy root type definition files if they exist
+    // These include context.d.ts (browser providers), matchers.d.ts (expect.element), jest-dom.d.ts (matchers)
+    const rootDtsFiles = ['context.d.ts', 'matchers.d.ts', 'jest-dom.d.ts'];
+    for (const dtsFile of rootDtsFiles) {
+      const rootDts = resolve(projectDir, `node_modules/${pkg}/${dtsFile}`);
+      try {
+        await stat(rootDts);
+        await copyFile(rootDts, join(destPkgDir, dtsFile));
+        console.log(`    + copied ${dtsFile}`);
+        totalCopied++;
+      } catch {
+        // File doesn't exist, skip
+      }
+    }
   }
 
   console.log(`\nCopied ${totalCopied} files to dist/@vitest/`);
@@ -654,9 +666,12 @@ async function rewriteVitestImports(leafDepToVendorPath: Map<string, string>) {
   let rewrittenCount = 0;
 
   // Scan both @vitest/* packages AND vitest core dist files
+  // Include .d.ts files so TypeScript type imports also get rewritten
   const jsFiles = fsGlob([
     join(vitestDir, '**/*.js'),
+    join(vitestDir, '**/*.d.ts'),
     join(distDir, '*.js'),
+    join(distDir, '*.d.ts'),
     join(distDir, 'chunks/*.js'),
   ]);
 
@@ -1182,8 +1197,11 @@ async function patchVitestBrowserPackage() {
         return '\\0vitest/browser';
       }
       // Handle vitest/* subpaths (resolve to our dist files)
+      // Also handle @voidzero-dev package aliases that resolve to the same files
       const vitestSubpathMap = {
         'vitest': resolve(packageRoot, 'index.js'),
+        '@voidzero-dev/vite-plus-test': resolve(packageRoot, 'index.js'),
+        '@voidzero-dev/vite-plus/test': resolve(packageRoot, 'index.js'),
         'vitest/node': resolve(packageRoot, 'node.js'),
         'vitest/config': resolve(packageRoot, 'config.js'),
         'vitest/internal/browser': resolve(packageRoot, 'browser.js'),

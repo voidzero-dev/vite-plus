@@ -225,20 +225,11 @@
     "./plugins/browser-playwright": {
       "default": "./dist/plugins/browser-playwright.mjs"
     },
-    "./plugins/browser-playwright-context": {
-      "default": "./dist/plugins/browser-playwright-context.mjs"
-    },
     "./plugins/browser-webdriverio": {
       "default": "./dist/plugins/browser-webdriverio.mjs"
     },
-    "./plugins/browser-webdriverio-context": {
-      "default": "./dist/plugins/browser-webdriverio-context.mjs"
-    },
     "./plugins/browser-preview": {
       "default": "./dist/plugins/browser-preview.mjs"
-    },
-    "./plugins/browser-preview-context": {
-      "default": "./dist/plugins/browser-preview-context.mjs"
     }
   },
   "main": "./dist/index.js",

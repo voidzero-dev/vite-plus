@@ -272,20 +272,11 @@
     "./test/plugins/browser-playwright": {
       "default": "./dist/test/plugins/browser-playwright.js"
     },
-    "./test/plugins/browser-playwright-context": {
-      "default": "./dist/test/plugins/browser-playwright-context.js"
-    },
     "./test/plugins/browser-webdriverio": {
       "default": "./dist/test/plugins/browser-webdriverio.js"
     },
-    "./test/plugins/browser-webdriverio-context": {
-      "default": "./dist/test/plugins/browser-webdriverio-context.js"
-    },
     "./test/plugins/browser-preview": {
       "default": "./dist/test/plugins/browser-preview.js"
-    },
-    "./test/plugins/browser-preview-context": {
-      "default": "./dist/test/plugins/browser-preview-context.js"
     }
   }
 }
