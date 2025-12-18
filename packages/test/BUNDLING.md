@@ -284,21 +284,22 @@ When upgrading the vitest version:
 ### Build Flow
 
 ```
-1. bundleVitest()           Copy vitest-dev dist/ -> dist/
-2. copyVitestPackages()     Copy @vitest/* -> dist/@vitest/
-3. convertTabsToSpaces()    Normalize formatting for patches
-4. collectLeafDependencies() Parse imports with oxc-parser
-5. bundleLeafDeps()         Bundle chai, pathe, etc -> dist/vendor/
-6. rewriteVitestImports()   Rewrite @vitest/*, vitest/*, vite
-7. patchVitestPkgRootPaths() Fix distRoot for relocated files
+1. bundleVitest()              Copy vitest-dev dist/ -> dist/
+2. copyVitestPackages()        Copy @vitest/* -> dist/@vitest/
+3. convertTabsToSpaces()       Normalize formatting for patches
+4. collectLeafDependencies()   Parse imports with oxc-parser
+5. bundleLeafDeps()            Bundle chai, pathe, etc -> dist/vendor/
+6. rewriteVitestImports()      Rewrite @vitest/*, vitest/*, vite
+7. patchVitestPkgRootPaths()   Fix distRoot for relocated files
 8. patchVitestBrowserPackage() Inject vendor-aliases plugin
-9. patchPlaywrightLocators() Fix browser-safe imports
+9. patchBrowserProviderLocators() Fix browser-safe imports
 10. Post-processing:
     - patchVendorPaths()
     - createBrowserCompatShim()
     - createModuleRunnerStub()   Browser-safe stub
     - createNodeEntry()          index-node.js with browser-provider
     - copyBrowserClientFiles()
+    - createBrowserEntryFiles()  browser/ entry files at package root
     - createPluginExports()      dist/plugins/* for pnpm overrides
     - mergePackageJson()
     - validateExternalDeps()
@@ -307,6 +308,9 @@ When upgrading the vitest version:
 ### Output Structure
 
 ```
+browser/                       # Entry files for ./browser export
+├── context.js                 # Runtime guard (throws if not in browser)
+└── context.d.ts               # Re-exports from dist/@vitest/browser/context.d.ts
 dist/
 ├── @vitest/                    # Copied packages (browser/Node.js safe)
 │   ├── runner/
@@ -355,6 +359,7 @@ This is achieved through:
 4. `vendor-aliases` plugin injection to resolve imports at runtime:
    - Handles `@vitest/*` imports → resolves to copied `dist/@vitest/` files
    - Handles `vitest/*` subpaths → resolves to dist files (enables `vitest/browser-playwright` usage)
+   - Handles `vitest/browser-playwright`, `vitest/browser-webdriverio`, `vitest/browser-preview` → resolves to bundled browser providers
    - Handles `@voidzero-dev/vite-plus-test/*` subpaths → maps to equivalent vitest paths
    - Handles `@voidzero-dev/vite-plus/test/*` subpaths → maps to equivalent vitest paths (CLI package)
    - Intercepts `vitest/browser`, `@voidzero-dev/vite-plus-test/browser`, `@voidzero-dev/vite-plus/test/browser` → returns virtual module ID for BrowserContext plugin

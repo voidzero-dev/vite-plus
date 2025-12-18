@@ -1213,6 +1213,10 @@ async function patchVitestBrowserPackage() {
         'vitest/reporters': resolve(packageRoot, 'reporters.js'),
         'vitest/snapshot': resolve(packageRoot, 'snapshot.js'),
         'vitest/mocker': resolve(packageRoot, 'mocker.js'),
+        // Browser providers - resolve to our bundled @vitest/browser-* packages
+        'vitest/browser-playwright': resolve(packageRoot, '@vitest/browser-playwright/index.js'),
+        'vitest/browser-webdriverio': resolve(packageRoot, '@vitest/browser-webdriverio/index.js'),
+        'vitest/browser-preview': resolve(packageRoot, '@vitest/browser-preview/index.js'),
       };
       if (vitestSubpathMap[id]) {
         return vitestSubpathMap[id];
@@ -1298,7 +1302,7 @@ async function patchVitestBrowserPackage() {
 
   // 4. Patch BrowserContext to also handle our package aliases as fallback
   // This allows direct imports from our package without requiring vitest override
-  // Supports: @voidzero-dev/vite-plus-test/browser, @voidzero-dev/vite-plus/test/browser
+  // Supports: vitest/browser, @voidzero-dev/vite-plus-test/browser, @voidzero-dev/vite-plus/test/browser
   const browserContextPattern = /if \(id === ID_CONTEXT\) \{/;
   if (browserContextPattern.test(content)) {
     content = content.replace(
@@ -1373,7 +1377,7 @@ async function patchBrowserProviderLocators() {
       // webdriverio/preview: import page from context.js, keep other imports from index.js
       const extraImportsStr = provider.extraImports.join(', ');
       const importPattern = new RegExp(
-        `import \\{ page, server, ${extraImportsStr.replace(/, /g, ', ')} \\} from ['"]\\.\\.\/browser\/index\\.js['"];?`,
+        `import \\{ page, server, ${extraImportsStr} \\} from ['"]\\.\\.\/browser\/index\\.js['"];?`,
       );
       if (importPattern.test(content)) {
         const replacement = `import { page } from '../browser/context.js';\nimport { ${extraImportsStr} } from '../browser/index.js';`;
