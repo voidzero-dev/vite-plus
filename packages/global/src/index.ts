@@ -1,3 +1,5 @@
+import t from '@bomb.sh/tab';
+
 // Parse command line arguments to intercept 'new', 'gen', and 'migration' commands
 const args = process.argv.slice(2);
 
@@ -15,6 +17,25 @@ const LOCAL_CLI_COMMANDS = [
 ];
 
 const command = args[0];
+
+// Define your CLI structure
+const devCmd = t.command('dev', 'Start development server');
+devCmd.option('port', 'Specify port', (complete) => {
+  complete('5173', 'Default port');
+  complete('8080', 'Rich port');
+});
+
+// Handle completion requests
+if (command === 'complete') {
+  const shell = process.argv[3];
+  if (shell === '--') {
+    const args = process.argv.slice(4);
+    t.parse(args);
+  } else {
+    t.setup('vite', 'vite', shell);
+  }
+  process.exit(0);
+}
 
 if (command === 'gen' || command === 'g' || command === 'generate' || command === 'new') {
   import('./gen/bin.js');

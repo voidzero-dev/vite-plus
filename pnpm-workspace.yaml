@@ -9,6 +9,7 @@ catalog:
   '@babel/core': ^7.24.7
   '@babel/preset-env': ^7.24.7
   '@babel/preset-typescript': ^7.24.7
+  '@bomb.sh/tab': ^0.0.10
   '@clack/prompts': ^0.11.0
   '@napi-rs/cli': ^3.4.1
   '@napi-rs/wasm-runtime': ^1.0.0

@@ -29,6 +29,7 @@
     "validate-npm-package-name": "catalog:"
   },
   "devDependencies": {
+    "@bomb.sh/tab": "catalog:",
     "@clack/prompts": "catalog:",
     "@napi-rs/cli": "catalog:",
     "@oxc-node/core": "catalog:",
