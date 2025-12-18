@@ -205,6 +205,7 @@ await patchBrowserProviderLocators();
 
 // Step 9: Post-processing
 await patchVendorPaths();
+await patchVitestCoreResolver();
 await createBrowserCompatShim();
 await createModuleRunnerStub();
 await createNodeEntry();
@@ -1075,6 +1076,68 @@ async function patchVendorPaths() {
   } else {
     console.log(`  Successfully patched ${patchedCount} file(s)`);
   }
+}
+
+/**
+ * Patch VitestCoreResolver to resolve @voidzero-dev/vite-plus/test directly.
+ *
+ * Problem: CLI's `export * from '@voidzero-dev/vite-plus-test'` creates a re-export
+ * chain that breaks module identity in Vite's SSR transform. expect.extend()
+ * mutations aren't visible through the re-export.
+ *
+ * Fix: Make VitestCoreResolver resolve both @voidzero-dev/vite-plus/test and
+ * @voidzero-dev/vite-plus-test directly to dist/index.js, bypassing re-exports.
+ */
+async function patchVitestCoreResolver() {
+  console.log('\nPatching VitestCoreResolver for CLI package alias...');
+
+  const cliApiChunks = await fsGlob(join(distDir, 'chunks/cli-api.*.js'));
+  const cliApiChunkArr: string[] = [];
+  for await (const chunk of cliApiChunks) {
+    cliApiChunkArr.push(chunk);
+  }
+
+  if (cliApiChunkArr.length === 0) {
+    throw new Error('cli-api chunk not found');
+  }
+
+  const cliApiChunk = cliApiChunkArr[0];
+  let content = await readFile(cliApiChunk, 'utf8');
+
+  // Find the VitestCoreResolver resolveId function and add our package aliases
+  const oldPattern = `async resolveId(id) {
+      if (id === "vitest") return resolve(distDir, "index.js");
+      if (id.startsWith("@vitest/") || id.startsWith("vitest/"))`;
+
+  const newCode = `async resolveId(id) {
+      if (id === "vitest") return resolve(distDir, "index.js");
+      // Resolve CLI test path and test package directly to dist/index.js
+      // This bypasses the re-export chain and ensures module identity is preserved
+      if (id === "@voidzero-dev/vite-plus/test" || id === "@voidzero-dev/vite-plus-test") {
+        return resolve(distDir, "index.js");
+      }
+      // Handle subpaths: @voidzero-dev/vite-plus/test/* -> vitest/*
+      if (id.startsWith("@voidzero-dev/vite-plus/test/")) {
+        const subpath = id.slice("@voidzero-dev/vite-plus/test/".length);
+        return this.resolve("vitest/" + subpath, join(ctx.config.root, "index.html"), { skipSelf: true });
+      }
+      // Handle subpaths: @voidzero-dev/vite-plus-test/* -> vitest/*
+      if (id.startsWith("@voidzero-dev/vite-plus-test/")) {
+        const subpath = id.slice("@voidzero-dev/vite-plus-test/".length);
+        return this.resolve("vitest/" + subpath, join(ctx.config.root, "index.html"), { skipSelf: true });
+      }
+      if (id.startsWith("@vitest/") || id.startsWith("vitest/"))`;
+
+  if (!content.includes(oldPattern)) {
+    throw new Error(
+      'Could not find VitestCoreResolver pattern to patch. ' +
+        'This likely means vitest code has changed and the patch needs to be updated.',
+    );
+  }
+
+  content = content.replace(oldPattern, newCode);
+  await writeFile(cliApiChunk, content);
+  console.log('  Patched VitestCoreResolver to resolve @voidzero-dev/vite-plus/test directly');
 }
 
 /**
