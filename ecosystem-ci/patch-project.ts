@@ -195,12 +195,39 @@ peerDependencyRules:
   }
 }
 
+async function patchSkeletonMigration() {
+  const packageJsonPath = join(projectDir, 'skeleton-migration', 'package.json');
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+
+  // Relax engine constraints to support broader node versions
+  if (packageJson.engines?.node) {
+    packageJson.engines.node = '>=22.0.0';
+  }
+
+  fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
+
+  // Patch pnpm-workspace.yaml
+  const pnpmWorkspacePath = join(projectDir, 'skeleton-migration', 'pnpm-workspace.yaml');
+  const pnpmWorkspaceContent = fs
+    .readFileSync(pnpmWorkspacePath, 'utf8')
+    .replace(/vite: .+/, `vite: "file:${tgzPath}/voidzero-dev-vite-plus-core-0.0.0.tgz"`)
+    .replace(/vitest: .+/, `vitest: "file:${tgzPath}/voidzero-dev-vite-plus-test-0.0.0.tgz"`)
+    .replace(
+      /'@voidzero-dev\/vite-plus': .+/,
+      `'@voidzero-dev/vite-plus': "file:${tgzPath}/voidzero-dev-vite-plus-0.0.0.tgz"`,
+    );
+  fs.writeFileSync(pnpmWorkspacePath, pnpmWorkspaceContent);
+}
+
 switch (project) {
   case 'vibe-dashboard':
     await patchVibeDashboard();
     break;
   case 'skeleton':
     await patchSkeleton();
+    break;
+  case 'skeleton-migration':
+    await patchSkeletonMigration();
     break;
   default:
     console.error(`Project ${project} is not supported`);

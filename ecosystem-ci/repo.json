@@ -4,6 +4,11 @@
     "branch": "main",
     "hash": "1d59e077dbf28d1931405864b06f06f9d3578903"
   },
+  "skeleton-migration": {
+    "repository": "https://github.com/fengmk2/skeleton.git",
+    "branch": "vite-plus-migration-e2e",
+    "hash": "89bc290409bc572024a5ae1f8b7d4e69a0268b21"
+  },
   "vibe-dashboard": {
     "repository": "https://github.com/voidzero-dev/vibe-dashboard.git",
     "branch": "main",
