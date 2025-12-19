@@ -213,6 +213,7 @@ await copyBrowserClientFiles();
 await createBrowserEntryFiles();
 await patchModuleAugmentations();
 await patchChaiTypeReference();
+await patchMockerHoistedModule();
 const pluginExports = await createPluginExports();
 await mergePackageJson(pluginExports);
 await validateExternalDeps();
@@ -1904,6 +1905,41 @@ async function patchChaiTypeReference() {
 
   await writeFile(expectIndexDts, content, 'utf-8');
   console.log('  Added /// <reference types="chai" /> to @vitest/expect/index.d.ts');
+}
+
+/**
+ * Patch the vitest mocker to recognize @voidzero-dev packages as valid sources for vi/vitest.
+ *
+ * The mocker's hoistMocks function checks if `vi` is imported from the 'vitest' module.
+ * When users import from '@voidzero-dev/vite-plus/test' instead, the mocker doesn't
+ * recognize it and throws "There are some problems in resolving the mocks API".
+ *
+ * This patch modifies the equality check to also accept our package names:
+ * - @voidzero-dev/vite-plus/test
+ * - @voidzero-dev/vite-plus-test
+ */
+async function patchMockerHoistedModule() {
+  console.log('\nPatching vitest mocker to recognize @voidzero-dev packages...');
+
+  const mockerPath = join(distDir, '@vitest/mocker/node.js');
+  let content = await readFile(mockerPath, 'utf-8');
+
+  // Find and replace the hoistedModule check
+  // Original: if (hoistedModule === source) {
+  // New: if (hoistedModule === source || source === "@voidzero-dev/vite-plus/test" || source === "@voidzero-dev/vite-plus-test") {
+  const originalCheck = 'if (hoistedModule === source) {';
+  const newCheck =
+    'if (hoistedModule === source || source === "@voidzero-dev/vite-plus/test" || source === "@voidzero-dev/vite-plus-test") {';
+
+  if (!content.includes(originalCheck)) {
+    console.log('  Warning: Could not find hoistedModule check to patch');
+    return;
+  }
+
+  content = content.replace(originalCheck, newCheck);
+
+  await writeFile(mockerPath, content, 'utf-8');
+  console.log('  Patched hoistMocks to recognize @voidzero-dev packages');
 }
 
 /**
