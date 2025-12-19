@@ -16,6 +16,10 @@ use crate::{ast_grep, file_walker};
 /// - `import { ... } from '@vitest/browser/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser/{name}'`
 /// - `import { ... } from '@vitest/browser-playwright'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-playwright'`
 /// - `import { ... } from '@vitest/browser-playwright/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-playwright/{name}'`
+/// - `import { ... } from '@vitest/browser-preview'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-preview'`
+/// - `import { ... } from '@vitest/browser-preview/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-preview/{name}'`
+/// - `import { ... } from '@vitest/browser-webdriverio'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-webdriverio'`
+/// - `import { ... } from '@vitest/browser-webdriverio/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-webdriverio/{name}'`
 const REWRITE_IMPORT_RULES: &str = r#"---
 id: rewrite-vitest-config-import
 language: TypeScript
@@ -70,7 +74,7 @@ language: TypeScript
 rule:
   pattern: $STR
   kind: string
-  regex: ^['"]@vitest/(browser-playwright|browser)(/.*)?['"]$
+  regex: ^['"]@vitest/(browser-playwright|browser-preview|browser-webdriverio|browser)(/.*)?['"]$
   inside:
     kind: import_statement
 transform:
@@ -508,6 +512,70 @@ export default something;"#;
         assert_eq!(
             result.content,
             r#"import { something } from "@voidzero-dev/vite-plus/test/browser-playwright/context";
+
+export default something;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_preview() {
+        let vite_config = r#"import { preview } from '@vitest/browser-preview';
+
+export default preview;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { preview } from '@voidzero-dev/vite-plus/test/browser-preview';
+
+export default preview;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_preview_subpath() {
+        let vite_config = r#"import { something } from "@vitest/browser-preview/context";
+
+export default something;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { something } from "@voidzero-dev/vite-plus/test/browser-preview/context";
+
+export default something;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_webdriverio() {
+        let vite_config = r#"import { webdriverio } from '@vitest/browser-webdriverio';
+
+export default webdriverio;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { webdriverio } from '@voidzero-dev/vite-plus/test/browser-webdriverio';
+
+export default webdriverio;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_webdriverio_subpath() {
+        let vite_config = r#"import { something } from "@vitest/browser-webdriverio/context";
+
+export default something;"#;
+
+        let result = rewrite_import_content(vite_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { something } from "@voidzero-dev/vite-plus/test/browser-webdriverio/context";
 
 export default something;"#
         );

@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { foo } from '@foo/vite-plugin-foo';
 import { playwright } from '@vitest/browser-playwright';
 import { server } from '@vitest/browser-playwright/context';
+import { preview } from '@vitest/browser-preview';
+import { webdriverio } from '@vitest/browser-webdriverio';
 import { userEvent } from '@vitest/browser/context';
 import { defineConfig } from 'vitest/config';
 

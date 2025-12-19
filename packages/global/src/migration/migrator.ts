@@ -36,7 +36,9 @@ const REMOVE_PACKAGES = [
   'oxlint-tsgolint',
   'oxfmt',
   '@vitest/browser',
+  '@vitest/browser-preview',
   '@vitest/browser-playwright',
+  '@vitest/browser-webdriverio',
 ] as const;
 
 export function checkViteVersion(projectPath: string): boolean {

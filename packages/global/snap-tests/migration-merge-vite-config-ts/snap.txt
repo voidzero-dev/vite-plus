@@ -11,16 +11,18 @@
 │
 ◆  ✅ Merged .oxfmtrc.json into vite.config.ts
 │
-◆  ✅ Rewrote imports in 2 file(s)
+◆  ✅ Rewrote imports in 1 file(s)
 │
 ●    vite.config.ts
-│    vitest.config.ts
 │
 └  ✨ Migration completed!
 
 
 > cat vite.config.ts # check vite.config.ts
+import { join } from 'node:path';
+
 import react from '@vitejs/plugin-react';
+import { playwright } from '@voidzero-dev/vite-plus/test/browser-playwright';
 import { defineConfig } from '@voidzero-dev/vite-plus';
 
 export default defineConfig({
@@ -37,17 +39,6 @@ export default defineConfig({
     },
   },
   plugins: [react()],
-});
-
-> cat vitest.config.ts # check vitest.config.ts
-import { join } from 'node:path';
-
-import { foo } from '@foo/vite-plugin-foo';
-import { playwright } from '@voidzero-dev/vite-plus/test/browser-playwright';
-import { defineConfig } from '@voidzero-dev/vite-plus';
-
-export default defineConfig({
-  plugins: [foo()],
   test: {
     dir: join(import.meta.dirname, 'test'),
     browser: {

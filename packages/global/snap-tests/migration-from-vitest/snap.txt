@@ -21,6 +21,8 @@ import { join } from 'node:path';
 import { foo } from '@foo/vite-plugin-foo';
 import { playwright } from '@voidzero-dev/vite-plus/test/browser-playwright';
 import { server } from '@voidzero-dev/vite-plus/test/browser-playwright/context';
+import { preview } from '@voidzero-dev/vite-plus/test/browser-preview';
+import { webdriverio } from '@voidzero-dev/vite-plus/test/browser-webdriverio';
 import { userEvent } from '@voidzero-dev/vite-plus/test/browser/context';
 import { defineConfig } from '@voidzero-dev/vite-plus';
 

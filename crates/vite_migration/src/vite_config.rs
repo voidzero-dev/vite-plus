@@ -542,10 +542,21 @@ export default defineConfig({});"#;
 }"#;
 
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from 'vite';
+
+export default defineConfig({
+  lint: {
+    rules: {
+      'no-console': 'warn',
+    },
+  },
+  
+});"#
+        );
         assert!(result.updated);
         assert!(!result.uses_function_callback);
-        assert!(result.content.contains("lint: {"));
-        assert!(result.content.contains("'no-console': 'warn'"));
     }
 
     #[test]
