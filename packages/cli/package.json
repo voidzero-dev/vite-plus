@@ -155,6 +155,10 @@
       "types": "./dist/test/context.d.ts",
       "default": "./dist/test/context.js"
     },
+    "./test/browser/context": {
+      "types": "./dist/test/browser/context.d.ts",
+      "default": "./dist/test/browser/context.js"
+    },
     "./test/locators": {
       "default": "./dist/test/locators.js"
     },

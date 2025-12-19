@@ -108,6 +108,10 @@
       "types": "./browser/context.d.ts",
       "default": "./dist/context.js"
     },
+    "./browser/context": {
+      "types": "./browser/context.d.ts",
+      "default": "./dist/context.js"
+    },
     "./locators": {
       "default": "./dist/locators.js"
     },

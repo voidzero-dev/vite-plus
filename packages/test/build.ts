@@ -291,6 +291,11 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
       types: './browser/context.d.ts',
       default: './dist/context.js',
     };
+    // Also export ./browser/context for users importing @voidzero-dev/vite-plus/test/browser/context
+    destPkg.exports['./browser/context'] = {
+      types: './browser/context.d.ts',
+      default: './dist/context.js',
+    };
     destPkg.exports['./locators'] = {
       default: './dist/locators.js',
     };
