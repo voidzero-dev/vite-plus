@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -208,12 +209,34 @@ peerDependencyRules:
   }
 }
 
+async function migrateProject(project: string) {
+  const repoRoot = join(projectDir, project);
+  // run vite migrate
+  execSync('vite migrate', {
+    cwd: repoRoot,
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      VITE_PLUS_OVERRIDE_PACKAGES: JSON.stringify({
+        vite: `file:${tgzPath}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
+        vitest: `file:${tgzPath}/voidzero-dev-vite-plus-test-0.0.0.tgz`,
+        '@voidzero-dev/vite-plus-core': `file:${tgzPath}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
+        '@voidzero-dev/vite-plus-test': `file:${tgzPath}/voidzero-dev-vite-plus-test-0.0.0.tgz`,
+      }),
+      VITE_PLUS_VERSION: `file:${tgzPath}/voidzero-dev-vite-plus-0.0.0.tgz`,
+    },
+  });
+}
+
 switch (project) {
   case 'vibe-dashboard':
     await patchVibeDashboard();
     break;
   case 'skeleton':
     await patchSkeleton();
+    break;
+  case 'rollipop':
+    await migrateProject(project);
     break;
   default:
     console.error(`Project ${project} is not supported`);

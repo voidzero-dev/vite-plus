@@ -8,5 +8,10 @@
     "repository": "https://github.com/voidzero-dev/vibe-dashboard.git",
     "branch": "main",
     "hash": "30c68c9ad65c1315abf4c69366b21bc63b5d0fb4"
+  },
+  "rollipop": {
+    "repository": "https://github.com/leegeunhyeok/rollipop.git",
+    "branch": "main",
+    "hash": "37095bfa36fa4c8bdf5e48f050aff39b3ffe8cc1"
   }
 }

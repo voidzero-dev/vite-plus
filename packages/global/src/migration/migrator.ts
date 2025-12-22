@@ -24,13 +24,10 @@ import {
   detectPackageMetadata,
   VITE_PLUS_NAME,
   VITE_PLUS_VERSION,
+  VITE_PLUS_OVERRIDE_PACKAGES,
 } from '../utils/index.js';
 import { detectConfigs, type ConfigFiles } from './detector.js';
 
-const OVERRIDE_PACKAGES = {
-  vite: 'npm:@voidzero-dev/vite-plus-core@latest',
-  vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
-} as const;
 // packages that are replaced with vite-plus
 const REMOVE_PACKAGES = [
   'oxlint',
@@ -102,24 +99,24 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
     if (packageManager === PackageManager.yarn) {
       pkg.resolutions = {
         ...pkg.resolutions,
-        ...OVERRIDE_PACKAGES,
+        ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
     } else if (packageManager === PackageManager.npm) {
       pkg.overrides = {
         ...pkg.overrides,
-        ...OVERRIDE_PACKAGES,
+        ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
     } else if (packageManager === PackageManager.pnpm) {
       pkg.pnpm = {
         ...pkg.pnpm,
         overrides: {
           ...pkg.pnpm?.overrides,
-          ...OVERRIDE_PACKAGES,
+          ...VITE_PLUS_OVERRIDE_PACKAGES,
         },
       };
       // remove packages from `resolutions` field if they exist
       // https://pnpm.io/9.x/package_json#resolutions
-      for (const key of [...Object.keys(OVERRIDE_PACKAGES), ...REMOVE_PACKAGES]) {
+      for (const key of [...Object.keys(VITE_PLUS_OVERRIDE_PACKAGES), ...REMOVE_PACKAGES]) {
         if (pkg.resolutions?.[key]) {
           delete pkg.resolutions[key];
         }
@@ -220,7 +217,7 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
     rewriteCatalog(doc);
 
     // overrides
-    for (const key of Object.keys(OVERRIDE_PACKAGES)) {
+    for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {
       doc.setIn(['overrides', scalarString(key)], scalarString('catalog:'));
     }
     // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:rolldown-vite@7.0.12"
@@ -240,7 +237,7 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
       allowAny = new YAMLSeq<Scalar<string>>();
     }
     const existing = new Set(allowAny.items.map((n) => n.value));
-    for (const key of Object.keys(OVERRIDE_PACKAGES)) {
+    for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {
       if (!existing.has(key)) {
         allowAny.add(scalarString(key));
       }
@@ -255,7 +252,7 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
     if (!allowedVersions) {
       allowedVersions = new YAMLMap<Scalar<string>, Scalar<string>>();
     }
-    for (const key of Object.keys(OVERRIDE_PACKAGES)) {
+    for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {
       // - vite: '*'
       allowedVersions.set(scalarString(key), scalarString('*'));
     }
@@ -325,7 +322,7 @@ function rewriteYarnrcYml(projectPath: string): void {
  * @param doc - The document to rewrite
  */
 function rewriteCatalog(doc: YamlDocument): void {
-  for (const [key, value] of Object.entries(OVERRIDE_PACKAGES)) {
+  for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
     doc.setIn(['catalog', key], scalarString(value));
   }
   doc.setIn(['catalog', VITE_PLUS_NAME], scalarString(VITE_PLUS_VERSION));
@@ -362,19 +359,19 @@ function rewriteRootWorkspacePackageJson(
         ...pkg.resolutions,
         // FIXME: yarn don't support catalog on resolutions
         // https://github.com/yarnpkg/berry/issues/6979
-        ...OVERRIDE_PACKAGES,
+        ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
     } else if (packageManager === PackageManager.npm) {
       pkg.overrides = {
         ...pkg.overrides,
-        ...OVERRIDE_PACKAGES,
+        ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
     } else if (packageManager === PackageManager.pnpm) {
       // pnpm use overrides field at pnpm-workspace.yaml
       // so we don't need to set overrides field at package.json
       // remove packages from `resolutions` field and `pnpm.overrides` field if they exist
       // https://pnpm.io/9.x/package_json#resolutions
-      for (const key of [...Object.keys(OVERRIDE_PACKAGES), ...REMOVE_PACKAGES]) {
+      for (const key of [...Object.keys(VITE_PLUS_OVERRIDE_PACKAGES), ...REMOVE_PACKAGES]) {
         if (pkg.pnpm?.overrides?.[key]) {
           delete pkg.pnpm.overrides[key];
         }
@@ -439,7 +436,7 @@ export function rewritePackageJson(
   }
   const supportCatalog = isMonorepo && packageManager !== PackageManager.npm;
   let needVitePlus = false;
-  for (const [key, version] of Object.entries(OVERRIDE_PACKAGES)) {
+  for (const [key, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
     const value = supportCatalog ? 'catalog:' : version;
     if (pkg.devDependencies?.[key]) {
       pkg.devDependencies[key] = value;
