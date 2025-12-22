@@ -1,0 +1,61 @@
+> vp migration # migration should rewrite imports to vite-plus
+┌  Vite+ Migration
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+◆  ✅ Rewrote imports in 1 file(s)
+│
+●    src/index.ts
+│
+└  ✨ Migration completed!
+
+
+> cat src/index.ts # check src/index.ts
+import type { RuntimeEnvConfig } from './runtime.env.config.js';
+import type { RuntimeHtmlConfig } from './runtime.html.config.js';
+
+declare module '@voidzero-dev/vite-plus' {
+  interface UserConfig {
+    /**
+     * Options for vite-plugin-runtime-env
+     */
+    runtimeEnv?: RuntimeEnvConfig;
+    /**
+     * Options for vite-plugin-runtime-html
+     */
+    runtimeHtml?: RuntimeHtmlConfig;
+  }
+}
+
+declare module '@voidzero-dev/vite-plus/test' {
+  export const describe: any;
+  export const it: any;
+  export const expect: any;
+  export const beforeAll: any;
+  export const afterAll: any;
+}
+
+declare module '@voidzero-dev/vite-plus' {
+  export function defineConfig(config: any): any;
+  const _default: typeof defineConfig;
+  export default _default;
+}
+
+> cat package.json # check package.json
+{
+  "name": "migration-rewrite-declare-module",
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "devDependencies": {
+    "@voidzero-dev/vite-plus": "latest"
+  },
+  "packageManager": "pnpm@<semver>"
+}

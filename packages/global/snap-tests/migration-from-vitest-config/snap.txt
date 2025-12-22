@@ -7,10 +7,9 @@
 │
 ●  pnpm@<semver> installed
 │
-◆  ✅ Rewrote imports in 2 file(s)
+◆  ✅ Rewrote imports in 1 file(s)
 │
-●    test/hello.ts
-│    vitest.config.ts
+●    vitest.config.ts
 │
 └  ✨ Migration completed!
 
@@ -42,7 +41,7 @@ export default defineConfig({
 
 > cat package.json # check package.json
 {
-  "name": "migration-from-vitest",
+  "name": "migration-from-vitest-config",
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
@@ -63,15 +62,3 @@ export default defineConfig({
   },
   "packageManager": "pnpm@<semver>"
 }
-
-> cat test/hello.ts # check test/hello.ts
-import { server } from '@voidzero-dev/vite-plus/test/browser-playwright/context';
-import { test, describe, expect, it } from '@voidzero-dev/vite-plus/test';
-
-const { readFile } = server.commands;
-
-describe('Hello', () => {
-  it('should return the correct result', () => {
-    expect(true).toBe(true);
-  });
-});

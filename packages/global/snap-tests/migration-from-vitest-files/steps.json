@@ -1,0 +1,10 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp migration # migration should rewrite imports to vite-plus",
+    "cat package.json # check package.json",
+    "cat test/hello.ts # check test/hello.ts"
+  ]
+}
