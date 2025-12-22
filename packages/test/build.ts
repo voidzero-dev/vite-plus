@@ -1958,8 +1958,10 @@ async function patchMockerHoistedModule() {
     'if (hoistedModule === source || source === "@voidzero-dev/vite-plus/test" || source === "@voidzero-dev/vite-plus-test") {';
 
   if (!content.includes(originalCheck)) {
-    console.log('  Warning: Could not find hoistedModule check to patch');
-    return;
+    throw new Error(
+      'Could not find hoistedModule check to patch in @vitest/mocker. ' +
+        'This likely means vitest code has changed and the patch needs to be updated.',
+    );
   }
 
   content = content.replace(originalCheck, newCheck);
