@@ -48,6 +48,10 @@
       "default": "./dist/pluginutils/index.js",
       "types": "./dist/pluginutils/index.d.ts"
     },
+    "./lib": {
+      "default": "./dist/tsdown/index.mjs",
+      "types": "./dist/tsdown/index-types.d.ts"
+    },
     "./types/*": {
       "types": "./dist/vite/types/*"
     },
@@ -160,9 +164,12 @@
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
     "es-module-lexer": "^1.7.0",
+    "hookable": "^6.0.1",
     "magic-string": "^0.30.21",
+    "pkg-types": "^2.3.0",
     "picocolors": "^1.1.1",
     "rolldown": "workspace:*",
+    "rolldown-plugin-dts": "catalog:",
     "vite": "workspace:*",
     "rollup": "^4.18.0",
     "rollup-plugin-license": "^3.6.0",

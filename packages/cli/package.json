@@ -66,6 +66,10 @@
       "types": "./binding/index.d.ts"
     },
     "./package.json": "./package.json",
+    "./lib": {
+      "import": "./dist/lib.js",
+      "types": "./dist/lib.d.ts"
+    },
     "./test": {
       "import": {
         "types": "./dist/test/index.d.ts",

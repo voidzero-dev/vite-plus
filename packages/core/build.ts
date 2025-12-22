@@ -3,6 +3,7 @@ import { join, parse, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { build, type BuildOptions } from 'rolldown';
+import { dts } from 'rolldown-plugin-dts';
 import { glob } from 'tinyglobby';
 
 import { RewriteImportsPlugin } from './build-support/rewrite-imports';
@@ -46,7 +47,8 @@ async function buildVite() {
               external === 'tinyglobby' ||
               external === 'fdir' ||
               external === 'rolldown')) ||
-          (external instanceof RegExp && external.test('rolldown/'))
+          external === 'yaml' ||
+          (external instanceof RegExp && (external.test('rolldown/') || external.test('vite/')))
         );
       });
     }
@@ -71,6 +73,8 @@ async function buildVite() {
 
     if (Array.isArray(config.plugins)) {
       config.plugins = [
+        // Add RewriteImportsPlugin to handle vite/rolldown import rewrites
+        RewriteImportsPlugin,
         {
           name: 'rewrite-static-paths',
           transform(_, id, meta) {
@@ -112,8 +116,6 @@ async function buildVite() {
             }
           },
         },
-        // Add RewriteImportsPlugin to handle vite/rolldown import rewrites
-        RewriteImportsPlugin,
         ...config.plugins.filter((plugin) => {
           return !(
             typeof plugin === 'object' &&
@@ -243,7 +245,10 @@ async function bundleTsdown() {
 
   // Re-build tsdown cli
   await build({
-    input: join(tsdownSourceDir, 'dist/run.mjs'),
+    input: {
+      run: join(tsdownSourceDir, 'dist/run.mjs'),
+      index: join(tsdownSourceDir, 'dist/index.mjs'),
+    },
     output: {
       format: 'esm',
       cleanDir: true,
@@ -252,6 +257,23 @@ async function bundleTsdown() {
     platform: 'node',
     external: (id: string) => tsdownExternal.some((e) => id.startsWith(e)),
     plugins: [RewriteImportsPlugin],
+  });
+
+  await build({
+    input: {
+      'index-types': join(tsdownSourceDir, 'dist/index.d.mts'),
+    },
+    output: {
+      format: 'esm',
+      dir: join(projectDir, 'dist/tsdown'),
+    },
+    plugins: [
+      RewriteImportsPlugin,
+      dts({
+        oxc: true,
+        dtsInput: true,
+      }),
+    ],
   });
 }
 
