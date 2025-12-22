@@ -106,11 +106,11 @@
     },
     "./context": {
       "types": "./browser/context.d.ts",
-      "default": "./dist/context.js"
+      "default": "./dist/@vitest/browser/context.js"
     },
     "./browser/context": {
       "types": "./browser/context.d.ts",
-      "default": "./dist/context.js"
+      "default": "./dist/@vitest/browser/context.js"
     },
     "./locators": {
       "default": "./dist/locators.js"
@@ -130,6 +130,18 @@
       "default": "./dist/@vitest/browser-webdriverio/index.js"
     },
     "./browser-preview": {
+      "types": "./dist/@vitest/browser-preview/index.d.ts",
+      "default": "./dist/@vitest/browser-preview/index.js"
+    },
+    "./browser/providers/playwright": {
+      "types": "./dist/@vitest/browser-playwright/index.d.ts",
+      "default": "./dist/@vitest/browser-playwright/index.js"
+    },
+    "./browser/providers/webdriverio": {
+      "types": "./dist/@vitest/browser-webdriverio/index.d.ts",
+      "default": "./dist/@vitest/browser-webdriverio/index.js"
+    },
+    "./browser/providers/preview": {
       "types": "./dist/@vitest/browser-preview/index.d.ts",
       "default": "./dist/@vitest/browser-preview/index.js"
     },

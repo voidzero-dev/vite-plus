@@ -287,14 +287,17 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
     destPkg.exports['./client'] = {
       default: './dist/client.js',
     };
+    // Point to @vitest/browser/context.js so that tests and init scripts share the same module
+    // This is critical: the init script (locators.js) calls page.extend() on this module,
+    // and tests must use the SAME module instance to see the extended methods
     destPkg.exports['./context'] = {
       types: './browser/context.d.ts',
-      default: './dist/context.js',
+      default: './dist/@vitest/browser/context.js',
     };
     // Also export ./browser/context for users importing @voidzero-dev/vite-plus/test/browser/context
     destPkg.exports['./browser/context'] = {
       types: './browser/context.d.ts',
-      default: './dist/context.js',
+      default: './dist/@vitest/browser/context.js',
     };
     destPkg.exports['./locators'] = {
       default: './dist/locators.js',
@@ -323,6 +326,21 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
     // Add @vitest/browser-preview compatible export
     // Users can import { preview } from 'vitest/browser-preview'
     destPkg.exports['./browser-preview'] = {
+      types: './dist/@vitest/browser-preview/index.d.ts',
+      default: './dist/@vitest/browser-preview/index.js',
+    };
+
+    // Add browser/providers/* alias exports for compatibility
+    // Some vitest examples use the nested path format
+    destPkg.exports['./browser/providers/playwright'] = {
+      types: './dist/@vitest/browser-playwright/index.d.ts',
+      default: './dist/@vitest/browser-playwright/index.js',
+    };
+    destPkg.exports['./browser/providers/webdriverio'] = {
+      types: './dist/@vitest/browser-webdriverio/index.d.ts',
+      default: './dist/@vitest/browser-webdriverio/index.js',
+    };
+    destPkg.exports['./browser/providers/preview'] = {
       types: './dist/@vitest/browser-preview/index.d.ts',
       default: './dist/@vitest/browser-preview/index.js',
     };
@@ -1343,8 +1361,11 @@ async function patchVitestBrowserPackage() {
   // - tailwindcss: pulls in @tailwindcss/oxide
   // Also exclude @vitest/ui (optional peer dependency) and its subpath
   // Also exclude @vitest/mocker/node which imports @voidzero-dev/vite-plus-core
+  // Also exclude our package aliases to preserve module identity with init scripts
+  // This prevents Vite from pre-bundling our browser context, ensuring both init scripts
+  // (loaded via /@fs/) and tests use the same page singleton
   const excludeReplacement =
-    '$1\n          "@vitest/browser",\n          "@vitest/ui",\n          "@vitest/ui/reporter",\n          "@vitest/mocker/node",\n          "vite",\n          "@voidzero-dev/vite-plus-core",\n          "@voidzero-dev/vite-plus-core/module-runner",\n          "lightningcss",\n          "@tailwindcss/oxide",\n          "tailwindcss",$2';
+    '$1\n          "@vitest/browser",\n          "@vitest/ui",\n          "@vitest/ui/reporter",\n          "@vitest/mocker/node",\n          "@voidzero-dev/vite-plus-test",\n          "@voidzero-dev/vite-plus-test/browser",\n          "@voidzero-dev/vite-plus-test/browser/context",\n          "@voidzero-dev/vite-plus/test",\n          "@voidzero-dev/vite-plus/test/browser",\n          "@voidzero-dev/vite-plus/test/browser/context",\n          "vite",\n          "@voidzero-dev/vite-plus-core",\n          "@voidzero-dev/vite-plus-core/module-runner",\n          "lightningcss",\n          "@tailwindcss/oxide",\n          "tailwindcss",$2';
   if (excludePattern.test(content)) {
     content = content.replace(excludePattern, excludeReplacement);
     console.log('  Patched exclude list with native deps');
