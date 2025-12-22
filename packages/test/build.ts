@@ -1117,17 +1117,15 @@ async function patchVendorPaths() {
 async function patchVitestCoreResolver() {
   console.log('\nPatching VitestCoreResolver for CLI package alias...');
 
-  const cliApiChunks = await fsGlob(join(distDir, 'chunks/cli-api.*.js'));
-  const cliApiChunkArr: string[] = [];
-  for await (const chunk of cliApiChunks) {
-    cliApiChunkArr.push(chunk);
+  let cliApiChunk: string | undefined;
+  for await (const chunk of fsGlob(join(distDir, 'chunks/cli-api.*.js'))) {
+    cliApiChunk = chunk;
+    break;
   }
 
-  if (cliApiChunkArr.length === 0) {
+  if (!cliApiChunk) {
     throw new Error('cli-api chunk not found');
   }
-
-  const cliApiChunk = cliApiChunkArr[0];
   let content = await readFile(cliApiChunk, 'utf8');
 
   // Find the VitestCoreResolver resolveId function and add our package aliases
@@ -1352,20 +1350,36 @@ async function patchVitestBrowserPackage() {
   // Pattern: const exclude = ["vitest", ...
   const excludePattern = /(const exclude = \[)(\n?\s*"vitest",)/;
   // Exclude packages that:
-  // - @vitest/browser: needs our resolveId plugin
-  // - vite: Node.js only
-  // - @voidzero-dev/vite-plus-core: our Node.js core package
-  // - @voidzero-dev/vite-plus-core/module-runner: pulled by index.js -> evaluatedModules
-  // - lightningcss: has native bindings
-  // - @tailwindcss/oxide: has native bindings
-  // - tailwindcss: pulls in @tailwindcss/oxide
-  // Also exclude @vitest/ui (optional peer dependency) and its subpath
-  // Also exclude @vitest/mocker/node which imports @voidzero-dev/vite-plus-core
-  // Also exclude our package aliases to preserve module identity with init scripts
-  // This prevents Vite from pre-bundling our browser context, ensuring both init scripts
-  // (loaded via /@fs/) and tests use the same page singleton
-  const excludeReplacement =
-    '$1\n          "@vitest/browser",\n          "@vitest/ui",\n          "@vitest/ui/reporter",\n          "@vitest/mocker/node",\n          "@voidzero-dev/vite-plus-test",\n          "@voidzero-dev/vite-plus-test/browser",\n          "@voidzero-dev/vite-plus-test/browser/context",\n          "@voidzero-dev/vite-plus/test",\n          "@voidzero-dev/vite-plus/test/browser",\n          "@voidzero-dev/vite-plus/test/browser/context",\n          "vite",\n          "@voidzero-dev/vite-plus-core",\n          "@voidzero-dev/vite-plus-core/module-runner",\n          "lightningcss",\n          "@tailwindcss/oxide",\n          "tailwindcss",$2';
+  // Packages to exclude from Vite's dependency pre-bundling (optimizeDeps.exclude)
+  const packagesToExclude = [
+    // @vitest packages that need our resolveId plugin
+    '@vitest/browser',
+    '@vitest/ui',
+    '@vitest/ui/reporter',
+    '@vitest/mocker/node', // imports @voidzero-dev/vite-plus-core
+
+    // Our package aliases - preserve module identity with init scripts
+    // This ensures both init scripts (loaded via /@fs/) and tests use the same page singleton
+    '@voidzero-dev/vite-plus-test',
+    '@voidzero-dev/vite-plus-test/browser',
+    '@voidzero-dev/vite-plus-test/browser/context',
+    '@voidzero-dev/vite-plus/test',
+    '@voidzero-dev/vite-plus/test/browser',
+    '@voidzero-dev/vite-plus/test/browser/context',
+
+    // Node.js only packages
+    'vite',
+    '@voidzero-dev/vite-plus-core',
+    '@voidzero-dev/vite-plus-core/module-runner',
+
+    // Native bindings
+    'lightningcss',
+    '@tailwindcss/oxide',
+    'tailwindcss', // pulls in @tailwindcss/oxide
+  ];
+
+  const excludeListStr = packagesToExclude.map((pkg) => `"${pkg}"`).join(',\n          ');
+  const excludeReplacement = `$1\n          ${excludeListStr},$2`;
   if (excludePattern.test(content)) {
     content = content.replace(excludePattern, excludeReplacement);
     console.log('  Patched exclude list with native deps');
