@@ -31,6 +31,14 @@ impl InstallCommand {
         // Handle UnrecognizedPackageManager error and let user select a package manager
         let package_manager =
             PackageManager::builder(&self.workspace_root).build_with_default().await?;
+        self.execute_with_package_manager(&package_manager, args).await
+    }
+
+    pub async fn execute_with_package_manager(
+        self,
+        package_manager: &PackageManager,
+        args: &Vec<String>,
+    ) -> Result<ExecutionSummary, Error> {
         let workspace = Workspace::partial_load(self.workspace_root)?;
         let resolve_command = package_manager.resolve_install_command(args);
         let resolved_task = ResolvedTask::resolve_from_builtin_with_command_result(

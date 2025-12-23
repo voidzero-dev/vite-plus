@@ -152,22 +152,26 @@ const fn resolve_bool_flag(positive: bool, negative: bool) -> bool {
     if negative { false } else { positive }
 }
 
-/// Automatically run install command
-async fn auto_install(workspace_root: &AbsolutePathBuf) -> Result<(), Error> {
+/// Automatically run install command and return the package manager bin prefix
+async fn auto_install(workspace_root: &AbsolutePathBuf) -> Result<Option<AbsolutePathBuf>, Error> {
     // Skip if we're already running inside a vite_task execution to prevent nested installs
     if std::env::var("VITE_TASK_EXECUTION_ENV").is_ok_and(|v| v == "1") {
         tracing::debug!("Skipping auto-install: already running inside vite_task execution");
-        return Ok(());
+        return Ok(None);
     }
 
     tracing::debug!("Running install automatically...");
+    let package_manager =
+        vite_install::PackageManager::builder(workspace_root).build_with_default().await?;
+    // For auto-install, we don't propagate exit failures to avoid breaking the main command
     let _exit_status = InstallCommand::builder(workspace_root.clone())
         .ignore_replay()
         .build()
-        .execute(&vec![])
+        .execute_with_package_manager(&package_manager, &vec![])
         .await?;
-    // For auto-install, we don't propagate exit failures to avoid breaking the main command
-    Ok(())
+
+    // Get bin_prefix from the package manager (fast since PM is already downloaded)
+    Ok(Some(package_manager.get_bin_prefix()))
 }
 
 pub struct CliOptions<
@@ -282,7 +286,13 @@ pub async fn main<
     if !args.commands.is_package_manager_command()
         && std::env::var_os("VITE_DISABLE_AUTO_INSTALL") != Some("1".into())
     {
-        auto_install(&cwd).await?;
+        if let Some(bin_prefix) = auto_install(&cwd).await? {
+            // Update PATH to include package manager bin directory
+            let new_path = vite_install::format_path_env(&bin_prefix);
+            // SAFETY: We're in a single-threaded context before task execution begins,
+            // and we're only modifying PATH which is a common operation.
+            unsafe { std::env::set_var("PATH", new_path) };
+        }
     }
 
     let mut summary: ExecutionSummary = match &mut args.commands {
@@ -1010,12 +1020,13 @@ mod tests {
         // Should attempt to run (and likely fail with workspace error, which is fine)
         assert!(result_with_wrong_value.is_err());
 
-        // With environment variable set to "1", auto_install should be skipped (return Ok)
+        // With environment variable set to "1", auto_install should be skipped (return Ok(None))
         unsafe {
             std::env::set_var("VITE_TASK_EXECUTION_ENV", "1");
         }
         let result_with_correct_value = auto_install(&test_workspace).await;
         assert!(result_with_correct_value.is_ok());
+        assert!(result_with_correct_value.unwrap().is_none());
 
         // Clean up
         unsafe {
