@@ -53,6 +53,7 @@ Options:
 
 > vite lib src/index.ts # should build the library
 ℹ tsdown v<semver> powered by rolldown v<semver>
+ℹ Using tsdown config: <cwd>/node_modules/.vite/task-cache/vite-lib.config.js
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
@@ -66,6 +67,7 @@ index.mjs
 > vite lib src/index.ts # should hit cache
 ✓ cache hit, replaying
 ℹ tsdown v<semver> powered by rolldown v<semver>
+ℹ Using tsdown config: <cwd>/node_modules/.vite/task-cache/vite-lib.config.js
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB

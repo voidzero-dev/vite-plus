@@ -413,6 +413,13 @@ pub async fn main<
             let workspace = Workspace::partial_load(cwd)?;
             let lib_fn =
                 options.map(|o| o.lib).expect("lib command requires CliOptions to be provided");
+            let lib_config_path = workspace.cache_path().join("vite-lib.config.js");
+            if write_vite_lib_config(&workspace.root_dir(), &lib_config_path).await? {
+                args.extend_from_slice(&[
+                    "--config".to_string(),
+                    lib_config_path.as_path().to_string_lossy().into_owned(),
+                ]);
+            }
             let summary = lib(lib_fn, &workspace, args).await?;
             workspace.unload().await?;
             summary
@@ -552,6 +559,42 @@ async fn read_vite_config_from_workspace_root<
         return Ok(Some(vite_config));
     }
     Ok(None)
+}
+
+async fn write_vite_lib_config(
+    workspace_root: &AbsolutePathBuf,
+    lib_config_path: &AbsolutePathBuf,
+) -> Result<bool, Error> {
+    let relative_vite_config_path =
+        lib_config_path.strip_prefix(workspace_root).map_err(|e| Error::InvalidRelativePath {
+            path: e.stripped_path.into(),
+            reason: e.invalid_path_data_error.into(),
+        })?;
+    if let Some(relative_vite_config_path) = relative_vite_config_path {
+        let relative_prefix = relative_vite_config_path
+            .as_path()
+            .components()
+            .skip(1)
+            .map(|_| "..".to_string())
+            .collect::<Vec<_>>()
+            .join("/");
+        write(
+            &lib_config_path,
+            format!(
+                r#"let config
+try {{
+  const viteConfig = await import('{relative_prefix}/vite.config.ts')
+  config = viteConfig.default.lib
+}} catch {{
+}}
+export default config
+"#
+            ),
+        )
+        .await?;
+        return Ok(true);
+    }
+    Ok(false)
 }
 
 #[cfg(test)]
