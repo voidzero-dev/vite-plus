@@ -11,6 +11,7 @@
  * provides ESLint-compatible linting with significantly better performance.
  */
 
+import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { relative } from 'node:path/win32';
 import { fileURLToPath } from 'node:url';
@@ -33,22 +34,28 @@ export async function lint(): Promise<{
 }> {
   // Resolve the oxlint binary directly (it's a native executable)
   const binPath = resolve('oxlint/bin/oxlint');
-  const oxlintTsgolintPath = join(
-    dirname(fileURLToPath(import.meta.url)),
-    '..',
-    'node_modules',
-    '.bin',
-    `tsgolint${process.platform === 'win32' ? '.cmd' : ''}`,
-  );
+  let oxlintTsgolintPath = resolve('oxlint-tsgolint/bin/tsgolint');
+  if (process.platform === 'win32') {
+    // If on Windows, resolve the tsgolint binary from the local node_modules
+    oxlintTsgolintPath = join(
+      dirname(fileURLToPath(import.meta.url)),
+      '..',
+      'node_modules',
+      '.bin',
+      'tsgolint.cmd',
+    );
+    if (!existsSync(oxlintTsgolintPath)) {
+      // Fallback to the cwd node_modules
+      oxlintTsgolintPath = join(process.cwd(), 'node_modules', '.bin', 'tsgolint.cmd');
+    }
+    oxlintTsgolintPath = `.\\${relative(process.cwd(), oxlintTsgolintPath)}`;
+  }
   const result = {
     binPath,
     // TODO: provide envs inference API
     envs: {
       ...DEFAULT_ENVS,
-      OXLINT_TSGOLINT_PATH:
-        process.platform !== 'win32'
-          ? oxlintTsgolintPath
-          : `.\\${relative(process.cwd(), oxlintTsgolintPath)}`,
+      OXLINT_TSGOLINT_PATH: oxlintTsgolintPath,
     },
   };
   return result;
