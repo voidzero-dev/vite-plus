@@ -1,0 +1,7 @@
+{
+  "type": "module",
+  "scripts": {
+    "check-yarn-version": "node main.js"
+  },
+  "packageManager": "yarn@4.12.0"
+}
