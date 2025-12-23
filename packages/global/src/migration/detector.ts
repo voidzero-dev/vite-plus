@@ -4,6 +4,7 @@ import path from 'node:path';
 export interface ConfigFiles {
   viteConfig?: string;
   vitestConfig?: string;
+  tsdownConfig?: string;
   oxlintConfig?: string;
   oxfmtConfig?: string;
 }
@@ -31,25 +32,25 @@ export function detectConfigs(projectPath: string): ConfigFiles {
     }
   }
 
-  // TODO: Check for tsdown.config.*
+  // Check for tsdown.config.*
   // https://tsdown.dev/options/config-file
-  // const tsdownConfigs = [
-  //   'tsdown.config.ts',
-  //   'tsdown.config.mts',
-  //   'tsdown.config.cts',
-  //   'tsdown.config.js',
-  //   'tsdown.config.mjs',
-  //   'tsdown.config.cjs',
-  //   'tsdown.config.json',
-  //   'tsdown.config',
-  // ];
+  const tsdownConfigs = [
+    'tsdown.config.ts',
+    'tsdown.config.mts',
+    'tsdown.config.cts',
+    'tsdown.config.js',
+    'tsdown.config.mjs',
+    'tsdown.config.cjs',
+    'tsdown.config.json',
+    'tsdown.config',
+  ];
   // Additionally, you can define your configuration directly in the `tsdown` field of your package.json file
-  // for (const config of tsdownConfigs) {
-  //   if (fs.existsSync(path.join(projectPath, config))) {
-  //     configs.tsdownConfig = config;
-  //     break;
-  //   }
-  // }
+  for (const config of tsdownConfigs) {
+    if (fs.existsSync(path.join(projectPath, config))) {
+      configs.tsdownConfig = config;
+      break;
+    }
+  }
 
   // Check for oxlint configs
   // https://oxc.rs/docs/guide/usage/linter/config.html#configuration-file-format

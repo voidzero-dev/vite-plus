@@ -1,0 +1,50 @@
+> vp migration # migration should rewrite imports to vite-plus
+┌  Vite+ Migration
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+│  📦 Found tsdown.config.ts. You can optionally merge it into vite.config.ts
+│
+●  See: https://viteplus.dev/migration/#tsdown
+│
+◆  ✅ Rewrote imports in 1 file(s)
+│
+●    tsdown.config.ts
+│
+└  ✨ Migration completed!
+
+
+> cat tsdown.config.ts # check tsdown.config.ts
+import { defineConfig } from '@voidzero-dev/vite-plus/lib';
+
+export default defineConfig({
+  entry: 'src/index.ts',
+  outDir: 'dist',
+  format: ['esm', 'cjs'],
+  dts: true,
+});
+
+> cat package.json # check package.json
+{
+  "name": "migration-from-tsdown",
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "@voidzero-dev/vite-plus": "latest"
+  },
+  "scripts": {
+    "build": "vite lib",
+    "build:watch": "vite lib --watch",
+    "build:dts": "vite lib --dts"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "packageManager": "pnpm@<semver>"
+}

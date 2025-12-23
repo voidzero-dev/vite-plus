@@ -35,6 +35,7 @@ const REMOVE_PACKAGES = [
   'oxlint',
   'oxlint-tsgolint',
   'oxfmt',
+  'tsdown',
   '@vitest/browser',
   '@vitest/browser-preview',
   '@vitest/browser-playwright',
@@ -140,6 +141,7 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
   rewriteNpmrc(projectPath);
   rewriteLintStagedConfigFile(projectPath);
   mergeViteConfigFiles(projectPath);
+  notifyTsdownConfig(projectPath);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(projectPath);
   // set package manager
@@ -171,6 +173,7 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
   rewriteNpmrc(workspaceInfo.rootDir);
   rewriteLintStagedConfigFile(workspaceInfo.rootDir);
   mergeViteConfigFiles(workspaceInfo.rootDir);
+  notifyTsdownConfig(workspaceInfo.rootDir);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(workspaceInfo.rootDir);
   // set package manager
@@ -183,6 +186,7 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
  */
 export function rewriteMonorepoProject(projectPath: string, packageManager: PackageManager): void {
   mergeViteConfigFiles(projectPath);
+  notifyTsdownConfig(projectPath);
 
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -555,6 +559,20 @@ function rewriteNpmrc(projectPath: string): void {
   }
   if (changed) {
     fs.writeFileSync(npmrcPath, content);
+  }
+}
+
+/**
+ * Notify about tsdown.config.* files that can optionally be merged
+ */
+function notifyTsdownConfig(projectPath: string): void {
+  const configs = detectConfigs(projectPath);
+  if (configs.tsdownConfig) {
+    const tsdownConfigPath = path.join(projectPath, configs.tsdownConfig);
+    prompts.log.message(
+      `📦 Found ${displayRelative(tsdownConfigPath)}. You can optionally merge it into vite.config.ts`,
+    );
+    prompts.log.info(`See: https://viteplus.dev/migration/#tsdown`);
   }
 }
 
