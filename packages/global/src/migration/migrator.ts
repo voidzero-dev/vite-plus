@@ -7,6 +7,7 @@ import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
 import {
   mergeJsonConfig,
+  mergeTsdownConfig,
   rewriteScripts,
   rewriteImportsInDirectory,
   type DownloadPackageManagerResult,
@@ -24,7 +25,7 @@ import {
   VITE_PLUS_NAME,
   VITE_PLUS_VERSION,
 } from '../utils/index.js';
-import { detectConfigs } from './detector.js';
+import { detectConfigs, type ConfigFiles } from './detector.js';
 
 const OVERRIDE_PACKAGES = {
   vite: 'npm:@voidzero-dev/vite-plus-core@latest',
@@ -141,7 +142,7 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
   rewriteNpmrc(projectPath);
   rewriteLintStagedConfigFile(projectPath);
   mergeViteConfigFiles(projectPath);
-  notifyTsdownConfig(projectPath);
+  mergeTsdownConfigFile(projectPath);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(projectPath);
   // set package manager
@@ -173,7 +174,7 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
   rewriteNpmrc(workspaceInfo.rootDir);
   rewriteLintStagedConfigFile(workspaceInfo.rootDir);
   mergeViteConfigFiles(workspaceInfo.rootDir);
-  notifyTsdownConfig(workspaceInfo.rootDir);
+  mergeTsdownConfigFile(workspaceInfo.rootDir);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(workspaceInfo.rootDir);
   // set package manager
@@ -186,7 +187,7 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
  */
 export function rewriteMonorepoProject(projectPath: string, packageManager: PackageManager): void {
   mergeViteConfigFiles(projectPath);
-  notifyTsdownConfig(projectPath);
+  mergeTsdownConfigFile(projectPath);
 
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -563,30 +564,11 @@ function rewriteNpmrc(projectPath: string): void {
 }
 
 /**
- * Notify about tsdown.config.* files that can optionally be merged
+ * Ensure vite.config.ts exists, create it if not
+ * @returns The vite config filename
  */
-function notifyTsdownConfig(projectPath: string): void {
-  const configs = detectConfigs(projectPath);
-  if (configs.tsdownConfig) {
-    const tsdownConfigPath = path.join(projectPath, configs.tsdownConfig);
-    prompts.log.message(
-      `📦 Found ${displayRelative(tsdownConfigPath)}. You can optionally merge it into vite.config.ts`,
-    );
-    prompts.log.info(`See: https://viteplus.dev/migration/#tsdown`);
-  }
-}
-
-/**
- * Merge oxlint and oxfmt config into vite.config.ts
- */
-function mergeViteConfigFiles(projectPath: string): void {
-  const configs = detectConfigs(projectPath);
-  if (!configs.oxfmtConfig && !configs.oxlintConfig) {
-    return;
-  }
+function ensureViteConfig(projectPath: string, configs: ConfigFiles): string {
   if (!configs.viteConfig) {
-    // TODO: handle typescript or javascript
-    // create vite.config.ts
     configs.viteConfig = 'vite.config.ts';
     const viteConfigPath = path.join(projectPath, 'vite.config.ts');
     fs.writeFileSync(
@@ -598,14 +580,62 @@ export default defineConfig({});
     );
     prompts.log.success(`✅ Created vite.config.ts in ${displayRelative(viteConfigPath)}`);
   }
+  return configs.viteConfig;
+}
+
+/**
+ * Merge tsdown.config.* into vite.config.ts
+ * - For JSON files: merge content directly into `lib` field and delete the JSON file
+ * - For TS/JS files: import the config file
+ */
+function mergeTsdownConfigFile(projectPath: string): void {
+  const configs = detectConfigs(projectPath);
+  if (!configs.tsdownConfig) {
+    return;
+  }
+  const viteConfig = ensureViteConfig(projectPath, configs);
+
+  const fullViteConfigPath = path.join(projectPath, viteConfig);
+  const fullTsdownConfigPath = path.join(projectPath, configs.tsdownConfig);
+
+  // For JSON files, merge content directly and delete the file
+  if (configs.tsdownConfig.endsWith('.json')) {
+    mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.tsdownConfig, 'lib');
+    return;
+  }
+
+  // For TS/JS files, import the config file
+  const tsdownRelativePath = `./${configs.tsdownConfig}`;
+  const result = mergeTsdownConfig(fullViteConfigPath, tsdownRelativePath);
+  if (result.updated) {
+    fs.writeFileSync(fullViteConfigPath, result.content);
+    prompts.log.success(
+      `✅ Added import for ${displayRelative(fullTsdownConfigPath)} in ${displayRelative(fullViteConfigPath)}`,
+    );
+  }
+  // Show documentation link for manual merging since we only added the import
+  prompts.log.info(
+    `📦 Please manually merge ${displayRelative(fullTsdownConfigPath)} into ${displayRelative(fullViteConfigPath)}, see https://viteplus.dev/migration/#tsdown`,
+  );
+}
+
+/**
+ * Merge oxlint and oxfmt config into vite.config.ts
+ */
+function mergeViteConfigFiles(projectPath: string): void {
+  const configs = detectConfigs(projectPath);
+  if (!configs.oxfmtConfig && !configs.oxlintConfig) {
+    return;
+  }
+  const viteConfig = ensureViteConfig(projectPath, configs);
   if (configs.oxlintConfig) {
     // merge oxlint config into vite.config.ts
-    mergeAndRemoveJsonConfig(projectPath, configs.viteConfig, configs.oxlintConfig, 'lint');
+    mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxlintConfig, 'lint');
   }
   if (configs.oxfmtConfig) {
     // TODO: handle jsonc file
     // merge oxfmt config into vite.config.ts
-    mergeAndRemoveJsonConfig(projectPath, configs.viteConfig, configs.oxfmtConfig, 'fmt');
+    mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxfmtConfig, 'fmt');
   }
 }
 

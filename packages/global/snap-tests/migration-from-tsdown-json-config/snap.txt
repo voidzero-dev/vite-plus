@@ -7,42 +7,35 @@
 │
 ●  pnpm@<semver> installed
 │
-◆  ✅ Created vite.config.ts in vite.config.ts
-│
-◆  ✅ Added import for tsdown.config.ts in vite.config.ts
-│
-●  📦 Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/migration/#tsdown
-│
-◆  ✅ Rewrote imports in 1 file(s)
-│
-●    tsdown.config.ts
+◆  ✅ Merged tsdown.config.json into vite.config.ts
 │
 └  ✨ Migration completed!
 
 
-> cat tsdown.config.ts # check tsdown.config.ts
-import { defineConfig } from '@voidzero-dev/vite-plus/lib';
-
-export default defineConfig({
-  entry: 'src/index.ts',
-  outDir: 'dist',
-  format: ['esm', 'cjs'],
-  dts: true,
-});
+> cat tsdown.config.json && exit 1 || true # check tsdown.config.json should be removed
+cat: tsdown.config.json: No such file or directory
 
 > cat vite.config.ts # check vite.config.ts
-import tsdownConfig from './tsdown.config.js';
-
 import { defineConfig } from '@voidzero-dev/vite-plus';
 
 export default defineConfig({
-  lib: tsdownConfig,
-  
+  lib: {
+    entry: 'src/index.ts',
+    outDir: 'dist',
+    format: ['esm', 'cjs'],
+    dts: true,
+    inputOptions: {
+      cwd: './src',
+    },
+  },
+  server: {
+    port: 3000,
+  },
 });
 
 > cat package.json # check package.json
 {
-  "name": "migration-from-tsdown",
+  "name": "migration-from-tsdown-json-config",
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "@voidzero-dev/vite-plus": "latest"
@@ -68,34 +61,30 @@ export default defineConfig({
 │
 ●  pnpm@<semver> installed
 │
-●  📦 Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/migration/#tsdown
-│
 └  ✨ Migration completed!
 
 
-> cat tsdown.config.ts # check tsdown.config.ts
-import { defineConfig } from '@voidzero-dev/vite-plus/lib';
-
-export default defineConfig({
-  entry: 'src/index.ts',
-  outDir: 'dist',
-  format: ['esm', 'cjs'],
-  dts: true,
-});
-
 > cat vite.config.ts # check vite.config.ts
-import tsdownConfig from './tsdown.config.js';
-
 import { defineConfig } from '@voidzero-dev/vite-plus';
 
 export default defineConfig({
-  lib: tsdownConfig,
-  
+  lib: {
+    entry: 'src/index.ts',
+    outDir: 'dist',
+    format: ['esm', 'cjs'],
+    dts: true,
+    inputOptions: {
+      cwd: './src',
+    },
+  },
+  server: {
+    port: 3000,
+  },
 });
 
 > cat package.json # check package.json
 {
-  "name": "migration-from-tsdown",
+  "name": "migration-from-tsdown-json-config",
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "@voidzero-dev/vite-plus": "latest"

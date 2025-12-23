@@ -102,6 +102,47 @@ pub struct BatchRewriteResult {
     pub errors: Vec<BatchRewriteError>,
 }
 
+/// Merge tsdown config into vite config by importing it
+///
+/// This function adds an import statement for the tsdown config file
+/// and adds `lib: libConfig` to the defineConfig.
+///
+/// # Arguments
+///
+/// * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
+/// * `tsdown_config_path` - Relative path to the tsdown.config.ts file (e.g., "./tsdown.config.ts")
+///
+/// # Returns
+///
+/// Returns a `MergeJsonConfigResult` containing:
+/// - `content`: The updated vite config content
+/// - `updated`: Whether any changes were made
+/// - `usesFunctionCallback`: Whether the config uses a function callback
+///
+/// # Example
+///
+/// ```javascript
+/// const result = mergeTsdownConfig('vite.config.ts', './tsdown.config.ts');
+/// if (result.updated) {
+///     fs.writeFileSync('vite.config.ts', result.content);
+/// }
+/// ```
+#[napi]
+pub fn merge_tsdown_config(
+    vite_config_path: String,
+    tsdown_config_path: String,
+) -> Result<MergeJsonConfigResult> {
+    let result =
+        vite_migration::merge_tsdown_config(Path::new(&vite_config_path), &tsdown_config_path)
+            .map_err(anyhow::Error::from)?;
+
+    Ok(MergeJsonConfigResult {
+        content: result.content,
+        updated: result.updated,
+        uses_function_callback: result.uses_function_callback,
+    })
+}
+
 /// Rewrite imports in all TypeScript/JavaScript files under a directory
 ///
 /// This function finds all TypeScript and JavaScript files in the specified directory

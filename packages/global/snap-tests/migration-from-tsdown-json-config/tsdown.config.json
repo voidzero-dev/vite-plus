@@ -1,0 +1,9 @@
+{
+  "entry": "src/index.ts",
+  "outDir": "dist",
+  "format": ["esm", "cjs"],
+  "dts": true,
+  "inputOptions": {
+    "cwd": "./src"
+  }
+}

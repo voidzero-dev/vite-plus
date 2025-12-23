@@ -15,7 +15,9 @@ use vite_path::current_dir;
 
 use crate::cli::Args;
 pub use crate::{
-    migration::{merge_json_config, rewrite_imports_in_directory, rewrite_scripts},
+    migration::{
+        merge_json_config, merge_tsdown_config, rewrite_imports_in_directory, rewrite_scripts,
+    },
     package_manager::{detect_workspace, download_package_manager},
 };
 

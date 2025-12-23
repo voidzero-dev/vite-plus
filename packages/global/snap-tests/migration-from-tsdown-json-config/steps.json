@@ -4,11 +4,10 @@
   },
   "commands": [
     "vp migration # migration should rewrite imports to vite-plus",
-    "cat tsdown.config.ts # check tsdown.config.ts",
+    "cat tsdown.config.json && exit 1 || true # check tsdown.config.json should be removed",
     "cat vite.config.ts # check vite.config.ts",
     "cat package.json # check package.json",
     "vp migration # run migration again to check if it is idempotent",
-    "cat tsdown.config.ts # check tsdown.config.ts",
     "cat vite.config.ts # check vite.config.ts",
     "cat package.json # check package.json"
   ]
