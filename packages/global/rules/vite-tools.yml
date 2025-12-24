@@ -41,3 +41,12 @@ rule:
   kind: command_name
   regex: '^vitest$'
 fix: vite test
+
+# tsdown => vite lib
+---
+id: replace-tsdown
+language: bash
+rule:
+  kind: command_name
+  regex: '^tsdown$'
+fix: vite lib

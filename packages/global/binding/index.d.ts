@@ -159,6 +159,38 @@ export interface MergeJsonConfigResult {
   usesFunctionCallback: boolean;
 }
 
+/**
+ * Merge tsdown config into vite config by importing it
+ *
+ * This function adds an import statement for the tsdown config file
+ * and adds `lib: libConfig` to the defineConfig.
+ *
+ * # Arguments
+ *
+ * * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
+ * * `tsdown_config_path` - Relative path to the tsdown.config.ts file (e.g., "./tsdown.config.ts")
+ *
+ * # Returns
+ *
+ * Returns a `MergeJsonConfigResult` containing:
+ * - `content`: The updated vite config content
+ * - `updated`: Whether any changes were made
+ * - `usesFunctionCallback`: Whether the config uses a function callback
+ *
+ * # Example
+ *
+ * ```javascript
+ * const result = mergeTsdownConfig('vite.config.ts', './tsdown.config.ts');
+ * if (result.updated) {
+ *     fs.writeFileSync('vite.config.ts', result.content);
+ * }
+ * ```
+ */
+export declare function mergeTsdownConfig(
+  viteConfigPath: string,
+  tsdownConfigPath: string,
+): MergeJsonConfigResult;
+
 /** Access modes for a path. */
 export interface PathAccess {
   /** Whether the path was read */

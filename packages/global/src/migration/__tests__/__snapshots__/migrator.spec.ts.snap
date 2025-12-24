@@ -4,7 +4,6 @@ exports[`rewritePackageJson > should rewrite devDependencies and dependencies on
 {
   "dependencies": {
     "foo": "1.0.0",
-    "tsdown": "1.0.0",
   },
   "devDependencies": {
     "@voidzero-dev/vite-plus": "latest",
@@ -16,7 +15,6 @@ exports[`rewritePackageJson > should rewrite devDependencies and dependencies on
 {
   "dependencies": {
     "foo": "1.0.0",
-    "tsdown": "1.0.0",
   },
   "devDependencies": {
     "@voidzero-dev/vite-plus": "catalog:",
@@ -28,7 +26,6 @@ exports[`rewritePackageJson > should rewrite devDependencies and dependencies on
 {
   "dependencies": {
     "foo": "1.0.0",
-    "tsdown": "1.0.0",
   },
   "devDependencies": {
     "@voidzero-dev/vite-plus": "latest",
@@ -40,7 +37,6 @@ exports[`rewritePackageJson > should rewrite devDependencies and dependencies on
 {
   "dependencies": {
     "foo": "1.0.0",
-    "tsdown": "1.0.0",
   },
   "devDependencies": {
     "@voidzero-dev/vite-plus": "catalog:",
@@ -58,7 +54,7 @@ exports[`rewritePackageJson > should rewrite package.json scripts 1`] = `
     "*.ts": "vite fmt --fix",
   },
   "scripts": {
-    "build": "pnpm install &&vite build -r && vite run build --watch && tsdown && tsc || exit 1",
+    "build": "pnpm install &&vite build -r && vite run build --watch && vite lib && tsc || exit 1",
     "dev": "vite dev",
     "dev_analyze": "vite dev --analyze",
     "dev_cjs": "VITE_CJS_IGNORE_WARNING=true vite dev",
@@ -74,15 +70,15 @@ exports[`rewritePackageJson > should rewrite package.json scripts 1`] = `
     "dev_verbose": "vite dev --verbose",
     "fmt": "vite fmt",
     "fmt_config": "vite fmt --config .oxfmt.json",
-    "lib": "tsdown",
-    "lib_watch": "tsdown --watch",
+    "lib": "vite lib",
+    "lib_watch": "vite lib --watch",
     "lint": "vite lint",
     "lint_config": "vite lint --config .oxlint.json",
     "lint_type_aware": "vite lint --type-aware",
     "optimize": "vite optimize",
     "preview": "vite preview",
-    "ready": "vite lint --fix --type-aware && vite test run && tsdown && vite fmt --fix",
-    "ready_env": "NODE_ENV=test FOO=bar vite lint --fix --type-aware && NODE_ENV=test FOO=bar vite test run && NODE_ENV=test FOO=bar tsdown && NODE_ENV=test FOO=bar vite fmt --fix",
+    "ready": "vite lint --fix --type-aware && vite test run && vite lib && vite fmt --fix",
+    "ready_env": "NODE_ENV=test FOO=bar vite lint --fix --type-aware && NODE_ENV=test FOO=bar vite test run && NODE_ENV=test FOO=bar vite lib && NODE_ENV=test FOO=bar vite fmt --fix",
     "ready_new": "vite install && vite fmt && vite lint --type-aware && vite test -r && vite build -r",
     "test": "vite test",
     "test_run": "vite test run && vite test --ui",

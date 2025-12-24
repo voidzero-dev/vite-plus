@@ -22,6 +22,7 @@ use crate::{ast_grep, file_walker};
 /// - `import { ... } from '@vitest/browser-preview/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-preview/{name}'`
 /// - `import { ... } from '@vitest/browser-webdriverio'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-webdriverio'`
 /// - `import { ... } from '@vitest/browser-webdriverio/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-webdriverio/{name}'`
+/// - `import { ... } from 'tsdown'` → `import { ... } from '@voidzero-dev/vite-plus/lib'`
 ///
 /// **Declare module statements:**
 /// - `declare module 'vite' { ... }` → `declare module '@voidzero-dev/vite-plus' { ... }`
@@ -37,6 +38,7 @@ use crate::{ast_grep, file_walker};
 /// - `declare module '@vitest/browser-preview/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-preview/{name}' { ... }`
 /// - `declare module '@vitest/browser-webdriverio' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-webdriverio' { ... }`
 /// - `declare module '@vitest/browser-webdriverio/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-webdriverio/{name}' { ... }`
+/// - `declare module 'tsdown' { ... }` → `declare module '@voidzero-dev/vite-plus/lib' { ... }`
 const REWRITE_IMPORT_RULES: &str = r#"---
 id: rewrite-vitest-config-import
 language: TypeScript
@@ -228,6 +230,38 @@ transform:
       source: $STR
       replace: vitest/
       by: "@voidzero-dev/vite-plus/test/"
+fix: $NEW_IMPORT
+---
+id: rewrite-tsdown-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]tsdown['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: tsdown
+      by: "@voidzero-dev/vite-plus/lib"
+fix: $NEW_IMPORT
+---
+id: rewrite-declare-module-tsdown
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]tsdown['"]$
+  inside:
+    kind: module
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: tsdown
+      by: "@voidzero-dev/vite-plus/lib"
 fix: $NEW_IMPORT
 "#;
 
@@ -1392,6 +1426,86 @@ declare module '@voidzero-dev/vite-plus/test/browser' {
   interface Plugin {
     name: string;
     configResolved?: (config: ResolvedConfig) => void;
+  }
+}"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_tsdown() {
+        let tsdown_config = r#"import { defineConfig } from 'tsdown';
+
+export default defineConfig({
+  entry: 'src/index.ts',
+});"#;
+
+        let result = rewrite_import_content(tsdown_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from '@voidzero-dev/vite-plus/lib';
+
+export default defineConfig({
+  entry: 'src/index.ts',
+});"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_tsdown_double_quotes() {
+        let tsdown_config = r#"import { defineConfig } from "tsdown";
+
+export default defineConfig({
+  entry: "src/index.ts",
+});"#;
+
+        let result = rewrite_import_content(tsdown_config).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from "@voidzero-dev/vite-plus/lib";
+
+export default defineConfig({
+  entry: "src/index.ts",
+});"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_declare_module_tsdown() {
+        let content = r#"declare module 'tsdown' {
+  interface BuildConfig {
+    custom?: boolean;
+  }
+}"#;
+
+        let result = rewrite_import_content(content).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"declare module '@voidzero-dev/vite-plus/lib' {
+  interface BuildConfig {
+    custom?: boolean;
+  }
+}"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_declare_module_tsdown_double_quotes() {
+        let content = r#"declare module "tsdown" {
+  interface BuildConfig {
+    custom?: boolean;
+  }
+}"#;
+
+        let result = rewrite_import_content(content).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"declare module "@voidzero-dev/vite-plus/lib" {
+  interface BuildConfig {
+    custom?: boolean;
   }
 }"#
         );

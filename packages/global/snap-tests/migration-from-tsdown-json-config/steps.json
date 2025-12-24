@@ -1,0 +1,14 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp migration # migration should rewrite imports to vite-plus",
+    "cat tsdown.config.json && exit 1 || true # check tsdown.config.json should be removed",
+    "cat vite.config.ts # check vite.config.ts",
+    "cat package.json # check package.json",
+    "vp migration # run migration again to check if it is idempotent",
+    "cat vite.config.ts # check vite.config.ts",
+    "cat package.json # check package.json"
+  ]
+}

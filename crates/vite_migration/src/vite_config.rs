@@ -400,6 +400,71 @@ fn escape_single_quotes(s: &str) -> String {
     s.replace('\\', "\\\\").replace('\'', "\\'")
 }
 
+/// Merge tsdown config into vite.config.ts by importing it
+///
+/// This function adds an import statement for the tsdown config file
+/// and adds `lib: tsdownConfig` to the defineConfig.
+///
+/// # Arguments
+///
+/// * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
+/// * `tsdown_config_path` - Path to the tsdown.config.ts file (relative path like "./tsdown.config.ts")
+///
+/// # Returns
+///
+/// Returns a `MergeResult` with the updated content
+pub fn merge_tsdown_config(
+    vite_config_path: &Path,
+    tsdown_config_path: &str,
+) -> Result<MergeResult, Error> {
+    let vite_config_content = std::fs::read_to_string(vite_config_path)?;
+    merge_tsdown_config_content(&vite_config_content, tsdown_config_path)
+}
+
+/// Merge tsdown config into vite config content
+///
+/// This adds:
+/// 1. An import statement: `import tsdownConfig from './tsdown.config.ts'`
+/// 2. The lib config in defineConfig: `lib: tsdownConfig`
+///
+/// This function is idempotent - running it multiple times will not create duplicates.
+fn merge_tsdown_config_content(
+    vite_config_content: &str,
+    tsdown_config_path: &str,
+) -> Result<MergeResult, Error> {
+    let uses_function_callback = check_function_callback(vite_config_content)?;
+
+    // Check if already migrated (idempotency check)
+    if vite_config_content.contains("import tsdownConfig from") {
+        return Ok(MergeResult {
+            content: vite_config_content.to_string(),
+            updated: false,
+            uses_function_callback,
+        });
+    }
+
+    // Step 1: Add import statement at the beginning
+    // Use JavaScript extensions for TypeScript files (TypeScript module resolution convention)
+    // .ts → .js, .mts → .mjs, .cts → .cjs
+    let import_path = if tsdown_config_path.ends_with(".mts") {
+        tsdown_config_path.replace(".mts", ".mjs")
+    } else if tsdown_config_path.ends_with(".cts") {
+        tsdown_config_path.replace(".cts", ".cjs")
+    } else if tsdown_config_path.ends_with(".ts") {
+        tsdown_config_path.replace(".ts", ".js")
+    } else {
+        tsdown_config_path.to_string()
+    };
+    let content_with_import =
+        format!("import tsdownConfig from '{import_path}';\n\n{vite_config_content}");
+
+    // Step 2: Add lib: tsdownConfig to defineConfig
+    let lib_rule = generate_merge_rule("tsdownConfig", "lib");
+    let (final_content, _) = ast_grep::apply_rules(&content_with_import, &lib_rule)?;
+
+    Ok(MergeResult { content: final_content, updated: true, uses_function_callback })
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Write;
@@ -1043,5 +1108,201 @@ export default defineConfig({
   plugins: [],
 })"
         );
+    }
+
+    #[test]
+    fn test_merge_tsdown_config_content_simple() {
+        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  plugins: [],
+});"#;
+
+        let result = merge_tsdown_config_content(vite_config, "./tsdown.config.ts").unwrap();
+        assert!(result.updated);
+        assert!(!result.uses_function_callback);
+        // TypeScript files use .js extension in imports
+        assert_eq!(
+            result.content,
+            r#"import tsdownConfig from './tsdown.config.js';
+
+import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  lib: tsdownConfig,
+  plugins: [],
+});"#
+        );
+    }
+
+    #[test]
+    fn test_merge_tsdown_config_content_with_existing_imports() {
+        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = merge_tsdown_config_content(vite_config, "./tsdown.config.ts").unwrap();
+        assert!(result.updated);
+        assert!(!result.uses_function_callback);
+        assert_eq!(
+            result.content,
+            r#"import tsdownConfig from './tsdown.config.js';
+
+import { defineConfig } from '@voidzero-dev/vite-plus';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  lib: tsdownConfig,
+  plugins: [react()],
+});"#
+        );
+    }
+
+    #[test]
+    fn test_merge_tsdown_config_content_function_callback() {
+        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig((env) => ({
+  plugins: [],
+}));"#;
+
+        let result = merge_tsdown_config_content(vite_config, "./tsdown.config.ts").unwrap();
+        assert!(result.updated);
+        assert!(result.uses_function_callback);
+        assert_eq!(
+            result.content,
+            r#"import tsdownConfig from './tsdown.config.js';
+
+import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig((env) => ({
+  lib: tsdownConfig,
+  plugins: [],
+}));"#
+        );
+    }
+
+    #[test]
+    fn test_merge_tsdown_config_content_idempotent() {
+        // Already migrated config - import at the beginning
+        let already_migrated = r#"import tsdownConfig from './tsdown.config.js';
+
+import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  lib: tsdownConfig,
+  plugins: [],
+});"#;
+
+        let result = merge_tsdown_config_content(already_migrated, "./tsdown.config.ts").unwrap();
+        assert!(!result.updated, "Should not update already migrated config");
+        assert_eq!(result.content, already_migrated);
+
+        // Run migration twice and verify no duplicates
+        let fresh_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  plugins: [],
+});"#;
+
+        let expected_migrated = r#"import tsdownConfig from './tsdown.config.js';
+
+import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  lib: tsdownConfig,
+  plugins: [],
+});"#;
+
+        let first_result = merge_tsdown_config_content(fresh_config, "./tsdown.config.ts").unwrap();
+        assert!(first_result.updated);
+        assert_eq!(first_result.content, expected_migrated);
+
+        // Run again on the result - should return unchanged
+        let second_result =
+            merge_tsdown_config_content(&first_result.content, "./tsdown.config.ts").unwrap();
+        assert!(!second_result.updated, "Second migration should not update");
+        assert_eq!(second_result.content, expected_migrated);
+    }
+
+    #[test]
+    fn test_merge_tsdown_config_content_no_imports() {
+        // vite.config.ts without any import statements
+        let vite_config = r#"export default {
+  server: { port: 3000 }
+}"#;
+
+        let result = merge_tsdown_config_content(vite_config, "./tsdown.config.ts").unwrap();
+        assert!(result.updated);
+        assert!(!result.uses_function_callback);
+        assert_eq!(
+            result.content,
+            r#"import tsdownConfig from './tsdown.config.js';
+
+export default {
+  lib: tsdownConfig,
+  server: { port: 3000 }
+}"#
+        );
+    }
+
+    #[test]
+    fn test_merge_tsdown_config_content_no_false_positive_stdlib() {
+        // "stdlib:" should not be detected as "lib:" key
+        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  stdlib: 'some-value',
+});"#;
+
+        let result = merge_tsdown_config_content(vite_config, "./tsdown.config.ts").unwrap();
+        assert!(result.updated);
+        assert!(result.content.contains("import tsdownConfig from './tsdown.config.js'"));
+        assert!(result.content.contains("lib: tsdownConfig"));
+        assert!(result.content.contains("stdlib: 'some-value'"));
+    }
+
+    #[test]
+    fn test_merge_tsdown_config_content_mts_extension() {
+        // .mts files should use .mjs extension in imports
+        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({});"#;
+
+        let result = merge_tsdown_config_content(vite_config, "./tsdown.config.mts").unwrap();
+        assert!(result.updated);
+        assert!(result.content.contains("import tsdownConfig from './tsdown.config.mjs'"));
+    }
+
+    #[test]
+    fn test_merge_tsdown_config_content_cts_extension() {
+        // .cts files should use .cjs extension in imports
+        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({});"#;
+
+        let result = merge_tsdown_config_content(vite_config, "./tsdown.config.cts").unwrap();
+        assert!(result.updated);
+        assert!(result.content.contains("import tsdownConfig from './tsdown.config.cjs'"));
+    }
+
+    #[test]
+    fn test_merge_tsdown_config_content_js_extension_unchanged() {
+        // .js, .mjs, .cjs files should keep their extensions unchanged
+        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({});"#;
+
+        let result = merge_tsdown_config_content(vite_config, "./tsdown.config.js").unwrap();
+        assert!(result.content.contains("import tsdownConfig from './tsdown.config.js'"));
+
+        let result = merge_tsdown_config_content(vite_config, "./tsdown.config.mjs").unwrap();
+        assert!(result.content.contains("import tsdownConfig from './tsdown.config.mjs'"));
+
+        let result = merge_tsdown_config_content(vite_config, "./tsdown.config.cjs").unwrap();
+        assert!(result.content.contains("import tsdownConfig from './tsdown.config.cjs'"));
     }
 }

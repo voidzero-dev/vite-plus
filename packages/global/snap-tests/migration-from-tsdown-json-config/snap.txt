@@ -1,0 +1,104 @@
+> vp migration # migration should rewrite imports to vite-plus
+┌  Vite+ Migration
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+◆  ✅ Merged tsdown.config.json into vite.config.ts
+│
+└  ✨ Migration completed!
+
+
+> cat tsdown.config.json && exit 1 || true # check tsdown.config.json should be removed
+cat: tsdown.config.json: No such file or directory
+
+> cat vite.config.ts # check vite.config.ts
+import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  lib: {
+    entry: 'src/index.ts',
+    outDir: 'dist',
+    format: ['esm', 'cjs'],
+    dts: true,
+    inputOptions: {
+      cwd: './src',
+    },
+  },
+  server: {
+    port: 3000,
+  },
+});
+
+> cat package.json # check package.json
+{
+  "name": "migration-from-tsdown-json-config",
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "@voidzero-dev/vite-plus": "latest"
+  },
+  "scripts": {
+    "build": "vite lib",
+    "build:watch": "vite lib --watch",
+    "build:dts": "vite lib --dts"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> vp migration # run migration again to check if it is idempotent
+┌  Vite+ Migration
+│
+●  pnpm@<semver> installing...
+│
+●  pnpm@<semver> installed
+│
+└  ✨ Migration completed!
+
+
+> cat vite.config.ts # check vite.config.ts
+import { defineConfig } from '@voidzero-dev/vite-plus';
+
+export default defineConfig({
+  lib: {
+    entry: 'src/index.ts',
+    outDir: 'dist',
+    format: ['esm', 'cjs'],
+    dts: true,
+    inputOptions: {
+      cwd: './src',
+    },
+  },
+  server: {
+    port: 3000,
+  },
+});
+
+> cat package.json # check package.json
+{
+  "name": "migration-from-tsdown-json-config",
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "@voidzero-dev/vite-plus": "latest"
+  },
+  "scripts": {
+    "build": "vite lib",
+    "build:watch": "vite lib --watch",
+    "build:dts": "vite lib --dts"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "packageManager": "pnpm@<semver>"
+}
