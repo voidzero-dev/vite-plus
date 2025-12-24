@@ -218,7 +218,11 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
 
     // overrides
     for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {
-      doc.setIn(['overrides', scalarString(key)], scalarString('catalog:'));
+      let version = VITE_PLUS_OVERRIDE_PACKAGES[key];
+      if (!version.startsWith('file:')) {
+        version = 'catalog:';
+      }
+      doc.setIn(['overrides', scalarString(key)], scalarString(version));
     }
     // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:rolldown-vite@7.0.12"
     const overrides = doc.getIn(['overrides']) as YAMLMap<Scalar<string>, Scalar<string>>;
@@ -323,11 +327,21 @@ function rewriteYarnrcYml(projectPath: string): void {
  */
 function rewriteCatalog(doc: YamlDocument): void {
   for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+    // ERR_PNPM_CATALOG_IN_OVERRIDES  Could not resolve a catalog in the overrides: The entry for 'vite' in catalog 'default' declares a dependency using the 'file' protocol
+    // ignore setting catalog if value starts with 'file:'
+    if (value.startsWith('file:')) {
+      continue;
+    }
     doc.setIn(['catalog', key], scalarString(value));
   }
-  doc.setIn(['catalog', VITE_PLUS_NAME], scalarString(VITE_PLUS_VERSION));
+  if (!VITE_PLUS_VERSION.startsWith('file:')) {
+    doc.setIn(['catalog', VITE_PLUS_NAME], scalarString(VITE_PLUS_VERSION));
+  }
   for (const name of REMOVE_PACKAGES) {
-    doc.deleteIn(['catalog', name]);
+    const path = ['catalog', name];
+    if (doc.hasIn(path)) {
+      doc.deleteIn(path);
+    }
   }
 
   // TODO: rewrite `catalogs` when OVERRIDE_PACKAGES exists in catalog
@@ -394,7 +408,10 @@ function rewriteRootWorkspacePackageJson(
     if (!pkg.devDependencies?.[VITE_PLUS_NAME]) {
       pkg.devDependencies = {
         ...pkg.devDependencies,
-        [VITE_PLUS_NAME]: packageManager === PackageManager.npm ? VITE_PLUS_VERSION : 'catalog:',
+        [VITE_PLUS_NAME]:
+          packageManager === PackageManager.npm || VITE_PLUS_VERSION.startsWith('file:')
+            ? VITE_PLUS_VERSION
+            : 'catalog:',
       };
     }
     return pkg;
@@ -437,7 +454,7 @@ export function rewritePackageJson(
   const supportCatalog = isMonorepo && packageManager !== PackageManager.npm;
   let needVitePlus = false;
   for (const [key, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
-    const value = supportCatalog ? 'catalog:' : version;
+    const value = supportCatalog && !version.startsWith('file:') ? 'catalog:' : version;
     if (pkg.devDependencies?.[key]) {
       pkg.devDependencies[key] = value;
       needVitePlus = true;
@@ -460,7 +477,8 @@ export function rewritePackageJson(
   }
   if (needVitePlus) {
     // add vite-plus to devDependencies
-    const version = supportCatalog ? 'catalog:' : VITE_PLUS_VERSION;
+    const version =
+      supportCatalog && !VITE_PLUS_VERSION.startsWith('file:') ? 'catalog:' : VITE_PLUS_VERSION;
     pkg.devDependencies = {
       ...pkg.devDependencies,
       [VITE_PLUS_NAME]: version,

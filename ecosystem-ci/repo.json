@@ -2,16 +2,26 @@
   "skeleton": {
     "repository": "https://github.com/skeletonlabs/skeleton.git",
     "branch": "main",
-    "hash": "6f613fe3326ed483885e4acc6f49e2044aa9ab79"
+    "hash": "6d57f29b823275c6e3fb267c6834da5d39558fb6"
   },
   "vibe-dashboard": {
     "repository": "https://github.com/voidzero-dev/vibe-dashboard.git",
     "branch": "main",
-    "hash": "30c68c9ad65c1315abf4c69366b21bc63b5d0fb4"
+    "hash": "f780e8769539feff8beb5e9bf44de6f5c5abad1c"
   },
   "rollipop": {
     "repository": "https://github.com/leegeunhyeok/rollipop.git",
     "branch": "main",
     "hash": "9beb8dd8fb70ef298b3a18703a831d6d4d3c01a1"
+  },
+  "frm-stack": {
+    "repository": "https://github.com/Nikola-Milovic/frm-stack.git",
+    "branch": "main",
+    "hash": "e9e344125d8476ed6f34880036c0b1aef8dc0bb5"
+  },
+  "vue-mini": {
+    "repository": "https://github.com/vue-mini/vue-mini.git",
+    "branch": "master",
+    "hash": "c51332662993dde44f665822bdea94cd0abf368b"
   }
 }

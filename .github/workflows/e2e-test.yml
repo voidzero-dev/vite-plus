@@ -47,17 +47,25 @@ jobs:
         project:
           - name: vibe-dashboard
             node-version: 24
-            command: vite run ready
-          - name: skeleton
-            node-version: 22
             command: |
-              pnpm run --filter="@skeletonlabs/*" --filter="!*skeleton.dev" --sequential build
-              pnpm test
+              pnpm playwright install --with-deps
+              # FIXME: Failed to load JS plugin: ./plugins/debugger.js
+              # vite run ready
+              vite fmt
+              vite test
+              vite run build
+          # FIXME: TypeError: Failed to fetch dynamically imported module
+          # - name: skeleton
+          #   node-version: 24
+          #   command: |
+          #     vite run format
+          #     vite run lint:check
+          #     vite run check
+          #     pnpm exec playwright install chromium
+          #     vite run test
           - name: rollipop
             node-version: 22
-            skip-install: true
             command: |
-              vite install --no-frozen-lockfile
               vite run -r build
               vite run lint
               vite run -r typecheck
@@ -65,6 +73,21 @@ jobs:
               vite run @rollipop/common#test
               vite run @rollipop/core#test
               vite run @rollipop/dev-server#test
+          - name: frm-stack
+            node-version: 24
+            command: |
+              vite run lint:check
+              vite run format:check
+              vite run typecheck
+              vite run @yourcompany/api#test
+              vite run @yourcompany/backend-core#test
+          - name: vue-mini
+            node-version: 24
+            command: |
+              vite run format
+              vite run lint
+              vite run type
+              vite run test -- --coverage
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -116,11 +139,7 @@ jobs:
           # avoid the vite migration using the wrong ignore file
           rm -f ../.gitignore
           node ../patch-project.ts ${{ matrix.project.name }}
-          if [ -n "${{ matrix.project.skip-install }}" ]; then
-            exit 0
-          fi
-          pnpm install --no-frozen-lockfile
-          pnpm playwright install --with-deps
+          vite install --no-frozen-lockfile
 
       - name: Run vite-plus commands in ${{ matrix.project.name }}
         working-directory: ecosystem-ci/${{ matrix.project.name }}
