@@ -7,8 +7,6 @@ on:
   push:
     branches:
       - main
-      # For testing the e2e test workflow, will be deleted after testing
-      - 12-22-test_e2e_add_vite_migration_e2e
     paths-ignore:
       - '**/*.md'
 
@@ -61,7 +59,7 @@ jobs:
             command: |
               vite install --no-frozen-lockfile
               vite run -r build
-              vite run lint || true
+              vite run lint
               vite run -r typecheck
               vite run format
               vite run @rollipop/common#test
@@ -115,6 +113,8 @@ jobs:
       - name: Install vite-plus from tgz in ${{ matrix.project.name }}
         working-directory: ecosystem-ci/${{ matrix.project.name }}
         run: |
+          # avoid the vite migration using the wrong ignore file
+          rm -f ../.gitignore
           node ../patch-project.ts ${{ matrix.project.name }}
           if [ -n "${{ matrix.project.skip-install }}" ]; then
             exit 0

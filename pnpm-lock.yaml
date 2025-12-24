@@ -365,6 +365,15 @@ importers:
       '@arethetypeswrong/core':
         specifier: ^0.18.1
         version: 0.18.2
+      '@babel/generator':
+        specifier: ^7.28.5
+        version: 7.28.5
+      '@babel/parser':
+        specifier: ^7.28.5
+        version: 7.28.5
+      '@babel/types':
+        specifier: ^7.28.5
+        version: 7.28.5
       '@oxc-project/runtime':
         specifier: 'catalog:'
         version: 0.101.0
