@@ -4,10 +4,8 @@
 ℹ Using tsdown config: <cwd>/packages/hello/tsdown.config.ts
 ℹ entry: src/index.ts
 ℹ Build start
-ℹ [ESM] dist/index.mjs  <variable> kB │ gzip: <variable> kB
-ℹ [ESM] 1 files, total: <variable> kB
-ℹ [CJS] dist/index.cjs  <variable> kB │ gzip: <variable> kB
-ℹ [CJS] 1 files, total: <variable> kB
+ℹ dist/index.cjs  <variable> kB │ gzip: <variable> kB
+ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
 
 
@@ -27,7 +25,6 @@ Task Details:
 
 > ls packages/hello/dist # should have the library
 index.cjs
-index.mjs
 
 > vite run hello#build # should hit cache
 ~/packages/hello$ vite lib (✓ cache hit, replaying)
@@ -35,10 +32,8 @@ index.mjs
 ℹ Using tsdown config: <cwd>/packages/hello/tsdown.config.ts
 ℹ entry: src/index.ts
 ℹ Build start
-ℹ [ESM] dist/index.mjs  <variable> kB │ gzip: <variable> kB
-ℹ [ESM] 1 files, total: <variable> kB
-ℹ [CJS] dist/index.cjs  <variable> kB │ gzip: <variable> kB
-ℹ [CJS] 1 files, total: <variable> kB
+ℹ dist/index.cjs  <variable> kB │ gzip: <variable> kB
+ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
 
 
