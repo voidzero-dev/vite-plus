@@ -1,0 +1,11 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite run hello#build # should build the library",
+    "ls packages/hello/dist # should have the library",
+    "vite run hello#build # should hit cache"
+  ]
+}

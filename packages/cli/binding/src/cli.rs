@@ -410,11 +410,11 @@ pub async fn main<
             summary
         }
         Commands::Lib { args } => {
-            let workspace = Workspace::partial_load(cwd)?;
+            let workspace = Workspace::partial_load(cwd.clone())?;
             let lib_fn =
                 options.map(|o| o.lib).expect("lib command requires CliOptions to be provided");
             let lib_config_path = workspace.cache_path().join("vite-lib.config.js");
-            if write_vite_lib_config(&workspace.root_dir(), &lib_config_path).await? {
+            if write_vite_lib_config(&cwd, &lib_config_path).await? {
                 args.extend_from_slice(&[
                     "--config".to_string(),
                     lib_config_path.as_path().to_string_lossy().into_owned(),

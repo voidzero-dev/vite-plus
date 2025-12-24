@@ -1,0 +1,57 @@
+> vite run hello#build # should build the library
+~/packages/hello$ vite lib
+ℹ tsdown v<semver> powered by rolldown v<semver>
+ℹ Using tsdown config: <cwd>/packages/hello/tsdown.config.ts
+ℹ entry: src/index.ts
+ℹ Build start
+ℹ [ESM] dist/index.mjs  <variable> kB │ gzip: <variable> kB
+ℹ [ESM] 1 files, total: <variable> kB
+ℹ [CJS] dist/index.cjs  <variable> kB │ gzip: <variable> kB
+ℹ [CJS] 1 files, total: <variable> kB
+✔ Build complete in <variable>ms
+
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] lib: ~/packages/hello$ vite lib ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> ls packages/hello/dist # should have the library
+index.cjs
+index.mjs
+
+> vite run hello#build # should hit cache
+~/packages/hello$ vite lib (✓ cache hit, replaying)
+ℹ tsdown v<semver> powered by rolldown v<semver>
+ℹ Using tsdown config: <cwd>/packages/hello/tsdown.config.ts
+ℹ entry: src/index.ts
+ℹ Build start
+ℹ [ESM] dist/index.mjs  <variable> kB │ gzip: <variable> kB
+ℹ [ESM] 1 files, total: <variable> kB
+ℹ [CJS] dist/index.cjs  <variable> kB │ gzip: <variable> kB
+ℹ [CJS] 1 files, total: <variable> kB
+✔ Build complete in <variable>ms
+
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate, <variable>ms saved in total
+
+Task Details:
+────────────────────────────────────────────────
+  [1] lib: ~/packages/hello$ vite lib ✓
+      → Cache hit - output replayed - <variable>ms saved
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
