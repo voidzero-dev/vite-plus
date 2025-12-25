@@ -128,6 +128,9 @@ pub enum Error {
     #[error("Cannot find binary path for command '{0}'")]
     CannotFindBinaryPath(Str),
 
+    #[error("Invalid argument: {0}")]
+    InvalidArgument(Str),
+
     #[error(transparent)]
     AstGrepConfigError(#[from] ast_grep_config::RuleConfigError),
 

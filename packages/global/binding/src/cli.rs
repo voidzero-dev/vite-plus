@@ -8,9 +8,9 @@ use vite_install::commands::{
 use vite_path::AbsolutePathBuf;
 
 use crate::commands::{
-    add::AddCommand, dedupe::DedupeCommand, install::InstallCommand, link::LinkCommand,
-    outdated::OutdatedCommand, pm::PmCommand, remove::RemoveCommand, unlink::UnlinkCommand,
-    update::UpdateCommand, why::WhyCommand,
+    add::AddCommand, dedupe::DedupeCommand, dlx::DlxCommand, install::InstallCommand,
+    link::LinkCommand, outdated::OutdatedCommand, pm::PmCommand, remove::RemoveCommand,
+    unlink::UnlinkCommand, update::UpdateCommand, why::WhyCommand,
 };
 
 #[derive(Parser, Debug)]
@@ -436,6 +436,33 @@ pub enum Commands {
     /// Package manager utilities
     #[command(subcommand)]
     Pm(PmCommands),
+    /// Execute a package binary without installing it as a dependency
+    #[command(alias = "x")]
+    Dlx {
+        /// Package(s) to install before running the command (can be used multiple times)
+        #[arg(long, short = 'p', value_name = "NAME")]
+        package: Vec<String>,
+
+        /// Execute the command within a shell environment
+        #[arg(long = "shell-mode", short = 'c')]
+        shell_mode: bool,
+
+        /// Suppress all output except the executed command's output
+        #[arg(long, short = 's')]
+        silent: bool,
+
+        /// Automatically confirm any prompts (npm only)
+        #[arg(long, short = 'y')]
+        yes: bool,
+
+        /// Automatically decline any prompts (npm only)
+        #[arg(long, short = 'n', conflicts_with = "yes")]
+        no: bool,
+
+        /// Package to execute (with optional @version) and arguments
+        #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Generate a new project
     Gen {
         /// Project name
@@ -1048,6 +1075,12 @@ pub async fn main(cwd: AbsolutePathBuf, mut args: Args) -> Result<std::process::
         }
         Commands::Pm(pm_command) => {
             let exit_status = PmCommand::new(cwd).execute(pm_command.clone()).await?;
+            return Ok(exit_status);
+        }
+        Commands::Dlx { package, shell_mode, silent, yes, no, args } => {
+            let exit_status = DlxCommand::new(cwd)
+                .execute(package.clone(), *shell_mode, *silent, *yes, *no, args.clone())
+                .await?;
             return Ok(exit_status);
         }
         _ => unreachable!(),
@@ -2379,6 +2412,229 @@ mod tests {
                 assert_eq!(pass_through_args, &Some(vec!["--custom-flag".to_string()]));
             } else {
                 panic!("Expected Dedupe command");
+            }
+        }
+    }
+
+    mod dlx_command_tests {
+        use super::*;
+
+        #[test]
+        fn test_args_dlx_command_basic() {
+            let args = Args::try_parse_from(&["vite-plus", "dlx", "create-vue", "my-app"]).unwrap();
+            if let Commands::Dlx { package, shell_mode, silent, yes, no, args: cmd_args } =
+                &args.commands
+            {
+                assert!(package.is_empty());
+                assert!(!shell_mode);
+                assert!(!silent);
+                assert!(!yes);
+                assert!(!no);
+                assert_eq!(cmd_args, &vec!["create-vue", "my-app"]);
+            } else {
+                panic!("Expected Dlx command");
+            }
+        }
+
+        #[test]
+        fn test_args_dlx_command_alias_x() {
+            let args = Args::try_parse_from(&["vite-plus", "x", "create-vue", "my-app"]).unwrap();
+            assert!(matches!(args.commands, Commands::Dlx { .. }));
+        }
+
+        #[test]
+        fn test_args_dlx_command_with_version() {
+            let args =
+                Args::try_parse_from(&["vite-plus", "dlx", "typescript@5.5.4", "tsc", "--version"])
+                    .unwrap();
+            if let Commands::Dlx { args: cmd_args, .. } = &args.commands {
+                assert_eq!(cmd_args, &vec!["typescript@5.5.4", "tsc", "--version"]);
+            } else {
+                panic!("Expected Dlx command");
+            }
+        }
+
+        #[test]
+        fn test_args_dlx_command_with_package_flag() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "dlx",
+                "-p",
+                "yo",
+                "-p",
+                "generator-webapp",
+                "yo",
+                "webapp",
+            ])
+            .unwrap();
+            if let Commands::Dlx { package, args: cmd_args, .. } = &args.commands {
+                assert_eq!(package, &vec!["yo", "generator-webapp"]);
+                assert_eq!(cmd_args, &vec!["yo", "webapp"]);
+            } else {
+                panic!("Expected Dlx command");
+            }
+        }
+
+        #[test]
+        fn test_args_dlx_command_with_long_package_flag() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "dlx",
+                "--package",
+                "cowsay",
+                "--package",
+                "lolcatjs",
+                "cowsay",
+                "hello",
+            ])
+            .unwrap();
+            if let Commands::Dlx { package, args: cmd_args, .. } = &args.commands {
+                assert_eq!(package, &vec!["cowsay", "lolcatjs"]);
+                assert_eq!(cmd_args, &vec!["cowsay", "hello"]);
+            } else {
+                panic!("Expected Dlx command");
+            }
+        }
+
+        #[test]
+        fn test_args_dlx_command_with_shell_mode() {
+            let args =
+                Args::try_parse_from(&["vite-plus", "dlx", "-c", "echo hello | cowsay"]).unwrap();
+            if let Commands::Dlx { shell_mode, args: cmd_args, .. } = &args.commands {
+                assert!(shell_mode);
+                assert_eq!(cmd_args, &vec!["echo hello | cowsay"]);
+            } else {
+                panic!("Expected Dlx command");
+            }
+        }
+
+        #[test]
+        fn test_args_dlx_command_with_shell_mode_long() {
+            let args =
+                Args::try_parse_from(&["vite-plus", "dlx", "--shell-mode", "echo hello | cowsay"])
+                    .unwrap();
+            if let Commands::Dlx { shell_mode, .. } = &args.commands {
+                assert!(shell_mode);
+            } else {
+                panic!("Expected Dlx command");
+            }
+        }
+
+        #[test]
+        fn test_args_dlx_command_with_silent() {
+            let args =
+                Args::try_parse_from(&["vite-plus", "dlx", "-s", "create-vue", "my-app"]).unwrap();
+            if let Commands::Dlx { silent, .. } = &args.commands {
+                assert!(silent);
+            } else {
+                panic!("Expected Dlx command");
+            }
+        }
+
+        #[test]
+        fn test_args_dlx_command_with_silent_long() {
+            let args =
+                Args::try_parse_from(&["vite-plus", "dlx", "--silent", "create-vue", "my-app"])
+                    .unwrap();
+            if let Commands::Dlx { silent, .. } = &args.commands {
+                assert!(silent);
+            } else {
+                panic!("Expected Dlx command");
+            }
+        }
+
+        #[test]
+        fn test_args_dlx_command_with_yes() {
+            let args =
+                Args::try_parse_from(&["vite-plus", "dlx", "-y", "create-vue", "my-app"]).unwrap();
+            if let Commands::Dlx { yes, no, .. } = &args.commands {
+                assert!(yes);
+                assert!(!no);
+            } else {
+                panic!("Expected Dlx command");
+            }
+        }
+
+        #[test]
+        fn test_args_dlx_command_with_no() {
+            let args =
+                Args::try_parse_from(&["vite-plus", "dlx", "-n", "create-vue", "my-app"]).unwrap();
+            if let Commands::Dlx { yes, no, .. } = &args.commands {
+                assert!(!yes);
+                assert!(no);
+            } else {
+                panic!("Expected Dlx command");
+            }
+        }
+
+        #[test]
+        fn test_args_dlx_command_yes_no_conflict() {
+            // --yes and --no should conflict
+            let result = Args::try_parse_from(&["vite-plus", "dlx", "-y", "-n", "create-vue"]);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_args_dlx_command_combined_flags() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "dlx",
+                "-p",
+                "cowsay",
+                "-c",
+                "-s",
+                "-y",
+                "echo hello | cowsay",
+            ])
+            .unwrap();
+            if let Commands::Dlx { package, shell_mode, silent, yes, no, args: cmd_args } =
+                &args.commands
+            {
+                assert_eq!(package, &vec!["cowsay"]);
+                assert!(shell_mode);
+                assert!(silent);
+                assert!(yes);
+                assert!(!no);
+                assert_eq!(cmd_args, &vec!["echo hello | cowsay"]);
+            } else {
+                panic!("Expected Dlx command");
+            }
+        }
+
+        #[test]
+        fn test_args_dlx_command_with_hyphen_args() {
+            let args = Args::try_parse_from(&[
+                "vite-plus",
+                "dlx",
+                "typescript",
+                "tsc",
+                "--noEmit",
+                "--strict",
+            ])
+            .unwrap();
+            if let Commands::Dlx { args: cmd_args, .. } = &args.commands {
+                assert_eq!(cmd_args, &vec!["typescript", "tsc", "--noEmit", "--strict"]);
+            } else {
+                panic!("Expected Dlx command");
+            }
+        }
+
+        #[test]
+        fn test_args_dlx_command_requires_package() {
+            // dlx requires at least one argument (the package)
+            let result = Args::try_parse_from(&["vite-plus", "dlx"]);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_args_dlx_command_scoped_package() {
+            let args =
+                Args::try_parse_from(&["vite-plus", "dlx", "@vue/cli@5.0.0", "create", "my-app"])
+                    .unwrap();
+            if let Commands::Dlx { args: cmd_args, .. } = &args.commands {
+                assert_eq!(cmd_args, &vec!["@vue/cli@5.0.0", "create", "my-app"]);
+            } else {
+                panic!("Expected Dlx command");
             }
         }
     }

@@ -1,5 +1,6 @@
 pub(crate) mod add;
 pub(crate) mod dedupe;
+pub(crate) mod dlx;
 pub(crate) mod install;
 pub(crate) mod link;
 pub(crate) mod outdated;
