@@ -4,6 +4,9 @@ permissions: {}
 
 on:
   workflow_dispatch:
+  schedule:
+    # Run every day at 0:00 GMT (8:00 AM Singapore time)
+    - cron: '0 0 * * *'
   push:
     branches:
       - main
@@ -35,6 +38,56 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+  build:
+    name: Build vite-plus packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    needs:
+      - download-previous-rolldown-binaries
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./.github/actions/clone
+
+      - name: Configure Git for access to vite-task
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: e2e-build
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
+
+      - name: Build with upstream
+        uses: ./.github/actions/build-upstream
+        with:
+          target: x86_64-unknown-linux-gnu
+
+      - name: Pack packages into tgz
+        run: |
+          pnpm run bootstrap-cli:ci
+          mkdir -p tmp/tgz
+          cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          cd packages/test && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          cd packages/global && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          ls -la tmp/tgz
+
+      - name: Upload tgz artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vite-plus-packages
+          path: tmp/tgz/*.tgz
+          retention-days: 1
+
   e2e-test:
     name: ${{ matrix.project.name }} E2E test
     env:
@@ -44,7 +97,7 @@ jobs:
       contents: read
       packages: read
     needs:
-      - download-previous-rolldown-binaries
+      - build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -67,7 +120,7 @@ jobs:
           #     vite run format
           #     vite run lint:check
           #     vite run check
-          #     pnpm exec playwright install chromium
+          #     npx playwright install chromium
           #     vite run test
           - name: rollipop
             node-version: 22
@@ -111,47 +164,22 @@ jobs:
         with:
           ecosystem-ci-project: ${{ matrix.project.name }}
 
-      - name: Configure Git for access to vite-task
-        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
-
-      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
-        with:
-          save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: e2e-test
-
-      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
-
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
-
-      - name: Build with upstream
-        uses: ./.github/actions/build-upstream
-        with:
-          target: x86_64-unknown-linux-gnu
-
-      - name: Build all packages
-        run: pnpm bootstrap-cli:ci
-
-      - name: Pack packages into tgz
-        run: |
-          mkdir -p tmp/tgz
-          cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
-          cd packages/test && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
-          cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
-          cd packages/global && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
-          ls -la tmp/tgz
-
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: ${{ matrix.project.node-version }}
           package-manager-cache: false
 
+      - name: Download vite-plus packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: vite-plus-packages
+          path: tmp/tgz
+
       - name: Install vite-plus from tgz in ${{ matrix.project.name }}
         working-directory: ecosystem-ci/${{ matrix.project.name }}
         run: |
+          # install global CLI first
+          npm install -g ../../tmp/tgz/voidzero-dev-global-0.0.0.tgz
           # avoid the vite migration using the wrong ignore file
           rm -f ../.gitignore
           node ../patch-project.ts ${{ matrix.project.name }}
@@ -160,3 +188,52 @@ jobs:
       - name: Run vite-plus commands in ${{ matrix.project.name }}
         working-directory: ecosystem-ci/${{ matrix.project.name }}
         run: ${{ matrix.project.command }}
+
+  notify-failure:
+    name: Notify on failure
+    runs-on: ubuntu-latest
+    needs: e2e-test
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Create or update GitHub issue on failure
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ISSUE_TITLE="E2E Test Scheduled Run Failed"
+          ISSUE_LABEL="e2e-failure"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          # Create label if it doesn't exist
+          if ! gh label list --json name --jq '.[].name' | grep -q "^${ISSUE_LABEL}$"; then
+            gh label create "$ISSUE_LABEL" --color "d73a4a" --description "E2E test scheduled run failure"
+            echo "Created label: $ISSUE_LABEL"
+          fi
+
+          # Search for existing open issue with the label
+          EXISTING_ISSUE=$(gh issue list --label "$ISSUE_LABEL" --state open --json number --jq '.[0].number')
+
+          if [ -z "$EXISTING_ISSUE" ]; then
+            # Create new issue if none exists
+            gh issue create \
+              --title "$ISSUE_TITLE" \
+              --label "$ISSUE_LABEL" \
+              --body "The scheduled E2E test run has failed.
+
+          **Failed Run:** $RUN_URL
+          **Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+          Please investigate the failure and fix any issues."
+            echo "Created new issue"
+          else
+            # Add comment to existing issue
+            gh issue comment "$EXISTING_ISSUE" \
+              --body "The scheduled E2E test run has failed again.
+
+          **Failed Run:** $RUN_URL
+          **Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "Added comment to issue #$EXISTING_ISSUE"
+          fi
