@@ -1,7 +1,19 @@
 // Parse command line arguments to intercept 'new', 'gen', and 'migration' commands
 const args = process.argv.slice(2);
 
-const LOCAL_CLI_COMMANDS = ['dev', 'build', 'test', 'lint', 'fmt', 'format', 'lib', 'doc', 'run'];
+const LOCAL_CLI_COMMANDS = [
+  'dev',
+  'build',
+  'test',
+  'lint',
+  'fmt',
+  'format',
+  'lib',
+  'doc',
+  'run',
+  'optimize',
+  'preview',
+];
 
 const command = args[0];
 
