@@ -409,6 +409,7 @@ const OXC_PACKAGES = new Set([
   'oxfmt',
   'oxlint',
   'oxlint-tsgolint',
+  'tinybench',
 ]);
 
 function isOxcPackage(packageName: string): boolean {
