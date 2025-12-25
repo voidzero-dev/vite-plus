@@ -2,17 +2,19 @@
 Usage: vite [OPTIONS] [TASK] [-- <TASK_ARGS>...] <COMMAND>
 
 Commands:
-  run      Run tasks
-  lint     Lint code
-  fmt      Format code
-  build    Build application
-  test     Run test
-  lib      Build library
-  dev      Run development server
-  doc      Build documentation
-  cache    Manage the task cache
-  install  Install command. It will be passed to the package manager's install command currently
-  help     Print this message or the help of the given subcommand(s)
+  run       Run tasks
+  lint      Lint code
+  fmt       Format code
+  build     Build application
+  test      Run test
+  lib       Build library
+  dev       Run development server
+  optimize  Pre-bundle dependencies
+  preview   Preview production build
+  doc       Build documentation
+  cache     Manage the task cache
+  install   Install command. It will be passed to the package manager's install command currently
+  help      Print this message or the help of the given subcommand(s)
 
 Arguments:
   [TASK]          
@@ -332,4 +334,46 @@ Options:
   --clearCache                                          Delete all Vitest caches, including experimental.fsModuleCache, without running any tests. This will reduce the performance in the subsequent test run. 
   --experimental <features>                             Experimental features.. Use '--help --experimental' for more info. 
   -h, --help                                            Display this message 
+
+
+> vite optimize -h # optimize help message
+vite/<semver>
+
+Usage:
+  $ vite optimize [root]
+
+Options:
+  --force                  [boolean] force the optimizer to ignore the cache and re-bundle 
+  -c, --config <file>      [string] use specified config file 
+  --base <path>            [string] public base path (default: /) 
+  -l, --logLevel <level>   [string] info | warn | error | silent 
+  --clearScreen            [boolean] allow/disable clear screen when logging 
+  --configLoader <loader>  [string] use 'bundle' to bundle the config with Rolldown, or 'runner' (experimental) to process it on the fly, or 'native' (experimental) to load using the native runtime (default: bundle) 
+  -d, --debug [feat]       [string | boolean] show debug logs 
+  -f, --filter <filter>    [string] filter debug logs 
+  -m, --mode <mode>        [string] set env mode 
+  -h, --help               Display this message 
+
+
+> vite preview -h # preview help message
+vite/<semver>
+
+Usage:
+  $ vite preview [root]
+
+Options:
+  --host [host]            [string] specify hostname 
+  --port <port>            [number] specify port 
+  --strictPort             [boolean] exit if specified port is already in use 
+  --open [path]            [boolean | string] open browser on startup 
+  --outDir <dir>           [string] output directory (default: dist) 
+  -c, --config <file>      [string] use specified config file 
+  --base <path>            [string] public base path (default: /) 
+  -l, --logLevel <level>   [string] info | warn | error | silent 
+  --clearScreen            [boolean] allow/disable clear screen when logging 
+  --configLoader <loader>  [string] use 'bundle' to bundle the config with Rolldown, or 'runner' (experimental) to process it on the fly, or 'native' (experimental) to load using the native runtime (default: bundle) 
+  -d, --debug [feat]       [string | boolean] show debug logs 
+  -f, --filter <filter>    [string] filter debug logs 
+  -m, --mode <mode>        [string] set env mode 
+  -h, --help               Display this message 
 

@@ -9,6 +9,8 @@
     "vite fmt -h # fmt help message",
     "vite lint -h # lint help message",
     "vite build -h # build help message",
-    "vite test -h # test help message"
+    "vite test -h # test help message",
+    "vite optimize -h # optimize help message",
+    "vite preview -h # preview help message"
   ]
 }

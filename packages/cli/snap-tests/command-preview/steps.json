@@ -1,0 +1,9 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite preview --port 12312312312 2>&1 | grep RangeError # intentionally use an invalid port (exceeds 0-65535) to trigger RangeError"
+  ]
+}

@@ -80,7 +80,8 @@ impl From<JsCommandResolvedResult> for ResolveCommandResult {
     }
 }
 
-static BUILTIN_COMMANDS: &[&str] = &["lint", "fmt", "build", "test", "doc", "lib"];
+static BUILTIN_COMMANDS: &[&str] =
+    &["lint", "fmt", "build", "test", "doc", "lib", "optimize", "preview"];
 
 /// Main entry point for the CLI, called from JavaScript.
 ///
@@ -284,6 +285,8 @@ fn parse_args() -> Args {
                 "test" => Commands::Test { args: forwarded_args },
                 "doc" => Commands::Doc { args: forwarded_args },
                 "lib" => Commands::Lib { args: forwarded_args },
+                "optimize" => Commands::Optimize { args: forwarded_args },
+                "preview" => Commands::Preview { args: forwarded_args },
                 _ => unreachable!(),
             },
             debug: false,
