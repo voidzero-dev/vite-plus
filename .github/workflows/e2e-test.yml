@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - main
+      - deps/upstream-update
     paths-ignore:
       - '**/*.md'
   pull_request:

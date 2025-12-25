@@ -1,0 +1,71 @@
+name: Upgrade Upstream Dependencies
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Daily at midnight UTC
+  workflow_dispatch: # Manual trigger
+
+permissions: {}
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./.github/actions/clone
+
+      - name: Configure Git for access to vite-task
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: upgrade-deps
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Rustup Adds Target
+        run: rustup target add x86_64-unknown-linux-gnu
+
+      - name: Rustup Adds Target for rolldown
+        working-directory: rolldown
+        run: rustup target add x86_64-unknown-linux-gnu
+
+      - name: Upgrade dependencies
+        id: upgrade
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/scripts/upgrade-deps.mjs
+
+      - name: Sync remote and build
+        id: build
+        continue-on-error: true # Create PR even if build fails
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm tool sync-remote
+          pnpm install --no-frozen-lockfile
+
+      - name: Build
+        uses: ./.github/actions/build-upstream
+        with:
+          target: x86_64-unknown-linux-gnu
+          build-rolldown-native: 'true'
+
+      - name: Create/Update PR
+        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+        with:
+          branch: deps/upstream-update
+          title: 'feat(deps): upgrade upstream dependencies'
+          body: |
+            Automated daily upgrade of upstream dependencies:
+            - rolldown (latest tag)
+            - rolldown-vite (latest tag)
+            - vitest (latest npm version)
+            - tsdown (latest npm version)
+
+            Build status: ${{ steps.build.outcome }}
+          commit-message: 'feat(deps): upgrade upstream dependencies'
+          delete-branch: true
