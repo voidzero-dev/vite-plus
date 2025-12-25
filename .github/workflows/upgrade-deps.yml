@@ -60,6 +60,7 @@ jobs:
           base: main
           branch: deps/upstream-update
           title: 'feat(deps): upgrade upstream dependencies'
+          sign-commits: true
           body: |
             Automated daily upgrade of upstream dependencies:
             - rolldown (latest tag)
