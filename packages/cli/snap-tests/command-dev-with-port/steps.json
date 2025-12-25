@@ -4,6 +4,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite dev --port 12312312312 2>&1 | grep RangeError # intentionally use an invalid port (exceeds 0-65535) to trigger RangeError"
+    "vite dev --port 12312312312 2>&1 | grep RangeError # intentionally use an invalid port (exceeds 0-65535) to trigger RangeError",
+    "vite --port 12312312313 2>&1 | grep RangeError # vite without args should be alias to dev command"
   ]
 }

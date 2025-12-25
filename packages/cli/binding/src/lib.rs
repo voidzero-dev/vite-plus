@@ -80,7 +80,8 @@ impl From<JsCommandResolvedResult> for ResolveCommandResult {
     }
 }
 
-static BUILTIN_COMMANDS: &[&str] = &["lint", "fmt", "build", "test", "doc", "lib", "preview"];
+static BUILTIN_COMMANDS: &[&str] =
+    &["dev", "lint", "fmt", "build", "test", "doc", "lib", "preview"];
 
 /// Main entry point for the CLI, called from JavaScript.
 ///
@@ -267,30 +268,70 @@ fn js_error_to_resolve_universal_vite_config_error(err: napi::Error) -> Error {
 fn parse_args() -> Args {
     // ArgsOs [node, vite-plus, ...]
     let mut raw_args = std::env::args_os().skip(2);
-    if let Some(first) = raw_args.next()
-        && let Some(first) = first.to_str()
-        && BUILTIN_COMMANDS.contains(&first)
-    {
-        let forwarded_args = raw_args
+
+    // No arguments provided, default to dev command
+    let Some(first) = raw_args.next() else {
+        return Args {
+            task: None,
+            task_args: vec![],
+            commands: Commands::Dev { args: vec![] },
+            debug: false,
+            no_debug: true,
+        };
+    };
+
+    // If first arg is not valid UTF-8, fall through to clap parsing
+    let Some(first_str) = first.to_str() else {
+        return Args::parse_from(std::env::args_os().skip(1));
+    };
+
+    // Collect remaining args for potential forwarding
+    let remaining_args: Vec<_> = raw_args.collect();
+
+    // Handle builtin commands with fast-path parsing (bypasses clap for better arg forwarding)
+    if let Some(cmd) = parse_builtin_command(first_str, &remaining_args) {
+        return cmd;
+    }
+
+    // If first arg starts with '-' but is NOT a help/version flag, treat as options for dev command
+    // e.g. `vite --port 3000` should be treated as `vite dev --port 3000`
+    if first_str.starts_with('-') && !matches!(first_str, "-h" | "--help" | "-V" | "--version") {
+        let forwarded_args: Vec<String> = std::iter::once(first)
+            .chain(remaining_args)
             .map(|a| a.into_string().unwrap_or_else(|os_str| os_str.to_string_lossy().into_owned()))
             .collect();
         return Args {
             task: None,
             task_args: vec![],
-            commands: match first {
-                "lint" => Commands::Lint { args: forwarded_args },
-                "fmt" => Commands::Fmt { args: forwarded_args },
-                "build" => Commands::Build { args: forwarded_args },
-                "test" => Commands::Test { args: forwarded_args },
-                "doc" => Commands::Doc { args: forwarded_args },
-                "lib" => Commands::Lib { args: forwarded_args },
-                "preview" => Commands::Preview { args: forwarded_args },
-                _ => unreachable!(),
-            },
+            commands: Commands::Dev { args: forwarded_args },
             debug: false,
             no_debug: true,
         };
     }
-    // Parse CLI arguments (skip first arg which is the node binary)
+
+    // Fall through to clap parsing for other commands (run, cache, install, help, etc.)
     Args::parse_from(std::env::args_os().skip(1))
+}
+
+fn parse_builtin_command(cmd: &str, raw_args: &[std::ffi::OsString]) -> Option<Args> {
+    if !BUILTIN_COMMANDS.contains(&cmd) {
+        return None;
+    }
+
+    let forwarded_args: Vec<String> =
+        raw_args.iter().map(|a| a.to_string_lossy().into_owned()).collect();
+
+    let commands = match cmd {
+        "dev" => Commands::Dev { args: forwarded_args },
+        "lint" => Commands::Lint { args: forwarded_args },
+        "fmt" => Commands::Fmt { args: forwarded_args },
+        "build" => Commands::Build { args: forwarded_args },
+        "test" => Commands::Test { args: forwarded_args },
+        "doc" => Commands::Doc { args: forwarded_args },
+        "lib" => Commands::Lib { args: forwarded_args },
+        "preview" => Commands::Preview { args: forwarded_args },
+        _ => return None,
+    };
+
+    Some(Args { task: None, task_args: vec![], commands, debug: false, no_debug: true })
 }

@@ -1,2 +1,5 @@
 > vite dev --port 12312312312 2>&1 | grep RangeError # intentionally use an invalid port (exceeds 0-65535) to trigger RangeError
 RangeError [ERR_SOCKET_BAD_PORT]: options.port should be >= 0 and < 65536. Received type number (12312312312).
+
+> vite --port 12312312313 2>&1 | grep RangeError # vite without args should be alias to dev command
+RangeError [ERR_SOCKET_BAD_PORT]: options.port should be >= 0 and < 65536. Received type number (12312312313).

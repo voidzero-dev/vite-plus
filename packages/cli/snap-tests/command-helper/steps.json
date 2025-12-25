@@ -10,6 +10,7 @@
     "vite lint -h # lint help message",
     "vite build -h # build help message",
     "vite test -h # test help message",
-    "vite preview -h # preview help message"
+    "vite preview -h # preview help message",
+    "vite dev -h # dev help message"
   ]
 }
