@@ -11,7 +11,6 @@ const LOCAL_CLI_COMMANDS = [
   'lib',
   'doc',
   'run',
-  'optimize',
   'preview',
 ];
 

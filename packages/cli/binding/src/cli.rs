@@ -108,12 +108,6 @@ pub enum Commands {
         /// Arguments to pass to vite dev
         args: Vec<String>,
     },
-    /// Pre-bundle dependencies
-    Optimize {
-        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
-        /// Arguments to pass to vite optimize
-        args: Vec<String>,
-    },
     /// Preview production build
     Preview {
         #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
@@ -440,13 +434,6 @@ pub async fn main<
             let workspace = Workspace::partial_load(cwd)?;
             let vite_fn = options.map(|o| o.vite).expect("dev command requires CliOptions");
             let summary = vite_cmd("dev", vite_fn, &workspace, args).await?;
-            workspace.unload().await?;
-            summary
-        }
-        Commands::Optimize { args } => {
-            let workspace = Workspace::partial_load(cwd)?;
-            let vite_fn = options.map(|o| o.vite).expect("optimize command requires CliOptions");
-            let summary = vite_cmd("optimize", vite_fn, &workspace, args).await?;
             workspace.unload().await?;
             summary
         }
@@ -964,27 +951,6 @@ mod tests {
             );
         } else {
             panic!("Expected Doc command");
-        }
-    }
-
-    #[test]
-    fn test_args_optimize_command() {
-        let args = Args::try_parse_from(["vite-plus", "optimize"]).unwrap();
-        assert_eq!(args.task, None);
-        assert!(args.task_args.is_empty());
-        assert!(matches!(args.commands, Commands::Optimize { .. }));
-        assert!(!args.debug);
-    }
-
-    #[test]
-    fn test_args_optimize_command_with_args() {
-        let args = Args::try_parse_from(["vite-plus", "optimize", "--force"]).unwrap();
-        assert_eq!(args.task, None);
-        assert!(args.task_args.is_empty());
-        if let Commands::Optimize { args } = &args.commands {
-            assert_eq!(args, &vec!["--force".to_string()]);
-        } else {
-            panic!("Expected Optimize command");
         }
     }
 

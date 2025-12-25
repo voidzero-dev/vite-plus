@@ -1,9 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "env": {
-    "VITE_DISABLE_AUTO_INSTALL": "1"
-  },
-  "commands": [
-    "vite optimize --force 2>&1 | head -3 # run optimize with force flag"
-  ]
-}
