@@ -409,11 +409,12 @@ const OXC_PACKAGES = new Set([
   'oxfmt',
   'oxlint',
   'oxlint-tsgolint',
-  'tinybench',
 ]);
+const VITEST_DEPS = new Set(['tinybench']);
 
-function isOxcPackage(packageName: string): boolean {
-  if (OXC_PACKAGES.has(packageName)) return true;
+// These packages should always use the highest version
+function syncedPackages(packageName: string): boolean {
+  if (OXC_PACKAGES.has(packageName) || VITEST_DEPS.has(packageName)) return true;
   return OXC_PACKAGE_PREFIXES.some((prefix) => packageName.startsWith(prefix));
 }
 
@@ -432,7 +433,7 @@ function mergeSemverVersions(
   if (isExact1 || isExact2) {
     if (isExact1 && isExact2 && v1 !== v2) {
       // For oxc-related packages, use the higher version
-      if (isOxcPackage(packageName)) {
+      if (syncedPackages(packageName)) {
         const ver1 = v1.slice(1); // Remove '=' prefix
         const ver2 = v2.slice(1);
         if (semver.valid(ver1) && semver.valid(ver2)) {
@@ -478,6 +479,12 @@ function mergeSemverVersions(
 
   // Check if major versions are compatible
   if (major1 !== major2) {
+    // For synced packages, use the higher major version
+    if (syncedPackages(packageName)) {
+      const higher = major1 > major2 ? v1 : v2;
+      log(`Resolving ${packageName} major version conflict: ${v1} vs ${v2} -> ${higher}`);
+      return higher;
+    }
     error(
       `Incompatible semver ranges for ${packageName}: ${v1} (major: ${major1}) vs ${v2} (major: ${major2})`,
     );
