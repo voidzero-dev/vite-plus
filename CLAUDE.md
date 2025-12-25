@@ -79,3 +79,29 @@ vite dev                             # runs dev script from package.json
 
 - Run `cargo test` to execute all tests
 - You never need to run `pnpm install` in the test fixtures dir, vite-plus should able to load and parse the workspace without `pnpm install`.
+
+## Build
+
+- Run `pnpm bootstrap-cli` from the project root to build all packages and install the global CLI
+  - This builds all `@voidzero-dev/*` packages
+  - Compiles the Rust NAPI bindings
+  - Installs the CLI globally via npm
+
+## Snap Tests
+
+Snap tests are located in `packages/global/snap-tests/`. Each test case is a directory containing:
+
+- `package.json` - Package configuration for the test
+- `steps.json` - Commands to run and environment variables
+- `src/` - Source files for the test
+- `snap.txt` - Expected output (generated/updated by running the test)
+
+```bash
+# Run all snap tests
+pnpm -F @voidzero-dev/global snap-test
+
+# Run a specific snap test by name filter
+pnpm -F @voidzero-dev/global snap-test migration-skip-vite-peer-dependency
+```
+
+The snap test will automatically generate/update the `snap.txt` file with the command outputs.

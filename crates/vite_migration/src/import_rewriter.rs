@@ -4,58 +4,14 @@ use vite_error::Error;
 
 use crate::{ast_grep, file_walker};
 
-/// ast-grep rules for rewriting imports and declare module statements to @voidzero-dev/vite-plus
+/// ast-grep rules for rewriting vite imports and declare module statements
 ///
 /// This rewrites:
-///
-/// **Import statements:**
 /// - `import { ... } from 'vite'` → `import { ... } from '@voidzero-dev/vite-plus'`
 /// - `import { ... } from 'vite/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/{name}'`
-/// - `import { ... } from 'vitest'` → `import { ... } from '@voidzero-dev/vite-plus/test'`
-/// - `import { ... } from 'vitest/config'` → `import { ... } from '@voidzero-dev/vite-plus'`
-/// - `import { ... } from 'vitest/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/{name}'`
-/// - `import { ... } from '@vitest/browser'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser'`
-/// - `import { ... } from '@vitest/browser/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser/{name}'`
-/// - `import { ... } from '@vitest/browser-playwright'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-playwright'`
-/// - `import { ... } from '@vitest/browser-playwright/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-playwright/{name}'`
-/// - `import { ... } from '@vitest/browser-preview'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-preview'`
-/// - `import { ... } from '@vitest/browser-preview/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-preview/{name}'`
-/// - `import { ... } from '@vitest/browser-webdriverio'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-webdriverio'`
-/// - `import { ... } from '@vitest/browser-webdriverio/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-webdriverio/{name}'`
-/// - `import { ... } from 'tsdown'` → `import { ... } from '@voidzero-dev/vite-plus/lib'`
-///
-/// **Declare module statements:**
 /// - `declare module 'vite' { ... }` → `declare module '@voidzero-dev/vite-plus' { ... }`
 /// - `declare module 'vite/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/{name}' { ... }`
-/// - `declare module 'vitest' { ... }` → `declare module '@voidzero-dev/vite-plus/test' { ... }`
-/// - `declare module 'vitest/config' { ... }` → `declare module '@voidzero-dev/vite-plus' { ... }`
-/// - `declare module 'vitest/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/{name}' { ... }`
-/// - `declare module '@vitest/browser' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser' { ... }`
-/// - `declare module '@vitest/browser/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser/{name}' { ... }`
-/// - `declare module '@vitest/browser-playwright' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-playwright' { ... }`
-/// - `declare module '@vitest/browser-playwright/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-playwright/{name}' { ... }`
-/// - `declare module '@vitest/browser-preview' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-preview' { ... }`
-/// - `declare module '@vitest/browser-preview/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-preview/{name}' { ... }`
-/// - `declare module '@vitest/browser-webdriverio' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-webdriverio' { ... }`
-/// - `declare module '@vitest/browser-webdriverio/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-webdriverio/{name}' { ... }`
-/// - `declare module 'tsdown' { ... }` → `declare module '@voidzero-dev/vite-plus/lib' { ... }`
-const REWRITE_IMPORT_RULES: &str = r#"---
-id: rewrite-vitest-config-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]vitest/config['"]$
-  inside:
-    kind: import_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: vitest/config
-      by: "@voidzero-dev/vite-plus"
-fix: $NEW_IMPORT
----
+const REWRITE_VITE_RULES: &str = r#"---
 id: rewrite-vite-import
 language: TypeScript
 rule:
@@ -69,6 +25,97 @@ transform:
     replace:
       source: $STR
       replace: vite
+      by: "@voidzero-dev/vite-plus"
+fix: $NEW_IMPORT
+---
+id: rewrite-vite-subpath-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vite/.+['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vite/
+      by: "@voidzero-dev/vite-plus/"
+fix: $NEW_IMPORT
+---
+id: rewrite-declare-module-vite
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['\"]vite['\"]$
+  inside:
+    kind: module
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vite
+      by: "@voidzero-dev/vite-plus"
+fix: $NEW_IMPORT
+---
+id: rewrite-declare-module-vite-subpath
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['\"]vite/.+['\"]$
+  inside:
+    kind: module
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vite/
+      by: "@voidzero-dev/vite-plus/"
+fix: $NEW_IMPORT
+"#;
+
+/// ast-grep rules for rewriting vitest imports and declare module statements
+///
+/// This rewrites:
+/// - `import { ... } from 'vitest'` → `import { ... } from '@voidzero-dev/vite-plus/test'`
+/// - `import { ... } from 'vitest/config'` → `import { ... } from '@voidzero-dev/vite-plus'`
+/// - `import { ... } from 'vitest/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/{name}'`
+/// - `import { ... } from '@vitest/browser'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser'`
+/// - `import { ... } from '@vitest/browser/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser/{name}'`
+/// - `import { ... } from '@vitest/browser-playwright'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-playwright'`
+/// - `import { ... } from '@vitest/browser-playwright/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-playwright/{name}'`
+/// - `import { ... } from '@vitest/browser-preview'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-preview'`
+/// - `import { ... } from '@vitest/browser-preview/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-preview/{name}'`
+/// - `import { ... } from '@vitest/browser-webdriverio'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-webdriverio'`
+/// - `import { ... } from '@vitest/browser-webdriverio/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-webdriverio/{name}'`
+/// - `declare module 'vitest' { ... }` → `declare module '@voidzero-dev/vite-plus/test' { ... }`
+/// - `declare module 'vitest/config' { ... }` → `declare module '@voidzero-dev/vite-plus' { ... }`
+/// - `declare module 'vitest/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/{name}' { ... }`
+/// - `declare module '@vitest/browser' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser' { ... }`
+/// - `declare module '@vitest/browser/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser/{name}' { ... }`
+/// - `declare module '@vitest/browser-playwright' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-playwright' { ... }`
+/// - `declare module '@vitest/browser-playwright/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-playwright/{name}' { ... }`
+/// - `declare module '@vitest/browser-preview' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-preview' { ... }`
+/// - `declare module '@vitest/browser-preview/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-preview/{name}' { ... }`
+/// - `declare module '@vitest/browser-webdriverio' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-webdriverio' { ... }`
+/// - `declare module '@vitest/browser-webdriverio/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-webdriverio/{name}' { ... }`
+const REWRITE_VITEST_RULES: &str = r#"---
+id: rewrite-vitest-config-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vitest/config['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vitest/config
       by: "@voidzero-dev/vite-plus"
 fix: $NEW_IMPORT
 ---
@@ -104,22 +151,6 @@ transform:
       by: "@voidzero-dev/vite-plus/test/"
 fix: $NEW_IMPORT
 ---
-id: rewrite-vite-subpath-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]vite/.+['"]$
-  inside:
-    kind: import_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: vite/
-      by: "@voidzero-dev/vite-plus/"
-fix: $NEW_IMPORT
----
 id: rewrite-vitest-subpath-import
 language: TypeScript
 rule:
@@ -149,22 +180,6 @@ transform:
     replace:
       source: $STR
       replace: vitest/config
-      by: "@voidzero-dev/vite-plus"
-fix: $NEW_IMPORT
----
-id: rewrite-declare-module-vite
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['\"]vite['\"]$
-  inside:
-    kind: module
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: vite
       by: "@voidzero-dev/vite-plus"
 fix: $NEW_IMPORT
 ---
@@ -200,22 +215,6 @@ transform:
       by: "@voidzero-dev/vite-plus/test/"
 fix: $NEW_IMPORT
 ---
-id: rewrite-declare-module-vite-subpath
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['\"]vite/.+['\"]$
-  inside:
-    kind: module
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: vite/
-      by: "@voidzero-dev/vite-plus/"
-fix: $NEW_IMPORT
----
 id: rewrite-declare-module-vitest-subpath
 language: TypeScript
 rule:
@@ -231,7 +230,14 @@ transform:
       replace: vitest/
       by: "@voidzero-dev/vite-plus/test/"
 fix: $NEW_IMPORT
----
+"#;
+
+/// ast-grep rules for rewriting tsdown imports and declare module statements
+///
+/// This rewrites:
+/// - `import { ... } from 'tsdown'` → `import { ... } from '@voidzero-dev/vite-plus/lib'`
+/// - `declare module 'tsdown' { ... }` → `declare module '@voidzero-dev/vite-plus/lib' { ... }`
+const REWRITE_TSDOWN_RULES: &str = r#"---
 id: rewrite-tsdown-import
 language: TypeScript
 rule:
@@ -264,6 +270,51 @@ transform:
       by: "@voidzero-dev/vite-plus/lib"
 fix: $NEW_IMPORT
 "#;
+
+/// Packages to skip rewriting based on peerDependencies
+#[derive(Debug, Clone, Default)]
+struct SkipPackages {
+    /// Skip rewriting vite imports (vite is in peerDependencies)
+    skip_vite: bool,
+    /// Skip rewriting vitest imports (vitest is in peerDependencies)
+    skip_vitest: bool,
+    /// Skip rewriting tsdown imports (tsdown is in peerDependencies)
+    skip_tsdown: bool,
+}
+
+impl SkipPackages {
+    /// Check if all packages should be skipped (file can be skipped entirely)
+    fn all_skipped(&self) -> bool {
+        self.skip_vite && self.skip_vitest && self.skip_tsdown
+    }
+}
+
+/// Parse package.json at the root and check which packages are in peerDependencies.
+/// Returns default (no skipping) if package.json doesn't exist or can't be parsed.
+fn get_skip_packages_from_root(root: &Path) -> SkipPackages {
+    let package_json_path = root.join("package.json");
+
+    let content = match std::fs::read_to_string(&package_json_path) {
+        Ok(c) => c,
+        Err(_) => return SkipPackages::default(),
+    };
+
+    let pkg: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(p) => p,
+        Err(_) => return SkipPackages::default(),
+    };
+
+    let peer_deps = match pkg.get("peerDependencies") {
+        Some(serde_json::Value::Object(deps)) => deps,
+        _ => return SkipPackages::default(),
+    };
+
+    SkipPackages {
+        skip_vite: peer_deps.contains_key("vite"),
+        skip_vitest: peer_deps.contains_key("vitest"),
+        skip_tsdown: peer_deps.contains_key("tsdown"),
+    }
+}
 
 /// Result of rewriting imports in a file
 #[derive(Debug)]
@@ -323,8 +374,17 @@ pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, E
         errors: Vec::new(),
     };
 
+    // Check package.json at root for peerDependencies
+    let skip_packages = get_skip_packages_from_root(root);
+
+    // If all packages are in peerDeps, skip all files
+    if skip_packages.all_skipped() {
+        result.unchanged_files = walk_result.files;
+        return Ok(result);
+    }
+
     for file_path in walk_result.files {
-        match rewrite_import(&file_path) {
+        match rewrite_import(&file_path, &skip_packages) {
             Ok(rewrite_result) => {
                 if rewrite_result.updated {
                     // Write the modified content back
@@ -350,41 +410,66 @@ pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, E
 ///
 /// This function reads a file and rewrites the import statements
 /// to use '@voidzero-dev/vite-plus' instead of 'vite', 'vitest', or '@vitest/*'.
+/// Packages that are in peerDependencies will be skipped.
 ///
 /// # Arguments
 ///
 /// * `file_path` - Path to the TypeScript/JavaScript file
+/// * `skip_packages` - Which packages to skip based on peerDependencies
 ///
 /// # Returns
 ///
 /// Returns a `RewriteResult` containing:
 /// - `content`: The updated file content
 /// - `updated`: Whether any changes were made
-///
-/// # Example
-///
-/// ```ignore
-/// use std::path::Path;
-/// use vite_migration::rewrite_import;
-///
-/// let result = rewrite_import(Path::new("src/app.ts"))?;
-/// if result.updated {
-///     std::fs::write("src/app.ts", &result.content)?;
-/// }
-/// ```
-fn rewrite_import(file_path: &Path) -> Result<RewriteResult, Error> {
+fn rewrite_import(file_path: &Path, skip_packages: &SkipPackages) -> Result<RewriteResult, Error> {
     // Read the file
     let content = std::fs::read_to_string(file_path)?;
 
     // Rewrite the imports
-    rewrite_import_content(&content)
+    rewrite_import_content(&content, skip_packages)
 }
 
 /// Rewrite imports in content from vite/vitest to @voidzero-dev/vite-plus
 ///
 /// This is the internal function that performs the actual rewrite using ast-grep.
-fn rewrite_import_content(content: &str) -> Result<RewriteResult, Error> {
-    let (new_content, updated) = ast_grep::apply_rules(content, REWRITE_IMPORT_RULES)?;
+/// Packages that are in peerDependencies will be skipped.
+fn rewrite_import_content(
+    content: &str,
+    skip_packages: &SkipPackages,
+) -> Result<RewriteResult, Error> {
+    let mut new_content = content.to_string();
+    let mut updated = false;
+
+    // Apply vite rules if not skipped
+    if !skip_packages.skip_vite {
+        let (vite_content, vite_updated) = ast_grep::apply_rules(&new_content, REWRITE_VITE_RULES)?;
+        if vite_updated {
+            new_content = vite_content;
+            updated = true;
+        }
+    }
+
+    // Apply vitest rules if not skipped
+    if !skip_packages.skip_vitest {
+        let (vitest_content, vitest_updated) =
+            ast_grep::apply_rules(&new_content, REWRITE_VITEST_RULES)?;
+        if vitest_updated {
+            new_content = vitest_content;
+            updated = true;
+        }
+    }
+
+    // Apply tsdown rules if not skipped
+    if !skip_packages.skip_tsdown {
+        let (tsdown_content, tsdown_updated) =
+            ast_grep::apply_rules(&new_content, REWRITE_TSDOWN_RULES)?;
+        if tsdown_updated {
+            new_content = tsdown_content;
+            updated = true;
+        }
+    }
+
     Ok(RewriteResult { content: new_content, updated })
 }
 
@@ -404,7 +489,7 @@ export default defineConfig({
   plugins: [],
 });"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -424,7 +509,7 @@ export default defineConfig({
   plugins: [],
 });"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -446,7 +531,7 @@ export default defineConfig({
   },
 });"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -469,7 +554,7 @@ export default defineConfig({
   plugins: [react()],
 });"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -490,7 +575,7 @@ export default defineConfig({
   plugins: [],
 });"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(!result.updated);
         assert_eq!(result.content, vite_config);
     }
@@ -515,7 +600,7 @@ export default defineConfig({{
         .unwrap();
 
         // Run the rewrite
-        let result = rewrite_import(&vite_config_path).unwrap();
+        let result = rewrite_import(&vite_config_path, &SkipPackages::default()).unwrap();
 
         assert!(result.updated);
         assert_eq!(
@@ -538,7 +623,7 @@ describe('test', () => {
   });
 });"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -558,7 +643,7 @@ describe('test', () => {
 
 describe('test', () => {});"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -574,7 +659,7 @@ describe('test', () => {});"#
 
 export default page;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -590,7 +675,7 @@ export default page;"#
 
 export default page;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -606,7 +691,7 @@ export default page;"#
 
 export default playwright;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -622,7 +707,7 @@ export default playwright;"#
 
 export default playwright;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -638,7 +723,7 @@ export default playwright;"#
 
 export default context;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -654,7 +739,7 @@ export default context;"#
 
 export default something;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -670,7 +755,7 @@ export default something;"#
 
 export default preview;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -686,7 +771,7 @@ export default preview;"#
 
 export default something;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -702,7 +787,7 @@ export default something;"#
 
 export default webdriverio;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -718,7 +803,7 @@ export default webdriverio;"#
 
 export default something;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -734,7 +819,7 @@ export default something;"#
 
 export default ModuleRunner;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -750,7 +835,7 @@ export default ModuleRunner;"#
 
 export default ModuleRunner;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -767,7 +852,7 @@ export default ModuleRunner;"#
 
 export default startVitest;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -781,7 +866,7 @@ export default startVitest;"#
 
 export default somePlugin;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -797,7 +882,7 @@ export default somePlugin;"#
 
 export default startVitest;"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -822,7 +907,7 @@ export default defineConfig({
   plugins: [react()],
 });"#;
 
-        let result = rewrite_import_content(vite_config).unwrap();
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -984,7 +1069,7 @@ describe('app', () => {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1004,7 +1089,7 @@ describe('app', () => {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1024,7 +1109,7 @@ describe('app', () => {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1044,7 +1129,7 @@ describe('app', () => {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1064,7 +1149,7 @@ describe('app', () => {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1084,7 +1169,7 @@ describe('app', () => {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1104,7 +1189,7 @@ describe('app', () => {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1124,7 +1209,7 @@ describe('app', () => {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1144,7 +1229,7 @@ describe('app', () => {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1164,7 +1249,7 @@ describe('app', () => {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1184,7 +1269,7 @@ describe('app', () => {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1215,7 +1300,7 @@ declare module 'vitest' {
 
 export default defineConfig({});"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1246,7 +1331,7 @@ export default defineConfig({});"#
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(!result.updated);
         assert_eq!(result.content, content);
     }
@@ -1277,7 +1362,7 @@ declare module '@vitest/browser' {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1315,7 +1400,7 @@ declare module '@voidzero-dev/vite-plus/test/browser' {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1335,7 +1420,7 @@ declare module '@voidzero-dev/vite-plus/test/browser' {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1355,7 +1440,7 @@ declare module '@voidzero-dev/vite-plus/test/browser' {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1375,7 +1460,7 @@ declare module '@voidzero-dev/vite-plus/test/browser' {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1407,7 +1492,7 @@ declare module '@voidzero-dev/vite-plus/test/browser' {
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1439,7 +1524,7 @@ export default defineConfig({
   entry: 'src/index.ts',
 });"#;
 
-        let result = rewrite_import_content(tsdown_config).unwrap();
+        let result = rewrite_import_content(tsdown_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1459,7 +1544,7 @@ export default defineConfig({
   entry: "src/index.ts",
 });"#;
 
-        let result = rewrite_import_content(tsdown_config).unwrap();
+        let result = rewrite_import_content(tsdown_config, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1479,7 +1564,7 @@ export default defineConfig({
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1499,7 +1584,7 @@ export default defineConfig({
   }
 }"#;
 
-        let result = rewrite_import_content(content).unwrap();
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1509,5 +1594,236 @@ export default defineConfig({
   }
 }"#
         );
+    }
+
+    // ========================
+    // PeerDependencies Tests
+    // ========================
+
+    #[test]
+    fn test_skip_vite_when_peer_dependency() {
+        // When vite is a peerDependency, vite imports should NOT be rewritten
+        let content = r#"import { defineConfig } from 'vite';
+import { describe } from 'vitest';
+
+export default defineConfig({});"#;
+
+        let skip_packages =
+            SkipPackages { skip_vite: true, skip_vitest: false, skip_tsdown: false };
+
+        let result = rewrite_import_content(content, &skip_packages).unwrap();
+        assert!(result.updated);
+        // vite import should NOT be rewritten, vitest import SHOULD be rewritten
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from 'vite';
+import { describe } from '@voidzero-dev/vite-plus/test';
+
+export default defineConfig({});"#
+        );
+    }
+
+    #[test]
+    fn test_skip_vitest_when_peer_dependency() {
+        // When vitest is a peerDependency, vitest imports should NOT be rewritten
+        let content = r#"import { defineConfig } from 'vite';
+import { describe } from 'vitest';
+
+export default defineConfig({});"#;
+
+        let skip_packages =
+            SkipPackages { skip_vite: false, skip_vitest: true, skip_tsdown: false };
+
+        let result = rewrite_import_content(content, &skip_packages).unwrap();
+        assert!(result.updated);
+        // vite import SHOULD be rewritten, vitest import should NOT be rewritten
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+import { describe } from 'vitest';
+
+export default defineConfig({});"#
+        );
+    }
+
+    #[test]
+    fn test_skip_all_when_all_peer_dependencies() {
+        // When all packages are peerDependencies, nothing should be rewritten
+        let content = r#"import { defineConfig } from 'vite';
+import { describe } from 'vitest';
+import { build } from 'tsdown';
+
+export default defineConfig({});"#;
+
+        let skip_packages = SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: true };
+
+        let result = rewrite_import_content(content, &skip_packages).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_skip_packages_all_skipped() {
+        let skip_all = SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: true };
+        assert!(skip_all.all_skipped());
+
+        let skip_some = SkipPackages { skip_vite: true, skip_vitest: false, skip_tsdown: true };
+        assert!(!skip_some.all_skipped());
+
+        let skip_none = SkipPackages::default();
+        assert!(!skip_none.all_skipped());
+    }
+
+    #[test]
+    fn test_get_skip_packages_from_root_with_vite_peer_dep() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // Create package.json with vite as peerDependency
+        let pkg_json = r#"{
+  "name": "my-vite-plugin",
+  "peerDependencies": {
+    "vite": "^5.0.0"
+  }
+}"#;
+        fs::write(temp.path().join("package.json"), pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_root(temp.path());
+        assert!(skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_get_skip_packages_from_root_with_all_peer_deps() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        let pkg_json = r#"{
+  "name": "my-plugin",
+  "peerDependencies": {
+    "vite": "^5.0.0",
+    "vitest": "^1.0.0",
+    "tsdown": "^1.0.0"
+  }
+}"#;
+        fs::write(temp.path().join("package.json"), pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_root(temp.path());
+        assert!(skip.skip_vite);
+        assert!(skip.skip_vitest);
+        assert!(skip.skip_tsdown);
+        assert!(skip.all_skipped());
+    }
+
+    #[test]
+    fn test_get_skip_packages_from_root_no_peer_deps() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        let pkg_json = r#"{
+  "name": "my-app",
+  "dependencies": {
+    "vite": "^5.0.0"
+  }
+}"#;
+        fs::write(temp.path().join("package.json"), pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_root(temp.path());
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_get_skip_packages_from_root_no_package_json() {
+        let temp = tempdir().unwrap();
+
+        // No package.json created - should return default (no skipping)
+        let skip = get_skip_packages_from_root(temp.path());
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_rewrite_imports_in_directory_with_peer_deps() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // Create package.json with vite as peerDependency
+        let pkg_json = r#"{
+  "name": "my-vite-plugin",
+  "peerDependencies": {
+    "vite": "^5.0.0"
+  }
+}"#;
+        fs::write(temp.path().join("package.json"), pkg_json).unwrap();
+
+        // Create src directory
+        fs::create_dir(temp.path().join("src")).unwrap();
+
+        // Create source file with vite and vitest imports
+        let original_content = r#"import { defineConfig } from 'vite';
+import { describe } from 'vitest';
+
+export default defineConfig({});"#;
+        fs::write(temp.path().join("src/index.ts"), original_content).unwrap();
+
+        // Run the batch rewrite
+        let result = rewrite_imports_in_directory(temp.path()).unwrap();
+
+        // File should be modified (vitest was rewritten)
+        assert_eq!(result.modified_files.len(), 1);
+        assert!(result.errors.is_empty());
+
+        // Verify vite import NOT rewritten, vitest IS rewritten
+        let content = fs::read_to_string(temp.path().join("src/index.ts")).unwrap();
+        assert_eq!(
+            content,
+            r#"import { defineConfig } from 'vite';
+import { describe } from '@voidzero-dev/vite-plus/test';
+
+export default defineConfig({});"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_imports_skips_file_when_all_peer_deps() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // Create package.json with all packages as peerDependencies
+        let pkg_json = r#"{
+  "name": "my-plugin",
+  "peerDependencies": {
+    "vite": "^5.0.0",
+    "vitest": "^1.0.0",
+    "tsdown": "^1.0.0"
+  }
+}"#;
+        fs::write(temp.path().join("package.json"), pkg_json).unwrap();
+
+        // Create source file
+        let original_content = r#"import { defineConfig } from 'vite';
+import { describe } from 'vitest';
+import { build } from 'tsdown';"#;
+        fs::write(temp.path().join("index.ts"), original_content).unwrap();
+
+        // Run the batch rewrite
+        let result = rewrite_imports_in_directory(temp.path()).unwrap();
+
+        // File should be unchanged (all skipped)
+        assert!(result.modified_files.is_empty());
+        assert_eq!(result.unchanged_files.len(), 1);
+
+        // Verify content unchanged
+        let content = fs::read_to_string(temp.path().join("index.ts")).unwrap();
+        assert_eq!(content, original_content);
     }
 }

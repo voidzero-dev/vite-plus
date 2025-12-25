@@ -1,0 +1,56 @@
+> vp migration # migration should skip rewriting vite imports when vite is in peerDependencies
+┌  Vite+ Migration
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+◆  ✅ Rewrote imports in 1 file(s)
+│
+●    src/index.ts
+│
+└  ✨ Migration completed!
+
+
+> cat src/index.ts # vite imports should NOT be rewritten, vitest imports SHOULD be rewritten
+import { defineConfig, type Plugin } from 'vite';
+import { describe, it, expect } from '@voidzero-dev/vite-plus/test';
+
+export function myVitePlugin(): Plugin {
+  return {
+    name: 'my-vite-plugin',
+    configResolved(config) {
+      console.log(config);
+    },
+  };
+}
+
+describe('myVitePlugin', () => {
+  it('should work', () => {
+    expect(myVitePlugin()).toBeDefined();
+  });
+});
+
+export default defineConfig({
+  plugins: [myVitePlugin()],
+});
+
+> cat package.json # check package.json
+{
+  "name": "migration-skip-vite-peer-dependency",
+  "peerDependencies": {
+    "vite": "^6.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "devDependencies": {
+    "@voidzero-dev/vite-plus": "latest"
+  },
+  "packageManager": "pnpm@<semver>"
+}
