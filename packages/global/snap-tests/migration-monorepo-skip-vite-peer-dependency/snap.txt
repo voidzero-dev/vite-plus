@@ -1,0 +1,53 @@
+> vp migration # migration should check each package's peerDependencies
+┌  Vite+ Migration
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+◆  ✅ Rewrote imports in 1 file(s)
+│
+●    packages/vite-plugin/src/index.ts
+│
+└  ✨ Migration completed!
+
+
+> cat packages/vite-plugin/src/index.ts # vite-plugin has vite in peerDeps: vite NOT rewritten, vitest rewritten
+import { defineConfig, type Plugin } from 'vite';
+import { describe, it, expect } from '@voidzero-dev/vite-plus/test';
+
+export function myVitePlugin(): Plugin {
+  return {
+    name: 'my-vite-plugin',
+    configResolved(config) {
+      console.log(config);
+    },
+  };
+}
+
+describe('myVitePlugin', () => {
+  it('should work', () => {
+    expect(myVitePlugin()).toBeDefined();
+  });
+});
+
+export default defineConfig({
+  plugins: [myVitePlugin()],
+});
+
+> cat package.json # check root package.json (no peerDependencies)
+{
+  "name": "migration-monorepo-skip-vite-peer-dependency",
+  "devDependencies": {
+    "@voidzero-dev/vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> cat packages/vite-plugin/package.json # has vite in peerDependencies
+{
+  "name": "my-vite-plugin",
+  "peerDependencies": {
+    "vite": "^6.0.0"
+  }
+}

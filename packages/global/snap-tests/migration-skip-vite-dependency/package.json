@@ -1,0 +1,6 @@
+{
+  "name": "migration-skip-vite-dependency",
+  "dependencies": {
+    "vite": "^6.0.0"
+  }
+}

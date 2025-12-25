@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use vite_error::Error;
 
@@ -271,14 +274,14 @@ transform:
 fix: $NEW_IMPORT
 "#;
 
-/// Packages to skip rewriting based on peerDependencies
+/// Packages to skip rewriting based on peerDependencies or dependencies
 #[derive(Debug, Clone, Default)]
 struct SkipPackages {
-    /// Skip rewriting vite imports (vite is in peerDependencies)
+    /// Skip rewriting vite imports (vite is in peerDependencies or dependencies)
     skip_vite: bool,
-    /// Skip rewriting vitest imports (vitest is in peerDependencies)
+    /// Skip rewriting vitest imports (vitest is in peerDependencies or dependencies)
     skip_vitest: bool,
-    /// Skip rewriting tsdown imports (tsdown is in peerDependencies)
+    /// Skip rewriting tsdown imports (tsdown is in peerDependencies or dependencies)
     skip_tsdown: bool,
 }
 
@@ -289,12 +292,33 @@ impl SkipPackages {
     }
 }
 
-/// Parse package.json at the root and check which packages are in peerDependencies.
-/// Returns default (no skipping) if package.json doesn't exist or can't be parsed.
-fn get_skip_packages_from_root(root: &Path) -> SkipPackages {
-    let package_json_path = root.join("package.json");
+/// Find the nearest package.json by walking up from the file's directory.
+/// Stops at the root directory.
+fn find_nearest_package_json(file_path: &Path, root: &Path) -> Option<PathBuf> {
+    let mut current = file_path.parent()?;
 
-    let content = match std::fs::read_to_string(&package_json_path) {
+    loop {
+        let package_json = current.join("package.json");
+        if package_json.exists() {
+            return Some(package_json);
+        }
+
+        // Stop if we've reached the root
+        if current == root {
+            break;
+        }
+
+        // Move to parent directory
+        current = current.parent()?;
+    }
+
+    None
+}
+
+/// Parse package.json and check which packages are in peerDependencies or dependencies.
+/// Returns default (no skipping) if package.json doesn't exist or can't be parsed.
+fn get_skip_packages_from_package_json(package_json_path: &Path) -> SkipPackages {
+    let content = match std::fs::read_to_string(package_json_path) {
         Ok(c) => c,
         Err(_) => return SkipPackages::default(),
     };
@@ -304,15 +328,21 @@ fn get_skip_packages_from_root(root: &Path) -> SkipPackages {
         Err(_) => return SkipPackages::default(),
     };
 
-    let peer_deps = match pkg.get("peerDependencies") {
-        Some(serde_json::Value::Object(deps)) => deps,
-        _ => return SkipPackages::default(),
+    // Helper to check if a package exists in a dependencies object
+    let has_package = |deps_key: &str, package_name: &str| -> bool {
+        pkg.get(deps_key)
+            .and_then(|v| v.as_object())
+            .map(|deps| deps.contains_key(package_name))
+            .unwrap_or(false)
     };
 
+    // Check both peerDependencies and dependencies
     SkipPackages {
-        skip_vite: peer_deps.contains_key("vite"),
-        skip_vitest: peer_deps.contains_key("vitest"),
-        skip_tsdown: peer_deps.contains_key("tsdown"),
+        skip_vite: has_package("peerDependencies", "vite") || has_package("dependencies", "vite"),
+        skip_vitest: has_package("peerDependencies", "vitest")
+            || has_package("dependencies", "vitest"),
+        skip_tsdown: has_package("peerDependencies", "tsdown")
+            || has_package("dependencies", "tsdown"),
     }
 }
 
@@ -374,16 +404,27 @@ pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, E
         errors: Vec::new(),
     };
 
-    // Check package.json at root for peerDependencies
-    let skip_packages = get_skip_packages_from_root(root);
-
-    // If all packages are in peerDeps, skip all files
-    if skip_packages.all_skipped() {
-        result.unchanged_files = walk_result.files;
-        return Ok(result);
-    }
+    // Cache package.json lookups to avoid re-reading the same file
+    let mut skip_packages_cache: HashMap<PathBuf, SkipPackages> = HashMap::new();
 
     for file_path in walk_result.files {
+        // Find the nearest package.json for this file
+        let skip_packages =
+            if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
+                skip_packages_cache
+                    .entry(package_json_path.clone())
+                    .or_insert_with(|| get_skip_packages_from_package_json(&package_json_path))
+                    .clone()
+            } else {
+                SkipPackages::default()
+            };
+
+        // If all packages are in peerDeps for this file's package, skip it
+        if skip_packages.all_skipped() {
+            result.unchanged_files.push(file_path);
+            continue;
+        }
+
         match rewrite_import(&file_path, &skip_packages) {
             Ok(rewrite_result) => {
                 if rewrite_result.updated {
@@ -410,12 +451,12 @@ pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, E
 ///
 /// This function reads a file and rewrites the import statements
 /// to use '@voidzero-dev/vite-plus' instead of 'vite', 'vitest', or '@vitest/*'.
-/// Packages that are in peerDependencies will be skipped.
+/// Packages that are in peerDependencies or dependencies will be skipped.
 ///
 /// # Arguments
 ///
 /// * `file_path` - Path to the TypeScript/JavaScript file
-/// * `skip_packages` - Which packages to skip based on peerDependencies
+/// * `skip_packages` - Which packages to skip based on peerDependencies or dependencies
 ///
 /// # Returns
 ///
@@ -433,7 +474,7 @@ fn rewrite_import(file_path: &Path, skip_packages: &SkipPackages) -> Result<Rewr
 /// Rewrite imports in content from vite/vitest to @voidzero-dev/vite-plus
 ///
 /// This is the internal function that performs the actual rewrite using ast-grep.
-/// Packages that are in peerDependencies will be skipped.
+/// Packages that are in peerDependencies or dependencies will be skipped.
 fn rewrite_import_content(
     content: &str,
     skip_packages: &SkipPackages,
@@ -1675,7 +1716,7 @@ export default defineConfig({});"#;
     }
 
     #[test]
-    fn test_get_skip_packages_from_root_with_vite_peer_dep() {
+    fn test_get_skip_packages_from_package_json_with_vite_peer_dep() {
         use std::fs;
 
         let temp = tempdir().unwrap();
@@ -1687,16 +1728,17 @@ export default defineConfig({});"#;
     "vite": "^5.0.0"
   }
 }"#;
-        fs::write(temp.path().join("package.json"), pkg_json).unwrap();
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
 
-        let skip = get_skip_packages_from_root(temp.path());
+        let skip = get_skip_packages_from_package_json(&package_json_path);
         assert!(skip.skip_vite);
         assert!(!skip.skip_vitest);
         assert!(!skip.skip_tsdown);
     }
 
     #[test]
-    fn test_get_skip_packages_from_root_with_all_peer_deps() {
+    fn test_get_skip_packages_from_package_json_with_all_peer_deps() {
         use std::fs;
 
         let temp = tempdir().unwrap();
@@ -1709,9 +1751,10 @@ export default defineConfig({});"#;
     "tsdown": "^1.0.0"
   }
 }"#;
-        fs::write(temp.path().join("package.json"), pkg_json).unwrap();
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
 
-        let skip = get_skip_packages_from_root(temp.path());
+        let skip = get_skip_packages_from_package_json(&package_json_path);
         assert!(skip.skip_vite);
         assert!(skip.skip_vitest);
         assert!(skip.skip_tsdown);
@@ -1719,11 +1762,90 @@ export default defineConfig({});"#;
     }
 
     #[test]
-    fn test_get_skip_packages_from_root_no_peer_deps() {
+    fn test_get_skip_packages_from_package_json_with_vite_dependency() {
         use std::fs;
 
         let temp = tempdir().unwrap();
 
+        // vite in dependencies should also skip rewriting
+        let pkg_json = r#"{
+  "name": "my-app",
+  "dependencies": {
+    "vite": "^5.0.0"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_vite); // NOW skips because vite is in dependencies
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_get_skip_packages_from_package_json_no_file() {
+        let temp = tempdir().unwrap();
+
+        // No package.json created - should return default (no skipping)
+        let package_json_path = temp.path().join("package.json");
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_get_skip_packages_from_package_json_no_deps() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // Package with no dependencies at all
+        let pkg_json = r#"{
+  "name": "my-app"
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_vite);
+        assert!(!skip.skip_vitest);
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_get_skip_packages_mixed_peer_and_regular_deps() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // vite in dependencies, vitest in peerDependencies
+        let pkg_json = r#"{
+  "name": "my-package",
+  "dependencies": {
+    "vite": "^5.0.0"
+  },
+  "peerDependencies": {
+    "vitest": "^1.0.0"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_vite); // in dependencies
+        assert!(skip.skip_vitest); // in peerDependencies
+        assert!(!skip.skip_tsdown);
+    }
+
+    #[test]
+    fn test_rewrite_imports_in_directory_with_vite_dependency() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // Create package.json with vite as dependency (not peerDependency)
         let pkg_json = r#"{
   "name": "my-app",
   "dependencies": {
@@ -1732,21 +1854,32 @@ export default defineConfig({});"#;
 }"#;
         fs::write(temp.path().join("package.json"), pkg_json).unwrap();
 
-        let skip = get_skip_packages_from_root(temp.path());
-        assert!(!skip.skip_vite);
-        assert!(!skip.skip_vitest);
-        assert!(!skip.skip_tsdown);
-    }
+        // Create src directory
+        fs::create_dir(temp.path().join("src")).unwrap();
 
-    #[test]
-    fn test_get_skip_packages_from_root_no_package_json() {
-        let temp = tempdir().unwrap();
+        // Create source file with vite and vitest imports
+        let original_content = r#"import { defineConfig } from 'vite';
+import { describe } from 'vitest';
 
-        // No package.json created - should return default (no skipping)
-        let skip = get_skip_packages_from_root(temp.path());
-        assert!(!skip.skip_vite);
-        assert!(!skip.skip_vitest);
-        assert!(!skip.skip_tsdown);
+export default defineConfig({});"#;
+        fs::write(temp.path().join("src/index.ts"), original_content).unwrap();
+
+        // Run the batch rewrite
+        let result = rewrite_imports_in_directory(temp.path()).unwrap();
+
+        // File should be modified (vitest was rewritten)
+        assert_eq!(result.modified_files.len(), 1);
+        assert!(result.errors.is_empty());
+
+        // Verify vite import NOT rewritten (in dependencies), vitest IS rewritten
+        let content = fs::read_to_string(temp.path().join("src/index.ts")).unwrap();
+        assert_eq!(
+            content,
+            r#"import { defineConfig } from 'vite';
+import { describe } from '@voidzero-dev/vite-plus/test';
+
+export default defineConfig({});"#
+        );
     }
 
     #[test]
@@ -1825,5 +1958,112 @@ import { build } from 'tsdown';"#;
         // Verify content unchanged
         let content = fs::read_to_string(temp.path().join("index.ts")).unwrap();
         assert_eq!(content, original_content);
+    }
+
+    #[test]
+    fn test_find_nearest_package_json() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // Create monorepo structure
+        fs::create_dir_all(temp.path().join("packages/vite-plugin/src")).unwrap();
+        fs::create_dir_all(temp.path().join("packages/app/src")).unwrap();
+
+        // Root package.json (no peerDeps)
+        fs::write(temp.path().join("package.json"), r#"{"name": "monorepo"}"#).unwrap();
+
+        // vite-plugin package.json (has vite in peerDeps)
+        fs::write(
+            temp.path().join("packages/vite-plugin/package.json"),
+            r#"{"name": "vite-plugin", "peerDependencies": {"vite": "^5.0.0"}}"#,
+        )
+        .unwrap();
+
+        // app package.json (no peerDeps)
+        fs::write(temp.path().join("packages/app/package.json"), r#"{"name": "app"}"#).unwrap();
+
+        // Test finding package.json from vite-plugin/src/index.ts
+        let file_path = temp.path().join("packages/vite-plugin/src/index.ts");
+        let result = find_nearest_package_json(&file_path, temp.path());
+        assert_eq!(result, Some(temp.path().join("packages/vite-plugin/package.json")));
+
+        // Test finding package.json from app/src/index.ts
+        let file_path = temp.path().join("packages/app/src/index.ts");
+        let result = find_nearest_package_json(&file_path, temp.path());
+        assert_eq!(result, Some(temp.path().join("packages/app/package.json")));
+
+        // Test finding package.json from root level file
+        let file_path = temp.path().join("vite.config.ts");
+        let result = find_nearest_package_json(&file_path, temp.path());
+        assert_eq!(result, Some(temp.path().join("package.json")));
+    }
+
+    #[test]
+    fn test_rewrite_imports_monorepo_different_peer_deps() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // Create monorepo structure
+        fs::create_dir_all(temp.path().join("packages/vite-plugin/src")).unwrap();
+        fs::create_dir_all(temp.path().join("packages/app/src")).unwrap();
+
+        // Root package.json (no peerDeps)
+        fs::write(temp.path().join("package.json"), r#"{"name": "monorepo"}"#).unwrap();
+
+        // vite-plugin package.json (has vite in peerDeps)
+        fs::write(
+            temp.path().join("packages/vite-plugin/package.json"),
+            r#"{"name": "vite-plugin", "peerDependencies": {"vite": "^5.0.0"}}"#,
+        )
+        .unwrap();
+
+        // app package.json (no peerDeps)
+        fs::write(temp.path().join("packages/app/package.json"), r#"{"name": "app"}"#).unwrap();
+
+        // vite-plugin source file with vite and vitest imports
+        fs::write(
+            temp.path().join("packages/vite-plugin/src/index.ts"),
+            r#"import { defineConfig } from 'vite';
+import { describe } from 'vitest';
+export default defineConfig({});"#,
+        )
+        .unwrap();
+
+        // app source file with vite and vitest imports
+        fs::write(
+            temp.path().join("packages/app/src/index.ts"),
+            r#"import { defineConfig } from 'vite';
+import { describe } from 'vitest';
+export default defineConfig({});"#,
+        )
+        .unwrap();
+
+        // Run the batch rewrite
+        let result = rewrite_imports_in_directory(temp.path()).unwrap();
+
+        // Both files should be modified
+        assert_eq!(result.modified_files.len(), 2);
+
+        // vite-plugin: vite NOT rewritten (has peerDep), vitest IS rewritten
+        let vite_plugin_content =
+            fs::read_to_string(temp.path().join("packages/vite-plugin/src/index.ts")).unwrap();
+        assert_eq!(
+            vite_plugin_content,
+            r#"import { defineConfig } from 'vite';
+import { describe } from '@voidzero-dev/vite-plus/test';
+export default defineConfig({});"#
+        );
+
+        // app: vite IS rewritten (no peerDep), vitest IS rewritten
+        let app_content =
+            fs::read_to_string(temp.path().join("packages/app/src/index.ts")).unwrap();
+        assert_eq!(
+            app_content,
+            r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+import { describe } from '@voidzero-dev/vite-plus/test';
+export default defineConfig({});"#
+        );
     }
 }

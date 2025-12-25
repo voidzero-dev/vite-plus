@@ -1,0 +1,6 @@
+{
+  "name": "my-vite-plugin",
+  "peerDependencies": {
+    "vite": "^6.0.0"
+  }
+}

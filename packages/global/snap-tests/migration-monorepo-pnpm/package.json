@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "packageManager": "pnpm@10.18.0",
   "dependencies": {
-    "testnpm2": "1.0.0",
-    "vite": "catalog:"
+    "testnpm2": "1.0.0"
   },
   "resolutions": {
     "vue": "3.5.25",
@@ -12,6 +11,7 @@
     "vitest": "catalog:"
   },
   "devDependencies": {
+    "vite": "catalog:",
     "vitest": "catalog:",
     "oxlint": "catalog:",
     "oxfmt": "catalog:"

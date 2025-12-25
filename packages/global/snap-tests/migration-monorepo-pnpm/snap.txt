@@ -52,13 +52,13 @@ cat: .oxfmtrc.json: No such file or directory
   "version": "1.0.0",
   "packageManager": "pnpm@<semver>",
   "dependencies": {
-    "testnpm2": "1.0.0",
-    "vite": "catalog:"
+    "testnpm2": "1.0.0"
   },
   "resolutions": {
     "vue": "3.5.25"
   },
   "devDependencies": {
+    "vite": "catalog:",
     "vitest": "catalog:",
     "@voidzero-dev/vite-plus": "catalog:"
   },

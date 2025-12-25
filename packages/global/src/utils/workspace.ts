@@ -113,6 +113,7 @@ export function discoverWorkspacePackages(
     {
       absolute: false,
       cwd: rootDir,
+      ignore: ['**/node_modules/**'],
     },
   );
   for (const packageJsonRelativePath of packageJsonRelativePaths) {

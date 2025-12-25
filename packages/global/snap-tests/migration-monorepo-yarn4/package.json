@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "packageManager": "yarn@4.12.0",
   "dependencies": {
-    "testnpm2": "1.0.0",
-    "vite": "catalog:"
+    "testnpm2": "1.0.0"
   },
   "devDependencies": {
+    "vite": "catalog:",
     "vitest": "catalog:",
     "oxlint": "catalog:",
     "oxfmt": "catalog:"

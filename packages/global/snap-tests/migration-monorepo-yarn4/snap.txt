@@ -36,10 +36,10 @@ cat: .oxlintrc.json: No such file or directory
   "version": "1.0.0",
   "packageManager": "yarn@<semver>",
   "dependencies": {
-    "testnpm2": "1.0.0",
-    "vite": "catalog:"
+    "testnpm2": "1.0.0"
   },
   "devDependencies": {
+    "vite": "catalog:",
     "vitest": "catalog:",
     "@voidzero-dev/vite-plus": "catalog:"
   },

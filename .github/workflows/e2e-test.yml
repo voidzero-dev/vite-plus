@@ -96,6 +96,14 @@ jobs:
               vite run lint
               vite run type
               vite run test -- --coverage
+          - name: vite-plugin-react
+            node-version: 22
+            command: |
+              vite run format
+              vite run lint -- --fix
+              # TODO(fengmk2): run all builds and tests after tsdown version upgrade
+              vite run @vitejs/plugin-rsc#build
+              vite run @vitejs/plugin-rsc#test
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
