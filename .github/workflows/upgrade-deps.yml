@@ -55,7 +55,7 @@ jobs:
           build-rolldown-native: 'true'
 
       - name: Create/Update PR
-        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
         with:
           base: main
           branch: deps/upstream-update
@@ -71,3 +71,4 @@ jobs:
             Build status: ${{ steps.build.outcome }}
           commit-message: 'feat(deps): upgrade upstream dependencies'
           delete-branch: true
+          token: ${{ secrets.GITHUB_TOKEN }}
