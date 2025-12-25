@@ -391,6 +391,31 @@ function mergePackageExports(
     );
 }
 
+// Oxc-related packages that should use the higher version on conflict
+const OXC_PACKAGE_PREFIXES = [
+  '@oxc-project/',
+  '@oxlint/',
+  '@oxc-minify/',
+  '@oxc-parser/',
+  '@oxc-resolver/',
+  '@oxc-transform/',
+  '@oxfmt/',
+  '@oxlint-tsgolint/',
+];
+const OXC_PACKAGES = new Set([
+  'oxc-minify',
+  'oxc-parser',
+  'oxc-transform',
+  'oxfmt',
+  'oxlint',
+  'oxlint-tsgolint',
+]);
+
+function isOxcPackage(packageName: string): boolean {
+  if (OXC_PACKAGES.has(packageName)) return true;
+  return OXC_PACKAGE_PREFIXES.some((prefix) => packageName.startsWith(prefix));
+}
+
 function mergeSemverVersions(
   v1: string,
   v2: string,
@@ -405,6 +430,16 @@ function mergeSemverVersions(
   const isExact2 = v2.startsWith('=');
   if (isExact1 || isExact2) {
     if (isExact1 && isExact2 && v1 !== v2) {
+      // For oxc-related packages, use the higher version
+      if (isOxcPackage(packageName)) {
+        const ver1 = v1.slice(1); // Remove '=' prefix
+        const ver2 = v2.slice(1);
+        if (semver.valid(ver1) && semver.valid(ver2)) {
+          const higher = semver.gt(ver1, ver2) ? v1 : v2;
+          log(`Resolving ${packageName} version conflict: ${v1} vs ${v2} -> ${higher}`);
+          return higher;
+        }
+      }
       error(`Incompatible exact versions for ${packageName}: ${v1} vs ${v2}`);
     }
     return isExact1 ? v1 : v2;
