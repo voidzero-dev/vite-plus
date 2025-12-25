@@ -16,9 +16,11 @@ import {
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
 const TEST_PACKAGE_NAME = '@voidzero-dev/vite-plus-test';
+const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 
 await buildCli();
 await buildNapiBinding();
+await syncCorePackageExports();
 await syncTestPackageExports();
 
 async function buildNapiBinding() {
@@ -70,6 +72,114 @@ async function buildCli() {
   if (diagnostics.length > 0) {
     console.error(formatDiagnostics(diagnostics, host));
     process.exit(1);
+  }
+}
+
+/**
+ * Sync Vite core exports from @voidzero-dev/vite-plus-core to @voidzero-dev/vite-plus
+ *
+ * This creates shim files for:
+ * - ./client (types only)
+ * - ./module-runner
+ * - ./internal
+ * - ./dist/client/* (wildcard)
+ * - ./types/* (wildcard, types only)
+ */
+async function syncCorePackageExports() {
+  console.log('\nSyncing core package exports...');
+
+  const distDir = join(projectDir, 'dist');
+  const clientDir = join(distDir, 'client');
+  const typesDir = join(distDir, 'types');
+
+  // Clean up previous build
+  await rm(clientDir, { recursive: true, force: true });
+  await rm(typesDir, { recursive: true, force: true });
+  await mkdir(clientDir, { recursive: true });
+  await mkdir(typesDir, { recursive: true });
+
+  // Create ./client shim (types only) - uses triple-slash reference since client.d.ts is ambient
+  console.log('  Creating ./client');
+  await writeFile(
+    join(distDir, 'client.d.ts'),
+    `/// <reference types="${CORE_PACKAGE_NAME}/client" />\n`,
+  );
+
+  // Create ./module-runner shim
+  console.log('  Creating ./module-runner');
+  await writeFile(
+    join(distDir, 'module-runner.js'),
+    `export * from '${CORE_PACKAGE_NAME}/module-runner';\n`,
+  );
+  await writeFile(
+    join(distDir, 'module-runner.d.ts'),
+    `export * from '${CORE_PACKAGE_NAME}/module-runner';\n`,
+  );
+
+  // Create ./internal shim
+  console.log('  Creating ./internal');
+  await writeFile(join(distDir, 'internal.js'), `export * from '${CORE_PACKAGE_NAME}/internal';\n`);
+  await writeFile(
+    join(distDir, 'internal.d.ts'),
+    `export * from '${CORE_PACKAGE_NAME}/internal';\n`,
+  );
+
+  // Create ./dist/client/* shims by reading core's dist/vite/client files
+  console.log('  Creating ./dist/client/*');
+  const coreClientDir = join(projectDir, '../core/dist/vite/client');
+  if (existsSync(coreClientDir)) {
+    const { readdirSync } = await import('node:fs');
+    for (const file of readdirSync(coreClientDir)) {
+      const shimPath = join(clientDir, file);
+      if (file.endsWith('.js')) {
+        await writeFile(shimPath, `export * from '${CORE_PACKAGE_NAME}/dist/client/${file}';\n`);
+      } else if (file.endsWith('.d.ts')) {
+        await writeFile(
+          shimPath,
+          `export * from '${CORE_PACKAGE_NAME}/dist/client/${file.replace('.d.ts', '')}';\n`,
+        );
+      } else {
+        // Copy non-JS/TS files directly (e.g., CSS, source maps)
+        const { copyFileSync } = await import('node:fs');
+        copyFileSync(join(coreClientDir, file), shimPath);
+      }
+    }
+  }
+
+  // Create ./types/* shims by reading core's dist/vite/types files
+  console.log('  Creating ./types/*');
+  const coreTypesDir = join(projectDir, '../core/dist/vite/types');
+  if (existsSync(coreTypesDir)) {
+    const { readdirSync, statSync } = await import('node:fs');
+    await syncTypesDir(coreTypesDir, typesDir, '');
+  }
+
+  console.log('\nSynced core package exports');
+}
+
+async function syncTypesDir(srcDir: string, destDir: string, relativePath: string) {
+  const { readdirSync, statSync } = await import('node:fs');
+  const entries = readdirSync(srcDir);
+
+  for (const entry of entries) {
+    const srcPath = join(srcDir, entry);
+    const destPath = join(destDir, entry);
+    const entryRelPath = relativePath ? `${relativePath}/${entry}` : entry;
+
+    if (statSync(srcPath).isDirectory()) {
+      // Skip internal directory - it's blocked by exports
+      if (entry === 'internal') continue;
+
+      await mkdir(destPath, { recursive: true });
+      await syncTypesDir(srcPath, destPath, entryRelPath);
+    } else if (entry.endsWith('.d.ts')) {
+      // Create shim that re-exports from core - must include .d.ts extension for wildcard exports
+      // Use 'export type *' since we're re-exporting from a .d.ts file
+      await writeFile(
+        destPath,
+        `export type * from '${CORE_PACKAGE_NAME}/types/${entryRelPath}';\n`,
+      );
+    }
   }
 }
 

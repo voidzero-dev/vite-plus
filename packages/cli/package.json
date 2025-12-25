@@ -58,6 +58,22 @@
       "require": "./dist/index.cjs",
       "types": "./dist/index.d.ts"
     },
+    "./client": {
+      "types": "./dist/client.d.ts"
+    },
+    "./module-runner": {
+      "types": "./dist/module-runner.d.ts",
+      "default": "./dist/module-runner.js"
+    },
+    "./internal": {
+      "types": "./dist/internal.d.ts",
+      "default": "./dist/internal.js"
+    },
+    "./dist/client/*": "./dist/client/*",
+    "./types/*": {
+      "types": "./dist/types/*"
+    },
+    "./types/internal/*": null,
     "./bin": {
       "import": "./dist/bin.js"
     },
