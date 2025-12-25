@@ -667,7 +667,7 @@ export async function syncRemote() {
     semver = await import('semver');
   } catch {
     log('Dependencies not found, running pnpm install...');
-    execCommand('pnpm install', rootDir);
+    execCommand('pnpm install --no-frozen-lockfile', rootDir);
     log('Retrying imports...');
     const yaml = await import('@std/yaml');
     parseYaml = yaml.parse;
@@ -711,7 +711,7 @@ export async function syncRemote() {
 
   log('✓ pnpm-workspace.yaml updated successfully!');
 
-  execCommand('pnpm install', rootDir);
+  execCommand('pnpm install --no-frozen-lockfile', rootDir);
 
   // Merge package.json exports
   log('Merging package.json exports...');
