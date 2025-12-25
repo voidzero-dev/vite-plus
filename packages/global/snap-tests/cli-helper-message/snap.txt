@@ -14,6 +14,7 @@ Commands:
   link      Link packages for local development
   unlink    Unlink packages
   pm        Package manager utilities
+  dlx       Execute a package binary without installing it as a dependency
   gen       Generate a new project
   migrate   Migrate an existing project to vite+<repeat>
   dev       Run development server

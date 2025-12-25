@@ -34,6 +34,8 @@ https://registry.<domain>/testnpm2/-/testnpm2-1.0.0.tgz
 "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.0.tgz","
 `;
 
+exports[`replaceUnstableOutput() > replace ignore npm warn exec The following package was not found and will be installed: cowsay@<semver> warning log 1`] = `"hello world"`;
+
 exports[`replaceUnstableOutput() > replace ignore pnpm request warning log 1`] = `
 "Foo bar
 Packages:"

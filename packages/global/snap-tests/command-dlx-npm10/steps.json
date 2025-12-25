@@ -1,0 +1,12 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp dlx --help # should show help message",
+    "vp x --help # should work with x alias",
+    "vp dlx -s -y cowsay hello # should run cowsay with npm exec and auto-confirm",
+    "vp dlx -s -y cowsay@1.6.0 hello # should run specific version",
+    "vp dlx -s -y -p cowsay -p lolcatjs cowsay hello # should run with multiple packages"
+  ]
+}

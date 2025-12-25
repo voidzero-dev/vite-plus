@@ -98,6 +98,11 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(`Checking formatting...\n`, 'Checking formatting...')
       // remove warning <name>@<semver>: No license field
       .replaceAll(/warning .+?: No license field\n/g, '')
+      // remove "npm warn exec The following package was not found and will be installed: cowsay@<semver>"
+      .replaceAll(
+        /npm warn exec The following package was not found and will be installed: .+?\n/g,
+        '',
+      )
       // remove "npm notice Access token expired or revoked..."
       .replaceAll(/npm notice Access token expired or revoked.+?\n/g, '')
   );

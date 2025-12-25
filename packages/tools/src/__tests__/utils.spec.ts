@@ -190,6 +190,15 @@ line 3
     `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
+
+  test('replace ignore npm warn exec The following package was not found and will be installed: cowsay@<semver> warning log', () => {
+    const output = `
+npm warn exec The following package was not found and will be installed: cowsay@<semver>
+npm warn exec The following package was not found and will be installed: cowsay@1.6.0
+hello world
+    `;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
 });
 
 describe('isPassThroughEnv()', () => {

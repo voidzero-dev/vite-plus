@@ -1,0 +1,10 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp dlx --help # should show help message",
+    "vp x --help # should work with x alias",
+    "vp dlx -s cowsay hello # should fallback to npx for yarn@1"
+  ]
+}
