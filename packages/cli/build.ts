@@ -1,3 +1,19 @@
+/**
+ * Build script for @voidzero-dev/vite-plus CLI package
+ *
+ * This script performs three main tasks:
+ * 1. buildCli() - Compiles TypeScript sources
+ * 2. buildNapiBinding() - Builds the native Rust binding via NAPI
+ * 3. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
+ * 4. syncTestPackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-test
+ *
+ * The sync functions allow this package to be a drop-in replacement for 'vite' by
+ * re-exporting all the same subpaths (./client, ./types/*, etc.) while delegating
+ * to the core package for actual implementation.
+ *
+ * IMPORTANT: The core package must be built before running this script.
+ */
+
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -78,12 +94,21 @@ async function buildCli() {
 /**
  * Sync Vite core exports from @voidzero-dev/vite-plus-core to @voidzero-dev/vite-plus
  *
- * This creates shim files for:
- * - ./client (types only)
- * - ./module-runner
- * - ./internal
- * - ./dist/client/* (wildcard)
- * - ./types/* (wildcard, types only)
+ * Creates shim files that re-export from the core package, enabling imports like:
+ * - `import type { ... } from '@voidzero-dev/vite-plus/types/importGlob.d.ts'`
+ * - `import { ... } from '@voidzero-dev/vite-plus/module-runner'`
+ *
+ * Export paths created:
+ * - ./client - Triple-slash reference (ambient type declarations for CSS, assets, etc.)
+ * - ./module-runner - Re-exports both JS and types
+ * - ./internal - Re-exports both JS and types
+ * - ./dist/client/* - Re-exports client runtime files (.mjs, .cjs)
+ * - ./types/* - Type-only re-exports using `export type *`
+ *
+ * Note: In package.json exports, ./types/internal/* must come BEFORE ./types/*
+ * for correct precedence (more specific patterns must precede wildcards).
+ *
+ * @throws Error if core package is not built (missing dist directories)
  */
 async function syncCorePackageExports() {
   console.log('\nSyncing core package exports...');
@@ -163,6 +188,21 @@ async function syncCorePackageExports() {
   console.log('\nSynced core package exports');
 }
 
+/**
+ * Recursively sync type definition files from core to CLI package
+ *
+ * Creates shim .d.ts files that re-export types from the core package.
+ * Uses `export type * from` syntax which is valid in TypeScript 5.0+.
+ *
+ * @param srcDir - Source directory containing .d.ts files
+ * @param destDir - Destination directory for shim files
+ * @param relativePath - Current path relative to types root (empty string at top level)
+ *
+ * Special handling:
+ * - Skips top-level 'internal' directory (blocked by ./types/internal/* export)
+ * - Supports .d.ts, .d.mts, and .d.cts extensions
+ * - Preserves directory structure recursively
+ */
 async function syncTypesDir(srcDir: string, destDir: string, relativePath: string) {
   const entries = readdirSync(srcDir);
 
