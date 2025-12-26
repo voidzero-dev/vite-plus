@@ -169,13 +169,13 @@ async function syncTypesDir(srcDir: string, destDir: string, relativePath: strin
     const entryRelPath = relativePath ? `${relativePath}/${entry}` : entry;
 
     if (statSync(srcPath).isDirectory()) {
-      // Skip internal directory - it's blocked by exports
-      if (entry === 'internal') continue;
+      // Skip top-level internal directory - it's blocked by ./types/internal/* export
+      if (entry === 'internal' && relativePath === '') continue;
 
       await mkdir(destPath, { recursive: true });
       await syncTypesDir(srcPath, destPath, entryRelPath);
-    } else if (entry.endsWith('.d.ts')) {
-      // Create shim that re-exports from core - must include .d.ts extension for wildcard exports
+    } else if (/\.d\.[mc]?ts$/.test(entry)) {
+      // Create shim that re-exports from core - must include extension for wildcard exports
       // Use 'export type *' since we're re-exporting from a .d.ts file
       await writeFile(
         destPath,
