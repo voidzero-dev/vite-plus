@@ -1,7 +1,7 @@
 /**
  * Build script for @voidzero-dev/vite-plus CLI package
  *
- * This script performs three main tasks:
+ * This script performs four main tasks:
  * 1. buildCli() - Compiles TypeScript sources
  * 2. buildNapiBinding() - Builds the native Rust binding via NAPI
  * 3. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
