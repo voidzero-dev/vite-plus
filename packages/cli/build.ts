@@ -1,5 +1,5 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -134,7 +134,10 @@ async function syncCorePackageExports() {
     );
   }
   for (const file of readdirSync(coreClientDir)) {
+    const srcPath = join(coreClientDir, file);
     const shimPath = join(clientDir, file);
+    // Skip directories
+    if (statSync(srcPath).isDirectory()) continue;
     if (file.endsWith('.js') || file.endsWith('.mjs') || file.endsWith('.cjs')) {
       await writeFile(shimPath, `export * from '${CORE_PACKAGE_NAME}/dist/client/${file}';\n`);
     } else if (file.endsWith('.d.ts') || file.endsWith('.d.mts') || file.endsWith('.d.cts')) {
@@ -142,7 +145,7 @@ async function syncCorePackageExports() {
       await writeFile(shimPath, `export * from '${CORE_PACKAGE_NAME}/dist/client/${baseFile}';\n`);
     } else {
       // Copy non-JS/TS files directly (e.g., CSS, source maps)
-      copyFileSync(join(coreClientDir, file), shimPath);
+      await copyFile(srcPath, shimPath);
     }
   }
 

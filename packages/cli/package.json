@@ -70,10 +70,10 @@
       "default": "./dist/internal.js"
     },
     "./dist/client/*": "./dist/client/*",
+    "./types/internal/*": null,
     "./types/*": {
       "types": "./dist/types/*"
     },
-    "./types/internal/*": null,
     "./bin": {
       "import": "./dist/bin.js"
     },
