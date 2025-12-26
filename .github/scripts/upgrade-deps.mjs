@@ -11,15 +11,29 @@ async function getLatestTagCommit(owner, repo) {
       Accept: 'application/vnd.github.v3+json',
     },
   });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch tags for ${owner}/${repo}: ${res.status} ${res.statusText}`);
+  }
   const tags = await res.json();
-  if (!tags.length) throw new Error(`No tags found for ${owner}/${repo}`);
+  if (!Array.isArray(tags) || !tags.length) {
+    throw new Error(`No tags found for ${owner}/${repo}`);
+  }
+  if (!tags[0]?.commit?.sha) {
+    throw new Error(`Invalid tag structure for ${owner}/${repo}: missing commit SHA`);
+  }
   return tags[0].commit.sha;
 }
 
 // ============ npm Registry ============
 async function getLatestNpmVersion(packageName) {
   const res = await fetch(`https://registry.npmjs.org/${packageName}/latest`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch npm version for ${packageName}: ${res.status} ${res.statusText}`);
+  }
   const data = await res.json();
+  if (!data?.version) {
+    throw new Error(`Invalid npm response for ${packageName}: missing version field`);
+  }
   return data.version;
 }
 
@@ -43,14 +57,14 @@ async function updatePnpmWorkspace(vitestVersion, tsdownVersion) {
   const filePath = path.join(ROOT, 'pnpm-workspace.yaml');
   let content = fs.readFileSync(filePath, 'utf8');
 
-  // Update vitest-dev override
+  // Update vitest-dev override (handle pre-release versions like -beta.1, -rc.0)
   content = content.replace(
-    /vitest-dev: npm:vitest@\^[\d.]+/,
+    /vitest-dev: npm:vitest@\^[\d.]+(-[\w.]+)?/,
     `vitest-dev: npm:vitest@^${vitestVersion}`,
   );
 
-  // Update tsdown in catalog
-  content = content.replace(/tsdown: \^[\d.]+/, `tsdown: ^${tsdownVersion}`);
+  // Update tsdown in catalog (handle pre-release versions)
+  content = content.replace(/tsdown: \^[\d.]+(-[\w.]+)?/, `tsdown: ^${tsdownVersion}`);
 
   fs.writeFileSync(filePath, content);
   console.log('Updated pnpm-workspace.yaml');
