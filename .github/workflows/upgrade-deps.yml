@@ -66,6 +66,7 @@ jobs:
           branch: deps/upstream-update
           title: 'feat(deps): upgrade upstream dependencies'
           sign-commits: true
+          branch-token: ${{ secrets.AUTO_UPDATE_BRANCH_TOKEN }}
           body: |
             Automated daily upgrade of upstream dependencies:
             - rolldown (latest tag)
