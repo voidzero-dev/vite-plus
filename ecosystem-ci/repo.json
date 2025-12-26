@@ -38,5 +38,10 @@
     "repository": "https://github.com/fengmk2/tanstack-start-helloworld.git",
     "branch": "main",
     "hash": "09bafe177bbcd1e3108c441a67601ae6380ad352"
+  },
+  "waku": {
+    "repository": "https://github.com/wakujs/waku.git",
+    "branch": "main",
+    "hash": "924f2b994629cdef19a24dcf2aeea703cab6081c"
   }
 }
