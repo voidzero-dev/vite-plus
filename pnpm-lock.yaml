@@ -386,9 +386,6 @@ importers:
       '@types/node':
         specifier: ^20.19.0 || >=22.12.0
         version: 22.19.1
-      '@vitejs/devtools':
-        specifier: ^0.0.0-alpha.18
-        version: 0.0.0-alpha.18(@pnpm/logger@1001.0.1)(vite@packages+core)(vue@3.5.25(typescript@5.9.3))
       esbuild:
         specifier: ^0.25.0
         version: 0.25.12
@@ -450,6 +447,9 @@ importers:
       '@oxc-node/core':
         specifier: 'catalog:'
         version: 0.0.34
+      '@vitejs/devtools':
+        specifier: ^0.0.0-alpha.18
+        version: 0.0.0-alpha.18(@pnpm/logger@1001.0.1)(vite@packages+core)(vue@3.5.25(typescript@5.9.3))
       es-module-lexer:
         specifier: ^1.7.0
         version: 1.7.0

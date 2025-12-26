@@ -5,21 +5,28 @@ const ROOT = process.cwd();
 
 // ============ GitHub API ============
 async function getLatestTagCommit(owner, repo) {
-  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/tags`, {
-    headers: {
-      Authorization: `token ${process.env.GITHUB_TOKEN}`,
-      Accept: 'application/vnd.github.v3+json',
+  const res = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/tags`,
+    {
+      headers: {
+        Authorization: `token ${process.env.GITHUB_TOKEN}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
     },
-  });
+  );
   if (!res.ok) {
-    throw new Error(`Failed to fetch tags for ${owner}/${repo}: ${res.status} ${res.statusText}`);
+    throw new Error(
+      `Failed to fetch tags for ${owner}/${repo}: ${res.status} ${res.statusText}`,
+    );
   }
   const tags = await res.json();
   if (!Array.isArray(tags) || !tags.length) {
     throw new Error(`No tags found for ${owner}/${repo}`);
   }
   if (!tags[0]?.commit?.sha) {
-    throw new Error(`Invalid tag structure for ${owner}/${repo}: missing commit SHA`);
+    throw new Error(
+      `Invalid tag structure for ${owner}/${repo}: missing commit SHA`,
+    );
   }
   return tags[0].commit.sha;
 }
@@ -28,11 +35,15 @@ async function getLatestTagCommit(owner, repo) {
 async function getLatestNpmVersion(packageName) {
   const res = await fetch(`https://registry.npmjs.org/${packageName}/latest`);
   if (!res.ok) {
-    throw new Error(`Failed to fetch npm version for ${packageName}: ${res.status} ${res.statusText}`);
+    throw new Error(
+      `Failed to fetch npm version for ${packageName}: ${res.status} ${res.statusText}`,
+    );
   }
   const data = await res.json();
   if (!data?.version) {
-    throw new Error(`Invalid npm response for ${packageName}: missing version field`);
+    throw new Error(
+      `Invalid npm response for ${packageName}: missing version field`,
+    );
   }
   return data.version;
 }
@@ -64,7 +75,10 @@ async function updatePnpmWorkspace(vitestVersion, tsdownVersion) {
   );
 
   // Update tsdown in catalog (handle pre-release versions)
-  content = content.replace(/tsdown: \^[\d.]+(-[\w.]+)?/, `tsdown: ^${tsdownVersion}`);
+  content = content.replace(
+    /tsdown: \^[\d.]+(-[\w.]+)?/,
+    `tsdown: ^${tsdownVersion}`,
+  );
 
   fs.writeFileSync(filePath, content);
   console.log('Updated pnpm-workspace.yaml');
@@ -96,21 +110,38 @@ async function updateTestPackage(vitestVersion) {
   console.log('Updated packages/test/package.json');
 }
 
+// ============ Update packages/core/package.json ============
+async function updateCorePackage(devtoolsVersion) {
+  const filePath = path.join(ROOT, 'packages/core/package.json');
+  const pkg = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+  // Update @vitejs/devtools in devDependencies
+  if (pkg.devDependencies?.['@vitejs/devtools']) {
+    pkg.devDependencies['@vitejs/devtools'] = `^${devtoolsVersion}`;
+  }
+
+  fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n');
+  console.log('Updated packages/core/package.json');
+}
+
 // ============ Main ============
 async function main() {
   console.log('Fetching latest versions...');
 
-  const [vitestVersion, tsdownVersion] = await Promise.all([
+  const [vitestVersion, tsdownVersion, devtoolsVersion] = await Promise.all([
     getLatestNpmVersion('vitest'),
     getLatestNpmVersion('tsdown'),
+    getLatestNpmVersion('@vitejs/devtools'),
   ]);
 
   console.log(`vitest: ${vitestVersion}`);
   console.log(`tsdown: ${tsdownVersion}`);
+  console.log(`@vitejs/devtools: ${devtoolsVersion}`);
 
   await updateUpstreamVersions();
   await updatePnpmWorkspace(vitestVersion, tsdownVersion);
   await updateTestPackage(vitestVersion);
+  await updateCorePackage(devtoolsVersion);
 
   console.log('Done!');
 }

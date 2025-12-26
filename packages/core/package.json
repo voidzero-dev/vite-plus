@@ -11,6 +11,10 @@
     },
     "./dist/client/*": "./dist/vite/client/*",
     "./internal": "./dist/vite/node/internal.js",
+    "./lib": {
+      "default": "./dist/tsdown/index.js",
+      "types": "./dist/tsdown/index-types.d.ts"
+    },
     "./module-runner": "./dist/vite/node/module-runner.js",
     "./package.json": "./package.json",
     "./rolldown": {
@@ -47,10 +51,6 @@
     "./rolldown/pluginutils": {
       "default": "./dist/pluginutils/index.js",
       "types": "./dist/pluginutils/index.d.ts"
-    },
-    "./lib": {
-      "default": "./dist/tsdown/index.js",
-      "types": "./dist/tsdown/index-types.d.ts"
     },
     "./types/*": {
       "types": "./dist/vite/types/*"
@@ -166,6 +166,7 @@
   "devDependencies": {
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
+    "@vitejs/devtools": "^0.0.0-alpha.18",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
     "magic-string": "^0.30.21",
