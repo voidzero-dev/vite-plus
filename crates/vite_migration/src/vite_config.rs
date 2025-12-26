@@ -2,6 +2,7 @@ use std::path::Path;
 
 use ast_grep_config::{GlobalRules, RuleConfig, from_yaml_string};
 use ast_grep_language::{LanguageExt, SupportLang};
+use json_strip_comments::StripComments;
 use serde_json::Value;
 use vite_error::Error;
 
@@ -71,9 +72,10 @@ pub fn merge_json_config(
     // Read the vite config file
     let vite_config_content = std::fs::read_to_string(vite_config_path)?;
 
-    // Read and parse the JSON config file
+    // Read and parse the JSON/JSONC config file (supports comments)
     let json_config_content = std::fs::read_to_string(json_config_path)?;
-    let json_config: Value = serde_json::from_str(&json_config_content)?;
+    let json_without_comments = StripComments::new(json_config_content.as_bytes());
+    let json_config: Value = serde_json::from_reader(json_without_comments)?;
 
     // Convert JSON to TypeScript object literal
     let ts_config = json_to_js_object_literal(&json_config, 0);
@@ -987,6 +989,110 @@ export default defineConfig({
       'no-console': 'warn',
     },
     ignorePatterns: ['dist', 'node_modules'],
+  },
+  plugins: [],
+});"#
+        );
+    }
+
+    #[test]
+    fn test_merge_json_config_with_jsonc_file() {
+        // Test JSONC support with single-line and block comments
+        let temp_dir = tempdir().unwrap();
+
+        let vite_config_path = temp_dir.path().join("vite.config.ts");
+        let jsonc_config_path = temp_dir.path().join(".oxfmtrc.jsonc");
+
+        // Write test vite config
+        let mut vite_file = std::fs::File::create(&vite_config_path).unwrap();
+        write!(
+            vite_file,
+            r#"import {{ defineConfig }} from 'vite';
+
+export default defineConfig({{
+  plugins: [],
+}});"#
+        )
+        .unwrap();
+
+        // Write test JSONC config with comments
+        let mut jsonc_file = std::fs::File::create(&jsonc_config_path).unwrap();
+        write!(
+            jsonc_file,
+            r#"{{
+  // Formatting options
+  "indentWidth": 2,
+  /*
+   * Line width configuration
+   */
+  "lineWidth": 100
+}}"#
+        )
+        .unwrap();
+
+        // Run the merge
+        let result = merge_json_config(&vite_config_path, &jsonc_config_path, "fmt").unwrap();
+
+        // Verify the result - comments should be stripped
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from 'vite';
+
+export default defineConfig({
+  fmt: {
+    indentWidth: 2,
+    lineWidth: 100,
+  },
+  plugins: [],
+});"#
+        );
+    }
+
+    #[test]
+    fn test_merge_json_config_with_inline_comments() {
+        // Test JSONC with inline comments
+        let temp_dir = tempdir().unwrap();
+
+        let vite_config_path = temp_dir.path().join("vite.config.ts");
+        let jsonc_config_path = temp_dir.path().join(".oxlintrc.jsonc");
+
+        let mut vite_file = std::fs::File::create(&vite_config_path).unwrap();
+        write!(
+            vite_file,
+            r#"import {{ defineConfig }} from 'vite';
+
+export default defineConfig({{
+  plugins: [],
+}});"#
+        )
+        .unwrap();
+
+        // JSONC with inline comments
+        let mut jsonc_file = std::fs::File::create(&jsonc_config_path).unwrap();
+        write!(
+            jsonc_file,
+            r#"{{
+  "rules": {{
+    "no-console": "warn" // warn about console.log usage
+  }}
+}}"#
+        )
+        .unwrap();
+
+        let result = merge_json_config(&vite_config_path, &jsonc_config_path, "lint").unwrap();
+
+        // Verify the result - inline comments should be stripped
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from 'vite';
+
+export default defineConfig({
+  lint: {
+    rules: {
+      'no-console': 'warn',
+    },
   },
   plugins: [],
 });"#
