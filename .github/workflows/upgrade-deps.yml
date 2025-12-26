@@ -66,7 +66,8 @@ jobs:
           branch: deps/upstream-update
           title: 'feat(deps): upgrade upstream dependencies'
           sign-commits: true
-          branch-token: ${{ secrets.AUTO_UPDATE_BRANCH_TOKEN }}
+          token: ${{ secrets.AUTO_UPDATE_BRANCH_TOKEN }}
+          branch-token: ${{ secrets.GITHUB_TOKEN }}
           body: |
             Automated daily upgrade of upstream dependencies:
             - rolldown (latest tag)
@@ -77,4 +78,3 @@ jobs:
             Build status: ${{ steps.build.outcome }}
           commit-message: 'feat(deps): upgrade upstream dependencies'
           delete-branch: true
-          token: ${{ secrets.GITHUB_TOKEN }}
