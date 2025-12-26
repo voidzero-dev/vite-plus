@@ -95,7 +95,7 @@ async function buildCli() {
  * Sync Vite core exports from @voidzero-dev/vite-plus-core to @voidzero-dev/vite-plus
  *
  * Creates shim files that re-export from the core package, enabling imports like:
- * - `import type { ... } from '@voidzero-dev/vite-plus/types/importGlob'`
+ * - `import type { ... } from '@voidzero-dev/vite-plus/types/importGlob.d.ts'`
  * - `import { ... } from '@voidzero-dev/vite-plus/module-runner'`
  *
  * Export paths created:
@@ -218,11 +218,12 @@ async function syncTypesDir(srcDir: string, destDir: string, relativePath: strin
       await mkdir(destPath, { recursive: true });
       await syncTypesDir(srcPath, destPath, entryRelPath);
     } else if (/\.d\.[mc]?ts$/.test(entry)) {
-      // Create shim that re-exports from core
-      // Strip extension for consistency with ./dist/client/* handling - TypeScript resolves .d.ts automatically
+      // Create shim that re-exports from core - must include extension for wildcard exports
       // Use 'export type *' since we're re-exporting from a .d.ts file
-      const modulePath = entryRelPath.replace(/\.d\.[mc]?ts$/, '');
-      await writeFile(destPath, `export type * from '${CORE_PACKAGE_NAME}/types/${modulePath}';\n`);
+      await writeFile(
+        destPath,
+        `export type * from '${CORE_PACKAGE_NAME}/types/${entryRelPath}';\n`,
+      );
     }
   }
 }
