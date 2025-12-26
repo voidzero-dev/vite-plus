@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -127,38 +127,40 @@ async function syncCorePackageExports() {
   // Create ./dist/client/* shims by reading core's dist/vite/client files
   console.log('  Creating ./dist/client/*');
   const coreClientDir = join(projectDir, '../core/dist/vite/client');
-  if (existsSync(coreClientDir)) {
-    const { readdirSync } = await import('node:fs');
-    for (const file of readdirSync(coreClientDir)) {
-      const shimPath = join(clientDir, file);
-      if (file.endsWith('.js')) {
-        await writeFile(shimPath, `export * from '${CORE_PACKAGE_NAME}/dist/client/${file}';\n`);
-      } else if (file.endsWith('.d.ts')) {
-        await writeFile(
-          shimPath,
-          `export * from '${CORE_PACKAGE_NAME}/dist/client/${file.replace('.d.ts', '')}';\n`,
-        );
-      } else {
-        // Copy non-JS/TS files directly (e.g., CSS, source maps)
-        const { copyFileSync } = await import('node:fs');
-        copyFileSync(join(coreClientDir, file), shimPath);
-      }
+  if (!existsSync(coreClientDir)) {
+    throw new Error(
+      `Core client artifacts not found at "${coreClientDir}". ` +
+        `Make sure ${CORE_PACKAGE_NAME} is built before building the CLI.`,
+    );
+  }
+  for (const file of readdirSync(coreClientDir)) {
+    const shimPath = join(clientDir, file);
+    if (file.endsWith('.js') || file.endsWith('.mjs') || file.endsWith('.cjs')) {
+      await writeFile(shimPath, `export * from '${CORE_PACKAGE_NAME}/dist/client/${file}';\n`);
+    } else if (file.endsWith('.d.ts') || file.endsWith('.d.mts') || file.endsWith('.d.cts')) {
+      const baseFile = file.replace(/\.d\.[mc]?ts$/, '');
+      await writeFile(shimPath, `export * from '${CORE_PACKAGE_NAME}/dist/client/${baseFile}';\n`);
+    } else {
+      // Copy non-JS/TS files directly (e.g., CSS, source maps)
+      copyFileSync(join(coreClientDir, file), shimPath);
     }
   }
 
   // Create ./types/* shims by reading core's dist/vite/types files
   console.log('  Creating ./types/*');
   const coreTypesDir = join(projectDir, '../core/dist/vite/types');
-  if (existsSync(coreTypesDir)) {
-    const { readdirSync, statSync } = await import('node:fs');
-    await syncTypesDir(coreTypesDir, typesDir, '');
+  if (!existsSync(coreTypesDir)) {
+    throw new Error(
+      `Core type definitions not found at "${coreTypesDir}". ` +
+        `Make sure ${CORE_PACKAGE_NAME} is built before building the CLI.`,
+    );
   }
+  await syncTypesDir(coreTypesDir, typesDir, '');
 
   console.log('\nSynced core package exports');
 }
 
 async function syncTypesDir(srcDir: string, destDir: string, relativePath: string) {
-  const { readdirSync, statSync } = await import('node:fs');
   const entries = readdirSync(srcDir);
 
   for (const entry of entries) {
