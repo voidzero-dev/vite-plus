@@ -1,16 +1,17 @@
 # CLI Package Build Architecture
 
-This document explains how `@voidzero-dev/vite-plus` is built and how it re-exports the test package.
+This document explains how `@voidzero-dev/vite-plus` is built and how it re-exports from both the core and test packages to serve as a drop-in replacement for `vite`.
 
 ## Overview
 
-The CLI package uses a **3-step build process**:
+The CLI package uses a **4-step build process**:
 
 1. **TypeScript Compilation** - Compile TypeScript source to JavaScript
 2. **NAPI Binding Build** - Compile Rust code to native Node.js bindings
-3. **Test Package Export Sync** - Re-export `@voidzero-dev/vite-plus-test` under `./test/*`
+3. **Core Package Export Sync** - Re-export `@voidzero-dev/vite-plus-core` under `./client`, `./types/*`, etc.
+4. **Test Package Export Sync** - Re-export `@voidzero-dev/vite-plus-test` under `./test/*`
 
-This allows users to import everything from a single package (`@voidzero-dev/vite-plus`) instead of needing to know about the separate test package.
+This architecture allows users to import everything from a single package (`@voidzero-dev/vite-plus`) as a drop-in replacement for `vite`, without needing to know about the separate core and test packages.
 
 ## Build Steps
 
@@ -50,7 +51,39 @@ await cli.build({
 
 The build generates platform-specific native binaries and formats the generated JavaScript wrapper with `oxfmt`.
 
-### Step 3: Test Package Export Sync (`syncTestPackageExports`)
+### Step 3: Core Package Export Sync (`syncCorePackageExports`)
+
+Creates shim files that re-export from `@voidzero-dev/vite-plus-core`, enabling this package to be a drop-in replacement for upstream `vite`. This is critical for compatibility with existing Vite plugins and configurations.
+
+**Prerequisites**: The core package must be built first (its `dist/vite/` directory must exist).
+
+**Export paths created**:
+
+| Export Path          | Type       | Description                                                                             |
+| -------------------- | ---------- | --------------------------------------------------------------------------------------- |
+| `./client`           | Types only | Triple-slash reference for ambient type declarations (CSS modules, asset imports, etc.) |
+| `./module-runner`    | JS + Types | Re-exports the Vite module runner for SSR/environments                                  |
+| `./internal`         | JS + Types | Re-exports internal Vite APIs                                                           |
+| `./dist/client/*`    | JS         | Client runtime files (`.mjs`, `.cjs`)                                                   |
+| `./types/*`          | Types only | Type-only re-exports using `export type *`                                              |
+| `./types/internal/*` | Blocked    | Set to `null` to prevent access to internal types                                       |
+
+**Shim file examples**:
+
+```typescript
+// dist/client.d.ts (triple-slash reference for ambient types)
+/// <reference types="@voidzero-dev/vite-plus-core/client" />
+
+// dist/module-runner.js
+export * from '@voidzero-dev/vite-plus-core/module-runner';
+
+// dist/types/importMeta.d.ts (type-only export)
+export type * from '@voidzero-dev/vite-plus-core/types/importMeta.d.ts';
+```
+
+**Note on export ordering**: In `package.json`, the `./types/internal/*` export (set to `null`) must appear before `./types/*` for correct precedence. More specific patterns must precede wildcards.
+
+### Step 4: Test Package Export Sync (`syncTestPackageExports`)
 
 Reads the test package's exports and creates shim files that re-export everything under `./test/*`:
 
@@ -74,6 +107,21 @@ packages/cli/
 │   ├── index.cjs             # Main entry (CJS)
 │   ├── index.d.ts            # Type declarations
 │   ├── bin.js                # CLI entry point
+│   ├── client.d.ts           # ./client types (triple-slash ref)
+│   ├── module-runner.js      # ./module-runner shim
+│   ├── module-runner.d.ts
+│   ├── internal.js           # ./internal shim
+│   ├── internal.d.ts
+│   ├── client/               # Synced client runtime files
+│   │   ├── client.mjs        # ESM client shim
+│   │   ├── client.d.ts
+│   │   ├── env.mjs
+│   │   └── ...
+│   ├── types/                # Synced type definitions
+│   │   ├── importMeta.d.ts   # Type shims (export type *)
+│   │   ├── importGlob.d.ts
+│   │   ├── customEvent.d.ts
+│   │   └── ...
 │   └── test/                 # Synced test exports
 │       ├── index.js          # Re-exports @voidzero-dev/vite-plus-test
 │       ├── index.cjs
@@ -113,6 +161,62 @@ These targets are defined in `package.json` under the `napi.targets` field.
 
 ---
 
+## Core Package Export Sync Details
+
+### Why Shim Files?
+
+The CLI package creates thin shim files that re-export from `@voidzero-dev/vite-plus-core` rather than bundling the actual code. This approach:
+
+1. **Enables drop-in replacement** - Users can replace `vite` with `@voidzero-dev/vite-plus` without changing imports
+2. **Keeps packages in sync** - No need to rebuild CLI when core package changes
+3. **Reduces duplication** - No file copying, just re-exports
+4. **Preserves module resolution** - Node.js resolves to the actual core package
+
+### Export Mapping (Core)
+
+| Upstream Vite Export | CLI Package Export                      | Description                                |
+| -------------------- | --------------------------------------- | ------------------------------------------ |
+| `vite/client`        | `@voidzero-dev/vite-plus/client`        | Ambient types for HMR, CSS modules, assets |
+| `vite/module-runner` | `@voidzero-dev/vite-plus/module-runner` | SSR/Environment module runner              |
+| `vite/internal`      | `@voidzero-dev/vite-plus/internal`      | Internal APIs                              |
+| `vite/dist/client/*` | `@voidzero-dev/vite-plus/dist/client/*` | Client runtime files                       |
+| `vite/types/*`       | `@voidzero-dev/vite-plus/types/*`       | Type definitions                           |
+
+### Type-Only Exports
+
+For `./types/*` exports, shim files use `export type *` syntax (TypeScript 5.0+) to ensure only type information is re-exported:
+
+```typescript
+// dist/types/importMeta.d.ts
+export type * from '@voidzero-dev/vite-plus-core/types/importMeta.d.ts';
+```
+
+This is important because `./types/*` only exposes `.d.ts` files and should never include runtime code.
+
+### Internal Types Blocking
+
+The `./types/internal/*` export is set to `null` in package.json to block access to internal type definitions:
+
+```json
+"./types/internal/*": null,
+"./types/*": { "types": "./dist/types/*" }
+```
+
+The `syncTypesDir()` helper skips the top-level `internal` directory when creating shims, since access is blocked at the exports level.
+
+### Client Types (Triple-Slash Reference)
+
+The `./client` export uses a triple-slash reference instead of a regular export because Vite's `client.d.ts` contains ambient type declarations (for CSS modules, assets, etc.) that should be globally available:
+
+```typescript
+// dist/client.d.ts
+/// <reference types="@voidzero-dev/vite-plus-core/client" />
+```
+
+This allows TypeScript to pick up types like `import.meta.hot`, CSS module types, and asset imports without explicit imports.
+
+---
+
 ## Test Package Export Sync Details
 
 ### Why Shim Files?
@@ -123,7 +227,7 @@ Instead of copying the actual dist files from the test package, we create thin s
 2. **Reduces duplication** - No file copying, just re-exports
 3. **Preserves module resolution** - Node.js resolves to the actual test package
 
-### Export Mapping
+### Export Mapping (Test)
 
 All test package exports are mapped under `./test/*`:
 
@@ -186,8 +290,11 @@ module.exports = require('@voidzero-dev/vite-plus-test');
 **Type shim** (`dist/test/browser-playwright.d.ts`):
 
 ```typescript
+import '@voidzero-dev/vite-plus-test/browser-playwright';
 export * from '@voidzero-dev/vite-plus-test/browser-playwright';
 ```
+
+Note: Type shims include a side-effect import to preserve module augmentations (e.g., `toMatchSnapshot` on the `Assertion` interface).
 
 ---
 
@@ -216,10 +323,10 @@ This sets `release: false` in the NAPI build options, producing larger but faste
 ## Build Commands
 
 ```bash
-# Build the CLI package
+# Build the CLI package (requires core package to be built first)
 pnpm -C packages/cli build
 
-# Build from monorepo root
+# Build from monorepo root (builds all dependencies first)
 pnpm build --filter @voidzero-dev/vite-plus
 
 # Debug build
@@ -232,16 +339,21 @@ VITE_PLUS_CLI_DEBUG=1 pnpm -C packages/cli build
 
 After building, the CLI package exports:
 
-| Export Path                 | Description                     |
-| --------------------------- | ------------------------------- |
-| `.`                         | Main entry (CLI utilities)      |
-| `./bin`                     | CLI binary entry point          |
-| `./binding`                 | NAPI native binding             |
-| `./test`                    | Test package main entry         |
-| `./test/browser`            | Browser testing utilities       |
-| `./test/browser-playwright` | Playwright integration          |
-| `./test/plugins/*`          | Plugin shims for pnpm overrides |
-| `./package.json`            | Package metadata                |
+| Export Path                 | Description                         |
+| --------------------------- | ----------------------------------- |
+| `.`                         | Main entry (CLI utilities)          |
+| `./client`                  | Client types (ambient declarations) |
+| `./module-runner`           | Vite module runner for SSR          |
+| `./internal`                | Internal Vite APIs                  |
+| `./dist/client/*`           | Client runtime files                |
+| `./types/*`                 | Type definitions                    |
+| `./bin`                     | CLI binary entry point              |
+| `./binding`                 | NAPI native binding                 |
+| `./test`                    | Test package main entry             |
+| `./test/browser`            | Browser testing utilities           |
+| `./test/browser-playwright` | Playwright integration              |
+| `./test/plugins/*`          | Plugin shims for pnpm overrides     |
+| `./package.json`            | Package metadata                    |
 
 See `package.json` for the complete list of exports.
 
@@ -252,17 +364,26 @@ See `package.json` for the complete list of exports.
 ### Build Flow
 
 ```
-1. buildCli()              TypeScript compilation -> dist/*.js
-2. buildNapiBinding()      Rust -> binding/*.node (per platform)
-3. syncTestPackageExports() Read test pkg exports -> dist/test/*
-   ├── createShimForExport()    Generate shim files
-   ├── createConditionalShim()  Handle import/require conditions
-   └── updateCliPackageJson()   Update exports in package.json
+1. buildCli()                TypeScript compilation -> dist/*.js
+2. buildNapiBinding()        Rust -> binding/*.node (per platform)
+3. syncCorePackageExports()  Read core pkg dist -> dist/client/, dist/types/
+   ├── createClientShim()        Triple-slash reference for ./client
+   ├── createModuleRunnerShim()  JS + types for ./module-runner
+   ├── createInternalShim()      JS + types for ./internal
+   ├── syncClientDir()           Shims for ./dist/client/*
+   └── syncTypesDir()            Type-only shims for ./types/*
+4. syncTestPackageExports()  Read test pkg exports -> dist/test/*
+   ├── createShimForExport()     Generate shim files
+   ├── createConditionalShim()   Handle import/require conditions
+   └── updateCliPackageJson()    Update exports in package.json
 ```
 
 ### Key Constants
 
 ```typescript
+// Core package name for Vite compatibility exports
+const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
+
 // Test package name for re-exports
 const TEST_PACKAGE_NAME = '@voidzero-dev/vite-plus-test';
 ```
@@ -275,4 +396,6 @@ The build script automatically updates `package.json`:
 2. Adds new exports from test package
 3. Ensures `dist/test` is in the `files` array
 
-This keeps the CLI package exports in sync with the test package without manual maintenance.
+Core package exports (`./client`, `./module-runner`, `./internal`, `./dist/client/*`, `./types/*`) are defined statically in `package.json` and not auto-generated, since they match upstream Vite's exports structure.
+
+This keeps the CLI package exports in sync with both upstream Vite and the test package without manual maintenance.
