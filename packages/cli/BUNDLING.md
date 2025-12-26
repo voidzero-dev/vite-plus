@@ -77,8 +77,8 @@ Creates shim files that re-export from `@voidzero-dev/vite-plus-core`, enabling 
 // dist/module-runner.js
 export * from '@voidzero-dev/vite-plus-core/module-runner';
 
-// dist/types/importMeta.d.ts (type-only export)
-export type * from '@voidzero-dev/vite-plus-core/types/importMeta.d.ts';
+// dist/types/importMeta.d.ts (type-only export, extension stripped)
+export type * from '@voidzero-dev/vite-plus-core/types/importMeta';
 ```
 
 **Note on export ordering**: In `package.json`, the `./types/internal/*` export (set to `null`) must appear before `./types/*` for correct precedence. More specific patterns must precede wildcards.
