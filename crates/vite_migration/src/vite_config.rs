@@ -2,8 +2,6 @@ use std::path::Path;
 
 use ast_grep_config::{GlobalRules, RuleConfig, from_yaml_string};
 use ast_grep_language::{LanguageExt, SupportLang};
-use json_strip_comments::StripComments;
-use serde_json::Value;
 use vite_error::Error;
 
 use crate::ast_grep;
@@ -72,16 +70,12 @@ pub fn merge_json_config(
     // Read the vite config file
     let vite_config_content = std::fs::read_to_string(vite_config_path)?;
 
-    // Read and parse the JSON/JSONC config file (supports comments)
-    let json_config_content = std::fs::read_to_string(json_config_path)?;
-    let json_without_comments = StripComments::new(json_config_content.as_bytes());
-    let json_config: Value = serde_json::from_reader(json_without_comments)?;
-
-    // Convert JSON to TypeScript object literal
-    let ts_config = json_to_js_object_literal(&json_config, 0);
+    // Read the JSON/JSONC config file directly
+    // JSON/JSONC content is valid JS (comments are valid in JS too)
+    let js_config = std::fs::read_to_string(json_config_path)?;
 
     // Merge the config
-    merge_json_config_content(&vite_config_content, &ts_config, config_key)
+    merge_json_config_content(&vite_config_content, &js_config, config_key)
 }
 
 /// Merge JSON configuration into vite config content
@@ -272,136 +266,6 @@ fn indent_multiline(s: &str, spaces: usize) -> String {
         .join("\n")
 }
 
-/// Convert a JSON value to JavaScript object literal format
-///
-/// This function recursively converts JSON values to their JavaScript
-/// object literal representation with proper formatting.
-fn json_to_js_object_literal(value: &Value, indent: usize) -> String {
-    match value {
-        Value::Null => "null".to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Number(n) => n.to_string(),
-        Value::String(s) => format!("'{}'", escape_single_quotes(s)),
-        Value::Array(arr) => {
-            if arr.is_empty() {
-                return "[]".to_string();
-            }
-            let items: Vec<String> =
-                arr.iter().map(|item| json_to_js_object_literal(item, indent + 2)).collect();
-            format!("[{}]", items.join(", "))
-        }
-        Value::Object(obj) => {
-            // Filter out $schema field (used for JSON schema validation, not needed in JS)
-            let filtered: Vec<_> = obj.iter().filter(|(key, _)| *key != "$schema").collect();
-
-            if filtered.is_empty() {
-                return "{}".to_string();
-            }
-
-            let spaces = " ".repeat(indent);
-            let inner_spaces = " ".repeat(indent + 2);
-
-            let props: Vec<String> = filtered
-                .iter()
-                .map(|(key, val)| {
-                    let formatted_key = format_object_key(key);
-                    let formatted_value = json_to_js_object_literal(val, indent + 2);
-                    format!("{inner_spaces}{formatted_key}: {formatted_value}")
-                })
-                .collect();
-
-            format!("{{\n{},\n{spaces}}}", props.join(",\n"))
-        }
-    }
-}
-
-/// Format an object key for TypeScript
-///
-/// If the key is a valid identifier, return it as-is.
-/// Otherwise, wrap it in single quotes.
-fn format_object_key(key: &str) -> String {
-    // Check if the key is a valid JavaScript identifier
-    if is_valid_identifier(key) {
-        key.to_string()
-    } else {
-        format!("'{}'", escape_single_quotes(key))
-    }
-}
-
-/// Check if a string is a valid JavaScript identifier
-fn is_valid_identifier(s: &str) -> bool {
-    if s.is_empty() {
-        return false;
-    }
-
-    let mut chars = s.chars();
-
-    // First character must be a letter, underscore, or dollar sign
-    match chars.next() {
-        Some(c) if c.is_ascii_alphabetic() || c == '_' || c == '$' => {}
-        _ => return false,
-    }
-
-    // Rest can also include digits
-    for c in chars {
-        if !c.is_ascii_alphanumeric() && c != '_' && c != '$' {
-            return false;
-        }
-    }
-
-    // Check against reserved words (basic set)
-    !matches!(
-        s,
-        "break"
-            | "case"
-            | "catch"
-            | "continue"
-            | "debugger"
-            | "default"
-            | "delete"
-            | "do"
-            | "else"
-            | "finally"
-            | "for"
-            | "function"
-            | "if"
-            | "in"
-            | "instanceof"
-            | "new"
-            | "return"
-            | "switch"
-            | "this"
-            | "throw"
-            | "try"
-            | "typeof"
-            | "var"
-            | "void"
-            | "while"
-            | "with"
-            | "class"
-            | "const"
-            | "enum"
-            | "export"
-            | "extends"
-            | "import"
-            | "super"
-            | "implements"
-            | "interface"
-            | "let"
-            | "package"
-            | "private"
-            | "protected"
-            | "public"
-            | "static"
-            | "yield"
-    )
-}
-
-/// Escape single quotes in a string for TypeScript string literals
-fn escape_single_quotes(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('\'', "\\'")
-}
-
 /// Merge tsdown config into vite.config.ts by importing it
 ///
 /// This function adds an import statement for the tsdown config file
@@ -474,103 +338,6 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-
-    #[test]
-    fn test_json_to_js_object_literal_primitives() {
-        assert_eq!(json_to_js_object_literal(&Value::Null, 0), "null");
-        assert_eq!(json_to_js_object_literal(&Value::Bool(true), 0), "true");
-        assert_eq!(json_to_js_object_literal(&Value::Bool(false), 0), "false");
-        assert_eq!(json_to_js_object_literal(&serde_json::json!(42), 0), "42");
-        assert_eq!(json_to_js_object_literal(&serde_json::json!(3.14), 0), "3.14");
-        assert_eq!(json_to_js_object_literal(&serde_json::json!("hello"), 0), "'hello'");
-    }
-
-    #[test]
-    fn test_json_to_js_object_literal_string_escaping() {
-        assert_eq!(json_to_js_object_literal(&serde_json::json!("it's"), 0), "'it\\'s'");
-        assert_eq!(json_to_js_object_literal(&serde_json::json!("a\\b"), 0), "'a\\\\b'");
-    }
-
-    #[test]
-    fn test_json_to_js_object_literal_array() {
-        assert_eq!(json_to_js_object_literal(&serde_json::json!([]), 0), "[]");
-        assert_eq!(json_to_js_object_literal(&serde_json::json!([1, 2, 3]), 0), "[1, 2, 3]");
-        assert_eq!(json_to_js_object_literal(&serde_json::json!(["a", "b"]), 0), "['a', 'b']");
-    }
-
-    #[test]
-    fn test_json_to_js_object_literal_object() {
-        assert_eq!(json_to_js_object_literal(&serde_json::json!({}), 0), "{}");
-
-        let obj = serde_json::json!({
-            "key": "value"
-        });
-        let result = json_to_js_object_literal(&obj, 0);
-        assert!(result.contains("key: 'value'"));
-    }
-
-    #[test]
-    fn test_json_to_js_object_literal_ignores_schema() {
-        // $schema field should be filtered out
-        let obj = serde_json::json!({
-            "$schema": "./node_modules/oxfmt/configuration_schema.json",
-            "foo": "bar"
-        });
-        let result = json_to_js_object_literal(&obj, 0);
-        assert!(!result.contains("$schema"));
-        assert!(result.contains("foo: 'bar'"));
-
-        // Object with only $schema should become empty
-        let obj = serde_json::json!({
-            "$schema": "./schema.json"
-        });
-        assert_eq!(json_to_js_object_literal(&obj, 0), "{}");
-    }
-
-    #[test]
-    fn test_json_to_js_object_literal_complex() {
-        let config = serde_json::json!({
-            "rules": {
-                "no-unused-vars": "error",
-                "no-console": "warn"
-            },
-            "ignorePatterns": ["dist", "node_modules"]
-        });
-
-        let result = json_to_js_object_literal(&config, 2);
-        assert!(result.contains("rules:"));
-        assert!(result.contains("'no-unused-vars': 'error'"));
-        assert!(result.contains("'no-console': 'warn'"));
-        assert!(result.contains("ignorePatterns: ['dist', 'node_modules']"));
-    }
-
-    #[test]
-    fn test_format_object_key() {
-        assert_eq!(format_object_key("validKey"), "validKey");
-        assert_eq!(format_object_key("_private"), "_private");
-        assert_eq!(format_object_key("$special"), "$special");
-        assert_eq!(format_object_key("key123"), "key123");
-        assert_eq!(format_object_key("no-dashes"), "'no-dashes'");
-        assert_eq!(format_object_key("has space"), "'has space'");
-        assert_eq!(format_object_key("123start"), "'123start'");
-    }
-
-    #[test]
-    fn test_is_valid_identifier() {
-        assert!(is_valid_identifier("validName"));
-        assert!(is_valid_identifier("_private"));
-        assert!(is_valid_identifier("$jquery"));
-        assert!(is_valid_identifier("camelCase"));
-        assert!(is_valid_identifier("PascalCase"));
-        assert!(is_valid_identifier("name123"));
-
-        assert!(!is_valid_identifier(""));
-        assert!(!is_valid_identifier("123start"));
-        assert!(!is_valid_identifier("has-dash"));
-        assert!(!is_valid_identifier("has space"));
-        assert!(!is_valid_identifier("class")); // reserved word
-        assert!(!is_valid_identifier("const")); // reserved word
-    }
 
     #[test]
     fn test_check_function_callback() {
@@ -977,18 +744,18 @@ export default defineConfig({{
         // Run the merge
         let result = merge_json_config(&vite_config_path, &oxlint_config_path, "lint").unwrap();
 
-        // Verify the result
+        // Verify the result - JSON content is used directly (double quotes preserved)
         assert_eq!(
             result.content,
             r#"import { defineConfig } from 'vite';
 
 export default defineConfig({
   lint: {
-    rules: {
-      'no-unused-vars': 'error',
-      'no-console': 'warn',
+    "rules": {
+      "no-unused-vars": "error",
+      "no-console": "warn"
     },
-    ignorePatterns: ['dist', 'node_modules'],
+    "ignorePatterns": ["dist", "node_modules"]
   },
   plugins: [],
 });"#
@@ -1033,7 +800,7 @@ export default defineConfig({{
         // Run the merge
         let result = merge_json_config(&vite_config_path, &jsonc_config_path, "fmt").unwrap();
 
-        // Verify the result - comments should be stripped
+        // Verify the result - JSONC content used directly (comments preserved)
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1041,8 +808,12 @@ export default defineConfig({{
 
 export default defineConfig({
   fmt: {
-    indentWidth: 2,
-    lineWidth: 100,
+    // Formatting options
+    "indentWidth": 2,
+    /*
+     * Line width configuration
+     */
+    "lineWidth": 100
   },
   plugins: [],
 });"#
@@ -1082,7 +853,7 @@ export default defineConfig({{
 
         let result = merge_json_config(&vite_config_path, &jsonc_config_path, "lint").unwrap();
 
-        // Verify the result - inline comments should be stripped
+        // Verify the result - JSONC content used directly (comments preserved)
         assert!(result.updated);
         assert_eq!(
             result.content,
@@ -1090,52 +861,12 @@ export default defineConfig({{
 
 export default defineConfig({
   lint: {
-    rules: {
-      'no-console': 'warn',
-    },
+    "rules": {
+      "no-console": "warn" // warn about console.log usage
+    }
   },
   plugins: [],
 });"#
-        );
-    }
-
-    #[test]
-    fn test_full_json_to_js_object_literal_conversion() {
-        // Test a realistic .oxlintrc config
-        let oxlint_json = serde_json::json!({
-            "rules": {
-                "no-unused-vars": "error",
-                "no-console": "warn",
-                "no-debugger": "error"
-            },
-            "ignorePatterns": ["dist", "node_modules", "*.config.js"],
-            "plugins": ["react", "typescript"],
-            "settings": {
-                "react": {
-                    "version": "detect"
-                }
-            }
-        });
-
-        let ts_literal = json_to_js_object_literal(&oxlint_json, 0);
-
-        // Verify the conversion
-        assert_eq!(
-            ts_literal,
-            r#"{
-  rules: {
-    'no-unused-vars': 'error',
-    'no-console': 'warn',
-    'no-debugger': 'error',
-  },
-  ignorePatterns: ['dist', 'node_modules', '*.config.js'],
-  plugins: ['react', 'typescript'],
-  settings: {
-    react: {
-      version: 'detect',
-    },
-  },
-}"#
         );
     }
 

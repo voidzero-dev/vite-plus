@@ -27,16 +27,16 @@ import { defineConfig } from '@voidzero-dev/vite-plus';
 
 export default defineConfig({
   fmt: {
-    printWidth: 100,
-    tabWidth: 2,
-    semi: true,
-    singleQuote: true,
-    trailingComma: 'es5',
+    "printWidth": 100,
+    "tabWidth": 2,
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "es5"
   },
   lint: {
-    rules: {
-      'no-unused-vars': 'error',
-    },
+    "rules": {
+      "no-unused-vars": "error"
+    }
   },
   plugins: [react()],
   test: {

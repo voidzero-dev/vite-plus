@@ -17,9 +17,9 @@ import react from '@vitejs/plugin-react';
 
 export default {
   lint: {
-    rules: {
-      'no-unused-vars': 'error',
-    },
+    "rules": {
+      "no-unused-vars": "error"
+    }
   },
   plugins: [react()],
 }

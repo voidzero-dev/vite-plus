@@ -2066,15 +2066,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "json-strip-comments"
-version = "3.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25376d12b2f6ae53f986f86e2a808a56af03d72284ae24fc35a2e290d09ee3c3"
-dependencies = [
- "memchr",
-]
-
-[[package]]
 name = "konst"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4363,7 +4354,6 @@ dependencies = [
  "ast-grep-core",
  "ast-grep-language",
  "ignore",
- "json-strip-comments",
  "serde_json",
  "tempfile",
  "vite_error",

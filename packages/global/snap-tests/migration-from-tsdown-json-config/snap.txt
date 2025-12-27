@@ -20,13 +20,13 @@ import { defineConfig } from '@voidzero-dev/vite-plus';
 
 export default defineConfig({
   lib: {
-    entry: 'src/index.ts',
-    outDir: 'dist',
-    format: ['esm', 'cjs'],
-    dts: true,
-    inputOptions: {
-      cwd: './src',
-    },
+    "entry": "src/index.ts",
+    "outDir": "dist",
+    "format": ["esm", "cjs"],
+    "dts": true,
+    "inputOptions": {
+      "cwd": "./src"
+    }
   },
   server: {
     port: 3000,
@@ -69,13 +69,13 @@ import { defineConfig } from '@voidzero-dev/vite-plus';
 
 export default defineConfig({
   lib: {
-    entry: 'src/index.ts',
-    outDir: 'dist',
-    format: ['esm', 'cjs'],
-    dts: true,
-    inputOptions: {
-      cwd: './src',
-    },
+    "entry": "src/index.ts",
+    "outDir": "dist",
+    "format": ["esm", "cjs"],
+    "dts": true,
+    "inputOptions": {
+      "cwd": "./src"
+    }
   },
   server: {
     port: 3000,
