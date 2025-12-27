@@ -28,5 +28,10 @@
     "repository": "https://github.com/vitejs/vite-plugin-react.git",
     "branch": "main",
     "hash": "0d3912b73d3aa1dc8f64619c82b3dacb0769e49e"
+  },
+  "vitepress": {
+    "repository": "https://github.com/vuejs/vitepress.git",
+    "branch": "feat/vite-8",
+    "hash": "9330f228861623c71f2598271d4e79c9c53f2c08"
   }
 }

@@ -157,6 +157,16 @@ jobs:
               # TODO(fengmk2): run all builds and tests after tsdown version upgrade
               vite run @vitejs/plugin-rsc#build
               vite run @vitejs/plugin-rsc#test
+          - name: vitepress
+            node-version: 24
+            command: |
+              npx playwright install chromium
+              vite run format
+              vite run build
+              vite test run -r __tests__/unit
+              vite run tests-e2e#test
+              VITE_TEST_BUILD=1 vite run tests-e2e#test
+              vite run tests-init#test
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
