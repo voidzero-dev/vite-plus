@@ -16,7 +16,7 @@ runs:
       if: ${{ inputs.target == 'x86_64-unknown-linux-gnu' }}
       run: |
         pnpm --filter @rolldown/pluginutils build
-        if [ "${{ inputs.build-rolldown-native }}" = "true" ]; then
+        if [ "${{ inputs.build-rolldown-native }}" = "true" ] || [ "${{ github.ref_name }}" = "deps/upstream-update" ]; then
           pnpm --filter rolldown build-binding:release --target ${{ inputs.target }} --use-napi-cross
         fi
         pnpm --filter rolldown build-node
@@ -33,7 +33,7 @@ runs:
       if: ${{ inputs.target == 'aarch64-unknown-linux-gnu' }}
       run: |
         pnpm --filter @rolldown/pluginutils build
-        if [ "${{ inputs.build-rolldown-native }}" = "true" ]; then
+        if [ "${{ inputs.build-rolldown-native }}" = "true" ] || [ "${{ github.ref_name }}" = "deps/upstream-update" ]; then
           pnpm --filter rolldown build-binding:release --target ${{ inputs.target }} --use-napi-cross
         fi
         pnpm --filter rolldown build-node
@@ -50,7 +50,7 @@ runs:
       if: ${{ !contains(inputs.target, 'linux') }}
       run: |
         pnpm --filter @rolldown/pluginutils build
-        if [ "${{ inputs.build-rolldown-native }}" = "true" ]; then
+        if [ "${{ inputs.build-rolldown-native }}" = "true" ] || [ "${{ github.ref_name }}" = "deps/upstream-update" ]; then
           pnpm --filter rolldown build-binding:release --target ${{ inputs.target }}
         fi
         pnpm --filter rolldown build-node
