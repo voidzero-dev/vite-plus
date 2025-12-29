@@ -56,6 +56,10 @@
       "default": "./dist/pluginutils/filter/index.js",
       "types": "./dist/pluginutils/filter/index.d.ts"
     },
+    "./lib": {
+      "default": "./dist/tsdown/index.js",
+      "types": "./dist/tsdown/index-types.d.ts"
+    },
     "./types/*": {
       "types": "./dist/vite/types/*"
     },
