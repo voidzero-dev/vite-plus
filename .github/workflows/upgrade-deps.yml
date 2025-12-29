@@ -59,6 +59,20 @@ jobs:
           pnpm install --no-frozen-lockfile
           pnpm dedupe
 
+      - name: Close and delete previous PR
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_UPDATE_BRANCH_TOKEN }}
+        run: |
+          # Find PR with the deps/upstream-update branch
+          PR_NUMBER=$(gh pr list --head deps/upstream-update --json number --jq '.[0].number')
+
+          if [ -n "$PR_NUMBER" ]; then
+            echo "Found existing PR #$PR_NUMBER, closing and deleting branch..."
+            gh pr close "$PR_NUMBER" --delete-branch
+          else
+            echo "No existing PR found with branch deps/upstream-update"
+          fi
+
       - name: Create/Update PR
         uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
         with:
