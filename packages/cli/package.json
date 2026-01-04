@@ -27,6 +27,7 @@
   "dependencies": {
     "@voidzero-dev/vite-plus-core": "workspace:*",
     "@voidzero-dev/vite-plus-test": "workspace:*",
+    "cac": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:"

@@ -1,7 +1,5 @@
 > vite run hello#build # should build the library
 ~/packages/hello$ vite lib
-ℹ tsdown v<semver> powered by rolldown v<semver>
-ℹ Using tsdown config: <cwd>/packages/hello/tsdown.config.ts
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.cjs  <variable> kB │ gzip: <variable> kB
@@ -28,8 +26,6 @@ index.cjs
 
 > vite run hello#build # should hit cache
 ~/packages/hello$ vite lib (✓ cache hit, replaying)
-ℹ tsdown v<semver> powered by rolldown v<semver>
-ℹ Using tsdown config: <cwd>/packages/hello/tsdown.config.ts
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.cjs  <variable> kB │ gzip: <variable> kB

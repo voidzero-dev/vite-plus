@@ -93,6 +93,9 @@ catalogs:
     buble:
       specifier: ^0.20.0
       version: 0.20.0
+    cac:
+      specifier: ^6.7.14
+      version: 6.7.14
     chalk:
       specifier: ^5.3.0
       version: 5.6.2
@@ -328,6 +331,9 @@ importers:
       '@voidzero-dev/vite-plus-test':
         specifier: workspace:*
         version: link:../test
+      cac:
+        specifier: 'catalog:'
+        version: 6.7.14
       oxfmt:
         specifier: 'catalog:'
         version: 0.16.0
