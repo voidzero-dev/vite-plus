@@ -33,12 +33,8 @@
     "vitest": "catalog:"
   },
   "lint-staged": {
-    "*.@(yml|yaml|md|json|html|toml)": [
-      "dprint fmt --staged"
-    ],
     "*.@(js|ts|tsx)": [
-      "oxlint -- --fix",
-      "vite fmt"
+      "oxlint -- --fix"
     ],
     "*.rs": [
       "cargo fmt --"
