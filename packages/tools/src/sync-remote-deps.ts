@@ -706,6 +706,12 @@ export async function syncRemote() {
     pluginutilsPackage,
   );
 
+  // additional tsdown exports
+  mergedExports['./lib'] = {
+    default: './dist/tsdown/index.js',
+    types: './dist/tsdown/index-types.d.ts',
+  };
+
   // Update CLI package.json with merged exports
   corePackage.exports = mergedExports;
 
