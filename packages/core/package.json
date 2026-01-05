@@ -13,6 +13,10 @@
     "./internal": "./dist/vite/node/internal.js",
     "./module-runner": "./dist/vite/node/module-runner.js",
     "./package.json": "./package.json",
+    "./lib": {
+      "default": "./dist/tsdown/index.js",
+      "types": "./dist/tsdown/index-types.d.ts"
+    },
     "./rolldown": {
       "default": "./dist/rolldown/index.mjs",
       "types": "./dist/rolldown/index.d.mts"
