@@ -437,7 +437,6 @@ pub enum Commands {
     #[command(subcommand)]
     Pm(PmCommands),
     /// Execute a package binary without installing it as a dependency
-    #[command(alias = "x")]
     Dlx {
         /// Package(s) to install before running the command (can be used multiple times)
         #[arg(long, short = 'p', value_name = "NAME")]
@@ -450,14 +449,6 @@ pub enum Commands {
         /// Suppress all output except the executed command's output
         #[arg(long, short = 's')]
         silent: bool,
-
-        /// Automatically confirm any prompts (npm only)
-        #[arg(long, short = 'y')]
-        yes: bool,
-
-        /// Automatically decline any prompts (npm only)
-        #[arg(long, short = 'n', conflicts_with = "yes")]
-        no: bool,
 
         /// Package to execute (with optional @version) and arguments
         #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
@@ -1077,9 +1068,9 @@ pub async fn main(cwd: AbsolutePathBuf, mut args: Args) -> Result<std::process::
             let exit_status = PmCommand::new(cwd).execute(pm_command.clone()).await?;
             return Ok(exit_status);
         }
-        Commands::Dlx { package, shell_mode, silent, yes, no, args } => {
+        Commands::Dlx { package, shell_mode, silent, args } => {
             let exit_status = DlxCommand::new(cwd)
-                .execute(package.clone(), *shell_mode, *silent, *yes, *no, args.clone())
+                .execute(package.clone(), *shell_mode, *silent, args.clone())
                 .await?;
             return Ok(exit_status);
         }
@@ -2422,24 +2413,14 @@ mod tests {
         #[test]
         fn test_args_dlx_command_basic() {
             let args = Args::try_parse_from(&["vite-plus", "dlx", "create-vue", "my-app"]).unwrap();
-            if let Commands::Dlx { package, shell_mode, silent, yes, no, args: cmd_args } =
-                &args.commands
-            {
+            if let Commands::Dlx { package, shell_mode, silent, args: cmd_args } = &args.commands {
                 assert!(package.is_empty());
                 assert!(!shell_mode);
                 assert!(!silent);
-                assert!(!yes);
-                assert!(!no);
                 assert_eq!(cmd_args, &vec!["create-vue", "my-app"]);
             } else {
                 panic!("Expected Dlx command");
             }
-        }
-
-        #[test]
-        fn test_args_dlx_command_alias_x() {
-            let args = Args::try_parse_from(&["vite-plus", "x", "create-vue", "my-app"]).unwrap();
-            assert!(matches!(args.commands, Commands::Dlx { .. }));
         }
 
         #[test]
@@ -2544,37 +2525,6 @@ mod tests {
         }
 
         #[test]
-        fn test_args_dlx_command_with_yes() {
-            let args =
-                Args::try_parse_from(&["vite-plus", "dlx", "-y", "create-vue", "my-app"]).unwrap();
-            if let Commands::Dlx { yes, no, .. } = &args.commands {
-                assert!(yes);
-                assert!(!no);
-            } else {
-                panic!("Expected Dlx command");
-            }
-        }
-
-        #[test]
-        fn test_args_dlx_command_with_no() {
-            let args =
-                Args::try_parse_from(&["vite-plus", "dlx", "-n", "create-vue", "my-app"]).unwrap();
-            if let Commands::Dlx { yes, no, .. } = &args.commands {
-                assert!(!yes);
-                assert!(no);
-            } else {
-                panic!("Expected Dlx command");
-            }
-        }
-
-        #[test]
-        fn test_args_dlx_command_yes_no_conflict() {
-            // --yes and --no should conflict
-            let result = Args::try_parse_from(&["vite-plus", "dlx", "-y", "-n", "create-vue"]);
-            assert!(result.is_err());
-        }
-
-        #[test]
         fn test_args_dlx_command_combined_flags() {
             let args = Args::try_parse_from(&[
                 "vite-plus",
@@ -2583,18 +2533,13 @@ mod tests {
                 "cowsay",
                 "-c",
                 "-s",
-                "-y",
                 "echo hello | cowsay",
             ])
             .unwrap();
-            if let Commands::Dlx { package, shell_mode, silent, yes, no, args: cmd_args } =
-                &args.commands
-            {
+            if let Commands::Dlx { package, shell_mode, silent, args: cmd_args } = &args.commands {
                 assert_eq!(package, &vec!["cowsay"]);
                 assert!(shell_mode);
                 assert!(silent);
-                assert!(yes);
-                assert!(!no);
                 assert_eq!(cmd_args, &vec!["echo hello | cowsay"]);
             } else {
                 panic!("Expected Dlx command");

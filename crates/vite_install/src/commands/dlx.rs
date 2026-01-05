@@ -21,10 +21,6 @@ pub struct DlxCommandOptions<'a> {
     pub shell_mode: bool,
     /// Suppress output
     pub silent: bool,
-    /// Auto-confirm prompts (npm)
-    pub yes: bool,
-    /// Auto-decline prompts (npm)
-    pub no: bool,
 }
 
 impl PackageManager {
@@ -114,13 +110,8 @@ impl PackageManager {
             args.push("-c".into());
         }
 
-        // Add yes/no flags
-        if options.yes {
-            args.push("--yes".into());
-        }
-        if options.no {
-            args.push("--no".into());
-        }
+        // Always add --yes to auto-confirm prompts (align with pnpm behavior)
+        args.push("--yes".into());
 
         // Add silent flag
         if options.silent {
@@ -202,13 +193,8 @@ impl PackageManager {
             args.push("--quiet".into());
         }
 
-        // Add yes/no flags
-        if options.yes {
-            args.push("--yes".into());
-        }
-        if options.no {
-            args.push("--no".into());
-        }
+        // Always add --yes to auto-confirm prompts (align with pnpm behavior)
+        args.push("--yes".into());
 
         // Add package spec
         args.push(options.package_spec.into());
@@ -293,8 +279,6 @@ mod tests {
             args: &["my-app".into()],
             shell_mode: false,
             silent: false,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "pnpm");
@@ -310,8 +294,6 @@ mod tests {
             args: &["tsc".into(), "--version".into()],
             shell_mode: false,
             silent: false,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "pnpm");
@@ -327,8 +309,6 @@ mod tests {
             args: &["webapp".into()],
             shell_mode: false,
             silent: false,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "pnpm");
@@ -347,8 +327,6 @@ mod tests {
             args: &[],
             shell_mode: true,
             silent: false,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "pnpm");
@@ -365,8 +343,6 @@ mod tests {
             args: &["my-app".into()],
             shell_mode: false,
             silent: true,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "pnpm");
@@ -382,12 +358,11 @@ mod tests {
             args: &["my-app".into()],
             shell_mode: false,
             silent: false,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "npm");
-        assert_eq!(result.args, vec!["exec", "--", "create-vue", "my-app"]);
+        // --yes is always added to auto-confirm prompts
+        assert_eq!(result.args, vec!["exec", "--yes", "--", "create-vue", "my-app"]);
     }
 
     #[test]
@@ -399,14 +374,21 @@ mod tests {
             args: &["tsc".into(), "--version".into()],
             shell_mode: false,
             silent: false,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "npm");
+        // --yes is always added to auto-confirm prompts
         assert_eq!(
             result.args,
-            vec!["exec", "--package=typescript@5.5.4", "--", "typescript", "tsc", "--version"]
+            vec![
+                "exec",
+                "--package=typescript@5.5.4",
+                "--yes",
+                "--",
+                "typescript",
+                "tsc",
+                "--version"
+            ]
         );
     }
 
@@ -419,11 +401,10 @@ mod tests {
             args: &["webapp".into()],
             shell_mode: false,
             silent: false,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "npm");
+        // --yes is always added to auto-confirm prompts
         assert_eq!(
             result.args,
             vec![
@@ -431,28 +412,12 @@ mod tests {
                 "--package=yo",
                 "--package=generator-webapp",
                 "--package=yo",
+                "--yes",
                 "--",
                 "yo",
                 "webapp"
             ]
         );
-    }
-
-    #[test]
-    fn test_npm_exec_with_yes() {
-        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
-        let options = DlxCommandOptions {
-            packages: &[],
-            package_spec: "create-vue",
-            args: &["my-app".into()],
-            shell_mode: false,
-            silent: false,
-            yes: true,
-            no: false,
-        };
-        let result = pm.resolve_dlx_command(&options);
-        assert_eq!(result.bin_path, "npm");
-        assert!(result.args.contains(&"--yes".to_string()));
     }
 
     #[test]
@@ -464,13 +429,13 @@ mod tests {
             args: &["my-app".into()],
             shell_mode: false,
             silent: true,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "npm");
         assert!(result.args.contains(&"--loglevel".to_string()));
         assert!(result.args.contains(&"silent".to_string()));
+        // --yes is always added to auto-confirm prompts
+        assert!(result.args.contains(&"--yes".to_string()));
     }
 
     #[test]
@@ -482,12 +447,11 @@ mod tests {
             args: &["my-app".into()],
             shell_mode: false,
             silent: false,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "npx");
-        assert_eq!(result.args, vec!["create-vue", "my-app"]);
+        // --yes is always added to auto-confirm prompts
+        assert_eq!(result.args, vec!["--yes", "create-vue", "my-app"]);
     }
 
     #[test]
@@ -499,12 +463,11 @@ mod tests {
             args: &["webapp".into()],
             shell_mode: false,
             silent: false,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "npx");
-        assert_eq!(result.args, vec!["--package", "yo", "yo", "webapp"]);
+        // --yes is always added to auto-confirm prompts
+        assert_eq!(result.args, vec!["--package", "yo", "--yes", "yo", "webapp"]);
     }
 
     #[test]
@@ -516,8 +479,6 @@ mod tests {
             args: &["my-app".into()],
             shell_mode: false,
             silent: false,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "yarn");
@@ -533,8 +494,6 @@ mod tests {
             args: &["webapp".into()],
             shell_mode: false,
             silent: false,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "yarn");
@@ -550,8 +509,6 @@ mod tests {
             args: &["my-app".into()],
             shell_mode: false,
             silent: true,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "yarn");
@@ -567,8 +524,6 @@ mod tests {
             args: &["my-app".into()],
             shell_mode: false,
             silent: false,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "yarn");
@@ -584,8 +539,6 @@ mod tests {
             args: &["tsc".into(), "--version".into()],
             shell_mode: false,
             silent: false,
-            yes: false,
-            no: false,
         };
         let result = pm.resolve_dlx_command(&options);
         assert_eq!(result.bin_path, "yarn");

@@ -10,27 +10,9 @@ Options:
   -p, --package <NAME>  Package(s) to install before running the command (can be used multiple times)
   -c, --shell-mode      Execute the command within a shell environment
   -s, --silent          Suppress all output except the executed command's output
-  -y, --yes             Automatically confirm any prompts (npm only)
-  -n, --no              Automatically decline any prompts (npm only)
   -h, --help            Print help
 
-> vp x --help # should work with x alias
-Execute a package binary without installing it as a dependency
-
-Usage: vp dlx [OPTIONS] <ARGS>...
-
-Arguments:
-  <ARGS>...  Package to execute (with optional @version) and arguments
-
-Options:
-  -p, --package <NAME>  Package(s) to install before running the command (can be used multiple times)
-  -c, --shell-mode      Execute the command within a shell environment
-  -s, --silent          Suppress all output except the executed command's output
-  -y, --yes             Automatically confirm any prompts (npm only)
-  -n, --no              Automatically decline any prompts (npm only)
-  -h, --help            Print help
-
-> vp dlx -s -y cowsay hello # should run cowsay with npm exec and auto-confirm
+> vp dlx -s cowsay hello # should run cowsay with npm exec
  _______
 < hello >
  -------
@@ -40,7 +22,7 @@ Options:
                 ||----w |
                 ||     ||
 
-> vp dlx -s -y cowsay@1.6.0 hello # should run specific version
+> vp dlx -s cowsay@1.6.0 hello # should run specific version
  _______
 < hello >
  -------
@@ -50,7 +32,7 @@ Options:
                 ||----w |
                 ||     ||
 
-> vp dlx -s -y -p cowsay -p lolcatjs cowsay hello # should run with multiple packages
+> vp dlx -s -p cowsay -p lolcatjs cowsay hello # should run with multiple packages
  _______
 < hello >
  -------

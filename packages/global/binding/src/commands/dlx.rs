@@ -26,8 +26,6 @@ impl DlxCommand {
         packages: Vec<String>,
         shell_mode: bool,
         silent: bool,
-        yes: bool,
-        no: bool,
         args: Vec<String>,
     ) -> Result<ExitStatus, Error> {
         if args.is_empty() {
@@ -47,8 +45,6 @@ impl DlxCommand {
             args: &command_args,
             shell_mode,
             silent,
-            yes,
-            no,
         };
 
         package_manager.run_dlx_command(&dlx_command_options, &self.cwd).await
