@@ -32,6 +32,10 @@
       "default": "./dist/rolldown/filter-index.mjs",
       "types": "./dist/rolldown/filter-index.d.mts"
     },
+    "./rolldown/getLogFilter": {
+      "default": "./dist/rolldown/get-log-filter.mjs",
+      "types": "./dist/rolldown/get-log-filter.d.mts"
+    },
     "./rolldown/parallelPlugin": {
       "default": "./dist/rolldown/parallel-plugin.mjs",
       "types": "./dist/rolldown/parallel-plugin.d.mts"
@@ -48,9 +52,9 @@
       "default": "./dist/pluginutils/index.js",
       "types": "./dist/pluginutils/index.d.ts"
     },
-    "./lib": {
-      "default": "./dist/tsdown/index.js",
-      "types": "./dist/tsdown/index-types.d.ts"
+    "./rolldown/pluginutils/filter": {
+      "default": "./dist/pluginutils/filter/index.js",
+      "types": "./dist/pluginutils/filter/index.d.ts"
     },
     "./types/*": {
       "types": "./dist/vite/types/*"
@@ -93,7 +97,7 @@
   },
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
-    "@vitejs/devtools": "^0.0.0-alpha.18",
+    "@vitejs/devtools": "*",
     "publint": "^0.3.0",
     "typescript": "^5.0.0",
     "unplugin-lightningcss": "^0.4.0",
@@ -166,6 +170,7 @@
   "devDependencies": {
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
+    "@vitejs/devtools": "^0.0.0-alpha.22",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
     "magic-string": "^0.30.21",
