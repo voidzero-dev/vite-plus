@@ -1,4 +1,5 @@
 {
+  "ignoredPlatforms": ["win32"],
   "env": {
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
@@ -6,6 +7,7 @@
     "vp dlx --help # should show help message",
     "vp dlx -s cowsay hello # should run cowsay with npm exec",
     "vp dlx -s cowsay@1.6.0 hello # should run specific version",
-    "vp dlx -s -p cowsay -p lolcatjs cowsay hello # should run with multiple packages"
+    "vp dlx -s -p cowsay -p lolcatjs cowsay hello # should run with multiple packages",
+    "vp dlx -s -p cowsay -c \"echo hello-from-shell | cowsay\" # should run shell mode command"
   ]
 }

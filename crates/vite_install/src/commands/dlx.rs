@@ -100,14 +100,14 @@ impl PackageManager {
             args.push(format!("--package={}", pkg));
         }
 
-        // If we have additional packages or version specifier, add the main package too
-        if !options.packages.is_empty() || options.package_spec.contains('@') {
+        // When using additional packages or version specifiers, npm exec requires explicit
+        // --package flags. For example, `npm exec typescript@5.5.4 -- tsc` doesn't work;
+        // we need `npm exec --package=typescript@5.5.4 -- typescript`.
+        // Shell mode uses the package_spec as the shell command, so skip this in that case.
+        if !options.shell_mode
+            && (!options.packages.is_empty() || options.package_spec.contains('@'))
+        {
             args.push(format!("--package={}", options.package_spec));
-        }
-
-        // Add shell mode flag
-        if options.shell_mode {
-            args.push("-c".into());
         }
 
         // Always add --yes to auto-confirm prompts (align with pnpm behavior)
@@ -119,19 +119,27 @@ impl PackageManager {
             args.push("silent".into());
         }
 
-        // Add separator and command
-        args.push("--".into());
-
-        // For npm exec, we need to extract the command name from package spec
-        let command = if options.packages.is_empty() && !options.package_spec.contains('@') {
-            options.package_spec.to_string()
+        if options.shell_mode {
+            args.push("-c".into());
+            args.push(build_shell_command(options.package_spec, options.args));
         } else {
-            extract_command_from_spec(options.package_spec)
-        };
-        args.push(command);
+            // Add separator and command
+            args.push("--".into());
 
-        // Add command arguments
-        args.extend(options.args.iter().cloned());
+            // When --package flag was added above (for version specifiers or additional packages),
+            // we need to extract just the command name without the version suffix.
+            // e.g., "typescript@5.5.4" → command is "typescript" (version is in --package flag)
+            // Otherwise, use package_spec directly as the command.
+            let command = if options.packages.is_empty() && !options.package_spec.contains('@') {
+                options.package_spec.to_string()
+            } else {
+                extract_command_from_spec(options.package_spec)
+            };
+            args.push(command);
+
+            // Add command arguments
+            args.extend(options.args.iter().cloned());
+        }
 
         ResolveCommandResult { bin_path: "npm".into(), args, envs }
     }
@@ -183,26 +191,39 @@ impl PackageManager {
             args.push(pkg.clone());
         }
 
-        // Add shell mode flag
-        if options.shell_mode {
-            args.push("-c".into());
-        }
+        // Always add --yes to auto-confirm prompts (align with pnpm behavior)
+        args.push("--yes".into());
 
         // Add quiet flag for silent mode
         if options.silent {
             args.push("--quiet".into());
         }
 
-        // Always add --yes to auto-confirm prompts (align with pnpm behavior)
-        args.push("--yes".into());
+        if options.shell_mode {
+            args.push("-c".into());
+            args.push(build_shell_command(options.package_spec, options.args));
+        } else {
+            // Add package spec
+            args.push(options.package_spec.into());
 
-        // Add package spec
-        args.push(options.package_spec.into());
-
-        // Add command arguments
-        args.extend(options.args.iter().cloned());
+            // Add command arguments
+            args.extend(options.args.iter().cloned());
+        }
 
         ResolveCommandResult { bin_path: "npx".into(), args, envs }
+    }
+}
+
+fn build_shell_command(package_spec: &str, args: &[String]) -> String {
+    if args.is_empty() {
+        package_spec.to_string()
+    } else {
+        let mut command = String::from(package_spec);
+        for arg in args {
+            command.push(' ');
+            command.push_str(arg);
+        }
+        command
     }
 }
 
@@ -439,6 +460,113 @@ mod tests {
     }
 
     #[test]
+    fn test_npm_exec_shell_mode_places_command_after_flag() {
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
+        let options = DlxCommandOptions {
+            packages: &["cowsay".into(), "lolcatjs".into()],
+            package_spec: "echo hello | cowsay | lolcatjs",
+            args: &[],
+            shell_mode: true,
+            silent: false,
+        };
+        let result = pm.resolve_dlx_command(&options);
+        assert_eq!(
+            result.args,
+            vec![
+                "exec",
+                "--package=cowsay",
+                "--package=lolcatjs",
+                "--yes",
+                "-c",
+                "echo hello | cowsay | lolcatjs"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_npm_exec_shell_mode_with_additional_args() {
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
+        let options = DlxCommandOptions {
+            packages: &[],
+            package_spec: "echo",
+            args: &["hello world".into()],
+            shell_mode: true,
+            silent: true,
+        };
+        let result = pm.resolve_dlx_command(&options);
+        assert_eq!(
+            result.args,
+            vec!["exec", "--yes", "--loglevel", "silent", "-c", "echo hello world"]
+        );
+    }
+
+    #[test]
+    fn test_npm_exec_scoped_package_with_version() {
+        // Scoped packages with version need --package flag and extracted command name
+        // e.g., "@vue/cli@5.0.0" -> --package=@vue/cli@5.0.0 and command "cli"
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
+        let options = DlxCommandOptions {
+            packages: &[],
+            package_spec: "@vue/cli@5.0.0",
+            args: &["create".into(), "my-app".into()],
+            shell_mode: false,
+            silent: false,
+        };
+        let result = pm.resolve_dlx_command(&options);
+        assert_eq!(result.bin_path, "npm");
+        assert_eq!(
+            result.args,
+            vec!["exec", "--package=@vue/cli@5.0.0", "--yes", "--", "cli", "create", "my-app"]
+        );
+    }
+
+    #[test]
+    fn test_npm_exec_scoped_package_without_version() {
+        // Scoped packages contain '@' in their name, so the current logic treats them
+        // the same as versioned packages (adds --package flag and extracts command name).
+        // e.g., "@vue/cli" -> --package=@vue/cli and command "cli"
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
+        let options = DlxCommandOptions {
+            packages: &[],
+            package_spec: "@vue/cli",
+            args: &["create".into(), "my-app".into()],
+            shell_mode: false,
+            silent: false,
+        };
+        let result = pm.resolve_dlx_command(&options);
+        assert_eq!(result.bin_path, "npm");
+        assert_eq!(
+            result.args,
+            vec!["exec", "--package=@vue/cli", "--yes", "--", "cli", "create", "my-app"]
+        );
+    }
+
+    #[test]
+    fn test_npm_exec_version_requires_package_flag_and_extracted_command() {
+        // This test documents the key behavior: when package_spec contains '@' for version,
+        // npm exec needs BOTH:
+        // 1. --package=<full-spec> to specify the version
+        // 2. The command name (without version) after -- separator
+        // Without this, `npm exec create-vue@3.10.0` would fail to find the command
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
+        let options = DlxCommandOptions {
+            packages: &[],
+            package_spec: "create-vue@3.10.0",
+            args: &["my-app".into()],
+            shell_mode: false,
+            silent: false,
+        };
+        let result = pm.resolve_dlx_command(&options);
+
+        // Verify --package flag contains full spec with version
+        assert!(result.args.contains(&"--package=create-vue@3.10.0".to_string()));
+
+        // Verify command after -- is just the name without version
+        let separator_pos = result.args.iter().position(|a| a == "--").unwrap();
+        assert_eq!(result.args[separator_pos + 1], "create-vue");
+    }
+
+    #[test]
     fn test_yarn_v1_fallback_to_npx() {
         let pm = create_mock_package_manager(PackageManagerType::Yarn, "1.22.19");
         let options = DlxCommandOptions {
@@ -468,6 +596,23 @@ mod tests {
         assert_eq!(result.bin_path, "npx");
         // --yes is always added to auto-confirm prompts
         assert_eq!(result.args, vec!["--package", "yo", "--yes", "yo", "webapp"]);
+    }
+
+    #[test]
+    fn test_yarn_v1_fallback_shell_mode_places_command_after_flag() {
+        let pm = create_mock_package_manager(PackageManagerType::Yarn, "1.22.19");
+        let options = DlxCommandOptions {
+            packages: &["cowsay".into()],
+            package_spec: "echo hello | cowsay",
+            args: &[],
+            shell_mode: true,
+            silent: true,
+        };
+        let result = pm.resolve_dlx_command(&options);
+        assert_eq!(
+            result.args,
+            vec!["--package", "cowsay", "--yes", "--quiet", "-c", "echo hello | cowsay"]
+        );
     }
 
     #[test]

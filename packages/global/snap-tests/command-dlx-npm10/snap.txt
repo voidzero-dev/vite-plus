@@ -41,3 +41,13 @@ Options:
             (__)\       )\/\
                 ||----w |
                 ||     ||
+
+> vp dlx -s -p cowsay -c "echo hello-from-shell | cowsay" # should run shell mode command
+ __________________
+< hello-from-shell >
+ ------------------
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||

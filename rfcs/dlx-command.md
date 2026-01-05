@@ -70,8 +70,6 @@ vite dlx [OPTIONS] <package[@version]> [args...]
 - `--package, -p <name>`: Specifies which package(s) to install before running the command. Can be specified multiple times.
 - `--shell-mode, -c`: Executes the command within a shell environment (`/bin/sh` on UNIX, `cmd.exe` on Windows).
 - `--silent, -s`: Suppresses all output except the executed command's output.
-- `--yes, -y`: Automatically confirm any prompts (npm only).
-- `--no, -n`: Automatically decline any prompts (npm only).
 
 ### Usage Examples
 
@@ -113,8 +111,6 @@ vite dlx -p typescript -p @types/node -c 'tsc --init && node -e "console.log(123
 | `--package <name>`, `-p <name>` | `--package <name>` | `--package=<name>`  | N/A         | `-p <name>`      | Specify package to install |
 | `--shell-mode`, `-c`            | `-c`               | `-c`                | N/A         | N/A              | Execute in shell           |
 | `--silent`, `-s`                | `--silent`         | `--loglevel silent` | `--quiet`   | `--quiet`        | Suppress output            |
-| `--yes`, `-y`                   | N/A                | `--yes`             | N/A         | N/A              | Auto-confirm prompts       |
-| `--no`, `-n`                    | N/A                | `--no`              | N/A         | N/A              | Auto-decline prompts       |
 
 **Notes:**
 
@@ -122,6 +118,7 @@ vite dlx -p typescript -p @types/node -c 'tsc --init && node -e "console.log(123
 - **npm exec vs npx**: `npx` is essentially an alias for `npm exec --` with some convenience features. We use `npm exec` for consistency.
 - **Shell mode**: Yarn 2+ does not support shell mode (`-c`), command will print a warning and try to execute anyway.
 - **--package flag position**: For pnpm, `--package` comes before `dlx`. For npm, `--package` can be anywhere. For yarn, `-p` comes after `dlx`.
+- **Auto-confirm prompts**: For npm and npx (yarn@1 fallback), `--yes` is automatically added to align with pnpm's behavior which doesn't require confirmation.
 
 ### Argument Handling
 
@@ -137,7 +134,7 @@ vite dlx typescript tsc --version --help
 
 **Implementation approach:**
 
-1. Parse known vite dlx options (`--package`, `-c`, `-s`, `-y`, `-n`)
+1. Parse known vite dlx options (`--package`, `-c`, `-s`)
 2. First non-option argument is the package spec (with optional @version)
 3. All remaining arguments are passed through to the executed command
 
@@ -169,14 +166,6 @@ pub enum Commands {
         /// Suppress all output except the executed command's output
         #[arg(long, short = 's')]
         silent: bool,
-
-        /// Automatically confirm any prompts (npm only)
-        #[arg(long, short = 'y')]
-        yes: bool,
-
-        /// Automatically decline any prompts (npm only)
-        #[arg(long, short = 'n')]
-        no: bool,
 
         /// Package to execute (with optional @version) and arguments
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -211,10 +200,6 @@ pub struct DlxCommandOptions<'a> {
     pub shell_mode: bool,
     /// Suppress output
     pub silent: bool,
-    /// Auto-confirm prompts (npm)
-    pub yes: bool,
-    /// Auto-decline prompts (npm)
-    pub no: bool,
 }
 
 impl PackageManager {
@@ -297,13 +282,8 @@ impl PackageManager {
             args.push("-c".into());
         }
 
-        // Add yes/no flags
-        if options.yes {
-            args.push("--yes".into());
-        }
-        if options.no {
-            args.push("--no".into());
-        }
+        // Always add --yes to auto-confirm prompts (align with pnpm behavior)
+        args.push("--yes".into());
 
         // Add silent flag
         if options.silent {
@@ -393,13 +373,8 @@ impl PackageManager {
             args.push("--quiet".into());
         }
 
-        // Add yes/no flags
-        if options.yes {
-            args.push("--yes".into());
-        }
-        if options.no {
-            args.push("--no".into());
-        }
+        // Always add --yes to auto-confirm prompts (align with pnpm behavior)
+        args.push("--yes".into());
 
         // Add package spec
         args.push(options.package_spec.into());
@@ -479,8 +454,6 @@ impl DlxCommand {
         packages: Vec<String>,
         shell_mode: bool,
         silent: bool,
-        yes: bool,
-        no: bool,
         args: Vec<String>,
     ) -> Result<i32, Error> {
         if args.is_empty() {
@@ -501,8 +474,6 @@ impl DlxCommand {
             args: command_args,
             shell_mode,
             silent,
-            yes,
-            no,
         };
 
         let exit_status = package_manager.run_dlx_command(&options, &self.cwd).await?;
@@ -568,6 +539,19 @@ impl DlxCommand {
 - `pnpm dlx` and `yarn dlx` infer command from package
 - Automation provides consistent UX
 - Handles scoped packages correctly
+
+### 6. Auto-confirm Prompts for npm/npx
+
+**Decision**: Always add `--yes` flag for npm and npx (yarn@1 fallback).
+
+**Rationale**:
+
+- pnpm doesn't require confirmation prompts by default
+- yarn dlx doesn't require confirmation prompts
+- npm and npx prompt for confirmation when running packages not in cache
+- Auto-adding `--yes` ensures consistent behavior across all package managers
+- Removes npm-specific `--yes/-y` and `--no/-n` options from the CLI
+- Users expect `vite dlx` to behave the same regardless of underlying package manager
 
 ## Error Handling
 
@@ -686,7 +670,6 @@ vite dlx → npx
 
 ```bash
 vite create-vue my-app    # Implicit dlx
-vite x create-vue my-app  # Short alias
 ```
 
 **Rejected because**:
@@ -695,6 +678,8 @@ vite x create-vue my-app  # Short alias
 - Less explicit about what's happening
 - Harder to discover and document
 - Deviates from pnpm/npm/yarn conventions
+
+Note: A short alias `x` was initially considered but rejected for the same reasons - it's not explicit about what's happening and could conflict with future commands.
 
 ### Alternative 3: No Fallback for Yarn 1.x
 
@@ -755,8 +740,6 @@ fn test_pnpm_dlx_basic() {
         args: &["my-app".into()],
         shell_mode: false,
         silent: false,
-        yes: false,
-        no: false,
     };
     let result = pm.resolve_dlx_command(&options);
     assert_eq!(result.bin_path, "pnpm");
@@ -772,8 +755,6 @@ fn test_pnpm_dlx_with_packages() {
         args: &["webapp".into()],
         shell_mode: false,
         silent: false,
-        yes: false,
-        no: false,
     };
     let result = pm.resolve_dlx_command(&options);
     assert_eq!(
@@ -791,12 +772,11 @@ fn test_npm_exec_basic() {
         args: &["my-app".into()],
         shell_mode: false,
         silent: false,
-        yes: false,
-        no: false,
     };
     let result = pm.resolve_dlx_command(&options);
     assert_eq!(result.bin_path, "npm");
-    assert_eq!(result.args, vec!["exec", "--", "create-vue", "my-app"]);
+    // --yes is always added to auto-confirm prompts
+    assert_eq!(result.args, vec!["exec", "--yes", "--", "create-vue", "my-app"]);
 }
 
 #[test]
@@ -808,12 +788,11 @@ fn test_yarn_v1_fallback_to_npx() {
         args: &["my-app".into()],
         shell_mode: false,
         silent: false,
-        yes: false,
-        no: false,
     };
     let result = pm.resolve_dlx_command(&options);
     assert_eq!(result.bin_path, "npx");
-    assert_eq!(result.args, vec!["create-vue", "my-app"]);
+    // --yes is always added to auto-confirm prompts
+    assert_eq!(result.args, vec!["--yes", "create-vue", "my-app"]);
 }
 
 #[test]
@@ -825,8 +804,6 @@ fn test_yarn_v2_dlx() {
         args: &["my-app".into()],
         shell_mode: false,
         silent: false,
-        yes: false,
-        no: false,
     };
     let result = pm.resolve_dlx_command(&options);
     assert_eq!(result.bin_path, "yarn");
@@ -850,8 +827,6 @@ fn test_shell_mode() {
         args: &[],
         shell_mode: true,
         silent: false,
-        yes: false,
-        no: false,
     };
     let result = pm.resolve_dlx_command(&options);
     assert!(result.args.contains(&"-c".to_string()));
@@ -874,8 +849,6 @@ Options:
   -p, --package <NAME>  Package(s) to install before running (can be used multiple times)
   -c, --shell-mode      Execute the command within a shell environment
   -s, --silent          Suppress all output except the executed command's output
-  -y, --yes             Automatically confirm any prompts (npm only)
-  -n, --no              Automatically decline any prompts (npm only)
   -h, --help            Print help
 
 Examples:
@@ -895,7 +868,7 @@ Examples:
 | --package flag    | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full |                          |
 | Shell mode (-c)   | ✅ Full | ✅ Full | ⚠️ npx  | ❌ N/A  | yarn@2+ doesn't support  |
 | Silent mode       | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full |                          |
-| --yes/--no        | ❌ N/A  | ✅ Full | ⚠️ npx  | ❌ N/A  | npm-specific             |
+| Auto-confirm      | ✅ N/A  | ✅ Auto | ⚠️ Auto | ✅ N/A  | --yes added for npm/npx  |
 
 ## Security Considerations
 
