@@ -52,6 +52,7 @@ import { fileURLToPath } from 'node:url';
 
 import { parseSync } from 'oxc-parser';
 import { build } from 'rolldown';
+import { dts } from 'rolldown-plugin-dts';
 
 import pkg from './package.json' with { type: 'json' };
 
@@ -413,6 +414,7 @@ async function bundleVitest() {
         .replaceAll(`import 'vite';`, `import '${CORE_PACKAGE_NAME}';`)
         .replaceAll(`'vite/module-runner'`, `'${CORE_PACKAGE_NAME}/module-runner'`)
         .replaceAll(`declare module "vite"`, `declare module "${CORE_PACKAGE_NAME}"`);
+      console.log(`Replaced vite imports in ${destPath}`);
       await writeFile(destPath, content, 'utf-8');
     } else {
       await copyFile(file, destPath);
@@ -658,6 +660,36 @@ async function bundleLeafDeps(leafDeps: Set<string>): Promise<Map<string, string
       },
       logLevel: 'warn',
     });
+
+    const dtsInput = { ...input };
+
+    for (const name of Object.keys(dtsInput)) {
+      const vendorDtsPath = join(vendorDir, `vendor_${name}.d.ts`);
+      dtsInput[name] = vendorDtsPath;
+      await writeFile(vendorDtsPath, `export * from '${name}';`, 'utf-8');
+    }
+
+    await build({
+      input: dtsInput,
+      output: {
+        dir: vendorDir,
+        format: 'esm',
+        entryFileNames: '[name].mts',
+      },
+      plugins: [
+        dts({
+          dtsInput: true,
+          oxc: true,
+          resolve: true,
+          emitDtsOnly: true,
+          tsconfig: false,
+        }),
+      ],
+    });
+
+    for (const p of Object.values(dtsInput)) {
+      await rm(p);
+    }
 
     // Register all specifiers
     for (const dep of leafDeps) {

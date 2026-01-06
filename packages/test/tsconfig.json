@@ -12,5 +12,6 @@
     "experimentalDecorators": true,
     "customConditions": ["dev"]
   },
+  "include": ["build.ts", "package.json"],
   "exclude": ["node_modules", "dist/**/*"]
 }
