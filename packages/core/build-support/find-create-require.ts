@@ -44,6 +44,7 @@ function isThirdPartyModule(specifier: string): boolean {
 export async function replaceThirdPartyCjsRequires(
   source: string,
   filePath: string,
+  tsdownExternal: Set<string>,
 ): Promise<{ code: string; modules: Set<string> }> {
   const ast = await parse(filePath, source, {
     lang: 'js',
@@ -63,8 +64,12 @@ export async function replaceThirdPartyCjsRequires(
   for (const { calls } of results) {
     for (const call of calls) {
       if (isThirdPartyModule(call.module)) {
-        thirdPartyModules.add(call.module);
-        replacements.push(call);
+        const parts = call.module.split('/');
+        const moduleName = call.module.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
+        if (!tsdownExternal.has(moduleName)) {
+          thirdPartyModules.add(call.module);
+          replacements.push(call);
+        }
       }
     }
   }

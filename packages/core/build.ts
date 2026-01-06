@@ -276,13 +276,9 @@ async function bundleTsdown() {
         async transform(code, id) {
           if (id.endsWith('.js') || id.endsWith('.mjs')) {
             const { code: updatedCode, modules: thirdPartyModules } =
-              await replaceThirdPartyCjsRequires(code, id);
+              await replaceThirdPartyCjsRequires(code, id, new Set(tsdownExternal));
             for (const module of thirdPartyModules) {
-              const parts = module.split('/');
-              const moduleName = module.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
-              if (!tsdownExternal.includes(moduleName)) {
-                thirdPartyCjsModules.add(module);
-              }
+              thirdPartyCjsModules.add(module);
             }
             return { code: updatedCode };
           }
