@@ -124,11 +124,7 @@ export function rewriteModuleSpecifiers(
   const processedRanges = new Set<string>();
 
   // Find all import/export statements, call expressions, and ambient module declarations
-  const nodeKinds = [
-    'import_statement',
-    'export_statement',
-    'call_expression',
-  ];
+  const nodeKinds = ['import_statement', 'export_statement', 'call_expression'];
 
   // Add TypeScript-specific kinds for .d.ts files
   if (lang === Lang.TypeScript || lang === Lang.Tsx) {
@@ -142,7 +138,11 @@ export function rewriteModuleSpecifiers(
       // For call expressions, check if it's require/__require/import()
       if (kindName === 'call_expression') {
         const text = match.text();
-        if (!text.startsWith('require(') && !text.startsWith('__require(') && !text.startsWith('import(')) {
+        if (
+          !text.startsWith('require(') &&
+          !text.startsWith('__require(') &&
+          !text.startsWith('import(')
+        ) {
           continue;
         }
       }

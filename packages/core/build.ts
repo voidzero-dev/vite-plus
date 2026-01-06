@@ -7,6 +7,8 @@ import { build, type BuildOptions } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
 import { glob } from 'tinyglobby';
 
+import { buildCjsDeps } from './build-support/build-cjs-deps';
+import { replaceThirdPartyCjsRequires } from './build-support/find-create-require';
 import { RewriteImportsPlugin } from './build-support/rewrite-imports';
 import {
   createRolldownRewriteRules,
@@ -252,6 +254,8 @@ async function bundleTsdown() {
 
   const tsdownExternal = Object.keys(pkgJson.peerDependencies);
 
+  const thirdPartyCjsModules = new Set<string>();
+
   // Re-build tsdown cli
   await build({
     input: {
@@ -265,8 +269,25 @@ async function bundleTsdown() {
     },
     platform: 'node',
     external: (id: string) => tsdownExternal.some((e) => id.startsWith(e)),
-    plugins: [RewriteImportsPlugin],
+    plugins: [
+      RewriteImportsPlugin,
+      {
+        name: 'find-third-party-cjs-requires',
+        async transform(code, id) {
+          if (id.endsWith('.js') || id.endsWith('.mjs')) {
+            const { code: updatedCode, modules: thirdPartyModules } =
+              await replaceThirdPartyCjsRequires(code, id, new Set(tsdownExternal));
+            for (const module of thirdPartyModules) {
+              thirdPartyCjsModules.add(module);
+            }
+            return { code: updatedCode };
+          }
+        },
+      },
+    ],
   });
+
+  await buildCjsDeps(thirdPartyCjsModules, join(projectDir, 'dist/tsdown'));
 
   await build({
     input: {
@@ -308,7 +329,12 @@ async function bundleVitepress() {
     await mkdir(parse(destPath).dir, { recursive: true });
 
     // Rewrite vite imports in .js and .mjs files
-    if (file.endsWith('.js') || file.endsWith('.mjs') || file.endsWith('.d.mts') || file.endsWith('.d.ts')) {
+    if (
+      file.endsWith('.js') ||
+      file.endsWith('.mjs') ||
+      file.endsWith('.d.mts') ||
+      file.endsWith('.d.ts')
+    ) {
       const content = await readFile(file, 'utf-8');
       // Note: For vitepress, 'vite' -> 'pkgJson.name/vite' (vite subpath)
       const rewrittenContent = rewriteModuleSpecifiers(content, file, {
