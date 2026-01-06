@@ -20,9 +20,9 @@ import { defineConfig } from '@voidzero-dev/vite-plus';
 
 export default defineConfig({
   lint: {
-    rules: {
-      'no-unused-vars': 'error',
-    },
+    "rules": {
+      "no-unused-vars": "error"
+    }
   },
   plugins: [react()],
 });

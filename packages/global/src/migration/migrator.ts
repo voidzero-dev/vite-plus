@@ -648,7 +648,6 @@ function mergeViteConfigFiles(projectPath: string): void {
     mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxlintConfig, 'lint');
   }
   if (configs.oxfmtConfig) {
-    // TODO: handle jsonc file
     // merge oxfmt config into vite.config.ts
     mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxfmtConfig, 'fmt');
   }
