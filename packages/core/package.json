@@ -173,6 +173,7 @@
     }
   },
   "devDependencies": {
+    "@ast-grep/napi": "^0.40.4",
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
     "@vitejs/devtools": "^0.0.0-alpha.22",

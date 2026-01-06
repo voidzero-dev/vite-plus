@@ -8,6 +8,12 @@ import { dts } from 'rolldown-plugin-dts';
 import { glob } from 'tinyglobby';
 
 import { RewriteImportsPlugin } from './build-support/rewrite-imports';
+import {
+  createRolldownRewriteRules,
+  createViteRewriteRules,
+  rewriteModuleSpecifiers,
+  type ReplacementRule,
+} from './build-support/rewrite-module-specifiers';
 import pkgJson from './package.json' with { type: 'json' };
 import viteRolldownConfig from './vite-rolldown.config';
 
@@ -161,20 +167,10 @@ async function buildVite() {
       'node',
       dtsFile.replace(join(rolldownViteSourceDir, 'dist', 'node'), ''),
     );
-    await writeFile(
-      dstFilePath,
-      file
-        // Handle vite v8+ imports (official vite repo uses 'vite' package name)
-        .replaceAll(`"vite/`, `"${pkgJson.name}/`)
-        .replaceAll(`"vite"`, `"${pkgJson.name}"`)
-        .replaceAll(`'vite/`, `'${pkgJson.name}/`)
-        .replaceAll(`'vite'`, `'${pkgJson.name}'`)
-        // Handle rolldown imports
-        .replaceAll(`"rolldown/`, `"${pkgJson.name}/rolldown/`)
-        .replaceAll(`"rolldown"`, `"${pkgJson.name}/rolldown"`)
-        .replaceAll(`'rolldown/`, `'${pkgJson.name}/rolldown/`)
-        .replaceAll(`'rolldown'`, `'${pkgJson.name}/rolldown'`),
-    );
+    const rewrittenFile = rewriteModuleSpecifiers(file, dtsFile, {
+      rules: [...createViteRewriteRules(pkgJson.name), ...createRolldownRewriteRules(pkgJson.name)],
+    });
+    await writeFile(dstFilePath, rewrittenFile);
   }
 
   // Copy type files
@@ -197,14 +193,10 @@ async function buildVite() {
     if (!existsSync(dir)) {
       await mkdir(dir, { recursive: true });
     }
-    await writeFile(
-      dstFilePath,
-      file
-        .replaceAll(`'vite/`, `'${pkgJson.name}/`)
-        .replaceAll(`'vite'`, `'${pkgJson.name}'`)
-        .replaceAll(`'rolldown/`, `'${pkgJson.name}/rolldown/`)
-        .replaceAll(`'rolldown'`, `'${pkgJson.name}/rolldown'`),
-    );
+    const rewrittenFile = rewriteModuleSpecifiers(file, srcDtsFile, {
+      rules: [...createViteRewriteRules(pkgJson.name), ...createRolldownRewriteRules(pkgJson.name)],
+    });
+    await writeFile(dstFilePath, rewrittenFile);
   }
 
   await cp(
@@ -236,20 +228,20 @@ async function bundleRolldown() {
     },
   });
 
-  // Rewrite @rolldown/pluginutils imports
+  // Rewrite @rolldown/pluginutils imports in JS and type declaration files
   for (const file of rolldownFiles) {
-    if (file.endsWith('.mjs') || file.endsWith('.js')) {
+    if (
+      file.endsWith('.mjs') ||
+      file.endsWith('.js') ||
+      file.endsWith('.d.mts') ||
+      file.endsWith('.d.ts')
+    ) {
       const source = await readFile(file, 'utf-8');
-      let newSource = source.replaceAll(
-        '"@rolldown/pluginutils"',
-        `"${pkgJson.name}/rolldown/pluginutils"`,
-      );
+      const rules: ReplacementRule[] = [...createRolldownRewriteRules(pkgJson.name)];
       if (process.env.RELEASE_BUILD) {
-        newSource = newSource.replaceAll(
-          `__require("../rolldown-binding`,
-          `__require("./rolldown-binding`,
-        );
+        rules.push({ from: '../rolldown-binding', to: './rolldown-binding' });
       }
+      const newSource = rewriteModuleSpecifiers(source, file, { rules });
       await writeFile(file, newSource);
     }
   }
@@ -316,12 +308,13 @@ async function bundleVitepress() {
     await mkdir(parse(destPath).dir, { recursive: true });
 
     // Rewrite vite imports in .js and .mjs files
-    if (file.endsWith('.js') || file.endsWith('.mjs')) {
-      let content = await readFile(file, 'utf-8');
-      content = content.replaceAll(/from ['"]vite['"]/g, `from '${pkgJson.name}/vite'`);
-      content = content.replaceAll(/import\(['"]vite['"]\)/g, `import('${pkgJson.name}/vite')`);
-      content = content.replaceAll(/require\(['"]vite['"]\)/g, `require('${pkgJson.name}/vite')`);
-      await writeFile(destPath, content, 'utf-8');
+    if (file.endsWith('.js') || file.endsWith('.mjs') || file.endsWith('.d.mts') || file.endsWith('.d.ts')) {
+      const content = await readFile(file, 'utf-8');
+      // Note: For vitepress, 'vite' -> 'pkgJson.name/vite' (vite subpath)
+      const rewrittenContent = rewriteModuleSpecifiers(content, file, {
+        rules: [{ from: 'vite', to: `${pkgJson.name}/vite` }],
+      });
+      await writeFile(destPath, rewrittenContent, 'utf-8');
     } else {
       await copyFile(file, destPath);
     }
