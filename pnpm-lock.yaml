@@ -374,16 +374,10 @@ importers:
       '@arethetypeswrong/core':
         specifier: ^0.18.1
         version: 0.18.2
-      '@babel/generator':
-        specifier: ^7.28.5
-        version: 7.28.5
-      '@babel/parser':
-        specifier: ^7.28.5
-        version: 7.28.5
-      '@babel/types':
-        specifier: ^7.28.5
-        version: 7.28.5
       '@oxc-project/runtime':
+        specifier: 'catalog:'
+        version: 0.106.0
+      '@oxc-project/types':
         specifier: 'catalog:'
         version: 0.106.0
       '@types/node':
@@ -401,9 +395,6 @@ importers:
       lightningcss:
         specifier: ^1.30.2
         version: 1.30.2
-      picomatch:
-        specifier: ^4.0.3
-        version: 4.0.3
       postcss:
         specifier: ^8.5.6
         version: 8.5.6
@@ -416,9 +407,6 @@ importers:
       sass-embedded:
         specifier: ^1.70.0
         version: 1.97.1(source-map-js@1.2.1)
-      semver:
-        specifier: ^7.7.3
-        version: 7.7.3
       stylus:
         specifier: '>=0.54.8'
         version: 0.64.0
@@ -428,9 +416,6 @@ importers:
       terser:
         specifier: ^5.16.0
         version: 5.44.1
-      tree-kill:
-        specifier: ^1.2.2
-        version: 1.2.2
       tsx:
         specifier: ^4.8.1
         version: 4.21.0
@@ -450,6 +435,15 @@ importers:
       '@ast-grep/napi':
         specifier: ^0.40.4
         version: 0.40.4
+      '@babel/generator':
+        specifier: ^7.28.5
+        version: 7.28.5
+      '@babel/parser':
+        specifier: ^7.28.5
+        version: 7.28.5
+      '@babel/types':
+        specifier: ^7.28.5
+        version: 7.28.5
       '@oxc-node/cli':
         specifier: 'catalog:'
         version: 0.0.35
@@ -468,9 +462,15 @@ importers:
       magic-string:
         specifier: ^0.30.21
         version: 0.30.21
+      oxc-parser:
+        specifier: 'catalog:'
+        version: 0.106.0
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1
+      picomatch:
+        specifier: ^4.0.3
+        version: 4.0.3
       pkg-types:
         specifier: ^2.3.0
         version: 2.3.0
@@ -486,9 +486,15 @@ importers:
       rollup-plugin-license:
         specifier: ^3.6.0
         version: 3.6.0(picomatch@4.0.3)(rollup@4.53.3)
+      semver:
+        specifier: ^7.7.3
+        version: 7.7.3
       tinyglobby:
         specifier: ^0.2.15
         version: 0.2.15
+      tree-kill:
+        specifier: ^1.2.2
+        version: 1.2.2
       tsdown:
         specifier: 'catalog:'
         version: 0.19.0-beta.2(@arethetypeswrong/core@0.18.2)(@vitejs/devtools@0.0.0-alpha.22(@pnpm/logger@1001.0.1)(vite@packages+core)(vue@3.5.25(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.16)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6)

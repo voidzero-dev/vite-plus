@@ -90,15 +90,10 @@
     "dist"
   ],
   "dependencies": {
-    "@babel/generator": "^7.28.5",
-    "@babel/parser": "^7.28.5",
-    "@babel/types": "^7.28.5",
     "@oxc-project/runtime": "catalog:",
+    "@oxc-project/types": "catalog:",
     "lightningcss": "^1.30.2",
-    "picomatch": "^4.0.3",
-    "postcss": "^8.5.6",
-    "semver": "^7.7.3",
-    "tree-kill": "^1.2.2"
+    "postcss": "^8.5.6"
   },
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
@@ -174,21 +169,28 @@
   },
   "devDependencies": {
     "@ast-grep/napi": "^0.40.4",
+    "@babel/generator": "^7.28.5",
+    "@babel/parser": "^7.28.5",
+    "@babel/types": "^7.28.5",
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
     "@vitejs/devtools": "^0.0.0-alpha.22",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
     "magic-string": "^0.30.21",
+    "oxc-parser": "catalog:",
     "pkg-types": "^2.3.0",
     "picocolors": "^1.1.1",
+    "picomatch": "^4.0.3",
     "rolldown": "workspace:*",
     "rolldown-plugin-dts": "catalog:",
     "vite": "workspace:*",
     "rollup": "^4.18.0",
     "rollup-plugin-license": "^3.6.0",
     "tinyglobby": "^0.2.15",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "semver": "^7.7.3",
+    "tree-kill": "^1.2.2"
   },
   "optionalDependencies": {
     "fsevents": "~2.3.3"
