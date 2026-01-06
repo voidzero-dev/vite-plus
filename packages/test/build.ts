@@ -401,7 +401,8 @@ async function bundleVitest() {
       file.endsWith('.js') ||
       file.endsWith('.mjs') ||
       file.endsWith('.cjs') ||
-      file.endsWith('.d.ts')
+      file.endsWith('.d.ts') ||
+      file.endsWith('.d.cts')
     ) {
       let content = await readFile(file, 'utf-8');
       content = content
