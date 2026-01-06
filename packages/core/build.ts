@@ -1,5 +1,5 @@
 import { copyFile, cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { join, parse, resolve } from 'node:path';
+import { dirname, join, parse, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { build, type BuildOptions } from 'rolldown';
@@ -9,6 +9,7 @@ import { glob } from 'tinyglobby';
 import { RewriteImportsPlugin } from './build-support/rewrite-imports';
 import pkgJson from './package.json' with { type: 'json' };
 import viteRolldownConfig from './vite-rolldown.config';
+import { existsSync } from 'node:fs';
 
 const projectDir = join(fileURLToPath(import.meta.url), '..');
 
@@ -166,9 +167,13 @@ async function buildVite() {
         // Handle vite v8+ imports (official vite repo uses 'vite' package name)
         .replaceAll(`"vite/`, `"${pkgJson.name}/`)
         .replaceAll(`"vite"`, `"${pkgJson.name}"`)
+        .replaceAll(`'vite/`, `'${pkgJson.name}/`)
+        .replaceAll(`'vite'`,  `'${pkgJson.name}'`)
         // Handle rolldown imports
         .replaceAll(`"rolldown/`, `"${pkgJson.name}/rolldown/`)
-        .replaceAll(`"rolldown"`, `"${pkgJson.name}/rolldown"`),
+        .replaceAll(`"rolldown"`, `"${pkgJson.name}/rolldown"`)
+        .replaceAll(`'rolldown/`, `'${pkgJson.name}/rolldown/`)
+        .replaceAll(`'rolldown'`, `'${pkgJson.name}/rolldown'`),
     );
   }
 
@@ -180,14 +185,23 @@ async function buildVite() {
   await mkdir(join(projectDir, 'dist/vite/types'), { recursive: true });
 
   for (const srcDtsFile of srcTypeFiles) {
-    await cp(
-      srcDtsFile,
-      join(
-        projectDir,
-        'dist/vite/types',
-        srcDtsFile.replace(join(rolldownViteSourceDir, 'types'), ''),
-      ),
+    const file = await readFile(srcDtsFile, 'utf-8');
+    const dstFilePath = join(
+      projectDir,
+      'dist',
+      'vite',
+      'types',
+      srcDtsFile.replace(join(rolldownViteSourceDir, 'types'), ''),
     );
+    const dir = dirname(dstFilePath);
+    if (!existsSync(dir)) {
+      await mkdir(dir, { recursive: true });
+    }
+    await writeFile(dstFilePath, file
+      .replaceAll(`'vite/`, `'${pkgJson.name}/`)
+      .replaceAll(`'vite'`, `'${pkgJson.name}'`)
+      .replaceAll(`'rolldown/`, `'${pkgJson.name}/rolldown/`)
+      .replaceAll(`'rolldown'`, `'${pkgJson.name}/rolldown'`));
   }
 
   await cp(
