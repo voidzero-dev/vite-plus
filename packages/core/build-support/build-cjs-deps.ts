@@ -17,6 +17,9 @@ export async function buildCjsDeps(modules: Set<string>, distDir: string) {
     await writeFile(distFile, `module.exports = require('${module}')\n`);
     distFiles.add(distFile);
   }
+  if (distFiles.size === 0) {
+    return;
+  }
   await build({
     input: Array.from(distFiles),
     platform: 'node',
