@@ -167,6 +167,12 @@ jobs:
               vite run tests-e2e#test
               VITE_TEST_BUILD=1 vite run tests-e2e#test
               vite run tests-init#test
+          - name: tanstack-start-helloworld
+            node-version: 24
+            command: |
+              npx playwright install chromium
+              vite run test
+              vite run build
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
