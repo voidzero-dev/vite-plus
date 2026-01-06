@@ -223,8 +223,8 @@ catalogs:
       specifier: ^1.0.1
       version: 1.0.2
     tsdown:
-      specifier: ^0.19.0-beta.2
-      version: 0.19.0-beta.2
+      specifier: ^0.19.0-beta.3
+      version: 0.19.0-beta.3
     typescript:
       specifier: ^5.9.3
       version: 5.9.3
@@ -364,7 +364,7 @@ importers:
         version: 0.20.0(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       tsdown:
         specifier: 'catalog:'
-        version: 0.19.0-beta.2(@arethetypeswrong/core@0.18.2)(@vitejs/devtools@0.0.0-alpha.22(@pnpm/logger@1001.0.1)(vite@packages+core)(vue@3.5.25(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.16)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6)
+        version: 0.19.0-beta.3(@arethetypeswrong/core@0.18.2)(@vitejs/devtools@0.0.0-alpha.22(@pnpm/logger@1001.0.1)(vite@packages+core)(vue@3.5.25(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.16)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6)
       vite:
         specifier: workspace:@voidzero-dev/vite-plus-core@*
         version: link:../core
@@ -488,7 +488,7 @@ importers:
         version: 0.2.15
       tsdown:
         specifier: 'catalog:'
-        version: 0.19.0-beta.2(@arethetypeswrong/core@0.18.2)(@vitejs/devtools@0.0.0-alpha.22(@pnpm/logger@1001.0.1)(vite@packages+core)(vue@3.5.25(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.16)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6)
+        version: 0.19.0-beta.3(@arethetypeswrong/core@0.18.2)(@vitejs/devtools@0.0.0-alpha.22(@pnpm/logger@1001.0.1)(vite@packages+core)(vue@3.5.25(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.16)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6)
       vite:
         specifier: workspace:@voidzero-dev/vite-plus-core@*
         version: 'link:'
@@ -7888,8 +7888,8 @@ packages:
       unplugin-unused:
         optional: true
 
-  tsdown@0.19.0-beta.2:
-    resolution: {integrity: sha512-hIn4nKz9YY5rUEiD/JPFIX0SI733ktgEESyn9o/iS1fnfryhxe7/FfJ0KuM2enxOKHqpAdHU/DiC0DPzBC5CVg==}
+  tsdown@0.19.0-beta.3:
+    resolution: {integrity: sha512-Ud75SBmTap0kDf9hs31yBBlU0iAV17gtZgTJlW6nG/e4J6wXPXwQtUXt/Fck4XSmHXXgSuYRwGrjF6AxTLwk+Q==}
     engines: {node: '>=20.19.0'}
     hasBin: true
     peerDependencies:
@@ -14759,7 +14759,7 @@ snapshots:
       - synckit
       - vue-tsc
 
-  tsdown@0.19.0-beta.2(@arethetypeswrong/core@0.18.2)(@vitejs/devtools@0.0.0-alpha.22(@pnpm/logger@1001.0.1)(vite@packages+core)(vue@3.5.25(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.16)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6):
+  tsdown@0.19.0-beta.3(@arethetypeswrong/core@0.18.2)(@vitejs/devtools@0.0.0-alpha.22(@pnpm/logger@1001.0.1)(vite@packages+core)(vue@3.5.25(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.16)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6):
     dependencies:
       ansis: 4.2.0
       cac: 6.7.14
