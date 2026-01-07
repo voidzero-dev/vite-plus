@@ -105,6 +105,8 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       )
       // remove "npm notice Access token expired or revoked..."
       .replaceAll(/npm notice Access token expired or revoked.+?\n/g, '')
+      // remove mise reshimming messages (appears when global npm packages change)
+      .replaceAll(/Reshimming mise.+?\n/g, '')
   );
 }
 
