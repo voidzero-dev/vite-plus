@@ -8,6 +8,7 @@
     "browser/**",
     "*.d.ts",
     "*.cjs",
+    "*.cts",
     "*.mjs"
   ],
   "imports": {
