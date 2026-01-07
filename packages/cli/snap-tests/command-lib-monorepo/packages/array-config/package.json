@@ -1,0 +1,9 @@
+{
+  "name": "array-config",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "vite lib"
+  }
+}

@@ -46,3 +46,104 @@ Task Details:
   [1] lib: ~/packages/hello$ vite lib ✓
       → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> vite run array-config#build # should build the library supports array config
+~/packages/array-config$ vite lib
+ℹ entry: src/sub/index.ts
+ℹ Build start
+ℹ dist/index.mjs    <variable> kB │ gzip: <variable> kB
+ℹ dist/index.d.mts  <variable> kB │ gzip: <variable> kB
+ℹ 2 files, total: <variable> kB
+✔ Build complete in <variable>ms
+
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] lib: ~/packages/array-config$ vite lib ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> ls packages/array-config/dist # should have the library
+index.d.mts
+index.mjs
+
+> vite run array-config#build # should hit cache
+~/packages/array-config$ vite lib (✓ cache hit, replaying)
+ℹ entry: src/sub/index.ts
+ℹ Build start
+ℹ dist/index.mjs    <variable> kB │ gzip: <variable> kB
+ℹ dist/index.d.mts  <variable> kB │ gzip: <variable> kB
+ℹ 2 files, total: <variable> kB
+✔ Build complete in <variable>ms
+
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate, <variable>ms saved in total
+
+Task Details:
+────────────────────────────────────────────────
+  [1] lib: ~/packages/array-config$ vite lib ✓
+      → Cache hit - output replayed - <variable>ms saved
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> vite run default-config#build # should build the library supports default config
+~/packages/default-config$ vite lib
+ℹ entry: src/index.ts
+ℹ Build start
+ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
+ℹ 1 files, total: <variable> kB
+✔ Build complete in <variable>ms
+
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] lib: ~/packages/default-config$ vite lib ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> ls packages/default-config/dist # should have the library
+index.mjs
+
+> vite run default-config#build # should hit cache
+~/packages/default-config$ vite lib (✓ cache hit, replaying)
+ℹ entry: src/index.ts
+ℹ Build start
+ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
+ℹ 1 files, total: <variable> kB
+✔ Build complete in <variable>ms
+
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate, <variable>ms saved in total
+
+Task Details:
+────────────────────────────────────────────────
+  [1] lib: ~/packages/default-config$ vite lib ✓
+      → Cache hit - output replayed - <variable>ms saved
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

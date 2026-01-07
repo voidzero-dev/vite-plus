@@ -2,12 +2,15 @@
 import module from 'node:module';
 
 import { resolveConfig } from '@voidzero-dev/vite-plus-core';
-import { build, type UserConfig, globalLogger } from '@voidzero-dev/vite-plus-core/lib';
+import { buildWithConfigs, resolveUserConfig, globalLogger, enableDebug, type InlineConfig, type ResolvedConfig } from '@voidzero-dev/vite-plus-core/lib';
 import { cac } from 'cac';
+
+import type { LibUserConfig } from './lib';
 
 const cli = cac('vite lib');
 cli.help();
 
+// support `TSDOWN_` for migration compatibility
 const DEFAULT_ENV_PREFIXES = ['VITE_LIB_', 'TSDOWN_'];
 
 cli
@@ -56,7 +59,6 @@ cli
     'Load environment variables from a file, when used together with --env, variables in --env take precedence',
   )
   .option('--env-prefix <prefix>', 'Prefix for env variables to inject into the bundle', {
-    // support `TSDOWN_` for migration compatibility
     default: DEFAULT_ENV_PREFIXES,
   })
   .option('--on-success <command>', 'Command to run on success')
@@ -67,22 +69,30 @@ cli
   .option('-W, --workspace [dir]', 'Enable workspace mode')
   .option('-F, --filter <pattern>', 'Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name')
   .option('--exports', 'Generate export-related metadata for package.json (experimental)')
-  .action(async (input: string[], flags: UserConfig) => {
+  .action(async (input: string[], flags: InlineConfig) => {
     const viteConfig = await resolveConfig({ root: process.cwd() }, 'build');
     if (input.length > 0) flags.entry = input;
-    // TODO: set default envPrefix after tsdown upgrade
-    await build({
-      ...(viteConfig.lib as UserConfig),
-      ...flags,
-      config: false,
-    });
+    if (flags.envPrefix === undefined) {
+      flags.envPrefix = DEFAULT_ENV_PREFIXES;
+    }
+
+    const configFiles: string[] = [];
+    if (viteConfig.configFile) configFiles.push(viteConfig.configFile);
+
+    const configs: ResolvedConfig[] = [];
+    const libConfigs = Array.isArray(viteConfig.lib) ? viteConfig.lib : [viteConfig.lib ?? {}];
+    for (const libConfig of libConfigs) {
+      const resolvedConfig = await resolveUserConfig({ ...libConfig, ...flags }, flags);
+      configs.push(...resolvedConfig);
+    }
+
+    await buildWithConfigs(configs, configFiles);
   });
 
 export async function runCLI(): Promise<void> {
   cli.parse(process.argv, { run: false });
 
-  // TODO: enable debug after tsdown upgrade
-  // enableDebug(cli.options)
+  enableDebug(cli.options.debug)
 
   try {
     await cli.runMatchedCommand();

@@ -6,6 +6,12 @@
   "commands": [
     "vite run hello#build # should build the library",
     "ls packages/hello/dist # should have the library",
-    "vite run hello#build # should hit cache"
+    "vite run hello#build # should hit cache",
+    "vite run array-config#build # should build the library supports array config",
+    "ls packages/array-config/dist # should have the library",
+    "vite run array-config#build # should hit cache",
+    "vite run default-config#build # should build the library supports default config",
+    "ls packages/default-config/dist # should have the library",
+    "vite run default-config#build # should hit cache"
   ]
 }

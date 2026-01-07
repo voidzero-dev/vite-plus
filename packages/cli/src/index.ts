@@ -1,8 +1,8 @@
-import type { defineConfig as defineLibConfig } from '@voidzero-dev/vite-plus-core/lib';
 import { defineConfig } from '@voidzero-dev/vite-plus-test/config';
 
 import type { OxfmtConfig } from './oxfmt-config';
 import type { OxlintConfig } from './oxlint-config';
+import type { LibUserConfig } from './lib';
 
 declare module '@voidzero-dev/vite-plus-core' {
   interface UserConfig {
@@ -13,7 +13,7 @@ declare module '@voidzero-dev/vite-plus-core' {
 
     fmt?: OxfmtConfig;
 
-    lib?: Parameters<typeof defineLibConfig>[0];
+    lib?: LibUserConfig | LibUserConfig[];
   }
 }
 
