@@ -599,9 +599,6 @@ importers:
       obug:
         specifier: ^2.1.1
         version: 2.1.1
-      picomatch:
-        specifier: ^4.0.3
-        version: 4.0.3
       pixelmatch:
         specifier: ^7.1.0
         version: 7.1.0
@@ -684,6 +681,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      picomatch:
+        specifier: ^4.0.3
+        version: 4.0.3
       rolldown:
         specifier: workspace:rolldown@*
         version: link:../../rolldown/packages/rolldown
