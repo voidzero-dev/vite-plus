@@ -13,10 +13,10 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] #test-task: echo hello ✓
+  [1] test-task: echo hello ✓
       → Cache disabled for Built-In Command
   ·······················································
-  [2] #test-task: node main.js ✓
+  [2] test-task: node main.js ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -36,9 +36,9 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] #test-task: echo hello ✓
+  [1] test-task: echo hello ✓
       → Cache disabled for Built-In Command
   ·······················································
-  [2] #test-task: node main.js ✓
+  [2] test-task: node main.js ✓
       → Cache miss: content of input 'main.js' changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

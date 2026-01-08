@@ -13,8 +13,8 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
 use monostate::MustBe;
 use vite_task::{
-    CLIArgs, LabeledReporter, Session, SessionCallbacks, TaskSynthesizer, UserCacheConfig,
-    UserTaskOptions, plan_request::SyntheticPlanRequest,
+    CLIArgs, EnabledCacheConfig, LabeledReporter, Session, SessionCallbacks, TaskSynthesizer,
+    UserCacheConfig, UserTaskOptions, plan_request::SyntheticPlanRequest,
 };
 
 /// Result type for resolved commands from JavaScript
@@ -204,9 +204,11 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     task_options: UserTaskOptions {
                         cache_config: UserCacheConfig::Enabled {
                             cache: MustBe!(true),
-                            envs: Box::new([]),
-                            // Pass OXLINT_TSGOLINT_PATH through to oxlint for type-aware linting
-                            pass_through_envs: vec![Str::from("OXLINT_TSGOLINT_PATH")],
+                            enabled_cache_config: EnabledCacheConfig {
+                                envs: Box::new([]),
+                                // Pass OXLINT_TSGOLINT_PATH through to oxlint for type-aware linting
+                                pass_through_envs: vec![Str::from("OXLINT_TSGOLINT_PATH")],
+                            },
                         },
                         ..Default::default()
                     },

@@ -13,10 +13,10 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] #hello: echo foo ✓
+  [1] hello: echo foo ✓
       → Cache disabled for Built-In Command
   ·······················································
-  [2] #hello: echo bar ✓
+  [2] hello: echo bar ✓
       → Cache disabled for Built-In Command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -36,10 +36,10 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] #hello: echo baz ✓
+  [1] hello: echo baz ✓
       → Cache disabled for Built-In Command
   ·······················································
-  [2] #hello: echo bar ✓
+  [2] hello: echo bar ✓
       → Cache disabled for Built-In Command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -57,6 +57,6 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] #hello: echo bar ✓
+  [1] hello: echo bar ✓
       → Cache disabled for Built-In Command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
