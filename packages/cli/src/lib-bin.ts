@@ -92,7 +92,7 @@ cli
 export async function runCLI(): Promise<void> {
   cli.parse(process.argv, { run: false });
 
-  enableDebug(cli.options.debug)
+  enableDebug(cli.options.debug);
 
   try {
     await cli.runMatchedCommand();
