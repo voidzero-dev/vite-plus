@@ -20,14 +20,56 @@ Commands:
 Options:
   -h, --help  Print help
 
-[1]> vite lib -h # lib help message
-[vite+] run error: [Error: Failed to plan execution, task call stack: 
+> vite lib -h # lib help message
+vite lib
 
-Caused by:
-    0: Failed to find executable "<homedir>/code/vite-plus/packages/cli/dist/lib-bin.js" under cwd AbsolutePath("<cwd>") with PATH: "<cwd>/node_modules/.bin:<homedir>/code/vite-plus/packages/cli/bin:<homedir>/code/vite-plus/packages/cli/node_modules/.bin:<homedir>/.cache/node/corepack/v1/pnpm/<semver>/dist/node-gyp-bin:<homedir>/code/vite-plus/node_modules/.bin:<homedir>/.local/share/mise/installs/node/<semver>/bin:<homedir>/.local/share/mise/installs/gh/<semver>/gh_2.83.2_macOS_arm64/bin:<homedir>/.local/share/mise/installs/npm-corepack/<semver>/bin:<homedir>/.nix-profile/bin:/etc/profiles/per-user/patr0nus/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-    1: cannot find binary path] {
-  code: 'GenericFailure'
-}
+Usage:
+  $ vite lib [...files]
+
+Commands:
+  [...files]  Bundle files
+
+For more info, run any command with the `--help` flag:
+  $ vite lib --help
+
+Options:
+  --config-loader <loader>  Config loader to use: auto, native, unrun (default: auto)
+  --no-config               Disable config file (default: true)
+  -f, --format <format>     Bundle format: esm, cjs, iife, umd (default: esm)
+  --clean                   Clean output directory, --no-clean to disable 
+  --external <module>       Mark dependencies as external 
+  --minify                  Minify output 
+  --devtools                Enable devtools integration 
+  --debug [feat]            Show debug logs 
+  --target <target>         Bundle target, e.g "es2015", "esnext" 
+  -l, --logLevel <level>    Set log level: info, warn, error, silent 
+  --fail-on-warn            Fail on warnings (default: true)
+  --no-write                Disable writing files to disk, incompatible with watch mode (default: true)
+  -d, --out-dir <dir>       Output directory (default: dist)
+  --treeshake               Tree-shake bundle (default: true)
+  --sourcemap               Generate source map (default: false)
+  --shims                   Enable cjs and esm shims (default: false)
+  --platform <platform>     Target platform (default: node)
+  --dts                     Generate dts files 
+  --publint                 Enable publint (default: false)
+  --attw                    Enable Are the types wrong integration (default: false)
+  --unused                  Enable unused dependencies check (default: false)
+  -w, --watch [path]        Watch mode 
+  --ignore-watch <path>     Ignore custom paths in watch mode 
+  --from-vite [vitest]      Reuse config from Vite or Vitest 
+  --report                  Size report (default: true)
+  --env.* <value>           Define compile-time env variables 
+  --env-file <file>         Load environment variables from a file, when used together with --env, variables in --env take precedence 
+  --env-prefix <prefix>     Prefix for env variables to inject into the bundle (default: VITE_LIB_,TSDOWN_)
+  --on-success <command>    Command to run on success 
+  --copy <dir>              Copy files to output dir 
+  --public-dir <dir>        Alias for --copy, deprecated 
+  --tsconfig <tsconfig>     Set tsconfig path 
+  --unbundle                Unbundle mode 
+  -W, --workspace [dir]     Enable workspace mode 
+  -F, --filter <pattern>    Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name 
+  --exports                 Generate export-related metadata for package.json (experimental) 
+  -h, --help                Display this message 
 
 > vite fmt -h # fmt help message
 Usage: [-c=PATH] [PATH]...
@@ -161,38 +203,182 @@ Available options:
     -V, --version             Prints version information
 
 
-[1]> vite build -h # build help message
-[vite+] run error: [Error: Failed to plan execution, task call stack: 
+> vite build -h # build help message
+vite/<semver>
 
-Caused by:
-    0: Failed to find executable "<homedir>/code/vite-plus/packages/core/dist/vite/node/cli.js" under cwd AbsolutePath("<cwd>") with PATH: "<cwd>/node_modules/.bin:<homedir>/code/vite-plus/packages/cli/bin:<homedir>/code/vite-plus/packages/cli/node_modules/.bin:<homedir>/.cache/node/corepack/v1/pnpm/<semver>/dist/node-gyp-bin:<homedir>/code/vite-plus/node_modules/.bin:<homedir>/.local/share/mise/installs/node/<semver>/bin:<homedir>/.local/share/mise/installs/gh/<semver>/gh_2.83.2_macOS_arm64/bin:<homedir>/.local/share/mise/installs/npm-corepack/<semver>/bin:<homedir>/.nix-profile/bin:/etc/profiles/per-user/patr0nus/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-    1: cannot find binary path] {
-  code: 'GenericFailure'
-}
+Usage:
+  $ vite build [root]
 
-[1]> vite test -h # test help message
-[vite+] run error: [Error: Failed to plan execution, task call stack: 
+Options:
+  --target <target>             [string] transpile target (default: 'baseline-widely-available') 
+  --outDir <dir>                [string] output directory (default: dist) 
+  --assetsDir <dir>             [string] directory under outDir to place assets in (default: assets) 
+  --assetsInlineLimit <number>  [number] static asset base64 inline threshold in bytes (default: 4096) 
+  --ssr [entry]                 [string] build specified entry for server-side rendering 
+  --sourcemap [output]          [boolean | "inline" | "hidden"] output source maps for build (default: false) 
+  --minify [minifier]           [boolean | "terser" | "esbuild"] enable/disable minification, or specify minifier to use (default: esbuild) 
+  --manifest [name]             [boolean | string] emit build manifest json 
+  --ssrManifest [name]          [boolean | string] emit ssr manifest json 
+  --emptyOutDir                 [boolean] force empty outDir when it's outside of root 
+  -w, --watch                   [boolean] rebuilds when modules have changed on disk 
+  --app                         [boolean] same as `builder: {}` 
+  -c, --config <file>           [string] use specified config file 
+  --base <path>                 [string] public base path (default: /) 
+  -l, --logLevel <level>        [string] info | warn | error | silent 
+  --clearScreen                 [boolean] allow/disable clear screen when logging 
+  --configLoader <loader>       [string] use 'bundle' to bundle the config with Rolldown, or 'runner' (experimental) to process it on the fly, or 'native' (experimental) to load using the native runtime (default: bundle) 
+  -d, --debug [feat]            [string | boolean] show debug logs 
+  -f, --filter <filter>         [string] filter debug logs 
+  -m, --mode <mode>             [string] set env mode 
+  -h, --help                    Display this message 
 
-Caused by:
-    0: Failed to find executable "<homedir>/code/vite-plus/packages/test/dist/cli.js" under cwd AbsolutePath("<cwd>") with PATH: "<cwd>/node_modules/.bin:<homedir>/code/vite-plus/packages/cli/bin:<homedir>/code/vite-plus/packages/cli/node_modules/.bin:<homedir>/.cache/node/corepack/v1/pnpm/<semver>/dist/node-gyp-bin:<homedir>/code/vite-plus/node_modules/.bin:<homedir>/.local/share/mise/installs/node/<semver>/bin:<homedir>/.local/share/mise/installs/gh/<semver>/gh_2.83.2_macOS_arm64/bin:<homedir>/.local/share/mise/installs/npm-corepack/<semver>/bin:<homedir>/.nix-profile/bin:/etc/profiles/per-user/patr0nus/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-    1: cannot find binary path] {
-  code: 'GenericFailure'
-}
+> vite test -h # test help message
+vitest/<semver>
+ WARN: no options were found for your subcommands so we printed the whole output
 
-[1]> vite preview -h # preview help message
-[vite+] run error: [Error: Failed to plan execution, task call stack: 
+Usage:
+  $ vitest [...filters]
 
-Caused by:
-    0: Failed to find executable "<homedir>/code/vite-plus/packages/core/dist/vite/node/cli.js" under cwd AbsolutePath("<cwd>") with PATH: "<cwd>/node_modules/.bin:<homedir>/code/vite-plus/packages/cli/bin:<homedir>/code/vite-plus/packages/cli/node_modules/.bin:<homedir>/.cache/node/corepack/v1/pnpm/<semver>/dist/node-gyp-bin:<homedir>/code/vite-plus/node_modules/.bin:<homedir>/.local/share/mise/installs/node/<semver>/bin:<homedir>/.local/share/mise/installs/gh/<semver>/gh_2.83.2_macOS_arm64/bin:<homedir>/.local/share/mise/installs/npm-corepack/<semver>/bin:<homedir>/.nix-profile/bin:/etc/profiles/per-user/patr0nus/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-    1: cannot find binary path] {
-  code: 'GenericFailure'
-}
+Commands:
+  run [...filters]      
+  related [...filters]  
+  watch [...filters]    
+  dev [...filters]      
+  bench [...filters]    
+  init <project>        
+  list [...filters]     
+  [...filters]          
 
-[1]> vite dev -h # dev help message
-[vite+] run error: [Error: Failed to plan execution, task call stack: 
+For more info, run any command with the `--help` flag:
+  $ vitest run --help
+  $ vitest related --help
+  $ vitest watch --help
+  $ vitest dev --help
+  $ vitest bench --help
+  $ vitest init --help
+  $ vitest list --help
+  $ vitest --help
+  $ vitest --help --expand-help
 
-Caused by:
-    0: Failed to find executable "<homedir>/code/vite-plus/packages/core/dist/vite/node/cli.js" under cwd AbsolutePath("<cwd>") with PATH: "<cwd>/node_modules/.bin:<homedir>/code/vite-plus/packages/cli/bin:<homedir>/code/vite-plus/packages/cli/node_modules/.bin:<homedir>/.cache/node/corepack/v1/pnpm/<semver>/dist/node-gyp-bin:<homedir>/code/vite-plus/node_modules/.bin:<homedir>/.local/share/mise/installs/node/<semver>/bin:<homedir>/.local/share/mise/installs/gh/<semver>/gh_2.83.2_macOS_arm64/bin:<homedir>/.local/share/mise/installs/npm-corepack/<semver>/bin:<homedir>/.nix-profile/bin:/etc/profiles/per-user/patr0nus/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-    1: cannot find binary path] {
-  code: 'GenericFailure'
-}
+Options:
+  -v, --version                                         Display version number 
+  -r, --root <path>                                     Root path 
+  -c, --config <path>                                   Path to config file 
+  -u, --update                                          Update snapshot 
+  -w, --watch                                           Enable watch mode 
+  -t, --testNamePattern <pattern>                       Run tests with full names matching the specified regexp pattern 
+  --dir <path>                                          Base directory to scan for the test files 
+  --ui                                                  Enable UI 
+  --open                                                Open UI automatically (default: !process.env.CI) 
+  --api [port]                                          Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204. Use '--help --api' for more info. 
+  --silent [value]                                      Silent console output from tests. Use 'passed-only' to see logs from failing tests only. 
+  --hideSkippedTests                                    Hide logs for skipped tests 
+  --reporter <name>                                     Specify reporters (default, blob, verbose, dot, json, tap, tap-flat, junit, tree, hanging-process, github-actions) 
+  --outputFile <filename/-s>                            Write test results to a file when supporter reporter is also specified, use cac's dot notation for individual outputs of multiple reporters (example: --outputFile.tap=./tap.txt) 
+  --coverage                                            Enable coverage report. Use '--help --coverage' for more info. 
+  --mode <name>                                         Override Vite mode (default: test or benchmark) 
+  --isolate                                             Run every test file in isolation. To disable isolation, use --no-isolate (default: true) 
+  --globals                                             Inject apis globally 
+  --dom                                                 Mock browser API with happy-dom 
+  --browser <name>                                      Run tests in the browser. Equivalent to --browser.enabled (default: false). Use '--help --browser' for more info. 
+  --pool <pool>                                         Specify pool, if not running in the browser (default: forks) 
+  --execArgv <option>                                   Pass additional arguments to node process when spawning worker_threads or child_process. 
+  --vmMemoryLimit <limit>                               Memory limit for VM pools. If you see memory leaks, try to tinker this value. 
+  --fileParallelism                                     Should all test files run in parallel. Use --no-file-parallelism to disable (default: true) 
+  --maxWorkers <workers>                                Maximum number or percentage of workers to run tests in 
+  --environment <name>                                  Specify runner environment, if not running in the browser (default: node) 
+  --passWithNoTests                                     Pass when no tests are found 
+  --logHeapUsage                                        Show the size of heap for each test when running in node 
+  --allowOnly                                           Allow tests and suites that are marked as only (default: !process.env.CI) 
+  --dangerouslyIgnoreUnhandledErrors                    Ignore any unhandled errors that occur 
+  --shard <shards>                                      Test suite shard to execute in a format of <index>/<count> 
+  --changed [since]                                     Run tests that are affected by the changed files (default: false) 
+  --sequence <options>                                  Options for how tests should be sorted. Use '--help --sequence' for more info. 
+  --inspect [[host:]port]                               Enable Node.js inspector (default: <semver>.1:9229) 
+  --inspectBrk [[host:]port]                            Enable Node.js inspector and break before the test starts 
+  --testTimeout <timeout>                               Default timeout of a test in milliseconds (default: 5000). Use 0 to disable timeout completely. 
+  --hookTimeout <timeout>                               Default hook timeout in milliseconds (default: 10000). Use 0 to disable timeout completely. 
+  --bail <number>                                       Stop test execution when given number of tests have failed (default: 0) 
+  --retry <times>                                       Retry the test specific number of times if it fails (default: 0) 
+  --diff <path>                                         DiffOptions object or a path to a module which exports DiffOptions object. Use '--help --diff' for more info. 
+  --exclude <glob>                                      Additional file globs to be excluded from test 
+  --expandSnapshotDiff                                  Show full diff when snapshot fails 
+  --disableConsoleIntercept                             Disable automatic interception of console logging (default: false) 
+  --typecheck                                           Enable typechecking alongside tests (default: false). Use '--help --typecheck' for more info. 
+  --project <name>                                      The name of the project to run if you are using Vitest workspace feature. This can be repeated for multiple projects: --project=1 --project=2. You can also filter projects using wildcards like --project=packages*, and exclude projects with --project=!pattern. 
+  --slowTestThreshold <threshold>                       Threshold in milliseconds for a test or suite to be considered slow (default: 300) 
+  --teardownTimeout <timeout>                           Default timeout of a teardown function in milliseconds (default: 10000) 
+  --cache                                               Enable cache. Use '--help --cache' for more info. 
+  --maxConcurrency <number>                             Maximum number of concurrent tests in a suite (default: 5) 
+  --expect                                              Configuration options for expect() matches. Use '--help --expect' for more info. 
+  --printConsoleTrace                                   Always print console stack traces 
+  --includeTaskLocation                                 Collect test and suite locations in the location property 
+  --attachmentsDir <dir>                                The directory where attachments from context.annotate are stored in (default: .vitest-attachments) 
+  --run                                                 Disable watch mode 
+  --no-color                                            Removes colors from the console output (default: true)
+  --clearScreen                                         Clear terminal screen when re-running tests during watch mode (default: true) 
+  --configLoader <loader>                               Use bundle to bundle the config with esbuild or runner (experimental) to process it on the fly. This is only available in vite version <semver> and above. (default: bundle) 
+  --standalone                                          Start Vitest without running tests. Tests will be running only on change. This option is ignored when CLI file filters are passed. (default: false) 
+  --mergeReports [path]                                 Path to a blob reports directory. If this options is used, Vitest won't run any tests, it will only report previously recorded tests 
+  --clearCache                                          Delete all Vitest caches, including experimental.fsModuleCache, without running any tests. This will reduce the performance in the subsequent test run. 
+  --experimental <features>                             Experimental features.. Use '--help --experimental' for more info. 
+  -h, --help                                            Display this message 
+
+> vite preview -h # preview help message
+vite/<semver>
+
+Usage:
+  $ vite preview [root]
+
+Options:
+  --host [host]            [string] specify hostname 
+  --port <port>            [number] specify port 
+  --strictPort             [boolean] exit if specified port is already in use 
+  --open [path]            [boolean | string] open browser on startup 
+  --outDir <dir>           [string] output directory (default: dist) 
+  -c, --config <file>      [string] use specified config file 
+  --base <path>            [string] public base path (default: /) 
+  -l, --logLevel <level>   [string] info | warn | error | silent 
+  --clearScreen            [boolean] allow/disable clear screen when logging 
+  --configLoader <loader>  [string] use 'bundle' to bundle the config with Rolldown, or 'runner' (experimental) to process it on the fly, or 'native' (experimental) to load using the native runtime (default: bundle) 
+  -d, --debug [feat]       [string | boolean] show debug logs 
+  -f, --filter <filter>    [string] filter debug logs 
+  -m, --mode <mode>        [string] set env mode 
+  -h, --help               Display this message 
+
+> vite dev -h # dev help message
+vite/<semver>
+
+Usage:
+  $ vite [root]
+
+Commands:
+  [root]           start dev server
+  build [root]     build for production
+  optimize [root]  pre-bundle dependencies (deprecated, the pre-bundle process runs automatically and does not need to be called)
+  preview [root]   locally preview production build
+
+For more info, run any command with the `--help` flag:
+  $ vite --help
+  $ vite build --help
+  $ vite optimize --help
+  $ vite preview --help
+
+Options:
+  --host [host]            [string] specify hostname 
+  --port <port>            [number] specify port 
+  --open [path]            [boolean | string] open browser on startup 
+  --cors                   [boolean] enable CORS 
+  --strictPort             [boolean] exit if specified port is already in use 
+  --force                  [boolean] force the optimizer to ignore the cache and re-bundle 
+  --experimentalBundle     [boolean] use experimental full bundle mode (this is highly experimental) 
+  -c, --config <file>      [string] use specified config file 
+  --base <path>            [string] public base path (default: /) 
+  -l, --logLevel <level>   [string] info | warn | error | silent 
+  --clearScreen            [boolean] allow/disable clear screen when logging 
+  --configLoader <loader>  [string] use 'bundle' to bundle the config with Rolldown, or 'runner' (experimental) to process it on the fly, or 'native' (experimental) to load using the native runtime (default: bundle) 
+  -d, --debug [feat]       [string | boolean] show debug logs 
+  -f, --filter <filter>    [string] filter debug logs 
+  -m, --mode <mode>        [string] set env mode 
+  -h, --help               Display this message 
+  -v, --version            Display version number 

@@ -165,15 +165,20 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("CLI options required for lint command"))?;
                 let resolved = (cli_options.lint)().await?;
-                let program = resolved.bin_path;
+                let js_path = resolved.bin_path;
+                let js_path_str = js_path
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("lint JS path is not valid UTF-8"))?;
 
                 let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("lint"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
                     .collect();
 
                 Ok(SyntheticPlanRequest {
-                    program,
-                    args: args.into_iter().map(Str::from).collect(),
+                    program: Arc::from(OsStr::new("node")),
+                    args: iter::once(Str::from(js_path_str))
+                        .chain(args.into_iter().map(Str::from))
+                        .collect(),
                     task_options: UserTaskOptions {
                         cache_config: UserCacheConfig::Enabled {
                             cache: MustBe!(true),
@@ -194,15 +199,20 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("CLI options required for fmt command"))?;
                 let resolved = (cli_options.fmt)().await?;
-                let program = resolved.bin_path;
+                let js_path = resolved.bin_path;
+                let js_path_str = js_path
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("fmt JS path is not valid UTF-8"))?;
 
                 let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("fmt"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
                     .collect();
 
                 Ok(SyntheticPlanRequest {
-                    program,
-                    args: args.into_iter().map(Str::from).collect(),
+                    program: Arc::from(OsStr::new("node")),
+                    args: iter::once(Str::from(js_path_str))
+                        .chain(args.into_iter().map(Str::from))
+                        .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
                 })
@@ -213,17 +223,23 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("CLI options required for build command"))?;
                 let resolved = (cli_options.vite)().await?;
-                let program = resolved.bin_path;
+                let js_path = resolved.bin_path;
+                let js_path_str = js_path
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("vite JS path is not valid UTF-8"))?;
 
-                let full_args: Arc<[Str]> = iter::once(Str::from("build"))
+                let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("build"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
                     .collect();
 
                 Ok(SyntheticPlanRequest {
-                    program,
-                    args: full_args.clone(),
+                    program: Arc::from(OsStr::new("node")),
+                    args: iter::once(Str::from(js_path_str))
+                        .chain(iter::once(Str::from("build")))
+                        .chain(args.into_iter().map(Str::from))
+                        .collect(),
                     task_options: Default::default(),
-                    direct_execution_cache_key: full_args,
+                    direct_execution_cache_key,
                 })
             }
             CustomTaskSubcommand::Test { args } => {
@@ -232,15 +248,20 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("CLI options required for test command"))?;
                 let resolved = (cli_options.test)().await?;
-                let program = resolved.bin_path;
+                let js_path = resolved.bin_path;
+                let js_path_str = js_path
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("test JS path is not valid UTF-8"))?;
 
                 let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("test"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
                     .collect();
 
                 Ok(SyntheticPlanRequest {
-                    program,
-                    args: args.into_iter().map(Str::from).collect(),
+                    program: Arc::from(OsStr::new("node")),
+                    args: iter::once(Str::from(js_path_str))
+                        .chain(args.into_iter().map(Str::from))
+                        .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
                 })
@@ -251,15 +272,20 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("CLI options required for lib command"))?;
                 let resolved = (cli_options.lib)().await?;
-                let program = resolved.bin_path;
+                let js_path = resolved.bin_path;
+                let js_path_str = js_path
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("lib JS path is not valid UTF-8"))?;
 
                 let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("lib"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
                     .collect();
 
                 Ok(SyntheticPlanRequest {
-                    program,
-                    args: args.into_iter().map(Str::from).collect(),
+                    program: Arc::from(OsStr::new("node")),
+                    args: iter::once(Str::from(js_path_str))
+                        .chain(args.into_iter().map(Str::from))
+                        .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
                 })
@@ -270,17 +296,23 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("CLI options required for dev command"))?;
                 let resolved = (cli_options.vite)().await?;
-                let program = resolved.bin_path;
+                let js_path = resolved.bin_path;
+                let js_path_str = js_path
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("vite JS path is not valid UTF-8"))?;
 
-                let full_args: Arc<[Str]> = iter::once(Str::from("dev"))
+                let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("dev"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
                     .collect();
 
                 Ok(SyntheticPlanRequest {
-                    program,
-                    args: full_args.clone(),
+                    program: Arc::from(OsStr::new("node")),
+                    args: iter::once(Str::from(js_path_str))
+                        .chain(iter::once(Str::from("dev")))
+                        .chain(args.into_iter().map(Str::from))
+                        .collect(),
                     task_options: Default::default(),
-                    direct_execution_cache_key: full_args,
+                    direct_execution_cache_key,
                 })
             }
             CustomTaskSubcommand::Preview { args } => {
@@ -289,17 +321,23 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("CLI options required for preview command"))?;
                 let resolved = (cli_options.vite)().await?;
-                let program = resolved.bin_path;
+                let js_path = resolved.bin_path;
+                let js_path_str = js_path
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("vite JS path is not valid UTF-8"))?;
 
-                let full_args: Arc<[Str]> = iter::once(Str::from("preview"))
+                let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("preview"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
                     .collect();
 
                 Ok(SyntheticPlanRequest {
-                    program,
-                    args: full_args.clone(),
+                    program: Arc::from(OsStr::new("node")),
+                    args: iter::once(Str::from(js_path_str))
+                        .chain(iter::once(Str::from("preview")))
+                        .chain(args.into_iter().map(Str::from))
+                        .collect(),
                     task_options: Default::default(),
-                    direct_execution_cache_key: full_args,
+                    direct_execution_cache_key,
                 })
             }
             CustomTaskSubcommand::Doc { args } => {
@@ -308,15 +346,20 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("CLI options required for doc command"))?;
                 let resolved = (cli_options.doc)().await?;
-                let program = resolved.bin_path;
+                let js_path = resolved.bin_path;
+                let js_path_str = js_path
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("doc JS path is not valid UTF-8"))?;
 
                 let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("doc"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
                     .collect();
 
                 Ok(SyntheticPlanRequest {
-                    program,
-                    args: args.into_iter().map(Str::from).collect(),
+                    program: Arc::from(OsStr::new("node")),
+                    args: iter::once(Str::from(js_path_str))
+                        .chain(args.into_iter().map(Str::from))
+                        .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
                 })

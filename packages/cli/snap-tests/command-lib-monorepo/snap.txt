@@ -1,17 +1,36 @@
-[1]> vite run hello#build # should build the library
-[vite+] run error: [Error: Failed to plan execution, task call stack: hello#build
+> vite run hello#build # should build the library
+$ vite lib
 
-Caused by:
-    0: Failed to find executable "<homedir>/code/vite-plus/packages/cli/dist/lib-bin.js" under cwd AbsolutePath("<cwd>") with PATH: "<cwd>/packages/hello/node_modules/.bin:<cwd>/node_modules/.bin:<homedir>/code/vite-plus/packages/cli/bin:<homedir>/code/vite-plus/packages/cli/node_modules/.bin:<homedir>/.cache/node/corepack/v1/pnpm/<semver>/dist/node-gyp-bin:<homedir>/code/vite-plus/node_modules/.bin:<homedir>/.local/share/mise/installs/node/<semver>/bin:<homedir>/.local/share/mise/installs/gh/<semver>/gh_2.83.2_macOS_arm64/bin:<homedir>/.local/share/mise/installs/npm-corepack/<semver>/bin:<homedir>/.nix-profile/bin:/etc/profiles/per-user/patr0nus/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-    1: cannot find binary path] {
-  code: 'GenericFailure'
-}
+ ERROR  Error: undefined No input files, try "tsdown <your-file>" or create src/index.ts
+    at resolveEntry (file://<homedir>/code/vite-plus/packages/core/dist/tsdown/index.js:3146:14)
+    at async resolveUserConfig (file://<homedir>/code/vite-plus/packages/core/dist/tsdown/index.js:3575:24)
+    at async Promise.all (index 0)
+    at async file://<homedir>/code/vite-plus/packages/core/dist/tsdown/index.js:3977:11
+    at async Promise.all (index 0)
+    at async resolveConfig (file://<homedir>/code/vite-plus/packages/core/dist/tsdown/index.js:3973:19)
+    at async build$1 (file://<homedir>/code/vite-plus/packages/core/dist/tsdown/index.js:4748:42)
+    at async CAC.<anonymous> (file://<homedir>/code/vite-plus/packages/cli/dist/lib-bin.js:68:5)
+    at async runCLI (file://<homedir>/code/vite-plus/packages/cli/dist/lib-bin.js:79:9)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 1 cache misses  • 1 failed
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] hello#build: vite lib ✗ (exit code: 1)
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 [1]> ls packages/hello/dist # should have the library
 ls: packages/hello/dist: No such file or directory
 
-[1]> vite run hello#build # should hit cache
-[vite+] run error: [Error: Failed to plan execution, task call stack: hello#build
+> vite run hello#build # should hit cache
+$ vite lib
 
 Statistics:   1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate
