@@ -3,9 +3,7 @@
 //! This module contains all the CLI-related code.
 //! It handles argument parsing, command dispatching, and orchestration of the task execution.
 
-use std::{
-    env, ffi::OsStr, future::Future, iter, path::PathBuf, pin::Pin, process::ExitStatus, sync::Arc,
-};
+use std::{env, ffi::OsStr, future::Future, iter, pin::Pin, process::ExitStatus, sync::Arc};
 
 use clap::Subcommand;
 use vite_error::Error;
@@ -147,31 +145,6 @@ impl Default for VitePlusTaskSynthesizer {
     }
 }
 
-/// Find executable in PATH and node_modules/.bin directories
-fn find_executable(
-    path_env: Option<&Arc<OsStr>>,
-    cwd: &AbsolutePath,
-    executable: &str,
-) -> anyhow::Result<Arc<OsStr>> {
-    let mut paths: Vec<PathBuf> =
-        if let Some(path_env) = path_env { env::split_paths(path_env).collect() } else { vec![] };
-
-    // Search up from cwd for node_modules/.bin directories
-    let mut current_cwd_parent = cwd;
-    loop {
-        let node_modules_bin = current_cwd_parent.join("node_modules").join(".bin");
-        paths.push(node_modules_bin.as_path().to_path_buf());
-        if let Some(parent) = current_cwd_parent.parent() {
-            current_cwd_parent = parent;
-        } else {
-            break;
-        }
-    }
-
-    let executable_path = which::which_in(executable, Some(env::join_paths(paths)?), cwd)?;
-    Ok(executable_path.into_os_string().into())
-}
-
 #[async_trait::async_trait(?Send)]
 impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
     fn should_synthesize_for_program(&self, program: &str) -> bool {
@@ -181,18 +154,17 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
     async fn synthesize_task(
         &mut self,
         subcommand: CustomTaskSubcommand,
-        path_env: Option<&Arc<OsStr>>,
+        _path_env: Option<&Arc<OsStr>>,
         cwd: &Arc<AbsolutePath>,
     ) -> anyhow::Result<SyntheticPlanRequest> {
         match subcommand {
             CustomTaskSubcommand::Lint { args } => {
-                // Use JS resolver if available, otherwise fall back to finding oxlint in PATH
-                let program = if let Some(ref cli_options) = self.cli_options {
-                    let resolved = (cli_options.lint)().await?;
-                    resolved.bin_path
-                } else {
-                    find_executable(path_env, cwd, "oxlint")?
-                };
+                let cli_options = self
+                    .cli_options
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("CLI options required for lint command"))?;
+                let resolved = (cli_options.lint)().await?;
+                let program = resolved.bin_path;
 
                 let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("lint"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
@@ -216,12 +188,12 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                 })
             }
             CustomTaskSubcommand::Fmt { args } => {
-                let program = if let Some(ref cli_options) = self.cli_options {
-                    let resolved = (cli_options.fmt)().await?;
-                    resolved.bin_path
-                } else {
-                    find_executable(path_env, cwd, "oxfmt")?
-                };
+                let cli_options = self
+                    .cli_options
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("CLI options required for fmt command"))?;
+                let resolved = (cli_options.fmt)().await?;
+                let program = resolved.bin_path;
 
                 let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("fmt"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
@@ -235,12 +207,12 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                 })
             }
             CustomTaskSubcommand::Build { args } => {
-                let program = if let Some(ref cli_options) = self.cli_options {
-                    let resolved = (cli_options.vite)().await?;
-                    resolved.bin_path
-                } else {
-                    find_executable(path_env, cwd, "vite")?
-                };
+                let cli_options = self
+                    .cli_options
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("CLI options required for build command"))?;
+                let resolved = (cli_options.vite)().await?;
+                let program = resolved.bin_path;
 
                 let full_args: Arc<[Str]> = iter::once(Str::from("build"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
@@ -254,12 +226,12 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                 })
             }
             CustomTaskSubcommand::Test { args } => {
-                let program = if let Some(ref cli_options) = self.cli_options {
-                    let resolved = (cli_options.test)().await?;
-                    resolved.bin_path
-                } else {
-                    find_executable(path_env, cwd, "vitest")?
-                };
+                let cli_options = self
+                    .cli_options
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("CLI options required for test command"))?;
+                let resolved = (cli_options.test)().await?;
+                let program = resolved.bin_path;
 
                 let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("test"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
@@ -273,12 +245,12 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                 })
             }
             CustomTaskSubcommand::Lib { args } => {
-                let program = if let Some(ref cli_options) = self.cli_options {
-                    let resolved = (cli_options.lib)().await?;
-                    resolved.bin_path
-                } else {
-                    find_executable(path_env, cwd, "tsdown")?
-                };
+                let cli_options = self
+                    .cli_options
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("CLI options required for lib command"))?;
+                let resolved = (cli_options.lib)().await?;
+                let program = resolved.bin_path;
 
                 let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("lib"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
@@ -292,12 +264,12 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                 })
             }
             CustomTaskSubcommand::Dev { args } => {
-                let program = if let Some(ref cli_options) = self.cli_options {
-                    let resolved = (cli_options.vite)().await?;
-                    resolved.bin_path
-                } else {
-                    find_executable(path_env, cwd, "vite")?
-                };
+                let cli_options = self
+                    .cli_options
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("CLI options required for dev command"))?;
+                let resolved = (cli_options.vite)().await?;
+                let program = resolved.bin_path;
 
                 let full_args: Arc<[Str]> = iter::once(Str::from("dev"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
@@ -311,12 +283,12 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                 })
             }
             CustomTaskSubcommand::Preview { args } => {
-                let program = if let Some(ref cli_options) = self.cli_options {
-                    let resolved = (cli_options.vite)().await?;
-                    resolved.bin_path
-                } else {
-                    find_executable(path_env, cwd, "vite")?
-                };
+                let cli_options = self
+                    .cli_options
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("CLI options required for preview command"))?;
+                let resolved = (cli_options.vite)().await?;
+                let program = resolved.bin_path;
 
                 let full_args: Arc<[Str]> = iter::once(Str::from("preview"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
@@ -330,12 +302,12 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                 })
             }
             CustomTaskSubcommand::Doc { args } => {
-                let program = if let Some(ref cli_options) = self.cli_options {
-                    let resolved = (cli_options.doc)().await?;
-                    resolved.bin_path
-                } else {
-                    find_executable(path_env, cwd, "vitepress")?
-                };
+                let cli_options = self
+                    .cli_options
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("CLI options required for doc command"))?;
+                let resolved = (cli_options.doc)().await?;
+                let program = resolved.bin_path;
 
                 let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("doc"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))

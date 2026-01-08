@@ -4351,7 +4351,6 @@ dependencies = [
  "vite_str",
  "vite_task",
  "vite_workspace",
- "which",
 ]
 
 [[package]]
