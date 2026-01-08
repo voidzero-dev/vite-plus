@@ -21,7 +21,7 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
 #[cfg(test)]
 use vite_workspace::find_package_root;
-use vite_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root, get_package_graph};
+use vite_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root, load_package_graph};
 
 use crate::{
     config::{get_cache_dir, get_npm_package_tgz_url, get_npm_package_version_url},
@@ -100,7 +100,7 @@ impl PackageManagerBuilder {
     /// Build the package manager.
     /// Detect the package manager from the current working directory.
     pub async fn build(&self) -> Result<PackageManager, Error> {
-        let workspace_root = find_workspace_root(&self.cwd)?;
+        let (workspace_root, _cwd) = find_workspace_root(&self.cwd)?;
         let (package_manager_type, version_or_latest, hash) =
             get_package_manager_type_and_version(&workspace_root, self.client_override)?;
 
@@ -199,7 +199,8 @@ impl PackageManager {
         // if the workspace is a monorepo, keep workspace packages' parent directories to watch for new packages being added
         if self.is_monorepo {
             // TODO(@fengmk2): should use a more efficient way to get the workspace packages parent directories
-            let package_graph = get_package_graph(&self.workspace_root)?;
+            let (workspace_root_info, _) = find_workspace_root(&self.workspace_root)?;
+            let package_graph = load_package_graph(&workspace_root_info)?;
             for node_index in package_graph.node_indices() {
                 let package_info = &package_graph[node_index];
                 if let Some(parent_path) = package_info.path.as_path().parent() {

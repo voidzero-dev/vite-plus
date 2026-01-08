@@ -1,37 +1,34 @@
 > OXLINT_TSGOLINT_PATH=/path/to/oxlint_tsgolint1 vite run check # get OXLINT_TSGOLINT_PATH env
 $ node check.js
-OXLINT_TSGOLINT_PATH=/path/to/oxlint_tsgolint1
-
+OXLINT_TSGOLINT_PATH=undefined
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 1 cache misses  
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] check-oxlint-env#check: $ node check.js ✓
+  [1] check: node check.js ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > rm -rf node_modules # clean cache
 > OXLINT_TSGOLINT_PATH=/path/to/oxlint_tsgolint2 vite run check-nested # get OXLINT_TSGOLINT_PATH env in nested task
 $ node check.js
-OXLINT_TSGOLINT_PATH=/path/to/oxlint_tsgolint2
-
-
+OXLINT_TSGOLINT_PATH=undefined
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 1 cache misses  
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] check-oxlint-env#check: $ node check.js ✓
+  [1] check: node check.js ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

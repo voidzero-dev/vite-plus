@@ -20,14 +20,11 @@ aliases: add, i, in, ins, inst, insta, instal, isnt, isnta, isntal, isntall
 
 Run "npm help install" for more info
 
-
 > vite install --production --silent # https://docs.npmjs.com/cli/v10/commands/npm-install
-
-
 > ls node_modules
 @oxlint
 tslib
 
 > vite install --production --silent # install again hit cache
-✓ cache hit, replaying
 
+→ Cache hit - output replayed - <variable>ms saved

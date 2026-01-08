@@ -2,70 +2,66 @@
 $ echo a
 a
 
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] echo: $ echo a ✓
-      → Cache miss: no previous cache entry found
+  [1] echo: echo a ✓
+      → Cache disabled for Built-In Command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run echo -- b # should create separate caches for different args
 $ echo b
 b
 
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] echo: $ echo b ✓
-      → Cache miss: no previous cache entry found
+  [1] echo: echo b ✓
+      → Cache disabled for Built-In Command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run echo -- a # should hit the cache created in step 1
-$ echo a (✓ cache hit, replaying)
+$ echo a
 a
-
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
+Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] echo: $ echo a ✓
-      → Cache hit - output replayed - <variable>ms saved
+  [1] echo: echo a ✓
+      → Cache disabled for Built-In Command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run echo -- b # should hit the cache created in step 2
-$ echo b (✓ cache hit, replaying)
+$ echo b
 b
-
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
+Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] echo: $ echo b ✓
-      → Cache hit - output replayed - <variable>ms saved
+  [1] echo: echo b ✓
+      → Cache disabled for Built-In Command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -1,16 +1,17 @@
-> vite run hello#build # should build the library
-~/packages/hello$ vite lib
-ℹ entry: src/index.ts
-ℹ Build start
-ℹ dist/index.cjs  <variable> kB │ gzip: <variable> kB
-ℹ 1 files, total: <variable> kB
-✔ Build complete in <variable>ms
+[1]> vite run hello#build # should build the library
+[vite+] run error: [Error: Failed to plan execution, task call stack: hello#build
 
+Caused by:
+    0: Failed to find executable "<homedir>/code/vite-plus/packages/cli/dist/lib-bin.js" under cwd AbsolutePath("<cwd>") with PATH: "<cwd>/packages/hello/node_modules/.bin:<cwd>/node_modules/.bin:<homedir>/code/vite-plus/packages/cli/bin:<homedir>/code/vite-plus/packages/cli/node_modules/.bin:<homedir>/.cache/node/corepack/v1/pnpm/<semver>/dist/node-gyp-bin:<homedir>/code/vite-plus/node_modules/.bin:<homedir>/.local/share/mise/installs/node/<semver>/bin:<homedir>/.local/share/mise/installs/gh/<semver>/gh_2.83.2_macOS_arm64/bin:<homedir>/.local/share/mise/installs/npm-corepack/<semver>/bin:<homedir>/.nix-profile/bin:/etc/profiles/per-user/patr0nus/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    1: cannot find binary path] {
+  code: 'GenericFailure'
+}
 
+[1]> ls packages/hello/dist # should have the library
+ls: packages/hello/dist: No such file or directory
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Vite+ Task Runner • Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[1]> vite run hello#build # should hit cache
+[vite+] run error: [Error: Failed to plan execution, task call stack: hello#build
 
 Statistics:   1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate

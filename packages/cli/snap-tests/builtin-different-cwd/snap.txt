@@ -2,21 +2,19 @@
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
-
 > cd folder2 && vite lint # should create different cache even though the package is the same
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
-
 > echo 'console.log(1);' > folder2/a.js
 > cd folder1 && vite lint
-✓ cache hit, replaying
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
+→ Cache hit - output replayed - <variable>ms saved
 
 > cd folder2 && vite lint
-✗ cache miss: content of input 'folder2/a.js' changed, executing
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
+→ Cache miss: content of input 'folder2/a.js' changed

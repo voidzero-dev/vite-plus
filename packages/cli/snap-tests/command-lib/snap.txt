@@ -1,71 +1,29 @@
-> vite lib -h # should print the help message
-vite lib
+[1]> vite lib -h # should print the help message
+[vite+] run error: [Error: Failed to plan execution, task call stack: 
 
-Usage:
-  $ vite lib [...files]
+Caused by:
+    0: Failed to find executable "<homedir>/code/vite-plus/packages/cli/dist/lib-bin.js" under cwd AbsolutePath("<cwd>") with PATH: "<cwd>/node_modules/.bin:<homedir>/code/vite-plus/packages/cli/bin:<homedir>/code/vite-plus/packages/cli/node_modules/.bin:<homedir>/.cache/node/corepack/v1/pnpm/<semver>/dist/node-gyp-bin:<homedir>/code/vite-plus/node_modules/.bin:<homedir>/.local/share/mise/installs/node/<semver>/bin:<homedir>/.local/share/mise/installs/gh/<semver>/gh_2.83.2_macOS_arm64/bin:<homedir>/.local/share/mise/installs/npm-corepack/<semver>/bin:<homedir>/.nix-profile/bin:/etc/profiles/per-user/patr0nus/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    1: cannot find binary path] {
+  code: 'GenericFailure'
+}
 
-Commands:
-  [...files]  Bundle files
+[1]> vite lib src/index.ts # should build the library
+[vite+] run error: [Error: Failed to plan execution, task call stack: 
 
-For more info, run any command with the `--help` flag:
-  $ vite lib --help
+Caused by:
+    0: Failed to find executable "<homedir>/code/vite-plus/packages/cli/dist/lib-bin.js" under cwd AbsolutePath("<cwd>") with PATH: "<cwd>/node_modules/.bin:<homedir>/code/vite-plus/packages/cli/bin:<homedir>/code/vite-plus/packages/cli/node_modules/.bin:<homedir>/.cache/node/corepack/v1/pnpm/<semver>/dist/node-gyp-bin:<homedir>/code/vite-plus/node_modules/.bin:<homedir>/.local/share/mise/installs/node/<semver>/bin:<homedir>/.local/share/mise/installs/gh/<semver>/gh_2.83.2_macOS_arm64/bin:<homedir>/.local/share/mise/installs/npm-corepack/<semver>/bin:<homedir>/.nix-profile/bin:/etc/profiles/per-user/patr0nus/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    1: cannot find binary path] {
+  code: 'GenericFailure'
+}
 
-Options:
-  --config-loader <loader>  Config loader to use: auto, native, unrun (default: auto)
-  --no-config               Disable config file (default: true)
-  -f, --format <format>     Bundle format: esm, cjs, iife, umd (default: esm)
-  --clean                   Clean output directory, --no-clean to disable 
-  --external <module>       Mark dependencies as external 
-  --minify                  Minify output 
-  --devtools                Enable devtools integration 
-  --debug [feat]            Show debug logs 
-  --target <target>         Bundle target, e.g "es2015", "esnext" 
-  -l, --logLevel <level>    Set log level: info, warn, error, silent 
-  --fail-on-warn            Fail on warnings (default: true)
-  --no-write                Disable writing files to disk, incompatible with watch mode (default: true)
-  -d, --out-dir <dir>       Output directory (default: dist)
-  --treeshake               Tree-shake bundle (default: true)
-  --sourcemap               Generate source map (default: false)
-  --shims                   Enable cjs and esm shims (default: false)
-  --platform <platform>     Target platform (default: node)
-  --dts                     Generate dts files 
-  --publint                 Enable publint (default: false)
-  --attw                    Enable Are the types wrong integration (default: false)
-  --unused                  Enable unused dependencies check (default: false)
-  -w, --watch [path]        Watch mode 
-  --ignore-watch <path>     Ignore custom paths in watch mode 
-  --from-vite [vitest]      Reuse config from Vite or Vitest 
-  --report                  Size report (default: true)
-  --env.* <value>           Define compile-time env variables 
-  --env-file <file>         Load environment variables from a file, when used together with --env, variables in --env take precedence 
-  --env-prefix <prefix>     Prefix for env variables to inject into the bundle (default: VITE_LIB_,TSDOWN_)
-  --on-success <command>    Command to run on success 
-  --copy <dir>              Copy files to output dir 
-  --public-dir <dir>        Alias for --copy, deprecated 
-  --tsconfig <tsconfig>     Set tsconfig path 
-  --unbundle                Unbundle mode 
-  -W, --workspace [dir]     Enable workspace mode 
-  -F, --filter <pattern>    Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name 
-  --exports                 Generate export-related metadata for package.json (experimental) 
-  -h, --help                Display this message 
+[1]> ls dist # should have the library
+ls: dist: No such file or directory
 
+[1]> vite lib src/index.ts # should hit cache
+[vite+] run error: [Error: Failed to plan execution, task call stack: 
 
-> vite lib src/index.ts # should build the library
-ℹ entry: src/index.ts
-ℹ Build start
-ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
-ℹ 1 files, total: <variable> kB
-✔ Build complete in <variable>ms
-
-
-> ls dist # should have the library
-index.mjs
-
-> vite lib src/index.ts # should hit cache
-✓ cache hit, replaying
-ℹ entry: src/index.ts
-ℹ Build start
-ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
-ℹ 1 files, total: <variable> kB
-✔ Build complete in <variable>ms
-
+Caused by:
+    0: Failed to find executable "<homedir>/code/vite-plus/packages/cli/dist/lib-bin.js" under cwd AbsolutePath("<cwd>") with PATH: "<cwd>/node_modules/.bin:<homedir>/code/vite-plus/packages/cli/bin:<homedir>/code/vite-plus/packages/cli/node_modules/.bin:<homedir>/.cache/node/corepack/v1/pnpm/<semver>/dist/node-gyp-bin:<homedir>/code/vite-plus/node_modules/.bin:<homedir>/.local/share/mise/installs/node/<semver>/bin:<homedir>/.local/share/mise/installs/gh/<semver>/gh_2.83.2_macOS_arm64/bin:<homedir>/.local/share/mise/installs/npm-corepack/<semver>/bin:<homedir>/.nix-profile/bin:/etc/profiles/per-user/patr0nus/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    1: cannot find binary path] {
+  code: 'GenericFailure'
+}

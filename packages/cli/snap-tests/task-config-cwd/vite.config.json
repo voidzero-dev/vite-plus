@@ -3,7 +3,7 @@
     "hello": {
       "command": "node a.js",
       "cwd": "subfolder",
-      "cacheable": true
+      "cache": true
     }
   }
 }

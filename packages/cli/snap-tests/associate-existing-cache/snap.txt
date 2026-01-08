@@ -2,53 +2,50 @@
 $ echo hello
 hello
 
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] script1: $ echo hello ✓
-      → Cache miss: no previous cache entry found
+  [1] script1: echo hello ✓
+      → Cache disabled for Built-In Command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run script2 # script2 has the same command as script1, should hit and associate the cache
-$ echo hello (✓ cache hit, replaying)
+$ echo hello
 hello
-
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
+Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] script2: $ echo hello ✓
-      → Cache hit - output replayed - <variable>ms saved
+  [1] script2: echo hello ✓
+      → Cache disabled for Built-In Command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > json-edit package.json '_.scripts.script2 = "echo world"' # update the command of script2
 > vite run script2 # should report cache miss due to command mismatch with the cache associated in step 2
-$ echo world (✗ cache miss: command changed, executing)
+$ echo world
 world
-
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] script2: $ echo world ✓
-      → Cache miss: command changed from echo hello to echo world
+  [1] script2: echo world ✓
+      → Cache disabled for Built-In Command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

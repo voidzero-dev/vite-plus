@@ -3,7 +3,7 @@
     "hello": {
       "command": "node -p process.env.MY_ENV",
       "passThroughEnvs": ["MY_ENV"],
-      "cacheable": true
+      "cache": true
     }
   }
 }

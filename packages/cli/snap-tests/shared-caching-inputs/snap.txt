@@ -2,17 +2,16 @@
 $ cat foo.txt
 bar
 
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 1 cache misses  
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] script1: $ cat foo.txt ✓
+  [1] script1: cat foo.txt ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -20,36 +19,34 @@ Task Details:
 $ cat foo.txt (✓ cache hit, replaying)
 bar
 
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Statistics:   1 tasks • 1 cache hits • 0 cache misses  
 Performance:  100% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] script2: $ cat foo.txt ✓
+  [1] script2: cat foo.txt ✓
       → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > echo baz > foo.txt # change the input file to invalidate the cache
 > vite run script2 # script2 should report a cache miss, and update the cache
-$ cat foo.txt (✗ cache miss: content of input 'foo.txt' changed, executing)
+$ cat foo.txt (✗ cache miss: input files changed, executing)
 baz
-
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 1 cache misses  
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] script2: $ cat foo.txt ✓
+  [1] script2: cat foo.txt ✓
       → Cache miss: content of input 'foo.txt' changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -57,16 +54,15 @@ Task Details:
 $ cat foo.txt (✓ cache hit, replaying)
 baz
 
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Statistics:   1 tasks • 1 cache hits • 0 cache misses  
 Performance:  100% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] script1: $ cat foo.txt ✓
+  [1] script1: cat foo.txt ✓
       → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

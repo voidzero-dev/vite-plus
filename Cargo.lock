@@ -482,11 +482,36 @@ dependencies = [
 ]
 
 [[package]]
-name = "brush-parser"
-version = "0.2.20"
+name = "bon"
+version = "3.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6924d0efd702b4fe3d65f3a63c03520edfe53b67d0955b9d3f8e66b192a410ff"
+checksum = "ebeb9aaf9329dff6ceb65c689ca3db33dbf15f324909c60e4e5eef5701ce31b1"
 dependencies = [
+ "bon-macros",
+ "rustversion",
+]
+
+[[package]]
+name = "bon-macros"
+version = "3.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77e9d642a7e3a318e37c2c9427b5a6a48aa1ad55dcd986f3034ab2239045a645"
+dependencies = [
+ "darling 0.21.3",
+ "ident_case",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.106",
+]
+
+[[package]]
+name = "brush-parser"
+version = "0.3.0"
+source = "git+https://github.com/reubeno/brush?rev=dcb760933b10ee0433d7b740a5709b06f5c67c6b#dcb760933b10ee0433d7b740a5709b06f5c67c6b"
+dependencies = [
+ "bon",
  "cached",
  "indenter",
  "peg",
@@ -561,7 +586,7 @@ version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9225bdcf4e4a9a4c08bf16607908eb2fbf746828d5e0b5e019726dbf6571f201"
 dependencies = [
- "darling",
+ "darling 0.20.11",
  "proc-macro2",
  "quote",
  "syn 2.0.106",
@@ -639,9 +664,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.48"
+version = "4.5.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2134bb3ea021b78629caa971416385309e0131b351b25e01dc16fb54e1b5fae"
+checksum = "c6e6ff9dcd79cff5cd969a17a545d79e84ab086e444102a591e288a8aa3ce394"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -649,9 +674,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.48"
+version = "4.5.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2ba64afa3c0a6df7fa517765e31314e983f51dda798ffba27b988194fb65dc9"
+checksum = "fa42cf4d2b7a41bc8f663a7cab4031ebafa1bf3875705bfaf8466dc60ab52c00"
 dependencies = [
  "anstream",
  "anstyle",
@@ -661,9 +686,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.5.47"
+version = "4.5.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbfd7eae0b0f1a6e63d4b13c9c478de77c2eb546fba158ad50b4203dc24b9f9c"
+checksum = "2a0b5487afeab2deb2ff4e03a807ad1a03ac532ff5a2cee5d86884440c7f7671"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -926,8 +951,18 @@ version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc7f46116c46ff9ab3eb1597a45688b6715c6e628b5c133e288e709a29bcb4ee"
 dependencies = [
- "darling_core",
- "darling_macro",
+ "darling_core 0.20.11",
+ "darling_macro 0.20.11",
+]
+
+[[package]]
+name = "darling"
+version = "0.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cdf337090841a411e2a7f3deb9187445851f91b309c0c0a29e05f74a00a48c0"
+dependencies = [
+ "darling_core 0.21.3",
+ "darling_macro 0.21.3",
 ]
 
 [[package]]
@@ -945,12 +980,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "darling_core"
+version = "0.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1247195ecd7e3c85f83c8d2a366e4210d588e802133e1e355180a9870b517ea4"
+dependencies = [
+ "fnv",
+ "ident_case",
+ "proc-macro2",
+ "quote",
+ "strsim",
+ "syn 2.0.106",
+]
+
+[[package]]
 name = "darling_macro"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
 dependencies = [
- "darling_core",
+ "darling_core 0.20.11",
+ "quote",
+ "syn 2.0.106",
+]
+
+[[package]]
+name = "darling_macro"
+version = "0.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d38308df82d1080de0afee5d069fa14b0326a88c14f15c5ccda35b4a6c414c81"
+dependencies = [
+ "darling_core 0.21.3",
  "quote",
  "syn 2.0.106",
 ]
@@ -1309,7 +1369,6 @@ dependencies = [
 [[package]]
 name = "fspy"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=edf07c7eac63aa24fe07ab4ff1039f682e48d6c3#edf07c7eac63aa24fe07ab4ff1039f682e48d6c3"
 dependencies = [
  "allocator-api2",
  "anyhow",
@@ -1344,7 +1403,6 @@ dependencies = [
 [[package]]
 name = "fspy_detours_sys"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=edf07c7eac63aa24fe07ab4ff1039f682e48d6c3#edf07c7eac63aa24fe07ab4ff1039f682e48d6c3"
 dependencies = [
  "cc",
  "winapi",
@@ -1353,7 +1411,6 @@ dependencies = [
 [[package]]
 name = "fspy_preload_unix"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=edf07c7eac63aa24fe07ab4ff1039f682e48d6c3#edf07c7eac63aa24fe07ab4ff1039f682e48d6c3"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1368,14 +1425,13 @@ dependencies = [
 [[package]]
 name = "fspy_preload_windows"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=edf07c7eac63aa24fe07ab4ff1039f682e48d6c3#edf07c7eac63aa24fe07ab4ff1039f682e48d6c3"
 dependencies = [
  "bincode",
  "constcat",
  "fspy_detours_sys",
  "fspy_shared",
  "ntapi",
- "smallvec 2.0.0-alpha.11",
+ "smallvec 2.0.0-alpha.12",
  "widestring",
  "winapi",
  "winsafe 0.0.24",
@@ -1384,7 +1440,6 @@ dependencies = [
 [[package]]
 name = "fspy_seccomp_unotify"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=edf07c7eac63aa24fe07ab4ff1039f682e48d6c3#edf07c7eac63aa24fe07ab4ff1039f682e48d6c3"
 dependencies = [
  "bincode",
  "futures-util",
@@ -1401,7 +1456,6 @@ dependencies = [
 [[package]]
 name = "fspy_shared"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=edf07c7eac63aa24fe07ab4ff1039f682e48d6c3#edf07c7eac63aa24fe07ab4ff1039f682e48d6c3"
 dependencies = [
  "allocator-api2",
  "bincode",
@@ -1419,7 +1473,6 @@ dependencies = [
 [[package]]
 name = "fspy_shared_unix"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=edf07c7eac63aa24fe07ab4ff1039f682e48d6c3#edf07c7eac63aa24fe07ab4ff1039f682e48d6c3"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1437,7 +1490,6 @@ dependencies = [
 [[package]]
 name = "fspy_test_utils"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=edf07c7eac63aa24fe07ab4ff1039f682e48d6c3#edf07c7eac63aa24fe07ab4ff1039f682e48d6c3"
 dependencies = [
  "base64 0.22.1",
  "bincode",
@@ -2293,6 +2345,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "monostate"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb4cc965c89dd0615a9e822ff8002f7633d2466143d51bd58693e4b2c75aabad"
+dependencies = [
+ "monostate-impl",
+ "serde",
+ "serde_core",
+]
+
+[[package]]
+name = "monostate-impl"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23f5b99488110875b5904839d396c2cdfaf241ff6622638acb879cc7effad5de"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
+]
+
+[[package]]
 name = "napi"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2875,6 +2949,16 @@ name = "precomputed-hash"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
+
+[[package]]
+name = "prettyplease"
+version = "0.2.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
+dependencies = [
+ "proc-macro2",
+ "syn 2.0.106",
+]
 
 [[package]]
 name = "proc-macro2"
@@ -3593,9 +3677,9 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "smallvec"
-version = "2.0.0-alpha.11"
+version = "2.0.0-alpha.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87b96efa4bd6bdd2ff0c6615cc36fc4970cbae63cfd46ddff5cee35a1b4df570"
+checksum = "ef784004ca8777809dcdad6ac37629f0a97caee4c685fcea805278d81dd8b857"
 
 [[package]]
 name = "socket2"
@@ -3925,6 +4009,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-stream"
+version = "0.1.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32da49809aab5c3bc678af03902d4ccddea2a87d028d86392a4b1560c6906c70"
+dependencies = [
+ "futures-core",
+ "pin-project-lite",
+ "tokio",
+]
+
+[[package]]
 name = "tokio-util"
 version = "0.7.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3984,9 +4079,9 @@ checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
 name = "tracing"
-version = "0.1.41"
+version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "784e0ac535deb450455cbfa28a6f0df145ea1bb7ae51b821cf5e7927fdcfbdd0"
+checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
 dependencies = [
  "pin-project-lite",
  "tracing-attributes",
@@ -3995,9 +4090,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-attributes"
-version = "0.1.30"
+version = "0.1.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81383ab64e72a7a8b8e13130c49e3dab29def6d0c7d76a03087b3cf71c5c6903"
+checksum = "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4006,9 +4101,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.34"
+version = "0.1.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9d12581f227e93f094d3af2ae690a574abb8a2b9b7a96e7cfe9647b2b617678"
+checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
  "valuable",
@@ -4155,9 +4250,9 @@ dependencies = [
 
 [[package]]
 name = "utf8-chars"
-version = "3.0.5"
+version = "3.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f598f797138b219a4560b4e9c53c255e872e267c9e3fdcc75aa59a2a90953bcd"
+checksum = "ebe49e006d6df172d7f14794568a90fe41e05a1fa9e03dc276fa6da4bb747ec3"
 dependencies = [
  "arrayvec",
 ]
@@ -4204,6 +4299,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
+name = "vec1"
+version = "1.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eab68b56840f69efb0fefbe3ab6661499217ffdc58e2eef7c3f6f69835386322"
+dependencies = [
+ "smallvec 1.15.1",
+]
+
+[[package]]
 name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4228,11 +4332,12 @@ dependencies = [
 name = "vite-plus-cli"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "clap",
  "napi",
  "napi-build",
  "napi-derive",
- "petgraph 0.8.3",
  "serde",
  "serde_json",
  "tempfile",
@@ -4244,6 +4349,8 @@ dependencies = [
  "vite_path",
  "vite_str",
  "vite_task",
+ "vite_workspace",
+ "which",
 ]
 
 [[package]]
@@ -4308,10 +4415,17 @@ dependencies = [
 [[package]]
 name = "vite_glob"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=edf07c7eac63aa24fe07ab4ff1039f682e48d6c3#edf07c7eac63aa24fe07ab4ff1039f682e48d6c3"
 dependencies = [
  "thiserror 2.0.17",
  "wax",
+]
+
+[[package]]
+name = "vite_graph_ser"
+version = "0.1.0"
+dependencies = [
+ "petgraph 0.8.3",
+ "serde",
 ]
 
 [[package]]
@@ -4362,7 +4476,6 @@ dependencies = [
 [[package]]
 name = "vite_path"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=edf07c7eac63aa24fe07ab4ff1039f682e48d6c3#edf07c7eac63aa24fe07ab4ff1039f682e48d6c3"
 dependencies = [
  "bincode",
  "diff-struct",
@@ -4373,9 +4486,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "vite_shell"
+version = "0.0.0"
+dependencies = [
+ "bincode",
+ "brush-parser",
+ "diff-struct",
+ "serde",
+ "shell-escape",
+ "vite_str",
+]
+
+[[package]]
 name = "vite_str"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=edf07c7eac63aa24fe07ab4ff1039f682e48d6c3#edf07c7eac63aa24fe07ab4ff1039f682e48d6c3"
 dependencies = [
  "bincode",
  "compact_str",
@@ -4386,14 +4510,15 @@ dependencies = [
 [[package]]
 name = "vite_task"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=edf07c7eac63aa24fe07ab4ff1039f682e48d6c3#edf07c7eac63aa24fe07ab4ff1039f682e48d6c3"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bincode",
- "brush-parser",
  "bstr",
+ "clap",
  "compact_str",
  "dashmap",
+ "derive_more",
  "diff-struct",
  "fspy",
  "futures-core",
@@ -4412,20 +4537,67 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
+ "tokio-stream",
  "tracing",
  "twox-hash",
  "uuid",
  "vite_glob",
  "vite_path",
+ "vite_shell",
  "vite_str",
+ "vite_task_graph",
+ "vite_task_plan",
  "vite_workspace",
  "wax",
 ]
 
 [[package]]
+name = "vite_task_graph"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "clap",
+ "monostate",
+ "petgraph 0.8.3",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "vec1",
+ "vite_graph_ser",
+ "vite_path",
+ "vite_str",
+ "vite_workspace",
+]
+
+[[package]]
+name = "vite_task_plan"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bincode",
+ "futures-util",
+ "petgraph 0.8.3",
+ "serde",
+ "sha2",
+ "shell-escape",
+ "supports-color",
+ "thiserror 2.0.17",
+ "tracing",
+ "vite_glob",
+ "vite_graph_ser",
+ "vite_path",
+ "vite_shell",
+ "vite_str",
+ "vite_task_graph",
+ "which",
+]
+
+[[package]]
 name = "vite_workspace"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task?rev=edf07c7eac63aa24fe07ab4ff1039f682e48d6c3#edf07c7eac63aa24fe07ab4ff1039f682e48d6c3"
 dependencies = [
  "petgraph 0.8.3",
  "rustc-hash",
@@ -4433,6 +4605,7 @@ dependencies = [
  "serde_json",
  "serde_yml",
  "thiserror 2.0.17",
+ "vec1",
  "vite_glob",
  "vite_path",
  "vite_str",

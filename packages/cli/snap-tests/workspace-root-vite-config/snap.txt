@@ -1,10 +1,9 @@
 > # Test that lint picks up workspace root config
 > # vite lint
 > # Test that fmt picks up workspace root config - specify file
-[1]> vite fmt packages/app-b/index.js --check
+> vite fmt packages/app-b/index.js --check
 Checking formatting...
 packages/app-b/index.js (<variable>ms)
 
 Format issues found in above 1 files. Run without `--check` to fix.
 Finished in <variable>ms on 1 files using <variable> threads.
-

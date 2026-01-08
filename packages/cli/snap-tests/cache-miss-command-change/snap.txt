@@ -1,67 +1,62 @@
 > vite run hello # create caches for 'echo foo' and 'echo bar'
 $ echo foo
 foo
-
 $ echo bar
 bar
-
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   2 tasks • 0 cache hits • 2 cache misses 
+Statistics:   2 tasks • 0 cache hits • 0 cache misses • 2 cache disabled 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello(subcommand 0): $ echo foo ✓
-      → Cache miss: no previous cache entry found
+  [1] hello: echo foo ✓
+      → Cache disabled for Built-In Command
   ·······················································
-  [2] hello: $ echo bar ✓
-      → Cache miss: no previous cache entry found
+  [2] hello: echo bar ✓
+      → Cache disabled for Built-In Command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > json-edit package.json '_.scripts.hello = "echo baz && echo bar"' # update the first subcommand
 > vite run hello # should report cache miss of the first subcommand, and hit cache of the second subcommand
-$ echo baz (✗ cache miss: command changed, executing)
+$ echo baz
 baz
-
-$ echo bar (✓ cache hit, replaying)
+$ echo bar
 bar
-
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   2 tasks • 1 cache hits • 1 cache misses 
-Performance:  50% cache hit rate
+Statistics:   2 tasks • 0 cache hits • 0 cache misses • 2 cache disabled 
+Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello(subcommand 0): $ echo baz ✓
-      → Cache miss: command changed from echo foo to echo baz
+  [1] hello: echo baz ✓
+      → Cache disabled for Built-In Command
   ·······················································
-  [2] hello: $ echo bar ✓
-      → Cache hit - output replayed - <variable>ms saved
+  [2] hello: echo bar ✓
+      → Cache disabled for Built-In Command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > json-edit package.json '_.scripts.hello = "echo bar"' # remove the first subcommand, now the second subcommand becomes the first
 > vite run hello # can still hit cache even the subcommand index changed
-$ echo bar (✓ cache hit, replaying)
+$ echo bar
 bar
-
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
+Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello: $ echo bar ✓
-      → Cache hit - output replayed - <variable>ms saved
+  [1] hello: echo bar ✓
+      → Cache disabled for Built-In Command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

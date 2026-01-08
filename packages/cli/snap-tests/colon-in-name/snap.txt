@@ -1,33 +1,31 @@
 > vite run read_colon_in_name
 $ node read_node_fs.js
 
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 1 cache misses  
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] read_colon_in_name: $ node read_node_fs.js ✓
+  [1] read_colon_in_name: node read_node_fs.js ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run read_colon_in_name
 $ node read_node_fs.js (✓ cache hit, replaying)
 
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Statistics:   1 tasks • 1 cache hits • 0 cache misses  
 Performance:  100% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] read_colon_in_name: $ node read_node_fs.js ✓
+  [1] read_colon_in_name: node read_node_fs.js ✓
       → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

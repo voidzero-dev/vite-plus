@@ -61,9 +61,6 @@ pub enum Error {
     SerdeYml(#[from] serde_yml::Error),
 
     #[error(transparent)]
-    TaskError(#[from] vite_task::Error),
-
-    #[error(transparent)]
     WorkspaceError(#[from] vite_workspace::Error),
 
     #[error("Lint failed, reason: {reason}")]

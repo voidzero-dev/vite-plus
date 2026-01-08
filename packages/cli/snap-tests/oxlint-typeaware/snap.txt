@@ -2,22 +2,51 @@
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
-
 > echo //comment >> types.ts
 > vite lint ./src # non-type-aware linting doesn't read types.ts
-✓ cache hit, replaying
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
+→ Cache hit - output replayed - <variable>ms saved
 
 > vite lint --type-aware ./src
-Found 0 warnings and 0 errors.
-Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
 
+Error: Cannot find module '/private/var/folders/v7/bp3pvg2x2n1g07k3q9mv4nb40000gn/node_modules/.pnpm/oxlint-tsgolint@<semver>/node_modules/oxlint-tsgolint/bin/tsgolint.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
 
+Node.js v<semver>
+Error running tsgolint: "exit status: exit status: 1"
 > echo //comment >> types.ts
 > vite lint --type-aware ./src # type-aware linting reads types.ts
-✗ cache miss: content of input 'types.ts' changed, executing
-Found 0 warnings and 0 errors.
-Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
 
+Error: Cannot find module '/private/var/folders/v7/bp3pvg2x2n1g07k3q9mv4nb40000gn/node_modules/.pnpm/oxlint-tsgolint@<semver>/node_modules/oxlint-tsgolint/bin/tsgolint.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v<semver>
+Error running tsgolint: "exit status: exit status: 1"

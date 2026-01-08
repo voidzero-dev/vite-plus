@@ -3,29 +3,16 @@
 //! This module provides the bridge between JavaScript tool resolvers and the Rust core.
 //! It uses NAPI-RS to create native Node.js bindings that allow JavaScript functions
 //! to be called from Rust code.
-//!
-//! ## Architecture
-//!
-//! The binding follows a callback pattern:
-//! 1. JavaScript passes resolver functions to Rust through `CliOptions`
-//! 2. These functions are wrapped in `ThreadsafeFunction` for safe cross-runtime calls
-//! 3. When Rust needs a tool, it calls the corresponding JavaScript function
-//! 4. JavaScript resolves the tool path and returns it to Rust
-//! 5. Rust executes the tool with the resolved path
 
 mod cli;
-mod commands;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, ffi::OsStr, sync::Arc};
 
-use clap::Parser as _;
 use napi::{anyhow, bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
-use vite_error::Error;
 use vite_path::current_dir;
-use vite_task::ResolveCommandResult;
 
-use crate::cli::{Args, CliOptions as ViteTaskCliOptions, Commands};
+use crate::cli::{BoxedResolverFn, CliOptions as ViteTaskCliOptions, ResolveCommandResult};
 
 /// Module initialization - sets up tracing for debugging
 #[napi_derive::module_init]
@@ -34,180 +21,117 @@ pub fn init() {
 }
 
 /// Configuration options passed from JavaScript to Rust.
-///
-/// Each field (except `cwd`) is a JavaScript function wrapped in a `ThreadsafeFunction`.
-/// These functions are called by Rust to resolve tool binary paths when needed.
-///
-/// The `ThreadsafeFunction` wrapper ensures the JavaScript functions can be
-/// safely called from Rust's async runtime without blocking or race conditions.
 #[napi(object, object_to_js = false)]
 pub struct CliOptions {
-    /// Resolver function for the lint tool (oxlint)
     pub lint: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    /// Resolver function for the fmt tool (oxfmt)
     pub fmt: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    /// Resolver function for the vite tool (used for build/dev)
     pub vite: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    /// Resolver function for the test tool (vitest)
     pub test: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    /// Resolver function for the lib tool (tsdown)
     pub lib: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    /// Resolver function for the doc tool (vitepress)
     pub doc: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    /// Optional working directory override
     pub cwd: Option<String>,
-    /// Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side
-    pub resolve_universal_vite_config: Arc<ThreadsafeFunction<String, Promise<String>>>,
+    /// CLI arguments (should be process.argv.slice(2) from JavaScript)
+    pub args: Option<Vec<String>>,
 }
 
 /// Result returned by JavaScript resolver functions.
-///
-/// This structure contains the information needed to execute a tool:
-/// - `bin_path`: The absolute path to the tool's binary/script
-/// - `envs`: Environment variables to set when executing the tool
 #[napi(object, object_to_js = false)]
 pub struct JsCommandResolvedResult {
-    /// Absolute path to the tool's executable or script
     pub bin_path: String,
-    /// Environment variables to set when running the tool
     pub envs: HashMap<String, String>,
 }
 
-/// Convert JavaScript result to Rust's expected format
 impl From<JsCommandResolvedResult> for ResolveCommandResult {
     fn from(value: JsCommandResolvedResult) -> Self {
-        Self { bin_path: value.bin_path, envs: value.envs }
+        Self {
+            bin_path: Arc::<OsStr>::from(OsStr::new(&value.bin_path).to_os_string()),
+            envs: value.envs.into_iter().collect(),
+        }
     }
 }
 
-static BUILTIN_COMMANDS: &[&str] =
-    &["dev", "lint", "fmt", "build", "test", "doc", "lib", "preview"];
+/// Create a boxed resolver function from a ThreadsafeFunction
+/// NOTE: Uses anyhow::Error to avoid NAPI type interference with vite_error::Error
+fn create_resolver(
+    tsf: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    error_message: &'static str,
+) -> BoxedResolverFn {
+    Box::new(move || {
+        let tsf = tsf.clone();
+        Box::pin(async move {
+            // Call JS function - map napi::Error to anyhow::Error
+            let promise: Promise<JsCommandResolvedResult> = tsf
+                .call_async(Ok(()))
+                .await
+                .map_err(|e| anyhow::anyhow!("{}: {}", error_message, e))?;
+
+            // Await the promise
+            let resolved: JsCommandResolvedResult = promise
+                .await
+                .map_err(|e| anyhow::anyhow!("{}: {}", error_message, e))?;
+
+            Ok(resolved.into())
+        })
+    })
+}
 
 /// Main entry point for the CLI, called from JavaScript.
 ///
-/// This function:
-/// 1. Parses command-line arguments
-/// 2. Sets up the working directory
-/// 3. Creates Rust-callable wrappers for JavaScript resolver functions
-/// 4. Passes control to the Rust core (`vite_task::main`)
-///
-/// ## JavaScript-to-Rust Bridge
-///
-/// The resolver functions are wrapped to:
-/// - Call the JavaScript function asynchronously
-/// - Handle errors and convert them to Rust error types
-/// - Convert the JavaScript result to Rust's expected format
-///
-/// ## Error Handling
-///
-/// Errors from JavaScript resolvers are converted to specific error types
-/// (e.g., `LintFailed`, `ViteError`) to provide better error messages.
+/// This is an async function that spawns a new thread for the non-Send async code
+/// from vite_task, while allowing the NAPI async context to continue running
+/// and process JavaScript callbacks (via ThreadsafeFunction).
 #[napi]
 pub async fn run(options: CliOptions) -> Result<i32> {
-    let args = parse_args();
     // Use provided cwd or current directory
     let mut cwd = current_dir()?;
     if let Some(options_cwd) = options.cwd {
         cwd.push(options_cwd);
     }
-    // Extract resolver functions from options
-    let lint = options.lint;
-    let fmt = options.fmt;
-    let vite = options.vite;
-    let test = options.test;
-    let lib = options.lib;
-    let doc = options.doc;
-    let resolve_universal_vite_config = options.resolve_universal_vite_config;
-    // Call the Rust core with wrapped resolver functions
-    let result = crate::cli::main(
-        cwd,
-        args,
-        Some(ViteTaskCliOptions {
-            // Wrap the lint resolver to be callable from Rust
-            lint: || async {
-                // Call the JavaScript function and await both the promise and the result
-                let resolved = lint
-                    .call_async(Ok(())) // Call with no arguments
-                    .await // Wait for the call to complete
-                    .map_err(js_error_to_lint_error)? // Convert call errors
-                    .await // Wait for the promise to resolve
-                    .map_err(js_error_to_lint_error)?; // Convert promise errors
 
-                Ok(resolved.into()) // Convert to Rust type
-            },
-            // Wrap the fmt resolver to be callable from Rust
-            fmt: || async {
-                let resolved = fmt
-                    .call_async(Ok(()))
-                    .await
-                    .map_err(js_error_to_fmt_error)?
-                    .await
-                    .map_err(js_error_to_fmt_error)?;
+    // Extract ThreadsafeFunctions (which are Send+Sync) to move to the worker thread
+    let lint_tsf = options.lint;
+    let fmt_tsf = options.fmt;
+    let vite_tsf = options.vite;
+    let test_tsf = options.test;
+    let lib_tsf = options.lib;
+    let doc_tsf = options.doc;
+    let args = options.args;
 
-                Ok(resolved.into())
-            },
-            // Wrap the vite resolver to be callable from Rust
-            vite: || async {
-                let resolved = vite
-                    .call_async(Ok(()))
-                    .await
-                    .inspect_err(|err| {
-                        tracing::error!("vite error: {:?}", err);
-                    })
-                    .map_err(js_error_to_vite_error)?
-                    .await
-                    .inspect_err(|err| {
-                        tracing::error!("vite error: {:?}", err);
-                    })
-                    .map_err(js_error_to_vite_error)?;
+    // Create a channel to receive the result from the worker thread
+    let (tx, rx) = tokio::sync::oneshot::channel();
 
-                Ok(resolved.into())
-            },
-            // Wrap the test resolver to be callable from Rust
-            test: || async {
-                let resolved = test
-                    .call_async(Ok(()))
-                    .await
-                    .map_err(js_error_to_test_error)?
-                    .await
-                    .map_err(js_error_to_test_error)?;
+    // Spawn a new thread for the non-Send async code
+    // ThreadsafeFunction is designed to work across threads, so the resolver
+    // callbacks will still be able to call back to JavaScript
+    std::thread::spawn(move || {
+        // Create the resolvers inside the thread (BoxedResolverFn is not Send)
+        let cli_options = ViteTaskCliOptions {
+            lint: create_resolver(lint_tsf, "Failed to resolve lint command"),
+            fmt: create_resolver(fmt_tsf, "Failed to resolve fmt command"),
+            vite: create_resolver(vite_tsf, "Failed to resolve vite command"),
+            test: create_resolver(test_tsf, "Failed to resolve test command"),
+            lib: create_resolver(lib_tsf, "Failed to resolve lib command"),
+            doc: create_resolver(doc_tsf, "Failed to resolve doc command"),
+        };
 
-                Ok(resolved.into())
-            },
-            // Wrap the lib resolver to be callable from Rust
-            lib: || async {
-                let resolved = lib
-                    .call_async(Ok(()))
-                    .await
-                    .map_err(js_error_to_lib_error)?
-                    .await
-                    .map_err(js_error_to_lib_error)?;
+        // Create a new single-threaded runtime for non-Send futures
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create runtime");
 
-                Ok(resolved.into())
-            },
-            // Wrap the doc resolver to be callable from Rust
-            doc: || async {
-                let resolved = doc
-                    .call_async(Ok(()))
-                    .await
-                    .map_err(js_error_to_doc_error)?
-                    .await
-                    .map_err(js_error_to_doc_error)?;
+        // Run the CLI in a LocalSet to allow non-Send futures
+        let local = tokio::task::LocalSet::new();
+        let result = local.block_on(&rt, async {
+            crate::cli::main(cwd, Some(cli_options), args).await
+        });
 
-                Ok(resolved.into())
-            },
-            resolve_universal_vite_config: |cwd: String| async {
-                let resolved = resolve_universal_vite_config
-                    .call_async(Ok(cwd))
-                    .await
-                    .map_err(js_error_to_resolve_universal_vite_config_error)?
-                    .await
-                    .map_err(js_error_to_resolve_universal_vite_config_error)?;
-                Ok(resolved)
-            },
-        }),
-    )
-    .await;
+        // Send the result back to the NAPI async context
+        let _ = tx.send(result);
+    });
+
+    // Wait for the result from the worker thread
+    let result = rx.await.map_err(|_| napi::Error::from_reason("Worker thread panicked"))?;
 
     tracing::debug!("Result: {result:?}");
 
@@ -215,123 +139,12 @@ pub async fn run(options: CliOptions) -> Result<i32> {
         Ok(exit_status) => Ok(exit_status.code().unwrap_or(1)),
         Err(e) => {
             match e {
-                // Standard exit code for Ctrl+C
-                Error::UserCancelled => Ok(130),
+                vite_error::Error::UserCancelled => Ok(130),
                 _ => {
-                    // Convert Rust errors to NAPI errors for JavaScript
                     tracing::error!("Rust error: {:?}", e);
                     Err(anyhow::Error::from(e).into())
                 }
             }
         }
     }
-}
-
-/// Convert JavaScript errors to Rust lint errors
-fn js_error_to_lint_error(err: napi::Error) -> Error {
-    Error::LintFailed { status: err.status.to_string().into(), reason: err.to_string().into() }
-}
-
-/// Convert JavaScript errors to Rust fmt errors
-fn js_error_to_fmt_error(err: napi::Error) -> Error {
-    Error::FmtFailed { status: err.status.to_string().into(), reason: err.to_string().into() }
-}
-
-/// Convert JavaScript errors to Rust vite errors
-fn js_error_to_vite_error(err: napi::Error) -> Error {
-    Error::Vite { status: err.status.to_string().into(), reason: err.to_string().into() }
-}
-
-/// Convert JavaScript errors to Rust test errors
-fn js_error_to_test_error(err: napi::Error) -> Error {
-    Error::TestFailed { status: err.status.to_string().into(), reason: err.to_string().into() }
-}
-
-/// Convert JavaScript errors to Rust lib errors
-fn js_error_to_lib_error(err: napi::Error) -> Error {
-    Error::LibFailed { status: err.status.to_string().into(), reason: err.to_string().into() }
-}
-
-/// Convert JavaScript errors to Rust doc errors
-fn js_error_to_doc_error(err: napi::Error) -> Error {
-    Error::DocFailed { status: err.status.to_string().into(), reason: err.to_string().into() }
-}
-
-/// Convert JavaScript errors to Rust resolve universal vite config errors
-fn js_error_to_resolve_universal_vite_config_error(err: napi::Error) -> Error {
-    Error::ResolveUniversalViteConfigFailed {
-        status: err.status.to_string().into(),
-        reason: err.to_string().into(),
-    }
-}
-
-fn parse_args() -> Args {
-    // ArgsOs [node, vite-plus, ...]
-    let mut raw_args = std::env::args_os().skip(2);
-
-    // No arguments provided, default to dev command
-    let Some(first) = raw_args.next() else {
-        return Args {
-            task: None,
-            task_args: vec![],
-            commands: Commands::Dev { args: vec![] },
-            debug: false,
-            no_debug: true,
-        };
-    };
-
-    // If first arg is not valid UTF-8, fall through to clap parsing
-    let Some(first_str) = first.to_str() else {
-        return Args::parse_from(std::env::args_os().skip(1));
-    };
-
-    // Collect remaining args for potential forwarding
-    let remaining_args: Vec<_> = raw_args.collect();
-
-    // Handle builtin commands with fast-path parsing (bypasses clap for better arg forwarding)
-    if let Some(cmd) = parse_builtin_command(first_str, &remaining_args) {
-        return cmd;
-    }
-
-    // If first arg starts with '-' but is NOT a help/version flag, treat as options for dev command
-    // e.g. `vite --port 3000` should be treated as `vite dev --port 3000`
-    if first_str.starts_with('-') && !matches!(first_str, "-h" | "--help" | "-V" | "--version") {
-        let forwarded_args: Vec<String> = std::iter::once(first)
-            .chain(remaining_args)
-            .map(|a| a.into_string().unwrap_or_else(|os_str| os_str.to_string_lossy().into_owned()))
-            .collect();
-        return Args {
-            task: None,
-            task_args: vec![],
-            commands: Commands::Dev { args: forwarded_args },
-            debug: false,
-            no_debug: true,
-        };
-    }
-
-    // Fall through to clap parsing for other commands (run, cache, install, help, etc.)
-    Args::parse_from(std::env::args_os().skip(1))
-}
-
-fn parse_builtin_command(cmd: &str, raw_args: &[std::ffi::OsString]) -> Option<Args> {
-    if !BUILTIN_COMMANDS.contains(&cmd) {
-        return None;
-    }
-
-    let forwarded_args: Vec<String> =
-        raw_args.iter().map(|a| a.to_string_lossy().into_owned()).collect();
-
-    let commands = match cmd {
-        "dev" => Commands::Dev { args: forwarded_args },
-        "lint" => Commands::Lint { args: forwarded_args },
-        "fmt" => Commands::Fmt { args: forwarded_args },
-        "build" => Commands::Build { args: forwarded_args },
-        "test" => Commands::Test { args: forwarded_args },
-        "doc" => Commands::Doc { args: forwarded_args },
-        "lib" => Commands::Lib { args: forwarded_args },
-        "preview" => Commands::Preview { args: forwarded_args },
-        _ => return None,
-    };
-
-    Some(Args { task: None, task_args: vec![], commands, debug: false, no_debug: true })
 }

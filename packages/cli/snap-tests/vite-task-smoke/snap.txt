@@ -1,48 +1,44 @@
 > vite run test-task
 $ echo hello
 hello
-
 $ node main.js
 foo
-
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   2 tasks • 0 cache hits • 2 cache misses 
+Statistics:   2 tasks • 0 cache hits • 1 cache misses • 1 cache disabled 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] test-task(subcommand 0): $ echo hello ✓
-      → Cache miss: no previous cache entry found
+  [1] test-task: echo hello ✓
+      → Cache disabled for Built-In Command
   ·······················································
-  [2] test-task: $ node main.js ✓
+  [2] test-task: node main.js ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > tool replace-file-content main.js foo bar
 > vite run test-task
-$ echo hello (✓ cache hit, replaying)
+$ echo hello
 hello
-
-$ node main.js (✗ cache miss: content of input 'main.js' changed, executing)
+$ node main.js (✗ cache miss: input files changed, executing)
 bar
-
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   2 tasks • 1 cache hits • 1 cache misses 
-Performance:  50% cache hit rate
+Statistics:   2 tasks • 0 cache hits • 1 cache misses • 1 cache disabled 
+Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] test-task(subcommand 0): $ echo hello ✓
-      → Cache hit - output replayed - <variable>ms saved
+  [1] test-task: echo hello ✓
+      → Cache disabled for Built-In Command
   ·······················································
-  [2] test-task: $ node main.js ✓
+  [2] test-task: node main.js ✓
       → Cache miss: content of input 'main.js' changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
