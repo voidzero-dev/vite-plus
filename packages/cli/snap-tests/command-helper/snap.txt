@@ -5,15 +5,15 @@ Usage: vite <COMMAND>
 
 Commands:
   run      Run tasks
-  lint     Lint code using oxlint
-  fmt      Format code using oxfmt
-  build    Build application using Vite
-  test     Run tests using Vitest
-  lib      Build library using tsdown
+  lint     Lint code
+  fmt      Format code
+  build    Build application
+  test     Run test
+  lib      Build library
   dev      Run development server
   preview  Preview production build
-  doc      Build documentation using VitePress
-  install  Install dependencies using the package manager
+  doc      Build documentation
+  install  Install command. It will be passed to the package manager's install command currently
   cache    Manage the task cache
   help     Print this message or the help of the given subcommand(s)
 

@@ -26,31 +26,31 @@ pub struct ResolveCommandResult {
 /// NOTE: Run command is already provided by vite-task, no need to declare here
 #[derive(Debug, Clone, Subcommand)]
 pub enum CustomTaskSubcommand {
-    /// Lint code using oxlint
+    /// Lint code
     #[command(disable_help_flag = true)]
     Lint {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
-    /// Format code using oxfmt
+    /// Format code
     #[command(disable_help_flag = true)]
     Fmt {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
-    /// Build application using Vite
+    /// Build application
     #[command(disable_help_flag = true)]
     Build {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
-    /// Run tests using Vitest
+    /// Run test
     #[command(disable_help_flag = true)]
     Test {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
-    /// Build library using tsdown
+    /// Build library
     #[command(disable_help_flag = true)]
     Lib {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
@@ -68,13 +68,14 @@ pub enum CustomTaskSubcommand {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
-    /// Build documentation using VitePress
+    /// Build documentation
     #[command(disable_help_flag = true)]
     Doc {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
-    /// Install dependencies using the package manager
+    /// Install command.
+    /// It will be passed to the package manager's install command currently.
     #[command(disable_help_flag = true, alias = "i")]
     Install {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
