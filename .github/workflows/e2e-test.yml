@@ -10,7 +10,6 @@ on:
   push:
     branches:
       - main
-      - deps/upstream-update
     paths-ignore:
       - '**/*.md'
   pull_request:
@@ -27,10 +26,11 @@ defaults:
 jobs:
   download-previous-rolldown-binaries:
     runs-on: ubuntu-latest
-    # Run if: not a PR, OR PR has 'test: e2e' label
+    # Run if: not a PR, OR PR has 'test: e2e' label, OR PR is from deps/upstream-update branch
     if: >-
       github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'test: e2e')
+      contains(github.event.pull_request.labels.*.name, 'test: e2e') ||
+      github.head_ref == 'deps/upstream-update'
     permissions:
       contents: read
       packages: read
