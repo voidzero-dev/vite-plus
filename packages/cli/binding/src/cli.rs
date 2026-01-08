@@ -174,6 +174,13 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
                     .collect();
 
+                // Convert resolved.envs to Arc<[(Arc<OsStr>, Arc<OsStr>)]>
+                let additional_envs: Arc<[(Arc<OsStr>, Arc<OsStr>)]> = resolved
+                    .envs
+                    .into_iter()
+                    .map(|(k, v)| (Arc::from(OsStr::new(&k)), Arc::from(OsStr::new(&v))))
+                    .collect();
+
                 Ok(SyntheticPlanRequest {
                     program: Arc::from(OsStr::new("node")),
                     args: iter::once(Str::from(js_path_str))
@@ -183,14 +190,15 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         cache_config: UserCacheConfig::Enabled {
                             cache: MustBe!(true),
                             enabled_cache_config: EnabledCacheConfig {
-                                envs: Box::new([]),
-                                // Pass OXLINT_TSGOLINT_PATH through to oxlint for type-aware linting
-                                pass_through_envs: vec![Str::from("OXLINT_TSGOLINT_PATH")],
+                                // Fingerprint OXLINT_TSGOLINT_PATH for type-aware linting cache invalidation
+                                envs: Box::new([Str::from("OXLINT_TSGOLINT_PATH")]),
+                                pass_through_envs: vec![],
                             },
                         },
                         ..Default::default()
                     },
                     direct_execution_cache_key,
+                    additional_envs,
                 })
             }
             CustomTaskSubcommand::Fmt { args } => {
@@ -215,6 +223,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
+                    additional_envs: Arc::new([]),
                 })
             }
             CustomTaskSubcommand::Build { args } => {
@@ -240,6 +249,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
+                    additional_envs: Arc::new([]),
                 })
             }
             CustomTaskSubcommand::Test { args } => {
@@ -264,6 +274,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
+                    additional_envs: Arc::new([]),
                 })
             }
             CustomTaskSubcommand::Lib { args } => {
@@ -288,6 +299,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
+                    additional_envs: Arc::new([]),
                 })
             }
             CustomTaskSubcommand::Dev { args } => {
@@ -313,6 +325,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
+                    additional_envs: Arc::new([]),
                 })
             }
             CustomTaskSubcommand::Preview { args } => {
@@ -338,6 +351,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
+                    additional_envs: Arc::new([]),
                 })
             }
             CustomTaskSubcommand::Doc { args } => {
@@ -362,6 +376,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
+                    additional_envs: Arc::new([]),
                 })
             }
             CustomTaskSubcommand::Install { args } => {
@@ -379,6 +394,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     args: resolve_command.args.into_iter().map(Str::from).collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
+                    additional_envs: Arc::new([]),
                 })
             }
         }
@@ -397,6 +413,7 @@ async fn create_install_synthetic_request(
         args: resolve_command.args.into_iter().map(Str::from).collect(),
         task_options: Default::default(),
         direct_execution_cache_key: vec![Str::from("install")].into(),
+        additional_envs: Arc::new([]),
     })
 }
 
