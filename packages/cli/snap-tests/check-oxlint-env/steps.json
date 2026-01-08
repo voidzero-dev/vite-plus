@@ -4,8 +4,6 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "OXLINT_TSGOLINT_PATH=/path/to/oxlint_tsgolint1 vite run check # get OXLINT_TSGOLINT_PATH env",
-    "rm -rf node_modules # clean cache",
-    "OXLINT_TSGOLINT_PATH=/path/to/oxlint_tsgolint2 vite run check-nested # get OXLINT_TSGOLINT_PATH env in nested task"
+    "OXLINT_TSGOLINT_PATH=./invalid-path vite lint --type-aware # should error that ./invalid-path doesn't exist"
   ]
 }

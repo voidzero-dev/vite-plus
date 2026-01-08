@@ -1,48 +1,51 @@
-[1]> MY_ENV=1 vite run hello
-[vite+] run error: [Error: Failed to plan execution, task call stack: 
+> MY_ENV=1 vite run hello
+$ node -p process.env.MY_ENV
+1
 
-Caused by:
-    0: Failed to load task graph
-    1: Failed to load task config file for package at AbsolutePath("<cwd>/")
-    2: data did not match any variant of untagged enum UserCacheConfig at line 7 column 5] {
-  code: 'GenericFailure'
-}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[1]> MY_ENV=2 vite run hello # MY_ENV is pass-through. should hit the cache created in step 1
-[vite+] run error: [Error: Failed to plan execution, task call stack: 
+Statistics:   1 tasks • 0 cache hits • 1 cache misses  
+Performance:  0% cache hit rate
 
-Caused by:
-    0: Failed to load task graph
-    1: Failed to load task config file for package at AbsolutePath("<cwd>/")
-    2: data did not match any variant of untagged enum UserCacheConfig at line 7 column 5] {
-  code: 'GenericFailure'
-}
+Task Details:
+────────────────────────────────────────────────
+  [1] #hello: node -p process.env.MY_ENV ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[1]> json-edit vite-task.json '_.tasks.hello.passThroughEnvs.push("MY_ENV2")' # add a new pass through env
-node:fs:441
-    return binding.readFileUtf8(path, stringToFlags(options.flag));
-                   ^
+> MY_ENV=2 vite run hello # MY_ENV is pass-through. should hit the cache created in step 1
+$ node -p process.env.MY_ENV (✓ cache hit, replaying)
+1
 
-Error: ENOENT: no such file or directory, open 'vite-task.json'
-    at readFileSync (node:fs:441:20)
-    at file://<homedir>/code/vite-plus/packages/tools/src/json-edit.ts:19:25
-    at ModuleJob.run (node:internal/modules/esm/module_job:345:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
-  errno: -2,
-  code: 'ENOENT',
-  syscall: 'open',
-  path: 'vite-task.json'
-}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Node.js v<semver>
+Statistics:   1 tasks • 1 cache hits • 0 cache misses  
+Performance:  100% cache hit rate, <variable>ms saved in total
 
-[1]> MY_ENV=2 vite run hello # cache should be invalidated because passThroughEnvs config changed
-[vite+] run error: [Error: Failed to plan execution, task call stack: 
+Task Details:
+────────────────────────────────────────────────
+  [1] #hello: node -p process.env.MY_ENV ✓
+      → Cache hit - output replayed - <variable>ms saved
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Caused by:
-    0: Failed to load task graph
-    1: Failed to load task config file for package at AbsolutePath("<cwd>/")
-    2: data did not match any variant of untagged enum UserCacheConfig at line 7 column 5] {
-  code: 'GenericFailure'
-}
+> json-edit vite.config.json '_.tasks.hello.passThroughEnvs.push("MY_ENV2")' # add a new pass through env
+> MY_ENV=2 vite run hello # cache should be invalidated because passThroughEnvs config changed
+$ node -p process.env.MY_ENV (✗ cache miss: command configuration changed, executing)
+2
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 1 cache misses  
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] #hello: node -p process.env.MY_ENV ✓
+      → Cache miss: command configuration changed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

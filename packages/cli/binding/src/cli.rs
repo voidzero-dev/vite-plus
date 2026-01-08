@@ -11,9 +11,10 @@ use clap::Subcommand;
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
+use monostate::MustBe;
 use vite_task::{
-    CLIArgs, LabeledReporter, Session, SessionCallbacks, TaskSynthesizer,
-    plan_request::SyntheticPlanRequest,
+    CLIArgs, LabeledReporter, Session, SessionCallbacks, TaskSynthesizer, UserCacheConfig,
+    UserTaskOptions, plan_request::SyntheticPlanRequest,
 };
 
 /// Result type for resolved commands from JavaScript
@@ -28,21 +29,25 @@ pub struct ResolveCommandResult {
 #[derive(Debug, Clone, Subcommand)]
 pub enum CustomTaskSubcommand {
     /// Lint code using oxlint
+    #[command(disable_help_flag = true)]
     Lint {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
     /// Format code using oxfmt
+    #[command(disable_help_flag = true)]
     Fmt {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
     /// Build application using Vite
+    #[command(disable_help_flag = true)]
     Build {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
     /// Run tests using Vitest
+    #[command(disable_help_flag = true)]
     Test {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
@@ -54,16 +59,19 @@ pub enum CustomTaskSubcommand {
         args: Vec<String>,
     },
     /// Run development server
+    #[command(disable_help_flag = true)]
     Dev {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
     /// Preview production build
+    #[command(disable_help_flag = true)]
     Preview {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
     /// Build documentation using VitePress
+    #[command(disable_help_flag = true)]
     Doc {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
@@ -193,7 +201,15 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                 Ok(SyntheticPlanRequest {
                     program,
                     args: args.into_iter().map(Str::from).collect(),
-                    task_options: Default::default(),
+                    task_options: UserTaskOptions {
+                        cache_config: UserCacheConfig::Enabled {
+                            cache: MustBe!(true),
+                            envs: Box::new([]),
+                            // Pass OXLINT_TSGOLINT_PATH through to oxlint for type-aware linting
+                            pass_through_envs: vec![Str::from("OXLINT_TSGOLINT_PATH")],
+                        },
+                        ..Default::default()
+                    },
                     direct_execution_cache_key,
                 })
             }
