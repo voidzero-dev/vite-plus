@@ -2,6 +2,7 @@
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
+
 > vite run lint # lint script should have different cache from builtin lint
 $ echo lint script
 lint script
@@ -16,7 +17,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] lint: echo lint script ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > echo 'console.log(1);' > a.js
@@ -40,5 +41,5 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] lint: echo lint script ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

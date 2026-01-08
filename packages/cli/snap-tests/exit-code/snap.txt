@@ -12,7 +12,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] script1: echo 'success' ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run script1 # script1 should hit the updated cache
@@ -29,7 +29,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] script1: echo 'success' ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run script2 # script2 should be failure and not cache

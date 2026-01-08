@@ -12,7 +12,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] echo: echo a ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run echo -- b # should create separate caches for different args
@@ -29,7 +29,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] echo: echo b ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run echo -- a # should hit the cache created in step 1
@@ -46,7 +46,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] echo: echo a ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run echo -- b # should hit the cache created in step 2
@@ -63,5 +63,5 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] echo: echo b ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

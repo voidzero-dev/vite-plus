@@ -1,6 +1,7 @@
 > vite run hello
 $ echo -n foo
-foo$ echo bar
+foo
+$ echo bar
 bar
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -13,8 +14,8 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] hello: echo -n foo ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
   ·······················································
   [2] hello: echo bar ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -8,6 +8,7 @@ dependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
+
 > vite i # install shortcut hit cache
 Packages: +<variable>
 +<repeat>

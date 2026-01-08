@@ -12,7 +12,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] hello: echo hello ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run hello # hit the cache
@@ -29,7 +29,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] hello: echo hello ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite cache clean # clean the cache
@@ -47,7 +47,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] hello: echo hello ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > cd subfolder && vite cache clean # cache can be located and cleaned from subfolder
@@ -65,5 +65,5 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] hello: echo hello ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

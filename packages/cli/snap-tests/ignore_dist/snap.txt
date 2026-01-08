@@ -2,6 +2,7 @@
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 0 files with <variable> rules using <variable> threads.
 
+
 > mkdir dist
 > vite lint # new dist folder should not invalidate cache
 Found 0 warnings and 0 errors.

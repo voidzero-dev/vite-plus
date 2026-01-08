@@ -49,12 +49,14 @@ Options:
   --exports                 Generate export-related metadata for package.json (experimental) 
   -h, --help                Display this message 
 
+
 > vite lib src/index.ts # should build the library
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
+
 
 > ls dist # should have the library
 index.mjs

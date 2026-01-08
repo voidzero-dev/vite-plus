@@ -1,6 +1,7 @@
 > vite run test-task
 $ echo hello
 hello
+
 $ node main.js
 foo
 
@@ -14,7 +15,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] test-task: echo hello ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
   ·······················································
   [2] test-task: node main.js ✓
       → Cache miss: no previous cache entry found
@@ -24,6 +25,7 @@ Task Details:
 > vite run test-task
 $ echo hello
 hello
+
 $ node main.js (✗ cache miss: input files changed, executing)
 bar
 
@@ -37,7 +39,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] test-task: echo hello ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
   ·······················································
   [2] test-task: node main.js ✓
       → Cache miss: content of input 'main.js' changed

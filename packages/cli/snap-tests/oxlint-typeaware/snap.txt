@@ -2,6 +2,7 @@
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
+
 > echo //comment >> types.ts
 > vite lint ./src # non-type-aware linting doesn't read types.ts
 Found 0 warnings and 0 errors.
@@ -29,6 +30,7 @@ Error: Cannot find module '/private/var/folders/v7/bp3pvg2x2n1g07k3q9mv4nb40000g
 
 Node.js v<semver>
 Error running tsgolint: "exit status: exit status: 1"
+
 > echo //comment >> types.ts
 > vite lint --type-aware ./src # type-aware linting reads types.ts
 node:internal/modules/cjs/loader:1386

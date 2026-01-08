@@ -2,6 +2,7 @@
 Already up to date
 
 Done in <variable>ms using pnpm v<semver>
+
 $ echo hello
 hello
 
@@ -15,7 +16,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] auto-install-before-task#hello: echo hello ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run hello # second run - no pnpm install output (cache hit, silent)
@@ -32,5 +33,5 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] auto-install-before-task#hello: echo hello ✓
-      → Cache disabled for Built-In Command
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

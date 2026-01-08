@@ -64,6 +64,7 @@
   Visit https://yarnpkg.com/en/docs/cli/install for documentation about this command.
 
 
+
 > vite install --prod # https://classic.yarnpkg.com/en/docs/cli/install#toc-yarn-install-production-true-false
 yarn install v<semver>
 info No lockfile found.
@@ -73,6 +74,7 @@ info No lockfile found.
 [4/4] Building fresh packages...
 success Saved lockfile.
 Done in <variable>ms.
+
 
 > ls node_modules
 tslib

@@ -71,6 +71,7 @@ Options:
   --exports                 Generate export-related metadata for package.json (experimental) 
   -h, --help                Display this message 
 
+
 > vite fmt -h # fmt help message
 Usage: [-c=PATH] [PATH]...
 
@@ -100,6 +101,7 @@ Available positional items:
 Available options:
     -h, --help               Prints help information
     -V, --version            Prints version information
+
 
 
 > vite lint -h # lint help message
@@ -203,6 +205,7 @@ Available options:
     -V, --version             Prints version information
 
 
+
 > vite build -h # build help message
 vite/<semver>
 
@@ -231,6 +234,7 @@ Options:
   -f, --filter <filter>         [string] filter debug logs 
   -m, --mode <mode>             [string] set env mode 
   -h, --help                    Display this message 
+
 
 > vite test -h # test help message
 vitest/<semver>
@@ -324,6 +328,7 @@ Options:
   --experimental <features>                             Experimental features.. Use '--help --experimental' for more info. 
   -h, --help                                            Display this message 
 
+
 > vite preview -h # preview help message
 vite/<semver>
 
@@ -345,6 +350,7 @@ Options:
   -f, --filter <filter>    [string] filter debug logs 
   -m, --mode <mode>        [string] set env mode 
   -h, --help               Display this message 
+
 
 > vite dev -h # dev help message
 vite/<semver>
@@ -382,3 +388,4 @@ Options:
   -m, --mode <mode>        [string] set env mode 
   -h, --help               Display this message 
   -v, --version            Display version number 
+

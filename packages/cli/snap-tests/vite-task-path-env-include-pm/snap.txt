@@ -11,6 +11,7 @@
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done with warnings in <variable>ms <variable>ms
 
+
 > vite run check-yarn-version
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
@@ -21,6 +22,7 @@
 ➤ YN0000: │ ESM support for PnP uses the experimental loader API and is therefore experimental
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done with warnings in <variable>ms <variable>ms
+
 $ node main.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
