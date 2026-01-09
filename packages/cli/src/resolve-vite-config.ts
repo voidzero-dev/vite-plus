@@ -10,6 +10,7 @@ export async function resolveUniversalViteConfig(err: null | Error, viteConfigCw
       JSON.stringify({
         lint: config.lint,
         fmt: config.fmt,
+        tasks: config.tasks,
       }),
     );
   } catch (err) {

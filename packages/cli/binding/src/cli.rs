@@ -17,14 +17,16 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
 use vite_task::{
     CLIArgs, EnabledCacheConfig, LabeledReporter, Session, SessionCallbacks, TaskSynthesizer,
-    UserCacheConfig, UserTaskOptions, plan_request::SyntheticPlanRequest,
+    UserCacheConfig, UserTaskConfig, UserTaskOptions, config::UserConfigFile,
+    loader::UserConfigLoader, plan_request::SyntheticPlanRequest,
 };
 
 /// Resolved configuration from vite.config.ts
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ResolvedUniversalViteConfig {
     pub lint: Option<serde_json::Value>,
     pub fmt: Option<serde_json::Value>,
+    pub tasks: Option<HashMap<String, serde_json::Value>>,
 }
 
 /// Result type for resolved commands from JavaScript
@@ -118,9 +120,13 @@ pub enum CacheSubcommand {
 pub type BoxedResolverFn =
     Box<dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<ResolveCommandResult>> + 'static>>>;
 
-/// Type alias for boxed vite config resolver function (takes workspace root path, returns JSON string)
-pub type BoxedViteConfigResolverFn =
-    Box<dyn Fn(String) -> Pin<Box<dyn Future<Output = anyhow::Result<String>> + 'static>>>;
+/// Type alias for vite config resolver function (takes package path, returns JSON string)
+/// Uses Arc for cloning and Send + Sync for use in UserConfigLoader
+pub type ViteConfigResolverFn = Arc<
+    dyn Fn(String) -> Pin<Box<dyn Future<Output = anyhow::Result<String>> + Send + 'static>>
+        + Send
+        + Sync,
+>;
 
 /// CLI options containing JavaScript resolver functions (using boxed futures for simplicity)
 pub struct CliOptions {
@@ -130,7 +136,7 @@ pub struct CliOptions {
     pub test: BoxedResolverFn,
     pub lib: BoxedResolverFn,
     pub doc: BoxedResolverFn,
-    pub resolve_universal_vite_config: BoxedViteConfigResolverFn,
+    pub resolve_universal_vite_config: ViteConfigResolverFn,
 }
 
 /// Task synthesizer for vite-plus that uses JavaScript resolver functions
@@ -472,6 +478,55 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
     }
 }
 
+/// User config loader that resolves vite.config.ts via JavaScript callback
+pub struct VitePlusConfigLoader {
+    resolve_fn: ViteConfigResolverFn,
+}
+
+impl VitePlusConfigLoader {
+    pub fn new(resolve_fn: ViteConfigResolverFn) -> Self {
+        Self { resolve_fn }
+    }
+}
+
+impl std::fmt::Debug for VitePlusConfigLoader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VitePlusConfigLoader").finish()
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl UserConfigLoader for VitePlusConfigLoader {
+    async fn load_user_config_file(
+        &self,
+        package_path: &AbsolutePath,
+    ) -> anyhow::Result<UserConfigFile> {
+        let package_path_str = package_path
+            .as_path()
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("package path is not valid UTF-8"))?;
+
+        let config_json = (self.resolve_fn)(package_path_str.to_string()).await?;
+        let resolved: ResolvedUniversalViteConfig =
+            serde_json::from_str(&config_json).inspect_err(|_| {
+                tracing::error!("Failed to parse vite config: {config_json}");
+            })?;
+
+        // Convert Option<HashMap<String, serde_json::Value>> to HashMap<Str, UserTaskConfig>
+        let tasks = resolved
+            .tasks
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(name, v)| {
+                let task_config: UserTaskConfig = serde_json::from_value(v)?;
+                Ok::<_, serde_json::Error>((Str::from(name), task_config))
+            })
+            .collect::<Result<HashMap<Str, UserTaskConfig>, _>>()?;
+
+        Ok(UserConfigFile { tasks })
+    }
+}
+
 /// Create auto-install synthetic plan request
 async fn create_install_synthetic_request(
     cwd: &AbsolutePathBuf,
@@ -563,13 +618,23 @@ pub async fn main(
             let (workspace_root, _) = vite_workspace::find_workspace_root(&cwd)?;
             let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 
+            // Extract resolve_universal_vite_config for the config loader (must clone before moving options)
+            let resolve_vite_config_fn = options
+                .as_ref()
+                .map(|o| Arc::clone(&o.resolve_universal_vite_config))
+                .ok_or_else(|| {
+                    Error::Anyhow(anyhow::anyhow!(
+                        "resolve_universal_vite_config is required but not available"
+                    ))
+                })?;
+
             // Create session callbacks
             let mut task_synthesizer = if let Some(options) = options {
                 VitePlusTaskSynthesizer::new(Arc::clone(&workspace_path)).with_cli_options(options)
             } else {
                 VitePlusTaskSynthesizer::new(Arc::clone(&workspace_path))
             };
-            let mut config_loader = vite_task::loader::JsonUserConfigLoader::default();
+            let mut config_loader = VitePlusConfigLoader::new(resolve_vite_config_fn);
 
             // Create single Session
             let mut session = Session::init(SessionCallbacks {

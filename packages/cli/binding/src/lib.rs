@@ -13,8 +13,7 @@ use napi_derive::napi;
 use vite_path::current_dir;
 
 use crate::cli::{
-    BoxedResolverFn, BoxedViteConfigResolverFn, CliOptions as ViteTaskCliOptions,
-    ResolveCommandResult,
+    BoxedResolverFn, CliOptions as ViteTaskCliOptions, ResolveCommandResult, ViteConfigResolverFn,
 };
 
 /// Module initialization - sets up tracing for debugging
@@ -80,15 +79,15 @@ fn create_resolver(
     })
 }
 
-/// Create a boxed vite config resolver function from a ThreadsafeFunction
+/// Create an Arc-wrapped vite config resolver function from a ThreadsafeFunction
 fn create_vite_config_resolver(
     tsf: Arc<ThreadsafeFunction<String, Promise<String>>>,
-) -> BoxedViteConfigResolverFn {
-    Box::new(move |workspace_root: String| {
+) -> ViteConfigResolverFn {
+    Arc::new(move |package_path: String| {
         let tsf = tsf.clone();
         Box::pin(async move {
             let promise: Promise<String> = tsf
-                .call_async(Ok(workspace_root))
+                .call_async(Ok(package_path))
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to resolve vite config: {}", e))?;
 

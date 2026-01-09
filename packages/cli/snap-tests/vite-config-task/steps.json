@@ -1,0 +1,10 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "# Test that task config is picked up from vite.config.ts",
+    "vite run build"
+  ]
+}

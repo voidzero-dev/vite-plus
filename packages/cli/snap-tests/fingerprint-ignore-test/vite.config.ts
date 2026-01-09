@@ -1,0 +1,13 @@
+export default {
+  tasks: {
+    "create-files": {
+      command: "mkdir -p node_modules/pkg-a dist && echo '{\"name\":\"pkg-a\",\"version\":\"1.0.0\"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js",
+      cache: true,
+      fingerprintIgnores: [
+        "node_modules/**/*",
+        "!node_modules/**/package.json",
+        "dist/**/*"
+      ]
+    }
+  }
+};

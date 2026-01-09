@@ -1,9 +1,0 @@
-{
-  "tasks": {
-    "hello": {
-      "command": "node -p process.env.MY_ENV",
-      "passThroughEnvs": ["MY_ENV"],
-      "cache": true
-    }
-  }
-}

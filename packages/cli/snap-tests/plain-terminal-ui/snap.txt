@@ -107,8 +107,8 @@ Task Details:
       → Cache miss: content of input 'input.txt' changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> json-edit vite.config.json "_.tasks.hello.passThroughEnvs=['PTE']"
-> vite run hello # passThroughEnvs changed
+> # set passThroughEnvs via env var
+> VITE_TASK_PASS_THROUGH_ENVS=PTE vite run hello # passThroughEnvs changed
 $ node hello.mjs ✗ cache miss: pass-through env config changed, executing
 bar undefined
 
@@ -126,8 +126,8 @@ Task Details:
       → Cache miss: pass-through env 'PTE' added
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> json-edit vite.config.json "_.tasks.hello.cwd='subfolder'"
-> vite run hello # cwd changed
+> # set cwd via env var (keep passThroughEnvs from previous step)
+> VITE_TASK_PASS_THROUGH_ENVS=PTE VITE_TASK_CWD=subfolder vite run hello # cwd changed
 ~/subfolder$ node hello.mjs ✗ cache miss: working directory changed, executing
 hello from subfolder
 

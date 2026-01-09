@@ -1,0 +1,18 @@
+> # Test that task config is picked up from vite.config.ts
+> vite run build
+$ echo 'build from vite.config.ts' ⊘ cache disabled: built-in command
+build from vite.config.ts
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] vite-config-task-test#build: $ echo 'build from vite.config.ts' ✓
+      → Cache disabled for built-in command
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

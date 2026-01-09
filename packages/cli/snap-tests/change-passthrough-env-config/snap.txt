@@ -34,8 +34,8 @@ Task Details:
       → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> json-edit vite.config.json '_.tasks.hello.passThroughEnvs.push("MY_ENV2")' # add a new pass through env
-> MY_ENV=2 vite run hello # cache should be invalidated because passThroughEnvs config changed
+> # add a new pass through env via VITE_TASK_PASS_THROUGH_ENVS
+> VITE_TASK_PASS_THROUGH_ENVS=MY_ENV,MY_ENV2 MY_ENV=2 vite run hello # cache should be invalidated because passThroughEnvs config changed
 $ node -p process.env.MY_ENV ✗ cache miss: pass-through env config changed, executing
 2
 

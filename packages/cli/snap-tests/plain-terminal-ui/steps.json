@@ -15,10 +15,10 @@
     "echo bar > input.txt",
     "vite run hello # input changed",
 
-    "json-edit vite.config.json \"_.tasks.hello.passThroughEnvs=['PTE']\"",
-    "vite run hello # passThroughEnvs changed",
+    "# set passThroughEnvs via env var",
+    "VITE_TASK_PASS_THROUGH_ENVS=PTE vite run hello # passThroughEnvs changed",
 
-    "json-edit vite.config.json \"_.tasks.hello.cwd='subfolder'\"",
-    "vite run hello # cwd changed"
+    "# set cwd via env var (keep passThroughEnvs from previous step)",
+    "VITE_TASK_PASS_THROUGH_ENVS=PTE VITE_TASK_CWD=subfolder vite run hello # cwd changed"
   ]
 }
