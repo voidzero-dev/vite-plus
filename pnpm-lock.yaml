@@ -954,8 +954,8 @@ importers:
   rolldown-vite/packages/vite:
     dependencies:
       '@oxc-project/runtime':
-        specifier: 0.106.0
-        version: 0.106.0
+        specifier: 0.107.0
+        version: 0.107.0
       '@types/node':
         specifier: ^20.19.0 || >=22.12.0
         version: 22.19.3
@@ -1006,8 +1006,8 @@ importers:
         specifier: ^0.3.31
         version: 0.3.31
       '@oxc-project/types':
-        specifier: 0.106.0
-        version: 0.106.0
+        specifier: 0.107.0
+        version: 0.107.0
       '@polka/compression':
         specifier: ^1.0.0-next.25
         version: 1.0.0-next.25
@@ -3499,16 +3499,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@oxc-project/runtime@0.106.0':
-    resolution: {integrity: sha512-5SW18pzHX3JRVSw07MoTLEB9yZ9/VTr0C/kdMA1202647roYTGs1HP53UHsY5GOQzkExClCqV3eBURl5mHcD2A==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-
   '@oxc-project/runtime@0.107.0':
     resolution: {integrity: sha512-Pkuh11dhnrlJky91CSu1T2v6LX59LMJqNEE0P5tot40DYOeEb1mlrINVYWcUi/bY0JkozCSWukmDxiaqB6wHGg==}
     engines: {node: ^20.19.0 || >=22.12.0}
-
-  '@oxc-project/types@0.106.0':
-    resolution: {integrity: sha512-QdsH3rZq480VnOHSHgPYOhjL8O8LBdcnSjM408BpPCCUc0JYYZPG9Gafl9i3OcGk/7137o+gweb4cCv3WAUykg==}
 
   '@oxc-project/types@0.107.0':
     resolution: {integrity: sha512-QFDRbYfV2LVx8tyqtyiah3jQPUj1mK2+RYwxyFWyGoys6XJnwTdlzO6rdNNHOPorHAu5Uo34oWRKcvNpbJarmQ==}
@@ -10377,11 +10370,7 @@ snapshots:
   '@oxc-parser/binding-win32-x64-msvc@0.107.0':
     optional: true
 
-  '@oxc-project/runtime@0.106.0': {}
-
   '@oxc-project/runtime@0.107.0': {}
-
-  '@oxc-project/types@0.106.0': {}
 
   '@oxc-project/types@0.107.0': {}
 
