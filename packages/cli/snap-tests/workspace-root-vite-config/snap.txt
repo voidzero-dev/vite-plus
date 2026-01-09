@@ -3,8 +3,6 @@
 > # Test that fmt picks up workspace root config - specify file
 > vite fmt packages/app-b/index.js --check
 Checking formatting...
-packages/app-b/index.js (<variable>ms)
-
-Format issues found in above 1 files. Run without `--check` to fix.
+All matched files use the correct format.
 Finished in <variable>ms on 1 files using <variable> threads.
 
