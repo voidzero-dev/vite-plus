@@ -4344,7 +4344,6 @@ dependencies = [
  "napi-derive",
  "serde",
  "serde_json",
- "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -4410,7 +4409,6 @@ dependencies = [
  "tokio",
  "vite_path",
  "vite_str",
- "vite_task",
  "vite_workspace",
  "wax",
 ]
