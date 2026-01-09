@@ -107,27 +107,9 @@ Task Details:
       → Cache miss: content of input 'input.txt' changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[1]> json-edit vite-task.json "_.tasks.hello.passThroughEnvs=['PTE']"
-node:fs:441
-    return binding.readFileUtf8(path, stringToFlags(options.flag));
-                   ^
-
-Error: ENOENT: no such file or directory, open 'vite-task.json'
-    at readFileSync (node:fs:441:20)
-    at file:///Volumes/code/vite-plus-workspace/vite-plus/packages/tools/src/json-edit.ts:19:25
-    at ModuleJob.run (node:internal/modules/esm/module_job:345:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
-  errno: -2,
-  code: 'ENOENT',
-  syscall: 'open',
-  path: 'vite-task.json'
-}
-
-Node.js v<semver>
-
+> json-edit vite.config.json "_.tasks.hello.passThroughEnvs=['PTE']"
 > vite run hello # passThroughEnvs changed
-$ node hello.mjs ✓ cache hit, replaying
+$ node hello.mjs ✗ cache miss: pass-through env config changed, executing
 bar undefined
 
 
@@ -135,48 +117,30 @@ bar undefined
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate, <variable>ms saved in total
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
   [1] root-package#hello: $ node hello.mjs ✓
-      → Cache hit - output replayed - <variable>ms saved
+      → Cache miss: pass-through env configuration changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[1]> json-edit vite-task.json "_.tasks.hello.cwd='subfolder'"
-node:fs:441
-    return binding.readFileUtf8(path, stringToFlags(options.flag));
-                   ^
-
-Error: ENOENT: no such file or directory, open 'vite-task.json'
-    at readFileSync (node:fs:441:20)
-    at file:///Volumes/code/vite-plus-workspace/vite-plus/packages/tools/src/json-edit.ts:19:25
-    at ModuleJob.run (node:internal/modules/esm/module_job:345:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
-  errno: -2,
-  code: 'ENOENT',
-  syscall: 'open',
-  path: 'vite-task.json'
-}
-
-Node.js v<semver>
-
+> json-edit vite.config.json "_.tasks.hello.cwd='subfolder'"
 > vite run hello # cwd changed
-$ node hello.mjs ✓ cache hit, replaying
-bar undefined
+~/subfolder$ node hello.mjs ✗ cache miss: working directory changed, executing
+hello from subfolder
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate, <variable>ms saved in total
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello: $ node hello.mjs ✓
-      → Cache hit - output replayed - <variable>ms saved
+  [1] root-package#hello: ~/subfolder$ node hello.mjs ✓
+      → Cache miss: working directory changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
