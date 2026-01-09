@@ -4,6 +4,7 @@ foo
 $ echo bar ⊘ cache disabled: built-in command
 bar
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -13,9 +14,9 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello: echo -n foo ✓
+  [1] hello: $ echo -n foo ✓
       → Cache disabled for built-in command
   ·······················································
-  [2] hello: echo bar ✓
+  [2] hello: $ echo bar ✓
       → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -7,19 +7,20 @@ $ vite lint
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   2 tasks • 0 cache hits • 2 cache misses  
+Statistics:   2 tasks • 0 cache hits • 2 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello: vite lint ./src ✓
+  [1] root-package#hello: $ vite lint ./src ✓
       → Cache miss: no previous cache entry found
   ·······················································
-  [2] root-package#hello: vite lint ✓
+  [2] root-package#hello: $ vite lint ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -33,18 +34,19 @@ $ vite lint ✗ cache miss: content of input 'a.ts' changed, executing
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   2 tasks • 1 cache hits • 1 cache misses  
+Statistics:   2 tasks • 1 cache hits • 1 cache misses 
 Performance:  50% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello: vite lint ./src ✓
+  [1] root-package#hello: $ vite lint ./src ✓
       → Cache hit - output replayed - <variable>ms saved
   ·······················································
-  [2] root-package#hello: vite lint ✓
+  [2] root-package#hello: $ vite lint ✓
       → Cache miss: content of input 'a.ts' changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

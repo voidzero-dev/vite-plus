@@ -5,6 +5,7 @@ foo
 $ echo bar ⊘ cache disabled: built-in command
 bar
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -14,10 +15,10 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello: echo foo ✓
+  [1] hello: $ echo foo ✓
       → Cache disabled for built-in command
   ·······················································
-  [2] hello: echo bar ✓
+  [2] hello: $ echo bar ✓
       → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -29,6 +30,7 @@ baz
 $ echo bar ⊘ cache disabled: built-in command
 bar
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -38,10 +40,10 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello: echo baz ✓
+  [1] hello: $ echo baz ✓
       → Cache disabled for built-in command
   ·······················································
-  [2] hello: echo bar ✓
+  [2] hello: $ echo bar ✓
       → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -49,6 +51,7 @@ Task Details:
 > vite run hello # can still hit cache even the subcommand index changed
 $ echo bar ⊘ cache disabled: built-in command
 bar
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
@@ -59,6 +62,6 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello: echo bar ✓
+  [1] hello: $ echo bar ✓
       → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

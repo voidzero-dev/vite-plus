@@ -5,6 +5,7 @@ hello
 $ node main.js
 foo
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -14,10 +15,10 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] test-task: echo hello ✓
+  [1] test-task: $ echo hello ✓
       → Cache disabled for built-in command
   ·······················································
-  [2] test-task: node main.js ✓
+  [2] test-task: $ node main.js ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -29,6 +30,7 @@ hello
 $ node main.js ✗ cache miss: content of input 'main.js' changed, executing
 bar
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -38,9 +40,9 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] test-task: echo hello ✓
+  [1] test-task: $ echo hello ✓
       → Cache disabled for built-in command
   ·······················································
-  [2] test-task: node main.js ✓
+  [2] test-task: $ node main.js ✓
       → Cache miss: content of input 'main.js' changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
