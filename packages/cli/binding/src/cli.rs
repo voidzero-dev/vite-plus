@@ -10,6 +10,8 @@ use std::{
 
 use clap::Subcommand;
 use monostate::MustBe;
+use serde::{Deserialize, Serialize};
+use tokio::fs::write;
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
@@ -17,6 +19,13 @@ use vite_task::{
     CLIArgs, EnabledCacheConfig, LabeledReporter, Session, SessionCallbacks, TaskSynthesizer,
     UserCacheConfig, UserTaskOptions, plan_request::SyntheticPlanRequest,
 };
+
+/// Resolved configuration from vite.config.ts
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolvedUniversalViteConfig {
+    pub lint: Option<serde_json::Value>,
+    pub fmt: Option<serde_json::Value>,
+}
 
 /// Result type for resolved commands from JavaScript
 #[derive(Debug, Clone)]
@@ -109,6 +118,10 @@ pub enum CacheSubcommand {
 pub type BoxedResolverFn =
     Box<dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<ResolveCommandResult>> + 'static>>>;
 
+/// Type alias for boxed vite config resolver function (takes workspace root path, returns JSON string)
+pub type BoxedViteConfigResolverFn =
+    Box<dyn Fn(String) -> Pin<Box<dyn Future<Output = anyhow::Result<String>> + 'static>>>;
+
 /// CLI options containing JavaScript resolver functions (using boxed futures for simplicity)
 pub struct CliOptions {
     pub lint: BoxedResolverFn,
@@ -117,35 +130,32 @@ pub struct CliOptions {
     pub test: BoxedResolverFn,
     pub lib: BoxedResolverFn,
     pub doc: BoxedResolverFn,
+    pub resolve_universal_vite_config: BoxedViteConfigResolverFn,
 }
 
 /// Task synthesizer for vite-plus that uses JavaScript resolver functions
 pub struct VitePlusTaskSynthesizer {
     cli_options: Option<CliOptions>,
+    workspace_path: Arc<AbsolutePath>,
 }
 
 impl std::fmt::Debug for VitePlusTaskSynthesizer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VitePlusTaskSynthesizer")
             .field("has_cli_options", &self.cli_options.is_some())
+            .field("workspace_path", &self.workspace_path)
             .finish()
     }
 }
 
 impl VitePlusTaskSynthesizer {
-    pub fn new() -> Self {
-        Self { cli_options: None }
+    pub fn new(workspace_path: Arc<AbsolutePath>) -> Self {
+        Self { cli_options: None, workspace_path }
     }
 
     pub fn with_cli_options(mut self, cli_options: CliOptions) -> Self {
         self.cli_options = Some(cli_options);
         self
-    }
-}
-
-impl Default for VitePlusTaskSynthesizer {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -162,7 +172,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
         cwd: &Arc<AbsolutePath>,
     ) -> anyhow::Result<SyntheticPlanRequest> {
         match subcommand {
-            CustomTaskSubcommand::Lint { args } => {
+            CustomTaskSubcommand::Lint { mut args } => {
                 let cli_options = self
                     .cli_options
                     .as_ref()
@@ -172,6 +182,34 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("lint JS path is not valid UTF-8"))?;
+
+                // Resolve vite config and extract lint config
+                let workspace_path_str = self
+                    .workspace_path
+                    .as_path()
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("workspace path is not valid UTF-8"))?;
+                let vite_config_json =
+                    (cli_options.resolve_universal_vite_config)(workspace_path_str.to_string())
+                        .await?;
+                let resolved_vite_config: ResolvedUniversalViteConfig =
+                    serde_json::from_str(&vite_config_json).inspect_err(|_| {
+                        tracing::error!("Failed to parse vite config: {vite_config_json}");
+                    })?;
+
+                // If lint config exists, write to tmp-config and add -c arg
+                if let Some(lint_config) = resolved_vite_config.lint {
+                    let config_dir = self.workspace_path.join("node_modules/.vite/tmp-config");
+                    tokio::fs::create_dir_all(&config_dir).await?;
+                    let oxlint_config_path = config_dir.join(".oxlintrc.json");
+                    write(&oxlint_config_path, serde_json::to_string(&lint_config)?).await?;
+                    let oxlint_config_path_str = oxlint_config_path
+                        .as_path()
+                        .to_str()
+                        .ok_or_else(|| anyhow::anyhow!("oxlint config path is not valid UTF-8"))?;
+                    args.insert(0, oxlint_config_path_str.to_string());
+                    args.insert(0, "-c".to_string());
+                }
 
                 let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("lint"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
@@ -204,7 +242,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     envs: Arc::new(envs),
                 })
             }
-            CustomTaskSubcommand::Fmt { args } => {
+            CustomTaskSubcommand::Fmt { mut args } => {
                 let cli_options = self
                     .cli_options
                     .as_ref()
@@ -214,6 +252,34 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("fmt JS path is not valid UTF-8"))?;
+
+                // Resolve vite config and extract fmt config
+                let workspace_path_str = self
+                    .workspace_path
+                    .as_path()
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("workspace path is not valid UTF-8"))?;
+                let vite_config_json =
+                    (cli_options.resolve_universal_vite_config)(workspace_path_str.to_string())
+                        .await?;
+                let resolved_vite_config: ResolvedUniversalViteConfig =
+                    serde_json::from_str(&vite_config_json).inspect_err(|_| {
+                        tracing::error!("Failed to parse vite config: {vite_config_json}");
+                    })?;
+
+                // If fmt config exists, write to tmp-config and add -c arg
+                if let Some(fmt_config) = resolved_vite_config.fmt {
+                    let config_dir = self.workspace_path.join("node_modules/.vite/tmp-config");
+                    tokio::fs::create_dir_all(&config_dir).await?;
+                    let oxfmt_config_path = config_dir.join(".oxfmtrc.json");
+                    write(&oxfmt_config_path, serde_json::to_string(&fmt_config)?).await?;
+                    let oxfmt_config_path_str = oxfmt_config_path
+                        .as_path()
+                        .to_str()
+                        .ok_or_else(|| anyhow::anyhow!("oxfmt config path is not valid UTF-8"))?;
+                    args.insert(0, oxfmt_config_path_str.to_string());
+                    args.insert(0, "-c".to_string());
+                }
 
                 let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("fmt"))
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
@@ -493,11 +559,15 @@ pub async fn main(
             }
         }
         CLIArgs::Task(task_cli_args) => {
+            // Get workspace root path first (needed for synthesizer)
+            let (workspace_root, _) = vite_workspace::find_workspace_root(&cwd)?;
+            let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
+
             // Create session callbacks
             let mut task_synthesizer = if let Some(options) = options {
-                VitePlusTaskSynthesizer::new().with_cli_options(options)
+                VitePlusTaskSynthesizer::new(Arc::clone(&workspace_path)).with_cli_options(options)
             } else {
-                VitePlusTaskSynthesizer::new()
+                VitePlusTaskSynthesizer::new(Arc::clone(&workspace_path))
             };
             let mut config_loader = vite_task::loader::JsonUserConfigLoader::default();
 

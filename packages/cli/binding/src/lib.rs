@@ -12,7 +12,10 @@ use napi::{anyhow, bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
 use vite_path::current_dir;
 
-use crate::cli::{BoxedResolverFn, CliOptions as ViteTaskCliOptions, ResolveCommandResult};
+use crate::cli::{
+    BoxedResolverFn, BoxedViteConfigResolverFn, CliOptions as ViteTaskCliOptions,
+    ResolveCommandResult,
+};
 
 /// Module initialization - sets up tracing for debugging
 #[napi_derive::module_init]
@@ -32,6 +35,8 @@ pub struct CliOptions {
     pub cwd: Option<String>,
     /// CLI arguments (should be process.argv.slice(2) from JavaScript)
     pub args: Option<Vec<String>>,
+    /// Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side
+    pub resolve_universal_vite_config: Arc<ThreadsafeFunction<String, Promise<String>>>,
 }
 
 /// Result returned by JavaScript resolver functions.
@@ -75,6 +80,27 @@ fn create_resolver(
     })
 }
 
+/// Create a boxed vite config resolver function from a ThreadsafeFunction
+fn create_vite_config_resolver(
+    tsf: Arc<ThreadsafeFunction<String, Promise<String>>>,
+) -> BoxedViteConfigResolverFn {
+    Box::new(move |workspace_root: String| {
+        let tsf = tsf.clone();
+        Box::pin(async move {
+            let promise: Promise<String> = tsf
+                .call_async(Ok(workspace_root))
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to resolve vite config: {}", e))?;
+
+            let resolved: String = promise
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to resolve vite config: {}", e))?;
+
+            Ok(resolved)
+        })
+    })
+}
+
 /// Main entry point for the CLI, called from JavaScript.
 ///
 /// This is an async function that spawns a new thread for the non-Send async code
@@ -95,6 +121,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     let test_tsf = options.test;
     let lib_tsf = options.lib;
     let doc_tsf = options.doc;
+    let resolve_universal_vite_config_tsf = options.resolve_universal_vite_config;
     let args = options.args;
 
     // Create a channel to receive the result from the worker thread
@@ -112,6 +139,9 @@ pub async fn run(options: CliOptions) -> Result<i32> {
             test: create_resolver(test_tsf, "Failed to resolve test command"),
             lib: create_resolver(lib_tsf, "Failed to resolve lib command"),
             doc: create_resolver(doc_tsf, "Failed to resolve doc command"),
+            resolve_universal_vite_config: create_vite_config_resolver(
+                resolve_universal_vite_config_tsf,
+            ),
         };
 
         // Create a new single-threaded runtime for non-Send futures
