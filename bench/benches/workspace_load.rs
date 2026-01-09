@@ -1,4 +1,7 @@
-use std::{collections::HashMap, convert::Infallible, ffi::OsStr, hint::black_box, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap, convert::Infallible, ffi::OsStr, hint::black_box, path::PathBuf,
+    sync::Arc,
+};
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use tokio::runtime::Runtime;
@@ -65,39 +68,26 @@ fn bench_workspace_load(c: &mut Criterion) {
                 )
                 .expect("Failed to create session");
                 black_box(
-                    session
-                        .ensure_task_graph_loaded()
-                        .await
-                        .expect("Failed to load task graph"),
+                    session.ensure_task_graph_loaded().await.expect("Failed to load task graph"),
                 );
             });
         });
     });
 
-    session_group.bench_with_input(
-        BenchmarkId::new("packages", 100),
-        &fixture_path,
-        |b, path| {
-            b.iter(|| {
-                runtime.block_on(async {
-                    let mut owned_callbacks = BenchSessionCallbacks::default();
-                    let envs: HashMap<Arc<OsStr>, Arc<OsStr>> = HashMap::new();
-                    let mut session = Session::init_with(
-                        envs,
-                        path.clone().into(),
-                        owned_callbacks.as_callbacks(),
-                    )
-                    .expect("Failed to create session");
-                    black_box(
-                        session
-                            .ensure_task_graph_loaded()
-                            .await
-                            .expect("Failed to load task graph"),
-                    );
-                });
+    session_group.bench_with_input(BenchmarkId::new("packages", 100), &fixture_path, |b, path| {
+        b.iter(|| {
+            runtime.block_on(async {
+                let mut owned_callbacks = BenchSessionCallbacks::default();
+                let envs: HashMap<Arc<OsStr>, Arc<OsStr>> = HashMap::new();
+                let mut session =
+                    Session::init_with(envs, path.clone().into(), owned_callbacks.as_callbacks())
+                        .expect("Failed to create session");
+                black_box(
+                    session.ensure_task_graph_loaded().await.expect("Failed to load task graph"),
+                );
             });
-        },
-    );
+        });
+    });
 
     session_group.finish();
 }

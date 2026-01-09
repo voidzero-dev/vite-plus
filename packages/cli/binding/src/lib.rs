@@ -70,9 +70,8 @@ fn create_resolver(
                 .map_err(|e| anyhow::anyhow!("{}: {}", error_message, e))?;
 
             // Await the promise
-            let resolved: JsCommandResolvedResult = promise
-                .await
-                .map_err(|e| anyhow::anyhow!("{}: {}", error_message, e))?;
+            let resolved: JsCommandResolvedResult =
+                promise.await.map_err(|e| anyhow::anyhow!("{}: {}", error_message, e))?;
 
             Ok(resolved.into())
         })
@@ -151,9 +150,8 @@ pub async fn run(options: CliOptions) -> Result<i32> {
 
         // Run the CLI in a LocalSet to allow non-Send futures
         let local = tokio::task::LocalSet::new();
-        let result = local.block_on(&rt, async {
-            crate::cli::main(cwd, Some(cli_options), args).await
-        });
+        let result =
+            local.block_on(&rt, async { crate::cli::main(cwd, Some(cli_options), args).await });
 
         // Send the result back to the NAPI async context
         let _ = tx.send(result);
@@ -166,14 +164,12 @@ pub async fn run(options: CliOptions) -> Result<i32> {
 
     match result {
         Ok(exit_status) => Ok(exit_status.code().unwrap_or(1)),
-        Err(e) => {
-            match e {
-                vite_error::Error::UserCancelled => Ok(130),
-                _ => {
-                    tracing::error!("Rust error: {:?}", e);
-                    Err(anyhow::Error::from(e).into())
-                }
+        Err(e) => match e {
+            vite_error::Error::UserCancelled => Ok(130),
+            _ => {
+                tracing::error!("Rust error: {:?}", e);
+                Err(anyhow::Error::from(e).into())
             }
-        }
+        },
     }
 }

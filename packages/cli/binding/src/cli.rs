@@ -507,8 +507,8 @@ impl UserConfigLoader for VitePlusConfigLoader {
             .ok_or_else(|| anyhow::anyhow!("package path is not valid UTF-8"))?;
 
         let config_json = (self.resolve_fn)(package_path_str.to_string()).await?;
-        let resolved: ResolvedUniversalViteConfig =
-            serde_json::from_str(&config_json).inspect_err(|_| {
+        let resolved: ResolvedUniversalViteConfig = serde_json::from_str(&config_json)
+            .inspect_err(|_| {
                 tracing::error!("Failed to parse vite config: {config_json}");
             })?;
 
