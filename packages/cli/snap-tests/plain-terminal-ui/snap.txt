@@ -102,16 +102,16 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 [1]> json-edit vite-task.json "_.tasks.hello.passThroughEnvs=['PTE']"
-node:fs:441
+node:fs:435
     return binding.readFileUtf8(path, stringToFlags(options.flag));
                    ^
 
 Error: ENOENT: no such file or directory, open 'vite-task.json'
-    at readFileSync (node:fs:441:20)
-    at file://<homedir>/code/vite-plus/packages/tools/src/json-edit.ts:19:25
-    at ModuleJob.run (node:internal/modules/esm/module_job:345:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+    at readFileSync (node:fs:435:20)
+    at file:///Volumes/code/vite-plus-workspace/vite-plus/packages/tools/src/json-edit.ts:19:25
+    at ModuleJob.run (node:internal/modules/esm/module_job:413:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:654:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
   errno: -2,
   code: 'ENOENT',
   syscall: 'open',
@@ -138,16 +138,16 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 [1]> json-edit vite-task.json "_.tasks.hello.cwd='subfolder'"
-node:fs:441
+node:fs:435
     return binding.readFileUtf8(path, stringToFlags(options.flag));
                    ^
 
 Error: ENOENT: no such file or directory, open 'vite-task.json'
-    at readFileSync (node:fs:441:20)
-    at file://<homedir>/code/vite-plus/packages/tools/src/json-edit.ts:19:25
-    at ModuleJob.run (node:internal/modules/esm/module_job:345:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+    at readFileSync (node:fs:435:20)
+    at file:///Volumes/code/vite-plus-workspace/vite-plus/packages/tools/src/json-edit.ts:19:25
+    at ModuleJob.run (node:internal/modules/esm/module_job:413:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:654:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
   errno: -2,
   code: 'ENOENT',
   syscall: 'open',

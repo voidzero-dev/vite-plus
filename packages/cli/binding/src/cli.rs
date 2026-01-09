@@ -3,13 +3,16 @@
 //! This module contains all the CLI-related code.
 //! It handles argument parsing, command dispatching, and orchestration of the task execution.
 
-use std::{env, ffi::OsStr, future::Future, iter, pin::Pin, process::ExitStatus, sync::Arc};
+use std::{
+    collections::HashMap, env, ffi::OsStr, future::Future, iter, pin::Pin, process::ExitStatus,
+    sync::Arc,
+};
 
 use clap::Subcommand;
+use monostate::MustBe;
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
-use monostate::MustBe;
 use vite_task::{
     CLIArgs, EnabledCacheConfig, LabeledReporter, Session, SessionCallbacks, TaskSynthesizer,
     UserCacheConfig, UserTaskOptions, plan_request::SyntheticPlanRequest,
@@ -155,7 +158,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
     async fn synthesize_task(
         &mut self,
         subcommand: CustomTaskSubcommand,
-        _path_env: Option<&Arc<OsStr>>,
+        envs: &Arc<HashMap<Arc<OsStr>, Arc<OsStr>>>,
         cwd: &Arc<AbsolutePath>,
     ) -> anyhow::Result<SyntheticPlanRequest> {
         match subcommand {
@@ -174,12 +177,12 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
                     .collect();
 
-                // Convert resolved.envs to Arc<[(Arc<OsStr>, Arc<OsStr>)]>
-                let additional_envs: Arc<[(Arc<OsStr>, Arc<OsStr>)]> = resolved
-                    .envs
-                    .into_iter()
-                    .map(|(k, v)| (Arc::from(OsStr::new(&k)), Arc::from(OsStr::new(&v))))
-                    .collect();
+                // Clone envs and extend with resolved.envs (without overriding existing entries)
+                let mut envs = HashMap::clone(envs);
+                for (k, v) in resolved.envs {
+                    envs.entry(Arc::from(OsStr::new(&k)))
+                        .or_insert_with(|| Arc::from(OsStr::new(&v)));
+                }
 
                 Ok(SyntheticPlanRequest {
                     program: Arc::from(OsStr::new("node")),
@@ -198,7 +201,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         ..Default::default()
                     },
                     direct_execution_cache_key,
-                    additional_envs,
+                    envs: Arc::new(envs),
                 })
             }
             CustomTaskSubcommand::Fmt { args } => {
@@ -223,7 +226,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    additional_envs: Arc::new([]),
+                    envs: Arc::clone(envs),
                 })
             }
             CustomTaskSubcommand::Build { args } => {
@@ -249,7 +252,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    additional_envs: Arc::new([]),
+                    envs: Arc::clone(envs),
                 })
             }
             CustomTaskSubcommand::Test { args } => {
@@ -274,7 +277,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    additional_envs: Arc::new([]),
+                    envs: Arc::clone(envs),
                 })
             }
             CustomTaskSubcommand::Lib { args } => {
@@ -299,7 +302,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    additional_envs: Arc::new([]),
+                    envs: Arc::clone(envs),
                 })
             }
             CustomTaskSubcommand::Dev { args } => {
@@ -325,7 +328,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    additional_envs: Arc::new([]),
+                    envs: Arc::clone(envs),
                 })
             }
             CustomTaskSubcommand::Preview { args } => {
@@ -351,7 +354,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    additional_envs: Arc::new([]),
+                    envs: Arc::clone(envs),
                 })
             }
             CustomTaskSubcommand::Doc { args } => {
@@ -376,7 +379,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    additional_envs: Arc::new([]),
+                    envs: Arc::clone(envs),
                 })
             }
             CustomTaskSubcommand::Install { args } => {
@@ -390,11 +393,13 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .collect();
 
                 Ok(SyntheticPlanRequest {
-                    program: Arc::<OsStr>::from(OsStr::new(&resolve_command.bin_path).to_os_string()),
+                    program: Arc::<OsStr>::from(
+                        OsStr::new(&resolve_command.bin_path).to_os_string(),
+                    ),
                     args: resolve_command.args.into_iter().map(Str::from).collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    additional_envs: Arc::new([]),
+                    envs: Arc::clone(envs),
                 })
             }
         }
@@ -413,7 +418,11 @@ async fn create_install_synthetic_request(
         args: resolve_command.args.into_iter().map(Str::from).collect(),
         task_options: Default::default(),
         direct_execution_cache_key: vec![Str::from("install")].into(),
-        additional_envs: Arc::new([]),
+        envs: Arc::new(
+            std::env::vars_os()
+                .map(|(k, v)| (Arc::from(k.as_os_str()), Arc::from(v.as_os_str())))
+                .collect(),
+        ),
     })
 }
 
@@ -532,10 +541,7 @@ pub async fn main(
                 .await
                 .map_err(|e| Error::Anyhow(e.into()))?;
             let reporter = LabeledReporter::new(std::io::stdout(), session.workspace_path());
-            session
-                .execute(plan, Box::new(reporter))
-                .await
-                .map_err(|e| Error::Anyhow(e.into()))?;
+            session.execute(plan, Box::new(reporter)).await.map_err(|e| Error::Anyhow(e.into()))?;
 
             Ok(ExitStatus::default())
         }

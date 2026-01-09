@@ -2,15 +2,15 @@
 $ vite lib
 
  ERROR  Error: undefined No input files, try "tsdown <your-file>" or create src/index.ts
-    at resolveEntry (file://<homedir>/code/vite-plus/packages/core/dist/tsdown/index.js:3146:14)
-    at async resolveUserConfig (file://<homedir>/code/vite-plus/packages/core/dist/tsdown/index.js:3575:24)
+    at resolveEntry (file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/index.js:3146:14)
+    at async resolveUserConfig (file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/index.js:3575:24)
     at async Promise.all (index 0)
-    at async file://<homedir>/code/vite-plus/packages/core/dist/tsdown/index.js:3977:11
+    at async file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/index.js:3977:11
     at async Promise.all (index 0)
-    at async resolveConfig (file://<homedir>/code/vite-plus/packages/core/dist/tsdown/index.js:3973:19)
-    at async build$1 (file://<homedir>/code/vite-plus/packages/core/dist/tsdown/index.js:4748:42)
-    at async CAC.<anonymous> (file://<homedir>/code/vite-plus/packages/cli/dist/lib-bin.js:68:5)
-    at async runCLI (file://<homedir>/code/vite-plus/packages/cli/dist/lib-bin.js:79:9)
+    at async resolveConfig (file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/index.js:3973:19)
+    at async build$1 (file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/index.js:4748:42)
+    at async CAC.<anonymous> (file:///Volumes/code/vite-plus-workspace/vite-plus/packages/cli/dist/lib-bin.js:68:5)
+    at async runCLI (file:///Volumes/code/vite-plus-workspace/vite-plus/packages/cli/dist/lib-bin.js:79:9)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
