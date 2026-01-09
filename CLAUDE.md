@@ -89,7 +89,7 @@ vite dev                             # runs dev script from package.json
 
 ## Snap Tests
 
-Snap tests are located in `packages/global/snap-tests/`. Each test case is a directory containing:
+Snap tests are located in `packages/global/snap-tests/` and `packages/cli/snap-tests/`. Each test case is a directory containing:
 
 - `package.json` - Package configuration for the test
 - `steps.json` - Commands to run and environment variables
@@ -97,11 +97,11 @@ Snap tests are located in `packages/global/snap-tests/`. Each test case is a dir
 - `snap.txt` - Expected output (generated/updated by running the test)
 
 ```bash
-# Run all snap tests
+# Run all global snap tests (for local cli, the package name would be @voidzero-dev/vite-plus)
 pnpm -F @voidzero-dev/global snap-test
 
 # Run a specific snap test by name filter
 pnpm -F @voidzero-dev/global snap-test migration-skip-vite-peer-dependency
 ```
 
-The snap test will automatically generate/update the `snap.txt` file with the command outputs.
+The snap test will automatically generate/update the `snap.txt` file with the command outputs. It exits with zero status even if there are output differences; you need to manually check the diffs(`git diff`) to verify correctness.
