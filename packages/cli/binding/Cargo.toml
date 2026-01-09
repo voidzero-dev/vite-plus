@@ -3,10 +3,6 @@ name = "vite-plus-cli"
 version = "0.0.0"
 edition = "2024"
 
-[[bin]]
-name = "vite"
-path = "src/main.rs"
-
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
