@@ -67,7 +67,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] root-package#hello: $ node hello.mjs ✓
-      → Cache miss: env BAR value changed from '<not set>' to '1'
+      → Cache miss: env BAR=1 added
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run hello # env removed
@@ -85,7 +85,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] root-package#hello: $ node hello.mjs ✓
-      → Cache miss: env BAR value changed from '1' to '<removed>'
+      → Cache miss: env BAR=1 removed; env FOO=2 removed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > echo bar > input.txt
@@ -123,7 +123,7 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] root-package#hello: $ node hello.mjs ✓
-      → Cache miss: pass-through env configuration changed
+      → Cache miss: pass-through env 'PTE' added
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > json-edit vite.config.json "_.tasks.hello.cwd='subfolder'"

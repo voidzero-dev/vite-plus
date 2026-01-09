@@ -50,5 +50,5 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] hello: $ node -p process.env.MY_ENV ✓
-      → Cache miss: pass-through env configuration changed
+      → Cache miss: pass-through env 'MY_ENV2' added
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
