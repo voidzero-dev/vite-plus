@@ -4,7 +4,7 @@ Finished in <variable>ms on 1 file with <variable> rules using <variable> thread
 
 
 > vite run lint # lint script should have different cache from builtin lint
-$ echo lint script
+$ echo lint script ⊘ cache disabled: built-in command
 lint script
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -22,13 +22,13 @@ Task Details:
 
 > echo 'console.log(1);' > a.js
 > vite lint
+✗ cache miss: content of input 'a.js' changed, executing
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
-→ Cache miss: content of input 'a.js' changed
 
 > vite run lint
-$ echo lint script
+$ echo lint script ⊘ cache disabled: built-in command
 lint script
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

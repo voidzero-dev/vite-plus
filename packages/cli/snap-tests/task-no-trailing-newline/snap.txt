@@ -1,7 +1,7 @@
 > vite run hello
-$ echo -n foo
+$ echo -n foo ⊘ cache disabled: built-in command
 foo
-$ echo bar
+$ echo bar ⊘ cache disabled: built-in command
 bar
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

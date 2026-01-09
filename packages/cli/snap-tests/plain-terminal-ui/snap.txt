@@ -16,7 +16,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > FOO=1 vite run hello # hit cache
-$ node hello.mjs (✓ cache hit, replaying)
+$ node hello.mjs ✓ cache hit, replaying
 input_content 1
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -33,7 +33,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > FOO=2 vite run hello # env changed
-$ node hello.mjs (✗ cache miss: command configuration changed, executing)
+$ node hello.mjs ✗ cache miss: envs changed, executing
 input_content 2
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -46,11 +46,11 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] root-package#hello: node hello.mjs ✓
-      → Cache miss: command configuration changed
+      → Cache miss: env FOO value changed from '1' to '2'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > FOO=2 BAR=1 vite run hello # env added
-$ node hello.mjs (✗ cache miss: command configuration changed, executing)
+$ node hello.mjs ✗ cache miss: envs changed, executing
 input_content 2
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -63,11 +63,11 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] root-package#hello: node hello.mjs ✓
-      → Cache miss: command configuration changed
+      → Cache miss: env BAR value changed from '<not set>' to '1'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run hello # env removed
-$ node hello.mjs (✗ cache miss: command configuration changed, executing)
+$ node hello.mjs ✗ cache miss: envs changed, executing
 input_content undefined
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -80,12 +80,12 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] root-package#hello: node hello.mjs ✓
-      → Cache miss: command configuration changed
+      → Cache miss: env BAR value changed from '1' to '<removed>'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > echo bar > input.txt
 > vite run hello # input changed
-$ node hello.mjs (✗ cache miss: input files changed, executing)
+$ node hello.mjs ✗ cache miss: content of input 'input.txt' changed, executing
 bar undefined
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -102,16 +102,16 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 [1]> json-edit vite-task.json "_.tasks.hello.passThroughEnvs=['PTE']"
-node:fs:435
+node:fs:441
     return binding.readFileUtf8(path, stringToFlags(options.flag));
                    ^
 
 Error: ENOENT: no such file or directory, open 'vite-task.json'
-    at readFileSync (node:fs:435:20)
+    at readFileSync (node:fs:441:20)
     at file:///Volumes/code/vite-plus-workspace/vite-plus/packages/tools/src/json-edit.ts:19:25
-    at ModuleJob.run (node:internal/modules/esm/module_job:413:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:654:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+    at ModuleJob.run (node:internal/modules/esm/module_job:345:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
   errno: -2,
   code: 'ENOENT',
   syscall: 'open',
@@ -121,7 +121,7 @@ Error: ENOENT: no such file or directory, open 'vite-task.json'
 Node.js v<semver>
 
 > vite run hello # passThroughEnvs changed
-$ node hello.mjs (✓ cache hit, replaying)
+$ node hello.mjs ✓ cache hit, replaying
 bar undefined
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -138,16 +138,16 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 [1]> json-edit vite-task.json "_.tasks.hello.cwd='subfolder'"
-node:fs:435
+node:fs:441
     return binding.readFileUtf8(path, stringToFlags(options.flag));
                    ^
 
 Error: ENOENT: no such file or directory, open 'vite-task.json'
-    at readFileSync (node:fs:435:20)
+    at readFileSync (node:fs:441:20)
     at file:///Volumes/code/vite-plus-workspace/vite-plus/packages/tools/src/json-edit.ts:19:25
-    at ModuleJob.run (node:internal/modules/esm/module_job:413:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:654:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+    at ModuleJob.run (node:internal/modules/esm/module_job:345:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
   errno: -2,
   code: 'ENOENT',
   syscall: 'open',
@@ -157,7 +157,7 @@ Error: ENOENT: no such file or directory, open 'vite-task.json'
 Node.js v<semver>
 
 > vite run hello # cwd changed
-$ node hello.mjs (✓ cache hit, replaying)
+$ node hello.mjs ✓ cache hit, replaying
 bar undefined
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

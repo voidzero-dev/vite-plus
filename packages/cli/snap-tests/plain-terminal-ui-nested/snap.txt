@@ -25,11 +25,11 @@ Task Details:
 
 > echo 'console.log(123)' > a.ts
 > vite run hello # report cache status from the inner runner
-$ vite lint ./src (✓ cache hit, replaying)
+$ vite lint ./src ✓ cache hit, replaying
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
-$ vite lint (✗ cache miss: input files changed, executing)
+$ vite lint ✗ cache miss: content of input 'a.ts' changed, executing
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
 

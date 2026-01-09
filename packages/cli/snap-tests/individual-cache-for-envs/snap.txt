@@ -16,7 +16,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > FOO=2 vite run hello # cache miss due to env change
-$ node -p process.env.FOO (✗ cache miss: command configuration changed, executing)
+$ node -p process.env.FOO ✗ cache miss: envs changed, executing
 2
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -29,11 +29,11 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] hello: node -p process.env.FOO ✓
-      → Cache miss: command configuration changed
+      → Cache miss: env FOO value changed from '1' to '2'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > FOO=1 vite run hello # hit cache created in step 1
-$ node -p process.env.FOO (✓ cache hit, replaying)
+$ node -p process.env.FOO ✓ cache hit, replaying
 1
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -50,7 +50,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > FOO=2 vite run hello # hit cache created in step 2
-$ node -p process.env.FOO (✓ cache hit, replaying)
+$ node -p process.env.FOO ✓ cache hit, replaying
 2
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

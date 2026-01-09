@@ -1,5 +1,5 @@
 > vite run script1 # simple task
-$ echo 'hello vite'
+$ echo 'hello vite' ⊘ cache disabled: built-in command
 hello vite
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -16,7 +16,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run script2 # nested task should work
-$ echo 'hello vite'
+$ echo 'hello vite' ⊘ cache disabled: built-in command
 hello vite
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

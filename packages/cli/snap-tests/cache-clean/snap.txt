@@ -1,5 +1,5 @@
 > vite run hello # create the cache for 'echo hello'
-$ echo hello
+$ echo hello ⊘ cache disabled: built-in command
 hello
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -16,7 +16,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run hello # hit the cache
-$ echo hello
+$ echo hello ⊘ cache disabled: built-in command
 hello
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -34,7 +34,7 @@ Task Details:
 
 > vite cache clean # clean the cache
 > vite run hello # cache miss after clean
-$ echo hello
+$ echo hello ⊘ cache disabled: built-in command
 hello
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -52,7 +52,7 @@ Task Details:
 
 > cd subfolder && vite cache clean # cache can be located and cleaned from subfolder
 > vite run hello # cache miss after clean
-$ echo hello
+$ echo hello ⊘ cache disabled: built-in command
 hello
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

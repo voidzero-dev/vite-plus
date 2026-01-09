@@ -16,7 +16,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > MY_ENV=2 vite run hello # MY_ENV is pass-through. should hit the cache created in step 1
-$ node -p process.env.MY_ENV (✓ cache hit, replaying)
+$ node -p process.env.MY_ENV ✓ cache hit, replaying
 1
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -34,7 +34,7 @@ Task Details:
 
 > json-edit vite.config.json '_.tasks.hello.passThroughEnvs.push("MY_ENV2")' # add a new pass through env
 > MY_ENV=2 vite run hello # cache should be invalidated because passThroughEnvs config changed
-$ node -p process.env.MY_ENV (✗ cache miss: command configuration changed, executing)
+$ node -p process.env.MY_ENV ✗ cache miss: pass-through env config changed, executing
 2
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -47,5 +47,5 @@ Performance:  0% cache hit rate
 Task Details:
 ────────────────────────────────────────────────
   [1] hello: node -p process.env.MY_ENV ✓
-      → Cache miss: command configuration changed
+      → Cache miss: pass-through env configuration changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

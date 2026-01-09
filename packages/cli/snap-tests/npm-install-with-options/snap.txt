@@ -11,11 +11,10 @@ Options:
 [--global-style] [--omit <dev|optional|peer> [--omit <dev|optional|peer> ...]]
 [--include <prod|dev|optional|peer> [--include <prod|dev|optional|peer> ...]]
 [--strict-peer-deps] [--prefer-dedupe] [--no-package-lock] [--package-lock-only]
-[--foreground-scripts] [--ignore-scripts] [--no-audit] [--before <date>]
-[--no-bin-links] [--no-fund] [--dry-run] [--cpu <cpu>] [--os <os>]
-[--libc <libc>]
+[--foreground-scripts] [--ignore-scripts] [--no-audit] [--no-bin-links]
+[--no-fund] [--dry-run] [--cpu <cpu>] [--os <os>] [--libc <libc>]
 [-w|--workspace <workspace-name> [-w|--workspace <workspace-name> ...]]
-[--workspaces] [--include-workspace-root] [--install-links]
+[-ws|--workspaces] [--include-workspace-root] [--install-links]
 
 aliases: add, i, in, ins, inst, insta, instal, isnt, isnta, isntal, isntall
 
@@ -26,8 +25,9 @@ Run "npm help install" for more info
 
 
 > ls node_modules
+@oxlint
 tslib
 
 > vite install --production --silent # install again hit cache
+✓ cache hit, replaying
 
-→ Cache hit - output replayed - <variable>ms saved

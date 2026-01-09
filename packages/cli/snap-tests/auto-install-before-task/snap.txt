@@ -3,7 +3,7 @@ Already up to date
 
 Done in <variable>ms using pnpm v<semver>
 
-$ echo hello
+$ echo hello ⊘ cache disabled: built-in command
 hello
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -20,7 +20,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run hello # second run - no pnpm install output (cache hit, silent)
-$ echo hello
+$ echo hello ⊘ cache disabled: built-in command
 hello
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

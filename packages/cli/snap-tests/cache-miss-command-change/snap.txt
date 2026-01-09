@@ -1,8 +1,8 @@
 > vite run hello # create caches for 'echo foo' and 'echo bar'
-$ echo foo
+$ echo foo ⊘ cache disabled: built-in command
 foo
 
-$ echo bar
+$ echo bar ⊘ cache disabled: built-in command
 bar
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -23,10 +23,10 @@ Task Details:
 
 > json-edit package.json '_.scripts.hello = "echo baz && echo bar"' # update the first subcommand
 > vite run hello # should report cache miss of the first subcommand, and hit cache of the second subcommand
-$ echo baz
+$ echo baz ⊘ cache disabled: built-in command
 baz
 
-$ echo bar
+$ echo bar ⊘ cache disabled: built-in command
 bar
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -47,7 +47,7 @@ Task Details:
 
 > json-edit package.json '_.scripts.hello = "echo bar"' # remove the first subcommand, now the second subcommand becomes the first
 > vite run hello # can still hit cache even the subcommand index changed
-$ echo bar
+$ echo bar ⊘ cache disabled: built-in command
 bar
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

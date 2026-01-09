@@ -1,5 +1,5 @@
 > vite run test-task
-$ echo hello
+$ echo hello ⊘ cache disabled: built-in command
 hello
 
 $ node main.js
@@ -23,10 +23,10 @@ Task Details:
 
 > tool replace-file-content main.js foo bar
 > vite run test-task
-$ echo hello
+$ echo hello ⊘ cache disabled: built-in command
 hello
 
-$ node main.js (✗ cache miss: input files changed, executing)
+$ node main.js ✗ cache miss: content of input 'main.js' changed, executing
 bar
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

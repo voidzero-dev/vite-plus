@@ -62,10 +62,10 @@ Options:
 index.mjs
 
 > vite lib src/index.ts # should hit cache
+✓ cache hit, replaying
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
 
-→ Cache hit - output replayed - <variable>ms saved
