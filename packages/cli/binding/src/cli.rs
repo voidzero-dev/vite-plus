@@ -3,10 +3,7 @@
 //! This module contains all the CLI-related code.
 //! It handles argument parsing, command dispatching, and orchestration of the task execution.
 
-use std::{
-    collections::HashMap, env, ffi::OsStr, future::Future, iter, pin::Pin,
-    sync::Arc,
-};
+use std::{collections::HashMap, env, ffi::OsStr, future::Future, iter, pin::Pin, sync::Arc};
 
 use clap::Subcommand;
 use monostate::MustBe;
@@ -22,7 +19,8 @@ use vite_task::{
         user::{EnabledCacheConfig, UserCacheConfig, UserTaskConfig, UserTaskOptions},
     },
     loader::UserConfigLoader,
-    plan_request::SyntheticPlanRequest, session::reporter::ExitStatus,
+    plan_request::SyntheticPlanRequest,
+    session::reporter::ExitStatus,
 };
 
 /// Resolved configuration from vite.config.ts
@@ -669,7 +667,7 @@ pub async fn main(
                             LabeledReporter::new(std::io::stdout(), session.workspace_path());
                         reporter.set_hide_summary(true);
                         reporter.set_silent_if_cache_hit(true);
-                        if let Err(exit_status) =  session.execute(plan, Box::new(reporter)).await {
+                        if let Err(exit_status) = session.execute(plan, Box::new(reporter)).await {
                             return Ok(exit_status);
                         }
                     }
