@@ -155,9 +155,7 @@ jobs:
             node-version: 22
             command: |
               vite run format
-              vite run lint -- --fix
-              # TODO(fengmk2): run all builds and tests after tsdown version upgrade
-              vite run @vitejs/plugin-rsc#build
+              vite run lint --fix
               vite run @vitejs/plugin-rsc#test
           - name: vitepress
             node-version: 24
