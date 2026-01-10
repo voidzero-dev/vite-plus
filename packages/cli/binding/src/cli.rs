@@ -640,7 +640,17 @@ pub async fn main(
             };
             let mut config_loader = VitePlusConfigLoader::new(resolve_vite_config_fn);
 
-            // Create single Session
+            // Update PATH to include package manager bin directory BEFORE session init
+            // so the session captures the updated PATH in its environment.
+            // Only update PATH if there's an explicit packageManager field in package.json.
+            // Use build() instead of build_with_default() to avoid prompting or using defaults.
+            if let Ok(pm) = vite_install::PackageManager::builder(&cwd).build().await {
+                let new_path = vite_install::format_path_env(&pm.get_bin_prefix());
+                // SAFETY: Single-threaded context before session init
+                unsafe { env::set_var("PATH", new_path) };
+            }
+
+            // Create single Session (captures updated PATH)
             let mut session = Session::init(SessionCallbacks {
                 task_synthesizer: &mut task_synthesizer,
                 user_config_loader: &mut config_loader,
@@ -661,15 +671,6 @@ pub async fn main(
                         reporter.set_silent_if_cache_hit(true);
                         let _ = session.execute(plan, Box::new(reporter)).await;
                     }
-                }
-
-                // Update PATH to include package manager bin directory
-                if let Ok(pm) =
-                    vite_install::PackageManager::builder(&cwd).build_with_default().await
-                {
-                    let new_path = vite_install::format_path_env(&pm.get_bin_prefix());
-                    // SAFETY: Single-threaded context before task execution
-                    unsafe { env::set_var("PATH", new_path) };
                 }
             }
 
