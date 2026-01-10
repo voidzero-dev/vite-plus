@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,8 +18,44 @@ if (!projects.includes(project)) {
 
 const tgzPath = join(projectDir, '..', 'tmp', 'tgz');
 
+/**
+ * Add public-hoist-pattern to .npmrc for packages that need to be accessible
+ * from createRequire().resolve in other packages.
+ *
+ * This is needed because plugin-react-swc uses createRequire(import.meta.url).resolve
+ * to resolve SWC plugins like @swc/plugin-emotion, which are only installed as
+ * devDependencies of the playground packages.
+ */
+function ensurePublicHoist(repoRoot: string) {
+  const npmrcPath = join(repoRoot, '.npmrc');
+  const patterns = ['@swc/*'];
+
+  for (const pattern of patterns) {
+    const line = `public-hoist-pattern[]=${pattern}`;
+    if (existsSync(npmrcPath)) {
+      let content = readFileSync(npmrcPath, 'utf-8');
+      if (!content.includes(line)) {
+        // Insert at the beginning of the file to ensure it's before any lines
+        // that might have issues (like ${GITHUB_TOKEN} which causes parsing warnings)
+        content = `${line}\n${content}`;
+        writeFileSync(npmrcPath, content);
+        console.log(`Added ${line} to .npmrc`);
+      }
+    } else {
+      appendFileSync(npmrcPath, `${line}\n`);
+      console.log(`Created .npmrc with ${line}`);
+    }
+  }
+}
+
 async function migrateProject(project: string) {
   const repoRoot = join(projectDir, project);
+
+  // Ensure packages needed by plugin-react-swc are publicly hoisted
+  if (project === 'vite-plugin-react') {
+    ensurePublicHoist(repoRoot);
+  }
+
   // run vite migrate
   execSync('vite migrate', {
     cwd: repoRoot,
