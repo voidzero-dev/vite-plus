@@ -34,7 +34,7 @@ Task Details:
       → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite run script2 # script2 should be failure and not cache
+[1]> vite run script2 # script2 should be failure and not cache
 $ node failure.js
 failure
 
@@ -52,7 +52,7 @@ Task Details:
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite run script2 # script2 should be failure and not cache
+[1]> vite run script2 # script2 should be failure and not cache
 $ node failure.js
 failure
 

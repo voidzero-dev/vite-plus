@@ -84,6 +84,24 @@ vite_workspace = { git = "https://github.com/voidzero-dev/vite-task", rev = "274
 wax = "0.6.0"
 which = "8.0.0"
 
+# =============================================================================
+# Local Development Patches
+# =============================================================================
+# This section patches vite-task crates to use local paths for simultaneous
+# vite-task and vite-plus development. When making changes to vite-task that
+# affect vite-plus, this allows testing without publishing or pushing commits.
+#
+# To use: Ensure vite-task is cloned at ../vite-task relative to vite-plus.
+# Comment out this section before committing.
+# =============================================================================
+[patch."https://github.com/voidzero-dev/vite-task"]
+fspy = { path = "../vite-task/crates/fspy" }
+vite_glob = { path = "../vite-task/crates/vite_glob" }
+vite_path = { path = "../vite-task/crates/vite_path" }
+vite_str = { path = "../vite-task/crates/vite_str" }
+vite_task = { path = "../vite-task/crates/vite_task" }
+vite_workspace = { path = "../vite-task/crates/vite_workspace" }
+
 [profile.dev]
 # Disabling debug info speeds up local and CI builds,
 # and we don't rely on it for debugging that much.

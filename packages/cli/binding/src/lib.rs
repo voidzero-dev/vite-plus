@@ -163,7 +163,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     tracing::debug!("Result: {result:?}");
 
     match result {
-        Ok(exit_status) => Ok(exit_status.code().unwrap_or(1)),
+        Ok(exit_status) => Ok(exit_status.0.into()),
         Err(e) => match e {
             vite_error::Error::UserCancelled => Ok(130),
             _ => {

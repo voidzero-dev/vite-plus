@@ -4,7 +4,7 @@
 //! It handles argument parsing, command dispatching, and orchestration of the task execution.
 
 use std::{
-    collections::HashMap, env, ffi::OsStr, future::Future, iter, pin::Pin, process::ExitStatus,
+    collections::HashMap, env, ffi::OsStr, future::Future, iter, pin::Pin,
     sync::Arc,
 };
 
@@ -22,7 +22,7 @@ use vite_task::{
         user::{EnabledCacheConfig, UserCacheConfig, UserTaskConfig, UserTaskOptions},
     },
     loader::UserConfigLoader,
-    plan_request::SyntheticPlanRequest,
+    plan_request::SyntheticPlanRequest, session::reporter::ExitStatus,
 };
 
 /// Resolved configuration from vite.config.ts
@@ -578,7 +578,7 @@ async fn handle_cache_command(
             eprintln!("Cache view not yet implemented with new Session API");
         }
     }
-    Ok(ExitStatus::default())
+    Ok(ExitStatus::SUCCESS)
 }
 
 /// Main entry point for vite-plus CLI.
@@ -669,7 +669,9 @@ pub async fn main(
                             LabeledReporter::new(std::io::stdout(), session.workspace_path());
                         reporter.set_hide_summary(true);
                         reporter.set_silent_if_cache_hit(true);
-                        let _ = session.execute(plan, Box::new(reporter)).await;
+                        if let Err(exit_status) =  session.execute(plan, Box::new(reporter)).await {
+                            return Ok(exit_status);
+                        }
                     }
                 }
             }
@@ -681,9 +683,7 @@ pub async fn main(
                 .await
                 .map_err(|e| Error::Anyhow(e.into()))?;
             let reporter = LabeledReporter::new(std::io::stdout(), session.workspace_path());
-            session.execute(plan, Box::new(reporter)).await.map_err(|e| Error::Anyhow(e.into()))?;
-
-            Ok(ExitStatus::default())
+            Ok(session.execute(plan, Box::new(reporter)).await.err().unwrap_or(ExitStatus::SUCCESS))
         }
     }
 }

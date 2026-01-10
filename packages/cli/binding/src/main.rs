@@ -13,7 +13,7 @@ async fn main() -> Result<(), Error> {
     let result = cli::main(current_dir()?, None, None).await;
 
     match result {
-        Ok(exit_status) => std::process::exit(exit_status.code().unwrap_or(1)),
+        Ok(exit_status) => std::process::exit(exit_status.0.into()),
 
         Err(err) => {
             tracing::error!("Error: {}", err);

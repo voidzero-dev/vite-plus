@@ -22,6 +22,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }
+vite_task = { workspace = true }
 vite_workspace = { workspace = true }
 wax = { workspace = true }
 
