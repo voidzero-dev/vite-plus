@@ -154,6 +154,7 @@ jobs:
           - name: vite-plugin-react
             node-version: 22
             command: |
+              corepack enable
               pnpm run build
               vite run format
               vite run lint --fix
