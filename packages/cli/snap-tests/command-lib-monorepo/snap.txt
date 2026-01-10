@@ -1,36 +1,16 @@
 > vite run hello#build # should build the library
-$ vite lib
+~/packages/hello$ vite lib
+ℹ entry: src/index.ts
+ℹ Build start
+ℹ dist/index.cjs  <variable> kB │ gzip: <variable> kB
+ℹ 1 files, total: <variable> kB
+✔ Build complete in <variable>ms
 
- ERROR  Error: undefined No input files, try "tsdown <your-file>" or create src/index.ts
-    at resolveEntry (file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/index.js:3146:14)
-    at async resolveUserConfig (file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/index.js:3575:24)
-    at async Promise.all (index 0)
-    at async file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/index.js:3977:11
-    at async Promise.all (index 0)
-    at async resolveConfig (file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/index.js:3973:19)
-    at async build$1 (file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/index.js:4748:42)
-    at async CAC.<anonymous> (file:///Volumes/code/vite-plus-workspace/vite-plus/packages/cli/dist/lib-bin.js:68:5)
-    at async runCLI (file:///Volumes/code/vite-plus-workspace/vite-plus/packages/cli/dist/lib-bin.js:79:9)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Statistics:   1 tasks • 0 cache hits • 1 cache misses  • 1 failed
-Performance:  0% cache hit rate
-
-Task Details:
-────────────────────────────────────────────────
-  [1] hello#build: vite lib ✗ (exit code: 1)
-      → Cache miss: no previous cache entry found
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[1]> ls packages/hello/dist # should have the library
-ls: packages/hello/dist: No such file or directory
-
-> vite run hello#build # should hit cache
-$ vite lib
 
 Statistics:   1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate

@@ -40,8 +40,9 @@ pub struct ResolveCommandResult {
     pub envs: Vec<(String, String)>,
 }
 
-/// These are the custom subcommands that synthesize tasks for vite-plus
-/// NOTE: Run command is already provided by vite-task, no need to declare here
+// These are the custom subcommands that synthesize tasks for vite-plus
+// NOTE: Run command is already provided by vite-task, no need to declare here
+/// Vite+
 #[derive(Debug, Clone, Subcommand)]
 pub enum CustomTaskSubcommand {
     /// Lint code
@@ -101,7 +102,6 @@ pub enum CustomTaskSubcommand {
     },
 }
 
-/// Non-task subcommands (handled independently without Session)
 #[derive(Debug, Clone, Subcommand)]
 pub enum NonTaskSubcommand {
     /// Manage the task cache

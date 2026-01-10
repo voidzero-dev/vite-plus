@@ -1,5 +1,5 @@
 > vite -h # help message
-Non-task subcommands (handled independently without Session)
+Vite+<repeat>
 
 Usage: vite <COMMAND>
 
