@@ -1,3 +1,4 @@
+// Test CI: checking if sqlite3 linking issue exists on main
 use std::{ffi::OsString, path::Path, sync::Arc};
 
 use thiserror::Error;

@@ -1,5 +1,7 @@
 # Vite+
 
+<!-- Test CI: checking if sqlite3 linking issue exists on main -->
+
 ## Pull upstream dependencies
 
 ```
