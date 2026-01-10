@@ -17,8 +17,12 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
 use vite_task::{
     CLIArgs, LabeledReporter, Session, SessionCallbacks, TaskSynthesizer,
-    config::{UserConfigFile, user::{EnabledCacheConfig, UserCacheConfig, UserTaskConfig, UserTaskOptions}},
-    loader::UserConfigLoader, plan_request::SyntheticPlanRequest,
+    config::{
+        UserConfigFile,
+        user::{EnabledCacheConfig, UserCacheConfig, UserTaskConfig, UserTaskOptions},
+    },
+    loader::UserConfigLoader,
+    plan_request::SyntheticPlanRequest,
 };
 
 /// Resolved configuration from vite.config.ts
