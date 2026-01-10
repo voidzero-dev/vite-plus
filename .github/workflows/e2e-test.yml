@@ -154,10 +154,8 @@ jobs:
           - name: vite-plugin-react
             node-version: 22
             command: |
-              # Install dependencies including optional @swc/plugin-emotion for emotion-plugin playground
-              pnpm install
-              pnpm add -D @swc/plugin-emotion -w
-              pnpm build
+              corepack enable
+              pnpm run build
               vite run format
               vite run lint --fix
               vite run @vitejs/plugin-rsc#test
