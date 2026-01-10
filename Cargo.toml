@@ -45,7 +45,7 @@ criterion = { version = "0.7", features = ["html_reports"] }
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 directories = "6.0.0"
 flate2 = "1.0.35"
-fspy = { path = "/Volumes/code/vite-plus-workspace/vite-task/crates/fspy" }
+fspy = { git = "ssh://git@github.com/voidzero-dev/vite-task", rev = "274bf07" }
 futures-util = "0.3.31"
 hex = "0.4.3"
 httpmock = "0.7"
@@ -74,13 +74,13 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "serde"] }
 vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
-vite_glob = { path = "/Volumes/code/vite-plus-workspace/vite-task/crates/vite_glob" }
+vite_glob = { git = "ssh://git@github.com/voidzero-dev/vite-task", rev = "274bf07" }
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
-vite_path = { path = "/Volumes/code/vite-plus-workspace/vite-task/crates/vite_path" }
-vite_str = { path = "/Volumes/code/vite-plus-workspace/vite-task/crates/vite_str" }
-vite_task = { path = "/Volumes/code/vite-plus-workspace/vite-task/crates/vite_task" }
-vite_workspace = { path = "/Volumes/code/vite-plus-workspace/vite-task/crates/vite_workspace" }
+vite_path = { git = "ssh://git@github.com/voidzero-dev/vite-task", rev = "274bf07" }
+vite_str = { git = "ssh://git@github.com/voidzero-dev/vite-task", rev = "274bf07" }
+vite_task = { git = "ssh://git@github.com/voidzero-dev/vite-task", rev = "274bf07" }
+vite_workspace = { git = "ssh://git@github.com/voidzero-dev/vite-task", rev = "274bf07" }
 wax = "0.6.0"
 which = "8.0.0"
 

@@ -16,8 +16,8 @@ use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
 use vite_task::{
-    CLIArgs, EnabledCacheConfig, LabeledReporter, Session, SessionCallbacks, TaskSynthesizer,
-    UserCacheConfig, UserTaskConfig, UserTaskOptions, config::UserConfigFile,
+    CLIArgs, LabeledReporter, Session, SessionCallbacks, TaskSynthesizer,
+    config::{UserConfigFile, user::{EnabledCacheConfig, UserCacheConfig, UserTaskConfig, UserTaskOptions}},
     loader::UserConfigLoader, plan_request::SyntheticPlanRequest,
 };
 
