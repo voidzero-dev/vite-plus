@@ -154,6 +154,10 @@ jobs:
           - name: vite-plugin-react
             node-version: 22
             command: |
+              # Build workspace packages first so vite-task can load all vite.config.ts
+              # files (playground configs import workspace packages like @vitejs/plugin-react-swc)
+              corepack enable
+              pnpm build
               vite run format
               vite run lint --fix
               vite run @vitejs/plugin-rsc#test
