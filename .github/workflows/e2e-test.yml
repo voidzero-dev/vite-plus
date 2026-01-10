@@ -156,9 +156,9 @@ jobs:
             command: |
               # Build workspace packages first so vite-task can load all vite.config.ts
               # files (playground configs import workspace packages like @vitejs/plugin-react-swc)
-              # Use --workspace-concurrency=1 to avoid SQLite race condition in vite-task cache
+              # Use --workspace-concurrency=1 to avoid pnpm race condition during parallel builds
               corepack enable
-              pnpm build --workspace-concurrency=1
+              pnpm -r --workspace-concurrency=1 --filter='./packages/*' run build
               vite run format
               vite run lint --fix
               vite run @vitejs/plugin-rsc#test
