@@ -154,11 +154,18 @@ jobs:
           - name: vite-plugin-react
             node-version: 22
             command: |
+              npx playwright install chromium
               vite run format
               vite run lint -- --fix
-              # TODO(fengmk2): run all builds and tests after tsdown version upgrade
+              # TODO(fengmk2): use `vite-task` to run all builds and tests after nested task support
+              vite run @vitejs/plugin-react#build
+              vite run @vitejs/plugin-react#test-unit
+              vite run @vitejs/plugin-react-oxc#build
+              vite run @vitejs/plugin-react-swc#build
+              vite run @vitejs/plugin-react-swc#test
               vite run @vitejs/plugin-rsc#build
               vite run @vitejs/plugin-rsc#test
+              vite run @vitejs/plugin-rsc#test-e2e-ci
           - name: vitepress
             node-version: 24
             command: |
