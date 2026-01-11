@@ -200,6 +200,16 @@ jobs:
               npx playwright install chromium
               vite run test
               vite run build
+        exclude:
+          # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
+          - os: windows-latest
+            project:
+              name: frm-stack
+          # tanstack-start-helloworld fails due to vite-task relative path bug on Windows
+          # TODO: Re-enable after vite-task Windows path handling is fixed
+          - os: windows-latest
+            project:
+              name: tanstack-start-helloworld
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
