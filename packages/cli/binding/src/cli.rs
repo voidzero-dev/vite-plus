@@ -549,13 +549,6 @@ async fn create_install_synthetic_request(
     })
 }
 
-/// Check if a command is a package manager command that should skip auto-install
-/// We check command line args directly since TaskCLIArgs internals are private
-fn is_package_manager_command(args: &[String]) -> bool {
-    // Check if "install" or "i" is in the command line args
-    args.iter().any(|arg| arg == "install" || arg == "i")
-}
-
 /// Handle cache subcommand
 async fn handle_cache_command(
     cwd: AbsolutePathBuf,
@@ -655,9 +648,10 @@ pub async fn main(
             })?;
 
             // Auto-install (unless package manager command or disabled)
-            if !is_package_manager_command(&args_vec)
-                && env::var_os("VITE_DISABLE_AUTO_INSTALL") != Some("1".into())
-                && env::var("VITE_TASK_EXECUTION_ENV").ok().as_deref() != Some("1")
+            if matches!(
+                task_cli_args.custom_subcommand(),
+                Some(CustomTaskSubcommand::Install { .. })
+            ) && env::var_os("VITE_DISABLE_AUTO_INSTALL") != Some("1".into())
             {
                 // Use session.plan_synthetic_task for auto-install
                 if let Ok(install_request) = create_install_synthetic_request(&cwd).await {
