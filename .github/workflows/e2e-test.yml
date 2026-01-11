@@ -154,6 +154,7 @@ jobs:
           - name: vite-plugin-react
             node-version: 22
             command: |
+              pnpm run build
               vite run format
               vite run lint -- --fix
               # TODO(fengmk2): run all builds and tests after tsdown version upgrade
