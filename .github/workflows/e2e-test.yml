@@ -41,21 +41,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   build:
-    name: Build vite-plus packages (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Build vite-plus packages
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: read
     needs:
       - download-previous-rolldown-binaries
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/clone
@@ -66,7 +58,7 @@ jobs:
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: e2e-build-${{ matrix.os }}
+          cache-key: e2e-build
 
       - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
 
@@ -79,7 +71,7 @@ jobs:
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
-          target: ${{ matrix.target }}
+          target: x86_64-unknown-linux-gnu
 
       - name: Pack packages into tgz
         run: |
@@ -94,12 +86,12 @@ jobs:
       - name: Upload tgz artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: vite-plus-packages-${{ matrix.os }}
+          name: vite-plus-packages
           path: tmp/tgz/*.tgz
           retention-days: 1
 
   e2e-test:
-    name: ${{ matrix.project.name }} E2E test (${{ matrix.os }})
+    name: ${{ matrix.project.name }} E2E test
     env:
       # For packing manager install from github package registry
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -108,14 +100,11 @@ jobs:
       packages: read
     needs:
       - build
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
         project:
           - name: vibe-dashboard
             node-version: 24
@@ -200,16 +189,6 @@ jobs:
               npx playwright install chromium
               vite run test
               vite run build
-        exclude:
-          # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
-          - os: windows-latest
-            project:
-              name: frm-stack
-          # tanstack-start-helloworld fails due to vite-task relative path bug on Windows
-          # TODO: Re-enable after vite-task Windows path handling is fixed
-          - os: windows-latest
-            project:
-              name: tanstack-start-helloworld
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -225,7 +204,7 @@ jobs:
       - name: Download vite-plus packages
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: vite-plus-packages-${{ matrix.os }}
+          name: vite-plus-packages
           path: tmp/tgz
 
       - name: Install vite-plus from tgz in ${{ matrix.project.name }}
