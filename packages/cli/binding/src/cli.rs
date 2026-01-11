@@ -648,7 +648,7 @@ pub async fn main(
             })?;
 
             // Auto-install (unless package manager command or disabled)
-            if matches!(
+            if !matches!(
                 task_cli_args.custom_subcommand(),
                 Some(CustomTaskSubcommand::Install { .. })
             ) && env::var_os("VITE_DISABLE_AUTO_INSTALL") != Some("1".into())
