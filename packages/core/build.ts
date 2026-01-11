@@ -1,7 +1,12 @@
 import { existsSync } from 'node:fs';
 import { copyFile, cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, parse, resolve } from 'node:path';
+import { dirname, join, parse, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// Normalize path separators to forward slashes for consistent cross-platform behavior
+function normalizePath(path: string): string {
+  return sep === '\\' ? path.replace(/\\/g, '/') : path;
+}
 
 import { build, type BuildOptions } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
@@ -156,19 +161,20 @@ async function buildVite() {
   });
 
   // Copy and rewrite .d.ts files
-  const dtsFiles = await glob(join(rolldownViteSourceDir, 'dist', 'node', '**/*.d.ts'), {
-    absolute: true,
-  });
+  // Normalize glob pattern to use forward slashes on Windows
+  const dtsFiles = await glob(
+    normalizePath(join(rolldownViteSourceDir, 'dist', 'node', '**/*.d.ts')),
+    { absolute: true },
+  );
 
   for (const dtsFile of dtsFiles) {
     const file = await readFile(dtsFile, 'utf-8');
-    const dstFilePath = join(
-      projectDir,
-      'dist',
-      'vite',
-      'node',
-      dtsFile.replace(join(rolldownViteSourceDir, 'dist', 'node'), ''),
+    // Normalize paths to use forward slashes for consistent replacement on Windows
+    const relativePath = normalizePath(dtsFile).replace(
+      normalizePath(join(rolldownViteSourceDir, 'dist', 'node')),
+      '',
     );
+    const dstFilePath = join(projectDir, 'dist', 'vite', 'node', relativePath);
     const rewrittenFile = rewriteModuleSpecifiers(file, dtsFile, {
       rules: [...createViteRewriteRules(pkgJson.name), ...createRolldownRewriteRules(pkgJson.name)],
     });
@@ -176,21 +182,22 @@ async function buildVite() {
   }
 
   // Copy type files
-  const srcTypeFiles = await glob(join(rolldownViteSourceDir, 'types', '**/*.d.ts'), {
-    absolute: true,
-  });
+  // Normalize glob pattern to use forward slashes on Windows
+  const srcTypeFiles = await glob(
+    normalizePath(join(rolldownViteSourceDir, 'types', '**/*.d.ts')),
+    { absolute: true },
+  );
 
   await mkdir(join(projectDir, 'dist/vite/types'), { recursive: true });
 
   for (const srcDtsFile of srcTypeFiles) {
     const file = await readFile(srcDtsFile, 'utf-8');
-    const dstFilePath = join(
-      projectDir,
-      'dist',
-      'vite',
-      'types',
-      srcDtsFile.replace(join(rolldownViteSourceDir, 'types'), ''),
+    // Normalize paths to use forward slashes for consistent replacement on Windows
+    const relativePath = normalizePath(srcDtsFile).replace(
+      normalizePath(join(rolldownViteSourceDir, 'types')),
+      '',
     );
+    const dstFilePath = join(projectDir, 'dist', 'vite', 'types', relativePath);
     const dir = dirname(dstFilePath);
     if (!existsSync(dir)) {
       await mkdir(dir, { recursive: true });
@@ -315,15 +322,21 @@ async function bundleVitepress() {
   await mkdir(vitepressDestDir, { recursive: true });
 
   // Copy dist directory
-  const vitepressDistFiles = await glob(join(vitepressSourceDir, 'dist', '**/*'), {
-    absolute: true,
-  });
+  // Normalize glob pattern to use forward slashes on Windows
+  const vitepressDistFiles = await glob(
+    normalizePath(join(vitepressSourceDir, 'dist', '**/*')),
+    { absolute: true },
+  );
 
   for (const file of vitepressDistFiles) {
     const stats = await stat(file);
     if (!stats.isFile()) continue;
 
-    const relativePath = file.replace(join(vitepressSourceDir, 'dist'), '');
+    // Normalize paths to use forward slashes for consistent replacement on Windows
+    const relativePath = normalizePath(file).replace(
+      normalizePath(join(vitepressSourceDir, 'dist')),
+      '',
+    );
     const destPath = join(vitepressDestDir, relativePath);
 
     await mkdir(parse(destPath).dir, { recursive: true });
@@ -363,15 +376,21 @@ async function bundleVitepress() {
   const vitepressTypesDestDir = join(vitepressDestDir, 'types');
   await mkdir(vitepressTypesDestDir, { recursive: true });
 
-  const vitepressTypesFiles = await glob(join(vitepressTypesDir, '**/*'), {
-    absolute: true,
-  });
+  // Normalize glob pattern to use forward slashes on Windows
+  const vitepressTypesFiles = await glob(
+    normalizePath(join(vitepressTypesDir, '**/*')),
+    { absolute: true },
+  );
 
   for (const file of vitepressTypesFiles) {
     const stats = await stat(file);
     if (!stats.isFile()) continue;
 
-    const relativePath = file.replace(vitepressTypesDir, '');
+    // Normalize paths to use forward slashes for consistent replacement on Windows
+    const relativePath = normalizePath(file).replace(
+      normalizePath(vitepressTypesDir),
+      '',
+    );
     const destPath = join(vitepressTypesDestDir, relativePath);
 
     await mkdir(parse(destPath).dir, { recursive: true });
