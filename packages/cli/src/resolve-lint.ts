@@ -48,7 +48,9 @@ export async function lint(): Promise<{
       // Fallback to the cwd node_modules
       oxlintTsgolintPath = join(process.cwd(), 'node_modules', '.bin', 'tsgolint.cmd');
     }
-    oxlintTsgolintPath = `.\\${relative(process.cwd(), oxlintTsgolintPath)}`;
+    const relativePath = relative(process.cwd(), oxlintTsgolintPath);
+    // Only prepend .\ if it's actually a relative path (not an absolute path returned by relative())
+    oxlintTsgolintPath = /^[a-zA-Z]:/.test(relativePath) ? relativePath : `.\\${relativePath}`;
   }
   const result = {
     binPath,
