@@ -1,3 +1,6 @@
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import * as prompts from '@clack/prompts';
 
 import { detectWorkspace as detectWorkspaceBinding } from '../../binding/index.js';
@@ -80,4 +83,4 @@ if (!localCliMetadata) {
 }
 
 // delegate to local CLI
-import(`${localCliMetadata.path}/dist/bin.js`);
+import(pathToFileURL(join(localCliMetadata.path, 'dist', 'bin.js')).href);
