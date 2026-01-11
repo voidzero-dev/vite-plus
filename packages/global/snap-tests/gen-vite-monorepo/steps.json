@@ -1,5 +1,5 @@
 {
-  "ignoredPlatforms": ["win32"],
+  
   "commands": [
     {
       "command": "vp gen vite:monorepo --no-interactive # create monorepo with default values",

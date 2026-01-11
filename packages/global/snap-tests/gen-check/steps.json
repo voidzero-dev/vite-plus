@@ -1,5 +1,5 @@
 {
-  "ignoredPlatforms": ["win32"],
+  
   "commands": [
     "vp gen --help # show help",
     "vp gen --list # list templates",
