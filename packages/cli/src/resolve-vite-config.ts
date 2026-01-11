@@ -14,13 +14,7 @@ export async function resolveUniversalViteConfig(err: null | Error, viteConfigCw
       }),
     );
   } catch (err) {
-    // Return empty config when loading fails (e.g., unbuilt workspace packages)
-    // This allows the task runner to continue with other packages
-    console.error(`failed to load config from ${viteConfigCwd}/vite.config.ts`);
-    return Promise.resolve(JSON.stringify({
-      lint: null,
-      fmt: null,
-      tasks: null,
-    }));
+    console.error('[vite+] resolve universal vite config error:', err);
+    throw err;
   }
 }
