@@ -37,6 +37,13 @@ runs:
         path: rolldown-vite
         ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_VITE_HASH }}
 
+    # Disable autocrlf to preserve LF line endings on Windows
+    # This prevents prettier/eslint from failing with "Delete ␍" errors
+    - name: Configure git for LF line endings
+      if: ${{ inputs.ecosystem-ci-project != '' }}
+      shell: bash
+      run: git config --global core.autocrlf false
+
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       if: ${{ inputs.ecosystem-ci-project != '' }}
       with:
