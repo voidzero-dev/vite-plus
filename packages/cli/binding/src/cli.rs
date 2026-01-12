@@ -175,8 +175,7 @@ fn merge_resolved_envs(
 ) -> Arc<HashMap<Arc<OsStr>, Arc<OsStr>>> {
     let mut envs = HashMap::clone(envs);
     for (k, v) in resolved_envs {
-        envs.entry(Arc::from(OsStr::new(&k)))
-            .or_insert_with(|| Arc::from(OsStr::new(&v)));
+        envs.entry(Arc::from(OsStr::new(&k))).or_insert_with(|| Arc::from(OsStr::new(&v)));
     }
     Arc::new(envs)
 }
