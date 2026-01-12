@@ -13,6 +13,8 @@ export interface CliOptions {
   args?: Array<string>;
   /** Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side */
   resolveUniversalViteConfig: (err: Error | null, arg: string) => Promise<string>;
+  /** Absolute path to resolve-vite-config.js for spawning node processes */
+  resolveViteConfigPath: string;
 }
 
 /** Result returned by JavaScript resolver functions. */

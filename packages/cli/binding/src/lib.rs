@@ -36,6 +36,8 @@ pub struct CliOptions {
     pub args: Option<Vec<String>>,
     /// Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side
     pub resolve_universal_vite_config: Arc<ThreadsafeFunction<String, Promise<String>>>,
+    /// Absolute path to resolve-vite-config.js for spawning node processes
+    pub resolve_vite_config_path: String,
 }
 
 /// Result returned by JavaScript resolver functions.
@@ -120,6 +122,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     let lib_tsf = options.lib;
     let doc_tsf = options.doc;
     let resolve_universal_vite_config_tsf = options.resolve_universal_vite_config;
+    let resolve_vite_config_path = options.resolve_vite_config_path;
     let args = options.args;
 
     // Create a channel to receive the result from the worker thread
@@ -140,6 +143,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
             resolve_universal_vite_config: create_vite_config_resolver(
                 resolve_universal_vite_config_tsf,
             ),
+            resolve_vite_config_path,
         };
 
         // Create a new single-threaded runtime for non-Send futures

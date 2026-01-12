@@ -139,6 +139,8 @@ pub struct CliOptions {
     pub lib: BoxedResolverFn,
     pub doc: BoxedResolverFn,
     pub resolve_universal_vite_config: ViteConfigResolverFn,
+    /// Absolute path to resolve-vite-config.js for spawning node processes
+    pub resolve_vite_config_path: String,
 }
 
 /// Task synthesizer for vite-plus that uses JavaScript resolver functions
@@ -496,14 +498,15 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
     }
 }
 
-/// User config loader that resolves vite.config.ts via JavaScript callback
+/// User config loader that spawns a node process to resolve vite.config.ts
+/// with the package directory as CWD, enabling correct module resolution.
 pub struct VitePlusConfigLoader {
-    resolve_fn: ViteConfigResolverFn,
+    resolve_vite_config_path: String,
 }
 
 impl VitePlusConfigLoader {
-    pub fn new(resolve_fn: ViteConfigResolverFn) -> Self {
-        Self { resolve_fn }
+    pub fn new(resolve_vite_config_path: String) -> Self {
+        Self { resolve_vite_config_path }
     }
 }
 
@@ -519,18 +522,55 @@ impl UserConfigLoader for VitePlusConfigLoader {
         &self,
         package_path: &AbsolutePath,
     ) -> anyhow::Result<UserConfigFile> {
-        let package_path_str = package_path
-            .as_path()
+        // Create a temp directory for the output file
+        // This avoids issues where vite.config.js might print messages to stdout
+        let temp_dir = tempfile::tempdir()?;
+        let output_file = temp_dir.path().join("config.json");
+        let output_file_str = output_file
             .to_str()
-            .ok_or_else(|| anyhow::anyhow!("package path is not valid UTF-8"))?;
+            .ok_or_else(|| anyhow::anyhow!("temp file path is not valid UTF-8"))?;
 
-        let config_json = (self.resolve_fn)(package_path_str.to_string()).await?;
-        let resolved: ResolvedUniversalViteConfig = serde_json::from_str(&config_json)
+        // JavaScript code that:
+        // - reads the resolve-vite-config path from process.argv[1]
+        // - writes output to file specified in process.argv[2]
+        const JS_CODE: &str = r#"
+import fs from 'node:fs';
+import(process.argv[1])
+    .then(m => m.resolveUniversalViteConfig(null, process.cwd()))
+    .then(r => { fs.writeFileSync(process.argv[2], r); process.exit(0); })
+"#;
+
+        let output = tokio::process::Command::new("node")
+            .arg("--input-type=module")
+            .arg("-e")
+            .arg(JS_CODE)
+            .arg(&self.resolve_vite_config_path)
+            .arg(output_file_str)
+            .current_dir(package_path)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!(
+                "Failed to resolve vite config in {}: {}",
+                package_path.as_path().display(),
+                stderr
+            );
+        }
+
+        // Read the JSON from the temp file
+        let config_bytes = tokio::fs::read(&output_file).await?;
+
+        // Parse directly from bytes (only tasks field needed)
+        let resolved: ResolvedUniversalViteConfig = serde_json::from_slice(&config_bytes)
             .inspect_err(|_| {
-                tracing::error!("Failed to parse vite config: {config_json}");
+                tracing::error!(
+                    "Failed to parse vite config: {}",
+                    String::from_utf8_lossy(&config_bytes)
+                );
             })?;
 
-        // Convert Option<HashMap<String, serde_json::Value>> to HashMap<Str, UserTaskConfig>
         let tasks = resolved
             .tasks
             .unwrap_or_default()
@@ -541,6 +581,7 @@ impl UserConfigLoader for VitePlusConfigLoader {
             })
             .collect::<Result<HashMap<Str, UserTaskConfig>, _>>()?;
 
+        // temp_dir is automatically cleaned up when dropped
         Ok(UserConfigFile { tasks })
     }
 }
@@ -636,13 +677,11 @@ pub async fn main(
             let (workspace_root, _) = vite_workspace::find_workspace_root(&cwd)?;
             let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 
-            // Extract resolve_universal_vite_config for the config loader (must clone before moving options)
-            let resolve_vite_config_fn = options
-                .as_ref()
-                .map(|o| Arc::clone(&o.resolve_universal_vite_config))
-                .ok_or_else(|| {
+            // Extract resolve_vite_config_path for the config loader (must clone before moving options)
+            let resolve_vite_config_path =
+                options.as_ref().map(|o| o.resolve_vite_config_path.clone()).ok_or_else(|| {
                     Error::Anyhow(anyhow::anyhow!(
-                        "resolve_universal_vite_config is required but not available"
+                        "resolve_vite_config_path is required but not available"
                     ))
                 })?;
 
@@ -652,7 +691,7 @@ pub async fn main(
             } else {
                 VitePlusTaskSynthesizer::new(Arc::clone(&workspace_path))
             };
-            let mut config_loader = VitePlusConfigLoader::new(resolve_vite_config_fn);
+            let mut config_loader = VitePlusConfigLoader::new(resolve_vite_config_path);
 
             // Update PATH to include package manager bin directory BEFORE session init
             // so the session captures the updated PATH in its environment.

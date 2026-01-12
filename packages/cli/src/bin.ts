@@ -9,6 +9,8 @@
  * tools (e.g., when running `vite-plus build`, it calls the vite resolver).
  */
 
+import { createRequire } from 'node:module';
+
 import { run } from '../binding/index.js';
 import { doc } from './resolve-doc.js';
 import { fmt } from './resolve-fmt.js';
@@ -17,6 +19,8 @@ import { lint } from './resolve-lint.js';
 import { test } from './resolve-test.js';
 import { resolveUniversalViteConfig } from './resolve-vite-config.js';
 import { vite } from './resolve-vite.js';
+
+const require = createRequire(import.meta.url);
 
 // Initialize the CLI with tool resolvers
 // These functions will be called from Rust when needed
@@ -28,6 +32,8 @@ run({
   test, // Resolves vitest binary for test commands
   doc, // Resolves vitepress binary for doc commands
   resolveUniversalViteConfig,
+  // Pass resolved path to resolve-vite-config for spawned node processes
+  resolveViteConfigPath: require.resolve('./resolve-vite-config'),
   // Pass CLI arguments to Rust (skip node binary and script path)
   args: process.argv.slice(2),
 })
