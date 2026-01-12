@@ -138,6 +138,9 @@ pub struct CliOptions {
     pub test: BoxedResolverFn,
     pub lib: BoxedResolverFn,
     pub doc: BoxedResolverFn,
+    /// Vite config resolver callback - kept for backwards compatibility but not used
+    /// (we use spawn_resolve_vite_config with resolve_vite_config_path instead)
+    #[allow(dead_code)]
     pub resolve_universal_vite_config: ViteConfigResolverFn,
     /// Absolute path to resolve-vite-config.js for spawning node processes
     pub resolve_vite_config_path: String,
@@ -206,19 +209,13 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("lint JS path is not valid UTF-8"))?;
 
-                // Resolve vite config and extract lint config
-                let workspace_path_str = self
-                    .workspace_path
-                    .as_path()
-                    .to_str()
-                    .ok_or_else(|| anyhow::anyhow!("workspace path is not valid UTF-8"))?;
-                let vite_config_json =
-                    (cli_options.resolve_universal_vite_config)(workspace_path_str.to_string())
-                        .await?;
-                let resolved_vite_config: ResolvedUniversalViteConfig =
-                    serde_json::from_str(&vite_config_json).inspect_err(|_| {
-                        tracing::error!("Failed to parse vite config: {vite_config_json}");
-                    })?;
+                // Resolve vite config using spawn approach for correct module resolution
+                let resolved_vite_config = spawn_resolve_vite_config(
+                    &cli_options.resolve_vite_config_path,
+                    &self.workspace_path,
+                    &self.workspace_path,
+                )
+                .await?;
 
                 // If lint config exists, write to tmp-config and add -c arg
                 if let Some(lint_config) = resolved_vite_config.lint {
@@ -269,19 +266,13 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("fmt JS path is not valid UTF-8"))?;
 
-                // Resolve vite config and extract fmt config
-                let workspace_path_str = self
-                    .workspace_path
-                    .as_path()
-                    .to_str()
-                    .ok_or_else(|| anyhow::anyhow!("workspace path is not valid UTF-8"))?;
-                let vite_config_json =
-                    (cli_options.resolve_universal_vite_config)(workspace_path_str.to_string())
-                        .await?;
-                let resolved_vite_config: ResolvedUniversalViteConfig =
-                    serde_json::from_str(&vite_config_json).inspect_err(|_| {
-                        tracing::error!("Failed to parse vite config: {vite_config_json}");
-                    })?;
+                // Resolve vite config using spawn approach for correct module resolution
+                let resolved_vite_config = spawn_resolve_vite_config(
+                    &cli_options.resolve_vite_config_path,
+                    &self.workspace_path,
+                    &self.workspace_path,
+                )
+                .await?;
 
                 // If fmt config exists, write to tmp-config and add -c arg
                 if let Some(fmt_config) = resolved_vite_config.fmt {
@@ -498,6 +489,79 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
     }
 }
 
+/// Spawns a node process to resolve vite.config.ts and returns the parsed config.
+///
+/// This function:
+/// - Spawns node with the package directory as CWD for correct module resolution
+/// - Sets NODE_PATH to include .pnpm/node_modules for pnpm hoisted packages
+/// - Writes output to a temp file to avoid stdout noise from vite.config.js
+/// - Uses pathToFileURL to handle Windows paths correctly
+async fn spawn_resolve_vite_config(
+    resolve_vite_config_path: &str,
+    workspace_root: &AbsolutePath,
+    cwd: &AbsolutePath,
+) -> anyhow::Result<ResolvedUniversalViteConfig> {
+    // Create a temp directory for the output file
+    // This avoids issues where vite.config.js might print messages to stdout
+    let temp_dir = tempfile::tempdir()?;
+    let output_file = temp_dir.path().join("config.json");
+    let output_file_str = output_file
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("temp file path is not valid UTF-8"))?;
+
+    // JavaScript code that:
+    // - reads the resolve-vite-config path from process.argv[1]
+    // - writes output to file specified in process.argv[2]
+    // - uses pathToFileURL to handle Windows paths correctly
+    const JS_CODE: &str = r#"
+import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import(pathToFileURL(process.argv[1]))
+    .then(m => m.resolveUniversalViteConfig(null, process.cwd()))
+    .then(r => { fs.writeFileSync(process.argv[2], r); process.exit(0); })
+"#;
+
+    // Compute NODE_PATH for pnpm hoisted packages
+    // pnpm bin shims set NODE_PATH to include .pnpm/node_modules which contains
+    // hoisted symlinks for packages matching hoist-pattern in .npmrc
+    let node_path = workspace_root.join("node_modules").join(".pnpm").join("node_modules");
+
+    let output = tokio::process::Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg(JS_CODE)
+        .arg(resolve_vite_config_path)
+        .arg(output_file_str)
+        .env("NODE_PATH", node_path.as_path())
+        .current_dir(cwd)
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!(
+            "Failed to resolve vite config in {}: {}",
+            cwd.as_path().display(),
+            stderr
+        );
+    }
+
+    // Read the JSON from the temp file
+    let config_bytes = tokio::fs::read(&output_file).await?;
+
+    // Parse directly from bytes
+    let resolved: ResolvedUniversalViteConfig =
+        serde_json::from_slice(&config_bytes).inspect_err(|_| {
+            tracing::error!(
+                "Failed to parse vite config: {}",
+                String::from_utf8_lossy(&config_bytes)
+            );
+        })?;
+
+    // temp_dir is automatically cleaned up when dropped
+    Ok(resolved)
+}
+
 /// User config loader that spawns a node process to resolve vite.config.ts
 /// with the package directory as CWD, enabling correct module resolution.
 pub struct VitePlusConfigLoader {
@@ -523,62 +587,12 @@ impl UserConfigLoader for VitePlusConfigLoader {
         &self,
         package_path: &AbsolutePath,
     ) -> anyhow::Result<UserConfigFile> {
-        // Create a temp directory for the output file
-        // This avoids issues where vite.config.js might print messages to stdout
-        let temp_dir = tempfile::tempdir()?;
-        let output_file = temp_dir.path().join("config.json");
-        let output_file_str = output_file
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("temp file path is not valid UTF-8"))?;
-
-        // JavaScript code that:
-        // - reads the resolve-vite-config path from process.argv[1]
-        // - writes output to file specified in process.argv[2]
-        // - uses pathToFileURL to handle Windows paths correctly
-        const JS_CODE: &str = r#"
-import fs from 'node:fs';
-import { pathToFileURL } from 'node:url';
-import(pathToFileURL(process.argv[1]))
-    .then(m => m.resolveUniversalViteConfig(null, process.cwd()))
-    .then(r => { fs.writeFileSync(process.argv[2], r); process.exit(0); })
-"#;
-
-        // Compute NODE_PATH for pnpm hoisted packages
-        // pnpm bin shims set NODE_PATH to include .pnpm/node_modules which contains
-        // hoisted symlinks for packages matching hoist-pattern in .npmrc
-        let node_path = self.workspace_root.join("node_modules").join(".pnpm").join("node_modules");
-
-        let output = tokio::process::Command::new("node")
-            .arg("--input-type=module")
-            .arg("-e")
-            .arg(JS_CODE)
-            .arg(&self.resolve_vite_config_path)
-            .arg(output_file_str)
-            .env("NODE_PATH", node_path.as_path())
-            .current_dir(package_path)
-            .output()
-            .await?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!(
-                "Failed to resolve vite config in {}: {}",
-                package_path.as_path().display(),
-                stderr
-            );
-        }
-
-        // Read the JSON from the temp file
-        let config_bytes = tokio::fs::read(&output_file).await?;
-
-        // Parse directly from bytes (only tasks field needed)
-        let resolved: ResolvedUniversalViteConfig = serde_json::from_slice(&config_bytes)
-            .inspect_err(|_| {
-                tracing::error!(
-                    "Failed to parse vite config: {}",
-                    String::from_utf8_lossy(&config_bytes)
-                );
-            })?;
+        let resolved = spawn_resolve_vite_config(
+            &self.resolve_vite_config_path,
+            &self.workspace_root,
+            package_path,
+        )
+        .await?;
 
         let tasks = resolved
             .tasks
@@ -590,7 +604,6 @@ import(pathToFileURL(process.argv[1]))
             })
             .collect::<Result<HashMap<Str, UserTaskConfig>, _>>()?;
 
-        // temp_dir is automatically cleaned up when dropped
         Ok(UserConfigFile { tasks })
     }
 }
