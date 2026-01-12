@@ -115,6 +115,10 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/npm notice Access token expired or revoked.+?\n/g, '')
       // remove mise reshimming messages (appears when global npm packages change)
       .replaceAll(/Reshimming mise.+?\n/g, '')
+      // remove plugin timings warnings (intermittent CI warnings)
+      // [PLUGIN_TIMINGS] Warning: Your build spent significant time in plugins. Here is a breakdown:
+      //   - externalize-deps (74%)
+      .replaceAll(/\[PLUGIN_TIMINGS\] Warning:.*?\n(?:\s+-\s+.+?\n)*/g, '')
   );
 }
 
