@@ -1,11 +1,12 @@
 import { existsSync } from 'node:fs';
 import { copyFile, cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, parse, resolve, sep } from 'node:path';
+import path from 'node:path';
+import { dirname, join, parse, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Normalize path separators to forward slashes for consistent cross-platform behavior
-function normalizePath(path: string): string {
-  return sep === '\\' ? path.replace(/\\/g, '/') : path;
+// Convert native path to POSIX format for glob patterns
+function toPosixPath(nativePath: string): string {
+  return nativePath.split(path.sep).join(path.posix.sep);
 }
 
 import { build, type BuildOptions } from 'rolldown';
@@ -163,15 +164,15 @@ async function buildVite() {
   // Copy and rewrite .d.ts files
   // Normalize glob pattern to use forward slashes on Windows
   const dtsFiles = await glob(
-    normalizePath(join(rolldownViteSourceDir, 'dist', 'node', '**/*.d.ts')),
+    toPosixPath(join(rolldownViteSourceDir, 'dist', 'node', '**/*.d.ts')),
     { absolute: true },
   );
 
   for (const dtsFile of dtsFiles) {
     const file = await readFile(dtsFile, 'utf-8');
     // Normalize paths to use forward slashes for consistent replacement on Windows
-    const relativePath = normalizePath(dtsFile).replace(
-      normalizePath(join(rolldownViteSourceDir, 'dist', 'node')),
+    const relativePath = toPosixPath(dtsFile).replace(
+      toPosixPath(join(rolldownViteSourceDir, 'dist', 'node')),
       '',
     );
     const dstFilePath = join(projectDir, 'dist', 'vite', 'node', relativePath);
@@ -184,7 +185,7 @@ async function buildVite() {
   // Copy type files
   // Normalize glob pattern to use forward slashes on Windows
   const srcTypeFiles = await glob(
-    normalizePath(join(rolldownViteSourceDir, 'types', '**/*.d.ts')),
+    toPosixPath(join(rolldownViteSourceDir, 'types', '**/*.d.ts')),
     { absolute: true },
   );
 
@@ -193,8 +194,8 @@ async function buildVite() {
   for (const srcDtsFile of srcTypeFiles) {
     const file = await readFile(srcDtsFile, 'utf-8');
     // Normalize paths to use forward slashes for consistent replacement on Windows
-    const relativePath = normalizePath(srcDtsFile).replace(
-      normalizePath(join(rolldownViteSourceDir, 'types')),
+    const relativePath = toPosixPath(srcDtsFile).replace(
+      toPosixPath(join(rolldownViteSourceDir, 'types')),
       '',
     );
     const dstFilePath = join(projectDir, 'dist', 'vite', 'types', relativePath);
@@ -324,7 +325,7 @@ async function bundleVitepress() {
   // Copy dist directory
   // Normalize glob pattern to use forward slashes on Windows
   const vitepressDistFiles = await glob(
-    normalizePath(join(vitepressSourceDir, 'dist', '**/*')),
+    toPosixPath(join(vitepressSourceDir, 'dist', '**/*')),
     { absolute: true },
   );
 
@@ -333,8 +334,8 @@ async function bundleVitepress() {
     if (!stats.isFile()) continue;
 
     // Normalize paths to use forward slashes for consistent replacement on Windows
-    const relativePath = normalizePath(file).replace(
-      normalizePath(join(vitepressSourceDir, 'dist')),
+    const relativePath = toPosixPath(file).replace(
+      toPosixPath(join(vitepressSourceDir, 'dist')),
       '',
     );
     const destPath = join(vitepressDestDir, relativePath);
@@ -378,7 +379,7 @@ async function bundleVitepress() {
 
   // Normalize glob pattern to use forward slashes on Windows
   const vitepressTypesFiles = await glob(
-    normalizePath(join(vitepressTypesDir, '**/*')),
+    toPosixPath(join(vitepressTypesDir, '**/*')),
     { absolute: true },
   );
 
@@ -387,8 +388,8 @@ async function bundleVitepress() {
     if (!stats.isFile()) continue;
 
     // Normalize paths to use forward slashes for consistent replacement on Windows
-    const relativePath = normalizePath(file).replace(
-      normalizePath(vitepressTypesDir),
+    const relativePath = toPosixPath(file).replace(
+      toPosixPath(vitepressTypesDir),
       '',
     );
     const destPath = join(vitepressTypesDestDir, relativePath);
