@@ -1,5 +1,4 @@
 {
-  "ignoredPlatforms": ["win32", "darwin", "linux"],
   "env": {
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
