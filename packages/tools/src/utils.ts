@@ -4,6 +4,10 @@ import path from 'node:path';
 import { Minimatch } from 'minimatch';
 
 export function replaceUnstableOutput(output: string, cwd?: string) {
+  // Normalize Windows backslashes to forward slashes for consistent snapshots
+  if (process.platform === 'win32') {
+    output = output.replaceAll('\\', '/');
+  }
   if (cwd) {
     output = output.replaceAll(cwd, '<cwd>');
     if (path.dirname(cwd) !== '/') {
