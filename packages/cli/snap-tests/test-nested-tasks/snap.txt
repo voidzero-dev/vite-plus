@@ -1,5 +1,5 @@
 > vite run script1 # simple task
-$ echo 'hello vite'
+$ echo 'hello vite' ⊘ cache disabled: built-in command
 hello vite
 
 
@@ -7,30 +7,29 @@ hello vite
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
   [1] script1: $ echo 'hello vite' ✓
-      → Cache miss: no previous cache entry found
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run script2 # nested task should work
-$ echo 'hello vite' (✓ cache hit, replaying)
+$ echo 'hello vite' ⊘ cache disabled: built-in command
 hello vite
-
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
+Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
   [1] script1: $ echo 'hello vite' ✓
-      → Cache hit - output replayed - <variable>ms saved
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -122,8 +122,8 @@ pub struct DetectWorkspaceResult {
 #[napi]
 pub async fn detect_workspace(cwd: String) -> Result<DetectWorkspaceResult> {
     let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
-    let workspace_root = match find_workspace_root(&cwd) {
-        Ok(workspace_root) => workspace_root,
+    let (workspace_root, _relative_path) = match find_workspace_root(&cwd) {
+        Ok(result) => result,
         Err(PackageJsonNotFound(_)) => {
             return Ok(DetectWorkspaceResult {
                 package_manager_name: None,

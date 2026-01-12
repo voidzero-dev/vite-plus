@@ -1,0 +1,7 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vite run hello # first run - should show pnpm install output",
+    "vite run hello # second run - no pnpm install output (cache hit, silent)"
+  ]
+}

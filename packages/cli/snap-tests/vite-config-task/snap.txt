@@ -1,22 +1,18 @@
-> vite run hello
-$ echo -n foo ⊘ cache disabled: built-in command
-foo
-$ echo bar ⊘ cache disabled: built-in command
-bar
+> # Test that task config is picked up from vite.config.ts
+> vite run build
+$ echo 'build from vite.config.ts' ⊘ cache disabled: built-in command
+build from vite.config.ts
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   2 tasks • 0 cache hits • 0 cache misses • 2 cache disabled 
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello: $ echo -n foo ✓
-      → Cache disabled for built-in command
-  ·······················································
-  [2] hello: $ echo bar ✓
+  [1] vite-config-task-test#build: $ echo 'build from vite.config.ts' ✓
       → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

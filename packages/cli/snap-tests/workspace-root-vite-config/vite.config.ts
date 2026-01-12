@@ -1,4 +1,6 @@
 // Mock vite config for testing workspace root config resolution
+// When this config is read, fmt will use singleQuote: true (file uses single quotes → passes)
+// Without this config, fmt uses default singleQuote: false (double quotes → fails)
 export default {
   lint: {
     rules: {
@@ -7,9 +9,6 @@ export default {
     },
   },
   fmt: {
-    rules: {
-      indentWidth: 4,
-      lineWidth: 100,
-    },
+    singleQuote: true,
   },
 };

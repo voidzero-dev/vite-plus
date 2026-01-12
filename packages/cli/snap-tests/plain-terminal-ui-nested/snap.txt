@@ -3,11 +3,9 @@ $ vite lint ./src
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
-
 $ vite lint
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
-
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -19,24 +17,22 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] lint: $ vite lint ./src ✓
+  [1] root-package#hello: $ vite lint ./src ✓
       → Cache miss: no previous cache entry found
   ·······················································
-  [2] lint: $ vite lint ✓
+  [2] root-package#hello: $ vite lint ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > echo 'console.log(123)' > a.ts
 > vite run hello # report cache status from the inner runner
-$ vite lint ./src (✓ cache hit, replaying)
+$ vite lint ./src ✓ cache hit, replaying
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
-
-$ vite lint (✗ cache miss: content of input 'a.ts' changed, executing)
+$ vite lint ✗ cache miss: content of input 'a.ts' changed, executing
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
-
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -48,9 +44,9 @@ Performance:  50% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] lint: $ vite lint ./src ✓
+  [1] root-package#hello: $ vite lint ./src ✓
       → Cache hit - output replayed - <variable>ms saved
   ·······················································
-  [2] lint: $ vite lint ✓
+  [2] root-package#hello: $ vite lint ✓
       → Cache miss: content of input 'a.ts' changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

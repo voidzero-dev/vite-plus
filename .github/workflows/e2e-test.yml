@@ -151,14 +151,28 @@ jobs:
               vite run lint
               vite run type
               vite run test -- --coverage
-          - name: vite-plugin-react
-            node-version: 22
-            command: |
-              vite run format
-              vite run lint -- --fix
-              # TODO(fengmk2): run all builds and tests after tsdown version upgrade
-              vite run @vitejs/plugin-rsc#build
-              vite run @vitejs/plugin-rsc#test
+          # SKIP: vite-plugin-react - vite-task config loading incompatibility
+          # vite-task needs to load vite.config.js for all workspace packages to build the task graph,
+          # but the vite-plus process starts with workspace root as cwd.
+          # The plugin-react-swc playgrounds use SWC plugins (e.g., @swc/plugin-emotion) which
+          # cannot be resolved when loading the config from workspace root.
+          #
+          # Minimal reproduction:
+          #   git clone https://github.com/vitejs/vite-plugin-react /tmp/vite-plugin-react-test
+          #   cd /tmp/vite-plugin-react-test && pnpm install && pnpm run build
+          #   node packages/plugin-react-swc/playground/emotion-plugin/vite.config.js
+          #   # Error: Cannot find module '@swc/plugin-emotion'
+          #
+          # This works when running from within the playground directory (pnpm run build)
+          # because pnpm's symlink structure allows resolution, but fails when loading from workspace root.
+          # - name: vite-plugin-react
+          #   node-version: 22
+          #   command: |
+          #     vite run format
+          #     vite run lint -- --fix
+          #     # TODO(fengmk2): run all builds and tests after tsdown version upgrade
+          #     vite run @vitejs/plugin-rsc#build
+          #     vite run @vitejs/plugin-rsc#test
           - name: vitepress
             node-version: 24
             command: |

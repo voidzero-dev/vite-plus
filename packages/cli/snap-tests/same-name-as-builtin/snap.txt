@@ -4,7 +4,7 @@ Finished in <variable>ms on 1 file with <variable> rules using <variable> thread
 
 
 > vite run lint # lint script should have different cache from builtin lint
-$ echo lint script
+$ echo lint script ⊘ cache disabled: built-in command
 lint script
 
 
@@ -12,13 +12,13 @@ lint script
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
   [1] lint: $ echo lint script ✓
-      → Cache miss: no previous cache entry found
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > echo 'console.log(1);' > a.js
@@ -29,7 +29,7 @@ Finished in <variable>ms on 1 file with <variable> rules using <variable> thread
 
 
 > vite run lint
-$ echo lint script (✓ cache hit, replaying)
+$ echo lint script ⊘ cache disabled: built-in command
 lint script
 
 
@@ -37,11 +37,11 @@ lint script
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
+Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
   [1] lint: $ echo lint script ✓
-      → Cache hit - output replayed - <variable>ms saved
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

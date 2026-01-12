@@ -10,6 +10,14 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       output = output.replaceAll(path.dirname(cwd), '<cwd>/..');
     }
   }
+  // On Windows, normalize path separators in file paths for consistent snapshots.
+  // Only replace backslashes that look like path separators (preceded/followed by valid path chars).
+  // This avoids breaking ASCII art or escape sequences.
+  if (process.platform === 'win32') {
+    // Replace backslashes in patterns like: word\word, ./path\to, src\file.ts
+    // Pattern: backslash between alphanumeric/dot/underscore/hyphen chars
+    output = output.replaceAll(/([a-zA-Z0-9._-])\\([a-zA-Z0-9._-])/g, '$1/$2');
+  }
   return (
     output
       // semver version
@@ -105,6 +113,12 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       )
       // remove "npm notice Access token expired or revoked..."
       .replaceAll(/npm notice Access token expired or revoked.+?\n/g, '')
+      // remove mise reshimming messages (appears when global npm packages change)
+      .replaceAll(/Reshimming mise.+?\n/g, '')
+      // remove plugin timings warnings (intermittent CI warnings)
+      // [PLUGIN_TIMINGS] Warning: Your build spent significant time in plugins. Here is a breakdown:
+      //   - externalize-deps (74%)
+      .replaceAll(/\[PLUGIN_TIMINGS\] Warning:.*?\n(?:\s+-\s+.+?\n)*/g, '')
   );
 }
 

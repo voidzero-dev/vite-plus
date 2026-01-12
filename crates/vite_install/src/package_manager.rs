@@ -21,7 +21,7 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
 #[cfg(test)]
 use vite_workspace::find_package_root;
-use vite_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root, get_package_graph};
+use vite_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root, load_package_graph};
 
 use crate::{
     config::{get_cache_dir, get_npm_package_tgz_url, get_npm_package_version_url},
@@ -100,7 +100,7 @@ impl PackageManagerBuilder {
     /// Build the package manager.
     /// Detect the package manager from the current working directory.
     pub async fn build(&self) -> Result<PackageManager, Error> {
-        let workspace_root = find_workspace_root(&self.cwd)?;
+        let (workspace_root, _cwd) = find_workspace_root(&self.cwd)?;
         let (package_manager_type, version_or_latest, hash) =
             get_package_manager_type_and_version(&workspace_root, self.client_override)?;
 
@@ -199,7 +199,8 @@ impl PackageManager {
         // if the workspace is a monorepo, keep workspace packages' parent directories to watch for new packages being added
         if self.is_monorepo {
             // TODO(@fengmk2): should use a more efficient way to get the workspace packages parent directories
-            let package_graph = get_package_graph(&self.workspace_root)?;
+            let (workspace_root_info, _) = find_workspace_root(&self.workspace_root)?;
+            let package_graph = load_package_graph(&workspace_root_info)?;
             for node_index in package_graph.node_indices() {
                 let package_info = &package_graph[node_index];
                 if let Some(parent_path) = package_info.path.as_path().parent() {
@@ -834,8 +835,8 @@ mod tests {
         File::create(temp_dir_path.join("pnpm-workspace.yaml")).unwrap();
 
         // Should find workspace root
-        let found = find_workspace_root(&nested_dir).unwrap();
-        assert_eq!(found.path, temp_dir_path);
+        let (found, _) = find_workspace_root(&nested_dir).unwrap();
+        assert_eq!(&*found.path, &*temp_dir_path);
         assert!(matches!(found.workspace_file, WorkspaceFile::PnpmWorkspaceYaml(_)));
     }
 
@@ -851,8 +852,8 @@ mod tests {
         fs::write(temp_dir_path.join("package.json"), package_json).unwrap();
 
         // Should find workspace root
-        let found = find_workspace_root(&temp_dir_path).unwrap();
-        assert_eq!(found.path, temp_dir_path);
+        let (found, _) = find_workspace_root(&temp_dir_path).unwrap();
+        assert_eq!(&*found.path, &*temp_dir_path);
         assert!(matches!(found.workspace_file, WorkspaceFile::NpmWorkspaceJson(_)));
     }
 
@@ -868,12 +869,12 @@ mod tests {
         fs::write(temp_dir_path.join("package.json"), package_json).unwrap();
 
         // Should fallback to package root
-        let found = find_workspace_root(&nested_dir).unwrap();
-        assert_eq!(found.path, temp_dir_path);
+        let (found, _) = find_workspace_root(&nested_dir).unwrap();
+        assert_eq!(&*found.path, &*temp_dir_path);
         assert!(matches!(found.workspace_file, WorkspaceFile::NonWorkspacePackage(_)));
         let package_root = find_package_root(&temp_dir_path).unwrap();
         // equal to workspace root
-        assert_eq!(package_root.path, found.path);
+        assert_eq!(&*package_root.path, &*found.path);
     }
 
     #[test]
@@ -935,8 +936,8 @@ mod tests {
         let workspace_content = "packages:\n  - 'packages/*'";
         create_pnpm_workspace_yaml(&temp_dir_path, workspace_content);
 
-        let result = find_workspace_root(&temp_dir_path).expect("Should find workspace root");
-        assert_eq!(result.path, temp_dir_path);
+        let (result, _) = find_workspace_root(&temp_dir_path).expect("Should find workspace root");
+        assert_eq!(&*result.path, &*temp_dir_path);
     }
 
     #[test]
@@ -949,8 +950,8 @@ mod tests {
         let sub_dir = temp_dir_path.join("subdir");
         fs::create_dir(&sub_dir).expect("Failed to create subdirectory");
 
-        let result = find_workspace_root(&sub_dir).expect("Should find workspace root");
-        assert_eq!(result.path, temp_dir_path);
+        let (result, _) = find_workspace_root(&sub_dir).expect("Should find workspace root");
+        assert_eq!(&*result.path, &*temp_dir_path);
     }
 
     #[test]
@@ -960,8 +961,8 @@ mod tests {
         let package_content = r#"{"name": "test-workspace", "workspaces": ["packages/*"]}"#;
         create_package_json(&temp_dir_path, package_content);
 
-        let result = find_workspace_root(&temp_dir_path).unwrap();
-        assert_eq!(result.path, temp_dir_path);
+        let (result, _) = find_workspace_root(&temp_dir_path).unwrap();
+        assert_eq!(&*result.path, &*temp_dir_path);
         assert!(matches!(result.workspace_file, WorkspaceFile::NpmWorkspaceJson(_)));
     }
 
@@ -975,8 +976,8 @@ mod tests {
         let sub_dir = temp_dir_path.join("subdir");
         fs::create_dir(&sub_dir).expect("Failed to create subdirectory");
 
-        let result = find_workspace_root(&sub_dir).unwrap();
-        assert_eq!(result.path, temp_dir_path);
+        let (result, _) = find_workspace_root(&sub_dir).unwrap();
+        assert_eq!(&*result.path, &*temp_dir_path);
         assert!(matches!(result.workspace_file, WorkspaceFile::NpmWorkspaceJson(_)));
     }
 
@@ -993,8 +994,8 @@ mod tests {
         let workspace_content = "packages:\n  - 'packages/*'";
         create_pnpm_workspace_yaml(&temp_dir_path, workspace_content);
 
-        let result = find_workspace_root(&temp_dir_path).expect("Should find workspace root");
-        assert_eq!(result.path, temp_dir_path);
+        let (result, _) = find_workspace_root(&temp_dir_path).expect("Should find workspace root");
+        assert_eq!(&*result.path, &*temp_dir_path);
     }
 
     #[test]
@@ -1007,8 +1008,8 @@ mod tests {
         let sub_dir = temp_dir_path.join("subdir");
         fs::create_dir(&sub_dir).expect("Failed to create subdirectory");
 
-        let result = find_workspace_root(&sub_dir).expect("Should fall back to package root");
-        assert_eq!(result.path, temp_dir_path);
+        let (result, _) = find_workspace_root(&sub_dir).expect("Should fall back to package root");
+        assert_eq!(&*result.path, &*temp_dir_path);
     }
 
     #[test]
@@ -1021,8 +1022,8 @@ mod tests {
         let nested_dir = temp_dir_path.join("packages").join("app").join("src");
         fs::create_dir_all(&nested_dir).expect("Failed to create nested directories");
 
-        let result = find_workspace_root(&nested_dir).expect("Should find workspace root");
-        assert_eq!(result.path, temp_dir_path);
+        let (result, _) = find_workspace_root(&nested_dir).expect("Should find workspace root");
+        assert_eq!(&*result.path, &*temp_dir_path);
     }
 
     #[test]
@@ -1032,8 +1033,8 @@ mod tests {
         let package_content = r#"{"name": "test-package"}"#;
         create_package_json(&temp_dir_path, package_content);
 
-        let result = find_workspace_root(&temp_dir_path).expect("Should return package root");
-        assert_eq!(result.path, temp_dir_path);
+        let (result, _) = find_workspace_root(&temp_dir_path).expect("Should return package root");
+        assert_eq!(&*result.path, &*temp_dir_path);
     }
 
     #[test]
@@ -1062,9 +1063,9 @@ mod tests {
         create_package_json(&sub_dir, sub_package_content);
 
         // Should find the subdirectory package.json since find_package_root searches upward from original_cwd
-        let workspace_root =
+        let (workspace_root, _) =
             find_workspace_root(&sub_dir).expect("Should find subdirectory package");
-        assert_eq!(workspace_root.path, sub_dir);
+        assert_eq!(&*workspace_root.path, &*sub_dir);
         assert!(matches!(workspace_root.workspace_file, WorkspaceFile::NonWorkspacePackage(_)));
     }
 
@@ -1234,7 +1235,7 @@ mod tests {
         let package_content = r#"{"name": "test-package", "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"}"#;
         create_package_json(&temp_dir_path, package_content);
 
-        let workspace_root = find_workspace_root(&temp_dir_path).unwrap();
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
         let (pm_type, version, hash) =
             get_package_manager_type_and_version(&workspace_root, None).unwrap();
 
@@ -1256,7 +1257,7 @@ mod tests {
         let package_content = r#"{"name": "test-package", "packageManager": "npm@10.5.0+sha1.abcd1234567890abcdef1234567890abcdef1234"}"#;
         create_package_json(&temp_dir_path, package_content);
 
-        let workspace_root = find_workspace_root(&temp_dir_path).unwrap();
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
         let (pm_type, version, hash) =
             get_package_manager_type_and_version(&workspace_root, None).unwrap();
 
@@ -1275,7 +1276,7 @@ mod tests {
         let package_content = r#"{"name": "test-package", "packageManager": "pnpm@8.15.0+sha224.1234567890abcdef1234567890abcdef1234567890abcdef12345678"}"#;
         create_package_json(&temp_dir_path, package_content);
 
-        let workspace_root = find_workspace_root(&temp_dir_path).unwrap();
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
         let (pm_type, version, hash) =
             get_package_manager_type_and_version(&workspace_root, None).unwrap();
 
@@ -1297,7 +1298,7 @@ mod tests {
         let package_content = r#"{"name": "test-package", "packageManager": "yarn@4.0.0+sha256.1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"}"#;
         create_package_json(&temp_dir_path, package_content);
 
-        let workspace_root = find_workspace_root(&temp_dir_path).unwrap();
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
         let (pm_type, version, hash) =
             get_package_manager_type_and_version(&workspace_root, None).unwrap();
 
@@ -1319,7 +1320,7 @@ mod tests {
         let package_content = r#"{"name": "test-package", "packageManager": "pnpm@8.15.0"}"#;
         create_package_json(&temp_dir_path, package_content);
 
-        let workspace_root = find_workspace_root(&temp_dir_path).unwrap();
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
         let (pm_type, version, hash) =
             get_package_manager_type_and_version(&workspace_root, None).unwrap();
 

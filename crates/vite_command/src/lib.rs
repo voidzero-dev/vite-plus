@@ -258,7 +258,6 @@ mod tests {
                 "PATH".to_string(),
                 std::env::var_os("PATH").unwrap_or_default().into_string().unwrap(),
             )]);
-            // Test with a filter that only accepts paths containing "package.json"
             let result = run_command_with_fspy(
                 "node",
                 &["-p", "fs.writeFileSync(path.join(process.cwd(), 'package.json'), '{}');'done'"],
@@ -270,12 +269,15 @@ mod tests {
             let cmd_result = result.unwrap();
             assert!(cmd_result.status.success());
             eprintln!("cmd_result: {:?}", cmd_result);
-            // Verify one path containing "package.json" is included
-            assert_eq!(cmd_result.path_accesses.len(), 1);
+            // Verify package.json is in path accesses with WRITE mode.
+            // Note: We don't assert exact count of path accesses because `node` may be a shim
+            // from tool version managers (volta, mise, fnm, etc.) that read additional config
+            // files (e.g., .tool-versions, .mise.toml, .nvmrc) to determine which Node version
+            // to use.
             let path_access = cmd_result
                 .path_accesses
                 .get(&RelativePathBuf::new("package.json").unwrap())
-                .unwrap();
+                .expect("package.json should be in path accesses");
             assert!(path_access.contains(AccessMode::WRITE));
             assert!(!path_access.contains(AccessMode::READ));
         }
@@ -290,7 +292,6 @@ mod tests {
                 "PATH".to_string(),
                 std::env::var_os("PATH").unwrap_or_default().into_string().unwrap(),
             )]);
-            // Test with a filter that only accepts paths containing "package.json"
             let result = run_command_with_fspy(
                 "node",
                 &["-p", "fs.writeFileSync(path.join(process.cwd(), 'package.json'), '{}'); fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'); 'done'"],
@@ -302,12 +303,15 @@ mod tests {
             let cmd_result = result.unwrap();
             assert!(cmd_result.status.success());
             eprintln!("cmd_result: {:?}", cmd_result);
-            // Verify one path containing "package.json" is included
-            assert_eq!(cmd_result.path_accesses.len(), 1);
+            // Verify package.json is in path accesses with WRITE and READ modes.
+            // Note: We don't assert exact count of path accesses because `node` may be a shim
+            // from tool version managers (volta, mise, fnm, etc.) that read additional config
+            // files (e.g., .tool-versions, .mise.toml, .nvmrc) to determine which Node version
+            // to use.
             let path_access = cmd_result
                 .path_accesses
                 .get(&RelativePathBuf::new("package.json").unwrap())
-                .unwrap();
+                .expect("package.json should be in path accesses");
             assert!(path_access.contains(AccessMode::WRITE));
             assert!(path_access.contains(AccessMode::READ));
         }

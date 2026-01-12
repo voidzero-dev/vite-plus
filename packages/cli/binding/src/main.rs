@@ -1,23 +1,19 @@
-use clap::Parser as _;
 use vite_error::Error;
 use vite_path::current_dir;
 
 mod cli;
-mod commands;
 
-use cli::{Args, CliOptions, init_tracing};
+use cli::init_tracing;
 
 #[tokio::main]
-
 async fn main() -> Result<(), Error> {
     init_tracing();
 
-    let args = Args::parse();
-
-    let result = cli::main(current_dir()?, args, None::<CliOptions>).await;
+    // Pass None for args - main.rs uses env::args() directly
+    let result = cli::main(current_dir()?, None, None).await;
 
     match result {
-        Ok(exit_status) => std::process::exit(exit_status.code().unwrap_or(1)),
+        Ok(exit_status) => std::process::exit(exit_status.0.into()),
 
         Err(err) => {
             tracing::error!("Error: {}", err);

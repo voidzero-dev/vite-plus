@@ -16,7 +16,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run read_colon_in_name
-$ node read_node_fs.js (✓ cache hit, replaying)
+$ node read_node_fs.js ✓ cache hit, replaying
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

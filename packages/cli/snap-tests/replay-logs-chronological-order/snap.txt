@@ -109,7 +109,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run build # should hit the cache
-$ node build.js (✓ cache hit, replaying)
+$ node build.js ✓ cache hit, replaying
 [build.js] --------------------------------
 [build.js] start
 [echo.js] --------------------------------
@@ -219,7 +219,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run build # should hit the cache and make sure the replay order is chronological
-$ node build.js (✓ cache hit, replaying)
+$ node build.js ✓ cache hit, replaying
 [build.js] --------------------------------
 [build.js] start
 [echo.js] --------------------------------
@@ -329,7 +329,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run build # should hit the cache and make sure the replay order is chronological again
-$ node build.js (✓ cache hit, replaying)
+$ node build.js ✓ cache hit, replaying
 [build.js] --------------------------------
 [build.js] start
 [echo.js] --------------------------------
@@ -439,7 +439,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run build # should hit the cache and make sure the replay order is chronological again
-$ node build.js (✓ cache hit, replaying)
+$ node build.js ✓ cache hit, replaying
 [build.js] --------------------------------
 [build.js] start
 [echo.js] --------------------------------

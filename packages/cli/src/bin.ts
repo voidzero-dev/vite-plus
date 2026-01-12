@@ -28,6 +28,8 @@ run({
   test, // Resolves vitest binary for test commands
   doc, // Resolves vitepress binary for doc commands
   resolveUniversalViteConfig,
+  // Pass CLI arguments to Rust (skip node binary and script path)
+  args: process.argv.slice(2),
 })
   .then((exitCode) => {
     process.exit(exitCode);

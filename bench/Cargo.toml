@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dev-dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
 criterion = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
 vite_path = { workspace = true }
 vite_task = { workspace = true }
 

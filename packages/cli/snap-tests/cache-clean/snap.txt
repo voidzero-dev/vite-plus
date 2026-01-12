@@ -1,5 +1,5 @@
 > vite run hello # create the cache for 'echo hello'
-$ echo hello
+$ echo hello ⊘ cache disabled: built-in command
 hello
 
 
@@ -7,17 +7,17 @@ hello
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
   [1] hello: $ echo hello ✓
-      → Cache miss: no previous cache entry found
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run hello # hit the cache
-$ echo hello (✓ cache hit, replaying)
+$ echo hello ⊘ cache disabled: built-in command
 hello
 
 
@@ -25,18 +25,18 @@ hello
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
+Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
   [1] hello: $ echo hello ✓
-      → Cache hit - output replayed - <variable>ms saved
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite cache clean # clean the cache
 > vite run hello # cache miss after clean
-$ echo hello
+$ echo hello ⊘ cache disabled: built-in command
 hello
 
 
@@ -44,18 +44,18 @@ hello
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
   [1] hello: $ echo hello ✓
-      → Cache miss: no previous cache entry found
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > cd subfolder && vite cache clean # cache can be located and cleaned from subfolder
 > vite run hello # cache miss after clean
-$ echo hello
+$ echo hello ⊘ cache disabled: built-in command
 hello
 
 
@@ -63,11 +63,11 @@ hello
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
   [1] hello: $ echo hello ✓
-      → Cache miss: no previous cache entry found
+      → Cache disabled for built-in command
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

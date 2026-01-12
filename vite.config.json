@@ -12,7 +12,7 @@
         "@voidzero-dev/vite-plus#build",
         "@voidzero-dev/global#build"
       ],
-      "cacheable": false
+      "cache": false
     }
   }
 }

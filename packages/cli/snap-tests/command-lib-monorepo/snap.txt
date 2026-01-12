@@ -7,7 +7,6 @@
 ✔ Build complete in <variable>ms
 
 
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -17,7 +16,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] lib: ~/packages/hello$ vite lib ✓
+  [1] hello#build: ~/packages/hello$ vite lib ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -25,13 +24,12 @@ Task Details:
 index.cjs
 
 > vite run hello#build # should hit cache
-~/packages/hello$ vite lib (✓ cache hit, replaying)
+~/packages/hello$ vite lib ✓ cache hit, replaying
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.cjs  <variable> kB │ gzip: <variable> kB
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
-
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -43,7 +41,7 @@ Performance:  100% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] lib: ~/packages/hello$ vite lib ✓
+  [1] hello#build: ~/packages/hello$ vite lib ✓
       → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -57,7 +55,6 @@ Task Details:
 ✔ Build complete in <variable>ms
 
 
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -67,7 +64,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] lib: ~/packages/array-config$ vite lib ✓
+  [1] array-config#build: ~/packages/array-config$ vite lib ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -76,14 +73,13 @@ index.d.mts
 index.mjs
 
 > vite run array-config#build # should hit cache
-~/packages/array-config$ vite lib (✓ cache hit, replaying)
+~/packages/array-config$ vite lib ✓ cache hit, replaying
 ℹ entry: src/sub/index.ts
 ℹ Build start
 ℹ dist/index.mjs    <variable> kB │ gzip: <variable> kB
 ℹ dist/index.d.mts  <variable> kB │ gzip: <variable> kB
 ℹ 2 files, total: <variable> kB
 ✔ Build complete in <variable>ms
-
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -95,7 +91,7 @@ Performance:  100% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] lib: ~/packages/array-config$ vite lib ✓
+  [1] array-config#build: ~/packages/array-config$ vite lib ✓
       → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -108,7 +104,6 @@ Task Details:
 ✔ Build complete in <variable>ms
 
 
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -118,7 +113,7 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] lib: ~/packages/default-config$ vite lib ✓
+  [1] default-config#build: ~/packages/default-config$ vite lib ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -126,13 +121,12 @@ Task Details:
 index.mjs
 
 > vite run default-config#build # should hit cache
-~/packages/default-config$ vite lib (✓ cache hit, replaying)
+~/packages/default-config$ vite lib ✓ cache hit, replaying
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
-
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -144,6 +138,6 @@ Performance:  100% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] lib: ~/packages/default-config$ vite lib ✓
+  [1] default-config#build: ~/packages/default-config$ vite lib ✓
       → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

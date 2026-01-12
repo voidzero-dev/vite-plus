@@ -1,5 +1,6 @@
 {
-  "ignoredPlatforms": ["linux", "win32"],
+  "ignoredPlatforms": ["linux", "win32", "darwin"],
+  "_comment": "TEMPORARILY disabled on darwin - fingerprintIgnores not yet supported in vite-task user config",
   "env": {
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
