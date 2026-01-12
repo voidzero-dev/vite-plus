@@ -472,6 +472,16 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
                     .collect();
 
+                // Merge package manager envs (e.g., modified PATH with bin prefix) into existing envs
+                // Package manager envs take precedence to ensure the downloaded PM is discoverable
+                let merged_envs = {
+                    let mut env_map = HashMap::clone(envs);
+                    for (k, v) in resolve_command.envs {
+                        env_map.insert(Arc::from(OsStr::new(&k)), Arc::from(OsStr::new(&v)));
+                    }
+                    Arc::new(env_map)
+                };
+
                 Ok(SyntheticPlanRequest {
                     program: Arc::<OsStr>::from(
                         OsStr::new(&resolve_command.bin_path).to_os_string(),
@@ -479,7 +489,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     args: resolve_command.args.into_iter().map(Str::from).collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    envs: Arc::clone(envs),
+                    envs: merged_envs,
                 })
             }
         }
@@ -542,16 +552,23 @@ async fn create_install_synthetic_request(
     let package_manager = vite_install::PackageManager::builder(cwd).build_with_default().await?;
     let resolve_command = package_manager.resolve_install_command(&vec![]);
 
+    // Start with process environment, then merge package manager envs
+    // (resolve_command.envs contains PATH with package manager bin prefix)
+    let mut envs: HashMap<Arc<OsStr>, Arc<OsStr>> = std::env::vars_os()
+        .map(|(k, v)| (Arc::from(k.as_os_str()), Arc::from(v.as_os_str())))
+        .collect();
+
+    // Merge package manager envs (these take precedence, e.g., modified PATH)
+    for (k, v) in resolve_command.envs {
+        envs.insert(Arc::from(OsStr::new(&k)), Arc::from(OsStr::new(&v)));
+    }
+
     Ok(SyntheticPlanRequest {
         program: Arc::<OsStr>::from(OsStr::new(&resolve_command.bin_path).to_os_string()),
         args: resolve_command.args.into_iter().map(Str::from).collect(),
         task_options: Default::default(),
         direct_execution_cache_key: vec![Str::from("install")].into(),
-        envs: Arc::new(
-            std::env::vars_os()
-                .map(|(k, v)| (Arc::from(k.as_os_str()), Arc::from(v.as_os_str())))
-                .collect(),
-        ),
+        envs: Arc::new(envs),
     })
 }
 
