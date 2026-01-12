@@ -167,6 +167,20 @@ impl VitePlusTaskSynthesizer {
     }
 }
 
+/// Merge resolved environment variables from JS resolver into existing envs.
+/// Does not override existing entries.
+fn merge_resolved_envs(
+    envs: &Arc<HashMap<Arc<OsStr>, Arc<OsStr>>>,
+    resolved_envs: Vec<(String, String)>,
+) -> Arc<HashMap<Arc<OsStr>, Arc<OsStr>>> {
+    let mut envs = HashMap::clone(envs);
+    for (k, v) in resolved_envs {
+        envs.entry(Arc::from(OsStr::new(&k)))
+            .or_insert_with(|| Arc::from(OsStr::new(&v)));
+    }
+    Arc::new(envs)
+}
+
 #[async_trait::async_trait(?Send)]
 impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
     fn should_synthesize_for_program(&self, program: &str) -> bool {
@@ -223,13 +237,6 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                     .chain(args.iter().map(|s| Str::from(s.as_str())))
                     .collect();
 
-                // Clone envs and extend with resolved.envs (without overriding existing entries)
-                let mut envs = HashMap::clone(envs);
-                for (k, v) in resolved.envs {
-                    envs.entry(Arc::from(OsStr::new(&k)))
-                        .or_insert_with(|| Arc::from(OsStr::new(&v)));
-                }
-
                 Ok(SyntheticPlanRequest {
                     program: Arc::from(OsStr::new("node")),
                     args: iter::once(Str::from(js_path_str))
@@ -247,7 +254,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         ..Default::default()
                     },
                     direct_execution_cache_key,
-                    envs: Arc::new(envs),
+                    envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
             CustomTaskSubcommand::Fmt { mut args } => {
@@ -300,7 +307,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    envs: Arc::clone(envs),
+                    envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
             CustomTaskSubcommand::Build { args } => {
@@ -326,7 +333,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    envs: Arc::clone(envs),
+                    envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
             CustomTaskSubcommand::Test { args } => {
@@ -351,7 +358,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    envs: Arc::clone(envs),
+                    envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
             CustomTaskSubcommand::Lib { args } => {
@@ -376,7 +383,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    envs: Arc::clone(envs),
+                    envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
             CustomTaskSubcommand::Dev { args } => {
@@ -402,7 +409,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    envs: Arc::clone(envs),
+                    envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
             CustomTaskSubcommand::Preview { args } => {
@@ -428,7 +435,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    envs: Arc::clone(envs),
+                    envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
             CustomTaskSubcommand::Doc { args } => {
@@ -453,7 +460,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: Default::default(),
                     direct_execution_cache_key,
-                    envs: Arc::clone(envs),
+                    envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
             CustomTaskSubcommand::Install { args } => {
