@@ -505,9 +505,8 @@ async fn spawn_resolve_vite_config(
     // This avoids issues where vite.config.js might print messages to stdout
     let temp_dir = tempfile::tempdir()?;
     let output_file = temp_dir.path().join("config.json");
-    let output_file_str = output_file
-        .to_str()
-        .ok_or_else(|| anyhow::anyhow!("temp file path is not valid UTF-8"))?;
+    let output_file_str =
+        output_file.to_str().ok_or_else(|| anyhow::anyhow!("temp file path is not valid UTF-8"))?;
 
     // JavaScript code that:
     // - reads the resolve-vite-config path from process.argv[1]
@@ -539,11 +538,7 @@ import(pathToFileURL(process.argv[1]))
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!(
-            "Failed to resolve vite config in {}: {}",
-            cwd.as_path().display(),
-            stderr
-        );
+        anyhow::bail!("Failed to resolve vite config in {}: {}", cwd.as_path().display(), stderr);
     }
 
     // Read the JSON from the temp file
