@@ -502,11 +502,12 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
 /// with the package directory as CWD, enabling correct module resolution.
 pub struct VitePlusConfigLoader {
     resolve_vite_config_path: String,
+    workspace_root: Arc<AbsolutePath>,
 }
 
 impl VitePlusConfigLoader {
-    pub fn new(resolve_vite_config_path: String) -> Self {
-        Self { resolve_vite_config_path }
+    pub fn new(resolve_vite_config_path: String, workspace_root: Arc<AbsolutePath>) -> Self {
+        Self { resolve_vite_config_path, workspace_root }
     }
 }
 
@@ -542,12 +543,18 @@ import(pathToFileURL(process.argv[1]))
     .then(r => { fs.writeFileSync(process.argv[2], r); process.exit(0); })
 "#;
 
+        // Compute NODE_PATH for pnpm hoisted packages
+        // pnpm bin shims set NODE_PATH to include .pnpm/node_modules which contains
+        // hoisted symlinks for packages matching hoist-pattern in .npmrc
+        let node_path = self.workspace_root.join("node_modules").join(".pnpm").join("node_modules");
+
         let output = tokio::process::Command::new("node")
             .arg("--input-type=module")
             .arg("-e")
             .arg(JS_CODE)
             .arg(&self.resolve_vite_config_path)
             .arg(output_file_str)
+            .env("NODE_PATH", node_path.as_path())
             .current_dir(package_path)
             .output()
             .await?;
@@ -693,7 +700,8 @@ pub async fn main(
             } else {
                 VitePlusTaskSynthesizer::new(Arc::clone(&workspace_path))
             };
-            let mut config_loader = VitePlusConfigLoader::new(resolve_vite_config_path);
+            let mut config_loader =
+                VitePlusConfigLoader::new(resolve_vite_config_path, Arc::clone(&workspace_path));
 
             // Update PATH to include package manager bin directory BEFORE session init
             // so the session captures the updated PATH in its environment.
