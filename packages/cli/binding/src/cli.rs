@@ -533,9 +533,11 @@ impl UserConfigLoader for VitePlusConfigLoader {
         // JavaScript code that:
         // - reads the resolve-vite-config path from process.argv[1]
         // - writes output to file specified in process.argv[2]
+        // - uses pathToFileURL to handle Windows paths correctly
         const JS_CODE: &str = r#"
 import fs from 'node:fs';
-import(process.argv[1])
+import { pathToFileURL } from 'node:url';
+import(pathToFileURL(process.argv[1]))
     .then(m => m.resolveUniversalViteConfig(null, process.cwd()))
     .then(r => { fs.writeFileSync(process.argv[2], r); process.exit(0); })
 "#;

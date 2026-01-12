@@ -165,8 +165,10 @@ jobs:
           - name: vite-plugin-react
             node-version: 22
             command: |
+              corepack enable
+              pnpm run build
               vite run format
-              vite run lint -- --fix
+              vite run lint --fix
               # TODO(fengmk2): run all builds and tests after tsdown version upgrade
               vite run @vitejs/plugin-rsc#build
               vite run @vitejs/plugin-rsc#test
