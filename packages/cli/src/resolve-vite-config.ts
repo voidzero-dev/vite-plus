@@ -4,7 +4,9 @@ export async function resolveUniversalViteConfig(err: null | Error, viteConfigCw
   }
   try {
     const { resolveConfig } = await import('./index.js');
-    const config = await resolveConfig({ root: viteConfigCwd }, 'build');
+    // Use 'runner' configLoader to avoid creating temp files in node_modules/.vite-temp
+    // which can cause module resolution issues for workspace packages
+    const config = await resolveConfig({ root: viteConfigCwd, configLoader: 'runner' }, 'build');
 
     return Promise.resolve(
       JSON.stringify({
