@@ -587,7 +587,7 @@ pub async fn main(
 ) -> Result<ExitStatus, Error> {
     // Get args from parameter or env::args()
     // When running from NAPI, args should be passed explicitly to skip node/script paths
-    let args_vec: Vec<String> = args.unwrap_or_else(|| env::args().collect());
+    let args_vec: Vec<String> = args.unwrap_or_else(|| env::args().skip(1).collect());
 
     // Parse CLI args using vite_task::CLIArgs
     // Prepend "vite" as program name for clap
