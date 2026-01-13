@@ -496,6 +496,7 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
 /// - Sets NODE_PATH to include .pnpm/node_modules for pnpm hoisted packages
 /// - Writes output to a temp file to avoid stdout noise from vite.config.js
 /// - Uses pathToFileURL to handle Windows paths correctly
+#[tracing::instrument(skip(resolve_vite_config_path, workspace_root), fields(cwd = %cwd.as_path().display()))]
 async fn spawn_resolve_vite_config(
     resolve_vite_config_path: &str,
     workspace_root: &AbsolutePath,
@@ -764,27 +765,21 @@ pub fn init_tracing() {
     use std::sync::OnceLock;
 
     use tracing_subscriber::{
-        filter::{LevelFilter, Targets},
-        prelude::__tracing_subscriber_SubscriberExt,
-        util::SubscriberInitExt,
+        fmt::format::FmtSpan, prelude::__tracing_subscriber_SubscriberExt,
+        util::SubscriberInitExt, EnvFilter,
     };
 
     static TRACING: OnceLock<()> = OnceLock::new();
     TRACING.get_or_init(|| {
+        // EnvFilter supports span name filtering with [span_name]=level syntax
+        // e.g., VITE_LOG="[spawn_resolve_vite_config]=info"
+        let filter = std::env::var("VITE_LOG")
+            .map(|v| EnvFilter::new(v))
+            .unwrap_or_else(|_| EnvFilter::new("off,tokenize=off,parse=off"));
+
         tracing_subscriber::registry()
-            .with(
-                std::env::var("VITE_LOG")
-                    .map_or_else(
-                        |_| Targets::new(),
-                        |env_var| {
-                            use std::str::FromStr;
-                            Targets::from_str(&env_var).unwrap_or_default()
-                        },
-                    )
-                    // disable brush-parser tracing
-                    .with_targets([("tokenize", LevelFilter::OFF), ("parse", LevelFilter::OFF)]),
-            )
-            .with(tracing_subscriber::fmt::layer())
+            .with(filter)
+            .with(tracing_subscriber::fmt::layer().with_span_events(FmtSpan::CLOSE))
             .init();
     });
 }
