@@ -132,10 +132,10 @@ vite run build -r --debug
 
 ## Next Steps
 
-- Learn more about [task configuration](/guide/tasks)
-- Explore [caching strategies](/guide/caching)
-- Set up [monorepo workspaces](/guide/monorepo)
-- Customize [Vite+ configuration](/config/)
+- Learn more about [task configuration](./task/getting-started)
+- Explore [caching strategies](./caching)
+- Set up [monorepo workspaces](./monorepo)
+- Customize [Vite+ configuration](../../config/)
 
 ## Community & Support
 

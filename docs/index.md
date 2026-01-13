@@ -9,7 +9,7 @@ hero:
   actions:
     - theme: brand
       text: Get Started
-      link: /guide/
+      link: /vite/guide/
     - theme: alt
       text: GitHub
       link: https://github.com/voidzero-dev/vite-plus
