@@ -1,5 +1,0 @@
-{
-  "scripts": {
-    "hello": "echo foo && echo bar"
-  }
-}

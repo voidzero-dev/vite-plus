@@ -1,9 +1,0 @@
-{
-  "env": {
-    "VITE_DISABLE_AUTO_INSTALL": "1"
-  },
-  "commands": [
-    "vite run read_colon_in_name",
-    "vite run read_colon_in_name"
-  ]
-}
