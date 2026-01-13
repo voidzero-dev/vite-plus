@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["bench", "crates/*", "packages/cli/binding", "packages/global/binding"]
+members = [
+  "bench",
+  "crates/*",
+  "packages/cli/binding",
+  "packages/global/binding",
+]
 
 [workspace.package]
 authors = ["Vite+ Authors"]
@@ -12,7 +17,10 @@ rust-version = "1.89.0"
 absolute_paths_not_starting_with_crate = "warn"
 non_ascii_idents = "warn"
 unit-bindings = "warn"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(coverage_nightly)'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+  'cfg(coverage)',
+  'cfg(coverage_nightly)',
+] }
 tail_expr_drop_order = "warn"
 unsafe_op_in_unsafe_fn = "warn"
 unused_unsafe = "warn"
@@ -36,25 +44,37 @@ anyhow = "1.0.98"
 async-trait = "0.1.89"
 ast-grep-config = "0.40.1"
 ast-grep-core = "0.40.1"
-ast-grep-language = { version = "0.40.1", default-features = false, features = ["tree-sitter-bash", "tree-sitter-typescript"] }
+ast-grep-language = { version = "0.40.1", default-features = false, features = [
+  "tree-sitter-bash",
+  "tree-sitter-typescript",
+] }
 backon = "1.3.0"
 bincode = "2.0.1"
-bstr = { version = "1.12.0", default-features = false, features = ["alloc", "std"] }
+bstr = { version = "1.12.0", default-features = false, features = [
+  "alloc",
+  "std",
+] }
 clap = "4.5.40"
 criterion = { version = "0.7", features = ["html_reports"] }
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 directories = "6.0.0"
 flate2 = "1.0.35"
-fspy = { git = "https://github.com/voidzero-dev/vite-task", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
+fspy = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
 futures-util = "0.3.31"
 hex = "0.4.3"
 httpmock = "0.7"
 ignore = "0.4"
 indoc = "2.0.5"
 monostate = "1.0.2"
-napi = { version = "3.0.0", default-features = false, features = ["async", "error_anyhow"] }
+napi = { version = "3.0.0", default-features = false, features = [
+  "async",
+  "error_anyhow",
+] }
 napi-build = "2"
-napi-derive = { version = "3.0.0", default-features = false, features = ["type-def", "strict"] }
+napi-derive = { version = "3.0.0", default-features = false, features = [
+  "type-def",
+  "strict",
+] }
 nix = { version = "0.30.1", features = ["dir"] }
 pathdiff = "0.2.3"
 reqwest = { version = "0.12", default-features = false }
@@ -74,13 +94,13 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "serde"] }
 vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
-vite_glob = { git = "https://github.com/voidzero-dev/vite-task", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
+vite_glob = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
-vite_path = { git = "https://github.com/voidzero-dev/vite-task", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
-vite_str = { git = "https://github.com/voidzero-dev/vite-task", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
-vite_task = { git = "https://github.com/voidzero-dev/vite-task", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
-vite_workspace = { git = "https://github.com/voidzero-dev/vite-task", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
+vite_path = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
+vite_str = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
+vite_task = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
+vite_workspace = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
 wax = "0.6.0"
 which = "8.0.0"
 
@@ -94,7 +114,7 @@ which = "8.0.0"
 # To use: Ensure vite-task is cloned at ../vite-task relative to vite-plus.
 # Comment out this section before committing.
 # =============================================================================
-# [patch."https://github.com/voidzero-dev/vite-task"]
+# [patch."ssh://git@github.com/voidzero-dev/vite-task.git"]
 # fspy = { path = "../vite-task/crates/fspy" }
 # vite_glob = { path = "../vite-task/crates/vite_glob" }
 # vite_path = { path = "../vite-task/crates/vite_path" }
@@ -114,5 +134,5 @@ opt-level = 3
 lto = "fat"
 codegen-units = 1
 strip = "symbols" # set to `false` for debug information
-debug = false # set to `true` for debug information
-panic = "abort" # Let it crash and force ourselves to write safe Rust.
+debug = false     # set to `true` for debug information
+panic = "abort"   # Let it crash and force ourselves to write safe Rust.

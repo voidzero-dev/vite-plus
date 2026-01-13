@@ -61,7 +61,7 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
 
       - name: Configure Git for access to vite-task
-        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
 
       - run: cargo check --all-targets --all-features
         env:
@@ -77,7 +77,7 @@ jobs:
       - uses: ./.github/actions/clone
 
       - name: Configure Git for access to vite-task
-        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
@@ -111,7 +111,7 @@ jobs:
       - uses: ./.github/actions/clone
 
       - name: Configure Git for access to vite-task
-        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
@@ -160,7 +160,7 @@ jobs:
       - uses: ./.github/actions/clone
 
       - name: Configure Git for access to vite-task
-        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
 
       - run: |
           brew install rustup
@@ -218,7 +218,7 @@ jobs:
       - uses: ./.github/actions/clone
 
       - name: Configure Git for access to vite-task
-        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:

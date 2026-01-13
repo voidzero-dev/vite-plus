@@ -61,7 +61,7 @@ jobs:
       - uses: ./.github/actions/clone
 
       - name: Configure Git for access to vite-task
-        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
@@ -83,7 +83,7 @@ jobs:
 
       - name: Pack packages into tgz
         run: |
-          pnpm run bootstrap-cli:ci
+          pnpm bootstrap-cli:ci
           mkdir -p tmp/tgz
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/test && pnpm pack --pack-destination ../../tmp/tgz && cd ../..

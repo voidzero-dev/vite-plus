@@ -2,9 +2,9 @@
   "name": "vite-plus-monorepo",
   "license": "BUSL-1.1",
   "private": true,
-  "packageManager": "pnpm@10.24.0",
+  "packageManager": "pnpm@10.28.0",
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.18.0"
   },
   "type": "module",
   "scripts": {
