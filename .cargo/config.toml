@@ -1,3 +1,7 @@
+[env]
+# Required by rolldown_workspace crate - points to the rolldown subproject root
+WORKSPACE_DIR = { value = "rolldown", relative = true }
+
 [build]
 rustflags = ["--cfg", "tokio_unstable"] # also update .github/workflows/ci.yml
 # fix sqlite build error on linux

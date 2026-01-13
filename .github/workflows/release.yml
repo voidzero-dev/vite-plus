@@ -7,6 +7,7 @@ permissions: {}
 
 env:
   RELEASE_BUILD: 'true'
+  DEBUG: 'napi:*'
 
 jobs:
   build-rust:
@@ -25,7 +26,6 @@ jobs:
             os: ubuntu-latest
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-          # - aarch64-pc-windows-msvc
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/clone
@@ -38,10 +38,6 @@ jobs:
       - name: Rustup Adds Target
         run: rustup target add ${{ matrix.settings.target }}
 
-      - name: Rustup Adds Target for rolldown
-        working-directory: rolldown
-        run: rustup target add ${{ matrix.settings.target }}
-
       - name: Add musl target (x86_64)
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         run: rustup target add x86_64-unknown-linux-musl
@@ -50,16 +46,7 @@ jobs:
         if: ${{ matrix.settings.target == 'aarch64-unknown-linux-gnu' }}
         run: rustup target add aarch64-unknown-linux-musl
 
-      - name: Add rolldown host target
-        if: ${{ matrix.settings.target == 'aarch64-unknown-linux-gnu' }}
-        working-directory: rolldown
-        run: rustup target add x86_64-unknown-linux-gnu
-
       - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
-
-      - name: Build host rolldown
-        if: ${{ matrix.settings.target == 'aarch64-unknown-linux-gnu' }}
-        run: pnpm --filter rolldown build-binding:release --target x86_64-unknown-linux-gnu
 
       - name: Set binding version
         run: |
@@ -73,9 +60,8 @@ jobs:
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.settings.target }}
-          build-rolldown-native: 'true'
 
-      - name: Upload Vite+ cli binding artifact
+      - name: Upload Vite+ native artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: vite-plus-native-${{ matrix.settings.target }}
@@ -87,13 +73,6 @@ jobs:
         with:
           name: vite-plus-global-native-${{ matrix.settings.target }}
           path: ./packages/global/binding/*.node
-          if-no-files-found: error
-
-      - name: Upload rolldown artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: rolldown-native-${{ matrix.settings.target }}
-          path: ./rolldown/packages/rolldown/src/*.node
           if-no-files-found: error
 
       - name: Remove .node files before upload dist
@@ -150,9 +129,8 @@ jobs:
       - name: Download cli binding
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          path: packages/cli/binding
+          path: packages/cli/artifacts
           pattern: vite-plus-native-*
-          merge-multiple: true
 
       - name: Download core dist
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -161,18 +139,11 @@ jobs:
           pattern: core
           merge-multiple: true
 
-      - name: Download rolldown native
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: ./.github/actions/download-rolldown-binaries
         with:
-          path: packages/core/dist/rolldown/shared
-          pattern: rolldown-native-*
-          merge-multiple: true
-
-      - name: Download rolldown native
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          path: rolldown/packages/rolldown/src
-          name: rolldown-native-x86_64-unknown-linux-gnu
+          github-token: ${{ github.token }}
+          target: x86_64-unknown-linux-gnu
+          upload: 'false'
 
       - name: Download global dist
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -207,6 +178,13 @@ jobs:
         run: pnpm --filter=@voidzero-dev/vite-plus-test build
 
       - run: npm install -g npm@latest # For trusted publishing support
+
+      - name: Publish native addons
+        run: |
+          echo '@voidzero-dev:registry=https://npm.pkg.github.com/' >> ~/.npmrc
+          pnpm --filter=@voidzero-dev/vite-plus publish-native
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish
         run: |

@@ -5,6 +5,14 @@ inputs:
   github-token:
     description: 'GitHub token for accessing GitHub Package Registry'
     required: true
+  target:
+    description: 'The target platform'
+    default: 'x86_64-unknown-linux-gnu'
+    required: false
+  upload:
+    description: 'Upload the rolldown binaries as artifact'
+    required: false
+    default: 'true'
 
 runs:
   using: 'composite'
@@ -12,15 +20,26 @@ runs:
     - name: Install previous release
       shell: bash
       run: |
-        echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> ~/.npmrc
-        echo "@voidzero-dev:registry=https://npm.pkg.github.com/" >> ~/.npmrc
-        export VERSION=$(npm view --json @voidzero-dev/vite-plus-core | jq -r '.version')
-        npm pack "@voidzero-dev/vite-plus-core@${VERSION}"
-        tar -xzf voidzero-dev-vite-plus-core-${VERSION}.tgz
+        if ${{ runner.os == 'Windows' }}; then
+          export TARGET="win32-x64-msvc"
+        elif ${{ runner.os == 'Linux' }}; then
+          export TARGET="linux-x64-gnu"
+        elif ${{ runner.os == 'macOS' }}; then
+          export TARGET="darwin-arm64"
+        fi
+
+        export VERSION=$(npm view --json rolldown | jq -r '.version')
+        npm pack "@rolldown/binding-${TARGET}@${VERSION}"
+        tar -xzf "rolldown-binding-${TARGET}-${VERSION}.tgz"
+        if [ -d "./rolldown/packages/rolldown/src" ]; then
+          cp "./package/rolldown-binding.${TARGET}.node" ./rolldown/packages/rolldown/src
+          ls ./rolldown/packages/rolldown/src
+        fi
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      if: ${{ inputs.upload == 'true' }}
       with:
         name: rolldown-binaries
-        path: ./package/dist/rolldown/shared/rolldown-binding.*.node
+        path: ./package/rolldown-binding.*.node
         if-no-files-found: error

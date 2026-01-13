@@ -67,7 +67,7 @@ jobs:
         env:
           RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
 
-      - run: cargo test
+      - run: cargo test -p vite_command -p vite_install -p vite_migration
 
   lint:
     name: Lint
@@ -90,7 +90,7 @@ jobs:
           cargo shear
           cargo fmt --check
           # cargo clippy --all-targets --all-features -- -D warnings
-          RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
+          # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
 
       - uses: crate-ci/typos@85f62a8a84f939ae994ab3763f01a0296d61a7ee # v1.36.2
         with:

@@ -1,11 +1,14 @@
 [package]
 name = "vite-plus-cli"
 version = "0.0.0"
-edition = "2024"
+edition.workspace = true
 
 [[bin]]
 name = "vite"
 path = "src/main.rs"
+
+[features]
+rolldown = ["dep:rolldown_binding"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -25,6 +28,8 @@ vite_path = { workspace = true }
 vite_str = { workspace = true }
 vite_task = { workspace = true }
 vite_workspace = { workspace = true }
+
+rolldown_binding = { workspace = true, optional = true }
 
 [build-dependencies]
 napi-build = { workspace = true }

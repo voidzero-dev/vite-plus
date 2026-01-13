@@ -1,9 +1,9 @@
 export default {
   tasks: {
     hello: {
-      command: "node a.js",
-      cwd: "subfolder",
-      cache: true
-    }
-  }
+      command: 'node a.js',
+      cwd: 'subfolder',
+      cache: true,
+    },
+  },
 };

@@ -44,13 +44,25 @@ async function buildNapiBinding() {
   const passedInOptions = buildCommand.getOptions();
 
   const cli = new NapiCli();
+
+  const dtsHeader = process.env.RELEASE_BUILD
+    ? (await import('../../rolldown/packages/rolldown/package.json', { with: { type: 'json' } }))
+        .default.napi.dtsHeader
+    : '';
+
+  if (dtsHeader) {
+    passedInOptions.dtsHeader = `type BindingErrorsOr<T> = T | BindingErrors;\ntype FxHashSet<T> = Set<T>;\ntype FxHashMap<K, V> = Map<K, V>;\n${dtsHeader}`;
+  }
+
   const { task } = await cli.build({
     ...passedInOptions,
     packageJsonPath: '../package.json',
     cwd: 'binding',
     platform: true,
+    jsBinding: 'index.cjs',
+    dts: 'index.d.cts',
     release: process.env.VITE_PLUS_CLI_DEBUG !== '1',
-    esm: true,
+    features: process.env.RELEASE_BUILD ? ['rolldown'] : void 0,
   });
 
   const outputs = await task;

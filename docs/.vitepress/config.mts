@@ -5,9 +5,7 @@ export default defineConfig({
   title: 'Vite+',
   titleTemplate: ':title | The UnifiedToolchain for the Web',
   description: 'The Unified Toolchain for the Web',
-  head: [
-    ['link', { rel: 'icon', href: 'https://viteplus.dev/favicon.svg' }],
-  ],
+  head: [['link', { rel: 'icon', href: 'https://viteplus.dev/favicon.svg' }]],
   themeConfig: {
     logo: { src: 'https://viteplus.dev/favicon.svg', width: 24, height: 24 },
 

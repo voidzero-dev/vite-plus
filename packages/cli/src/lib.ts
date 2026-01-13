@@ -5,8 +5,8 @@ export type * from '@voidzero-dev/vite-plus-core/lib';
 
 export interface LibUserConfig extends TsdownUserConfig {
   /**
-  * When loading env variables from `envFile`, only include variables with these prefixes.
-  * @default ['VITE_LIB_', 'TSDOWN_']
-  */
+   * When loading env variables from `envFile`, only include variables with these prefixes.
+   * @default ['VITE_LIB_', 'TSDOWN_']
+   */
   envPrefix?: string | string[];
 }

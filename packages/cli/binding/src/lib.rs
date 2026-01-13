@@ -4,6 +4,9 @@
 //! It uses NAPI-RS to create native Node.js bindings that allow JavaScript functions
 //! to be called from Rust code.
 
+#[cfg(feature = "rolldown")]
+pub extern crate rolldown_binding;
+
 mod cli;
 
 use std::{collections::HashMap, ffi::OsStr, sync::Arc};

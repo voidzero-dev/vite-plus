@@ -14,6 +14,7 @@
   "scripts": {
     "build": "oxnode -C dev ./build.ts",
     "snap-test": "tool snap-test",
+    "publish-native": "node ./publish-native-addons.ts",
     "test": "vitest run"
   },
   "files": [
@@ -21,10 +22,13 @@
     "dist",
     "binding/index.d.ts",
     "binding/index.js",
+    "binding/index.d.cts",
+    "binding/index.cjs",
     "binding/*.node",
     "dist/test"
   ],
   "dependencies": {
+    "@oxc-project/types": "catalog:",
     "@voidzero-dev/vite-plus-core": "workspace:*",
     "@voidzero-dev/vite-plus-test": "workspace:*",
     "cac": "catalog:",
@@ -43,13 +47,11 @@
   },
   "napi": {
     "binaryName": "vite-plus",
-    "packageName": "@vite-plus",
+    "packageName": "@voidzero-dev/vite-plus",
     "targets": [
       "aarch64-apple-darwin",
-      "x86_64-apple-darwin",
       "aarch64-unknown-linux-gnu",
       "x86_64-unknown-linux-gnu",
-      "aarch64-pc-windows-msvc",
       "x86_64-pc-windows-msvc"
     ]
   },
@@ -79,8 +81,9 @@
       "import": "./dist/bin.js"
     },
     "./binding": {
-      "import": "./binding/index.js",
-      "types": "./binding/index.d.ts"
+      "import": "./binding/index.cjs",
+      "require": "./binding/index.cjs",
+      "types": "./binding/index.d.cts"
     },
     "./package.json": "./package.json",
     "./lib": {

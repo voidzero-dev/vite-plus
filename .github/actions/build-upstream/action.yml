@@ -4,38 +4,44 @@ inputs:
   target:
     description: 'The target platform'
     required: true
-  build-rolldown-native:
-    description: 'Build rolldown native'
-    required: false
-    default: 'false'
+
 runs:
   using: 'composite'
   steps:
+    - uses: ./.github/actions/download-rolldown-binaries
+      with:
+        github-token: ${{ github.token }}
+        target: ${{ inputs.target }}
+        upload: 'false'
+    - name: Patch Vite
+      shell: bash
+      run: |
+        if [[ "${{ runner.os }}" == "macOS" ]]; then
+          sed -i '' '123,124d' rolldown-vite/packages/vite/rolldown.dts.config.ts
+        else
+          sed -i '123,124d' rolldown-vite/packages/vite/rolldown.dts.config.ts
+        fi
+
     - name: Build
       shell: bash
       if: ${{ inputs.target == 'x86_64-unknown-linux-gnu' }}
       run: |
         pnpm --filter @rolldown/pluginutils build
-        if [ "${{ inputs.build-rolldown-native }}" = "true" ] || [ "${{ github.head_ref || github.ref_name }}" = "deps/upstream-update" ]; then
-          pnpm --filter rolldown build-binding:release --target ${{ inputs.target }} --use-napi-cross
-        fi
         pnpm --filter rolldown build-node
         pnpm --filter vite build-types
         pnpm --filter=@voidzero-dev/vite-plus-core build
         pnpm --filter=@voidzero-dev/vite-plus-test build
-        CC=clang pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }} --use-napi-cross
-        CC=clang pnpm --filter=@voidzero-dev/global build --target ${{ inputs.target }} --use-napi-cross
+        pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }} --use-napi-cross
+        pnpm --filter=@voidzero-dev/global build --target ${{ inputs.target }} --use-napi-cross
       env:
         TARGET_CC: clang
+        DEBUG: napi:*
 
     - name: Build
       shell: bash
       if: ${{ inputs.target == 'aarch64-unknown-linux-gnu' }}
       run: |
         pnpm --filter @rolldown/pluginutils build
-        if [ "${{ inputs.build-rolldown-native }}" = "true" ] || [ "${{ github.head_ref || github.ref_name }}" = "deps/upstream-update" ]; then
-          pnpm --filter rolldown build-binding:release --target ${{ inputs.target }} --use-napi-cross
-        fi
         pnpm --filter rolldown build-node
         pnpm --filter vite build-types
         pnpm --filter=@voidzero-dev/vite-plus-core build
@@ -44,18 +50,18 @@ runs:
         TARGET_CFLAGS="-D_BSD_SOURCE" pnpm --filter=@voidzero-dev/global build --target ${{ inputs.target }} --use-napi-cross
       env:
         TARGET_CC: clang
+        DEBUG: napi:*
 
     - name: Build
       shell: bash
       if: ${{ !contains(inputs.target, 'linux') }}
       run: |
         pnpm --filter @rolldown/pluginutils build
-        if [ "${{ inputs.build-rolldown-native }}" = "true" ] || [ "${{ github.head_ref || github.ref_name }}" = "deps/upstream-update" ]; then
-          pnpm --filter rolldown build-binding:release --target ${{ inputs.target }}
-        fi
         pnpm --filter rolldown build-node
         pnpm --filter vite build-types
         pnpm --filter=@voidzero-dev/vite-plus-core build
         pnpm --filter=@voidzero-dev/vite-plus-test build
         pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }}
         pnpm --filter=@voidzero-dev/global build --target ${{ inputs.target }}
+      env:
+        DEBUG: napi:*

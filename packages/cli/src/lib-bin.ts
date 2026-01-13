@@ -2,10 +2,15 @@
 import module from 'node:module';
 
 import { resolveConfig } from '@voidzero-dev/vite-plus-core';
-import { buildWithConfigs, resolveUserConfig, globalLogger, enableDebug, type InlineConfig, type ResolvedConfig } from '@voidzero-dev/vite-plus-core/lib';
+import {
+  buildWithConfigs,
+  resolveUserConfig,
+  globalLogger,
+  enableDebug,
+  type InlineConfig,
+  type ResolvedConfig,
+} from '@voidzero-dev/vite-plus-core/lib';
 import { cac } from 'cac';
-
-import type { LibUserConfig } from './lib';
 
 const cli = cac('vite lib');
 cli.help();

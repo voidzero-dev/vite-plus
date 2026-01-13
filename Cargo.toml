@@ -10,8 +10,10 @@ members = [
 [workspace.package]
 authors = ["Vite+ Authors"]
 edition = "2024"
+homepage = "https://github.com/voidzero-dev/vite-plus"
 license = "BUSL-1.1"
-rust-version = "1.89.0"
+repository = "https://github.com/voidzero-dev/vite-plus"
+rust-version = "1.92.0"
 
 [workspace.lints.rust]
 absolute_paths_not_starting_with_crate = "warn"
@@ -21,7 +23,6 @@ unexpected_cfgs = { level = "warn", check-cfg = [
   'cfg(coverage)',
   'cfg(coverage_nightly)',
 ] }
-tail_expr_drop_order = "warn"
 unsafe_op_in_unsafe_fn = "warn"
 unused_unsafe = "warn"
 
@@ -41,30 +42,62 @@ cargo_common_metadata = "allow"
 
 [workspace.dependencies]
 anyhow = "1.0.98"
-async-trait = "0.1.89"
+append-only-vec = "0.1.7"
+arcstr = { version = "1.2.0", default-features = false }
+ariadne = { package = "rolldown-ariadne", version = "0.5.3" }
 ast-grep-config = "0.40.1"
 ast-grep-core = "0.40.1"
 ast-grep-language = { version = "0.40.1", default-features = false, features = [
   "tree-sitter-bash",
   "tree-sitter-typescript",
 ] }
+async-channel = "2.3.1"
+async-scoped = "0.9.0"
+async-trait = "0.1.89"
 backon = "1.3.0"
+base-encode = "0.3.1"
+base64-simd = "0.8.0"
 bincode = "2.0.1"
 bstr = { version = "1.12.0", default-features = false, features = [
   "alloc",
   "std",
 ] }
+bitflags = "2.9.1"
+blake3 = "1.8.2"
 clap = "4.5.40"
+commondir = "1.0.0"
+cow-utils = "0.1.3"
 criterion = { version = "0.7", features = ["html_reports"] }
+criterion2 = { version = "3.0.0", default-features = false }
 crossterm = { version = "0.29.0", features = ["event-stream"] }
+css-module-lexer = "0.0.15"
+dashmap = "6.1.0"
+derive_more = { version = "2.0.1", features = ["debug"] }
 directories = "6.0.0"
-flate2 = "1.0.35"
-fspy = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
+dunce = "1.0.5"
+fast-glob = "1.0.0"
+flate2 = { version = "=1.1.5", features = ["zlib-rs"] }
+form_urlencoded = "1.2.1"
+fspy = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "41f102edf54b9cda98dffa161acd8bb5b5514759" }
+futures = "0.3.31"
 futures-util = "0.3.31"
+glob = "0.3.2"
+heck = "0.5.0"
 hex = "0.4.3"
 httpmock = "0.7"
 ignore = "0.4"
+indexmap = "2.9.0"
 indoc = "2.0.5"
+infer = "0.19.0"
+insta = "1.43.1"
+itertools = "0.14.0"
+itoa = "1.0.15"
+json-escape-simd = "3"
+json-strip-comments = "3"
+jsonschema = { version = "0.38.0", default-features = false }
+memchr = "2.7.4"
+mimalloc-safe = "0.1.52"
+mime = "0.3.17"
 monostate = "1.0.2"
 napi = { version = "3.0.0", default-features = false, features = [
   "async",
@@ -76,33 +109,141 @@ napi-derive = { version = "3.0.0", default-features = false, features = [
   "strict",
 ] }
 nix = { version = "0.30.1", features = ["dir"] }
+nodejs-built-in-modules = "1.0.0"
+nom = "8.0.0"
+num-bigint = "0.4.6"
+num-format = "0.4"
+num_cpus = "1.17"
+owo-colors = "4.2.2"
+parking_lot = "0.12.5"
 pathdiff = "0.2.3"
+percent-encoding = "2.3.1"
+petgraph = "0.8.2"
+phf = "0.13.0"
+rayon = "1.10.0"
+regex = "1.11.1"
+regress = "0.10.3"
 reqwest = { version = "0.12", default-features = false }
+rolldown-notify = "10.1.0"
+rolldown-notify-debouncer-full = "0.7.4"
+ropey = "1.6.1"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
+rustc-hash = "2.1.1"
+schemars = "1.0.0"
+self_cell = "1.2.0"
 semver = "1.0.26"
-serde = "1.0.219"
+serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
+serde_yaml = "0.9.34"
 serde_yml = "0.0.12"
 sha1 = "0.10.6"
 sha2 = "0.10.9"
+simdutf8 = "0.1.5"
+smallvec = "1.15.0"
+sugar_path = { version = "1.2.1", features = ["cached_current_dir"] }
 tar = "0.4.43"
 tempfile = "3.14.0"
+terminal_size = "0.4.2"
 test-log = { version = "0.2.18", features = ["trace"] }
+testing_macros = "1.0.0"
 thiserror = "2"
-tokio = "1.48.0"
+tokio = { version = "1.48.0", default-features = false }
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter", "serde"] }
+tracing-chrome = "0.7.2"
+tracing-subscriber = { version = "0.3.19", default-features = false, features = ["env-filter", "fmt", "json", "serde", "std"] }
+ts-rs = "11.0"
+typedmap = "0.6.0"
+url = "2.5.4"
+urlencoding = "2.1.3"
+uuid = "1.17.0"
+vfs = "0.12.1"
 vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
-vite_glob = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
+vite_glob = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "41f102edf54b9cda98dffa161acd8bb5b5514759" }
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
-vite_path = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
-vite_str = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
-vite_task = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
-vite_workspace = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
+vite_path = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "41f102edf54b9cda98dffa161acd8bb5b5514759" }
+vite_str = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "41f102edf54b9cda98dffa161acd8bb5b5514759" }
+vite_task = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "41f102edf54b9cda98dffa161acd8bb5b5514759" }
+vite_workspace = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "41f102edf54b9cda98dffa161acd8bb5b5514759" }
+walkdir = "2.5.0"
 wax = "0.6.0"
 which = "8.0.0"
+xxhash-rust = "0.8.15"
+
+# oxc crates with the same version
+oxc = { version = "0.108.0", features = [
+  "ast_visit",
+  "transformer",
+  "minifier",
+  "mangler",
+  "semantic",
+  "codegen",
+  "serialize",
+  "isolated_declarations",
+  "regular_expression",
+  "cfg",
+] }
+oxc_allocator = { version = "0.108.0", features = ["pool"] }
+oxc_ecmascript = "0.108.0"
+oxc_minify_napi = "0.108.0"
+oxc_parser_napi = "0.108.0"
+oxc_transform_napi = "0.108.0"
+oxc_traverse = "0.108.0"
+
+# oxc crates in their own repos
+oxc_index = { version = "4", features = ["rayon", "serde"] }
+oxc_resolver = { version = "11.15.0", features = ["yarn_pnp"] }
+oxc_resolver_napi = { version = "11.15.0", default-features = false, features = ["yarn_pnp"] }
+oxc_sourcemap = "6"
+
+# rolldown crates
+rolldown = { path = "./rolldown/crates/rolldown" }
+rolldown_binding = { path = "./rolldown/crates/rolldown_binding" }
+rolldown_common = { path = "./rolldown/crates/rolldown_common" }
+rolldown_dev = { path = "./rolldown/crates/rolldown_dev" }
+rolldown_dev_common = { path = "./rolldown/crates/rolldown_dev_common" }
+rolldown_devtools = { path = "./rolldown/crates/rolldown_devtools" }
+rolldown_devtools_action = { path = "./rolldown/crates/rolldown_devtools_action" }
+rolldown_ecmascript = { path = "./rolldown/crates/rolldown_ecmascript" }
+rolldown_ecmascript_utils = { path = "./rolldown/crates/rolldown_ecmascript_utils" }
+rolldown_error = { path = "./rolldown/crates/rolldown_error" }
+rolldown_fs = { path = "./rolldown/crates/rolldown_fs" }
+rolldown_fs_watcher = { path = "./rolldown/crates/rolldown_fs_watcher" }
+rolldown_plugin = { path = "./rolldown/crates/rolldown_plugin" }
+rolldown_plugin_chunk_import_map = { path = "./rolldown/crates/rolldown_plugin_chunk_import_map" }
+rolldown_plugin_data_uri = { path = "./rolldown/crates/rolldown_plugin_data_uri" }
+rolldown_plugin_esm_external_require = { path = "./rolldown/crates/rolldown_plugin_esm_external_require" }
+rolldown_plugin_hmr = { path = "./rolldown/crates/rolldown_plugin_hmr" }
+rolldown_plugin_isolated_declaration = { path = "./rolldown/crates/rolldown_plugin_isolated_declaration" }
+rolldown_plugin_lazy_compilation = { path = "./rolldown/crates/rolldown_plugin_lazy_compilation" }
+rolldown_plugin_oxc_runtime = { path = "./rolldown/crates/rolldown_plugin_oxc_runtime" }
+rolldown_plugin_replace = { path = "./rolldown/crates/rolldown_plugin_replace" }
+rolldown_plugin_utils = { path = "./rolldown/crates/rolldown_plugin_utils" }
+rolldown_plugin_vite_alias = { path = "./rolldown/crates/rolldown_plugin_vite_alias" }
+rolldown_plugin_vite_build_import_analysis = { path = "./rolldown/crates/rolldown_plugin_vite_build_import_analysis" }
+rolldown_plugin_vite_dynamic_import_vars = { path = "./rolldown/crates/rolldown_plugin_vite_dynamic_import_vars" }
+rolldown_plugin_vite_import_glob = { path = "./rolldown/crates/rolldown_plugin_vite_import_glob" }
+rolldown_plugin_vite_json = { path = "./rolldown/crates/rolldown_plugin_vite_json" }
+rolldown_plugin_vite_load_fallback = { path = "./rolldown/crates/rolldown_plugin_vite_load_fallback" }
+rolldown_plugin_vite_manifest = { path = "./rolldown/crates/rolldown_plugin_vite_manifest" }
+rolldown_plugin_vite_module_preload_polyfill = { path = "./rolldown/crates/rolldown_plugin_vite_module_preload_polyfill" }
+rolldown_plugin_vite_react_refresh_wrapper = { path = "./rolldown/crates/rolldown_plugin_vite_react_refresh_wrapper" }
+rolldown_plugin_vite_reporter = { path = "./rolldown/crates/rolldown_plugin_vite_reporter" }
+rolldown_plugin_vite_resolve = { path = "./rolldown/crates/rolldown_plugin_vite_resolve" }
+rolldown_plugin_vite_transform = { path = "./rolldown/crates/rolldown_plugin_vite_transform" }
+rolldown_plugin_vite_wasm_fallback = { path = "./rolldown/crates/rolldown_plugin_vite_wasm_fallback" }
+rolldown_plugin_vite_wasm_helper = { path = "./rolldown/crates/rolldown_plugin_vite_wasm_helper" }
+rolldown_plugin_vite_web_worker_post = { path = "./rolldown/crates/rolldown_plugin_vite_web_worker_post" }
+rolldown_resolver = { path = "./rolldown/crates/rolldown_resolver" }
+rolldown_sourcemap = { path = "./rolldown/crates/rolldown_sourcemap" }
+rolldown_std_utils = { path = "./rolldown/crates/rolldown_std_utils" }
+rolldown_testing = { path = "./rolldown/crates/rolldown_testing" }
+rolldown_testing_config = { path = "./rolldown/crates/rolldown_testing_config" }
+rolldown_tracing = { path = "./rolldown/crates/rolldown_tracing" }
+rolldown_utils = { path = "./rolldown/crates/rolldown_utils" }
+rolldown_workspace = { path = "./rolldown/crates/rolldown_workspace" }
+string_wizard = { path = "./rolldown/crates/string_wizard", features = ["serde"] }
 
 # =============================================================================
 # Local Development Patches

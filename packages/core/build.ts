@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { copyFile, cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { dirname, join, parse, resolve } from 'node:path';
+import { dirname, join, parse, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Convert native path to POSIX format for glob patterns
@@ -184,10 +184,9 @@ async function buildVite() {
 
   // Copy type files
   // Normalize glob pattern to use forward slashes on Windows
-  const srcTypeFiles = await glob(
-    toPosixPath(join(rolldownViteSourceDir, 'types', '**/*.d.ts')),
-    { absolute: true },
-  );
+  const srcTypeFiles = await glob(toPosixPath(join(rolldownViteSourceDir, 'types', '**/*.d.ts')), {
+    absolute: true,
+  });
 
   await mkdir(join(projectDir, 'dist/vite/types'), { recursive: true });
 
@@ -246,10 +245,20 @@ async function bundleRolldown() {
       file.endsWith('.d.mts') ||
       file.endsWith('.d.ts')
     ) {
-      const source = await readFile(file, 'utf-8');
+      let source = await readFile(file, 'utf-8');
       const rules: ReplacementRule[] = [...createRolldownRewriteRules(pkgJson.name)];
       if (process.env.RELEASE_BUILD) {
-        rules.push({ from: '../rolldown-binding', to: './rolldown-binding' });
+        const rolldownBindingVersion = (
+          await import(toPosixPath(relative(projectDir, join(rolldownSourceDir, 'package.json'))), {
+            with: { type: 'json' },
+          })
+        ).default.version;
+        // @rolldown/binding-darwin-arm64 → @voidzero-dev/vite-plus-darwin-arm64/binding
+        source = source.replace(
+          /@rolldown\/binding-([a-z0-9-]+)/g,
+          '@voidzero-dev/vite-plus/binding',
+        );
+        source = source.replaceAll(`${rolldownBindingVersion}`, pkgJson.version);
       }
       const newSource = rewriteModuleSpecifiers(source, file, { rules });
       await writeFile(file, newSource);
@@ -324,10 +333,9 @@ async function bundleVitepress() {
 
   // Copy dist directory
   // Normalize glob pattern to use forward slashes on Windows
-  const vitepressDistFiles = await glob(
-    toPosixPath(join(vitepressSourceDir, 'dist', '**/*')),
-    { absolute: true },
-  );
+  const vitepressDistFiles = await glob(toPosixPath(join(vitepressSourceDir, 'dist', '**/*')), {
+    absolute: true,
+  });
 
   for (const file of vitepressDistFiles) {
     const stats = await stat(file);
@@ -378,20 +386,16 @@ async function bundleVitepress() {
   await mkdir(vitepressTypesDestDir, { recursive: true });
 
   // Normalize glob pattern to use forward slashes on Windows
-  const vitepressTypesFiles = await glob(
-    toPosixPath(join(vitepressTypesDir, '**/*')),
-    { absolute: true },
-  );
+  const vitepressTypesFiles = await glob(toPosixPath(join(vitepressTypesDir, '**/*')), {
+    absolute: true,
+  });
 
   for (const file of vitepressTypesFiles) {
     const stats = await stat(file);
     if (!stats.isFile()) continue;
 
     // Normalize paths to use forward slashes for consistent replacement on Windows
-    const relativePath = toPosixPath(file).replace(
-      toPosixPath(vitepressTypesDir),
-      '',
-    );
+    const relativePath = toPosixPath(file).replace(toPosixPath(vitepressTypesDir), '');
     const destPath = join(vitepressTypesDestDir, relativePath);
 
     await mkdir(parse(destPath).dir, { recursive: true });
