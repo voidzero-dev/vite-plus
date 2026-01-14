@@ -9,7 +9,6 @@ Vite+ Commands:
   lint       Lint code
   test       Run tests
   fmt        Format code
-  doc        Build documentation
   lib        Build library
   migrate    Migrate an existing project to Vite+<repeat>
   cache      Manage the task cache

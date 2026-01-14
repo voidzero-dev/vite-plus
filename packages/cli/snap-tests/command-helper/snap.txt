@@ -11,7 +11,6 @@ vite+/<semver>
   [1mtest[0m       Run tests
   [1mfmt[0m        Format code
   [1mlib[0m        Build library
-  [1mdoc[0m        Build documentation
   [1mrun[0m        Run tasks
   [1mcache[0m      Manage the task cache
 
