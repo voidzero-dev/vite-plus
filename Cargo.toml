@@ -59,7 +59,7 @@ criterion = { version = "0.7", features = ["html_reports"] }
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 directories = "6.0.0"
 flate2 = "1.0.35"
-fspy = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
+fspy = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "41f102edf54b9cda98dffa161acd8bb5b5514759" }
 futures-util = "0.3.31"
 hex = "0.4.3"
 httpmock = "0.7"
@@ -94,13 +94,13 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "serde"] }
 vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
-vite_glob = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
+vite_glob = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "41f102edf54b9cda98dffa161acd8bb5b5514759" }
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
-vite_path = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
-vite_str = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
-vite_task = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
-vite_workspace = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "c57008d77e940ea235822c02351020de34fa97a6" }
+vite_path = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "41f102edf54b9cda98dffa161acd8bb5b5514759" }
+vite_str = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "41f102edf54b9cda98dffa161acd8bb5b5514759" }
+vite_task = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "41f102edf54b9cda98dffa161acd8bb5b5514759" }
+vite_workspace = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "41f102edf54b9cda98dffa161acd8bb5b5514759" }
 wax = "0.6.0"
 which = "8.0.0"
 
