@@ -21,7 +21,7 @@
 
 
 > cat tsdown.config.ts # check tsdown.config.ts
-import { defineConfig } from '@voidzero-dev/vite-plus/lib';
+import { defineConfig } from 'vite-plus/lib';
 
 export default defineConfig({
   entry: 'src/index.ts',
@@ -33,7 +33,7 @@ export default defineConfig({
 > cat vite.config.ts # check vite.config.ts
 import tsdownConfig from './tsdown.config.js';
 
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lib: tsdownConfig,
@@ -45,7 +45,7 @@ export default defineConfig({
   "name": "migration-from-tsdown",
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "scripts": {
     "build": "vite lib",
@@ -74,7 +74,7 @@ export default defineConfig({
 
 
 > cat tsdown.config.ts # check tsdown.config.ts
-import { defineConfig } from '@voidzero-dev/vite-plus/lib';
+import { defineConfig } from 'vite-plus/lib';
 
 export default defineConfig({
   entry: 'src/index.ts',
@@ -86,7 +86,7 @@ export default defineConfig({
 > cat vite.config.ts # check vite.config.ts
 import tsdownConfig from './tsdown.config.js';
 
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lib: tsdownConfig,
@@ -98,7 +98,7 @@ export default defineConfig({
   "name": "migration-from-tsdown",
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "scripts": {
     "build": "vite lib",

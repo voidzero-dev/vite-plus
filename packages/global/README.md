@@ -5,27 +5,8 @@
 
 ## Install
 
-> **Note**: need GitHub token to install before we publish the package to npm.
-
-Add the following lines to your `~/.npmrc` file:
-
-```ini
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-@voidzero-dev:registry=https://npm.pkg.github.com/
-```
-
-Create a fine-grained personal access token with the `read:packages` scope. Follow this guide: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens.
-
-Use this token to install the global cli:
-
 ```bash
-GITHUB_TOKEN=<your-token> npm install -g @voidzero-dev/global
-```
-
-Use 1Password CLI:
-
-```bash
-GITHUB_TOKEN=$(op read "op://YOUR_GITHUB_TOKEN_PATH") npm install -g @voidzero-dev/global
+npm install -g vite-plus-global
 ```
 
 ## Get Started

@@ -22,7 +22,7 @@
 
 > cat vite.config.ts # check vite.config.ts
 import react from '@vitejs/plugin-react';
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   fmt: {
@@ -60,7 +60,7 @@ cat: .oxfmtrc.json: No such file or directory
   "devDependencies": {
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@voidzero-dev/vite-plus": "catalog:"
+    "vite-plus": "catalog:"
   },
   "scripts": {
     "dev": "vite dev",
@@ -84,7 +84,7 @@ catalog:
   # test comment here to check if the comment is preserved
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
-  '@voidzero-dev/vite-plus': latest
+  vite-plus: latest
 
 minimumReleaseAge: 1440
 overrides:
@@ -118,7 +118,7 @@ minimumReleaseAgeExclude:
     "test-vite-plus-package": "1.0.0",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@voidzero-dev/vite-plus": "catalog:"
+    "vite-plus": "catalog:"
   },
   "optionalDependencies": {
     "test-vite-plus-other-optional": "1.0.0"
@@ -139,7 +139,7 @@ minimumReleaseAgeExclude:
   "devDependencies": {
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@voidzero-dev/vite-plus": "catalog:"
+    "vite-plus": "catalog:"
   },
   "scripts": {
     "dev": "vite dev",
@@ -152,7 +152,7 @@ minimumReleaseAgeExclude:
 {
   "name": "@vite-plus-test/only-oxlint",
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "catalog:"
+    "vite-plus": "catalog:"
   },
   "scripts": {
     "lint": "vite lint --fix"
@@ -160,7 +160,7 @@ minimumReleaseAgeExclude:
 }
 
 > cat packages/only-oxlint/vite.config.ts # check only-oxlint vite.config.ts
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lint: {

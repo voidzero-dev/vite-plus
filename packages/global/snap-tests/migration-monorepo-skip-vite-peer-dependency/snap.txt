@@ -14,7 +14,7 @@
 
 > cat packages/vite-plugin/src/index.ts # vite-plugin has vite in peerDeps: vite NOT rewritten, vitest rewritten
 import { defineConfig, type Plugin } from 'vite';
-import { describe, it, expect } from '@voidzero-dev/vite-plus/test';
+import { describe, it, expect } from 'vite-plus/test';
 
 export function myVitePlugin(): Plugin {
   return {
@@ -39,7 +39,7 @@ export default defineConfig({
 {
   "name": "migration-monorepo-skip-vite-peer-dependency",
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "catalog:"
+    "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@<semver>"
 }

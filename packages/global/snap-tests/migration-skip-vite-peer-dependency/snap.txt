@@ -16,7 +16,7 @@
 
 > cat src/index.ts # vite imports should NOT be rewritten, vitest imports SHOULD be rewritten
 import { defineConfig, type Plugin } from 'vite';
-import { describe, it, expect } from '@voidzero-dev/vite-plus/test';
+import { describe, it, expect } from 'vite-plus/test';
 
 export function myVitePlugin(): Plugin {
   return {
@@ -50,7 +50,7 @@ export default defineConfig({
     }
   },
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "packageManager": "pnpm@<semver>"
 }

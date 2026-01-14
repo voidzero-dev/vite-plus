@@ -17,7 +17,7 @@
 
 
 > cat vite.config.ts # check vite.config.ts
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   fmt: {
@@ -43,7 +43,7 @@ cat: .oxfmtrc.json: No such file or directory
 > cat package.json # check package.json
 {
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "pnpm": {
     "overrides": {

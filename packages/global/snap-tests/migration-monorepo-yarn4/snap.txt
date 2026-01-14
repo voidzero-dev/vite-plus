@@ -16,7 +16,7 @@
 
 > cat vite.config.ts # check vite.config.ts
 import react from '@vitejs/plugin-react';
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lint: {
@@ -41,7 +41,7 @@ cat: .oxlintrc.json: No such file or directory
   "devDependencies": {
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@voidzero-dev/vite-plus": "catalog:"
+    "vite-plus": "catalog:"
   },
   "scripts": {
     "dev": "vite dev",
@@ -67,7 +67,7 @@ cat: .oxlintrc.json: No such file or directory
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
-  '@voidzero-dev/vite-plus': latest
+  vite-plus: latest
 npmScopes:
   voidzero-dev:
     npmRegistryServer: https://npm.pkg.github.com
@@ -85,7 +85,7 @@ npmScopes:
     "test-vite-plus-package": "1.0.0",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@voidzero-dev/vite-plus": "catalog:"
+    "vite-plus": "catalog:"
   },
   "optionalDependencies": {
     "test-vite-plus-other-optional": "1.0.0"
@@ -106,7 +106,7 @@ npmScopes:
   "devDependencies": {
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@voidzero-dev/vite-plus": "catalog:"
+    "vite-plus": "catalog:"
   },
   "scripts": {
     "dev": "vite dev",

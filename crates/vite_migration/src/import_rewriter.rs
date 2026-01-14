@@ -10,10 +10,10 @@ use crate::{ast_grep, file_walker};
 /// ast-grep rules for rewriting vite imports and declare module statements
 ///
 /// This rewrites:
-/// - `import { ... } from 'vite'` → `import { ... } from '@voidzero-dev/vite-plus'`
-/// - `import { ... } from 'vite/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/{name}'`
-/// - `declare module 'vite' { ... }` → `declare module '@voidzero-dev/vite-plus' { ... }`
-/// - `declare module 'vite/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/{name}' { ... }`
+/// - `import { ... } from 'vite'` → `import { ... } from 'vite-plus'`
+/// - `import { ... } from 'vite/{name}'` → `import { ... } from 'vite-plus/{name}'`
+/// - `declare module 'vite' { ... }` → `declare module 'vite-plus' { ... }`
+/// - `declare module 'vite/{name}' { ... }` → `declare module 'vite-plus/{name}' { ... }`
 const REWRITE_VITE_RULES: &str = r#"---
 id: rewrite-vite-import
 language: TypeScript
@@ -28,7 +28,7 @@ transform:
     replace:
       source: $STR
       replace: vite
-      by: "@voidzero-dev/vite-plus"
+      by: "vite-plus"
 fix: $NEW_IMPORT
 ---
 id: rewrite-vite-subpath-import
@@ -44,7 +44,7 @@ transform:
     replace:
       source: $STR
       replace: vite/
-      by: "@voidzero-dev/vite-plus/"
+      by: "vite-plus/"
 fix: $NEW_IMPORT
 ---
 id: rewrite-declare-module-vite
@@ -60,7 +60,7 @@ transform:
     replace:
       source: $STR
       replace: vite
-      by: "@voidzero-dev/vite-plus"
+      by: "vite-plus"
 fix: $NEW_IMPORT
 ---
 id: rewrite-declare-module-vite-subpath
@@ -76,35 +76,35 @@ transform:
     replace:
       source: $STR
       replace: vite/
-      by: "@voidzero-dev/vite-plus/"
+      by: "vite-plus/"
 fix: $NEW_IMPORT
 "#;
 
 /// ast-grep rules for rewriting vitest imports and declare module statements
 ///
 /// This rewrites:
-/// - `import { ... } from 'vitest'` → `import { ... } from '@voidzero-dev/vite-plus/test'`
-/// - `import { ... } from 'vitest/config'` → `import { ... } from '@voidzero-dev/vite-plus'`
-/// - `import { ... } from 'vitest/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/{name}'`
-/// - `import { ... } from '@vitest/browser'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser'`
-/// - `import { ... } from '@vitest/browser/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser/{name}'`
-/// - `import { ... } from '@vitest/browser-playwright'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-playwright'`
-/// - `import { ... } from '@vitest/browser-playwright/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-playwright/{name}'`
-/// - `import { ... } from '@vitest/browser-preview'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-preview'`
-/// - `import { ... } from '@vitest/browser-preview/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-preview/{name}'`
-/// - `import { ... } from '@vitest/browser-webdriverio'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-webdriverio'`
-/// - `import { ... } from '@vitest/browser-webdriverio/{name}'` → `import { ... } from '@voidzero-dev/vite-plus/test/browser-webdriverio/{name}'`
-/// - `declare module 'vitest' { ... }` → `declare module '@voidzero-dev/vite-plus/test' { ... }`
-/// - `declare module 'vitest/config' { ... }` → `declare module '@voidzero-dev/vite-plus' { ... }`
-/// - `declare module 'vitest/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/{name}' { ... }`
-/// - `declare module '@vitest/browser' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser' { ... }`
-/// - `declare module '@vitest/browser/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser/{name}' { ... }`
-/// - `declare module '@vitest/browser-playwright' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-playwright' { ... }`
-/// - `declare module '@vitest/browser-playwright/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-playwright/{name}' { ... }`
-/// - `declare module '@vitest/browser-preview' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-preview' { ... }`
-/// - `declare module '@vitest/browser-preview/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-preview/{name}' { ... }`
-/// - `declare module '@vitest/browser-webdriverio' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-webdriverio' { ... }`
-/// - `declare module '@vitest/browser-webdriverio/{name}' { ... }` → `declare module '@voidzero-dev/vite-plus/test/browser-webdriverio/{name}' { ... }`
+/// - `import { ... } from 'vitest'` → `import { ... } from 'vite-plus/test'`
+/// - `import { ... } from 'vitest/config'` → `import { ... } from 'vite-plus'`
+/// - `import { ... } from 'vitest/{name}'` → `import { ... } from 'vite-plus/test/{name}'`
+/// - `import { ... } from '@vitest/browser'` → `import { ... } from 'vite-plus/test/browser'`
+/// - `import { ... } from '@vitest/browser/{name}'` → `import { ... } from 'vite-plus/test/browser/{name}'`
+/// - `import { ... } from '@vitest/browser-playwright'` → `import { ... } from 'vite-plus/test/browser-playwright'`
+/// - `import { ... } from '@vitest/browser-playwright/{name}'` → `import { ... } from 'vite-plus/test/browser-playwright/{name}'`
+/// - `import { ... } from '@vitest/browser-preview'` → `import { ... } from 'vite-plus/test/browser-preview'`
+/// - `import { ... } from '@vitest/browser-preview/{name}'` → `import { ... } from 'vite-plus/test/browser-preview/{name}'`
+/// - `import { ... } from '@vitest/browser-webdriverio'` → `import { ... } from 'vite-plus/test/browser-webdriverio'`
+/// - `import { ... } from '@vitest/browser-webdriverio/{name}'` → `import { ... } from 'vite-plus/test/browser-webdriverio/{name}'`
+/// - `declare module 'vitest' { ... }` → `declare module 'vite-plus/test' { ... }`
+/// - `declare module 'vitest/config' { ... }` → `declare module 'vite-plus' { ... }`
+/// - `declare module 'vitest/{name}' { ... }` → `declare module 'vite-plus/test/{name}' { ... }`
+/// - `declare module '@vitest/browser' { ... }` → `declare module 'vite-plus/test/browser' { ... }`
+/// - `declare module '@vitest/browser/{name}' { ... }` → `declare module 'vite-plus/test/browser/{name}' { ... }`
+/// - `declare module '@vitest/browser-playwright' { ... }` → `declare module 'vite-plus/test/browser-playwright' { ... }`
+/// - `declare module '@vitest/browser-playwright/{name}' { ... }` → `declare module 'vite-plus/test/browser-playwright/{name}' { ... }`
+/// - `declare module '@vitest/browser-preview' { ... }` → `declare module 'vite-plus/test/browser-preview' { ... }`
+/// - `declare module '@vitest/browser-preview/{name}' { ... }` → `declare module 'vite-plus/test/browser-preview/{name}' { ... }`
+/// - `declare module '@vitest/browser-webdriverio' { ... }` → `declare module 'vite-plus/test/browser-webdriverio' { ... }`
+/// - `declare module '@vitest/browser-webdriverio/{name}' { ... }` → `declare module 'vite-plus/test/browser-webdriverio/{name}' { ... }`
 const REWRITE_VITEST_RULES: &str = r#"---
 id: rewrite-vitest-config-import
 language: TypeScript
@@ -119,7 +119,7 @@ transform:
     replace:
       source: $STR
       replace: vitest/config
-      by: "@voidzero-dev/vite-plus"
+      by: "vite-plus"
 fix: $NEW_IMPORT
 ---
 id: rewrite-vitest-import
@@ -135,7 +135,7 @@ transform:
     replace:
       source: $STR
       replace: vitest
-      by: "@voidzero-dev/vite-plus/test"
+      by: "vite-plus/test"
 fix: $NEW_IMPORT
 ---
 id: rewrite-vitest-scoped-import
@@ -151,7 +151,7 @@ transform:
     replace:
       source: $STR
       replace: "@vitest/"
-      by: "@voidzero-dev/vite-plus/test/"
+      by: "vite-plus/test/"
 fix: $NEW_IMPORT
 ---
 id: rewrite-vitest-subpath-import
@@ -167,7 +167,7 @@ transform:
     replace:
       source: $STR
       replace: vitest/
-      by: "@voidzero-dev/vite-plus/test/"
+      by: "vite-plus/test/"
 fix: $NEW_IMPORT
 ---
 id: rewrite-declare-module-vitest-config
@@ -183,7 +183,7 @@ transform:
     replace:
       source: $STR
       replace: vitest/config
-      by: "@voidzero-dev/vite-plus"
+      by: "vite-plus"
 fix: $NEW_IMPORT
 ---
 id: rewrite-declare-module-vitest
@@ -199,7 +199,7 @@ transform:
     replace:
       source: $STR
       replace: vitest
-      by: "@voidzero-dev/vite-plus/test"
+      by: "vite-plus/test"
 fix: $NEW_IMPORT
 ---
 id: rewrite-declare-module-vitest-scoped
@@ -215,7 +215,7 @@ transform:
     replace:
       source: $STR
       replace: "@vitest/"
-      by: "@voidzero-dev/vite-plus/test/"
+      by: "vite-plus/test/"
 fix: $NEW_IMPORT
 ---
 id: rewrite-declare-module-vitest-subpath
@@ -231,15 +231,15 @@ transform:
     replace:
       source: $STR
       replace: vitest/
-      by: "@voidzero-dev/vite-plus/test/"
+      by: "vite-plus/test/"
 fix: $NEW_IMPORT
 "#;
 
 /// ast-grep rules for rewriting tsdown imports and declare module statements
 ///
 /// This rewrites:
-/// - `import { ... } from 'tsdown'` → `import { ... } from '@voidzero-dev/vite-plus/lib'`
-/// - `declare module 'tsdown' { ... }` → `declare module '@voidzero-dev/vite-plus/lib' { ... }`
+/// - `import { ... } from 'tsdown'` → `import { ... } from 'vite-plus/lib'`
+/// - `declare module 'tsdown' { ... }` → `declare module 'vite-plus/lib' { ... }`
 const REWRITE_TSDOWN_RULES: &str = r#"---
 id: rewrite-tsdown-import
 language: TypeScript
@@ -254,7 +254,7 @@ transform:
     replace:
       source: $STR
       replace: tsdown
-      by: "@voidzero-dev/vite-plus/lib"
+      by: "vite-plus/lib"
 fix: $NEW_IMPORT
 ---
 id: rewrite-declare-module-tsdown
@@ -270,7 +270,7 @@ transform:
     replace:
       source: $STR
       replace: tsdown
-      by: "@voidzero-dev/vite-plus/lib"
+      by: "vite-plus/lib"
 fix: $NEW_IMPORT
 "#;
 
@@ -447,10 +447,10 @@ pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, E
     Ok(result)
 }
 
-/// Rewrite imports in a TypeScript/JavaScript file from vite/vitest to @voidzero-dev/vite-plus
+/// Rewrite imports in a TypeScript/JavaScript file from vite/vitest to vite-plus
 ///
 /// This function reads a file and rewrites the import statements
-/// to use '@voidzero-dev/vite-plus' instead of 'vite', 'vitest', or '@vitest/*'.
+/// to use 'vite-plus' instead of 'vite', 'vitest', or '@vitest/*'.
 /// Packages that are in peerDependencies or dependencies will be skipped.
 ///
 /// # Arguments
@@ -471,7 +471,7 @@ fn rewrite_import(file_path: &Path, skip_packages: &SkipPackages) -> Result<Rewr
     rewrite_import_content(&content, skip_packages)
 }
 
-/// Rewrite imports in content from vite/vitest to @voidzero-dev/vite-plus
+/// Rewrite imports in content from vite/vitest to vite-plus
 ///
 /// This is the internal function that performs the actual rewrite using ast-grep.
 /// Packages that are in peerDependencies or dependencies will be skipped.
@@ -534,7 +534,7 @@ export default defineConfig({
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { defineConfig } from '@voidzero-dev/vite-plus'
+            r#"import { defineConfig } from 'vite-plus'
 
 export default defineConfig({
   plugins: [],
@@ -554,7 +554,7 @@ export default defineConfig({
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { defineConfig } from "@voidzero-dev/vite-plus";
+            r#"import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   plugins: [],
@@ -576,7 +576,7 @@ export default defineConfig({
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+            r#"import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   test: {
@@ -599,7 +599,7 @@ export default defineConfig({
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { defineConfig, loadEnv, type UserWorkspaceConfig } from '@voidzero-dev/vite-plus';
+            r#"import { defineConfig, loadEnv, type UserWorkspaceConfig } from 'vite-plus';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
@@ -610,7 +610,7 @@ export default defineConfig({
 
     #[test]
     fn test_rewrite_import_content_already_vite_plus() {
-        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   plugins: [],
@@ -646,7 +646,7 @@ export default defineConfig({{
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+            r#"import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   plugins: [],
@@ -668,7 +668,7 @@ describe('test', () => {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { describe, it, expect } from '@voidzero-dev/vite-plus/test';
+            r#"import { describe, it, expect } from 'vite-plus/test';
 
 describe('test', () => {
   it('should work', () => {
@@ -688,7 +688,7 @@ describe('test', () => {});"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { describe, it, expect } from "@voidzero-dev/vite-plus/test";
+            r#"import { describe, it, expect } from "vite-plus/test";
 
 describe('test', () => {});"#
         );
@@ -704,7 +704,7 @@ export default page;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { page } from '@voidzero-dev/vite-plus/test/browser';
+            r#"import { page } from 'vite-plus/test/browser';
 
 export default page;"#
         );
@@ -720,7 +720,7 @@ export default page;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { page } from "@voidzero-dev/vite-plus/test/browser";
+            r#"import { page } from "vite-plus/test/browser";
 
 export default page;"#
         );
@@ -736,7 +736,7 @@ export default playwright;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { playwright } from '@voidzero-dev/vite-plus/test/browser-playwright';
+            r#"import { playwright } from 'vite-plus/test/browser-playwright';
 
 export default playwright;"#
         );
@@ -752,7 +752,7 @@ export default playwright;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { playwright } from "@voidzero-dev/vite-plus/test/browser-playwright";
+            r#"import { playwright } from "vite-plus/test/browser-playwright";
 
 export default playwright;"#
         );
@@ -768,7 +768,7 @@ export default context;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { context } from '@voidzero-dev/vite-plus/test/browser/context';
+            r#"import { context } from 'vite-plus/test/browser/context';
 
 export default context;"#
         );
@@ -784,7 +784,7 @@ export default something;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { something } from "@voidzero-dev/vite-plus/test/browser-playwright/context";
+            r#"import { something } from "vite-plus/test/browser-playwright/context";
 
 export default something;"#
         );
@@ -800,7 +800,7 @@ export default preview;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { preview } from '@voidzero-dev/vite-plus/test/browser-preview';
+            r#"import { preview } from 'vite-plus/test/browser-preview';
 
 export default preview;"#
         );
@@ -816,7 +816,7 @@ export default something;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { something } from "@voidzero-dev/vite-plus/test/browser-preview/context";
+            r#"import { something } from "vite-plus/test/browser-preview/context";
 
 export default something;"#
         );
@@ -832,7 +832,7 @@ export default webdriverio;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { webdriverio } from '@voidzero-dev/vite-plus/test/browser-webdriverio';
+            r#"import { webdriverio } from 'vite-plus/test/browser-webdriverio';
 
 export default webdriverio;"#
         );
@@ -848,7 +848,7 @@ export default something;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { something } from "@voidzero-dev/vite-plus/test/browser-webdriverio/context";
+            r#"import { something } from "vite-plus/test/browser-webdriverio/context";
 
 export default something;"#
         );
@@ -864,7 +864,7 @@ export default ModuleRunner;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { ModuleRunner } from '@voidzero-dev/vite-plus/module-runner';
+            r#"import { ModuleRunner } from 'vite-plus/module-runner';
 
 export default ModuleRunner;"#
         );
@@ -880,7 +880,7 @@ export default ModuleRunner;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { ModuleRunner } from "@voidzero-dev/vite-plus/module-runner";
+            r#"import { ModuleRunner } from "vite-plus/module-runner";
 
 export default ModuleRunner;"#
         );
@@ -897,7 +897,7 @@ export default startVitest;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { startVitest } from '@voidzero-dev/vite-plus/test/node';
+            r#"import { startVitest } from 'vite-plus/test/node';
 
 export default startVitest;"#
         );
@@ -911,7 +911,7 @@ export default somePlugin;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { somePlugin } from '@voidzero-dev/vite-plus/test/plugins/runner';
+            r#"import { somePlugin } from 'vite-plus/test/plugins/runner';
 
 export default somePlugin;"#
         );
@@ -927,7 +927,7 @@ export default startVitest;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { startVitest } from "@voidzero-dev/vite-plus/test/node";
+            r#"import { startVitest } from "vite-plus/test/node";
 
 export default startVitest;"#
         );
@@ -952,12 +952,12 @@ export default defineConfig({
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { defineConfig } from '@voidzero-dev/vite-plus';
-import { ModuleRunner } from '@voidzero-dev/vite-plus/module-runner';
-import { describe, it, expect } from '@voidzero-dev/vite-plus/test';
-import { startVitest } from '@voidzero-dev/vite-plus/test/node';
-import { page } from '@voidzero-dev/vite-plus/test/browser';
-import { playwright } from '@voidzero-dev/vite-plus/test/browser-playwright';
+            r#"import { defineConfig } from 'vite-plus';
+import { ModuleRunner } from 'vite-plus/module-runner';
+import { describe, it, expect } from 'vite-plus/test';
+import { startVitest } from 'vite-plus/test/node';
+import { page } from 'vite-plus/test/browser';
+import { playwright } from 'vite-plus/test/browser-playwright';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
@@ -1022,14 +1022,14 @@ describe('test', () => {});"#,
 
         // Verify the files were actually modified
         let config_content = fs::read_to_string(temp.path().join("src/config.ts")).unwrap();
-        assert!(config_content.contains("@voidzero-dev/vite-plus"));
+        assert!(config_content.contains("vite-plus"));
 
         let test_content = fs::read_to_string(temp.path().join("src/test.ts")).unwrap();
-        assert!(test_content.contains("@voidzero-dev/vite-plus/test"));
+        assert!(test_content.contains("vite-plus/test"));
 
         // Verify utils.ts was not modified
         let utils_content = fs::read_to_string(temp.path().join("src/utils.ts")).unwrap();
-        assert!(!utils_content.contains("@voidzero-dev/vite-plus"));
+        assert!(!utils_content.contains("vite-plus"));
     }
 
     #[test]
@@ -1098,8 +1098,8 @@ describe('app', () => {
 
         // Verify nested file was modified
         let test_content = fs::read_to_string(temp.path().join("tests/unit/app.test.ts")).unwrap();
-        assert!(test_content.contains("@voidzero-dev/vite-plus/test"));
-        assert!(test_content.contains("@voidzero-dev/vite-plus/test/browser"));
+        assert!(test_content.contains("vite-plus/test"));
+        assert!(test_content.contains("vite-plus/test/browser"));
     }
 
     #[test]
@@ -1114,7 +1114,7 @@ describe('app', () => {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus' {
+            r#"declare module 'vite-plus' {
   interface UserConfig {
     runtimeEnv?: RuntimeEnvConfig;
   }
@@ -1134,7 +1134,7 @@ describe('app', () => {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module "@voidzero-dev/vite-plus" {
+            r#"declare module "vite-plus" {
   interface UserConfig {
     custom?: boolean;
   }
@@ -1154,7 +1154,7 @@ describe('app', () => {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus/test' {
+            r#"declare module 'vite-plus/test' {
   interface JestAssertion<T = any> {
     toBeCustom(): void;
   }
@@ -1174,7 +1174,7 @@ describe('app', () => {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus' {
+            r#"declare module 'vite-plus' {
   interface UserConfig {
     test?: TestConfig;
   }
@@ -1194,7 +1194,7 @@ describe('app', () => {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus/module-runner' {
+            r#"declare module 'vite-plus/module-runner' {
   export interface ModuleRunnerOptions {
     custom?: boolean;
   }
@@ -1214,7 +1214,7 @@ describe('app', () => {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus/test/node' {
+            r#"declare module 'vite-plus/test/node' {
   export interface VitestOptions {
     custom?: boolean;
   }
@@ -1234,7 +1234,7 @@ describe('app', () => {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus/test/browser' {
+            r#"declare module 'vite-plus/test/browser' {
   interface BrowserContext {
     custom?: boolean;
   }
@@ -1254,7 +1254,7 @@ describe('app', () => {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus/test/browser/context' {
+            r#"declare module 'vite-plus/test/browser/context' {
   export interface Context {
     custom?: boolean;
   }
@@ -1274,7 +1274,7 @@ describe('app', () => {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus/test/browser-playwright' {
+            r#"declare module 'vite-plus/test/browser-playwright' {
   interface PlaywrightContext {
     custom?: boolean;
   }
@@ -1294,7 +1294,7 @@ describe('app', () => {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus/test/browser-preview' {
+            r#"declare module 'vite-plus/test/browser-preview' {
   interface PreviewContext {
     custom?: boolean;
   }
@@ -1314,7 +1314,7 @@ describe('app', () => {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus/test/browser-webdriverio' {
+            r#"declare module 'vite-plus/test/browser-webdriverio' {
   interface WebDriverContext {
     custom?: boolean;
   }
@@ -1345,16 +1345,16 @@ export default defineConfig({});"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { defineConfig } from '@voidzero-dev/vite-plus';
-import { describe } from '@voidzero-dev/vite-plus/test';
+            r#"import { defineConfig } from 'vite-plus';
+import { describe } from 'vite-plus/test';
 
-declare module '@voidzero-dev/vite-plus' {
+declare module 'vite-plus' {
   interface UserConfig {
     custom?: boolean;
   }
 }
 
-declare module '@voidzero-dev/vite-plus/test' {
+declare module 'vite-plus/test' {
   interface JestAssertion<T = any> {
     toBeCustom(): void;
   }
@@ -1366,7 +1366,7 @@ export default defineConfig({});"#
 
     #[test]
     fn test_rewrite_declare_module_already_vite_plus() {
-        let content = r#"declare module '@voidzero-dev/vite-plus' {
+        let content = r#"declare module 'vite-plus' {
   interface UserConfig {
     custom?: boolean;
   }
@@ -1407,25 +1407,25 @@ declare module '@vitest/browser' {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus' {
+            r#"declare module 'vite-plus' {
   interface UserConfig {
     custom?: boolean;
   }
 }
 
-declare module '@voidzero-dev/vite-plus/module-runner' {
+declare module 'vite-plus/module-runner' {
   export interface ModuleRunnerOptions {
     custom?: boolean;
   }
 }
 
-declare module '@voidzero-dev/vite-plus/test' {
+declare module 'vite-plus/test' {
   interface JestAssertion<T = any> {
     toBeCustom(): void;
   }
 }
 
-declare module '@voidzero-dev/vite-plus/test/browser' {
+declare module 'vite-plus/test/browser' {
   interface BrowserContext {
     custom?: boolean;
   }
@@ -1445,7 +1445,7 @@ declare module '@voidzero-dev/vite-plus/test/browser' {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module "@voidzero-dev/vite-plus/test" {
+            r#"declare module "vite-plus/test" {
   interface JestAssertion<T = any> {
     toBeCustom(): void;
   }
@@ -1465,7 +1465,7 @@ declare module '@voidzero-dev/vite-plus/test/browser' {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus/test/browser-playwright/context' {
+            r#"declare module 'vite-plus/test/browser-playwright/context' {
   export interface Context {
     custom?: boolean;
   }
@@ -1485,7 +1485,7 @@ declare module '@voidzero-dev/vite-plus/test/browser' {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus/test/browser-preview/context' {
+            r#"declare module 'vite-plus/test/browser-preview/context' {
   export interface Context {
     custom?: boolean;
   }
@@ -1505,7 +1505,7 @@ declare module '@voidzero-dev/vite-plus/test/browser' {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus/test/browser-webdriverio/context' {
+            r#"declare module 'vite-plus/test/browser-webdriverio/context' {
   export interface Context {
     custom?: boolean;
   }
@@ -1537,7 +1537,7 @@ declare module '@voidzero-dev/vite-plus/test/browser' {
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus' {
+            r#"declare module 'vite-plus' {
   interface UserConfig {
     /**
      * Options for vite-plugin-runtime-env
@@ -1569,7 +1569,7 @@ export default defineConfig({
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { defineConfig } from '@voidzero-dev/vite-plus/lib';
+            r#"import { defineConfig } from 'vite-plus/lib';
 
 export default defineConfig({
   entry: 'src/index.ts',
@@ -1589,7 +1589,7 @@ export default defineConfig({
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { defineConfig } from "@voidzero-dev/vite-plus/lib";
+            r#"import { defineConfig } from "vite-plus/lib";
 
 export default defineConfig({
   entry: "src/index.ts",
@@ -1609,7 +1609,7 @@ export default defineConfig({
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module '@voidzero-dev/vite-plus/lib' {
+            r#"declare module 'vite-plus/lib' {
   interface BuildConfig {
     custom?: boolean;
   }
@@ -1629,7 +1629,7 @@ export default defineConfig({
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module "@voidzero-dev/vite-plus/lib" {
+            r#"declare module "vite-plus/lib" {
   interface BuildConfig {
     custom?: boolean;
   }
@@ -1658,7 +1658,7 @@ export default defineConfig({});"#;
         assert_eq!(
             result.content,
             r#"import { defineConfig } from 'vite';
-import { describe } from '@voidzero-dev/vite-plus/test';
+import { describe } from 'vite-plus/test';
 
 export default defineConfig({});"#
         );
@@ -1680,7 +1680,7 @@ export default defineConfig({});"#;
         // vite import SHOULD be rewritten, vitest import should NOT be rewritten
         assert_eq!(
             result.content,
-            r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+            r#"import { defineConfig } from 'vite-plus';
 import { describe } from 'vitest';
 
 export default defineConfig({});"#
@@ -1876,7 +1876,7 @@ export default defineConfig({});"#;
         assert_eq!(
             content,
             r#"import { defineConfig } from 'vite';
-import { describe } from '@voidzero-dev/vite-plus/test';
+import { describe } from 'vite-plus/test';
 
 export default defineConfig({});"#
         );
@@ -1919,7 +1919,7 @@ export default defineConfig({});"#;
         assert_eq!(
             content,
             r#"import { defineConfig } from 'vite';
-import { describe } from '@voidzero-dev/vite-plus/test';
+import { describe } from 'vite-plus/test';
 
 export default defineConfig({});"#
         );
@@ -2052,7 +2052,7 @@ export default defineConfig({});"#,
         assert_eq!(
             vite_plugin_content,
             r#"import { defineConfig } from 'vite';
-import { describe } from '@voidzero-dev/vite-plus/test';
+import { describe } from 'vite-plus/test';
 export default defineConfig({});"#
         );
 
@@ -2061,8 +2061,8 @@ export default defineConfig({});"#
             fs::read_to_string(temp.path().join("packages/app/src/index.ts")).unwrap();
         assert_eq!(
             app_content,
-            r#"import { defineConfig } from '@voidzero-dev/vite-plus';
-import { describe } from '@voidzero-dev/vite-plus/test';
+            r#"import { defineConfig } from 'vite-plus';
+import { describe } from 'vite-plus/test';
 export default defineConfig({});"#
         );
     }

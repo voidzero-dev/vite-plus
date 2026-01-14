@@ -31,8 +31,8 @@ runs:
         pnpm --filter vite build-types
         pnpm --filter=@voidzero-dev/vite-plus-core build
         pnpm --filter=@voidzero-dev/vite-plus-test build
-        pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }} --use-napi-cross
-        pnpm --filter=@voidzero-dev/global build --target ${{ inputs.target }} --use-napi-cross
+        pnpm --filter=vite-plus build --target ${{ inputs.target }} --use-napi-cross
+        pnpm --filter=vite-plus-cli build --target ${{ inputs.target }} --use-napi-cross
       env:
         TARGET_CC: clang
         DEBUG: napi:*
@@ -46,8 +46,8 @@ runs:
         pnpm --filter vite build-types
         pnpm --filter=@voidzero-dev/vite-plus-core build
         pnpm --filter=@voidzero-dev/vite-plus-test build
-        TARGET_CFLAGS="-D_BSD_SOURCE" pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }} --use-napi-cross
-        TARGET_CFLAGS="-D_BSD_SOURCE" pnpm --filter=@voidzero-dev/global build --target ${{ inputs.target }} --use-napi-cross
+        TARGET_CFLAGS="-D_BSD_SOURCE" pnpm --filter=vite-plus build --target ${{ inputs.target }} --use-napi-cross
+        TARGET_CFLAGS="-D_BSD_SOURCE" pnpm --filter=vite-plus-cli build --target ${{ inputs.target }} --use-napi-cross
       env:
         TARGET_CC: clang
         DEBUG: napi:*
@@ -61,7 +61,7 @@ runs:
         pnpm --filter vite build-types
         pnpm --filter=@voidzero-dev/vite-plus-core build
         pnpm --filter=@voidzero-dev/vite-plus-test build
-        pnpm --filter=@voidzero-dev/vite-plus build --target ${{ inputs.target }}
-        pnpm --filter=@voidzero-dev/global build --target ${{ inputs.target }}
+        pnpm --filter=vite-plus build --target ${{ inputs.target }}
+        pnpm --filter=vite-plus-cli build --target ${{ inputs.target }}
       env:
         DEBUG: napi:*

@@ -22,8 +22,8 @@
 import { join } from 'node:path';
 
 import react from '@vitejs/plugin-react';
-import { playwright } from '@voidzero-dev/vite-plus/test/browser-playwright';
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { playwright } from 'vite-plus/test/browser-playwright';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   fmt: {
@@ -63,7 +63,7 @@ cat: .oxfmtrc.json: No such file or directory
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
     "@vitejs/plugin-react": "^4.2.0",
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "scripts": {
     "dev": "vite dev",

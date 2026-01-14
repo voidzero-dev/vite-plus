@@ -19,23 +19,8 @@ All in a single, cohesive tool designed for scale, speed, and developer sanity.
 
 ### Global CLI
 
-Add the following to your `~/.npmrc`:
-
-```ini
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-@voidzero-dev:registry=https://npm.pkg.github.com/
-```
-
-Create a [classic personal access token](https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries) and install the global CLI:
-
 ```bash
-GITHUB_TOKEN=<your-token> npm install -g @voidzero-dev/global
-```
-
-Using 1Password CLI:
-
-```bash
-GITHUB_TOKEN=$(op read "op://YOUR_GITHUB_TOKEN_PATH") npm install -g @voidzero-dev/global
+npm install -g vite-plus-global
 ```
 
 ## Scaffolding Your First Vite+ Project

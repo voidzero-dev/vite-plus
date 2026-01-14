@@ -18,7 +18,7 @@
 import type { RuntimeEnvConfig } from './runtime.env.config.js';
 import type { RuntimeHtmlConfig } from './runtime.html.config.js';
 
-declare module '@voidzero-dev/vite-plus' {
+declare module 'vite-plus' {
   interface UserConfig {
     /**
      * Options for vite-plugin-runtime-env
@@ -31,7 +31,7 @@ declare module '@voidzero-dev/vite-plus' {
   }
 }
 
-declare module '@voidzero-dev/vite-plus/test' {
+declare module 'vite-plus/test' {
   export const describe: any;
   export const it: any;
   export const expect: any;
@@ -39,7 +39,7 @@ declare module '@voidzero-dev/vite-plus/test' {
   export const afterAll: any;
 }
 
-declare module '@voidzero-dev/vite-plus' {
+declare module 'vite-plus' {
   export function defineConfig(config: any): any;
   const _default: typeof defineConfig;
   export default _default;
@@ -55,7 +55,7 @@ declare module '@voidzero-dev/vite-plus' {
     }
   },
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "packageManager": "pnpm@<semver>"
 }

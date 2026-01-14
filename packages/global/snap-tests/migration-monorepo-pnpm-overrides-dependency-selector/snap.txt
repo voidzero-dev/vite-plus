@@ -14,7 +14,7 @@
 
 > cat vite.config.ts # check vite.config.ts
 import react from '@vitejs/plugin-react';
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   plugins: [react()],
@@ -27,7 +27,7 @@ export default defineConfig({
   "packageManager": "pnpm@<semver>+sha512.cf9998222162dd85864d0a8102e7892e7ba4ceadebbf5a31f9c2fce48dfce317a9c53b9f6464d1ef9042cba2e02ae02a9f7c143a2b438cd93c91840f0192b9dd",
   "devDependencies": {
     "vite": "catalog:",
-    "@voidzero-dev/vite-plus": "catalog:"
+    "vite-plus": "catalog:"
   },
   "scripts": {
     "dev": "vite dev"
@@ -47,7 +47,7 @@ packages:
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
-  '@voidzero-dev/vite-plus': latest
+  vite-plus: latest
 
 overrides:
   '@vitejs/plugin-react>vite': 'npm:rolldown-vite@<semver>'
@@ -67,7 +67,7 @@ peerDependencyRules:
   "name": "app",
   "devDependencies": {
     "vite": "catalog:",
-    "@voidzero-dev/vite-plus": "catalog:"
+    "vite-plus": "catalog:"
   },
   "optionalDependencies": {
     "test-vite-plus-other-optional": "1.0.0"

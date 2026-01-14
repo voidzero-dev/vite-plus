@@ -1,5 +1,5 @@
 {
-  "name": "@voidzero-dev/global",
+  "name": "vite-plus-global",
   "version": "0.0.0",
   "type": "module",
   "repository": {

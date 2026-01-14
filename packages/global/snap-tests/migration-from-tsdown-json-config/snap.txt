@@ -38,7 +38,7 @@ export default defineConfig({
   "name": "migration-from-tsdown-json-config",
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "scripts": {
     "build": "vite lib",
@@ -87,7 +87,7 @@ export default defineConfig({
   "name": "migration-from-tsdown-json-config",
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "scripts": {
     "build": "vite lib",

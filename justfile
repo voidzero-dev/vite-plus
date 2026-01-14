@@ -20,7 +20,7 @@ build:
   pnpm --filter rolldown build-node
   pnpm --filter vite build-types
   pnpm --filter=@voidzero-dev/vite-plus build
-  pnpm --filter=@voidzero-dev/global build
+  pnpm --filter=vite-plus-global build
 
 ready:
   git diff --exit-code --quiet

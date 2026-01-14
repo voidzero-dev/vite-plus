@@ -61,7 +61,7 @@ Aliases: migrate
     }
   },
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "packageManager": "pnpm@<semver>"
 }

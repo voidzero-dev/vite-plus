@@ -98,10 +98,10 @@ Snap tests are located in `packages/global/snap-tests/` and `packages/cli/snap-t
 
 ```bash
 # Run all global snap tests (for local cli, the package name would be @voidzero-dev/vite-plus)
-pnpm -F @voidzero-dev/global snap-test
+pnpm -F vite-plus-global snap-test
 
 # Run a specific snap test by name filter
-pnpm -F @voidzero-dev/global snap-test migration-skip-vite-peer-dependency
+pnpm -F vite-plus-global snap-test migration-skip-vite-peer-dependency
 ```
 
 The snap test will automatically generate/update the `snap.txt` file with the command outputs. It exits with zero status even if there are output differences; you need to manually check the diffs(`git diff`) to verify correctness.

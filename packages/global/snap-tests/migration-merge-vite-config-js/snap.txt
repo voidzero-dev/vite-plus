@@ -32,7 +32,7 @@ cat: .oxlintrc.json: No such file or directory
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "@vitejs/plugin-react": "^4.2.0",
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "scripts": {
     "dev": "vite dev --port 3000",

@@ -20,7 +20,7 @@
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "scripts": {
     "test:run": "vite test run",
@@ -39,8 +39,8 @@
 }
 
 > cat test/hello.ts # check test/hello.ts
-import { server } from '@voidzero-dev/vite-plus/test/browser-playwright/context';
-import { test, describe, expect, it } from '@voidzero-dev/vite-plus/test';
+import { server } from 'vite-plus/test/browser-playwright/context';
+import { test, describe, expect, it } from 'vite-plus/test';
 
 const { readFile } = server.commands;
 
