@@ -12,6 +12,7 @@ const LOCAL_CLI_COMMANDS = [
   'doc',
   'run',
   'preview',
+  'cache',
 ];
 
 const command = args[0];

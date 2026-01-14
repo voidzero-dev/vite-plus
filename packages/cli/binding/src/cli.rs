@@ -578,7 +578,7 @@ async fn handle_cache_command(
 ) -> Result<ExitStatus, Error> {
     // Get cache path - need to find workspace root first
     let (workspace_root, _) = vite_workspace::find_workspace_root(&cwd)?;
-    let cache_path = workspace_root.path.join(".vite-plus");
+    let cache_path = workspace_root.path.join("node_modules/.vite/task-cache");
 
     match subcmd {
         CacheSubcommand::Clean => {

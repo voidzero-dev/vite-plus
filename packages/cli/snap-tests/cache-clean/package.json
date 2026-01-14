@@ -1,5 +1,5 @@
 {
   "scripts": {
-    "hello": "echo hello"
+    "hello": "vite fmt"
   }
 }
