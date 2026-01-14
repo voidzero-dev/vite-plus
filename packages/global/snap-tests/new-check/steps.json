@@ -1,0 +1,8 @@
+{
+  
+  "commands": [
+    "vite new --help # show help",
+    "vite new --list # list templates",
+    "vite new --no-interactive # run in non-interactive mode without template name will show error"
+  ]
+}

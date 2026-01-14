@@ -4,12 +4,12 @@
   },
   "commands": [
     {
-      "command": "vite gen vite:library # create vite library with default values",
+      "command": "vite new vite:library # create vite library with default values",
       "ignoreOutput": true
     },
     "ls vite-plus-library/package.json # check package.json",
     {
-      "command": "vite gen vite:library --directory my-vue -- --template vue # create vite library with custom template",
+      "command": "vite new vite:library --directory my-vue -- --template vue # create vite library with custom template",
       "ignoreOutput": true
     },
     "ls my-vue/package.json # check package.json"

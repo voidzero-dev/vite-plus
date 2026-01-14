@@ -1,7 +1,0 @@
-> vite gen vite:application --no-interactive # create vite app with default values
-> ls vite-plus-application/package.json # check package.json
-vite-plus-application/package.json
-
-> vite gen vite:application --no-interactive --directory my-react-ts -- --template react-ts # create vite app with react-ts template
-> ls my-react-ts/package.json # check package.json
-my-react-ts/package.json

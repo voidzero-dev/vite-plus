@@ -16,8 +16,8 @@ const LOCAL_CLI_COMMANDS = [
 
 const command = args[0];
 
-if (command === 'gen' || command === 'g' || command === 'generate' || command === 'new') {
-  import('./gen/bin.js');
+if (command === 'new') {
+  import('./new/bin.js');
 } else if (command === 'migration' || command === 'migrate') {
   import('./migration/bin.js');
 } else if (LOCAL_CLI_COMMANDS.includes(command)) {

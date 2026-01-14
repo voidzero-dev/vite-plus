@@ -36,7 +36,7 @@ const { blue, cyan, green, gray, blueBright } = colors;
 
 // prettier-ignore
 const helpMessage = `\
-Usage: vite gen [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
+Usage: vite new [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
 
 Run any template (builtin, remote, or local) with automatic vite+ integration.
 
@@ -59,38 +59,36 @@ Template options (after --):
 
 Examples:
   ${gray('# Interactive mode - choose template via prompt')}
-  vite gen
+  vite new
 
   ${gray('# Run any existing template (npx / pnpm dlx / yarn dlx / bunx auto-detected)')}
-  vite gen create-vite
-  vite gen create-next-app
-  vite gen @tanstack/create-start
+  vite new create-vite
+  vite new create-next-app
+  vite new @tanstack/create-start
 
   ${gray('# With template-specific options (after --)')}
-  vite gen create-vite -- --template react-ts
-  vite gen create-next-app -- --typescript --app
+  vite new create-vite -- --template react-ts
+  vite new create-next-app -- --typescript --app
 
   ${gray('# Create vite+ monorepo, application, library, or generator scaffolds')}
-  vite gen vite:monorepo
-  vite gen vite:application
-  vite gen vite:library
-  vite gen vite:generator
+  vite new vite:monorepo
+  vite new vite:application
+  vite new vite:library
+  vite new vite:generator
 
   ${gray('# Monorepo: specify target directory')}
-  vite gen vite:application --directory=packages/my-app
+  vite new vite:application --directory=packages/my-app
 
-  ${gray('# Combine gen command options and template options')}
-  vite gen vite:application --directory=apps/my-app -- --template vue-ts
+  ${gray('# Combine new command options and template options')}
+  vite new vite:application --directory=apps/my-app -- --template vue-ts
 
   ${gray('# Run templates from GitHub (via degit)')}
-  vite gen github:user/repo
-  vite gen https://github.com/user/template-repo
+  vite new github:user/repo
+  vite new https://github.com/user/template-repo
 
 Note: Templates are executed via npx / pnpm dlx / yarn dlx / bunx,
       based on the detected package manager.
       No global installation required - always uses the latest version.
-
-Aliases: ${gray('g, generate, new')}
 `;
 
 export interface Options {
@@ -159,13 +157,13 @@ async function main() {
     console.error(`
 Template name is required when running in non-interactive mode
 
-Usage: vite gen [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
+Usage: vite new [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
 
 Example: 
   ${gray('# Create a new application in non-interactive mode with a custom target directory')}
-  vite gen vite:application --no-interactive --directory=apps/my-app
+  vite new vite:application --no-interactive --directory=apps/my-app
 
-Use \`vite gen --list\` to list all available templates, or run \`vite gen --help\` for more information.
+Use \`vite new --list\` to list all available templates, or run \`vite new --help\` for more information.
 `);
     process.exit(1);
   }
@@ -558,16 +556,16 @@ function showAvailableTemplates() {
   console.log('  • create-react-router           ' + gray('- React Router application'));
   console.log('  • create-vue                    ' + gray('- Vue application'));
 
-  console.log('\n' + gray('Run ') + cyan('vite gen') + gray(' for interactive mode'));
-  console.log(gray('Run ') + cyan('vite gen <template>') + gray(' to use any template'));
+  console.log('\n' + gray('Run ') + cyan('vite new') + gray(' for interactive mode'));
+  console.log(gray('Run ') + cyan('vite new <template>') + gray(' to use any template'));
   console.log(
     gray('Run ') +
-      cyan('vite gen <template> -- <options>') +
+      cyan('vite new <template> -- <options>') +
       gray(' to pass options to the template'),
   );
 
   console.log('');
-  console.log('✨ Tip: You can use ANY npm template with vite gen!');
+  console.log('✨ Tip: You can use ANY npm template with vite new!');
   console.log('');
 }
 
