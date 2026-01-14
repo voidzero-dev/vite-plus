@@ -15,7 +15,7 @@ use crate::{
     cli::{ConfigCommands, OwnerCommands, PmCommands},
 };
 
-/// Package manager utilities command.
+/// Forward command to the package manager.
 ///
 /// This command provides a unified interface to package manager utilities
 /// across pnpm, npm, and yarn.

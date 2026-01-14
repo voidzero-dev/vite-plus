@@ -1,6 +1,6 @@
 use std::process::ExitStatus;
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use vite_error::Error;
 use vite_install::commands::{
     add::SaveDependencyType, install::InstallCommandOptions, outdated::Format,
@@ -15,16 +15,7 @@ use crate::commands::{
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
-#[command(
-    disable_help_subcommand = true,
-    help_template = "\
-vite+/{version}
-
-{usage-heading} {usage}
-
-{all-args}{after-help}
-"
-)]
+#[command(disable_help_subcommand = true)]
 pub struct Args {
     #[clap(subcommand)]
     pub commands: Commands,
@@ -406,6 +397,24 @@ pub enum Commands {
         #[arg(last = true, allow_hyphen_values = true)]
         pass_through_args: Option<Vec<String>>,
     },
+    /// View package information from registry
+    #[command(alias = "view", alias = "show")]
+    Info {
+        /// Package name with optional version
+        #[arg(required = true)]
+        package: String,
+
+        /// Specific field to view
+        field: Option<String>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
     /// Link packages for local development
     #[command(alias = "ln")]
     Link {
@@ -433,7 +442,7 @@ pub enum Commands {
         #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
-    /// Package manager utilities
+    /// Forward command to the package manager.
     #[command(subcommand)]
     Pm(PmCommands),
     /// Execute a package binary without installing it as a dependency
@@ -1064,6 +1073,17 @@ pub async fn main(cwd: AbsolutePathBuf, mut args: Args) -> Result<std::process::
                 .await?;
             return Ok(exit_status);
         }
+        Commands::Info { package, field, json, pass_through_args } => {
+            let exit_status = PmCommand::new(cwd)
+                .execute(PmCommands::View {
+                    package: package.clone(),
+                    field: field.clone(),
+                    json: *json,
+                    pass_through_args: pass_through_args.clone(),
+                })
+                .await?;
+            return Ok(exit_status);
+        }
         Commands::Pm(pm_command) => {
             let exit_status = PmCommand::new(cwd).execute(pm_command.clone()).await?;
             return Ok(exit_status);
@@ -1076,6 +1096,53 @@ pub async fn main(cwd: AbsolutePathBuf, mut args: Args) -> Result<std::process::
         }
         _ => unreachable!(),
     };
+}
+
+pub fn command_with_help() -> clap::Command {
+    let bold = "\x1b[1m";
+    let bold_underline = "\x1b[1;4m";
+    let reset = "\x1b[0m";
+    let version = env!("CARGO_PKG_VERSION");
+
+    let after_help = format!(
+        "{bold_underline}Vite+ Commands:{reset}
+  {bold}dev{reset}        Run development server
+  {bold}build{reset}      Build for production
+  {bold}lint{reset}       Lint code
+  {bold}test{reset}       Run tests
+  {bold}fmt{reset}        Format code
+  {bold}doc{reset}        Build documentation
+  {bold}lib{reset}        Build library
+  {bold}migrate{reset}    Migrate an existing project to Vite+
+  {bold}cache{reset}      Manage the task cache
+  {bold}new{reset}        Generate a new project
+  {bold}run{reset}        Run tasks
+
+{bold_underline}Package Manager Commands:{reset}
+  {bold}install{reset}    Install all dependencies, or add packages if package names are provided
+  {bold}add{reset}        Add packages to dependencies
+  {bold}remove{reset}     Remove packages from dependencies
+  {bold}dedupe{reset}     Deduplicate dependencies by removing older versions
+  {bold}dlx{reset}        Execute a package binary without installing it as a dependency
+  {bold}info{reset}       View package information from registry
+  {bold}link{reset}       Link packages for local development
+  {bold}outdated{reset}   Check for outdated packages
+  {bold}pm{reset}         Forward command to the package manager
+  {bold}unlink{reset}     Unlink packages
+  {bold}update{reset}     Update packages to their latest versions
+  {bold}why{reset}        Show why a package is installed
+"
+    );
+    let help_template = format!(
+        "vite+/{version}
+
+{{usage-heading}} {{usage}}{{after-help}}
+{bold_underline}Options:{reset}
+{{options}}
+"
+    );
+
+    Args::command().after_help(after_help).help_template(help_template)
 }
 
 pub fn init_tracing() {

@@ -55,13 +55,13 @@ pub enum CustomTaskSubcommand {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
-    /// Build application
+    /// Build for production
     #[command(disable_help_flag = true)]
     Build {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
-    /// Run test
+    /// Run tests
     #[command(disable_help_flag = true)]
     Test {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
@@ -92,7 +92,6 @@ pub enum CustomTaskSubcommand {
         args: Vec<String>,
     },
     /// Install command.
-    /// It will be passed to the package manager's install command currently.
     #[command(disable_help_flag = true, alias = "i")]
     Install {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
@@ -611,6 +610,11 @@ pub async fn main(
     // Get args from parameter or env::args()
     // When running from NAPI, args should be passed explicitly to skip node/script paths
     let args_vec: Vec<String> = args.unwrap_or_else(|| env::args().skip(1).collect());
+    let args_vec = normalize_help_args(args_vec);
+    if should_print_help(&args_vec) {
+        print_help();
+        return Ok(ExitStatus::SUCCESS);
+    }
 
     // Parse CLI args using vite_task::CLIArgs
     // Prepend "vite" as program name for clap
@@ -701,6 +705,47 @@ pub async fn main(
             Ok(session.execute(plan, Box::new(reporter)).await.err().unwrap_or(ExitStatus::SUCCESS))
         }
     }
+}
+
+fn normalize_help_args(args: Vec<String>) -> Vec<String> {
+    args
+}
+
+fn should_print_help(args: &[String]) -> bool {
+    matches!(
+        args,
+        [arg] if arg == "-h" || arg == "--help"
+    )
+}
+
+fn print_help() {
+    let version = env!("CARGO_PKG_VERSION");
+    let bold = "\x1b[1m";
+    let bold_underline = "\x1b[1;4m";
+    let reset = "\x1b[0m";
+    println!(
+        "vite+/{version}
+
+{bold_underline}Usage:{reset} {bold}vite{reset} <COMMAND>
+
+{bold_underline}Vite+ Commands:{reset}
+  {bold}dev{reset}        Run development server
+  {bold}build{reset}      Build for production
+  {bold}preview{reset}    Preview production build
+  {bold}lint{reset}       Lint code
+  {bold}test{reset}       Run tests
+  {bold}fmt{reset}        Format code
+  {bold}lib{reset}        Build library
+  {bold}doc{reset}        Build documentation
+  {bold}run{reset}        Run tasks
+  {bold}cache{reset}      Manage the task cache
+
+{bold_underline}Package Manager Commands:{reset}
+  {bold}install{reset}    Install all dependencies
+
+Options:
+  -h, --help  Print help"
+    );
 }
 
 pub fn init_tracing() {

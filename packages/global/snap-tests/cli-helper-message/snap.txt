@@ -3,29 +3,32 @@ vite+/<semver>
 
 Usage: vite <COMMAND>
 
-Commands:
-  install   Install all dependencies, or add packages if package names are provided
-  add       Add packages to dependencies
-  remove    Remove packages from dependencies
-  update    Update packages to their latest versions
-  dedupe    Deduplicate dependencies by removing older versions
-  outdated  Check for outdated packages
-  why       Show why a package is installed
-  link      Link packages for local development
-  unlink    Unlink packages
-  pm        Package manager utilities
-  dlx       Execute a package binary without installing it as a dependency
-  gen       Generate a new project
-  migrate   Migrate an existing project to vite+<repeat>
-  dev       Run development server
-  build     Build application
-  test      Run test
-  lint      Lint code
-  fmt       Format code
-  lib       Build library
-  doc       Build documentation
-  run       Run tasks
-  cache     Manage the task cache
+Vite+ Commands:
+  dev        Run development server
+  build      Build for production
+  lint       Lint code
+  test       Run tests
+  fmt        Format code
+  doc        Build documentation
+  lib        Build library
+  migrate    Migrate an existing project to Vite+<repeat>
+  cache      Manage the task cache
+  new        Generate a new project
+  run        Run tasks
+
+Package Manager Commands:
+  install    Install all dependencies, or add packages if package names are provided
+  add        Add packages to dependencies
+  remove     Remove packages from dependencies
+  dedupe     Deduplicate dependencies by removing older versions
+  dlx        Execute a package binary without installing it as a dependency
+  info       View package information from registry
+  link       Link packages for local development
+  outdated   Check for outdated packages
+  pm         Forward command to the package manager
+  unlink     Unlink packages
+  update     Update packages to their latest versions
+  why        Show why a package is installed
 
 Options:
   -h, --help     Print help
@@ -235,7 +238,7 @@ Options:
   -h, --help                   Print help
 
 > vite pm -h # show pm help message
-Package manager utilities
+Forward command to the package manager
 
 Usage: vite pm <COMMAND>
 

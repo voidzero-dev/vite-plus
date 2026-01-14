@@ -1,21 +1,22 @@
 > vite -h # help message
-Vite+<repeat>
+vite+/<semver>
 
-Usage: vite <COMMAND>
+[1;4mUsage:[0m [1mvite[0m <COMMAND>
 
-Commands:
-  run      Run tasks
-  lint     Lint code
-  fmt      Format code
-  build    Build application
-  test     Run test
-  lib      Build library
-  dev      Run development server
-  preview  Preview production build
-  doc      Build documentation
-  install  Install command. It will be passed to the package manager's install command currently
-  cache    Manage the task cache
-  help     Print this message or the help of the given subcommand(s)
+[1;4mVite+ Commands:[0m
+  [1mdev[0m        Run development server
+  [1mbuild[0m      Build for production
+  [1mpreview[0m    Preview production build
+  [1mlint[0m       Lint code
+  [1mtest[0m       Run tests
+  [1mfmt[0m        Format code
+  [1mlib[0m        Build library
+  [1mdoc[0m        Build documentation
+  [1mrun[0m        Run tasks
+  [1mcache[0m      Manage the task cache
+
+[1;4mPackage Manager Commands:[0m
+  [1minstall[0m    Install all dependencies
 
 Options:
   -h, --help  Print help

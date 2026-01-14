@@ -6,7 +6,9 @@ mod migration;
 mod package_manager;
 mod utils;
 
-use clap::Parser as _;
+use std::ffi::{OsStr, OsString};
+
+use clap::FromArgMatches as _;
 use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
 pub use utils::run_command;
@@ -90,5 +92,19 @@ pub async fn run(options: CliOptions) -> Result<i32> {
 
 fn parse_args() -> Args {
     // Parse CLI arguments (skip first arg which is the node binary)
-    Args::parse_from(std::env::args_os().skip(1))
+    let args = normalize_help_args(std::env::args_os().skip(1).collect());
+    let matches = crate::cli::command_with_help().get_matches_from(args);
+    Args::from_arg_matches(&matches).unwrap_or_else(|e| e.exit())
+}
+
+fn normalize_help_args(args: Vec<OsString>) -> Vec<OsString> {
+    if matches!(args.first(), Some(arg) if arg == OsStr::new("help")) {
+        return vec![OsString::from("--help")];
+    }
+
+    if args.len() >= 2 && args[1] == OsStr::new("help") {
+        return vec![args[0].clone(), OsString::from("--help")];
+    }
+
+    args
 }
