@@ -43,7 +43,7 @@ GITHUB_TOKEN=$(op read "op://YOUR_GITHUB_TOKEN_PATH") npm install -g @voidzero-d
 Create a Vite+ project:
 
 ```bash
-vite gen
+vite new
 ```
 
 Follow the prompts to select your preferred framework and configuration.

@@ -23,13 +23,13 @@ npm install -g @voidzero-dev/global
 ```bash
 vite --version
 vite --help
-vite gen --help
+vite new --help
 ```
 
 Generate a new project
 
 ```bash
-vite gen
+vite new
 ```
 
 Migrate an existing project

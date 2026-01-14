@@ -15,7 +15,7 @@ When transitioning to vite+, projects typically use standalone tools like vite, 
 
 **Related Commands**:
 
-- `vite gen` - Uses this same migration engine after generating code (see [code-generator.md](./code-generator.md))
+- `vite new` - Uses this same migration engine after generating code (see [code-generator.md](./code-generator.md))
 - `vite migration` - This command, for migrating existing projects
 
 ## Goals

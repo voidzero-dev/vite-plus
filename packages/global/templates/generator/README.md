@@ -8,7 +8,7 @@ From monorepo root:
 
 ```bash
 # run and select the generator
-vite gen
+vite new
 ```
 
 ## Development
