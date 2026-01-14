@@ -5,8 +5,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "vite": "./bin/vite",
-    "vite-plus": "./bin/vite"
+    "vite": "./bin/vite"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

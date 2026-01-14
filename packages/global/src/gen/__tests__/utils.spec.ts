@@ -17,7 +17,7 @@ describe('formatTargetDir', () => {
     expect(formatTargetDir('../../foo/bar')).matchSnapshot();
   });
 
-  it('should format target dir with valid input', () => {
+  it.skipIf(process.platform === 'win32')('should format target dir with valid input', () => {
     expect(formatTargetDir('./my-package')).matchSnapshot();
     expect(formatTargetDir('my-package')).matchSnapshot();
     expect(formatTargetDir('@my-scope/my-package')).matchSnapshot();

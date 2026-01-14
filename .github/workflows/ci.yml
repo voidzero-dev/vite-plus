@@ -136,6 +136,7 @@ jobs:
 
       - name: Print help for built-in commands
         run: |
+          which vite
           vite -h
           vite run -h
           vite lint -h
@@ -187,24 +188,21 @@ jobs:
           target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' ||  matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'aarch64-apple-darwin' }}
 
       - name: Build CLI
-        run: pnpm bootstrap-cli:ci
+        run: |
+          pnpm bootstrap-cli:ci
+          which vite
+          vite --version
+          vite -h
 
       - name: Run CLI lint
-        run: pnpm lint
+        run: vite run lint
 
       - name: Install Playwright browsers
         run: pnpx playwright install chromium
 
-      - name: Run CLI E2E tests
-        if: ${{ matrix.os != 'windows-latest' }}
+      - name: Run CLI snapshot tests
         run: |
           RUST_BACKTRACE=1 pnpm test
-          git diff --exit-code
-
-      - name: Run CLI E2E tests
-        if: ${{ matrix.os == 'windows-latest' }}
-        run: |
-          RUST_BACKTRACE=1 pnpm -r snap-test
           git diff --exit-code
 
   install-e2e-test:

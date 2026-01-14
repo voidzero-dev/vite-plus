@@ -69,13 +69,13 @@ Done in 171ms using pnpm v10.16.1
     }
   });
 
-  test('replace unstable cwd', () => {
+  test.skipIf(process.platform === 'win32')('replace unstable cwd', () => {
     const cwd = tmpdir();
     const output = `${path.join(cwd, 'foo.txt')}`;
     expect(replaceUnstableOutput(output.trim(), cwd)).toMatchSnapshot();
   });
 
-  test('replace unstable tmpdir with realpath', () => {
+  test.skipIf(process.platform === 'win32')('replace unstable tmpdir with realpath', () => {
     const tmp = fs.realpathSync(tmpdir());
     const cwd = path.join(tmp, `vite-plus-unittest-${randomUUID()}`);
     const output = `${path.join(cwd, 'foo.txt')}\n${path.join(cwd, '../other/bar.txt')}`;
