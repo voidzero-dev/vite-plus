@@ -73,9 +73,6 @@ npmScopes:
     npmRegistryServer: https://npm.pkg.github.com
     npmAuthToken: ${GITHUB_TOKEN}
 
-> cat .npmrc # check .npmrc
-@voidzero-dev:registry=https://npm.pkg.github.com/
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 > cat packages/app/package.json # check app package.json
 {
   "name": "app",

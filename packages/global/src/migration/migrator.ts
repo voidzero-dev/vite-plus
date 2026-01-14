@@ -135,8 +135,6 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
     return pkg;
   });
 
-  // set .npmrc to use vite-plus
-  rewriteNpmrc(projectPath);
   rewriteLintStagedConfigFile(projectPath);
   mergeViteConfigFiles(projectPath);
   mergeTsdownConfigFile(projectPath);
@@ -167,8 +165,6 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
     );
   }
 
-  // set .npmrc to use vite-plus
-  rewriteNpmrc(workspaceInfo.rootDir);
   rewriteLintStagedConfigFile(workspaceInfo.rootDir);
   mergeViteConfigFiles(workspaceInfo.rootDir);
   mergeTsdownConfigFile(workspaceInfo.rootDir);
@@ -541,40 +537,6 @@ function rewriteLintStagedConfigFile(projectPath: string): void {
     prompts.log.warn(
       `Please migrate the lint-staged config manually, see https://viteplus.dev/migration/#lint-staged for more details`,
     );
-  }
-}
-
-// TODO: should remove this function after vite-plus is released to npm
-/**
- * Rewrite .npmrc to add custom registry and auth token
- * ```
- * @voidzero-dev:registry=https://npm.pkg.github.com/
- * //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
- * ```
- * @param projectPath - The path to the project
- */
-function rewriteNpmrc(projectPath: string): void {
-  const npmrcPath = path.join(projectPath, '.npmrc');
-  if (!fs.existsSync(npmrcPath)) {
-    fs.writeFileSync(npmrcPath, '');
-  }
-
-  let changed = false;
-  let content = fs.readFileSync(npmrcPath, 'utf-8');
-  const customRegistry = `@voidzero-dev:registry=https://npm.pkg.github.com/`;
-  if (!content.includes(customRegistry)) {
-    content = content ? `${content.trimEnd()}\n${customRegistry}` : customRegistry;
-    changed = true;
-  }
-  // don't set if it already exists
-  let customAuthToken = '//npm.pkg.github.com/:_authToken=';
-  if (!content.includes(customAuthToken)) {
-    customAuthToken += '${GITHUB_TOKEN}';
-    content = content ? `${content.trimEnd()}\n${customAuthToken}` : customAuthToken;
-    changed = true;
-  }
-  if (changed) {
-    fs.writeFileSync(npmrcPath, content);
   }
 }
 

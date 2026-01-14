@@ -1,5 +1,4 @@
 {
-  
   "commands": [
     {
       "command": "vite gen vite:monorepo --no-interactive # create monorepo with default values",
@@ -8,7 +7,6 @@
     "ls vite-plus-monorepo | LC_ALL=C sort # check files created",
     "cat vite-plus-monorepo/package.json # check package.json",
     "cat vite-plus-monorepo/pnpm-workspace.yaml # check workspace config",
-    "cat vite-plus-monorepo/.npmrc # check .npmrc",
     "test -d vite-plus-monorepo/.git && echo 'Git initialized' || echo 'No git' # check git init",
     "ls vite-plus-monorepo/apps # check apps directory created",
     "ls vite-plus-monorepo/apps/website/package.json # check website package.json",

@@ -1,5 +1,4 @@
 {
-  
   "env": {
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
@@ -8,7 +7,6 @@
       "command": "vite gen vite:library --no-interactive --directory @my-scope/my-library # create vite library with scope name",
       "ignoreOutput": true
     },
-    "ls my-library/package.json # check package.json",
-    "cat my-library/.npmrc # check .npmrc"
+    "ls my-library/package.json # check package.json"
   ]
 }

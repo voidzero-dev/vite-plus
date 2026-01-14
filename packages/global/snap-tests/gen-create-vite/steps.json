@@ -1,5 +1,4 @@
 {
-  
   "env": {
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
@@ -9,7 +8,6 @@
       "ignoreOutput": true
     },
     "ls vite-plus-application/package.json # check package.json",
-    "cat vite-plus-application/.npmrc # check .npmrc",
     {
       "command": "vite gen vite:application --no-interactive --directory my-react-ts -- --template react-ts # create vite app with react-ts template",
       "ignoreOutput": true

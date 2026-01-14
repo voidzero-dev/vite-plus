@@ -52,9 +52,6 @@ peerDependencyRules:
     vite: '*'
     vitest: '*'
 
-> cat vite-plus-monorepo/.npmrc # check .npmrc
-@voidzero-dev:registry=https://npm.pkg.github.com/
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 > test -d vite-plus-monorepo/.git && echo 'Git initialized' || echo 'No git' # check git init
 Git initialized
 

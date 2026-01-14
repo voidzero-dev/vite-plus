@@ -1,5 +1,4 @@
 {
-  
   "env": {
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
@@ -9,7 +8,6 @@
       "ignoreOutput": true
     },
     "ls vite-plus-library/package.json # check package.json",
-    "cat vite-plus-library/.npmrc # check .npmrc",
     {
       "command": "vite gen vite:library --directory my-vue -- --template vue # create vite library with custom template",
       "ignoreOutput": true
