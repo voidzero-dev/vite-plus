@@ -53,10 +53,10 @@ If the local CLI is not installed, the global CLI will install it for you.
 vite run build
 
 # if not installed, will install it for you
-Add @voidzero-dev/vite-plus as a devDependency in package.json? [y/N]: y
+Add vite-plus as a devDependency in package.json? [y/N]: y
 
 # will install it for you
-Installing @voidzero-dev/vite-plus...
+Installing vite-plus...
 
 # will run the build task
 vite run build

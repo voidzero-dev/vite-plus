@@ -71,7 +71,7 @@ e.g.:
     "ready": "vite lint && vite run -r build && vite test"
   },
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "*"
+    "vite-plus": "*"
   }
 }
 ```

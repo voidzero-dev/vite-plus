@@ -277,9 +277,6 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.10.3
-      '@voidzero-dev/vite-plus':
-        specifier: workspace:*
-        version: link:packages/cli
       '@voidzero-dev/vite-plus-tools':
         specifier: workspace:*
         version: link:packages/tools
@@ -304,6 +301,9 @@ importers:
       vite:
         specifier: workspace:@voidzero-dev/vite-plus-core@*
         version: link:packages/core
+      vite-plus:
+        specifier: workspace:*
+        version: link:packages/cli
       vitest:
         specifier: workspace:@voidzero-dev/vite-plus-test@*
         version: link:packages/test

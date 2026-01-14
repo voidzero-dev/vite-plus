@@ -117,7 +117,7 @@ For maintainers developing the vitest/vite migration feature, here are the trans
 
 - `vitest/browser-playwright` (or `vitest/browser-webdriverio`, `vitest/browser-preview`) - works when `vitest` is overridden to our package (Recommended)
 - `@voidzero-dev/vite-plus-test/browser-playwright` - direct import from test package
-- `@voidzero-dev/vite-plus/test/plugins/browser-playwright` - direct import from CLI package
+- `vite-plus/test/plugins/browser-playwright` - direct import from CLI package
 
 Importing from `@vitest/browser-*` packages directly requires additional overrides for those specific packages.
 
@@ -142,12 +142,12 @@ Importing from `@vitest/browser-*` packages directly requires additional overrid
 ```yaml
 # pnpm-workspace.yaml
 overrides:
-  vite: 'file:path/to/vite-plus-core.tgz'
-  vitest: 'file:path/to/vite-plus-test.tgz'
-  '@vitest/browser': 'file:path/to/vite-plus-test.tgz'
-  '@vitest/browser-playwright': 'file:path/to/vite-plus-test.tgz'
-  '@vitest/browser-webdriverio': 'file:path/to/vite-plus-test.tgz'
-  '@vitest/browser-preview': 'file:path/to/vite-plus-test.tgz'
+  vite: 'file:path/to/@voidzero-dev/vite-plus-core.tgz'
+  vitest: 'file:path/to/@voidzero-dev/vite-plus-test.tgz'
+  '@vitest/browser': 'file:path/to/@voidzero-dev/vite-plus-test.tgz'
+  '@vitest/browser-playwright': 'file:path/to/@voidzero-dev/vite-plus-test.tgz'
+  '@vitest/browser-webdriverio': 'file:path/to/@voidzero-dev/vite-plus-test.tgz'
+  '@vitest/browser-preview': 'file:path/to/@voidzero-dev/vite-plus-test.tgz'
 ```
 
 Or using npm package names:
@@ -175,7 +175,7 @@ import { playwright } from 'vitest/browser-playwright';
 import { playwright } from '@voidzero-dev/vite-plus-test/browser-playwright';
 
 // After - Option 3: Direct import from CLI package
-import { playwright } from '@voidzero-dev/vite-plus/test/plugins/browser-playwright';
+import { playwright } from 'vite-plus/test/plugins/browser-playwright';
 ```
 
 Similarly for WebdriverIO:
@@ -361,8 +361,8 @@ This is achieved through:
    - Handles `vitest/*` subpaths → resolves to dist files (enables `vitest/browser-playwright` usage)
    - Handles `vitest/browser-playwright`, `vitest/browser-webdriverio`, `vitest/browser-preview` → resolves to bundled browser providers
    - Handles `@voidzero-dev/vite-plus-test/*` subpaths → maps to equivalent vitest paths
-   - Handles `@voidzero-dev/vite-plus/test/*` subpaths → maps to equivalent vitest paths (CLI package)
-   - Intercepts `vitest/browser`, `@voidzero-dev/vite-plus-test/browser`, `@voidzero-dev/vite-plus/test/browser` → returns virtual module ID for BrowserContext plugin
+   - Handles `vite-plus/test/*` subpaths → maps to equivalent vitest paths (CLI package)
+   - Intercepts `vitest/browser`, `@voidzero-dev/vite-plus-test/browser`, `vite-plus/test/browser` → returns virtual module ID for BrowserContext plugin
 
 ### Key Constants
 

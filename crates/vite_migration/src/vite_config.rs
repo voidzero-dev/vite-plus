@@ -949,7 +949,7 @@ export default defineConfig({
 
     #[test]
     fn test_merge_tsdown_config_content_simple() {
-        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   plugins: [],
@@ -963,7 +963,7 @@ export default defineConfig({
             result.content,
             r#"import tsdownConfig from './tsdown.config.js';
 
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lib: tsdownConfig,
@@ -974,7 +974,7 @@ export default defineConfig({
 
     #[test]
     fn test_merge_tsdown_config_content_with_existing_imports() {
-        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
@@ -988,7 +988,7 @@ export default defineConfig({
             result.content,
             r#"import tsdownConfig from './tsdown.config.js';
 
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
@@ -1000,7 +1000,7 @@ export default defineConfig({
 
     #[test]
     fn test_merge_tsdown_config_content_function_callback() {
-        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
 
 export default defineConfig((env) => ({
   plugins: [],
@@ -1013,7 +1013,7 @@ export default defineConfig((env) => ({
             result.content,
             r#"import tsdownConfig from './tsdown.config.js';
 
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig((env) => ({
   lib: tsdownConfig,
@@ -1027,7 +1027,7 @@ export default defineConfig((env) => ({
         // Already migrated config - import at the beginning
         let already_migrated = r#"import tsdownConfig from './tsdown.config.js';
 
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lib: tsdownConfig,
@@ -1039,7 +1039,7 @@ export default defineConfig({
         assert_eq!(result.content, already_migrated);
 
         // Run migration twice and verify no duplicates
-        let fresh_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+        let fresh_config = r#"import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   plugins: [],
@@ -1047,7 +1047,7 @@ export default defineConfig({
 
         let expected_migrated = r#"import tsdownConfig from './tsdown.config.js';
 
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lib: tsdownConfig,
@@ -1089,7 +1089,7 @@ export default {
     #[test]
     fn test_merge_tsdown_config_content_no_false_positive_stdlib() {
         // "stdlib:" should not be detected as "lib:" key
-        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   stdlib: 'some-value',
@@ -1105,7 +1105,7 @@ export default defineConfig({
     #[test]
     fn test_merge_tsdown_config_content_mts_extension() {
         // .mts files should use .mjs extension in imports
-        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
 
 export default defineConfig({});"#;
 
@@ -1117,7 +1117,7 @@ export default defineConfig({});"#;
     #[test]
     fn test_merge_tsdown_config_content_cts_extension() {
         // .cts files should use .cjs extension in imports
-        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
 
 export default defineConfig({});"#;
 
@@ -1129,7 +1129,7 @@ export default defineConfig({});"#;
     #[test]
     fn test_merge_tsdown_config_content_js_extension_unchanged() {
         // .js, .mjs, .cjs files should keep their extensions unchanged
-        let vite_config = r#"import { defineConfig } from '@voidzero-dev/vite-plus';
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
 
 export default defineConfig({});"#;
 

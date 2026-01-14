@@ -8,7 +8,8 @@
   },
   "type": "module",
   "scripts": {
-    "bootstrap-cli": "pnpm --filter=@voidzero-dev/* build && pnpm install-global-cli",
+    "build": "pnpm --filter=@voidzero-dev/*,vite-plus,vite-plus-global build",
+    "bootstrap-cli": "pnpm build && pnpm install-global-cli",
     "bootstrap-cli:ci": "pnpm install-global-cli",
     "install-global-cli": "pnpm --filter=vite-plus-global copy-binding && npm install -g ./packages/global",
     "typecheck": "tsc -b tsconfig.json",
@@ -23,7 +24,7 @@
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
     "@types/node": "catalog:",
-    "@voidzero-dev/vite-plus": "workspace:*",
+    "vite-plus": "workspace:*",
     "@voidzero-dev/vite-plus-tools": "workspace:*",
     "husky": "catalog:",
     "lint-staged": "catalog:",

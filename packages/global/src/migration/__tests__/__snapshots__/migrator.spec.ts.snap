@@ -6,7 +6,7 @@ exports[`rewritePackageJson > should rewrite devDependencies and dependencies on
     "foo": "1.0.0",
   },
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "latest",
+    "vite-plus": "latest",
   },
 }
 `;
@@ -17,7 +17,7 @@ exports[`rewritePackageJson > should rewrite devDependencies and dependencies on
     "foo": "1.0.0",
   },
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "catalog:",
+    "vite-plus": "catalog:",
   },
 }
 `;
@@ -28,7 +28,7 @@ exports[`rewritePackageJson > should rewrite devDependencies and dependencies on
     "foo": "1.0.0",
   },
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "latest",
+    "vite-plus": "latest",
   },
 }
 `;
@@ -39,7 +39,7 @@ exports[`rewritePackageJson > should rewrite devDependencies and dependencies on
     "foo": "1.0.0",
   },
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "catalog:",
+    "vite-plus": "catalog:",
   },
 }
 `;

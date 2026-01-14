@@ -66,7 +66,7 @@ Packages: +<variable>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 devDependencies:
-+ @voidzero-dev/vite-plus <semver>
++ vite-plus <semver>
 + vitest <semver>"
 `;
 
@@ -105,8 +105,8 @@ exports[`replaceUnstableOutput() > replace unstable tmpdir with realpath 1`] = `
 `;
 
 exports[`replaceUnstableOutput() > replace unstable vite-plus hash version 1`] = `
-""@voidzero-dev/vite-plus": "^0.0.0-<hash>"
-"@voidzero-dev/vite-plus-core": "^0.0.0-<hash>""
+""vite-plus": "^0.0.0-<hash>"
+"vite-plus-core": "^0.0.0-<hash>""
 `;
 
 exports[`replaceUnstableOutput() > replace yarn YN0000: └ Completed with duration to empty string 1`] = `

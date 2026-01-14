@@ -1,5 +1,5 @@
 /**
- * Build script for @voidzero-dev/vite-plus CLI package
+ * Build script for vite-plus CLI package
  *
  * This script performs four main tasks:
  * 1. buildCli() - Compiles TypeScript sources
@@ -104,11 +104,11 @@ async function buildCli() {
 }
 
 /**
- * Sync Vite core exports from @voidzero-dev/vite-plus-core to @voidzero-dev/vite-plus
+ * Sync Vite core exports from @voidzero-dev/vite-plus-core to vite-plus
  *
  * Creates shim files that re-export from the core package, enabling imports like:
- * - `import type { ... } from '@voidzero-dev/vite-plus/types/importGlob.d.ts'`
- * - `import { ... } from '@voidzero-dev/vite-plus/module-runner'`
+ * - `import type { ... } from 'vite-plus/types/importGlob.d.ts'`
+ * - `import { ... } from 'vite-plus/module-runner'`
  *
  * Export paths created:
  * - ./client - Triple-slash reference (ambient type declarations for CSS, assets, etc.)
@@ -241,11 +241,11 @@ async function syncTypesDir(srcDir: string, destDir: string, relativePath: strin
 }
 
 /**
- * Sync exports from @voidzero-dev/vite-plus-test to @voidzero-dev/vite-plus
+ * Sync exports from @voidzero-dev/vite-plus-test to vite-plus
  *
  * This function reads the test package's exports and creates shim files that
  * re-export everything under the ./test/* subpath. This allows users to import
- * from @voidzero-dev/vite-plus/test/* instead of @voidzero-dev/vite-plus-test/*.
+ * from vite-plus/test/* instead of @voidzero-dev/vite-plus-test/*.
  */
 async function syncTestPackageExports() {
   console.log('\nSyncing test package exports...');

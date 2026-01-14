@@ -260,7 +260,7 @@ module.exports = { ${pkg.name.replace('-', '_')} };
         'lint:all': 'vite run lint',
       },
       devDependencies: {
-        '@voidzero-dev/vite-plus': '*',
+        'vite-plus': '*',
       },
     };
 

@@ -25,7 +25,7 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       // e.g.: `/1.0.0` -> `/<semver>`
       .replaceAll(/([@/\s]v?)\d+\.\d+\.\d+(?:-.*)?/g, '$1<semver>')
       // vite-plus hash version
-      // e.g.: `@voidzero-dev/vite-plus": "^0.0.0-aa9f90fe23216b8ad85b0ba4fc1bccb0614afaf0"` -> `@voidzero-dev/vite-plus": "^0.0.0-<hash>`
+      // e.g.: `vite-plus": "^0.0.0-aa9f90fe23216b8ad85b0ba4fc1bccb0614afaf0"` -> `vite-plus": "^0.0.0-<hash>`
       .replaceAll(/0\.0\.0-\w{40}/g, '0.0.0-<hash>')
       // date
       .replaceAll(/\d{2}:\d{2}:\d{2}/g, '<date>')

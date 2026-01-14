@@ -98,6 +98,7 @@ peerDependencyRules:
     vite: '*'
     vitest: '*'
 minimumReleaseAgeExclude:
+  - vite-plus
   - '@voidzero-dev/*'
   - oxlint
   - '@oxlint/*'

@@ -1,4 +1,4 @@
-import type { UserConfig } from '@voidzero-dev/vite-plus';
+import type { UserConfig } from 'vite-plus';
 
 export default (<UserConfig>{
   lint: {

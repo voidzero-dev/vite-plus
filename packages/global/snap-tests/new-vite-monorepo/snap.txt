@@ -22,7 +22,7 @@ vite.config.ts
     "node": ">=22.12.0"
   },
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "catalog:"
+    "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@<semver>"
 }
@@ -40,7 +40,7 @@ catalog:
   typescript: ^5
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
-  '@voidzero-dev/vite-plus': latest
+  vite-plus: latest
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'
@@ -130,7 +130,7 @@ vite.config.ts
     "node": ">=22.12.0"
   },
   "devDependencies": {
-    "@voidzero-dev/vite-plus": "catalog:"
+    "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@<semver>"
 }

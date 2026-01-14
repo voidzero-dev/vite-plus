@@ -16,7 +16,7 @@
 cat: tsdown.config.json: No such file or directory
 
 > cat vite.config.ts # check vite.config.ts
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lib: {
@@ -65,7 +65,7 @@ export default defineConfig({
 
 
 > cat vite.config.ts # check vite.config.ts
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lib: {

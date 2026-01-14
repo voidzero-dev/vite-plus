@@ -260,8 +260,9 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
 
     // minimumReleaseAgeExclude
     if (doc.has('minimumReleaseAge')) {
-      // add @voidzero-dev/*, oxlint, oxlint-tsgolint, oxfmt to minimumReleaseAgeExclude
+      // add vite-plus, @voidzero-dev/*, oxlint, oxlint-tsgolint, oxfmt to minimumReleaseAgeExclude
       const excludes = [
+        'vite-plus',
         '@voidzero-dev/*',
         'oxlint',
         '@oxlint/*',

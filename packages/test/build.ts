@@ -295,7 +295,7 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
       types: './browser/context.d.ts',
       default: './dist/@vitest/browser/context.js',
     };
-    // Also export ./browser/context for users importing @voidzero-dev/vite-plus/test/browser/context
+    // Also export ./browser/context for users importing vite-plus/test/browser/context
     destPkg.exports['./browser/context'] = {
       types: './browser/context.d.ts',
       default: './dist/@vitest/browser/context.js',
@@ -1138,13 +1138,13 @@ async function patchVendorPaths() {
 }
 
 /**
- * Patch VitestCoreResolver to resolve @voidzero-dev/vite-plus/test directly.
+ * Patch VitestCoreResolver to resolve vite-plus/test directly.
  *
  * Problem: CLI's `export * from '@voidzero-dev/vite-plus-test'` creates a re-export
  * chain that breaks module identity in Vite's SSR transform. expect.extend()
  * mutations aren't visible through the re-export.
  *
- * Fix: Make VitestCoreResolver resolve both @voidzero-dev/vite-plus/test and
+ * Fix: Make VitestCoreResolver resolve both vite-plus/test and
  * @voidzero-dev/vite-plus-test directly to dist/index.js, bypassing re-exports.
  */
 async function patchVitestCoreResolver() {
@@ -1170,12 +1170,12 @@ async function patchVitestCoreResolver() {
       if (id === "vitest") return resolve(distDir, "index.js");
       // Resolve CLI test path and test package directly to dist/index.js
       // This bypasses the re-export chain and ensures module identity is preserved
-      if (id === "@voidzero-dev/vite-plus/test" || id === "@voidzero-dev/vite-plus-test") {
+      if (id === "vite-plus/test" || id === "@voidzero-dev/vite-plus-test") {
         return resolve(distDir, "index.js");
       }
-      // Handle subpaths: @voidzero-dev/vite-plus/test/* -> vitest/*
-      if (id.startsWith("@voidzero-dev/vite-plus/test/")) {
-        const subpath = id.slice("@voidzero-dev/vite-plus/test/".length);
+      // Handle subpaths: vite-plus/test/* -> vitest/*
+      if (id.startsWith("vite-plus/test/")) {
+        const subpath = id.slice("vite-plus/test/".length);
         return this.resolve("vitest/" + subpath, join(ctx.config.root, "index.html"), { skipSelf: true });
       }
       // Handle subpaths: @voidzero-dev/vite-plus-test/* -> vitest/*
@@ -1194,7 +1194,7 @@ async function patchVitestCoreResolver() {
 
   content = content.replace(oldPattern, newCode);
   await writeFile(cliApiChunk, content);
-  console.log('  Patched VitestCoreResolver to resolve @voidzero-dev/vite-plus/test directly');
+  console.log('  Patched VitestCoreResolver to resolve vite-plus/test directly');
 }
 
 /**
@@ -1313,8 +1313,8 @@ async function patchVitestBrowserPackage() {
       }
       // Handle vitest/browser and package aliases
       // Return virtual module ID so BrowserContext plugin can load it
-      // Supports: vitest/browser, @voidzero-dev/vite-plus-test/browser, @voidzero-dev/vite-plus/test/browser
-      if (id === 'vitest/browser' || id === '@voidzero-dev/vite-plus-test/browser' || id === '@voidzero-dev/vite-plus/test/browser') {
+      // Supports: vitest/browser, @voidzero-dev/vite-plus-test/browser, vite-plus/test/browser
+      if (id === 'vitest/browser' || id === '@voidzero-dev/vite-plus-test/browser' || id === 'vite-plus/test/browser') {
         return '\\0vitest/browser';
       }
       // Handle vitest/* subpaths (resolve to our dist files)
@@ -1322,7 +1322,7 @@ async function patchVitestBrowserPackage() {
       const vitestSubpathMap = {
         'vitest': resolve(packageRoot, 'index.js'),
         '@voidzero-dev/vite-plus-test': resolve(packageRoot, 'index.js'),
-        '@voidzero-dev/vite-plus/test': resolve(packageRoot, 'index.js'),
+        'vite-plus/test': resolve(packageRoot, 'index.js'),
         'vitest/node': resolve(packageRoot, 'node.js'),
         'vitest/config': resolve(packageRoot, 'config.js'),
         'vitest/internal/browser': resolve(packageRoot, 'browser.js'),
@@ -1349,9 +1349,9 @@ async function patchVitestBrowserPackage() {
           return vitestSubpathMap[vitestEquiv];
         }
       }
-      // Handle @voidzero-dev/vite-plus/test/* subpaths (CLI package paths, same as vitest/*)
-      if (id.startsWith('@voidzero-dev/vite-plus/test/')) {
-        const subpath = id.slice('@voidzero-dev/vite-plus/test/'.length);
+      // Handle vite-plus/test/* subpaths (CLI package paths, same as vitest/*)
+      if (id.startsWith('vite-plus/test/')) {
+        const subpath = id.slice('vite-plus/test/'.length);
         const vitestEquiv = 'vitest/' + subpath;
         if (vitestSubpathMap[vitestEquiv]) {
           return vitestSubpathMap[vitestEquiv];
@@ -1396,9 +1396,9 @@ async function patchVitestBrowserPackage() {
     '@voidzero-dev/vite-plus-test',
     '@voidzero-dev/vite-plus-test/browser',
     '@voidzero-dev/vite-plus-test/browser/context',
-    '@voidzero-dev/vite-plus/test',
-    '@voidzero-dev/vite-plus/test/browser',
-    '@voidzero-dev/vite-plus/test/browser/context',
+    'vite-plus/test',
+    'vite-plus/test/browser',
+    'vite-plus/test/browser/context',
 
     // Node.js only packages
     'vite',
@@ -1441,12 +1441,12 @@ async function patchVitestBrowserPackage() {
 
   // 4. Patch BrowserContext to also handle our package aliases as fallback
   // This allows direct imports from our package without requiring vitest override
-  // Supports: vitest/browser, @voidzero-dev/vite-plus-test/browser, @voidzero-dev/vite-plus/test/browser
+  // Supports: vitest/browser, @voidzero-dev/vite-plus-test/browser, vite-plus/test/browser
   const browserContextPattern = /if \(id === ID_CONTEXT\) \{/;
   if (browserContextPattern.test(content)) {
     content = content.replace(
       browserContextPattern,
-      `if (id === ID_CONTEXT || id === "@voidzero-dev/vite-plus-test/browser" || id === "@voidzero-dev/vite-plus/test/browser") {`,
+      `if (id === ID_CONTEXT || id === "@voidzero-dev/vite-plus-test/browser" || id === "vite-plus/test/browser") {`,
     );
     console.log('  Patched BrowserContext to handle package aliases');
   } else {
@@ -1984,11 +1984,11 @@ async function patchChaiTypeReference() {
  * Patch the vitest mocker to recognize @voidzero-dev packages as valid sources for vi/vitest.
  *
  * The mocker's hoistMocks function checks if `vi` is imported from the 'vitest' module.
- * When users import from '@voidzero-dev/vite-plus/test' instead, the mocker doesn't
+ * When users import from 'vite-plus/test' instead, the mocker doesn't
  * recognize it and throws "There are some problems in resolving the mocks API".
  *
  * This patch modifies the equality check to also accept our package names:
- * - @voidzero-dev/vite-plus/test
+ * - vite-plus/test
  * - @voidzero-dev/vite-plus-test
  */
 async function patchMockerHoistedModule() {
@@ -1999,10 +1999,10 @@ async function patchMockerHoistedModule() {
 
   // Find and replace the hoistedModule check
   // Original: if (hoistedModule === source) {
-  // New: if (hoistedModule === source || source === "@voidzero-dev/vite-plus/test" || source === "@voidzero-dev/vite-plus-test") {
+  // New: if (hoistedModule === source || source === "vite-plus/test" || source === "@voidzero-dev/vite-plus-test") {
   const originalCheck = 'if (hoistedModule === source) {';
   const newCheck =
-    'if (hoistedModule === source || source === "@voidzero-dev/vite-plus/test" || source === "@voidzero-dev/vite-plus-test") {';
+    'if (hoistedModule === source || source === "vite-plus/test" || source === "@voidzero-dev/vite-plus-test") {';
 
   if (!content.includes(originalCheck)) {
     throw new Error(

@@ -78,7 +78,7 @@ The `vite migration` command automatically:
 
 1. **Updates dependencies**: Replaces standalone `vite`, `vitest`, `oxlint`, and `oxfmt` with unified Vite+ packages
 2. **Configures overrides**: Adds package manager overrides to ensure all dependencies use Vite+ versions
-3. **Rewrites imports**: Updates `import from 'vite'` and `import from 'vitest/config'` to `import from '@voidzero-dev/vite-plus'`
+3. **Rewrites imports**: Updates `import from 'vite'` and `import from 'vitest/config'` to `import from 'vite-plus'`
 4. **Merges configurations**: Consolidates `.oxlintrc` and `.oxfmtrc` into `vite.config.ts`
 5. **Updates scripts**: Rewrites npm scripts to use Vite+ commands
 
@@ -107,7 +107,7 @@ $ vite migration
 │  - vite: ^8.0.0
 │  - vitest: ^4.0.0
 │  - oxlint: ^0.1.0
-│  + @voidzero-dev/vite-plus: latest
+│  + vite-plus: latest
 │
 │  Configuration:
 │  ✓ Merge .oxlintrc → vite.config.ts
@@ -132,7 +132,7 @@ If you prefer to migrate manually or need to understand what changes are made, f
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "pnpm": {
     "overrides": {
@@ -150,7 +150,7 @@ If you prefer to migrate manually or need to understand what changes are made, f
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -166,7 +166,7 @@ If you prefer to migrate manually or need to understand what changes are made, f
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "resolutions": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -183,7 +183,7 @@ Add to `pnpm-workspace.yaml`:
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
-  '@voidzero-dev/vite-plus': latest
+  'vite-plus': latest
 
 overrides:
   vite: 'catalog:'
@@ -207,7 +207,7 @@ Add to root `package.json`:
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "@voidzero-dev/vite-plus": "latest"
+    "vite-plus": "latest"
   },
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -224,7 +224,7 @@ Add to `.yarnrc.yml`:
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
-  '@voidzero-dev/vite-plus': latest
+  'vite-plus': latest
 ```
 
 Add to root `package.json`:
@@ -264,7 +264,7 @@ export default defineConfig({
 **After:**
 
 ```typescript
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   // your config
@@ -288,7 +288,7 @@ export default defineConfig({
 **After:**
 
 ```typescript
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   test: {
@@ -316,7 +316,7 @@ If you have an `.oxlintrc` file, merge it into `vite.config.ts`:
 **After (vite.config.ts):**
 
 ```typescript
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lint: {
@@ -347,7 +347,7 @@ If you have an `.oxfmtrc` file, merge it into `vite.config.ts`:
 **After (vite.config.ts):**
 
 ```typescript
-import { defineConfig } from '@voidzero-dev/vite-plus';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   fmt: {
@@ -444,9 +444,9 @@ You'll need to manually add the configuration to your `vite.config.ts`. See the 
 
 If you have complex import patterns that weren't automatically updated, search for and replace:
 
-- `from 'vite'` → `from '@voidzero-dev/vite-plus'`
-- `from 'vitest/config'` → `from '@voidzero-dev/vite-plus'`
-- `from 'vitest'` → `from '@voidzero-dev/vite-plus/test'`
+- `from 'vite'` → `from 'vite-plus'`
+- `from 'vitest/config'` → `from 'vite-plus'`
+- `from 'vitest'` → `from 'vite-plus/test'`
 
 ## What's Not Migrated
 

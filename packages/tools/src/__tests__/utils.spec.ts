@@ -41,12 +41,12 @@ Packages: +312
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 Progress: resolved 1, reused 0, downloaded 0, added 0
 Progress: resolved 316, reused 316, downloaded 0, added 315
-WARN  Skip adding vite to the default catalog because it already exists as npm:@voidzero-dev/vite-plus. Please use \`pnpm update\` to update the catalogs.
+WARN  Skip adding vite to the default catalog because it already exists as npm:vite-plus. Please use \`pnpm update\` to update the catalogs.
 WARN  Skip adding vitest to the default catalog because it already exists as beta. Please use \`pnpm update\` to update the catalogs.
 Progress: resolved 316, reused 316, downloaded 0, added 316, done
 
 devDependencies:
-+ @voidzero-dev/vite-plus 0.0.0-8a4f4936e0eca32dd57e1a503c2b09745953344d
++ vite-plus 0.0.0-8a4f4936e0eca32dd57e1a503c2b09745953344d
 + vitest 3.2.4
       `,
       `
@@ -185,8 +185,8 @@ line 3
 
   test('replace unstable vite-plus hash version', () => {
     const output = `
-"@voidzero-dev/vite-plus": "^0.0.0-aa9f90fe23216b8ad85b0ba4fc1bccb0614afaf0"
-"@voidzero-dev/vite-plus-core": "^0.0.0-43b91ac4e4bc63ba78dee8a813806bdbaa7a4378"
+"vite-plus": "^0.0.0-aa9f90fe23216b8ad85b0ba4fc1bccb0614afaf0"
+"vite-plus-core": "^0.0.0-43b91ac4e4bc63ba78dee8a813806bdbaa7a4378"
     `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });

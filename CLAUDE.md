@@ -83,7 +83,7 @@ vite dev                             # runs dev script from package.json
 ## Build
 
 - Run `pnpm bootstrap-cli` from the project root to build all packages and install the global CLI
-  - This builds all `@voidzero-dev/*` packages
+  - This builds all `@voidzero-dev/*`, `vite-plus` and `vite-plus-global` packages
   - Compiles the Rust NAPI bindings
   - Installs the CLI globally via npm
 
@@ -97,7 +97,7 @@ Snap tests are located in `packages/global/snap-tests/` and `packages/cli/snap-t
 - `snap.txt` - Expected output (generated/updated by running the test)
 
 ```bash
-# Run all global snap tests (for local cli, the package name would be @voidzero-dev/vite-plus)
+# Run all global snap tests (for local cli, the package name would be vite-plus)
 pnpm -F vite-plus-global snap-test
 
 # Run a specific snap test by name filter

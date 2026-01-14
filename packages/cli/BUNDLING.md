@@ -1,6 +1,6 @@
 # CLI Package Build Architecture
 
-This document explains how `@voidzero-dev/vite-plus` is built and how it re-exports from both the core and test packages to serve as a drop-in replacement for `vite`.
+This document explains how `vite-plus` is built and how it re-exports from both the core and test packages to serve as a drop-in replacement for `vite`.
 
 ## Overview
 
@@ -11,7 +11,7 @@ The CLI package uses a **4-step build process**:
 3. **Core Package Export Sync** - Re-export `@voidzero-dev/vite-plus-core` under `./client`, `./types/*`, etc.
 4. **Test Package Export Sync** - Re-export `@voidzero-dev/vite-plus-test` under `./test/*`
 
-This architecture allows users to import everything from a single package (`@voidzero-dev/vite-plus`) as a drop-in replacement for `vite`, without needing to know about the separate core and test packages.
+This architecture allows users to import everything from a single package (`vite-plus`) as a drop-in replacement for `vite`, without needing to know about the separate core and test packages.
 
 ## Build Steps
 
@@ -167,7 +167,7 @@ These targets are defined in `package.json` under the `napi.targets` field.
 
 The CLI package creates thin shim files that re-export from `@voidzero-dev/vite-plus-core` rather than bundling the actual code. This approach:
 
-1. **Enables drop-in replacement** - Users can replace `vite` with `@voidzero-dev/vite-plus` without changing imports
+1. **Enables drop-in replacement** - Users can replace `vite` with `vite-plus` without changing imports
 2. **Keeps packages in sync** - No need to rebuild CLI when core package changes
 3. **Reduces duplication** - No file copying, just re-exports
 4. **Preserves module resolution** - Node.js resolves to the actual core package
@@ -176,11 +176,11 @@ The CLI package creates thin shim files that re-export from `@voidzero-dev/vite-
 
 | Upstream Vite Export | CLI Package Export                      | Description                                |
 | -------------------- | --------------------------------------- | ------------------------------------------ |
-| `vite/client`        | `@voidzero-dev/vite-plus/client`        | Ambient types for HMR, CSS modules, assets |
-| `vite/module-runner` | `@voidzero-dev/vite-plus/module-runner` | SSR/Environment module runner              |
-| `vite/internal`      | `@voidzero-dev/vite-plus/internal`      | Internal APIs                              |
-| `vite/dist/client/*` | `@voidzero-dev/vite-plus/dist/client/*` | Client runtime files                       |
-| `vite/types/*`       | `@voidzero-dev/vite-plus/types/*`       | Type definitions                           |
+| `vite/client`        | `vite-plus/client`        | Ambient types for HMR, CSS modules, assets |
+| `vite/module-runner` | `vite-plus/module-runner` | SSR/Environment module runner              |
+| `vite/internal`      | `vite-plus/internal`      | Internal APIs                              |
+| `vite/dist/client/*` | `vite-plus/dist/client/*` | Client runtime files                       |
+| `vite/types/*`       | `vite-plus/types/*`       | Type definitions                           |
 
 ### Type-Only Exports
 
@@ -233,10 +233,10 @@ All test package exports are mapped under `./test/*`:
 
 | Test Package Export                               | CLI Package Export                                |
 | ------------------------------------------------- | ------------------------------------------------- |
-| `@voidzero-dev/vite-plus-test`                    | `@voidzero-dev/vite-plus/test`                    |
-| `@voidzero-dev/vite-plus-test/browser`            | `@voidzero-dev/vite-plus/test/browser`            |
-| `@voidzero-dev/vite-plus-test/browser-playwright` | `@voidzero-dev/vite-plus/test/browser-playwright` |
-| `@voidzero-dev/vite-plus-test/plugins/runner`     | `@voidzero-dev/vite-plus/test/plugins/runner`     |
+| `@voidzero-dev/vite-plus-test`                    | `vite-plus/test`                    |
+| `@voidzero-dev/vite-plus-test/browser`            | `vite-plus/test/browser`            |
+| `@voidzero-dev/vite-plus-test/browser-playwright` | `vite-plus/test/browser-playwright` |
+| `@voidzero-dev/vite-plus-test/plugins/runner`     | `vite-plus/test/plugins/runner`     |
 
 ### Conditional Export Handling
 
@@ -327,7 +327,7 @@ This sets `release: false` in the NAPI build options, producing larger but faste
 pnpm -C packages/cli build
 
 # Build from monorepo root (builds all dependencies first)
-pnpm build --filter @voidzero-dev/vite-plus
+pnpm build --filter vite-plus
 
 # Debug build
 VITE_PLUS_CLI_DEBUG=1 pnpm -C packages/cli build
