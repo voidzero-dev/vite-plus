@@ -1,8 +1,8 @@
-> vp install # should install packages first
+> vite install # should install packages first
 
 added 4 packages in <variable>ms
 
-> vp pm list --json # should list current workspace root dependencies
+> vite pm list --json # should list current workspace root dependencies
 {
   "version": "1.0.0",
   "name": "command-list-npm10-with-workspace",
@@ -37,7 +37,7 @@ added 4 packages in <variable>ms
   }
 }
 
-> vp pm list --recursive --json # should list all packages in workspace (uses --workspaces)
+> vite pm list --recursive --json # should list all packages in workspace (uses --workspaces)
 {
   "version": "1.0.0",
   "name": "command-list-npm10-with-workspace",
@@ -72,7 +72,7 @@ added 4 packages in <variable>ms
   }
 }
 
-> vp pm list --filter app --json # should list specific workspace package (uses --workspace app)
+> vite pm list --filter app --json # should list specific workspace package (uses --workspace app)
 {
   "version": "1.0.0",
   "name": "command-list-npm10-with-workspace",
@@ -97,7 +97,7 @@ added 4 packages in <variable>ms
   }
 }
 
-> vp pm list --filter app --filter @vite-plus-test/utils --json # should list multiple workspace packages
+> vite pm list --filter app --filter @vite-plus-test/utils --json # should list multiple workspace packages
 {
   "version": "1.0.0",
   "name": "command-list-npm10-with-workspace",
@@ -132,7 +132,7 @@ added 4 packages in <variable>ms
   }
 }
 
-> vp pm list --recursive --depth 0 --json # should list workspace packages with depth limit
+> vite pm list --recursive --depth 0 --json # should list workspace packages with depth limit
 {
   "version": "1.0.0",
   "name": "command-list-npm10-with-workspace",

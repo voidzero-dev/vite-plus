@@ -3,6 +3,6 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp pm list # should show warning that yarn@2+ does not support list command"
+    "vite pm list # should show warning that yarn@2+ does not support list command"
   ]
 }

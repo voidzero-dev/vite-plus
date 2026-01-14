@@ -1,4 +1,4 @@
-> vp add testnpm2 -D -w --filter=* && vp add test-vite-plus-install -w --filter=* && vp add test-vite-plus-package-optional -O --filter=* && cat package.json packages/app/package.json packages/utils/package.json # prepare packages
+> vite add testnpm2 -D -w --filter=* && vite add test-vite-plus-install -w --filter=* && vite add test-vite-plus-package-optional -O --filter=* && cat package.json packages/app/package.json packages/utils/package.json # prepare packages
 .                                        |   +1 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>
@@ -46,7 +46,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp remove testnpm2 -r && cat package.json packages/app/package.json packages/utils/package.json # should remove package from all workspaces and root
+> vite remove testnpm2 -r && cat package.json packages/app/package.json packages/utils/package.json # should remove package from all workspaces and root
 Scope: all <variable> workspace projects
 .                                        |   -1 -
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -80,7 +80,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp remove -O test-vite-plus-package-optional -r && cat package.json packages/app/package.json packages/utils/package.json # should remove optional package from all workspaces
+> vite remove -O test-vite-plus-package-optional -r && cat package.json packages/app/package.json packages/utils/package.json # should remove optional package from all workspaces
 Scope: all <variable> workspace projects
 .                                        |   -1 -
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -108,7 +108,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp remove test-vite-plus-install --filter=app && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=app
+> vite remove test-vite-plus-install --filter=app && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=app
 .                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>
@@ -132,7 +132,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp remove test-vite-plus-install --filter=* && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=*
+> vite remove test-vite-plus-install --filter=* && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=*
 Scope: all <variable> workspace projects
 .                                        |   -1 -
 Done in <variable>ms using pnpm v<semver>

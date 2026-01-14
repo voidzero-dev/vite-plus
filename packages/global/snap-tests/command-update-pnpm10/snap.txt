@@ -1,7 +1,7 @@
-> vp update --help # should show help
+> vite update --help # should show help
 Update packages to their latest versions
 
-Usage: vp update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+Usage: vite update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   [PACKAGES]...           Packages to update (optional - updates all if omitted)
@@ -21,7 +21,7 @@ Options:
       --workspace         Only update if package exists in workspace (pnpm-specific)
   -h, --help              Print help
 
-> vp update testnpm2 && cat package.json # should update package within semver range
+> vite update testnpm2 && cat package.json # should update package within semver range
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -51,7 +51,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp up testnpm2 --latest && cat package.json # should to absolute latest version
+> vite up testnpm2 --latest && cat package.json # should to absolute latest version
 Already up to date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
@@ -71,7 +71,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp update -D && cat package.json # should update only dev dependencies
+> vite update -D && cat package.json # should update only dev dependencies
 Already up to date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
@@ -95,7 +95,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp update -P --no-save && cat package.json # should update only dependencies and optionalDependencies without saving
+> vite update -P --no-save && cat package.json # should update only dependencies and optionalDependencies without saving
 Already up to date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
@@ -117,7 +117,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp rm testnpm2 && vp add testnpm2@1.0.0 -O && vp update --no-optional --latest && cat package.json # should skip optional dependencies
+> vite rm testnpm2 && vite add testnpm2@1.0.0 -O && vite update --no-optional --latest && cat package.json # should skip optional dependencies
 Packages: -1
 -
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -156,7 +156,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp update && vp update --recursive && cat package.json # should update all packages and change the package.json
+> vite update && vite update --recursive && cat package.json # should update all packages and change the package.json
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done

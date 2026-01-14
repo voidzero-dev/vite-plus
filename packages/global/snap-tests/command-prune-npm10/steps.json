@@ -3,12 +3,12 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp install # should install packages first",
-    "vp pm prune --help # should show help",
-    "vp pm prune # should prune extraneous dependencies",
-    "vp pm prune --prod # should prune dev dependencies (uses --omit=dev)",
-    "vp pm prune --no-optional # should prune optional dependencies (uses --omit=optional)",
-    "vp pm prune --prod --no-optional # should prune both dev and optional dependencies",
-    "vp pm prune -- --loglevel=warn # should support pass through arguments"
+    "vite install # should install packages first",
+    "vite pm prune --help # should show help",
+    "vite pm prune # should prune extraneous dependencies",
+    "vite pm prune --prod # should prune dev dependencies (uses --omit=dev)",
+    "vite pm prune --no-optional # should prune optional dependencies (uses --omit=optional)",
+    "vite pm prune --prod --no-optional # should prune both dev and optional dependencies",
+    "vite pm prune -- --loglevel=warn # should support pass through arguments"
   ]
 }

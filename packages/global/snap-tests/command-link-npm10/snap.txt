@@ -1,5 +1,5 @@
 > mkdir -p ../test-lib-npm && echo '{"name": "test-lib-npm", "version": "1.0.0"}' > ../test-lib-npm/package.json # create test library
-> vp link ../test-lib-npm && cat package.json # should link local directory
+> vite link ../test-lib-npm && cat package.json # should link local directory
 
 added 1 package in <variable>ms
 {
@@ -8,7 +8,7 @@ added 1 package in <variable>ms
   "packageManager": "npm@<semver>"
 }
 
-> vp ln ../test-lib-npm && cat package.json # should work with ln alias
+> vite ln ../test-lib-npm && cat package.json # should work with ln alias
 
 up to date in <variable>ms
 {
@@ -17,7 +17,7 @@ up to date in <variable>ms
   "packageManager": "npm@<semver>"
 }
 
-> vp unlink test-lib-npm && cat package.json # cleanup temp states
+> vite unlink test-lib-npm && cat package.json # cleanup temp states
 
 removed 1 package in <variable>ms
 {

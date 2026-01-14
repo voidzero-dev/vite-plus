@@ -1,11 +1,11 @@
-> vp install # should install packages first
+> vite install # should install packages first
 
 added 3 packages in <variable>ms
 
-> vp pm prune --help # should show help
+> vite pm prune --help # should show help
 Remove unnecessary packages
 
-Usage: vp pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+Usage: vite pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
@@ -15,22 +15,22 @@ Options:
       --no-optional  Remove optional dependencies
   -h, --help         Print help
 
-> vp pm prune # should prune extraneous dependencies
+> vite pm prune # should prune extraneous dependencies
 
 up to date in <variable>ms
 
-> vp pm prune --prod # should prune dev dependencies (uses --omit=dev)
+> vite pm prune --prod # should prune dev dependencies (uses --omit=dev)
 
 up to date in <variable>ms
 
-> vp pm prune --no-optional # should prune optional dependencies (uses --omit=optional)
+> vite pm prune --no-optional # should prune optional dependencies (uses --omit=optional)
 
 added 1 package in <variable>ms
 
-> vp pm prune --prod --no-optional # should prune both dev and optional dependencies
+> vite pm prune --prod --no-optional # should prune both dev and optional dependencies
 
 up to date in <variable>ms
 
-> vp pm prune -- --loglevel=warn # should support pass through arguments
+> vite pm prune -- --loglevel=warn # should support pass through arguments
 
 added 2 packages in <variable>ms

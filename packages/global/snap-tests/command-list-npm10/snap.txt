@@ -1,8 +1,8 @@
-> vp install # should install packages first
+> vite install # should install packages first
 
 added 3 packages in <variable>ms
 
-> vp pm list --json # should list installed packages
+> vite pm list --json # should list installed packages
 {
   "version": "1.0.0",
   "name": "command-list-npm10",
@@ -25,7 +25,7 @@ added 3 packages in <variable>ms
   }
 }
 
-> vp pm list testnpm2 --json # should list specific package
+> vite pm list testnpm2 --json # should list specific package
 {
   "version": "1.0.0",
   "name": "command-list-npm10",
@@ -38,7 +38,7 @@ added 3 packages in <variable>ms
   }
 }
 
-> vp pm list --depth 0 --json # should list packages with depth limit
+> vite pm list --depth 0 --json # should list packages with depth limit
 {
   "version": "1.0.0",
   "name": "command-list-npm10",
@@ -61,7 +61,7 @@ added 3 packages in <variable>ms
   }
 }
 
-> vp pm list --long --json # should list packages with extended info
+> vite pm list --long --json # should list packages with extended info
 {
   "version": "1.0.0",
   "name": "command-list-npm10",
@@ -126,7 +126,7 @@ added 3 packages in <variable>ms
   }
 }
 
-> vp pm list --parseable --json # should list packages in parseable format
+> vite pm list --parseable --json # should list packages in parseable format
 {
   "version": "1.0.0",
   "name": "command-list-npm10",
@@ -149,7 +149,7 @@ added 3 packages in <variable>ms
   }
 }
 
-> vp pm list --prod --json # should list production dependencies only (uses --include prod --include peer)
+> vite pm list --prod --json # should list production dependencies only (uses --include prod --include peer)
 {
   "version": "1.0.0",
   "name": "command-list-npm10",
@@ -172,7 +172,7 @@ added 3 packages in <variable>ms
   }
 }
 
-> vp pm list --dev --json # should list development dependencies only (uses --include dev)
+> vite pm list --dev --json # should list development dependencies only (uses --include dev)
 {
   "version": "1.0.0",
   "name": "command-list-npm10",
@@ -195,7 +195,7 @@ added 3 packages in <variable>ms
   }
 }
 
-> vp pm list --no-optional --json # should exclude optional dependencies (uses --omit optional)
+> vite pm list --no-optional --json # should exclude optional dependencies (uses --omit optional)
 {
   "version": "1.0.0",
   "name": "command-list-npm10",
@@ -218,7 +218,7 @@ added 3 packages in <variable>ms
   }
 }
 
-> vp pm list --exclude-peers --json # should exclude peer dependencies (uses --omit peer)
+> vite pm list --exclude-peers --json # should exclude peer dependencies (uses --omit peer)
 {
   "version": "1.0.0",
   "name": "command-list-npm10",
@@ -236,7 +236,7 @@ added 3 packages in <variable>ms
   }
 }
 
-> vp pm list -- --loglevel=warn --json # should support pass through arguments
+> vite pm list -- --loglevel=warn --json # should support pass through arguments
 {
   "version": "1.0.0",
   "name": "command-list-npm10",

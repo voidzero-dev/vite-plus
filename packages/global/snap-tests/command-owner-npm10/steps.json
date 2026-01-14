@@ -3,6 +3,6 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp pm owner list testnpm2 # should list package owners"
+    "vite pm owner list testnpm2 # should list package owners"
   ]
 }

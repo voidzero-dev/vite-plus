@@ -1,4 +1,4 @@
-> vp outdated -- -h # should show yarn upgrade-interactive help
+> vite outdated -- -h # should show yarn upgrade-interactive help
 Note: yarn@2+ uses 'yarn upgrade-interactive' for checking outdated packages
 Open the upgrade interface
 

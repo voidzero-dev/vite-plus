@@ -1,4 +1,4 @@
-> vp migration # migration should rewrite imports to vite-plus
+> vite migration # migration should rewrite imports to vite-plus
 ┌  Vite+ Migration
 │
 ●  Using default package manager: pnpm
@@ -61,7 +61,7 @@ export default defineConfig({
   "packageManager": "pnpm@<semver>"
 }
 
-> vp migration # run migration again to check if it is idempotent
+> vite migration # run migration again to check if it is idempotent
 ┌  Vite+ Migration
 │
 ●  pnpm@<semver> installing...

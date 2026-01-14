@@ -3,11 +3,11 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp install # should install packages first",
-    "vp pm list --json # should list current workspace root dependencies",
-    "vp pm list --recursive --json # should list all packages in workspace (uses --workspaces)",
-    "vp pm list --filter app --json # should list specific workspace package (uses --workspace app)",
-    "vp pm list --filter app --filter @vite-plus-test/utils --json # should list multiple workspace packages",
-    "vp pm list --recursive --depth 0 --json # should list workspace packages with depth limit"
+    "vite install # should install packages first",
+    "vite pm list --json # should list current workspace root dependencies",
+    "vite pm list --recursive --json # should list all packages in workspace (uses --workspaces)",
+    "vite pm list --filter app --json # should list specific workspace package (uses --workspace app)",
+    "vite pm list --filter app --filter @vite-plus-test/utils --json # should list multiple workspace packages",
+    "vite pm list --recursive --depth 0 --json # should list workspace packages with depth limit"
   ]
 }

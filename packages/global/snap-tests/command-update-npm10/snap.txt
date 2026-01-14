@@ -1,4 +1,4 @@
-> vp update testnpm2 -- --no-audit && cat package.json # should update package within semver range
+> vite update testnpm2 -- --no-audit && cat package.json # should update package within semver range
 
 added 3 packages in <variable>ms
 {
@@ -16,7 +16,7 @@ added 3 packages in <variable>ms
   }
 }
 
-> vp up testnpm2 --latest -- --no-audit && cat package.json # should to absolute latest version
+> vite up testnpm2 --latest -- --no-audit && cat package.json # should to absolute latest version
 Warning: npm doesn't support --latest flag. Updating within semver range only.
 
 up to date in <variable>ms
@@ -35,7 +35,7 @@ up to date in <variable>ms
   }
 }
 
-> vp update -D -- --no-audit && cat package.json # should update only dev dependencies
+> vite update -D -- --no-audit && cat package.json # should update only dev dependencies
 
 up to date in <variable>ms
 {
@@ -53,7 +53,7 @@ up to date in <variable>ms
   }
 }
 
-> vp update -P --no-save -- --no-audit && cat package.json # should update only dependencies and optionalDependencies without saving
+> vite update -P --no-save -- --no-audit && cat package.json # should update only dependencies and optionalDependencies without saving
 
 up to date in <variable>ms
 {
@@ -71,7 +71,7 @@ up to date in <variable>ms
   }
 }
 
-> vp rm testnpm2 && vp add testnpm2@1.0.0 -O -- --no-audit && vp update --no-optional --latest -- --no-audit && cat package.json # should skip optional dependencies
+> vite rm testnpm2 && vite add testnpm2@1.0.0 -O -- --no-audit && vite update --no-optional --latest -- --no-audit && cat package.json # should skip optional dependencies
 
 removed 1 package in <variable>ms
 
@@ -96,7 +96,7 @@ changed 1 package in <variable>ms
   }
 }
 
-> vp update -- --no-audit && cat package.json # should update all packages but won't change the package.json
+> vite update -- --no-audit && cat package.json # should update all packages but won't change the package.json
 
 added 2 packages in <variable>ms
 {

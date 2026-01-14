@@ -4,11 +4,11 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp dedupe --help # should show help",
-    "vp dedupe && cat package.json # should dedupe dependencies",
-    "vp dedupe --check && cat package.json # should check if deduplication would make changes",
-    "vp ddp -- --loglevel=warn && cat package.json # support pass through arguments",
-    "json-edit package.json '_.dependencies = {}' && cat package.json && vp dedupe --check # should check fails because no dependencies",
-    "vp dedupe && cat package.json && vp dedupe --check # should dedupe fix the change by removing the dependencies"
+    "vite dedupe --help # should show help",
+    "vite dedupe && cat package.json # should dedupe dependencies",
+    "vite dedupe --check && cat package.json # should check if deduplication would make changes",
+    "vite ddp -- --loglevel=warn && cat package.json # support pass through arguments",
+    "json-edit package.json '_.dependencies = {}' && cat package.json && vite dedupe --check # should check fails because no dependencies",
+    "vite dedupe && cat package.json && vite dedupe --check # should dedupe fix the change by removing the dependencies"
   ]
 }

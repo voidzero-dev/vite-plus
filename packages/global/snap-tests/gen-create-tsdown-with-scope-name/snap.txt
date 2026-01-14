@@ -1,4 +1,4 @@
-> vp gen vite:library --no-interactive --directory @my-scope/my-library # create vite library with scope name
+> vite gen vite:library --no-interactive --directory @my-scope/my-library # create vite library with scope name
 > ls my-library/package.json # check package.json
 my-library/package.json
 

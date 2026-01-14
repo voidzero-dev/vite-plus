@@ -1,7 +1,7 @@
-> vp pm owner --help # should show help
+> vite pm owner --help # should show help
 Manage package owners
 
-Usage: vp pm owner <COMMAND>
+Usage: vite pm owner <COMMAND>
 
 Commands:
   list  List package owners
@@ -11,5 +11,5 @@ Commands:
 Options:
   -h, --help  Print help
 
-> vp pm owner list testnpm2 # should list package owners (uses npm owner)
+> vite pm owner list testnpm2 # should list package owners (uses npm owner)
 fengmk2 <fengmk2@gmail.com>

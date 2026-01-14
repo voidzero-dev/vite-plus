@@ -4,7 +4,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp dlx --help # should show help message",
-    "vp dlx -s cowsay hello # should fallback to npx for yarn@1"
+    "vite dlx --help # should show help message",
+    "vite dlx -s cowsay hello # should fallback to npx for yarn@1"
   ]
 }

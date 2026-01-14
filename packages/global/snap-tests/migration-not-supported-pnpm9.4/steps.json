@@ -3,7 +3,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp migration # migration should fail because pnpm version is not supported",
+    "vite migration # migration should fail because pnpm version is not supported",
     "cat package.json # check package.json is not updated"
   ]
 }

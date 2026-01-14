@@ -4,10 +4,10 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp install",
-    "vp outdated testnpm2 -w # should outdated in workspace root",
-    "vp outdated testnpm2 --filter app # should outdated in specific package",
-    "vp outdated --filter \"*\" --format json # should outdated in all packages",
-    "vp outdated -r # should outdated recursively"
+    "vite install",
+    "vite outdated testnpm2 -w # should outdated in workspace root",
+    "vite outdated testnpm2 --filter app # should outdated in specific package",
+    "vite outdated --filter \"*\" --format json # should outdated in all packages",
+    "vite outdated -r # should outdated recursively"
   ]
 }

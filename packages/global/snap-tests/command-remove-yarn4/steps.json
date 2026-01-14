@@ -4,10 +4,10 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp remove testnpm2 -D && cat package.json # should error when remove not exists package",
-    "vp add testnpm2 && vp add -D test-vite-plus-install && vp add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies",
-    "vp remove testnpm2 test-vite-plus-install && cat package.json # should remove packages from dependencies",
-    "vp remove -D test-vite-plus-package-optional && cat package.json # support ignore -O flag and remove package from optional dependencies",
-    "vp remove -g testnpm2 -- --dry-run && cat package.json # support remove global package with dry-run"
+    "vite remove testnpm2 -D && cat package.json # should error when remove not exists package",
+    "vite add testnpm2 && vite add -D test-vite-plus-install && vite add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies",
+    "vite remove testnpm2 test-vite-plus-install && cat package.json # should remove packages from dependencies",
+    "vite remove -D test-vite-plus-package-optional && cat package.json # support ignore -O flag and remove package from optional dependencies",
+    "vite remove -g testnpm2 -- --dry-run && cat package.json # support remove global package with dry-run"
   ]
 }

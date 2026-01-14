@@ -1,7 +1,7 @@
-> vp unlink -h # should show help message
+> vite unlink -h # should show help message
 Unlink packages
 
-Usage: vp unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
+Usage: vite unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
 
 Arguments:
   [PACKAGE|DIR]  Package name to unlink If empty, unlinks current package globally
@@ -12,7 +12,7 @@ Options:
   -h, --help       Print help
 
 > mkdir -p ../unlink-test-lib && echo '{"name": "unlink-test-lib", "version": "1.0.0"}' > ../unlink-test-lib/package.json # create test library
-> vp link ../unlink-test-lib && cat package.json # link the library first
+> vite link ../unlink-test-lib && cat package.json # link the library first
 
 dependencies:
 + unlink-test-lib <semver> <- ../unlink-test-lib
@@ -26,7 +26,7 @@ dependencies:
   }
 }
 
-> vp unlink unlink-test-lib && cat package.json # should unlink the package
+> vite unlink unlink-test-lib && cat package.json # should unlink the package
 Nothing to unlink
 {
   "name": "command-unlink-pnpm10",
@@ -37,11 +37,11 @@ Nothing to unlink
   }
 }
 
-> vp link ../unlink-test-lib # link again
+> vite link ../unlink-test-lib # link again
 Lockfile is up to date, resolution step is skipped
 
 
-> vp unlink && cat package.json # should unlink all packages
+> vite unlink && cat package.json # should unlink all packages
 Nothing to unlink
 {
   "name": "command-unlink-pnpm10",

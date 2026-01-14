@@ -4,11 +4,11 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp update testnpm2 -- --no-audit && cat package.json # should update package within semver range",
-    "vp up testnpm2 --latest -- --no-audit && cat package.json # should to absolute latest version",
-    "vp update -D -- --no-audit && cat package.json # should update only dev dependencies",
-    "vp update -P --no-save -- --no-audit && cat package.json # should update only dependencies and optionalDependencies without saving",
-    "vp rm testnpm2 && vp add testnpm2@1.0.0 -O -- --no-audit && vp update --no-optional --latest -- --no-audit && cat package.json # should skip optional dependencies",
-    "vp update -- --no-audit && cat package.json # should update all packages but won't change the package.json"
+    "vite update testnpm2 -- --no-audit && cat package.json # should update package within semver range",
+    "vite up testnpm2 --latest -- --no-audit && cat package.json # should to absolute latest version",
+    "vite update -D -- --no-audit && cat package.json # should update only dev dependencies",
+    "vite update -P --no-save -- --no-audit && cat package.json # should update only dependencies and optionalDependencies without saving",
+    "vite rm testnpm2 && vite add testnpm2@1.0.0 -O -- --no-audit && vite update --no-optional --latest -- --no-audit && cat package.json # should skip optional dependencies",
+    "vite update -- --no-audit && cat package.json # should update all packages but won't change the package.json"
   ]
 }

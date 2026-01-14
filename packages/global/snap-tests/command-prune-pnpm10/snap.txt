@@ -1,4 +1,4 @@
-> vp install # should install packages first
+> vite install # should install packages first
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -14,10 +14,10 @@ devDependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
-> vp pm prune --help # should show help
+> vite pm prune --help # should show help
 Remove unnecessary packages
 
-Usage: vp pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+Usage: vite pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
@@ -27,7 +27,7 @@ Options:
       --no-optional  Remove optional dependencies
   -h, --help         Print help
 
-> vp pm prune && cat package.json # should prune extraneous dependencies
+> vite pm prune && cat package.json # should prune extraneous dependencies
 Lockfile is up to date, resolution step is skipped
 Already up to date
 
@@ -46,7 +46,7 @@ Already up to date
   }
 }
 
-> vp pm prune --prod && cat package.json # should prune dev dependencies
+> vite pm prune --prod && cat package.json # should prune dev dependencies
 Lockfile is up to date, resolution step is skipped
 Packages: -1
 -
@@ -69,7 +69,7 @@ devDependencies:
   }
 }
 
-> vp pm prune --no-optional && cat package.json # should prune optional dependencies
+> vite pm prune --no-optional && cat package.json # should prune optional dependencies
 Lockfile is up to date, resolution step is skipped
 Packages: -1
 -
@@ -96,7 +96,7 @@ devDependencies:
   }
 }
 
-> vp pm prune --prod --no-optional && cat package.json # should prune both dev and optional dependencies
+> vite pm prune --prod --no-optional && cat package.json # should prune both dev and optional dependencies
 Lockfile is up to date, resolution step is skipped
 Packages: -1
 -
@@ -121,7 +121,7 @@ devDependencies:
   }
 }
 
-> vp pm prune -- --loglevel=warn && cat package.json # should support pass through arguments
+> vite pm prune -- --loglevel=warn && cat package.json # should support pass through arguments
 {
   "name": "command-prune-pnpm10",
   "version": "1.0.0",

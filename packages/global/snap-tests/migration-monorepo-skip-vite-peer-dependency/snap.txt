@@ -1,4 +1,4 @@
-> vp migration # migration should check each package's peerDependencies
+> vite migration # migration should check each package's peerDependencies
 ┌  Vite+ Migration
 │
 ●  pnpm@latest installing...

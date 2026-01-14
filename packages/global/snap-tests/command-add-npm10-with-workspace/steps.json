@@ -4,12 +4,12 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp add testnpm2 -D -w -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add package to workspace root",
-    "vp add @vite-plus-test/utils --workspace -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to workspace root",
-    "vp add testnpm2 test-vite-plus-install@1.0.0 --filter app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app",
-    "vp add @vite-plus-test/utils --workspace --filter app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app",
-    "vp add testnpm2 test-vite-plus-install@1.0.0 --filter \"*\" -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages except workspace root",
-    "vp add -E testnpm2 test-vite-plus-install@1.0.0 --filter \"*\" --workspace-root -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages include workspace root",
-    "vp install test-vite-plus-package@1.0.0 --filter \"*\" --workspace-root -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should install packages alias for add command"
+    "vite add testnpm2 -D -w -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add package to workspace root",
+    "vite add @vite-plus-test/utils --workspace -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to workspace root",
+    "vite add testnpm2 test-vite-plus-install@1.0.0 --filter app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app",
+    "vite add @vite-plus-test/utils --workspace --filter app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app",
+    "vite add testnpm2 test-vite-plus-install@1.0.0 --filter \"*\" -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages except workspace root",
+    "vite add -E testnpm2 test-vite-plus-install@1.0.0 --filter \"*\" --workspace-root -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages include workspace root",
+    "vite install test-vite-plus-package@1.0.0 --filter \"*\" --workspace-root -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should install packages alias for add command"
   ]
 }

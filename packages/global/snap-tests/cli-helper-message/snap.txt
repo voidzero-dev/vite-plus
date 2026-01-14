@@ -1,7 +1,7 @@
-> vp -h # show help message
+> vite -h # show help message
 vite+/<semver>
 
-Usage: vp <COMMAND>
+Usage: vite <COMMAND>
 
 Commands:
   install   Install all dependencies, or add packages if package names are provided
@@ -31,15 +31,15 @@ Options:
   -h, --help     Print help
   -V, --version  Print version
 
-> vp -V # show version
+> vite -V # show version
 Vite+ Version:
 - Local: Not found
 - Global: v<semver>
 
-> vp install -h # show install help message
+> vite install -h # show install help message
 Install all dependencies, or add packages if package names are provided
 
-Usage: vp install [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+Usage: vite install [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   [PACKAGES]...           Packages to add (if provided, acts as `vite add`)
@@ -70,10 +70,10 @@ Options:
   -g, --global              Install globally (only when adding packages)
   -h, --help                Print help
 
-> vp add -h # show add help message
+> vite add -h # show add help message
 Add packages to dependencies
 
-Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vite add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   <PACKAGES>...           Packages to add
@@ -107,10 +107,10 @@ Options:
   -h, --help
           Print help
 
-> vp remove -h # show remove help message
+> vite remove -h # show remove help message
 Remove packages from dependencies
 
-Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vite remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   <PACKAGES>...           Packages to remove
@@ -126,10 +126,10 @@ Options:
   -g, --global            Remove global packages
   -h, --help              Print help
 
-> vp update -h # show update help message
+> vite update -h # show update help message
 Update packages to their latest versions
 
-Usage: vp update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+Usage: vite update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   [PACKAGES]...           Packages to update (optional - updates all if omitted)
@@ -149,10 +149,10 @@ Options:
       --workspace         Only update if package exists in workspace (pnpm-specific)
   -h, --help              Print help
 
-> vp link -h # show link help message
+> vite link -h # show link help message
 Link packages for local development
 
-Usage: vp link [PACKAGE|DIR] [ARGS]...
+Usage: vite link [PACKAGE|DIR] [ARGS]...
 
 Arguments:
   [PACKAGE|DIR]  Package name or directory to link If empty, registers current package globally
@@ -161,10 +161,10 @@ Arguments:
 Options:
   -h, --help  Print help
 
-> vp unlink -h # show unlink help message
+> vite unlink -h # show unlink help message
 Unlink packages
 
-Usage: vp unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
+Usage: vite unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
 
 Arguments:
   [PACKAGE|DIR]  Package name to unlink If empty, unlinks current package globally
@@ -174,10 +174,10 @@ Options:
   -r, --recursive  Unlink in every workspace package (pnpm/yarn@2+-specific)
   -h, --help       Print help
 
-> vp dedupe -h # show dedupe help message
+> vite dedupe -h # show dedupe help message
 Deduplicate dependencies by removing older versions
 
-Usage: vp dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+Usage: vite dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
@@ -186,10 +186,10 @@ Options:
       --check  Check if deduplication would make changes
   -h, --help   Print help
 
-> vp outdated -h # show outdated help message
+> vite outdated -h # show outdated help message
 Check for outdated packages
 
-Usage: vp outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+Usage: vite outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   [PACKAGES]...           Package name(s) to check (supports glob patterns in pnpm)
@@ -209,10 +209,10 @@ Options:
   -g, --global            Check globally installed packages
   -h, --help              Print help
 
-> vp why -h # show why help message
+> vite why -h # show why help message
 Show why a package is installed
 
-Usage: vp why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vite why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   <PACKAGES>...           Package(s) to check
@@ -234,10 +234,10 @@ Options:
       --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs (pnpm-specific)
   -h, --help                   Print help
 
-> vp pm -h # show pm help message
+> vite pm -h # show pm help message
 Package manager utilities
 
-Usage: vp pm <COMMAND>
+Usage: vite pm <COMMAND>
 
 Commands:
   prune    Remove unnecessary packages

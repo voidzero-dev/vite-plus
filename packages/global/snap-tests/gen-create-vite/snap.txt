@@ -1,10 +1,10 @@
-> vp gen vite:application --no-interactive # create vite app with default values
+> vite gen vite:application --no-interactive # create vite app with default values
 > ls vite-plus-application/package.json # check package.json
 vite-plus-application/package.json
 
 > cat vite-plus-application/.npmrc # check .npmrc
 @voidzero-dev:registry=https://npm.pkg.github.com/
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-> vp gen vite:application --no-interactive --directory my-react-ts -- --template react-ts # create vite app with react-ts template
+> vite gen vite:application --no-interactive --directory my-react-ts -- --template react-ts # create vite app with react-ts template
 > ls my-react-ts/package.json # check package.json
 my-react-ts/package.json

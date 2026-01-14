@@ -4,10 +4,10 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp pm pack --json # should pack current workspace root",
-    "vp pm pack --recursive --json && rm -rf *.tgz # should pack all packages in workspace (uses --workspaces)",
-    "vp pm pack --filter app --json && rm -rf *.tgz # should pack specific package (uses --workspace app)",
-    "vp pm pack --filter app --filter @vite-plus-test/utils --json && rm -rf *.tgz # should pack multiple packages",
-    "vp pm pack --pack-destination ./dist --json && rm -rf ./dist # should pack with destination"
+    "vite pm pack --json # should pack current workspace root",
+    "vite pm pack --recursive --json && rm -rf *.tgz # should pack all packages in workspace (uses --workspaces)",
+    "vite pm pack --filter app --json && rm -rf *.tgz # should pack specific package (uses --workspace app)",
+    "vite pm pack --filter app --filter @vite-plus-test/utils --json && rm -rf *.tgz # should pack multiple packages",
+    "vite pm pack --pack-destination ./dist --json && rm -rf ./dist # should pack with destination"
   ]
 }

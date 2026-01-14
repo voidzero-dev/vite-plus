@@ -3,7 +3,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp pm owner --help # should show help",
-    "vp pm owner list testnpm2 # should list package owners (uses npm owner)"
+    "vite pm owner --help # should show help",
+    "vite pm owner list testnpm2 # should list package owners (uses npm owner)"
   ]
 }

@@ -3,8 +3,8 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp pm view testnpm2 dist.tarball # should view testnpm2 package information",
-    "vp pm info testnpm2 dist.tarball # should info alias to view",
-    "vp pm show testnpm2 dist.tarball # should show alias to view"
+    "vite pm view testnpm2 dist.tarball # should view testnpm2 package information",
+    "vite pm info testnpm2 dist.tarball # should info alias to view",
+    "vite pm show testnpm2 dist.tarball # should show alias to view"
   ]
 }

@@ -1,4 +1,4 @@
-> vp install
+> vite install
 Scope: all <variable> workspace projects
 Packages: +<variable>
 +<repeat>
@@ -9,7 +9,7 @@ dependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
-> vp why testnpm2 -w # should check why in workspace root
+> vite why testnpm2 -w # should check why in workspace root
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10-with-workspace@<semver> <cwd>
@@ -17,7 +17,7 @@ command-why-pnpm10-with-workspace@<semver> <cwd>
 dependencies:
 testnpm2 <semver>
 
-> vp why testnpm2 --filter app # should check why in specific package
+> vite why testnpm2 --filter app # should check why in specific package
 Legend: production dependency, optional only, dev only
 
 app <cwd>/packages/app
@@ -27,7 +27,7 @@ dependencies:
 └── testnpm2 <semver>
 testnpm2 <semver>
 
-> vp why test-vite-plus-package -D --filter app # should check why dev dependencies in app
+> vite why test-vite-plus-package -D --filter app # should check why dev dependencies in app
 Legend: production dependency, optional only, dev only
 
 app <cwd>/packages/app
@@ -35,7 +35,7 @@ app <cwd>/packages/app
 devDependencies:
 test-vite-plus-package <semver>
 
-> vp why testnpm2 --filter "*" # should check why in all packages
+> vite why testnpm2 --filter "*" # should check why in all packages
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10-with-workspace@<semver> <cwd>
@@ -55,7 +55,7 @@ testnpm2 <semver>
 dependencies:
 testnpm2 <semver>
 
-> vp why testnpm2 -r # should check why recursively
+> vite why testnpm2 -r # should check why recursively
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10-with-workspace@<semver> <cwd>
@@ -75,7 +75,7 @@ testnpm2 <semver>
 dependencies:
 testnpm2 <semver>
 
-> vp why testnpm2 --filter app --json # should support json output with filter
+> vite why testnpm2 --filter app --json # should support json output with filter
 [
   {
     "name": "app",
@@ -105,7 +105,7 @@ testnpm2 <semver>
   }
 ]
 
-> vp why test-vite-plus-install --filter app --depth 1 # should support depth limiting with filter
+> vite why test-vite-plus-install --filter app --depth 1 # should support depth limiting with filter
 Legend: production dependency, optional only, dev only
 
 app <cwd>/packages/app

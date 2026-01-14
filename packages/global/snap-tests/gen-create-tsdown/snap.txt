@@ -1,10 +1,10 @@
-> vp gen vite:library # create vite library with default values
+> vite gen vite:library # create vite library with default values
 > ls vite-plus-library/package.json # check package.json
 vite-plus-library/package.json
 
 > cat vite-plus-library/.npmrc # check .npmrc
 @voidzero-dev:registry=https://npm.pkg.github.com/
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-> vp gen vite:library --directory my-vue -- --template vue # create vite library with custom template
+> vite gen vite:library --directory my-vue -- --template vue # create vite library with custom template
 > ls my-vue/package.json # check package.json
 my-vue/package.json

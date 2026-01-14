@@ -1,4 +1,4 @@
-> vp migration # migration should rewrite imports to vite-plus
+> vite migration # migration should rewrite imports to vite-plus
 ┌  Vite+ Migration
 │
 ●  Using default package manager: pnpm

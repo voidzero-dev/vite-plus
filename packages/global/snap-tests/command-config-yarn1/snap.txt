@@ -1,14 +1,14 @@
-> vp pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope (shows warning for yarn@1)
+> vite pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope (shows warning for yarn@1)
 Warning: yarn@1 does not support --location, ignoring flag
 yarn config v<semver>
 success Set "vite-plus-pm-config-test-key" to "test-value".
 Done in <variable>ms.
 
-> vp pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope (shows warning for yarn@1)
+> vite pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope (shows warning for yarn@1)
 Warning: yarn@1 does not support --location, ignoring flag
 test-value
 
-> vp pm config delete vite-plus-pm-config-test-key --location project # should delete config key from project scope (shows warning for yarn@1)
+> vite pm config delete vite-plus-pm-config-test-key --location project # should delete config key from project scope (shows warning for yarn@1)
 Warning: yarn@1 does not support --location, ignoring flag
 yarn config v<semver>
 success Deleted "vite-plus-pm-config-test-key".

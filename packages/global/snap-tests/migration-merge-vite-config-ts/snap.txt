@@ -1,4 +1,4 @@
-> vp migration # migration should merge vite.config.ts and remove oxlintrc and oxfmtrc
+> vite migration # migration should merge vite.config.ts and remove oxlintrc and oxfmtrc
 ┌  Vite+ Migration
 │
 ●  Using default package manager: pnpm

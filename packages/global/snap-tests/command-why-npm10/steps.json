@@ -4,16 +4,16 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp install # should install packages first",
-    "vp why testnpm2 # should show why package is installed (uses npm explain)",
-    "vp explain testnpm2 # should work with explain alias",
-    "vp why test-vite-plus-package # should show why dev package is installed",
-    "vp why testnpm2 --json # should support json output",
-    "vp why testnpm2 test-vite-plus-package # should support multiple packages",
-    "vp why testnpm2 --long # should warn that --long not supported by npm",
-    "vp why testnpm2 --parseable # should warn that --parseable not supported by npm",
-    "vp why testnpm2 -P # should warn that --prod not supported by npm",
-    "vp why testnpm2 --find-by customFinder # should warn that --find-by not supported by npm",
-    "vp why testnpm2 -- --omit=dev # should support pass through arguments"
+    "vite install # should install packages first",
+    "vite why testnpm2 # should show why package is installed (uses npm explain)",
+    "vite explain testnpm2 # should work with explain alias",
+    "vite why test-vite-plus-package # should show why dev package is installed",
+    "vite why testnpm2 --json # should support json output",
+    "vite why testnpm2 test-vite-plus-package # should support multiple packages",
+    "vite why testnpm2 --long # should warn that --long not supported by npm",
+    "vite why testnpm2 --parseable # should warn that --parseable not supported by npm",
+    "vite why testnpm2 -P # should warn that --prod not supported by npm",
+    "vite why testnpm2 --find-by customFinder # should warn that --find-by not supported by npm",
+    "vite why testnpm2 -- --omit=dev # should support pass through arguments"
   ]
 }

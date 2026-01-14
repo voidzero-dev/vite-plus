@@ -1,4 +1,4 @@
-> vp add testnpm2 -D && vp add testnpm2 -D --filter=* --filter=@vite-plus-test/utils && vp add test-vite-plus-install --filter=* --filter=@vite-plus-test/utils && vp add test-vite-plus-package-optional -O --filter=* --filter=@vite-plus-test/utils && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # prepare packages
+> vite add testnpm2 -D && vite add testnpm2 -D --filter=* --filter=@vite-plus-test/utils && vite add test-vite-plus-install --filter=* --filter=@vite-plus-test/utils && vite add test-vite-plus-package-optional -O --filter=* --filter=@vite-plus-test/utils && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # prepare packages
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + testnpm2@npm:1.0.1
@@ -164,7 +164,7 @@ Done in <variable>ms <variable>ms
   }
 }
 
-> vp remove testnpm2 -r && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package from all workspaces and root
+> vite remove testnpm2 -r && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package from all workspaces and root
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ - testnpm2@npm:1.0.1
@@ -217,7 +217,7 @@ Done in <variable>ms <variable>ms
   }
 }
 
-> vp remove -O test-vite-plus-package-optional -r && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove optional package from all workspaces
+> vite remove -O test-vite-plus-package-optional -r && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove optional package from all workspaces
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ - test-vite-plus-package-optional@npm:1.0.0
@@ -258,7 +258,7 @@ Done in <variable>ms <variable>ms
   }
 }
 
-> vp remove test-vite-plus-install --filter=app && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package by filter=app
+> vite remove test-vite-plus-install --filter=app && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package by filter=app
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -296,7 +296,7 @@ Done in <variable>ms <variable>ms
   }
 }
 
-> vp add test-vite-plus-install --filter=app && vp remove test-vite-plus-install --filter=* && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package by filter=*
+> vite add test-vite-plus-install --filter=app && vite remove test-vite-plus-install --filter=* && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package by filter=*
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed

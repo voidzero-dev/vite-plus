@@ -2,7 +2,7 @@
   
   "commands": [
     {
-      "command": "vp gen vite:monorepo --no-interactive # create monorepo with default values",
+      "command": "vite gen vite:monorepo --no-interactive # create monorepo with default values",
       "ignoreOutput": true
     },
     "ls vite-plus-monorepo | LC_ALL=C sort # check files created",
@@ -13,24 +13,24 @@
     "ls vite-plus-monorepo/apps # check apps directory created",
     "ls vite-plus-monorepo/apps/website/package.json # check website package.json",
     {
-      "command": "cd vite-plus-monorepo && vp gen --no-interactive vite:application # create application in non-interactive mode",
+      "command": "cd vite-plus-monorepo && vite gen --no-interactive vite:application # create application in non-interactive mode",
       "ignoreOutput": true
     },
     "ls vite-plus-monorepo/apps # check apps directory created",
     "ls vite-plus-monorepo/apps/vite-plus-application/package.json # check vite-plus-application package.json",
     {
-      "command": "cd vite-plus-monorepo && vp gen --no-interactive vite:library # create library in non-interactive mode",
+      "command": "cd vite-plus-monorepo && vite gen --no-interactive vite:library # create library in non-interactive mode",
       "ignoreOutput": true
     },
     "ls vite-plus-monorepo/packages/vite-plus-library/package.json # check vite-plus-library package.json",
     {
-      "command": "cd vite-plus-monorepo && vp gen --no-interactive vite:generator # create generator in non-interactive mode",
+      "command": "cd vite-plus-monorepo && vite gen --no-interactive vite:generator # create generator in non-interactive mode",
       "ignoreOutput": true
     },
     "ls vite-plus-monorepo/tools # check tools directory created",
     "cat vite-plus-monorepo/tools/vite-plus-generator/package.json # check vite-plus-generator package.json",
     {
-      "command": "vp gen vite:monorepo --no-interactive --directory my-vite-plus-monorepo # create monorepo with custom directory",
+      "command": "vite gen vite:monorepo --no-interactive --directory my-vite-plus-monorepo # create monorepo with custom directory",
       "ignoreOutput": true
     },
     "ls my-vite-plus-monorepo | LC_ALL=C sort # check files created",

@@ -1,4 +1,4 @@
-> vp migration # migration should merge pnpm overrides with dependency selector
+> vite migration # migration should merge pnpm overrides with dependency selector
 ┌  Vite+ Migration
 │
 ●  pnpm@<semver> installing...

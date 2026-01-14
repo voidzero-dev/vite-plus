@@ -1,4 +1,4 @@
-> vp fmt && cat package.json # should fmt in workspace root and auto add vite-plus to devDependencies
+> vite fmt && cat package.json # should fmt in workspace root and auto add vite-plus to devDependencies
 ┌  Vite+ Local CLI "@voidzero-dev/vite-plus" not found
 │
 ●  Running "vite add -D @voidzero-dev/vite-plus -w"...
@@ -20,7 +20,7 @@
   }
 }
 
-> cd packages/utils && vp fmt && cat package.json # should fmt in specific package and not add vite-plus to devDependencies
+> cd packages/utils && vite fmt && cat package.json # should fmt in specific package and not add vite-plus to devDependencies
 
 {
   "name": "@vite-plus-test/utils",

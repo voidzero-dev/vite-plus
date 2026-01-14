@@ -1,7 +1,7 @@
-> vp why --help # should show help
+> vite why --help # should show help
 Show why a package is installed
 
-Usage: vp why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vite why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   <PACKAGES>...           Package(s) to check
@@ -23,7 +23,7 @@ Options:
       --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs (pnpm-specific)
   -h, --help                   Print help
 
-> vp install # should install packages first
+> vite install # should install packages first
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -39,7 +39,7 @@ devDependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
-> vp why testnpm2 # should show why package is installed
+> vite why testnpm2 # should show why package is installed
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -47,7 +47,7 @@ command-why-pnpm10@<semver> <cwd>
 dependencies:
 testnpm2 <semver>
 
-> vp explain testnpm2 # should work with explain alias
+> vite explain testnpm2 # should work with explain alias
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -55,7 +55,7 @@ command-why-pnpm10@<semver> <cwd>
 dependencies:
 testnpm2 <semver>
 
-> vp why test-vite-plus-package # should show why dev package is installed
+> vite why test-vite-plus-package # should show why dev package is installed
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -63,7 +63,7 @@ command-why-pnpm10@<semver> <cwd>
 devDependencies:
 test-vite-plus-package <semver>
 
-> vp why testnpm2 test-vite-plus-package # should support multiple packages
+> vite why testnpm2 test-vite-plus-package # should support multiple packages
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -74,7 +74,7 @@ testnpm2 <semver>
 devDependencies:
 test-vite-plus-package <semver>
 
-> vp why testnpm2 --json # should support json output
+> vite why testnpm2 --json # should support json output
 [
   {
     "name": "command-why-pnpm10",
@@ -92,7 +92,7 @@ test-vite-plus-package <semver>
   }
 ]
 
-> vp why testnpm2 --long # should support long output
+> vite why testnpm2 --long # should support long output
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -101,11 +101,11 @@ dependencies:
 testnpm2 <semver>
   <cwd>/node_modules/.pnpm/testnpm2@<semver>/node_modules/testnpm2
 
-> vp why testnpm2 --parseable # should support parseable output
+> vite why testnpm2 --parseable # should support parseable output
 <cwd>
 <cwd>/node_modules/.pnpm/testnpm2@<semver>/node_modules/testnpm2
 
-> vp why testnpm2 -P # should support prod dependencies only
+> vite why testnpm2 -P # should support prod dependencies only
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -113,7 +113,7 @@ command-why-pnpm10@<semver> <cwd>
 dependencies:
 testnpm2 <semver>
 
-> vp why test-vite-plus-package -D # should support dev dependencies only
+> vite why test-vite-plus-package -D # should support dev dependencies only
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -121,7 +121,7 @@ command-why-pnpm10@<semver> <cwd>
 devDependencies:
 test-vite-plus-package <semver>
 
-> vp why testnpm2 --depth 1 # should support depth limiting
+> vite why testnpm2 --depth 1 # should support depth limiting
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>
@@ -129,11 +129,11 @@ command-why-pnpm10@<semver> <cwd>
 dependencies:
 testnpm2 <semver>
 
-> vp why test-vite-plus-package-optional --no-optional # should exclude optional dependencies
-[1]> vp why testnpm2 --find-by customFinder # should support find-by option (pnpm-specific)
+> vite why test-vite-plus-package-optional --no-optional # should exclude optional dependencies
+[1]> vite why testnpm2 --find-by customFinder # should support find-by option (pnpm-specific)
  ERR_PNPM_FINDER_NOT_FOUND  No finder with name customFinder is found
 
-> vp why testnpm2 -- --reporter=silent # should support pass through arguments
+> vite why testnpm2 -- --reporter=silent # should support pass through arguments
 Legend: production dependency, optional only, dev only
 
 command-why-pnpm10@<semver> <cwd>

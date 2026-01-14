@@ -1,6 +1,6 @@
 {
   "commands": [
-    "vp migration foo # migration work with subpath",
+    "vite migration foo # migration work with subpath",
     "cat foo/package.json # check package.json"
   ]
 }

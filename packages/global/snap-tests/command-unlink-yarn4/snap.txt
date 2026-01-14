@@ -1,5 +1,5 @@
 > mkdir -p ../unlink-test-lib-yarn && echo '{"name": "unlink-test-lib-yarn", "version": "1.0.0"}' > ../unlink-test-lib-yarn/package.json # create test library
-> vp link ../unlink-test-lib-yarn && cat package.json # link the library first
+> vite link ../unlink-test-lib-yarn && cat package.json # link the library first
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -17,7 +17,7 @@
   }
 }
 
-> vp unlink unlink-test-lib-yarn && cat package.json # should unlink the package
+> vite unlink unlink-test-lib-yarn && cat package.json # should unlink the package
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -32,7 +32,7 @@
   "packageManager": "yarn@<semver>"
 }
 
-> vp link ../unlink-test-lib-yarn && cat package.json # link again
+> vite link ../unlink-test-lib-yarn && cat package.json # link again
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -50,7 +50,7 @@
   }
 }
 
-> vp unlink --recursive && cat package.json # should unlink all with --all flag
+> vite unlink --recursive && cat package.json # should unlink all with --all flag
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -65,7 +65,7 @@
   "packageManager": "yarn@<semver>"
 }
 
-> vp unlink -r && cat package.json # should work with -r short form
+> vite unlink -r && cat package.json # should work with -r short form
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed

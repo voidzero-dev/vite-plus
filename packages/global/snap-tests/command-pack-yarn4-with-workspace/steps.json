@@ -4,12 +4,12 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp install -- --mode=update-lockfile # should install packages first",
-    "vp pm pack # should pack current workspace root",
-    "vp pm pack --recursive # should pack all packages in workspace (uses workspaces foreach --all pack)",
-    "vp pm pack --filter app # should pack specific package (uses workspaces foreach --all --include app pack)",
-    "vp pm pack --filter app --filter @vite-plus-test/utils # should pack multiple packages",
-    "vp pm pack --out ./dist/package.tgz # should pack with output file",
-    "vp pm pack --json # should pack with json output"
+    "vite install -- --mode=update-lockfile # should install packages first",
+    "vite pm pack # should pack current workspace root",
+    "vite pm pack --recursive # should pack all packages in workspace (uses workspaces foreach --all pack)",
+    "vite pm pack --filter app # should pack specific package (uses workspaces foreach --all --include app pack)",
+    "vite pm pack --filter app --filter @vite-plus-test/utils # should pack multiple packages",
+    "vite pm pack --out ./dist/package.tgz # should pack with output file",
+    "vite pm pack --json # should pack with json output"
   ]
 }

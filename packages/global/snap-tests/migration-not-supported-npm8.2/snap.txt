@@ -1,4 +1,4 @@
-[1]> vp migration # migration should fail because npm version is not supported
+[1]> vite migration # migration should fail because npm version is not supported
 ┌  Vite+ Migration
 │
 ●  npm@<semver> installing...

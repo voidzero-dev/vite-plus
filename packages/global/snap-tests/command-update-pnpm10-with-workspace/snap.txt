@@ -1,4 +1,4 @@
-> vp update testnpm2 --latest -w && cat package.json # should update in workspace root
+> vite update testnpm2 --latest -w && cat package.json # should update in workspace root
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 Packages: +<variable>
@@ -13,7 +13,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp update testnpm2 --latest --filter app && cat packages/app/package.json # should update in specific package
+> vite update testnpm2 --latest --filter app && cat packages/app/package.json # should update in specific package
 .                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 .                                        |   +2 +<repeat>
@@ -30,7 +30,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp up -D --filter app && cat packages/app/package.json # should update dev dependencies in app
+> vite up -D --filter app && cat packages/app/package.json # should update dev dependencies in app
 .                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>
@@ -46,7 +46,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp update --latest --filter "*" && cat packages/app/package.json packages/utils/package.json # should update in all packages
+> vite update --latest --filter "*" && cat packages/app/package.json packages/utils/package.json # should update in all packages
 Scope: all <variable> workspace projects
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>
@@ -69,7 +69,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp update -r --no-save && cat package.json packages/app/package.json # should update recursively without saving
+> vite update -r --no-save && cat package.json packages/app/package.json # should update recursively without saving
 Scope: all <variable> workspace projects
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>
@@ -93,7 +93,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp update --workspace --filter app @vite-plus-test/utils && cat packages/app/package.json # should update workspace dependency
+> vite update --workspace --filter app @vite-plus-test/utils && cat packages/app/package.json # should update workspace dependency
 .                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>

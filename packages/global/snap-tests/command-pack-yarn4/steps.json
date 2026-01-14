@@ -4,9 +4,9 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp pm pack # should pack current package",
-    "vp pm pack --out ./dist/package.tgz # should pack with output file",
-    "vp pm pack --json # should pack with json output",
-    "vp pm pack -- --dry-run # should support pass through arguments"
+    "vite pm pack # should pack current package",
+    "vite pm pack --out ./dist/package.tgz # should pack with output file",
+    "vite pm pack --json # should pack with json output",
+    "vite pm pack -- --dry-run # should support pass through arguments"
   ]
 }

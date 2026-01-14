@@ -1,4 +1,4 @@
-> vp pm view testnpm2 # should view testnpm2 package information (uses npm view)
+> vite pm view testnpm2 # should view testnpm2 package information (uses npm view)
 
 testnpm2@<semver> | ISC | deps: none | versions: 2
 
@@ -16,5 +16,5 @@ release-1: <semver>
 
 published over a year ago by fengmk2 <fengmk2@gmail.com>
 
-> vp pm view testnpm2 version # should view testnpm2 version field (uses npm view)
+> vite pm view testnpm2 version # should view testnpm2 version field (uses npm view)
 1.0.1

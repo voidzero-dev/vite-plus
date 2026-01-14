@@ -1,4 +1,4 @@
-> vp install # should install packages first
+> vite install # should install packages first
 Scope: all <variable> workspace projects
 Packages: +<variable>
 +<repeat>
@@ -6,8 +6,8 @@ Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <
 
 Done in <variable>ms using pnpm v<semver>
 
-> vp pm list # should list current workspace root dependencies
-> vp pm list --recursive # should list all packages in workspace recursively
+> vite pm list # should list current workspace root dependencies
+> vite pm list --recursive # should list all packages in workspace recursively
 Legend: production dependency, optional only, dev only
 
 app@<semver> <cwd>/packages/app
@@ -21,7 +21,7 @@ test-vite-plus-package-optional <semver>
 dependencies:
 testnpm2 <semver>
 
-> vp pm list --filter app # should list specific workspace package (uses --filter app list)
+> vite pm list --filter app # should list specific workspace package (uses --filter app list)
 Legend: production dependency, optional only, dev only
 
 app@<semver> <cwd>/packages/app
@@ -30,7 +30,7 @@ dependencies:
 @vite-plus-test/utils link:../utils
 test-vite-plus-package-optional <semver>
 
-> vp pm list --filter app --filter @vite-plus-test/utils # should list multiple workspace packages
+> vite pm list --filter app --filter @vite-plus-test/utils # should list multiple workspace packages
 Legend: production dependency, optional only, dev only
 
 app@<semver> <cwd>/packages/app
@@ -44,7 +44,7 @@ test-vite-plus-package-optional <semver>
 dependencies:
 testnpm2 <semver>
 
-> vp pm list --recursive --json # should list all workspace packages in JSON format
+> vite pm list --recursive --json # should list all workspace packages in JSON format
 [
   {
     "name": "command-list-pnpm10-with-workspace",
@@ -87,7 +87,7 @@ testnpm2 <semver>
   }
 ]
 
-> vp pm list --recursive --depth 0 # should list workspace packages with depth limit
+> vite pm list --recursive --depth 0 # should list workspace packages with depth limit
 Legend: production dependency, optional only, dev only
 
 app@<semver> <cwd>/packages/app
@@ -101,7 +101,7 @@ test-vite-plus-package-optional <semver>
 dependencies:
 testnpm2 <semver>
 
-> vp pm list --recursive --only-projects # should list only workspace projects (pnpm-specific)
+> vite pm list --recursive --only-projects # should list only workspace projects (pnpm-specific)
 Legend: production dependency, optional only, dev only
 
 app@<semver> <cwd>/packages/app
@@ -109,7 +109,7 @@ app@<semver> <cwd>/packages/app
 dependencies:
 @vite-plus-test/utils link:../utils
 
-> vp pm list --recursive --exclude-peers # should exclude peer dependencies in workspace
+> vite pm list --recursive --exclude-peers # should exclude peer dependencies in workspace
 Legend: production dependency, optional only, dev only
 
 app@<semver> <cwd>/packages/app
@@ -123,7 +123,7 @@ test-vite-plus-package-optional <semver>
 dependencies:
 testnpm2 <semver>
 
-> vp pm list --recursive --prod # should list production dependencies in workspace
+> vite pm list --recursive --prod # should list production dependencies in workspace
 Legend: production dependency, optional only, dev only
 
 app@<semver> <cwd>/packages/app

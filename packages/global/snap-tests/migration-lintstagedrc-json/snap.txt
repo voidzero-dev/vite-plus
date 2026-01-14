@@ -1,4 +1,4 @@
-> vp migration -h # migration help message
+> vite migration -h # migration help message
 Usage: vite migration [PATH] [OPTIONS]
 
 Migrate standalone vite, vitest, oxlint, and oxfmt to unified vite-plus.
@@ -23,7 +23,7 @@ Examples:
 Aliases: migrate
 
 
-> vp migration # migration work with lintstagedrc.json
+> vite migration # migration work with lintstagedrc.json
 ┌  Vite+ Migration
 │
 ●  Using default package manager: pnpm

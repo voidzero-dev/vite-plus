@@ -5,7 +5,7 @@
   },
   "commands": [
     {
-      "command": "vp gen vite:library --no-interactive --directory @my-scope/my-library # create vite library with scope name",
+      "command": "vite gen vite:library --no-interactive --directory @my-scope/my-library # create vite library with scope name",
       "ignoreOutput": true
     },
     "ls my-library/package.json # check package.json",

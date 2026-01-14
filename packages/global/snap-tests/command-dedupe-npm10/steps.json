@@ -4,8 +4,8 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp dedupe && cat package.json # should dedupe dependencies",
-    "vp dedupe --check && cat package.json # should check if deduplication would make changes",
-    "vp ddp -- --loglevel=warn && cat package.json # support pass through arguments"
+    "vite dedupe && cat package.json # should dedupe dependencies",
+    "vite dedupe --check && cat package.json # should check if deduplication would make changes",
+    "vite ddp -- --loglevel=warn && cat package.json # support pass through arguments"
   ]
 }

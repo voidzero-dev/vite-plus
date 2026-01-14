@@ -1,17 +1,17 @@
 {
   
   "commands": [
-    "vp -h # show help message",
-    "vp -V # show version",
-    "vp install -h # show install help message",
-    "vp add -h # show add help message",
-    "vp remove -h # show remove help message",
-    "vp update -h # show update help message",
-    "vp link -h # show link help message",
-    "vp unlink -h # show unlink help message",
-    "vp dedupe -h # show dedupe help message",
-    "vp outdated -h # show outdated help message",
-    "vp why -h # show why help message",
-    "vp pm -h # show pm help message"
+    "vite -h # show help message",
+    "vite -V # show version",
+    "vite install -h # show install help message",
+    "vite add -h # show add help message",
+    "vite remove -h # show remove help message",
+    "vite update -h # show update help message",
+    "vite link -h # show link help message",
+    "vite unlink -h # show unlink help message",
+    "vite dedupe -h # show dedupe help message",
+    "vite outdated -h # show outdated help message",
+    "vite why -h # show why help message",
+    "vite pm -h # show pm help message"
   ]
 }

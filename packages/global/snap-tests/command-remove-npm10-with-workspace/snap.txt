@@ -1,4 +1,4 @@
-> vp add testnpm2 -D -w --filter=* -- --no-audit && vp add test-vite-plus-install -w --filter=* -- --no-audit && vp add test-vite-plus-package-optional -O --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # prepare packages
+> vite add testnpm2 -D -w --filter=* -- --no-audit && vite add test-vite-plus-install -w --filter=* -- --no-audit && vite add test-vite-plus-package-optional -O --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # prepare packages
 
 added 3 packages in <variable>ms
 
@@ -46,7 +46,7 @@ added 1 package in <variable>ms
   }
 }
 
-> vp remove testnpm2 -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package from all workspaces and root
+> vite remove testnpm2 -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package from all workspaces and root
 
 removed 1 package in <variable>ms
 {
@@ -81,7 +81,7 @@ removed 1 package in <variable>ms
   }
 }
 
-> vp remove -O test-vite-plus-package-optional -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove optional package from all workspaces
+> vite remove -O test-vite-plus-package-optional -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove optional package from all workspaces
 
 removed 1 package in <variable>ms
 {
@@ -110,7 +110,7 @@ removed 1 package in <variable>ms
   }
 }
 
-> vp remove test-vite-plus-install --filter=app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=app
+> vite remove test-vite-plus-install --filter=app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=app
 
 up to date in <variable>ms
 {
@@ -136,7 +136,7 @@ up to date in <variable>ms
   }
 }
 
-> vp remove test-vite-plus-install --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=*
+> vite remove test-vite-plus-install --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=*
 
 up to date in <variable>ms
 {

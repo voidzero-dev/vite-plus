@@ -1,6 +1,6 @@
-> # vp pm config set vite-plus-pm-config-test-key test-value --location project # npm set will check valid keys start from npm v9, see https://github.com/npm/cli/issues/5852
-> vp pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope
+> # vite pm config set vite-plus-pm-config-test-key test-value --location project # npm set will check valid keys start from npm v9, see https://github.com/npm/cli/issues/5852
+> vite pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope
 test-value
 
-> vp pm config delete vite-plus-pm-config-test-key --location project && cat .npmrc # should delete config key from project scope
+> vite pm config delete vite-plus-pm-config-test-key --location project && cat .npmrc # should delete config key from project scope
 foo=bar

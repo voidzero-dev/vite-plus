@@ -1,4 +1,4 @@
-> vp gen vite:monorepo --no-interactive # create monorepo with default values
+> vite gen vite:monorepo --no-interactive # create monorepo with default values
 > ls vite-plus-monorepo | LC_ALL=C sort # check files created
 README.md
 apps
@@ -64,7 +64,7 @@ website
 > ls vite-plus-monorepo/apps/website/package.json # check website package.json
 vite-plus-monorepo/apps/website/package.json
 
-> cd vite-plus-monorepo && vp gen --no-interactive vite:application # create application in non-interactive mode
+> cd vite-plus-monorepo && vite gen --no-interactive vite:application # create application in non-interactive mode
 > ls vite-plus-monorepo/apps # check apps directory created
 vite-plus-application
 website
@@ -72,11 +72,11 @@ website
 > ls vite-plus-monorepo/apps/vite-plus-application/package.json # check vite-plus-application package.json
 vite-plus-monorepo/apps/vite-plus-application/package.json
 
-> cd vite-plus-monorepo && vp gen --no-interactive vite:library # create library in non-interactive mode
+> cd vite-plus-monorepo && vite gen --no-interactive vite:library # create library in non-interactive mode
 > ls vite-plus-monorepo/packages/vite-plus-library/package.json # check vite-plus-library package.json
 vite-plus-monorepo/packages/vite-plus-library/package.json
 
-> cd vite-plus-monorepo && vp gen --no-interactive vite:generator # create generator in non-interactive mode
+> cd vite-plus-monorepo && vite gen --no-interactive vite:generator # create generator in non-interactive mode
 > ls vite-plus-monorepo/tools # check tools directory created
 vite-plus-generator
 
@@ -109,7 +109,7 @@ vite-plus-generator
   }
 }
 
-> vp gen vite:monorepo --no-interactive --directory my-vite-plus-monorepo # create monorepo with custom directory
+> vite gen vite:monorepo --no-interactive --directory my-vite-plus-monorepo # create monorepo with custom directory
 > ls my-vite-plus-monorepo | LC_ALL=C sort # check files created
 README.md
 apps

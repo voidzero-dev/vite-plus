@@ -3,7 +3,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp migration # migration should skip rewriting vite imports when vite is in dependencies",
+    "vite migration # migration should skip rewriting vite imports when vite is in dependencies",
     "cat src/index.ts # vite imports should NOT be rewritten, vitest imports SHOULD be rewritten",
     "cat package.json # check package.json"
   ]

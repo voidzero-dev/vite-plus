@@ -1,2 +1,2 @@
-> vp pm publish --dry-run -- --loglevel error # should preview publish without actually publishing (uses npm publish --dry-run)
+> vite pm publish --dry-run -- --loglevel error # should preview publish without actually publishing (uses npm publish --dry-run)
 + command-publish-npm10@<semver>

@@ -1,4 +1,4 @@
-> vp migration foo # migration work with subpath
+> vite migration foo # migration work with subpath
 ┌  Vite+ Migration
 │
 ●  Using default package manager: pnpm

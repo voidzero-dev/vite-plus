@@ -1,8 +1,8 @@
-> vp install
+> vite install
 
 added 6 packages in <variable>ms
 
-> vp why testnpm2 --filter app # should check why in specific workspace using --workspace
+> vite why testnpm2 --filter app # should check why in specific workspace using --workspace
 testnpm2@<semver>
 node_modules/testnpm2
   testnpm2@"1.0.0" from @vite-plus-test/utils@undefined
@@ -22,7 +22,7 @@ node_modules/testnpm2
       workspace packages/app from the root project
   testnpm2@"1.0.0" from the root project
 
-> vp why test-vite-plus-package --filter app # should check why dev dependencies in app workspace
+> vite why test-vite-plus-package --filter app # should check why dev dependencies in app workspace
 test-vite-plus-package@<semver> dev
 node_modules/test-vite-plus-package
   dev test-vite-plus-package@"1.0.0" from app@undefined
@@ -31,7 +31,7 @@ node_modules/test-vite-plus-package
     node_modules/app
       workspace packages/app from the root project
 
-> vp why testnpm2 --filter app --json # should support json output with workspace filter
+> vite why testnpm2 --filter app --json # should support json output with workspace filter
 [
   {
     "name": "testnpm2",

@@ -4,7 +4,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp pm cache dir # should show cache directory (uses yarn config get cacheFolder)",
-    "vp pm cache path # should show cache path (alias for dir, uses yarn config get cacheFolder)"
+    "vite pm cache dir # should show cache directory (uses yarn config get cacheFolder)",
+    "vite pm cache path # should show cache path (alias for dir, uses yarn config get cacheFolder)"
   ]
 }

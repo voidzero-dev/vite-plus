@@ -3,8 +3,8 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope (shows warning for yarn@1)",
-    "vp pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope (shows warning for yarn@1)",
-    "vp pm config delete vite-plus-pm-config-test-key --location project # should delete config key from project scope (shows warning for yarn@1)"
+    "vite pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope (shows warning for yarn@1)",
+    "vite pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope (shows warning for yarn@1)",
+    "vite pm config delete vite-plus-pm-config-test-key --location project # should delete config key from project scope (shows warning for yarn@1)"
   ]
 }

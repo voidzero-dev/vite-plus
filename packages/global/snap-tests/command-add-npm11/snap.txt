@@ -1,7 +1,7 @@
-> vp add --help # should show help
+> vite add --help # should show help
 Add packages to dependencies
 
-Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vite add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   <PACKAGES>...           Packages to add
@@ -35,7 +35,7 @@ Options:
   -h, --help
           Print help
 
-> vp add testnpm2 -D -- --no-audit && cat package.json # should add package as dev dependencies
+> vite add testnpm2 -D -- --no-audit && cat package.json # should add package as dev dependencies
 
 added 1 package in <variable>ms
 {
@@ -47,7 +47,7 @@ added 1 package in <variable>ms
   }
 }
 
-> vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install -- --no-audit && cat package.json # should add packages to dependencies
+> vite add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install -- --no-audit && cat package.json # should add packages to dependencies
 
 added 1 package in <variable>ms
 {
@@ -62,7 +62,7 @@ added 1 package in <variable>ms
   }
 }
 
-> vp install test-vite-plus-package@1.0.0 --save-peer -- --no-audit && cat package.json # should install package alias for add
+> vite install test-vite-plus-package@1.0.0 --save-peer -- --no-audit && cat package.json # should install package alias for add
 
 added 1 package in <variable>ms
 {
@@ -80,7 +80,7 @@ added 1 package in <variable>ms
   }
 }
 
-> vp add test-vite-plus-package-optional -O -- --no-audit && cat package.json # should add package as optional dependencies
+> vite add test-vite-plus-package-optional -O -- --no-audit && cat package.json # should add package as optional dependencies
 
 added 1 package in <variable>ms
 {
@@ -101,7 +101,7 @@ added 1 package in <variable>ms
   }
 }
 
-> vp add test-vite-plus-package-optional -- --loglevel=warn --no-audit && cat package.json # support pass through arguments
+> vite add test-vite-plus-package-optional -- --loglevel=warn --no-audit && cat package.json # support pass through arguments
 
 up to date in <variable>ms
 {

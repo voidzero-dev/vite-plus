@@ -1,4 +1,4 @@
-[1]> vp migration # migration should fail because pnpm version is not supported
+[1]> vite migration # migration should fail because pnpm version is not supported
 ┌  Vite+ Migration
 │
 ●  pnpm@<semver> installing...

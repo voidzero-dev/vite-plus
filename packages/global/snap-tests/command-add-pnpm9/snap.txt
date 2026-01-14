@@ -1,7 +1,7 @@
-> vp add --help # should show help
+> vite add --help # should show help
 Add packages to dependencies
 
-Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vite add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   <PACKAGES>...           Packages to add
@@ -35,7 +35,7 @@ Options:
   -h, --help
           Print help
 
-> vp add testnpm2 -D && cat package.json # should add package as dev dependencies
+> vite add testnpm2 -D && cat package.json # should add package as dev dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -53,7 +53,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp add testnpm2 test-vite-plus-install && cat package.json # should add packages to dependencies
+> vite add testnpm2 test-vite-plus-install && cat package.json # should add packages to dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -74,11 +74,11 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-[1]> vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install # should error because allow-build is not supported at pnpm@9
+[1]> vite add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install # should error because allow-build is not supported at pnpm@9
  ERROR  Unknown option: 'allow-build'
 For help, run: pnpm help add
 
-> vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
+> vite install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -106,7 +106,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
+> vite add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -134,7 +134,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp add test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support pass through arguments
+> vite add test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support pass through arguments
 {
   "name": "command-add-pnpm9",
   "version": "1.0.0",

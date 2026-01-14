@@ -4,15 +4,15 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp install # should install packages first",
-    "vp pm list # should list current workspace root dependencies",
-    "vp pm list --recursive # should list all packages in workspace recursively",
-    "vp pm list --filter app # should list specific workspace package (uses --filter app list)",
-    "vp pm list --filter app --filter @vite-plus-test/utils # should list multiple workspace packages",
-    "vp pm list --recursive --json # should list all workspace packages in JSON format",
-    "vp pm list --recursive --depth 0 # should list workspace packages with depth limit",
-    "vp pm list --recursive --only-projects # should list only workspace projects (pnpm-specific)",
-    "vp pm list --recursive --exclude-peers # should exclude peer dependencies in workspace",
-    "vp pm list --recursive --prod # should list production dependencies in workspace"
+    "vite install # should install packages first",
+    "vite pm list # should list current workspace root dependencies",
+    "vite pm list --recursive # should list all packages in workspace recursively",
+    "vite pm list --filter app # should list specific workspace package (uses --filter app list)",
+    "vite pm list --filter app --filter @vite-plus-test/utils # should list multiple workspace packages",
+    "vite pm list --recursive --json # should list all workspace packages in JSON format",
+    "vite pm list --recursive --depth 0 # should list workspace packages with depth limit",
+    "vite pm list --recursive --only-projects # should list only workspace projects (pnpm-specific)",
+    "vite pm list --recursive --exclude-peers # should exclude peer dependencies in workspace",
+    "vite pm list --recursive --prod # should list production dependencies in workspace"
   ]
 }

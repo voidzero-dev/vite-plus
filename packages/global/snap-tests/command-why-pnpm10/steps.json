@@ -4,20 +4,20 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp why --help # should show help",
-    "vp install # should install packages first",
-    "vp why testnpm2 # should show why package is installed",
-    "vp explain testnpm2 # should work with explain alias",
-    "vp why test-vite-plus-package # should show why dev package is installed",
-    "vp why testnpm2 test-vite-plus-package # should support multiple packages",
-    "vp why testnpm2 --json # should support json output",
-    "vp why testnpm2 --long # should support long output",
-    "vp why testnpm2 --parseable # should support parseable output",
-    "vp why testnpm2 -P # should support prod dependencies only",
-    "vp why test-vite-plus-package -D # should support dev dependencies only",
-    "vp why testnpm2 --depth 1 # should support depth limiting",
-    "vp why test-vite-plus-package-optional --no-optional # should exclude optional dependencies",
-    "vp why testnpm2 --find-by customFinder # should support find-by option (pnpm-specific)",
-    "vp why testnpm2 -- --reporter=silent # should support pass through arguments"
+    "vite why --help # should show help",
+    "vite install # should install packages first",
+    "vite why testnpm2 # should show why package is installed",
+    "vite explain testnpm2 # should work with explain alias",
+    "vite why test-vite-plus-package # should show why dev package is installed",
+    "vite why testnpm2 test-vite-plus-package # should support multiple packages",
+    "vite why testnpm2 --json # should support json output",
+    "vite why testnpm2 --long # should support long output",
+    "vite why testnpm2 --parseable # should support parseable output",
+    "vite why testnpm2 -P # should support prod dependencies only",
+    "vite why test-vite-plus-package -D # should support dev dependencies only",
+    "vite why testnpm2 --depth 1 # should support depth limiting",
+    "vite why test-vite-plus-package-optional --no-optional # should exclude optional dependencies",
+    "vite why testnpm2 --find-by customFinder # should support find-by option (pnpm-specific)",
+    "vite why testnpm2 -- --reporter=silent # should support pass through arguments"
   ]
 }

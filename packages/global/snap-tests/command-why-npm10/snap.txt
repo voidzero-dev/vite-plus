@@ -1,23 +1,23 @@
-> vp install # should install packages first
+> vite install # should install packages first
 
 added 3 packages in <variable>ms
 
-> vp why testnpm2 # should show why package is installed (uses npm explain)
+> vite why testnpm2 # should show why package is installed (uses npm explain)
 testnpm2@<semver>
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project
 
-> vp explain testnpm2 # should work with explain alias
+> vite explain testnpm2 # should work with explain alias
 testnpm2@<semver>
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project
 
-> vp why test-vite-plus-package # should show why dev package is installed
+> vite why test-vite-plus-package # should show why dev package is installed
 test-vite-plus-package@<semver> dev
 node_modules/test-vite-plus-package
   dev test-vite-plus-package@"1.0.0" from the root project
 
-> vp why testnpm2 --json # should support json output
+> vite why testnpm2 --json # should support json output
 [
   {
     "name": "testnpm2",
@@ -43,7 +43,7 @@ node_modules/test-vite-plus-package
   }
 ]
 
-> vp why testnpm2 test-vite-plus-package # should support multiple packages
+> vite why testnpm2 test-vite-plus-package # should support multiple packages
 testnpm2@<semver>
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project
@@ -52,31 +52,31 @@ test-vite-plus-package@<semver> dev
 node_modules/test-vite-plus-package
   dev test-vite-plus-package@"1.0.0" from the root project
 
-> vp why testnpm2 --long # should warn that --long not supported by npm
+> vite why testnpm2 --long # should warn that --long not supported by npm
 Warning: --long not supported by npm
 testnpm2@<semver>
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project
 
-> vp why testnpm2 --parseable # should warn that --parseable not supported by npm
+> vite why testnpm2 --parseable # should warn that --parseable not supported by npm
 Warning: --parseable not supported by npm
 testnpm2@<semver>
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project
 
-> vp why testnpm2 -P # should warn that --prod not supported by npm
+> vite why testnpm2 -P # should warn that --prod not supported by npm
 Warning: --prod/--dev not supported by npm
 testnpm2@<semver>
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project
 
-> vp why testnpm2 --find-by customFinder # should warn that --find-by not supported by npm
+> vite why testnpm2 --find-by customFinder # should warn that --find-by not supported by npm
 Warning: --find-by not supported by npm
 testnpm2@<semver>
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project
 
-> vp why testnpm2 -- --omit=dev # should support pass through arguments
+> vite why testnpm2 -- --omit=dev # should support pass through arguments
 testnpm2@<semver>
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project

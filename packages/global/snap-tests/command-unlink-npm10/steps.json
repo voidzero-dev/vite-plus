@@ -5,7 +5,7 @@
   },
   "commands": [
     "mkdir -p ../unlink-test-lib-npm && echo '{\"name\": \"unlink-test-lib-npm\", \"version\": \"1.0.0\"}' > ../unlink-test-lib-npm/package.json # create test library",
-    "vp link ../unlink-test-lib-npm && cat package.json # link the library first",
-    "vp unlink unlink-test-lib-npm && cat package.json # should unlink the package"
+    "vite link ../unlink-test-lib-npm && cat package.json # link the library first",
+    "vite unlink unlink-test-lib-npm && cat package.json # should unlink the package"
   ]
 }

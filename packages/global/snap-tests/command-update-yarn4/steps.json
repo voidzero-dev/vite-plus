@@ -4,9 +4,9 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp update testnpm2 && cat package.json # should update package within semver range",
-    "vp rm testnpm2 && vp add testnpm2@1.0.0 -D && vp update testnpm2 --latest && cat package.json # should to absolute latest version",
-    "vp update -D && cat package.json # should update and ignore -D options",
-    "vp update --recursive && cat package.json # should update all packages but won't change the package.json"
+    "vite update testnpm2 && cat package.json # should update package within semver range",
+    "vite rm testnpm2 && vite add testnpm2@1.0.0 -D && vite update testnpm2 --latest && cat package.json # should to absolute latest version",
+    "vite update -D && cat package.json # should update and ignore -D options",
+    "vite update --recursive && cat package.json # should update all packages but won't change the package.json"
   ]
 }

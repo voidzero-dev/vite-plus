@@ -1,7 +1,7 @@
-> vp pm view --help # should show help
+> vite pm view --help # should show help
 View package information from registry
 
-Usage: vp pm view [OPTIONS] <PACKAGE> [FIELD] [-- <PASS_THROUGH_ARGS>...]
+Usage: vite pm view [OPTIONS] <PACKAGE> [FIELD] [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   <PACKAGE>               Package name with optional version
@@ -12,7 +12,7 @@ Options:
       --json  Output in JSON format
   -h, --help  Print help
 
-> vp pm view testnpm2 # should view lodash package information (uses npm view)
+> vite pm view testnpm2 # should view lodash package information (uses npm view)
 
 testnpm2@<semver> | ISC | deps: none | versions: 2
 
@@ -30,10 +30,10 @@ release-1: <semver>
 
 published over a year ago by fengmk2 <fengmk2@gmail.com>
 
-> vp pm view testnpm2 version # should view lodash version field (uses npm view)
+> vite pm view testnpm2 version # should view lodash version field (uses npm view)
 1.0.1
 
-> vp pm view testnpm2@1.0.0 # should view specific version of lodash (uses npm view)
+> vite pm view testnpm2@1.0.0 # should view specific version of lodash (uses npm view)
 
 testnpm2@<semver> | ISC | deps: none | versions: 2
 
@@ -51,17 +51,17 @@ release-1: <semver>
 
 published over a year ago by fengmk2 <fengmk2@gmail.com>
 
-> vp pm view testnpm2 dist.tarball # should view nested field (uses npm view)
+> vite pm view testnpm2 dist.tarball # should view nested field (uses npm view)
 https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz
 
-> vp pm view testnpm2 dependencies # should view dependencies object (uses npm view)
-> vp pm view testnpm2 dist.tarball --json # should view package.dist.tarball info in JSON format (uses npm view)
+> vite pm view testnpm2 dependencies # should view dependencies object (uses npm view)
+> vite pm view testnpm2 dist.tarball --json # should view package.dist.tarball info in JSON format (uses npm view)
 "https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz"
 
-> vp pm view testnpm2 version --json # should view field in JSON format (uses npm view)
+> vite pm view testnpm2 version --json # should view field in JSON format (uses npm view)
 "1.0.1"
 
-> vp pm view testnpm2 -- --loglevel=warn # should support pass through arguments (uses npm view)
+> vite pm view testnpm2 -- --loglevel=warn # should support pass through arguments (uses npm view)
 
 testnpm2@<semver> | ISC | deps: none | versions: 2
 

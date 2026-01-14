@@ -1,4 +1,4 @@
-> vp dedupe && cat package.json # should dedupe dependencies
+> vite dedupe && cat package.json # should dedupe dependencies
 ➤ YN0000: ┌ Deduplication step
 ➤ YN0000: │ No packages can be deduped using the highest strategy
 ➤ YN0000: └ Completed
@@ -26,7 +26,7 @@
   }
 }
 
-> vp dedupe --check && cat package.json # should check if deduplication would make changes
+> vite dedupe --check && cat package.json # should check if deduplication would make changes
 ➤ YN0000: ┌ Deduplication step
 ➤ YN0000: │ No packages can be deduped using the highest strategy
 ➤ YN0000: └ Completed
@@ -45,7 +45,7 @@
   }
 }
 
-> vp ddp -- --json && cat package.json # support pass through arguments
+> vite ddp -- --json && cat package.json # support pass through arguments
 {
   "name": "command-dedupe-yarn4",
   "version": "1.0.0",

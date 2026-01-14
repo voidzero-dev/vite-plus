@@ -3,7 +3,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp pm publish --help # should show help",
-    "vp pm publish --dry-run -- --loglevel error # should preview publish without actually publishing (uses pnpm publish --dry-run)"
+    "vite pm publish --help # should show help",
+    "vite pm publish --dry-run -- --loglevel error # should preview publish without actually publishing (uses pnpm publish --dry-run)"
   ]
 }

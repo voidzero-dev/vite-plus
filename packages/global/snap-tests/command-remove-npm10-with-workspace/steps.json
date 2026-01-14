@@ -4,10 +4,10 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp add testnpm2 -D -w --filter=* -- --no-audit && vp add test-vite-plus-install -w --filter=* -- --no-audit && vp add test-vite-plus-package-optional -O --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # prepare packages",
-    "vp remove testnpm2 -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package from all workspaces and root",
-    "vp remove -O test-vite-plus-package-optional -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove optional package from all workspaces",
-    "vp remove test-vite-plus-install --filter=app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=app",
-    "vp remove test-vite-plus-install --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=*"
+    "vite add testnpm2 -D -w --filter=* -- --no-audit && vite add test-vite-plus-install -w --filter=* -- --no-audit && vite add test-vite-plus-package-optional -O --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # prepare packages",
+    "vite remove testnpm2 -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package from all workspaces and root",
+    "vite remove -O test-vite-plus-package-optional -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove optional package from all workspaces",
+    "vite remove test-vite-plus-install --filter=app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=app",
+    "vite remove test-vite-plus-install --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=*"
   ]
 }

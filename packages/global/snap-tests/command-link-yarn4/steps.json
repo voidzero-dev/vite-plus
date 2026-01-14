@@ -5,8 +5,8 @@
   },
   "commands": [
     "mkdir -p ../test-lib-yarn && echo '{\"name\": \"test-lib-yarn\", \"version\": \"1.0.0\"}' > ../test-lib-yarn/package.json # create test library",
-    "vp link ../test-lib-yarn && cat package.json # should link local directory",
-    "vp ln ../test-lib-yarn && cat package.json # should work with ln alias",
-    "vp unlink test-lib-yarn && cat package.json # cleanup temp states"
+    "vite link ../test-lib-yarn && cat package.json # should link local directory",
+    "vite ln ../test-lib-yarn && cat package.json # should work with ln alias",
+    "vite unlink test-lib-yarn && cat package.json # cleanup temp states"
   ]
 }

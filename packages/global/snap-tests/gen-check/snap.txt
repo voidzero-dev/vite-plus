@@ -1,4 +1,4 @@
-> vp gen --help # show help
+> vite gen --help # show help
 Usage: vite gen [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
 
 Run any template (builtin, remote, or local) with automatic vite+ integration.
@@ -56,7 +56,7 @@ Note: Templates are executed via npx / pnpm dlx / yarn dlx / bunx,
 Aliases: g, generate, new
 
 
-> vp gen --list # list templates
+> vite gen --list # list templates
 
 📦 Available Templates
 
@@ -82,7 +82,7 @@ Run vite gen <template> -- <options> to pass options to the template
 ✨ Tip: You can use ANY npm template with vite gen!
 
 
-[1]> vp gen --no-interactive # run in non-interactive mode without template name will show error
+[1]> vite gen --no-interactive # run in non-interactive mode without template name will show error
 
 Template name is required when running in non-interactive mode
 

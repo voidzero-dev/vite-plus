@@ -1,4 +1,4 @@
-> vp add testnpm2 -D -w && cat package.json packages/app/package.json packages/utils/package.json # should add package to workspace root
+> vite add testnpm2 -D -w && cat package.json packages/app/package.json packages/utils/package.json # should add package to workspace root
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + testnpm2@npm:1.0.1
@@ -28,7 +28,7 @@
   "private": true
 }
 
-> vp add @vite-plus-test/utils --workspace -w && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to workspace root
+> vite add @vite-plus-test/utils --workspace -w && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to workspace root
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -60,7 +60,7 @@
   "private": true
 }
 
-> vp add testnpm2 test-vite-plus-install@1.0.0 --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app
+> vite add testnpm2 test-vite-plus-install@1.0.0 --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-install@npm:1.0.0
@@ -98,7 +98,7 @@ Done in <variable>ms <variable>ms
   "private": true
 }
 
-> vp add @vite-plus-test/utils --workspace --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app
+> vite add @vite-plus-test/utils --workspace --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -136,7 +136,7 @@ Done in <variable>ms <variable>ms
   "private": true
 }
 
-> vp add testnpm2 test-vite-plus-install@1.0.0 --filter "*" --filter @vite-plus-test/utils && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages and workspace root
+> vite add testnpm2 test-vite-plus-install@1.0.0 --filter "*" --filter @vite-plus-test/utils && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages and workspace root
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -210,7 +210,7 @@ Done in <variable>ms <variable>ms
   }
 }
 
-> vp install -O test-vite-plus-package-optional --filter "*" && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should install packages alias for add command
+> vite install -O test-vite-plus-package-optional --filter "*" && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should install packages alias for add command
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0

@@ -4,19 +4,19 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp install # should install packages first",
-    "vp outdated testnpm2 # should outdated package",
-    "vp outdated test-vite* # should outdated with glob pattern not working on npm",
-    "vp outdated --format json # should support json output",
-    "vp outdated --format list # should support list output",
-    "vp outdated --format table # should support table output",
-    "vp outdated testnpm2 --long # should support --long",
-    "vp outdated -r # should support recursive output",
-    "vp outdated -P # should support prod output",
-    "vp outdated -D # should support dev output",
-    "vp outdated --no-optional # should support no-optional output",
-    "vp outdated --compatible # should compatible output nothing",
-    "json-edit package.json '_.optionalDependencies[\"test-vite-plus-other-optional\"] = \"^1.0.0\"' && vp outdated --compatible # should support compatible output with optional dependencies",
-    "vp outdated --sort-by name # should support sort-by output"
+    "vite install # should install packages first",
+    "vite outdated testnpm2 # should outdated package",
+    "vite outdated test-vite* # should outdated with glob pattern not working on npm",
+    "vite outdated --format json # should support json output",
+    "vite outdated --format list # should support list output",
+    "vite outdated --format table # should support table output",
+    "vite outdated testnpm2 --long # should support --long",
+    "vite outdated -r # should support recursive output",
+    "vite outdated -P # should support prod output",
+    "vite outdated -D # should support dev output",
+    "vite outdated --no-optional # should support no-optional output",
+    "vite outdated --compatible # should compatible output nothing",
+    "json-edit package.json '_.optionalDependencies[\"test-vite-plus-other-optional\"] = \"^1.0.0\"' && vite outdated --compatible # should support compatible output with optional dependencies",
+    "vite outdated --sort-by name # should support sort-by output"
   ]
 }

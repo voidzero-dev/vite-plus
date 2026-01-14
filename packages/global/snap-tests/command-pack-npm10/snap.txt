@@ -1,4 +1,4 @@
-> vp pm pack --json && rm -rf *.tgz # should pack current package
+> vite pm pack --json && rm -rf *.tgz # should pack current package
 [
   {
     "id": "command-pack-npm10@<semver>",
@@ -36,7 +36,7 @@
   }
 ]
 
-> vp pm pack --pack-destination ./dist --json && rm -rf ./dist # should pack with destination
+> vite pm pack --pack-destination ./dist --json && rm -rf ./dist # should pack with destination
 [
   {
     "id": "command-pack-npm10@<semver>",
@@ -79,7 +79,7 @@
   }
 ]
 
-> vp pm pack --json -- --loglevel=warn && rm -rf *.tgz # should support pass through arguments
+> vite pm pack --json -- --loglevel=warn && rm -rf *.tgz # should support pass through arguments
 [
   {
     "id": "command-pack-npm10@<semver>",

@@ -1,7 +1,7 @@
-> vp pm pack --help # should show help
+> vite pm pack --help # should show help
 Create a tarball of the package
 
-Usage: vp pm pack [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+Usage: vite pm pack [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
@@ -22,7 +22,7 @@ Options:
   -h, --help
           Print help
 
-> vp pm pack && rm -rf *.tgz # should pack current package
+> vite pm pack && rm -rf *.tgz # should pack current package
 📦  command-pack-pnpm10@<semver>
 Tarball Contents
 output.log
@@ -32,7 +32,7 @@ steps.json
 Tarball Details
 command-pack-pnpm10-1.0.0.tgz
 
-> vp pm pack --out ./dist/package.tgz && rm -rf ./dist # should pack with output file
+> vite pm pack --out ./dist/package.tgz && rm -rf ./dist # should pack with output file
 📦  command-pack-pnpm10@<semver>
 Tarball Contents
 command-pack-pnpm10-1.0.0.tgz
@@ -43,7 +43,7 @@ steps.json
 Tarball Details
 <cwd>/dist/package.tgz
 
-> vp pm pack --pack-destination ./dist && rm -rf ./dist # should pack with destination
+> vite pm pack --pack-destination ./dist && rm -rf ./dist # should pack with destination
 📦  command-pack-pnpm10@<semver>
 Tarball Contents
 command-pack-pnpm10-1.0.0.tgz
@@ -54,7 +54,7 @@ steps.json
 Tarball Details
 <cwd>/dist/command-pack-pnpm10-1.0.0.tgz
 
-> vp pm pack --json --pack-gzip-level 9 && rm -rf *.tgz # should pack with gzip compression level
+> vite pm pack --json --pack-gzip-level 9 && rm -rf *.tgz # should pack with gzip compression level
 {
   "name": "command-pack-pnpm10",
   "version": "1.0.0",
@@ -78,7 +78,7 @@ Tarball Details
   ]
 }
 
-> vp pm pack --json && rm -rf *.tgz # should pack with json output
+> vite pm pack --json && rm -rf *.tgz # should pack with json output
 {
   "name": "command-pack-pnpm10",
   "version": "1.0.0",
@@ -102,7 +102,7 @@ Tarball Details
   ]
 }
 
-> vp pm pack -- --loglevel=warn && rm -rf *.tgz # should support pass through arguments
+> vite pm pack -- --loglevel=warn && rm -rf *.tgz # should support pass through arguments
 📦  command-pack-pnpm10@<semver>
 Tarball Contents
 command-pack-pnpm10-1.0.0.tgz

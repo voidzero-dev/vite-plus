@@ -3,7 +3,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp migration # migration should check each package's peerDependencies",
+    "vite migration # migration should check each package's peerDependencies",
     "cat packages/vite-plugin/src/index.ts # vite-plugin has vite in peerDeps: vite NOT rewritten, vitest rewritten",
     "cat package.json # check root package.json (no peerDependencies)",
     "cat packages/vite-plugin/package.json # has vite in peerDependencies"

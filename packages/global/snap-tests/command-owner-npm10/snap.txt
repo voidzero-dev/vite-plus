@@ -1,2 +1,2 @@
-> vp pm owner list testnpm2 # should list package owners
+> vite pm owner list testnpm2 # should list package owners
 fengmk2 <fengmk2@gmail.com>

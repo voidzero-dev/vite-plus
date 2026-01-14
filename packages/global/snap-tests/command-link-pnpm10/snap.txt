@@ -1,7 +1,7 @@
-> vp link -h # should show help message
+> vite link -h # should show help message
 Link packages for local development
 
-Usage: vp link [PACKAGE|DIR] [ARGS]...
+Usage: vite link [PACKAGE|DIR] [ARGS]...
 
 Arguments:
   [PACKAGE|DIR]  Package name or directory to link If empty, registers current package globally
@@ -10,7 +10,7 @@ Arguments:
 Options:
   -h, --help  Print help
 
-> vp install # install initial dependencies
+> vite install # install initial dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -21,7 +21,7 @@ dependencies:
 Done in <variable>ms using pnpm v<semver>
 
 > mkdir -p ../test-lib-pnpm && echo '{"name": "testnpm2", "version": "1.0.0"}' > ../test-lib-pnpm/package.json # create test library
-> vp link ../test-lib-pnpm && cat package.json pnpm-lock.yaml # should link local directory
+> vite link ../test-lib-pnpm && cat package.json pnpm-lock.yaml # should link local directory
 Packages: -1
 -
 
@@ -54,7 +54,7 @@ importers:
         specifier: link:../test-lib-pnpm
         version: link:../test-lib-pnpm
 
-> vp ln ../test-lib-pnpm && cat package.json pnpm-lock.yaml # should work with ln alias
+> vite ln ../test-lib-pnpm && cat package.json pnpm-lock.yaml # should work with ln alias
 Lockfile is up to date, resolution step is skipped
 
 {
@@ -82,7 +82,7 @@ importers:
         specifier: link:../test-lib-pnpm
         version: link:../test-lib-pnpm
 
-> vp unlink ../test-lib-pnpm && vp unlink testnpm2 && cat package.json pnpm-lock.yaml # should unlink the package
+> vite unlink ../test-lib-pnpm && vite unlink testnpm2 && cat package.json pnpm-lock.yaml # should unlink the package
 Nothing to unlink
 Nothing to unlink
 {

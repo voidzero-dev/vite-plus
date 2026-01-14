@@ -1,7 +1,7 @@
-> vp add --help # should show help
+> vite add --help # should show help
 Add packages to dependencies
 
-Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vite add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   <PACKAGES>...           Packages to add
@@ -35,7 +35,7 @@ Options:
   -h, --help
           Print help
 
-> vp add testnpm2 -D && cat package.json # should add package as dev dependencies
+> vite add testnpm2 -D && cat package.json # should add package as dev dependencies
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + testnpm2@npm:1.0.1
@@ -54,7 +54,7 @@ Options:
   }
 }
 
-> vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies
+> vite add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-install@npm:1.0.0
@@ -76,7 +76,7 @@ Options:
   }
 }
 
-> vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
+> vite install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -100,7 +100,7 @@ Options:
   }
 }
 
-> vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
+> vite add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0
@@ -128,7 +128,7 @@ Options:
   }
 }
 
-> vp add test-vite-plus-package-optional -- --tilde && cat package.json # support pass through arguments
+> vite add test-vite-plus-package-optional -- --tilde && cat package.json # support pass through arguments
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed

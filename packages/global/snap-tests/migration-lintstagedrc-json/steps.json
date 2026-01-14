@@ -3,8 +3,8 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp migration -h # migration help message",
-    "vp migration # migration work with lintstagedrc.json",
+    "vite migration -h # migration help message",
+    "vite migration # migration work with lintstagedrc.json",
     "cat .lintstagedrc.json # check lintstagedrc.json",
     "cat package.json # check package.json"
   ]

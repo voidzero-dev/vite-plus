@@ -1,4 +1,4 @@
-> vp migration # migration should merge vite.config.ts and remove oxlintrc
+> vite migration # migration should merge vite.config.ts and remove oxlintrc
 ┌  Vite+ Migration
 │
 ●  yarn@<semver> installing...

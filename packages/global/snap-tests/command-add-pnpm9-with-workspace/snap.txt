@@ -1,4 +1,4 @@
-> vp add testnpm2 -D -w && cat package.json # should add package to workspace root
+> vite add testnpm2 -D -w && cat package.json # should add package to workspace root
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 devDependencies:
@@ -16,10 +16,10 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-[1]> vp add @vite-plus-test/utils --workspace && cat package.json # should add @vite-plus-test/utils to workspace root
+[1]> vite add @vite-plus-test/utils --workspace && cat package.json # should add @vite-plus-test/utils to workspace root
  ERR_PNPM_ADDING_TO_ROOT  Running this command will add the dependency to the workspace root, which might not be what you want - if you really meant it, make it explicit by running this command again with the -w flag (or --workspace-root). If you don't want to see this warning anymore, you may set the ignore-workspace-root-check setting to true.
 
-> vp add testnpm2 test-vite-plus-install@1.0.0 --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app
+> vite add testnpm2 test-vite-plus-install@1.0.0 --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app
 .                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 .                                        |   +1 +<repeat>
@@ -45,7 +45,7 @@ Done in <variable>ms using pnpm v<semver>
   "private": true
 }
 
-> vp add @vite-plus-test/utils --workspace --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app
+> vite add @vite-plus-test/utils --workspace --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app
 .                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>
@@ -71,7 +71,7 @@ Done in <variable>ms using pnpm v<semver>
   "private": true
 }
 
-> vp add -E testnpm2 test-vite-plus-install --filter "*" && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages except workspace root
+> vite add -E testnpm2 test-vite-plus-install --filter "*" && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages except workspace root
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>
 {
@@ -100,7 +100,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vp install test-vite-plus-package@1.0.0 --filter "*" --workspace-root && cat package.json packages/app/package.json packages/utils/package.json pnpm-workspace.yaml # should install packages alias for add command
+> vite install test-vite-plus-package@1.0.0 --filter "*" --workspace-root && cat package.json packages/app/package.json packages/utils/package.json pnpm-workspace.yaml # should install packages alias for add command
 .                                        |   +1 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>
@@ -137,12 +137,12 @@ Done in <variable>ms using pnpm v<semver>
 packages:
   - packages/*
 
-[1]> vp add --filter app test-vite-plus-package-optional --save-catalog-name v1 # should error because save-catalog-name is not supported at pnpm@9
+[1]> vite add --filter app test-vite-plus-package-optional --save-catalog-name v1 # should error because save-catalog-name is not supported at pnpm@9
  ERROR  Unknown option: 'save-catalog-name'
 Did you mean 'save-optional'? Use "--config.unknown=value" to force an unknown option.
 For help, run: pnpm help add
 
-[1]> vp add --filter=./packages/utils test-vite-plus-package-optional -O --save-catalog v2 # should error because save-catalog is not supported at pnpm@9
+[1]> vite add --filter=./packages/utils test-vite-plus-package-optional -O --save-catalog v2 # should error because save-catalog is not supported at pnpm@9
  ERROR  Unknown option: 'save-catalog'
 Did you mean 'save-exact', or 'save-prod'? Use "--config.unknown=value" to force an unknown option.
 For help, run: pnpm help add

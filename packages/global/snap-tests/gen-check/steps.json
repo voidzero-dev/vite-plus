@@ -1,8 +1,8 @@
 {
   
   "commands": [
-    "vp gen --help # show help",
-    "vp gen --list # list templates",
-    "vp gen --no-interactive # run in non-interactive mode without template name will show error"
+    "vite gen --help # show help",
+    "vite gen --list # list templates",
+    "vite gen --no-interactive # run in non-interactive mode without template name will show error"
   ]
 }

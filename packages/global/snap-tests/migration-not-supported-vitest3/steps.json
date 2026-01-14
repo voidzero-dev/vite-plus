@@ -4,10 +4,10 @@
   },
   "commands": [
     {
-      "command": "vp install # install dependencies first",
+      "command": "vite install # install dependencies first",
       "ignoreOutput": true
     },
-    "vp migration # migration should fail because vitest version is not supported",
+    "vite migration # migration should fail because vitest version is not supported",
     "cat package.json # check package.json is not updated"
   ]
 }

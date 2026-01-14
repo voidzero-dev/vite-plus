@@ -1,7 +1,7 @@
-> vp dlx --help # should show help message
+> vite dlx --help # should show help message
 Execute a package binary without installing it as a dependency
 
-Usage: vp dlx [OPTIONS] <ARGS>...
+Usage: vite dlx [OPTIONS] <ARGS>...
 
 Arguments:
   <ARGS>...  Package to execute (with optional @version) and arguments
@@ -12,7 +12,7 @@ Options:
   -s, --silent          Suppress all output except the executed command's output
   -h, --help            Print help
 
-> vp dlx -s cowsay hello # should fallback to npx for yarn@1
+> vite dlx -s cowsay hello # should fallback to npx for yarn@1
 Note: yarn@1 does not have dlx command, falling back to npx
  _______
 < hello >

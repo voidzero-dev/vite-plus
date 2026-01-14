@@ -1,7 +1,7 @@
-> vp dedupe --help # should show help
+> vite dedupe --help # should show help
 Deduplicate dependencies by removing older versions
 
-Usage: vp dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+Usage: vite dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
@@ -10,7 +10,7 @@ Options:
       --check  Check if deduplication would make changes
   -h, --help   Print help
 
-> vp dedupe && cat package.json # should dedupe dependencies
+> vite dedupe && cat package.json # should dedupe dependencies
 Already up to date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
@@ -38,7 +38,7 @@ devDependencies:
   }
 }
 
-> vp dedupe --check && cat package.json # should check if deduplication would make changes
+> vite dedupe --check && cat package.json # should check if deduplication would make changes
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 {
@@ -56,7 +56,7 @@ Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <
   }
 }
 
-> vp ddp -- --loglevel=warn && cat package.json # support pass through arguments
+> vite ddp -- --loglevel=warn && cat package.json # support pass through arguments
 {
   "name": "command-dedupe-pnpm10",
   "version": "1.0.0",
@@ -72,7 +72,7 @@ Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <
   }
 }
 
-[1]> json-edit package.json '_.dependencies = {}' && cat package.json && vp dedupe --check # should check fails because no dependencies
+[1]> json-edit package.json '_.dependencies = {}' && cat package.json && vite dedupe --check # should check fails because no dependencies
 {
   "name": "command-dedupe-pnpm10",
   "version": "1.0.0",
@@ -100,7 +100,7 @@ Packages
 Run pnpm dedupe to apply the changes above.
 
 
-> vp dedupe && cat package.json && vp dedupe --check # should dedupe fix the change by removing the dependencies
+> vite dedupe && cat package.json && vite dedupe --check # should dedupe fix the change by removing the dependencies
 Packages: -1
 -
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done

@@ -1,4 +1,4 @@
-> vp install -- --mode=update-lockfile # should install packages first
+> vite install -- --mode=update-lockfile # should install packages first
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -9,7 +9,7 @@
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done with warnings in <variable>ms <variable>ms
 
-> vp pm pack # should pack current workspace root
+> vite pm pack # should pack current workspace root
 ➤ YN0000: output.log
 ➤ YN0000: package.json
 ➤ YN0000: snap.txt
@@ -17,7 +17,7 @@
 ➤ YN0000: Package archive generated in <cwd>/package.tgz
 ➤ YN0000: Done in <variable>ms <variable>ms
 
-> vp pm pack --recursive # should pack all packages in workspace (uses workspaces foreach --all pack)
+> vite pm pack --recursive # should pack all packages in workspace (uses workspaces foreach --all pack)
 ➤ YN0000: output.log
 ➤ YN0000: package.json
 ➤ YN0000: snap.txt
@@ -32,13 +32,13 @@
 ➤ YN0000: Done in <variable>ms <variable>ms
 Done in <variable>ms <variable>ms
 
-> vp pm pack --filter app # should pack specific package (uses workspaces foreach --all --include app pack)
+> vite pm pack --filter app # should pack specific package (uses workspaces foreach --all --include app pack)
 ➤ YN0000: package.json
 ➤ YN0000: Package archive generated in <cwd>/packages/app/package.tgz
 ➤ YN0000: Done in <variable>ms <variable>ms
 Done in <variable>ms <variable>ms
 
-> vp pm pack --filter app --filter @vite-plus-test/utils # should pack multiple packages
+> vite pm pack --filter app --filter @vite-plus-test/utils # should pack multiple packages
 ➤ YN0000: package.json
 ➤ YN0000: Package archive generated in <cwd>/packages/app/package.tgz
 ➤ YN0000: Done in <variable>ms <variable>ms
@@ -47,7 +47,7 @@ Done in <variable>ms <variable>ms
 ➤ YN0000: Done in <variable>ms <variable>ms
 Done in <variable>ms <variable>ms
 
-> vp pm pack --out ./dist/package.tgz # should pack with output file
+> vite pm pack --out ./dist/package.tgz # should pack with output file
 ➤ YN0000: output.log
 ➤ YN0000: package.json
 ➤ YN0000: snap.txt
@@ -55,7 +55,7 @@ Done in <variable>ms <variable>ms
 ➤ YN0000: Package archive generated in <cwd>/dist/package.tgz
 ➤ YN0000: Done in <variable>ms <variable>ms
 
-> vp pm pack --json # should pack with json output
+> vite pm pack --json # should pack with json output
 {"base":"<cwd>"}
 {"location":"dist/package.tgz"}
 {"location":"output.log"}

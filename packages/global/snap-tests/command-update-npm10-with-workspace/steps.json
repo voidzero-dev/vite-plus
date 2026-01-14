@@ -4,11 +4,11 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp update testnpm2 -w -- --no-audit && cat package.json # should update in workspace root",
-    "vp update testnpm2 --latest --filter app -- --no-audit && cat packages/app/package.json # should update in specific package",
-    "vp up -D --filter app -- --no-audit && cat packages/app/package.json # should update dev dependencies in app",
-    "vp update --filter \"*\" -- --no-audit && cat packages/app/package.json packages/utils/package.json # should update in all packages",
-    "vp update -r --no-save -- --no-audit && cat package.json packages/app/package.json # should update recursively without saving",
-    "vp update --workspace --filter app @vite-plus-test/utils -- --no-audit && cat packages/app/package.json # should update workspace dependency"
+    "vite update testnpm2 -w -- --no-audit && cat package.json # should update in workspace root",
+    "vite update testnpm2 --latest --filter app -- --no-audit && cat packages/app/package.json # should update in specific package",
+    "vite up -D --filter app -- --no-audit && cat packages/app/package.json # should update dev dependencies in app",
+    "vite update --filter \"*\" -- --no-audit && cat packages/app/package.json packages/utils/package.json # should update in all packages",
+    "vite update -r --no-save -- --no-audit && cat package.json packages/app/package.json # should update recursively without saving",
+    "vite update --workspace --filter app @vite-plus-test/utils -- --no-audit && cat packages/app/package.json # should update workspace dependency"
   ]
 }

@@ -1,7 +1,7 @@
-> vp pm publish --help # should show help
+> vite pm publish --help # should show help
 Publish package to registry
 
-Usage: vp pm publish [OPTIONS] [TARBALL|FOLDER] [-- <PASS_THROUGH_ARGS>...]
+Usage: vite pm publish [OPTIONS] [TARBALL|FOLDER] [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   [TARBALL|FOLDER]        Tarball or folder to publish
@@ -21,5 +21,5 @@ Options:
       --filter <PATTERN>         Filter packages in monorepo (can be used multiple times)
   -h, --help                     Print help
 
-> vp pm publish --dry-run -- --loglevel error # should preview publish without actually publishing (uses pnpm publish --dry-run)
+> vite pm publish --dry-run -- --loglevel error # should preview publish without actually publishing (uses pnpm publish --dry-run)
 + command-publish-pnpm10@<semver>
