@@ -489,6 +489,7 @@ pub enum Commands {
     Fmt,
     /// Build library
     Lib,
+    #[command(hide = true)]
     /// Build documentation
     Doc,
     /// Run tasks
@@ -1111,7 +1112,6 @@ pub fn command_with_help() -> clap::Command {
   {bold}lint{reset}       Lint code
   {bold}test{reset}       Run tests
   {bold}fmt{reset}        Format code
-  {bold}doc{reset}        Build documentation
   {bold}lib{reset}        Build library
   {bold}migrate{reset}    Migrate an existing project to Vite+
   {bold}cache{reset}      Manage the task cache

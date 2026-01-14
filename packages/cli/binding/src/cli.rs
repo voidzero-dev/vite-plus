@@ -86,7 +86,7 @@ pub enum CustomTaskSubcommand {
         args: Vec<String>,
     },
     /// Build documentation
-    #[command(disable_help_flag = true)]
+    #[command(disable_help_flag = true, hide = true)]
     Doc {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
@@ -736,7 +736,6 @@ fn print_help() {
   {bold}test{reset}       Run tests
   {bold}fmt{reset}        Format code
   {bold}lib{reset}        Build library
-  {bold}doc{reset}        Build documentation
   {bold}run{reset}        Run tasks
   {bold}cache{reset}      Manage the task cache
 
