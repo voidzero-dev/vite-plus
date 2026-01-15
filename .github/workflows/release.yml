@@ -114,7 +114,17 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
 
       - name: Configure Git for access to vite-task
         run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
@@ -172,32 +182,30 @@ jobs:
           sed -i 's/"version": "0.0.0"/"version": "0.0.0-${{ github.sha }}"/' packages/cli/package.json
           sed -i 's/"version": "0.0.0"/"version": "0.0.0-${{ github.sha }}"/' packages/global/package.json
 
-      # Setup node correctly for publishing to github registry
-      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
-        with:
-          node-version-file: .node-version
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@voidzero-dev'
-          package-manager-cache: false
-
       - name: Build test
         run: pnpm --filter=@voidzero-dev/vite-plus-test build
 
-      - run: npm install -g npm@latest # For trusted publishing support
+      - name: 'Setup npm'
+        run: |
+          npm install -g npm@latest
+          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish native addons
         run: |
-          echo '@voidzero-dev:registry=https://npm.pkg.github.com/' >> ~/.npmrc
-          pnpm --filter=vite-plus publish-native
-          pnpm --filter=vite-plus-cli publish-native
+          node ./packages/cli/publish-native-addons.ts
+          node ./packages/global/publish-native-addons.ts
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish
         run: |
-          pnpm publish --filter=./packages/core --registry https://npm.pkg.github.com --no-git-checks
-          pnpm publish --filter=./packages/test --registry https://npm.pkg.github.com --no-git-checks
-          pnpm publish --filter=./packages/cli --registry https://npm.pkg.github.com --no-git-checks
-          pnpm publish --filter=./packages/global --registry https://npm.pkg.github.com --no-git-checks
+          pnpm publish --filter=./packages/core --access public --no-git-checks
+          pnpm publish --filter=./packages/test --access public --no-git-checks
+          pnpm publish --filter=./packages/cli --access public --no-git-checks
+          pnpm publish --filter=./packages/global --access public --no-git-checks
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

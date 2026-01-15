@@ -29,7 +29,7 @@ await cli.prePublish({
 
 const npmDir = await readdir(join(currentDir, 'npm'));
 for (const file of npmDir) {
-  execSync(`npm publish --tag latest --registry https://npm.pkg.github.com --no-git-checks`, {
+  execSync(`npm publish --tag latest --access public --no-git-checks`, {
     cwd: join(currentDir, 'npm', file),
     env: process.env,
     stdio: 'inherit',
