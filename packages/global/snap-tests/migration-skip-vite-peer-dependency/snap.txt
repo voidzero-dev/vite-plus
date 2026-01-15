@@ -11,6 +11,8 @@
 │
 ●    src/index.ts
 │
+◆  Wrote agent instructions to AGENTS.md
+│
 └  ✨ Migration completed!
 
 

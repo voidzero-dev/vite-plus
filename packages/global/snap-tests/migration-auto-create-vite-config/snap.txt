@@ -13,6 +13,8 @@
 │
 ◆  ✅ Merged .oxfmtrc.json into vite.config.ts
 │
+◆  Wrote agent instructions to AGENTS.md
+│
 └  ✨ Migration completed!
 
 

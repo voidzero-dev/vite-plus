@@ -20,9 +20,12 @@ import {
   updateWorkspaceConfig,
   runViteInstall,
   templatesDir,
+  selectAgentTargetPath,
+  detectExistingAgentTargetPath,
+  writeAgentInstructions,
 } from '../utils/index.js';
 import type { ExecutionResult } from './command.js';
-import { discoverTemplate } from './discovery.js';
+import { discoverTemplate, inferParentDir } from './discovery.js';
 import { cancelAndExit, checkProjectDirExists, promptPackageNameAndTargetDir } from './prompts.js';
 import {
   executeBuiltinTemplate,
@@ -50,6 +53,7 @@ Arguments:
 Options (before --):
   --directory DIR           Target directory for the generated project.
                             Only works for built-in templates; auto-detected for remote templates.
+  --agent NAME              Write agent instructions file into the generated project (e.g. chatgpt, claude, opencode).
   --no-interactive          Run in non-interactive mode (skip prompts and use defaults)
   --list                    List all available templates
   -h, --help                Show this help message
@@ -96,6 +100,7 @@ export interface Options {
   interactive: boolean;
   list: boolean;
   help: boolean;
+  agent?: string;
 }
 
 // Parse CLI arguments: split on '--' separator
@@ -114,10 +119,11 @@ function parseArgs() {
     interactive?: boolean;
     list?: boolean;
     help?: boolean;
+    agent?: string;
   }>(viteArgs, {
     alias: { h: 'help' },
     boolean: ['help', 'list', 'all', 'interactive'],
-    string: ['directory'],
+    string: ['directory', 'agent'],
     default: { interactive: defaultInteractive() },
   });
 
@@ -130,6 +136,7 @@ function parseArgs() {
       interactive: parsed.interactive,
       list: parsed.list || false,
       help: parsed.help || false,
+      agent: parsed.agent,
     } as Options,
     templateArgs,
   };
@@ -195,6 +202,8 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
   // Interactive mode: prompt for template if not provided
   let selectedTemplateName = templateName as string;
   let selectedTemplateArgs = [...templateArgs];
+  let selectedAgentTargetPath: string | undefined;
+  let selectedParentDir: string | undefined;
 
   if (!selectedTemplateName) {
     const templates: { label: string; value: string; hint: string }[] = [];
@@ -279,6 +288,99 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
     }
   }
 
+  const isBuiltinTemplate = selectedTemplateName.startsWith('vite:');
+  if (targetDir && !isBuiltinTemplate) {
+    cancelAndExit('The --directory option is only available for builtin templates', 1);
+  }
+  if (selectedTemplateName === BuiltinTemplate.monorepo && isMonorepo) {
+    prompts.log.info(
+      'You are already in a monorepo workspace.\nUse a different template or run this command outside the monorepo',
+    );
+    cancelAndExit('Cannot create a monorepo inside an existing monorepo', 1);
+  }
+
+  if (isMonorepo && options.interactive && !targetDir) {
+    let parentDir: string | undefined;
+    if (workspaceInfoOptional.parentDirs.length > 0) {
+      const defaultParentDir =
+        inferParentDir(selectedTemplateName, workspaceInfoOptional) ??
+        workspaceInfoOptional.parentDirs[0];
+      const selected = await prompts.select({
+        message: 'Where should the new package be added to the monorepo:',
+        options: workspaceInfoOptional.parentDirs
+          .map((dir) => ({
+            label: `${dir}/`,
+            value: dir,
+            hint: ``,
+          }))
+          .concat([
+            {
+              label: 'other',
+              value: 'other',
+              hint: 'Enter a custom target directory',
+            },
+          ]),
+        initialValue: defaultParentDir,
+      });
+
+      if (prompts.isCancel(selected)) {
+        cancelAndExit();
+      }
+
+      if (selected !== 'other') {
+        parentDir = selected;
+      }
+    }
+
+    if (!parentDir) {
+      const customTargetDir = await prompts.text({
+        message: 'Where should the new package be added to the monorepo:',
+        placeholder: 'e.g., packages/',
+        validate: (value) => {
+          return formatTargetDir(value).error;
+        },
+      });
+
+      if (prompts.isCancel(customTargetDir)) {
+        cancelAndExit();
+      }
+
+      parentDir = customTargetDir;
+    }
+
+    selectedParentDir = parentDir;
+  }
+  if (isMonorepo && !options.interactive && !targetDir) {
+    const inferredParentDir =
+      inferParentDir(selectedTemplateName, workspaceInfoOptional) ??
+      workspaceInfoOptional.parentDirs[0];
+    selectedParentDir = inferredParentDir;
+  }
+
+  if (isBuiltinTemplate && !targetDir) {
+    if (selectedTemplateName === BuiltinTemplate.monorepo) {
+      const selected = await promptPackageNameAndTargetDir(
+        'vite-plus-monorepo',
+        options.interactive,
+      );
+      packageName = selected.packageName;
+      targetDir = selected.targetDir;
+    } else {
+      let defaultPackageName = `vite-plus-${selectedTemplateName.split(':')[1]}`;
+      if (workspaceInfoOptional.monorepoScope) {
+        defaultPackageName = `${workspaceInfoOptional.monorepoScope}/${defaultPackageName}`;
+      }
+      const selected = await promptPackageNameAndTargetDir(
+        defaultPackageName,
+        options.interactive,
+      );
+      packageName = selected.packageName;
+      targetDir = selectedParentDir
+        ? path.join(selectedParentDir, selected.targetDir)
+        : selected.targetDir;
+    }
+  }
+
   // Prompt for package manager or use default
   const packageManager =
     workspaceInfoOptional.packageManager ?? (await selectPackageManager(options.interactive));
@@ -294,6 +396,18 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
     downloadPackageManager: downloadResult,
   };
 
+  const existingAgentTargetPath =
+    options.agent || !options.interactive
+      ? undefined
+      : detectExistingAgentTargetPath(workspaceInfoOptional.rootDir);
+  selectedAgentTargetPath =
+    existingAgentTargetPath ??
+    (await selectAgentTargetPath({
+      interactive: options.interactive,
+      agent: options.agent,
+      onCancel: () => cancelAndExit(),
+    }));
+
   // Discover template
   const templateInfo = discoverTemplate(
     selectedTemplateName,
@@ -302,11 +416,12 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
     options.interactive,
   );
 
+  if (selectedParentDir) {
+    templateInfo.parentDir = selectedParentDir;
+  }
+
   // only for builtin templates
   if (targetDir) {
-    if (templateInfo.type !== TemplateType.builtin) {
-      cancelAndExit('The --directory option is only available for builtin templates', 1);
-    }
     // reset auto detect parent directory
     templateInfo.parentDir = undefined;
   }
@@ -315,23 +430,6 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
 
   // #region Handle monorepo template
   if (templateInfo.command === BuiltinTemplate.monorepo) {
-    // Validate: cannot create monorepo inside an existing monorepo
-    if (isMonorepo) {
-      prompts.log.info(
-        'You are already in a monorepo workspace.\nUse a different template or run this command outside the monorepo',
-      );
-      cancelAndExit('Cannot create a monorepo inside an existing monorepo', 1);
-    }
-
-    if (!packageName) {
-      const selected = await promptPackageNameAndTargetDir(
-        'vite-plus-monorepo',
-        options.interactive,
-      );
-      packageName = selected.packageName;
-      targetDir = selected.targetDir;
-    }
-
     prompts.log.info(`Target directory: ${cyan(targetDir)}`);
     await checkProjectDirExists(path.join(workspaceInfo.rootDir, targetDir), options.interactive);
     const result = await executeMonorepoTemplate(
@@ -345,6 +443,11 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
 
     // rewrite monorepo to add vite-plus dependencies
     const fullPath = path.join(workspaceInfo.rootDir, result.projectDir!);
+    await writeAgentInstructions({
+      projectRoot: fullPath,
+      targetPath: selectedAgentTargetPath,
+      interactive: options.interactive,
+    });
     workspaceInfo.rootDir = fullPath;
     rewriteMonorepo(workspaceInfo);
     await runViteInstall(fullPath, options.interactive);
@@ -355,59 +458,6 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
   // #endregion
 
   // #region Handle single project template
-
-  if (isMonorepo && options.interactive) {
-    if (!targetDir) {
-      // no custom target directory provided, prompt for parent directory
-      let parentDir: string | undefined;
-      if (workspaceInfo.parentDirs.length > 0) {
-        const defaultParentDir = templateInfo.parentDir ?? workspaceInfo.parentDirs[0];
-        const selected = await prompts.select({
-          message: 'Where should the new package be added to the monorepo:',
-          options: workspaceInfo.parentDirs
-            .map((dir) => ({
-              label: `${dir}/`,
-              value: dir,
-              hint: ``,
-            }))
-            .concat([
-              {
-                label: 'other',
-                value: 'other',
-                hint: 'Enter a custom target directory',
-              },
-            ]),
-          initialValue: defaultParentDir,
-        });
-
-        if (prompts.isCancel(selected)) {
-          cancelAndExit();
-        }
-
-        if (selected !== 'other') {
-          parentDir = selected;
-        }
-      }
-
-      if (!parentDir) {
-        const customTargetDir = await prompts.text({
-          message: 'Where should the new package be added to the monorepo:',
-          placeholder: 'e.g., packages/',
-          validate: (value) => {
-            return formatTargetDir(value).error;
-          },
-        });
-
-        if (prompts.isCancel(customTargetDir)) {
-          cancelAndExit();
-        }
-
-        parentDir = customTargetDir;
-      }
-
-      templateInfo.parentDir = parentDir;
-    }
-  }
 
   let result: ExecutionResult;
   if (templateInfo.type === TemplateType.builtin) {
@@ -445,6 +495,11 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
   // Show detected project directory
   prompts.log.success(`Detected project directory: ${green(projectDir)}`);
   const fullPath = path.join(workspaceInfo.rootDir, projectDir);
+  await writeAgentInstructions({
+    projectRoot: fullPath,
+    targetPath: selectedAgentTargetPath,
+    interactive: options.interactive,
+  });
 
   // Monorepo integration
   if (isMonorepo) {

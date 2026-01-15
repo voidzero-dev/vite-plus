@@ -17,6 +17,8 @@
 │
 ●    tsdown.config.ts
 │
+◆  Wrote agent instructions to AGENTS.md
+│
 └  ✨ Migration completed!
 
 
@@ -69,6 +71,8 @@ export default defineConfig({
 ●  pnpm@<semver> installed
 │
 ●  📦 Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/migration/#tsdown
+│
+●  Skipped writing AGENTS.md (already exists)
 │
 └  ✨ Migration completed!
 

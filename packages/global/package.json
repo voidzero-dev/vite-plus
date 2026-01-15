@@ -12,6 +12,7 @@
   "files": [
     "bin",
     "dist",
+    "AGENTS.md",
     "templates",
     "rules"
   ],

@@ -1,5 +1,6 @@
 > vite new vite:monorepo --no-interactive # create monorepo with default values
 > ls vite-plus-monorepo | LC_ALL=C sort # check files created
+AGENTS.md
 README.md
 apps
 package.json
@@ -108,6 +109,7 @@ vite-plus-generator
 
 > vite new vite:monorepo --no-interactive --directory my-vite-plus-monorepo # create monorepo with custom directory
 > ls my-vite-plus-monorepo | LC_ALL=C sort # check files created
+AGENTS.md
 README.md
 apps
 package.json

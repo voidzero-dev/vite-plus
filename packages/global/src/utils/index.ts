@@ -6,3 +6,4 @@ export * from './workspace.js';
 export * from './yaml.js';
 export * from './command.js';
 export * from './constants.js';
+export * from './agent.js';

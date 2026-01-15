@@ -14,6 +14,8 @@ import {
   runViteInstall,
   upgradeYarn,
   cancelAndExit,
+  selectAgentTargetPath,
+  writeAgentInstructions,
 } from '../utils/index.js';
 import {
   checkVitestVersion,
@@ -34,6 +36,7 @@ Arguments:
   PATH                       Target directory to migrate (default: current directory)
 
 Options:
+  --agent NAME              Write agent instructions file into the project (e.g. chatgpt, claude, opencode).
   --no-interactive           Run in non-interactive mode (skip prompts and use defaults)
   -h, --help                 Show this help message
 
@@ -53,6 +56,7 @@ Aliases: ${gray('migrate')}
 export interface MigrationOptions {
   interactive: boolean;
   help?: boolean;
+  agent?: string;
 }
 
 function parseArgs() {
@@ -61,9 +65,11 @@ function parseArgs() {
   const parsed = mri<{
     help?: boolean;
     interactive?: boolean;
+    agent?: string;
   }>(args, {
     alias: { h: 'help' },
     boolean: ['help', 'interactive'],
+    string: ['agent'],
     default: { interactive: defaultInteractive() },
   });
 
@@ -79,6 +85,7 @@ function parseArgs() {
     options: {
       interactive: parsed.interactive,
       help: parsed.help,
+      agent: parsed.agent,
     } as MigrationOptions,
   };
 }
@@ -153,6 +160,18 @@ async function main() {
   } else {
     rewriteStandaloneProject(workspaceInfo.rootDir, workspaceInfo);
   }
+
+  const selectedAgentTargetPath = await selectAgentTargetPath({
+    interactive: options.interactive,
+    agent: options.agent,
+    onCancel: () => cancelAndExit(),
+  });
+
+  await writeAgentInstructions({
+    projectRoot: workspaceInfo.rootDir,
+    targetPath: selectedAgentTargetPath,
+    interactive: options.interactive,
+  });
 
   // reinstall after migration
   await runViteInstall(workspaceInfo.rootDir, options.interactive);

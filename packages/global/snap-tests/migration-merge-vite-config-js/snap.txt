@@ -9,6 +9,8 @@
 │
 ◆  ✅ Merged .oxlintrc.json into vite.config.js
 │
+◆  Wrote agent instructions to AGENTS.md
+│
 └  ✨ Migration completed!
 
 

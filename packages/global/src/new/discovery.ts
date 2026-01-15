@@ -117,7 +117,10 @@ export function discoverTemplate(
 }
 
 // Infer the parent directory of the generated package based on the template name
-function inferParentDir(templateName: string, workspaceInfo: WorkspaceInfo): string | undefined {
+export function inferParentDir(
+  templateName: string,
+  workspaceInfo: WorkspaceInfo,
+): string | undefined {
   if (workspaceInfo.parentDirs.length === 0) {
     return;
   }

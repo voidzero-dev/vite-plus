@@ -15,6 +15,8 @@
 │
 ●    vite.config.ts
 │
+◆  Wrote agent instructions to AGENTS.md
+│
 └  ✨ Migration completed!
 
 

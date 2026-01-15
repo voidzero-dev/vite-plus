@@ -7,6 +7,7 @@ Arguments:
   PATH                       Target directory to migrate (default: current directory)
 
 Options:
+  --agent NAME              Write agent instructions file into the project (e.g. chatgpt, claude, opencode).
   --no-interactive           Run in non-interactive mode (skip prompts and use defaults)
   -h, --help                 Show this help message
 
@@ -33,6 +34,8 @@ Aliases: migrate
 ●  pnpm@<semver> installed
 │
 ◆  ✅ Rewrote lint-staged config in .lintstagedrc.json
+│
+◆  Wrote agent instructions to AGENTS.md
 │
 └  ✨ Migration completed!
 

@@ -13,6 +13,7 @@ Arguments:
 Options (before --):
   --directory DIR           Target directory for the generated project.
                             Only works for built-in templates; auto-detected for remote templates.
+  --agent NAME              Write agent instructions file into the generated project (e.g. chatgpt, claude, opencode).
   --no-interactive          Run in non-interactive mode (skip prompts and use defaults)
   --list                    List all available templates
   -h, --help                Show this help message
