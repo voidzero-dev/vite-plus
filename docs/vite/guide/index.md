@@ -20,7 +20,7 @@ All in a single, cohesive tool designed for scale, speed, and developer sanity.
 ### Global CLI
 
 ```bash
-npm install -g vite-plus-global
+npm install -g vite-plus-cli
 ```
 
 ## Scaffolding Your First Vite+ Project

@@ -31,7 +31,7 @@ async function migrateProject(project: string) {
         '@voidzero-dev/vite-plus-core': `file:${tgzPath}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
         '@voidzero-dev/vite-plus-test': `file:${tgzPath}/voidzero-dev-vite-plus-test-0.0.0.tgz`,
       }),
-      VITE_PLUS_VERSION: `file:${tgzPath}/voidzero-dev-vite-plus-0.0.0.tgz`,
+      VITE_PLUS_VERSION: `file:${tgzPath}/vite-plus-0.0.0.tgz`,
     },
   });
 }

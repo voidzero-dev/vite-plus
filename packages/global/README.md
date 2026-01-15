@@ -6,7 +6,7 @@
 ## Install
 
 ```bash
-npm install -g vite-plus-global
+npm install -g vite-plus-cli
 ```
 
 ## Get Started

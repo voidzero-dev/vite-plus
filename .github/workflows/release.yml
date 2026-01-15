@@ -182,7 +182,7 @@ jobs:
       - name: Publish native addons
         run: |
           echo '@voidzero-dev:registry=https://npm.pkg.github.com/' >> ~/.npmrc
-          pnpm --filter=@voidzero-dev/vite-plus publish-native
+          pnpm --filter=vite-plus publish-native
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

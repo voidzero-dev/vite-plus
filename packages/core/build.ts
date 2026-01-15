@@ -256,7 +256,7 @@ async function bundleRolldown() {
         // @rolldown/binding-darwin-arm64 → @voidzero-dev/vite-plus-darwin-arm64/binding
         source = source.replace(
           /@rolldown\/binding-([a-z0-9-]+)/g,
-          '@voidzero-dev/vite-plus/binding',
+          'vite-plus/binding',
         );
         source = source.replaceAll(`${rolldownBindingVersion}`, pkgJson.version);
       }

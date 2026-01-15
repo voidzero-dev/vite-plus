@@ -142,12 +142,12 @@ Importing from `@vitest/browser-*` packages directly requires additional overrid
 ```yaml
 # pnpm-workspace.yaml
 overrides:
-  vite: 'file:path/to/@voidzero-dev/vite-plus-core.tgz'
-  vitest: 'file:path/to/@voidzero-dev/vite-plus-test.tgz'
-  '@vitest/browser': 'file:path/to/@voidzero-dev/vite-plus-test.tgz'
-  '@vitest/browser-playwright': 'file:path/to/@voidzero-dev/vite-plus-test.tgz'
-  '@vitest/browser-webdriverio': 'file:path/to/@voidzero-dev/vite-plus-test.tgz'
-  '@vitest/browser-preview': 'file:path/to/@voidzero-dev/vite-plus-test.tgz'
+  vite: 'file:path/to/vite-plus-core.tgz'
+  vitest: 'file:path/to/vite-plus-test.tgz'
+  '@vitest/browser': 'file:path/to/vite-plus-test.tgz'
+  '@vitest/browser-playwright': 'file:path/to/vite-plus-test.tgz'
+  '@vitest/browser-webdriverio': 'file:path/to/vite-plus-test.tgz'
+  '@vitest/browser-preview': 'file:path/to/vite-plus-test.tgz'
 ```
 
 Or using npm package names:

@@ -227,7 +227,7 @@ jobs:
         working-directory: ecosystem-ci/${{ matrix.project.name }}
         run: |
           # install global CLI first
-          npm install -g ../../tmp/tgz/voidzero-dev-global-0.0.0.tgz
+          npm install -g ../../tmp/tgz/vite-plus-cli-0.0.0.tgz
           # avoid the vite migration using the wrong ignore file
           rm -f ../.gitignore
           node ../patch-project.ts ${{ matrix.project.name }}
