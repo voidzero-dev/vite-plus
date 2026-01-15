@@ -162,13 +162,6 @@ jobs:
           pattern: global
           merge-multiple: true
 
-      - name: Download global binding to dist
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          path: packages/global/dist
-          pattern: vite-plus-cli-native-*
-          merge-multiple: true
-
       - name: Download global binding to artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
