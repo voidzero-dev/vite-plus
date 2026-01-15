@@ -89,7 +89,7 @@ vite pm <subcommand> [OPTIONS] [ARGS...]
 1. **prune**: Remove unnecessary packages
 2. **pack**: Create a tarball of the package
 3. **list** (alias: **ls**): List installed packages
-4. **view**: View package information from registry
+4. **view**: View package information from the registry
 5. **publish**: Publish package to registry
 6. **owner**: Manage package owners
 7. **cache**: Manage package cache
@@ -864,7 +864,7 @@ pub enum PmCommands {
         args: Vec<String>,
     },
 
-    /// View package information from registry
+    /// View package information from the registry
     View {
         /// Package name with optional version
         package: String,
@@ -1565,7 +1565,7 @@ Commands:
   prune    Remove unnecessary packages
   pack     Create a tarball of the package
   list     List installed packages (alias: ls)
-  view     View package information from registry
+  view     View package information from the registry
   publish  Publish package to registry
   owner    Manage package owners
   cache    Manage package cache

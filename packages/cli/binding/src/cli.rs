@@ -73,7 +73,7 @@ pub enum CustomTaskSubcommand {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
-    /// Run development server
+    /// Run the development server
     #[command(disable_help_flag = true)]
     Dev {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
@@ -729,7 +729,7 @@ fn print_help() {
 {bold_underline}Usage:{reset} {bold}vite{reset} <COMMAND>
 
 {bold_underline}Vite+ Commands:{reset}
-  {bold}dev{reset}        Run development server
+  {bold}dev{reset}        Run the development server
   {bold}build{reset}      Build for production
   {bold}preview{reset}    Preview production build
   {bold}lint{reset}       Lint code

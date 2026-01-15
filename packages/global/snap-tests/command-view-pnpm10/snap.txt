@@ -1,5 +1,5 @@
 > vite pm view --help # should show help
-View package information from registry
+View package information from the registry
 
 Usage: vite pm view [OPTIONS] <PACKAGE> [FIELD] [-- <PASS_THROUGH_ARGS>...]
 

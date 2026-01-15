@@ -4,7 +4,7 @@ vite+/<semver>
 [1;4mUsage:[0m [1mvite[0m <COMMAND>
 
 [1;4mVite+ Commands:[0m
-  [1mdev[0m        Run development server
+  [1mdev[0m        Run the development server
   [1mbuild[0m      Build for production
   [1mpreview[0m    Preview production build
   [1mlint[0m       Lint code

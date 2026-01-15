@@ -4,7 +4,7 @@ vite+/<semver>
 Usage: vite <COMMAND>
 
 Vite+ Commands:
-  dev        Run development server
+  dev        Run the development server
   build      Build for production
   lint       Lint code
   test       Run tests
@@ -21,10 +21,10 @@ Package Manager Commands:
   remove     Remove packages from dependencies
   dedupe     Deduplicate dependencies by removing older versions
   dlx        Execute a package binary without installing it as a dependency
-  info       View package information from registry
+  info       View package information from the registry
   link       Link packages for local development
   outdated   Check for outdated packages
-  pm         Forward command to the package manager
+  pm         Forward a command to the package manager
   unlink     Unlink packages
   update     Update packages to their latest versions
   why        Show why a package is installed
@@ -237,7 +237,7 @@ Options:
   -h, --help                   Print help
 
 > vite pm -h # show pm help message
-Forward command to the package manager
+Forward a command to the package manager
 
 Usage: vite pm <COMMAND>
 
@@ -245,7 +245,7 @@ Commands:
   prune    Remove unnecessary packages
   pack     Create a tarball of the package
   list     List installed packages
-  view     View package information from registry
+  view     View package information from the registry
   publish  Publish package to registry
   owner    Manage package owners
   cache    Manage package cache

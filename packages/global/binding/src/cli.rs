@@ -397,7 +397,7 @@ pub enum Commands {
         #[arg(last = true, allow_hyphen_values = true)]
         pass_through_args: Option<Vec<String>>,
     },
-    /// View package information from registry
+    /// View package information from the registry
     #[command(alias = "view", alias = "show")]
     Info {
         /// Package name with optional version
@@ -442,7 +442,7 @@ pub enum Commands {
         #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
-    /// Forward command to the package manager.
+    /// Forward a command to the package manager.
     #[command(subcommand)]
     Pm(PmCommands),
     /// Execute a package binary without installing it as a dependency
@@ -477,7 +477,7 @@ pub enum Commands {
     },
 
     // below commands only used to show help message, not actually executed
-    /// Run development server
+    /// Run the development server
     Dev,
     /// Build application
     Build,
@@ -609,7 +609,7 @@ pub enum PmCommands {
         pass_through_args: Option<Vec<String>>,
     },
 
-    /// View package information from registry
+    /// View package information from the registry
     #[command(alias = "info", alias = "show")]
     View {
         /// Package name with optional version
@@ -1107,7 +1107,7 @@ pub fn command_with_help() -> clap::Command {
 
     let after_help = format!(
         "{bold_underline}Vite+ Commands:{reset}
-  {bold}dev{reset}        Run development server
+  {bold}dev{reset}        Run the development server
   {bold}build{reset}      Build for production
   {bold}lint{reset}       Lint code
   {bold}test{reset}       Run tests
@@ -1124,10 +1124,10 @@ pub fn command_with_help() -> clap::Command {
   {bold}remove{reset}     Remove packages from dependencies
   {bold}dedupe{reset}     Deduplicate dependencies by removing older versions
   {bold}dlx{reset}        Execute a package binary without installing it as a dependency
-  {bold}info{reset}       View package information from registry
+  {bold}info{reset}       View package information from the registry
   {bold}link{reset}       Link packages for local development
   {bold}outdated{reset}   Check for outdated packages
-  {bold}pm{reset}         Forward command to the package manager
+  {bold}pm{reset}         Forward a command to the package manager
   {bold}unlink{reset}     Unlink packages
   {bold}update{reset}     Update packages to their latest versions
   {bold}why{reset}        Show why a package is installed
