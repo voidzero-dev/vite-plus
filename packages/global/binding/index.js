@@ -76,14 +76,14 @@ function requireNative() {
   } else if (process.platform === 'android') {
     if (process.arch === 'arm64') {
       try {
-        return require('./vite-plus-global.android-arm64.node');
+        return require('./vite-plus-cli.android-arm64.node');
       } catch (e) {
         loadErrors.push(e);
       }
       try {
-        const binding = require('@vite-plus/global-android-arm64');
+        const binding = require('@voidzero-dev/vite-plus-cli-android-arm64');
         const bindingPackageVersion =
-          require('@vite-plus/global-android-arm64/package.json').version;
+          require('@voidzero-dev/vite-plus-cli-android-arm64/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -99,14 +99,14 @@ function requireNative() {
       }
     } else if (process.arch === 'arm') {
       try {
-        return require('./vite-plus-global.android-arm-eabi.node');
+        return require('./vite-plus-cli.android-arm-eabi.node');
       } catch (e) {
         loadErrors.push(e);
       }
       try {
-        const binding = require('@vite-plus/global-android-arm-eabi');
+        const binding = require('@voidzero-dev/vite-plus-cli-android-arm-eabi');
         const bindingPackageVersion =
-          require('@vite-plus/global-android-arm-eabi/package.json').version;
+          require('@voidzero-dev/vite-plus-cli-android-arm-eabi/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -130,14 +130,14 @@ function requireNative() {
         process.config?.variables?.node_target_type === 'shared_library'
       ) {
         try {
-          return require('./vite-plus-global.win32-x64-gnu.node');
+          return require('./vite-plus-cli.win32-x64-gnu.node');
         } catch (e) {
           loadErrors.push(e);
         }
         try {
-          const binding = require('@vite-plus/global-win32-x64-gnu');
+          const binding = require('@voidzero-dev/vite-plus-cli-win32-x64-gnu');
           const bindingPackageVersion =
-            require('@vite-plus/global-win32-x64-gnu/package.json').version;
+            require('@voidzero-dev/vite-plus-cli-win32-x64-gnu/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -153,14 +153,14 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./vite-plus-global.win32-x64-msvc.node');
+          return require('./vite-plus-cli.win32-x64-msvc.node');
         } catch (e) {
           loadErrors.push(e);
         }
         try {
-          const binding = require('@vite-plus/global-win32-x64-msvc');
+          const binding = require('@voidzero-dev/vite-plus-cli-win32-x64-msvc');
           const bindingPackageVersion =
-            require('@vite-plus/global-win32-x64-msvc/package.json').version;
+            require('@voidzero-dev/vite-plus-cli-win32-x64-msvc/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -177,14 +177,14 @@ function requireNative() {
       }
     } else if (process.arch === 'ia32') {
       try {
-        return require('./vite-plus-global.win32-ia32-msvc.node');
+        return require('./vite-plus-cli.win32-ia32-msvc.node');
       } catch (e) {
         loadErrors.push(e);
       }
       try {
-        const binding = require('@vite-plus/global-win32-ia32-msvc');
+        const binding = require('@voidzero-dev/vite-plus-cli-win32-ia32-msvc');
         const bindingPackageVersion =
-          require('@vite-plus/global-win32-ia32-msvc/package.json').version;
+          require('@voidzero-dev/vite-plus-cli-win32-ia32-msvc/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -200,14 +200,14 @@ function requireNative() {
       }
     } else if (process.arch === 'arm64') {
       try {
-        return require('./vite-plus-global.win32-arm64-msvc.node');
+        return require('./vite-plus-cli.win32-arm64-msvc.node');
       } catch (e) {
         loadErrors.push(e);
       }
       try {
-        const binding = require('@vite-plus/global-win32-arm64-msvc');
+        const binding = require('@voidzero-dev/vite-plus-cli-win32-arm64-msvc');
         const bindingPackageVersion =
-          require('@vite-plus/global-win32-arm64-msvc/package.json').version;
+          require('@voidzero-dev/vite-plus-cli-win32-arm64-msvc/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -226,14 +226,14 @@ function requireNative() {
     }
   } else if (process.platform === 'darwin') {
     try {
-      return require('./vite-plus-global.darwin-universal.node');
+      return require('./vite-plus-cli.darwin-universal.node');
     } catch (e) {
       loadErrors.push(e);
     }
     try {
-      const binding = require('@vite-plus/global-darwin-universal');
+      const binding = require('@voidzero-dev/vite-plus-cli-darwin-universal');
       const bindingPackageVersion =
-        require('@vite-plus/global-darwin-universal/package.json').version;
+        require('@voidzero-dev/vite-plus-cli-darwin-universal/package.json').version;
       if (
         bindingPackageVersion !== '0.0.0' &&
         process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -249,13 +249,14 @@ function requireNative() {
     }
     if (process.arch === 'x64') {
       try {
-        return require('./vite-plus-global.darwin-x64.node');
+        return require('./vite-plus-cli.darwin-x64.node');
       } catch (e) {
         loadErrors.push(e);
       }
       try {
-        const binding = require('@vite-plus/global-darwin-x64');
-        const bindingPackageVersion = require('@vite-plus/global-darwin-x64/package.json').version;
+        const binding = require('@voidzero-dev/vite-plus-cli-darwin-x64');
+        const bindingPackageVersion =
+          require('@voidzero-dev/vite-plus-cli-darwin-x64/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -271,14 +272,14 @@ function requireNative() {
       }
     } else if (process.arch === 'arm64') {
       try {
-        return require('./vite-plus-global.darwin-arm64.node');
+        return require('./vite-plus-cli.darwin-arm64.node');
       } catch (e) {
         loadErrors.push(e);
       }
       try {
-        const binding = require('@vite-plus/global-darwin-arm64');
+        const binding = require('@voidzero-dev/vite-plus-cli-darwin-arm64');
         const bindingPackageVersion =
-          require('@vite-plus/global-darwin-arm64/package.json').version;
+          require('@voidzero-dev/vite-plus-cli-darwin-arm64/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -298,13 +299,14 @@ function requireNative() {
   } else if (process.platform === 'freebsd') {
     if (process.arch === 'x64') {
       try {
-        return require('./vite-plus-global.freebsd-x64.node');
+        return require('./vite-plus-cli.freebsd-x64.node');
       } catch (e) {
         loadErrors.push(e);
       }
       try {
-        const binding = require('@vite-plus/global-freebsd-x64');
-        const bindingPackageVersion = require('@vite-plus/global-freebsd-x64/package.json').version;
+        const binding = require('@voidzero-dev/vite-plus-cli-freebsd-x64');
+        const bindingPackageVersion =
+          require('@voidzero-dev/vite-plus-cli-freebsd-x64/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -320,14 +322,14 @@ function requireNative() {
       }
     } else if (process.arch === 'arm64') {
       try {
-        return require('./vite-plus-global.freebsd-arm64.node');
+        return require('./vite-plus-cli.freebsd-arm64.node');
       } catch (e) {
         loadErrors.push(e);
       }
       try {
-        const binding = require('@vite-plus/global-freebsd-arm64');
+        const binding = require('@voidzero-dev/vite-plus-cli-freebsd-arm64');
         const bindingPackageVersion =
-          require('@vite-plus/global-freebsd-arm64/package.json').version;
+          require('@voidzero-dev/vite-plus-cli-freebsd-arm64/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -348,14 +350,14 @@ function requireNative() {
     if (process.arch === 'x64') {
       if (isMusl()) {
         try {
-          return require('./vite-plus-global.linux-x64-musl.node');
+          return require('./vite-plus-cli.linux-x64-musl.node');
         } catch (e) {
           loadErrors.push(e);
         }
         try {
-          const binding = require('@vite-plus/global-linux-x64-musl');
+          const binding = require('@voidzero-dev/vite-plus-cli-linux-x64-musl');
           const bindingPackageVersion =
-            require('@vite-plus/global-linux-x64-musl/package.json').version;
+            require('@voidzero-dev/vite-plus-cli-linux-x64-musl/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -371,14 +373,14 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./vite-plus-global.linux-x64-gnu.node');
+          return require('./vite-plus-cli.linux-x64-gnu.node');
         } catch (e) {
           loadErrors.push(e);
         }
         try {
-          const binding = require('@vite-plus/global-linux-x64-gnu');
+          const binding = require('@voidzero-dev/vite-plus-cli-linux-x64-gnu');
           const bindingPackageVersion =
-            require('@vite-plus/global-linux-x64-gnu/package.json').version;
+            require('@voidzero-dev/vite-plus-cli-linux-x64-gnu/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -396,14 +398,14 @@ function requireNative() {
     } else if (process.arch === 'arm64') {
       if (isMusl()) {
         try {
-          return require('./vite-plus-global.linux-arm64-musl.node');
+          return require('./vite-plus-cli.linux-arm64-musl.node');
         } catch (e) {
           loadErrors.push(e);
         }
         try {
-          const binding = require('@vite-plus/global-linux-arm64-musl');
+          const binding = require('@voidzero-dev/vite-plus-cli-linux-arm64-musl');
           const bindingPackageVersion =
-            require('@vite-plus/global-linux-arm64-musl/package.json').version;
+            require('@voidzero-dev/vite-plus-cli-linux-arm64-musl/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -419,14 +421,14 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./vite-plus-global.linux-arm64-gnu.node');
+          return require('./vite-plus-cli.linux-arm64-gnu.node');
         } catch (e) {
           loadErrors.push(e);
         }
         try {
-          const binding = require('@vite-plus/global-linux-arm64-gnu');
+          const binding = require('@voidzero-dev/vite-plus-cli-linux-arm64-gnu');
           const bindingPackageVersion =
-            require('@vite-plus/global-linux-arm64-gnu/package.json').version;
+            require('@voidzero-dev/vite-plus-cli-linux-arm64-gnu/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -444,14 +446,14 @@ function requireNative() {
     } else if (process.arch === 'arm') {
       if (isMusl()) {
         try {
-          return require('./vite-plus-global.linux-arm-musleabihf.node');
+          return require('./vite-plus-cli.linux-arm-musleabihf.node');
         } catch (e) {
           loadErrors.push(e);
         }
         try {
-          const binding = require('@vite-plus/global-linux-arm-musleabihf');
+          const binding = require('@voidzero-dev/vite-plus-cli-linux-arm-musleabihf');
           const bindingPackageVersion =
-            require('@vite-plus/global-linux-arm-musleabihf/package.json').version;
+            require('@voidzero-dev/vite-plus-cli-linux-arm-musleabihf/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -467,14 +469,14 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./vite-plus-global.linux-arm-gnueabihf.node');
+          return require('./vite-plus-cli.linux-arm-gnueabihf.node');
         } catch (e) {
           loadErrors.push(e);
         }
         try {
-          const binding = require('@vite-plus/global-linux-arm-gnueabihf');
+          const binding = require('@voidzero-dev/vite-plus-cli-linux-arm-gnueabihf');
           const bindingPackageVersion =
-            require('@vite-plus/global-linux-arm-gnueabihf/package.json').version;
+            require('@voidzero-dev/vite-plus-cli-linux-arm-gnueabihf/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -492,14 +494,14 @@ function requireNative() {
     } else if (process.arch === 'loong64') {
       if (isMusl()) {
         try {
-          return require('./vite-plus-global.linux-loong64-musl.node');
+          return require('./vite-plus-cli.linux-loong64-musl.node');
         } catch (e) {
           loadErrors.push(e);
         }
         try {
-          const binding = require('@vite-plus/global-linux-loong64-musl');
+          const binding = require('@voidzero-dev/vite-plus-cli-linux-loong64-musl');
           const bindingPackageVersion =
-            require('@vite-plus/global-linux-loong64-musl/package.json').version;
+            require('@voidzero-dev/vite-plus-cli-linux-loong64-musl/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -515,14 +517,14 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./vite-plus-global.linux-loong64-gnu.node');
+          return require('./vite-plus-cli.linux-loong64-gnu.node');
         } catch (e) {
           loadErrors.push(e);
         }
         try {
-          const binding = require('@vite-plus/global-linux-loong64-gnu');
+          const binding = require('@voidzero-dev/vite-plus-cli-linux-loong64-gnu');
           const bindingPackageVersion =
-            require('@vite-plus/global-linux-loong64-gnu/package.json').version;
+            require('@voidzero-dev/vite-plus-cli-linux-loong64-gnu/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -540,14 +542,14 @@ function requireNative() {
     } else if (process.arch === 'riscv64') {
       if (isMusl()) {
         try {
-          return require('./vite-plus-global.linux-riscv64-musl.node');
+          return require('./vite-plus-cli.linux-riscv64-musl.node');
         } catch (e) {
           loadErrors.push(e);
         }
         try {
-          const binding = require('@vite-plus/global-linux-riscv64-musl');
+          const binding = require('@voidzero-dev/vite-plus-cli-linux-riscv64-musl');
           const bindingPackageVersion =
-            require('@vite-plus/global-linux-riscv64-musl/package.json').version;
+            require('@voidzero-dev/vite-plus-cli-linux-riscv64-musl/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -563,14 +565,14 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./vite-plus-global.linux-riscv64-gnu.node');
+          return require('./vite-plus-cli.linux-riscv64-gnu.node');
         } catch (e) {
           loadErrors.push(e);
         }
         try {
-          const binding = require('@vite-plus/global-linux-riscv64-gnu');
+          const binding = require('@voidzero-dev/vite-plus-cli-linux-riscv64-gnu');
           const bindingPackageVersion =
-            require('@vite-plus/global-linux-riscv64-gnu/package.json').version;
+            require('@voidzero-dev/vite-plus-cli-linux-riscv64-gnu/package.json').version;
           if (
             bindingPackageVersion !== '0.0.0' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -587,14 +589,14 @@ function requireNative() {
       }
     } else if (process.arch === 'ppc64') {
       try {
-        return require('./vite-plus-global.linux-ppc64-gnu.node');
+        return require('./vite-plus-cli.linux-ppc64-gnu.node');
       } catch (e) {
         loadErrors.push(e);
       }
       try {
-        const binding = require('@vite-plus/global-linux-ppc64-gnu');
+        const binding = require('@voidzero-dev/vite-plus-cli-linux-ppc64-gnu');
         const bindingPackageVersion =
-          require('@vite-plus/global-linux-ppc64-gnu/package.json').version;
+          require('@voidzero-dev/vite-plus-cli-linux-ppc64-gnu/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -610,14 +612,14 @@ function requireNative() {
       }
     } else if (process.arch === 's390x') {
       try {
-        return require('./vite-plus-global.linux-s390x-gnu.node');
+        return require('./vite-plus-cli.linux-s390x-gnu.node');
       } catch (e) {
         loadErrors.push(e);
       }
       try {
-        const binding = require('@vite-plus/global-linux-s390x-gnu');
+        const binding = require('@voidzero-dev/vite-plus-cli-linux-s390x-gnu');
         const bindingPackageVersion =
-          require('@vite-plus/global-linux-s390x-gnu/package.json').version;
+          require('@voidzero-dev/vite-plus-cli-linux-s390x-gnu/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -637,14 +639,14 @@ function requireNative() {
   } else if (process.platform === 'openharmony') {
     if (process.arch === 'arm64') {
       try {
-        return require('./vite-plus-global.openharmony-arm64.node');
+        return require('./vite-plus-cli.openharmony-arm64.node');
       } catch (e) {
         loadErrors.push(e);
       }
       try {
-        const binding = require('@vite-plus/global-openharmony-arm64');
+        const binding = require('@voidzero-dev/vite-plus-cli-openharmony-arm64');
         const bindingPackageVersion =
-          require('@vite-plus/global-openharmony-arm64/package.json').version;
+          require('@voidzero-dev/vite-plus-cli-openharmony-arm64/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -660,14 +662,14 @@ function requireNative() {
       }
     } else if (process.arch === 'x64') {
       try {
-        return require('./vite-plus-global.openharmony-x64.node');
+        return require('./vite-plus-cli.openharmony-x64.node');
       } catch (e) {
         loadErrors.push(e);
       }
       try {
-        const binding = require('@vite-plus/global-openharmony-x64');
+        const binding = require('@voidzero-dev/vite-plus-cli-openharmony-x64');
         const bindingPackageVersion =
-          require('@vite-plus/global-openharmony-x64/package.json').version;
+          require('@voidzero-dev/vite-plus-cli-openharmony-x64/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -683,14 +685,14 @@ function requireNative() {
       }
     } else if (process.arch === 'arm') {
       try {
-        return require('./vite-plus-global.openharmony-arm.node');
+        return require('./vite-plus-cli.openharmony-arm.node');
       } catch (e) {
         loadErrors.push(e);
       }
       try {
-        const binding = require('@vite-plus/global-openharmony-arm');
+        const binding = require('@voidzero-dev/vite-plus-cli-openharmony-arm');
         const bindingPackageVersion =
-          require('@vite-plus/global-openharmony-arm/package.json').version;
+          require('@voidzero-dev/vite-plus-cli-openharmony-arm/package.json').version;
         if (
           bindingPackageVersion !== '0.0.0' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
@@ -720,7 +722,7 @@ if (!nativeBinding || process.env.NAPI_RS_FORCE_WASI) {
   let wasiBinding = null;
   let wasiBindingError = null;
   try {
-    wasiBinding = require('./vite-plus-global.wasi.cjs');
+    wasiBinding = require('./vite-plus-cli.wasi.cjs');
     nativeBinding = wasiBinding;
   } catch (err) {
     if (process.env.NAPI_RS_FORCE_WASI) {
@@ -729,7 +731,7 @@ if (!nativeBinding || process.env.NAPI_RS_FORCE_WASI) {
   }
   if (!nativeBinding) {
     try {
-      wasiBinding = require('@vite-plus/global-wasm32-wasi');
+      wasiBinding = require('@voidzero-dev/vite-plus-cli-wasm32-wasi');
       nativeBinding = wasiBinding;
     } catch (err) {
       if (process.env.NAPI_RS_FORCE_WASI) {

@@ -18,7 +18,8 @@
   "scripts": {
     "build": "rolldown -c rolldown.config.ts && oxnode -C dev ./build.ts",
     "copy-binding": "cp ./binding/*.node ./dist",
-    "snap-test": "tool snap-test"
+    "snap-test": "tool snap-test",
+    "publish-native": "node ./publish-native-addons.ts"
   },
   "dependencies": {
     "cross-spawn": "catalog:",
@@ -47,8 +48,8 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "napi": {
-    "binaryName": "vite-plus-global",
-    "packageName": "@vite-plus/global",
+    "binaryName": "vite-plus-cli",
+    "packageName": "@voidzero-dev/vite-plus-cli",
     "targets": [
       "aarch64-apple-darwin",
       "x86_64-apple-darwin",
