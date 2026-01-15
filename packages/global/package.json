@@ -24,8 +24,7 @@
   },
   "dependencies": {
     "cross-spawn": "catalog:",
-    "picocolors": "catalog:",
-    "validate-npm-package-name": "catalog:"
+    "picocolors": "catalog:"
   },
   "devDependencies": {
     "@clack/prompts": "catalog:",
@@ -43,6 +42,7 @@
     "oxfmt": "catalog:",
     "rolldown": "workspace:*",
     "semver": "catalog:",
+    "validate-npm-package-name": "catalog:",
     "yaml": "catalog:"
   },
   "engines": {

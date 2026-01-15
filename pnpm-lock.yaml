@@ -229,8 +229,8 @@ catalogs:
       specifier: 1.2.0
       version: 1.2.0
     validate-npm-package-name:
-      specifier: ^7.0.0
-      version: 7.0.0
+      specifier: ^7.0.2
+      version: 7.0.2
     vue:
       specifier: ^3.5.21
       version: 3.5.25
@@ -511,9 +511,6 @@ importers:
       picocolors:
         specifier: 'catalog:'
         version: 1.1.1
-      validate-npm-package-name:
-        specifier: 'catalog:'
-        version: 7.0.0
     devDependencies:
       '@clack/prompts':
         specifier: 'catalog:'
@@ -560,6 +557,9 @@ importers:
       semver:
         specifier: 'catalog:'
         version: 7.7.3
+      validate-npm-package-name:
+        specifier: 'catalog:'
+        version: 7.0.2
       yaml:
         specifier: 'catalog:'
         version: 2.8.1
@@ -8210,8 +8210,8 @@ packages:
     resolution: {integrity: sha512-OljLrQ9SQdOUqTaQxqL5dEfZWrXExyyWsozYlAWFawPVNuD83igl7uJD2RTkNMbniIYgt8l81eCJGIdQF7avLQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  validate-npm-package-name@7.0.0:
-    resolution: {integrity: sha512-bwVk/OK+Qu108aJcMAEiU4yavHUI7aN20TgZNBj9MR2iU1zPUl1Z1Otr7771ExfYTPTvfN8ZJ1pbr5Iklgt4xg==}
+  validate-npm-package-name@7.0.2:
+    resolution: {integrity: sha512-hVDIBwsRruT73PbK7uP5ebUt+ezEtCmzZz3F59BSr2F6OVFnJ/6h8liuvdLrQ88Xmnk6/+xGGuq+pG9WwTuy3A==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
   varint@6.0.0:
@@ -15051,7 +15051,7 @@ snapshots:
 
   validate-npm-package-name@5.0.1: {}
 
-  validate-npm-package-name@7.0.0: {}
+  validate-npm-package-name@7.0.2: {}
 
   varint@6.0.0: {}
 
