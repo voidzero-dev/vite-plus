@@ -89,6 +89,8 @@ function autoFixRemoteTemplateCommand(templateInfo: TemplateInfo, workspaceInfo:
     // don't run dev server after installation
     // https://github.com/vitejs/vite/blob/main/packages/create-vite/src/index.ts#L46
     templateInfo.args.push('--no-immediate');
+    // don't present rolldown option to users
+    templateInfo.args.push('--no-rolldown');
   }
 
   if (workspaceInfo.isMonorepo) {
