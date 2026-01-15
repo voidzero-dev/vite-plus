@@ -5,7 +5,7 @@ Finished in <variable>ms on 0 files with <variable> rules using <variable> threa
 
 > mkdir dist
 > vite lint # new dist folder should not invalidate cache
-✓ cache hit, replaying
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 0 files with <variable> rules using <variable> threads.
+✓ cache hit, logs replayed
 

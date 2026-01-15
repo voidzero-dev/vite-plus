@@ -80,7 +80,6 @@ Done in <variable>ms.
 tslib
 
 > vite install --prod # install again hit cache
-✓ cache hit, replaying
 yarn install v<semver>
 info No lockfile found.
 [1/4] Resolving packages...
@@ -89,4 +88,5 @@ info No lockfile found.
 [4/4] Building fresh packages...
 success Saved lockfile.
 Done in <variable>ms.
+✓ cache hit, logs replayed
 

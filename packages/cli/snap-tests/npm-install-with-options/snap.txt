@@ -29,5 +29,5 @@ Run "npm help install" for more info
 tslib
 
 > vite install --production --silent # install again hit cache
-✓ cache hit, replaying
+✓ cache hit, logs replayed
 

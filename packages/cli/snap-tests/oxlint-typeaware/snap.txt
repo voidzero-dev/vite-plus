@@ -5,9 +5,9 @@ Finished in <variable>ms on 1 file with <variable> rules using <variable> thread
 
 > echo //comment >> types.ts
 > vite lint ./src # non-type-aware linting doesn't read types.ts
-✓ cache hit, replaying
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+✓ cache hit, logs replayed
 
 
 > vite lint --type-aware ./src
@@ -17,7 +17,6 @@ Finished in <variable>ms on 1 file with <variable> rules using <variable> thread
 
 > echo //comment >> types.ts
 > vite lint --type-aware ./src # type-aware linting reads types.ts
-✗ cache miss: content of input 'types.ts' changed, executing
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
