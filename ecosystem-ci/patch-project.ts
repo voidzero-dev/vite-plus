@@ -1,10 +1,22 @@
 import { execSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import repos from './repo.json' with { type: 'json' };
 
-const projectDir = dirname(fileURLToPath(import.meta.url));
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+
+function getEcosystemCiDir(): string {
+  if (process.env.ECOSYSTEM_CI_DIR) {
+    return process.env.ECOSYSTEM_CI_DIR;
+  }
+  // Use realpathSync for macOS where tmpdir() returns a symlink
+  return join(realpathSync(tmpdir()), 'vite-plus-e2e');
+}
+
+const ecosystemCiDir = getEcosystemCiDir();
 
 const projects = Object.keys(repos);
 
@@ -15,10 +27,11 @@ if (!projects.includes(project)) {
   process.exit(1);
 }
 
-const tgzPath = join(projectDir, '..', 'tmp', 'tgz');
+// tgzPath stays relative to repo (where the built packages are)
+const tgzPath = join(scriptDir, '..', 'tmp', 'tgz');
 
 async function migrateProject(project: string) {
-  const repoRoot = join(projectDir, project);
+  const repoRoot = join(ecosystemCiDir, project);
   // run vite migrate
   execSync('vite migrate', {
     cwd: repoRoot,

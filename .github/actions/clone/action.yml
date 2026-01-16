@@ -48,5 +48,5 @@ runs:
       if: ${{ inputs.ecosystem-ci-project != '' }}
       with:
         repository: ${{ steps.ecosystem-ci-project-hash.outputs.ECOSYSTEM_CI_PROJECT_REPOSITORY }}
-        path: ecosystem-ci/${{ inputs.ecosystem-ci-project }}
+        path: ${{ runner.temp }}/vite-plus-e2e/${{ inputs.ecosystem-ci-project }}
         ref: ${{ steps.ecosystem-ci-project-hash.outputs.ECOSYSTEM_CI_PROJECT_HASH }}

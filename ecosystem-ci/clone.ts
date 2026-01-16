@@ -1,10 +1,23 @@
 import { execSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import repos from './repo.json' with { type: 'json' };
 
 const cwd = import.meta.dirname;
+
+function getEcosystemCiDir(): string {
+  if (process.env.ECOSYSTEM_CI_DIR) {
+    return process.env.ECOSYSTEM_CI_DIR;
+  }
+  // Use realpathSync for macOS where tmpdir() returns a symlink
+  return join(realpathSync(tmpdir()), 'vite-plus-e2e');
+}
+
+const ecosystemCiDir = getEcosystemCiDir();
+mkdirSync(ecosystemCiDir, { recursive: true });
+console.info(`Cloning projects to: ${ecosystemCiDir}`);
 
 function exec(cmd: string, execCwd: string = cwd): string {
   return execSync(cmd, { cwd: execCwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
@@ -51,7 +64,7 @@ function checkoutHash(dir: string, hash: string): void {
 }
 
 for (const [repoName, repo] of Object.entries(repos)) {
-  const targetDir = join(cwd, repoName);
+  const targetDir = join(ecosystemCiDir, repoName);
 
   if (existsSync(targetDir)) {
     console.info(`\nDirectory ${repoName} exists, validating...`);

@@ -224,17 +224,19 @@ jobs:
           path: tmp/tgz
 
       - name: Install vite-plus from tgz in ${{ matrix.project.name }}
-        working-directory: ecosystem-ci/${{ matrix.project.name }}
+        working-directory: ${{ runner.temp }}/vite-plus-e2e/${{ matrix.project.name }}
+        env:
+          ECOSYSTEM_CI_DIR: ${{ runner.temp }}/vite-plus-e2e
         run: |
           # install global CLI first
-          npm install -g ../../tmp/tgz/vite-plus-cli-0.0.0.tgz
-          # avoid the vite migration using the wrong ignore file
-          rm -f ../.gitignore
-          node ../patch-project.ts ${{ matrix.project.name }}
+          npm install -g ${{ github.workspace }}/tmp/tgz/vite-plus-cli-0.0.0.tgz
+          node ${{ github.workspace }}/ecosystem-ci/patch-project.ts ${{ matrix.project.name }}
           vite install --no-frozen-lockfile
 
       - name: Run vite-plus commands in ${{ matrix.project.name }}
-        working-directory: ecosystem-ci/${{ matrix.project.name }}
+        working-directory: ${{ runner.temp }}/vite-plus-e2e/${{ matrix.project.name }}
+        env:
+          ECOSYSTEM_CI_DIR: ${{ runner.temp }}/vite-plus-e2e
         run: ${{ matrix.project.command }}
 
   notify-failure:
