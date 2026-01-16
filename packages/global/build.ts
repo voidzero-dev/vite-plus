@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, writeFileSync, cpSync } from 'node:fs';
+import { dirname, join, parse } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createBuildCommand, NapiCli } from '@napi-rs/cli';
@@ -38,4 +38,9 @@ async function buildNapiBinding() {
     ],
     formatEmbeddedCode,
   );
+
+  const nodeFile = outputs.find((o) => o.kind === 'node');
+  if (nodeFile) {
+    cpSync(nodeFile.path, join(projectDir, `dist/${parse(nodeFile.path).base}`));
+  }
 }

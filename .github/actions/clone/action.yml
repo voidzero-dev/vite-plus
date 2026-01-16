@@ -25,15 +25,15 @@ runs:
         node -e "console.log('ECOSYSTEM_CI_PROJECT_HASH=' + require('./ecosystem-ci/repo.json')['${{ inputs.ecosystem-ci-project }}'].hash)" >> $GITHUB_OUTPUT
         node -e "console.log('ECOSYSTEM_CI_PROJECT_REPOSITORY=' + require('./ecosystem-ci/repo.json')['${{ inputs.ecosystem-ci-project }}'].repository.replace('https://github.com/', '').replace('.git', ''))" >> $GITHUB_OUTPUT
 
-    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       with:
         repository: rolldown/rolldown
         path: rolldown
         ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_HASH }}
 
-    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       with:
-        repository: vitejs/rolldown-vite
+        repository: vitejs/vite
         path: rolldown-vite
         ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_VITE_HASH }}
 
@@ -44,7 +44,7 @@ runs:
       shell: bash
       run: git config --global core.autocrlf false
 
-    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       if: ${{ inputs.ecosystem-ci-project != '' }}
       with:
         repository: ${{ steps.ecosystem-ci-project-hash.outputs.ECOSYSTEM_CI_PROJECT_REPOSITORY }}

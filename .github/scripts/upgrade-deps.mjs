@@ -21,6 +21,7 @@ async function getLatestTagCommit(owner, repo) {
   if (!tags[0]?.commit?.sha) {
     throw new Error(`Invalid tag structure for ${owner}/${repo}: missing commit SHA`);
   }
+  console.log(`${repo} -> ${tags[0].name}`);
   return tags[0].commit.sha;
 }
 

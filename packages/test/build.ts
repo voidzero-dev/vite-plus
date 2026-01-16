@@ -263,7 +263,7 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
   }
 
   destPkg.bundledVersions = {
-    ...(destPkg.bundledVersions ?? {}),
+    ...destPkg.bundledVersions,
     vitest: vitestPkg.version,
   };
 
@@ -1192,7 +1192,7 @@ async function patchVitestCoreResolver() {
 
   if (!content.includes(oldPattern)) {
     throw new Error(
-      'Could not find VitestCoreResolver pattern to patch. ' +
+      'Could not find VitestCoreResolver pattern to patch in ' + cliApiChunk + '. ' +
         'This likely means vitest code has changed and the patch needs to be updated.',
     );
   }
@@ -1521,7 +1521,7 @@ async function patchBrowserProviderLocators() {
       // webdriverio/preview: import page from context.js, keep other imports from index.js
       const extraImportsStr = provider.extraImports.join(', ');
       const importPattern = new RegExp(
-        `import \\{ page, server, ${extraImportsStr} \\} from ['"]\\.\\.\/browser\/index\\.js['"];?`,
+        `import \\{ page, server, ${extraImportsStr} \\} from ['"]\\.\\./browser/index\\.js['"];?`,
       );
       if (importPattern.test(content)) {
         const replacement = `import { page } from '../browser/context.js';\nimport { ${extraImportsStr} } from '../browser/index.js';`;

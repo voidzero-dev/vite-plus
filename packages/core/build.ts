@@ -422,7 +422,7 @@ async function mergePackageJson() {
   };
 
   destPkg.bundledVersions = {
-    ...(destPkg.bundledVersions ?? {}),
+    ...destPkg.bundledVersions,
     vite: vitePkg.version,
     tsdown: tsdownPkg.version,
   };

@@ -19,11 +19,7 @@ export default (<UserConfig>{
     ],
   },
   fmt: {
-    ignorePatterns: [
-      '**/tmp/**',
-      '**/ecosystem-ci/vibe-dashboard/**',
-      '**/ecosystem-ci/skeleton/**',
-    ],
+    ignorePatterns: ['**/tmp/**', '/ecosystem-ci/*/**', '/rolldown', '/rolldown-vite'],
     singleQuote: true,
     semi: true,
     experimentalSortImports: {

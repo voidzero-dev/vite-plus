@@ -19,6 +19,8 @@ build:
   pnpm --filter rolldown build-binding:release
   pnpm --filter rolldown build-node
   pnpm --filter vite build-types
+  pnpm --filter=@voidzero-dev/vite-plus-core build
+  pnpm --filter=@voidzero-dev/vite-plus-test build
   pnpm --filter=vite-plus build
   pnpm --filter=vite-plus-cli build
 

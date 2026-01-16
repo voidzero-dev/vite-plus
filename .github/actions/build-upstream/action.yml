@@ -13,15 +13,6 @@ runs:
         github-token: ${{ github.token }}
         target: ${{ inputs.target }}
         upload: 'false'
-    - name: Patch Vite
-      shell: bash
-      run: |
-        if [[ "${{ runner.os }}" == "macOS" ]]; then
-          sed -i '' '123,124d' rolldown-vite/packages/vite/rolldown.dts.config.ts
-        else
-          sed -i '123,124d' rolldown-vite/packages/vite/rolldown.dts.config.ts
-        fi
-
     - name: Build
       shell: bash
       if: ${{ inputs.target == 'x86_64-unknown-linux-gnu' }}

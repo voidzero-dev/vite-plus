@@ -1,4 +1,5 @@
 {
+  "ignoredPlatforms": ["win32", "linux"],
   "env": {
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
