@@ -230,6 +230,8 @@ jobs:
           npm install -g ../../tmp/tgz/vite-plus-cli-0.0.0.tgz
           # avoid the vite migration using the wrong ignore file
           rm -f ../.gitignore
+          # remove package.json and pnpm-workspace.yaml from root workspace to make the test project not belong to the vite+ monorepo
+          rm -f ../../package.json ../../pnpm-workspace.yaml
           node ../patch-project.ts ${{ matrix.project.name }}
           vite install --no-frozen-lockfile
 
