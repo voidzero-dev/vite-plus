@@ -13,46 +13,90 @@ runs:
         github-token: ${{ github.token }}
         target: ${{ inputs.target }}
         upload: 'false'
-    - name: Build
+
+    # Compute cache key once before any builds modify files
+    # (packages/cli/package.json is modified by syncTestPackageExports during build-ts)
+    - name: Compute NAPI binding cache key
+      id: cache-key
       shell: bash
-      if: ${{ inputs.target == 'x86_64-unknown-linux-gnu' }}
+      run: |
+        echo "key=napi-binding-v1-${{ inputs.target }}-${{ hashFiles('packages/tools/.upstream-versions.json', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/*/binding/**/*.rs', 'packages/*/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/global/package.json', 'packages/global/build.ts') }}" >> $GITHUB_OUTPUT
+
+    # Cache only NAPI bindings (the slow part, especially on Windows)
+    - name: Restore NAPI binding cache
+      id: cache-restore
+      uses: actions/cache/restore@94b89442628ad1d101e352b7ee38f30e1bef108e # v5
+      with:
+        path: |
+          packages/cli/binding/*.node
+          packages/cli/binding/index.js
+          packages/cli/binding/index.d.ts
+          packages/cli/binding/index.cjs
+          packages/cli/binding/index.d.cts
+          packages/global/binding/*.node
+          packages/global/binding/index.js
+          packages/global/binding/index.d.ts
+        key: ${{ steps.cache-key.outputs.key }}
+
+    # Build upstream TypeScript packages first (don't depend on native bindings)
+    - name: Build upstream TypeScript packages
+      shell: bash
       run: |
         pnpm --filter @rolldown/pluginutils build
         pnpm --filter rolldown build-node
         pnpm --filter vite build-types
         pnpm --filter=@voidzero-dev/vite-plus-core build
         pnpm --filter=@voidzero-dev/vite-plus-test build
-        pnpm --filter=vite-plus build --target ${{ inputs.target }} --use-napi-cross
-        pnpm --filter=vite-plus-cli build --target ${{ inputs.target }} --use-napi-cross
+
+    # NAPI builds - only run on cache miss (slow, especially on Windows)
+    # Must run before vite-plus/vite-plus-cli TypeScript builds which depend on the bindings
+    - name: Build NAPI bindings
+      shell: bash
+      if: steps.cache-restore.outputs.cache-hit != 'true' && inputs.target == 'x86_64-unknown-linux-gnu'
+      run: |
+        pnpm --filter=vite-plus build-native --target ${{ inputs.target }} --use-napi-cross
+        pnpm --filter=vite-plus-cli build-native --target ${{ inputs.target }} --use-napi-cross
       env:
         TARGET_CC: clang
         DEBUG: napi:*
 
-    - name: Build
+    - name: Build NAPI bindings
       shell: bash
-      if: ${{ inputs.target == 'aarch64-unknown-linux-gnu' }}
+      if: steps.cache-restore.outputs.cache-hit != 'true' && inputs.target == 'aarch64-unknown-linux-gnu'
       run: |
-        pnpm --filter @rolldown/pluginutils build
-        pnpm --filter rolldown build-node
-        pnpm --filter vite build-types
-        pnpm --filter=@voidzero-dev/vite-plus-core build
-        pnpm --filter=@voidzero-dev/vite-plus-test build
-        TARGET_CFLAGS="-D_BSD_SOURCE" pnpm --filter=vite-plus build --target ${{ inputs.target }} --use-napi-cross
-        TARGET_CFLAGS="-D_BSD_SOURCE" pnpm --filter=vite-plus-cli build --target ${{ inputs.target }} --use-napi-cross
+        TARGET_CFLAGS="-D_BSD_SOURCE" pnpm --filter=vite-plus build-native --target ${{ inputs.target }} --use-napi-cross
+        TARGET_CFLAGS="-D_BSD_SOURCE" pnpm --filter=vite-plus-cli build-native --target ${{ inputs.target }} --use-napi-cross
       env:
         TARGET_CC: clang
         DEBUG: napi:*
 
-    - name: Build
+    - name: Build NAPI bindings
       shell: bash
-      if: ${{ !contains(inputs.target, 'linux') }}
+      if: steps.cache-restore.outputs.cache-hit != 'true' && !contains(inputs.target, 'linux')
       run: |
-        pnpm --filter @rolldown/pluginutils build
-        pnpm --filter rolldown build-node
-        pnpm --filter vite build-types
-        pnpm --filter=@voidzero-dev/vite-plus-core build
-        pnpm --filter=@voidzero-dev/vite-plus-test build
-        pnpm --filter=vite-plus build --target ${{ inputs.target }}
-        pnpm --filter=vite-plus-cli build --target ${{ inputs.target }}
+        pnpm --filter=vite-plus build-native --target ${{ inputs.target }}
+        pnpm --filter=vite-plus-cli build-native --target ${{ inputs.target }}
       env:
         DEBUG: napi:*
+
+    - name: Save NAPI binding cache
+      if: steps.cache-restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@94b89442628ad1d101e352b7ee38f30e1bef108e # v5
+      with:
+        path: |
+          packages/cli/binding/*.node
+          packages/cli/binding/index.js
+          packages/cli/binding/index.d.ts
+          packages/cli/binding/index.cjs
+          packages/cli/binding/index.d.cts
+          packages/global/binding/*.node
+          packages/global/binding/index.js
+          packages/global/binding/index.d.ts
+        key: ${{ steps.cache-key.outputs.key }}
+
+    # Build vite-plus TypeScript after native bindings are ready
+    - name: Build vite-plus TypeScript packages
+      shell: bash
+      run: |
+        pnpm --filter=vite-plus build-ts
+        pnpm --filter=vite-plus-cli build-ts

@@ -117,15 +117,8 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vite rm testnpm2 && vite add testnpm2@1.0.0 -O && vite update --no-optional --latest && cat package.json # should skip optional dependencies
-Packages: -1
--
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
-
-dependencies:
-- testnpm2 <semver>
-
-Done in <variable>ms using pnpm v<semver>
+> vite rm testnpm2 # should remove package from dependencies for the next test
+> vite add testnpm2@1.0.0 -O && vite update --no-optional --latest && cat package.json # should skip optional dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done

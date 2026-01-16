@@ -9,7 +9,11 @@
     "vite up testnpm2 --latest && cat package.json # should to absolute latest version",
     "vite update -D && cat package.json # should update only dev dependencies",
     "vite update -P --no-save && cat package.json # should update only dependencies and optionalDependencies without saving",
-    "vite rm testnpm2 && vite add testnpm2@1.0.0 -O && vite update --no-optional --latest && cat package.json # should skip optional dependencies",
+    {
+      "command": "vite rm testnpm2 # should remove package from dependencies for the next test",
+      "ignoreOutput": true
+    },
+    "vite add testnpm2@1.0.0 -O && vite update --no-optional --latest && cat package.json # should skip optional dependencies",
     "vite update && vite update --recursive && cat package.json # should update all packages and change the package.json"
   ]
 }

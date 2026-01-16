@@ -1,17 +1,25 @@
 {
-  "ignoredPlatforms": ["win32", "linux"],
   "env": {
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite run hello#build # should build the library",
+    {
+      "command": "vite run hello#build # should build the library",
+      "ignoreOutput": true
+    },
     "ls packages/hello/dist # should have the library",
-    "vite run hello#build # should hit cache",
-    "vite run array-config#build # should build the library supports array config",
+    "vite run hello#build | grep 'cache hit' # should hit cache",
+    {
+      "command": "vite run array-config#build # should build the library supports array config",
+      "ignoreOutput": true
+    },
     "ls packages/array-config/dist # should have the library",
-    "vite run array-config#build # should hit cache",
-    "vite run default-config#build # should build the library supports default config",
+    "vite run array-config#build | grep 'cache hit' # should hit cache",
+    {
+      "command": "vite run default-config#build # should build the library supports default config",
+      "ignoreOutput": true
+    },
     "ls packages/default-config/dist # should have the library",
-    "vite run default-config#build # should hit cache"
+    "vite run default-config#build | grep 'cache hit' # should hit cache"
   ]
 }
