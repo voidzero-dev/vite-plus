@@ -35,8 +35,8 @@ Options:
 
 > vite -V # show version
 Vite+ Version:
-- Local: Not found
-- Global: v<semver>
+  vite-plus-cli: v<semver>
+  vite-plus:     Not found
 
 > vite install -h # show install help message
 Install all dependencies, or add packages if package names are provided

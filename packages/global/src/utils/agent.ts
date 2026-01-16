@@ -89,8 +89,7 @@ export function resolveAgentTargetPath(agent?: string) {
   const resolved = alias ? normalizeAgentName(alias) : normalized;
   const match = AGENTS.find(
     (option) =>
-      normalizeAgentName(option.id) === resolved ||
-      normalizeAgentName(option.label) === resolved,
+      normalizeAgentName(option.id) === resolved || normalizeAgentName(option.label) === resolved,
   );
   return match?.targetPath ?? 'AGENTS.md';
 }
@@ -144,10 +143,7 @@ export async function writeAgentInstructions({
         fsPromises.readFile(sourcePath, 'utf-8'),
       ]);
       const separator = existingContent.endsWith('\n') ? '' : '\n';
-      await fsPromises.appendFile(
-        destinationPath,
-        `${separator}\n${incomingContent}`,
-      );
+      await fsPromises.appendFile(destinationPath, `${separator}\n${incomingContent}`);
       prompts.log.success(`Appended agent instructions to ${targetPath}`);
       return;
     }

@@ -326,5 +326,8 @@
     "tinyrainbow": "^3.0.3",
     "vitest-dev": "^4.0.16",
     "why-is-node-running": "^2.3.0"
+  },
+  "bundledVersions": {
+    "vitest": "4.0.16"
   }
 }

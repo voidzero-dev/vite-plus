@@ -254,10 +254,7 @@ async function bundleRolldown() {
           })
         ).default.version;
         // @rolldown/binding-darwin-arm64 → @voidzero-dev/vite-plus-darwin-arm64/binding
-        source = source.replace(
-          /@rolldown\/binding-([a-z0-9-]+)/g,
-          'vite-plus/binding',
-        );
+        source = source.replace(/@rolldown\/binding-([a-z0-9-]+)/g, 'vite-plus/binding');
         source = source.replaceAll(`${rolldownBindingVersion}`, pkgJson.version);
       }
       const newSource = rewriteModuleSpecifiers(source, file, { rules });
@@ -422,6 +419,12 @@ async function mergePackageJson() {
   destPkg.peerDependenciesMeta = {
     ...tsdownPkg.peerDependenciesMeta,
     ...vitePkg.peerDependenciesMeta,
+  };
+
+  destPkg.bundledVersions = {
+    ...(destPkg.bundledVersions ?? {}),
+    vite: vitePkg.version,
+    tsdown: tsdownPkg.version,
   };
 
   await writeFile(destPkgPath, JSON.stringify(destPkg, null, 2) + '\n');

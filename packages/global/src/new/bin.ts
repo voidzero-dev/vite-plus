@@ -370,10 +370,7 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
       if (workspaceInfoOptional.monorepoScope) {
         defaultPackageName = `${workspaceInfoOptional.monorepoScope}/${defaultPackageName}`;
       }
-      const selected = await promptPackageNameAndTargetDir(
-        defaultPackageName,
-        options.interactive,
-      );
+      const selected = await promptPackageNameAndTargetDir(defaultPackageName, options.interactive);
       packageName = selected.packageName;
       targetDir = selectedParentDir
         ? path.join(selectedParentDir, selected.targetDir)

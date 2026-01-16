@@ -262,6 +262,11 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
     }
   }
 
+  destPkg.bundledVersions = {
+    ...(destPkg.bundledVersions ?? {}),
+    vitest: vitestPkg.version,
+  };
+
   // Add @vitest/browser compatible export (for when this package overrides @vitest/browser)
   // The main "." export is what's used when code imports from @vitest/browser
   if (destPkg.exports) {
