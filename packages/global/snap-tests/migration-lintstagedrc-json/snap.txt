@@ -25,7 +25,7 @@ Aliases: migrate
 
 
 > vite migration # migration work with lintstagedrc.json
-┌  Vite+ Migration
+┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
 │

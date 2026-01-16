@@ -23,8 +23,9 @@ import {
   rewriteMonorepo,
   rewriteStandaloneProject,
 } from './migrator.js';
+import { getVitePlusHeader } from '../utils/terminal.js';
 
-const { cyan, green, gray } = colors;
+const { green, gray } = colors;
 
 // prettier-ignore
 const helpMessage = `\
@@ -93,19 +94,17 @@ function parseArgs() {
 async function main() {
   const { projectPath, options } = parseArgs();
 
-  // Handle help flag
   if (options.help) {
     console.log(helpMessage);
     return;
   }
 
-  // Start migration
-  prompts.intro(cyan('Vite+ Migration'));
+  prompts.intro(await getVitePlusHeader());
 
   const workspaceInfoOptional = await detectWorkspace(projectPath);
-  // Prompt for package manager or use default
   const packageManager =
-    workspaceInfoOptional.packageManager ?? (await selectPackageManager(options.interactive));
+    workspaceInfoOptional.packageManager ??
+    (await selectPackageManager(options.interactive));
 
   // ensure the package manager is installed by vite-plus
   const downloadResult = await downloadPackageManager(

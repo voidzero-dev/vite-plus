@@ -1,5 +1,5 @@
 > vite migration foo # migration work with subpath
-┌  Vite+ Migration
+┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
 │

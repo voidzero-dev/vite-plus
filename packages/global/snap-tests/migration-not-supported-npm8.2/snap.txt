@@ -1,5 +1,5 @@
 [1]> vite migration # migration should fail because npm version is not supported
-┌  Vite+ Migration
+┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  npm@<semver> installing...
 │

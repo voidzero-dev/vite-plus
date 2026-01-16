@@ -34,7 +34,9 @@ Options:
   -V, --version  Print version
 
 > vite -V # show version
-Vite+ Version:
+VITE+(⚡︎) - The Unified Toolchain for the Web
+
+Package Versions:
   vite-plus-cli: v<semver>
   vite-plus:     Not found
 

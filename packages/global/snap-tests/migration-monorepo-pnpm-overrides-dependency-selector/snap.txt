@@ -1,5 +1,5 @@
 > vite migration # migration should merge pnpm overrides with dependency selector
-┌  Vite+ Migration
+┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  pnpm@<semver> installing...
 │
