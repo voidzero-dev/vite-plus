@@ -13,6 +13,8 @@
   "sideEffects": false,
   "scripts": {
     "build": "oxnode -C dev ./build.ts",
+    "build-ts": "oxnode -C dev ./build.ts --skip-native",
+    "build-native": "oxnode -C dev ./build.ts --skip-ts",
     "snap-test": "tool snap-test",
     "publish-native": "node ./publish-native-addons.ts",
     "test": "vitest run"

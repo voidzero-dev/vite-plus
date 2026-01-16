@@ -2,8 +2,8 @@
  * Build script for vite-plus CLI package
  *
  * This script performs four main tasks:
- * 1. buildCli() - Compiles TypeScript sources
- * 2. buildNapiBinding() - Builds the native Rust binding via NAPI
+ * 1. buildNapiBinding() - Builds the native Rust binding via NAPI
+ * 2. buildCli() - Compiles TypeScript sources
  * 3. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
  * 4. syncTestPackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-test
  *
@@ -12,6 +12,7 @@
  * to the core package for actual implementation.
  *
  * IMPORTANT: The core package must be built before running this script.
+ * Native binding is built first because TypeScript may depend on generated binding types.
  */
 
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
@@ -34,13 +35,23 @@ const projectDir = dirname(fileURLToPath(import.meta.url));
 const TEST_PACKAGE_NAME = '@voidzero-dev/vite-plus-test';
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 
-await buildCli();
-await buildNapiBinding();
-await syncCorePackageExports();
-await syncTestPackageExports();
+const skipNative = process.argv.includes('--skip-native');
+const skipTs = process.argv.includes('--skip-ts');
+// Filter out custom flags before passing to NAPI CLI
+const napiArgs = process.argv.slice(2).filter((arg) => arg !== '--skip-native' && arg !== '--skip-ts');
+
+// Build native first - TypeScript may depend on the generated binding types
+if (!skipNative) {
+  await buildNapiBinding();
+}
+if (!skipTs) {
+  await buildCli();
+  await syncCorePackageExports();
+  await syncTestPackageExports();
+}
 
 async function buildNapiBinding() {
-  const buildCommand = createBuildCommand(process.argv.slice(2));
+  const buildCommand = createBuildCommand(napiArgs);
   const passedInOptions = buildCommand.getOptions();
 
   const cli = new NapiCli();
