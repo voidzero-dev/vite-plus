@@ -91,6 +91,11 @@ function autoFixRemoteTemplateCommand(templateInfo: TemplateInfo, workspaceInfo:
     templateInfo.args.push('--no-immediate');
     // don't present rolldown option to users
     templateInfo.args.push('--no-rolldown');
+  } else if (packageName === '@tanstack/create-start') {
+    // don't run npm install after project creation
+    templateInfo.args.push('--no-install');
+    // don't setup toolchain automatically
+    templateInfo.args.push('--no-toolchain');
   }
 
   if (workspaceInfo.isMonorepo) {
