@@ -1,0 +1,18 @@
+> vite migration --agent claude # migration with --agent claude should write CLAUDE.md
+┌  VITE+(⚡︎) - The Unified Toolchain for the Web
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+◆  Wrote agent instructions to CLAUDE.md
+│
+└  ✨ Migration completed!
+
+
+> cat CLAUDE.md | head -3 # verify CLAUDE.md was created
+<!--VITE PLUS START-->
+# Using Vite+, the Unified Toolchain for the Web
+

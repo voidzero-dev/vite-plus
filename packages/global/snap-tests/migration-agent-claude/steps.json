@@ -1,0 +1,9 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite migration --agent claude # migration with --agent claude should write CLAUDE.md",
+    "cat CLAUDE.md | head -3 # verify CLAUDE.md was created"
+  ]
+}

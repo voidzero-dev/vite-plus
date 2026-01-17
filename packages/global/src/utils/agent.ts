@@ -35,9 +35,14 @@ export async function selectAgentTargetPath({
   onCancel,
 }: {
   interactive: boolean;
-  agent?: string;
+  agent?: string | false;
   onCancel: () => void;
 }) {
+  // Skip entirely if --no-agent is passed
+  if (agent === false) {
+    return undefined;
+  }
+
   if (interactive && !agent) {
     const selectedAgent = await prompts.select({
       message: 'Which agent are you using?',

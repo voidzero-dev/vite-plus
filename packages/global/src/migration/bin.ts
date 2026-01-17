@@ -37,7 +37,8 @@ Arguments:
   PATH                       Target directory to migrate (default: current directory)
 
 Options:
-  --agent NAME              Write agent instructions file into the project (e.g. chatgpt, claude, opencode).
+  --agent NAME               Write agent instructions file into the project (e.g. chatgpt, claude, opencode).
+  --no-agent                 Skip writing agent instructions file
   --no-interactive           Run in non-interactive mode (skip prompts and use defaults)
   -h, --help                 Show this help message
 
@@ -57,7 +58,7 @@ Aliases: ${gray('migrate')}
 export interface MigrationOptions {
   interactive: boolean;
   help?: boolean;
-  agent?: string;
+  agent?: string | false;
 }
 
 function parseArgs() {
@@ -66,11 +67,10 @@ function parseArgs() {
   const parsed = mri<{
     help?: boolean;
     interactive?: boolean;
-    agent?: string;
+    agent?: string | false;
   }>(args, {
     alias: { h: 'help' },
     boolean: ['help', 'interactive'],
-    string: ['agent'],
     default: { interactive: defaultInteractive() },
   });
 

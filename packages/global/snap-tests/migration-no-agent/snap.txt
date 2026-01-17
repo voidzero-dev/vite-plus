@@ -1,0 +1,14 @@
+> vite migration --no-agent # migration with --no-agent should skip agent instructions
+┌  VITE+(⚡︎) - The Unified Toolchain for the Web
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+└  ✨ Migration completed!
+
+
+> ls -la | grep -E '(AGENTS|CLAUDE)' || echo 'No agent file created' # verify no agent file was created
+No agent file created

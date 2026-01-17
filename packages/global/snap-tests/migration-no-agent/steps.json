@@ -1,0 +1,9 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite migration --no-agent # migration with --no-agent should skip agent instructions",
+    "ls -la | grep -E '(AGENTS|CLAUDE)' || echo 'No agent file created' # verify no agent file was created"
+  ]
+}

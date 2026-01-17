@@ -20,7 +20,7 @@ const tgzPath = join(projectDir, '..', 'tmp', 'tgz');
 async function migrateProject(project: string) {
   const repoRoot = join(projectDir, project);
   // run vite migrate
-  execSync('vite migrate', {
+  execSync('vite migrate --no-agent', {
     cwd: repoRoot,
     stdio: 'inherit',
     env: {
