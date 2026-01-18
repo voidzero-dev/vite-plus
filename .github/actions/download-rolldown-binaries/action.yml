@@ -43,3 +43,9 @@ runs:
         name: rolldown-binaries
         path: ./package/rolldown-binding.*.node
         if-no-files-found: error
+
+    - name: Clean up
+      shell: bash
+      run: |
+        rm -rf package
+        rm *.tgz
