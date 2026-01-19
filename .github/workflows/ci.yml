@@ -7,7 +7,7 @@ permissions:
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, labeled]
     paths-ignore:
       - '**/*.md'
   push:
@@ -126,12 +126,12 @@ jobs:
           path: ./rolldown/packages/rolldown/src
           merge-multiple: true
 
-      - name: build
+      - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: x86_64-unknown-linux-gnu
 
-      - name: Build self
+      - name: Build CLI
         run: pnpm bootstrap-cli:ci
 
       - name: Print help for built-in commands
@@ -212,10 +212,13 @@ jobs:
 
   install-e2e-test:
     name: vite install E2E test
-    # FIXME: Error: spawnSync esbuild ENOTSOCK
-    # runs-on: ubuntu-latest
-    runs-on: namespace-profile-mac-default
-    if: ${{ github.ref_name == 'main' }}
+    needs:
+      - download-previous-rolldown-binaries
+    runs-on: ubuntu-latest
+    # Run if: not a PR, OR PR has 'test: install-e2e' label
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'test: install-e2e')
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: ./.github/actions/clone
@@ -228,17 +231,26 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: install-e2e-test
 
-      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
-
       - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
 
-      - name: Build vite rust binary
-        run: cargo build --bin vite --release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
 
-      - name: Run vite install
+      - name: Build with upstream
+        uses: ./.github/actions/build-upstream
+        with:
+          target: x86_64-unknown-linux-gnu
+
+      - name: Build CLI
+        run: pnpm bootstrap-cli:ci
+
+      - name: Run local CLI vite install
         run: |
-          export PATH=$PWD/target/release:$PATH
-
+          export PATH=$PWD/node_modules/.bin:$PATH
+          vite -h
           # Test vite install on various repositories with different package managers
           repos=(
             # pnpm workspace
@@ -256,11 +268,11 @@ jobs:
             IFS=':' read -r repo dir_name <<< "$repo_info"
             echo "Testing vite install on $repo..."
             # remove the directory if it exists
-            if [ -d "tmp/$dir_name" ]; then
-              rm -rf "tmp/$dir_name"
+            if [ -d "$RUNNER_TEMP/$dir_name" ]; then
+              rm -rf "$RUNNER_TEMP/$dir_name"
             fi
-            git clone --depth 1 "https://github.com/$repo.git" "tmp/$dir_name"
-            cd "tmp/$dir_name"
+            git clone --depth 1 "https://github.com/$repo.git" "$RUNNER_TEMP/$dir_name"
+            cd "$RUNNER_TEMP/$dir_name"
             vite install
             # run again to show install cache increase by time
             time vite install
