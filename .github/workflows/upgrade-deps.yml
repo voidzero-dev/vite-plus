@@ -13,6 +13,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: read
+      id-token: write
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: ./.github/actions/clone
@@ -24,6 +26,7 @@ jobs:
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: upgrade-deps
+          tools: just,cargo-shear
 
       - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
 
@@ -50,8 +53,41 @@ jobs:
 
       - name: Build
         uses: ./.github/actions/build-upstream
+        id: build-upstream
+        continue-on-error: true
         with:
           target: x86_64-unknown-linux-gnu
+
+      - uses: anthropics/claude-code-action@a017b830c03e23789b11fb69ed571ea61c12e45c # v1.0.0
+        if: steps.build-upstream.outcome == 'failure'
+        with:
+          claude_code_oauth_token: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Check why the build-upstream steps failed and fix them.
+            ### Background
+            - The build-upstream steps are at ./.github/actions/build-upstream/action.yml
+            - The deps upgrade script is at ./.github/scripts/upgrade-deps.mjs
+
+            ### Instructions
+            - We are using `pnpm` as the package manager
+            - We are aiming to upgrade all dependencies to the latest versions in this workflow, so don't downgrade any dependencies.
+            - Check `.claude/agents/cargo-workspace-merger.md` if rolldown hash is changed.
+            - If deps in our `Cargo.toml` need to be upgraded, you can refer to the `./.claude/agents/cargo-workspace-merger.md`
+              - If `Cargo.toml` has been modified, you need to run `cargo shear` to ensure there is nothing wrong with our dependencies.
+              - Run `cargo check --all-targets --all-features` to ensure everything works fine if any Rust related codes are modified.
+            - Run the steps in `build-upstream` action.yml after your fixing. If no errors are found, you can safe to exit.
+            - Your final step is to run `just build` to ensure all builds are successful.
+            - Run `pnpm run lint` to check if there are any issues after the build, if has, deep investigate it and fix it. You need to run `just build` before you can run `pnpm run lint`.
+            - Run `pnpm run test` after `just build` to ensure all tests are successful.
+            - The snapshot tests in `pnpm run test` are always successful, you need to check the updated snapshot to see if there is anything wrong after our deps upgrade.
+
+            Help me fix the errors in `build-upstream` steps, no need to commit changes after your fixing.
+          claude_args: |
+            --model opus --allowedTools "Bash,Edit,Replace,NotebookEditCell"
+          additional_permissions: |
+            actions: read
+
       - name: Update lockfile
         run: |
           pnpm install --no-frozen-lockfile
