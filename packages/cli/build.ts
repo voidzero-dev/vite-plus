@@ -38,7 +38,9 @@ const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 const skipNative = process.argv.includes('--skip-native');
 const skipTs = process.argv.includes('--skip-ts');
 // Filter out custom flags before passing to NAPI CLI
-const napiArgs = process.argv.slice(2).filter((arg) => arg !== '--skip-native' && arg !== '--skip-ts');
+const napiArgs = process.argv
+  .slice(2)
+  .filter((arg) => arg !== '--skip-native' && arg !== '--skip-ts');
 
 // Build native first - TypeScript may depend on the generated binding types
 if (!skipNative) {

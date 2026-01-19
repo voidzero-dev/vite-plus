@@ -17,13 +17,13 @@ import {
   selectAgentTargetPath,
   writeAgentInstructions,
 } from '../utils/index.js';
+import { getVitePlusHeader } from '../utils/terminal.js';
 import {
   checkVitestVersion,
   checkViteVersion,
   rewriteMonorepo,
   rewriteStandaloneProject,
 } from './migrator.js';
-import { getVitePlusHeader } from '../utils/terminal.js';
 
 const { green, gray } = colors;
 
@@ -103,8 +103,7 @@ async function main() {
 
   const workspaceInfoOptional = await detectWorkspace(projectPath);
   const packageManager =
-    workspaceInfoOptional.packageManager ??
-    (await selectPackageManager(options.interactive));
+    workspaceInfoOptional.packageManager ?? (await selectPackageManager(options.interactive));
 
   // ensure the package manager is installed by vite-plus
   const downloadResult = await downloadPackageManager(
