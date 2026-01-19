@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import type { WorkspaceInfo } from '../types/index.js';
+import type { WorkspaceInfo, WorkspaceInfoOptional } from '../types/index.js';
 import { readJsonFile } from '../utils/index.js';
 import { prependToPathToEnvs } from './command.js';
 import { BuiltinTemplate, type TemplateInfo, TemplateType } from './templates/types.js';
@@ -119,7 +119,7 @@ export function discoverTemplate(
 // Infer the parent directory of the generated package based on the template name
 export function inferParentDir(
   templateName: string,
-  workspaceInfo: WorkspaceInfo,
+  workspaceInfo: WorkspaceInfoOptional,
 ): string | undefined {
   if (workspaceInfo.parentDirs.length === 0) {
     return;

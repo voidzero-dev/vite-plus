@@ -429,12 +429,13 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
       { ...templateInfo, packageName, targetDir },
       options.interactive,
     );
-    if (result.exitCode !== 0) {
+    const { projectDir } = result;
+    if (result.exitCode !== 0 || !projectDir) {
       cancelAndExit(`Failed to create monorepo, exit code: ${result.exitCode}`, result.exitCode);
     }
 
     // rewrite monorepo to add vite-plus dependencies
-    const fullPath = path.join(workspaceInfo.rootDir, result.projectDir!);
+    const fullPath = path.join(workspaceInfo.rootDir, projectDir);
     await writeAgentInstructions({
       projectRoot: fullPath,
       targetPath: selectedAgentTargetPath,
@@ -444,7 +445,7 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
     rewriteMonorepo(workspaceInfo);
     await runViteInstall(fullPath, options.interactive);
     prompts.outro(green('✨ Generation completed!'));
-    showNextSteps(result.projectDir!);
+    showNextSteps(projectDir, true);
     return;
   }
   // #endregion

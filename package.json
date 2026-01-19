@@ -29,6 +29,7 @@
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
     "@voidzero-dev/vite-plus-tools": "workspace:*",
+    "bingo": "catalog:",
     "husky": "catalog:",
     "lint-staged": "catalog:",
     "oxfmt": "catalog:",
@@ -37,7 +38,8 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "workspace:*",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "zod": "catalog:"
   },
   "lint-staged": {
     "*.@(js|ts|tsx)": [

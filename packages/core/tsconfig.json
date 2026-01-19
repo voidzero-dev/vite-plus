@@ -1,18 +1,9 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "composite": true,
-    "outDir": "./dist",
-    "noEmit": false,
-    "allowImportingTsExtensions": false,
-    "skipLibCheck": true,
-    "rootDir": ".",
-    "resolveJsonModule": true,
-    "experimentalDecorators": true,
-    "customConditions": ["dev"]
+    "experimentalDecorators": true
   },
-  "exclude": ["node_modules", "dist/**/*"],
-  "include": ["./**/*.ts", "package.json"]
+  "files": [],
+  "include": [],
+  "exclude": ["**/*"]
 }

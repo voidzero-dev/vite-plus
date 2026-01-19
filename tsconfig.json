@@ -2,7 +2,6 @@
   "compilerOptions": {
     "allowImportingTsExtensions": true,
     "declaration": true,
-    "erasableSyntaxOnly": true,
     "esModuleInterop": true,
     "module": "preserve",
     "moduleDetection": "force",
@@ -16,22 +15,11 @@
     "types": ["node"],
     "verbatimModuleSyntax": true
   },
-  "include": [],
-  "references": [
-    {
-      "path": "./packages/cli"
-    },
-    {
-      "path": "./packages/core"
-    },
-    {
-      "path": "./packages/test"
-    },
-    {
-      "path": "./packages/global"
-    },
-    {
-      "path": "./packages/tools"
-    }
+  "exclude": [
+    "packages/cli/snap-tests",
+    "packages/global/snap-tests",
+    "rolldown-vite",
+    "rolldown",
+    "target"
   ]
 }

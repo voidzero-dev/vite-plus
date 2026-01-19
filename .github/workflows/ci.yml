@@ -187,6 +187,10 @@ jobs:
         with:
           target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' ||  matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'aarch64-apple-darwin' }}
 
+      - name: Check TypeScript types
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: pnpm tsgo
+
       - name: Build CLI
         run: |
           pnpm bootstrap-cli:ci
