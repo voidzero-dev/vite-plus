@@ -46,5 +46,8 @@
     "*.rs": [
       "cargo fmt --"
     ]
+  },
+  "dependencies": {
+    "@voidzero-dev/vitepress-theme": "link:../../../../Library/pnpm/global/5/node_modules/@voidzero-dev/vitepress-theme"
   }
 }

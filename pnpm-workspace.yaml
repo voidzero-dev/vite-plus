@@ -40,6 +40,7 @@ catalog:
   '@typescript/native-preview': 7.0.0-dev.20260117.1
   '@vitest/browser': ^4.0.9
   '@vitest/browser-playwright': ^4.0.9
+  '@voidzero-dev/vitepress-theme': ^4.2.1
   '@vueuse/core': ^14.0.0
   '@yarnpkg/fslib': ^3.1.3
   '@yarnpkg/shell': ^4.1.3
@@ -154,6 +155,7 @@ minimumReleaseAgeExclude:
 
 overrides:
   '@rolldown/pluginutils': workspace:@rolldown/pluginutils@*
+  '@voidzero-dev/vitepress-theme': link:../../../../Library/pnpm/global/5/node_modules/@voidzero-dev/vitepress-theme
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vitest: workspace:@voidzero-dev/vite-plus-test@*

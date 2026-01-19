@@ -250,6 +250,7 @@ overrides:
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vitest: workspace:@voidzero-dev/vite-plus-test@*
   vitest-dev: npm:vitest@^4.0.17
+  '@voidzero-dev/vitepress-theme': link:../../../../Library/pnpm/global/5/node_modules/@voidzero-dev/vitepress-theme
 
 packageExtensionsChecksum: sha256-BLDZCgUIohvBXMHo3XFOlGLzGXRyK3sDU0nMBRk9APY=
 
@@ -270,6 +271,10 @@ patchedDependencies:
 importers:
 
   .:
+    dependencies:
+      '@voidzero-dev/vitepress-theme':
+        specifier: link:../../../../Library/pnpm/global/5/node_modules/@voidzero-dev/vitepress-theme
+        version: link:../../../../Library/pnpm/global/5/node_modules/@voidzero-dev/vitepress-theme
     devDependencies:
       '@oxc-node/cli':
         specifier: 'catalog:'
@@ -316,6 +321,9 @@ importers:
 
   docs:
     devDependencies:
+      '@voidzero-dev/vitepress-theme':
+        specifier: link:../../../../../Library/pnpm/global/5/node_modules/@voidzero-dev/vitepress-theme
+        version: link:../../../../../Library/pnpm/global/5/node_modules/@voidzero-dev/vitepress-theme
       oxc-minify:
         specifier: ^0.101.0
         version: 0.101.0
