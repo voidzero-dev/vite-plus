@@ -18,7 +18,7 @@ This project is using Vite+, a modern toolchain built on top of Vite, Rolldown, 
 - new - Create a new monorepo package (in-project) or a new project (global)
 - run - Run tasks from `package.json` scripts
 
-These commands map to their corresponding tools. For example, `vite dev --port 3000` runs Vite's dev server and works the same as Vite. `vite test` runs JavaScript tests through the bundled Vitest. The versions of individual tools can be checked using `vite <command> --version`. For example, `vite lint --version` prints the bundled Oxlint version, and `vite test --version` prints the bundled Vitest version. This is useful when researching documentation, features, and bugs.
+These commands map to their corresponding tools. For example, `vite dev --port 3000` runs Vite's dev server and works the same as Vite. `vite test` runs JavaScript tests through the bundled Vitest. The version of all tools can be checked using `vite --version`. This is useful when researching documentation, features, and bugs.
 
 ### Package Manager Commands
 

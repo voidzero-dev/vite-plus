@@ -402,10 +402,12 @@ async function bundleVitepress() {
 
 async function mergePackageJson() {
   const tsdownPkgPath = join(tsdownSourceDir, 'package.json');
+  const rolldownPkgPath = join(rolldownSourceDir, 'package.json');
   const vitePkgPath = join(rolldownViteSourceDir, 'package.json');
   const destPkgPath = resolve(projectDir, 'package.json');
 
   const tsdownPkg = JSON.parse(await readFile(tsdownPkgPath, 'utf-8'));
+  const rolldownPkg = JSON.parse(await readFile(rolldownPkgPath, 'utf-8'));
   const vitePkg = JSON.parse(await readFile(vitePkgPath, 'utf-8'));
   const destPkg = JSON.parse(await readFile(destPkgPath, 'utf-8'));
 
@@ -424,6 +426,7 @@ async function mergePackageJson() {
   destPkg.bundledVersions = {
     ...destPkg.bundledVersions,
     vite: vitePkg.version,
+    rolldown: rolldownPkg.version,
     tsdown: tsdownPkg.version,
   };
 

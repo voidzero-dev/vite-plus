@@ -128,6 +128,12 @@ export async function printVersion(cwd: string) {
       bundledVersionKey: 'vite',
     },
     {
+      command: 'rolldown',
+      displayName: 'rolldown',
+      packageName: '@voidzero-dev/vite-plus-core',
+      bundledVersionKey: 'rolldown',
+    },
+    {
       command: 'test',
       displayName: 'vitest',
       packageName: '@voidzero-dev/vite-plus-test',
