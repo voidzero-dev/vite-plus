@@ -1192,7 +1192,9 @@ async function patchVitestCoreResolver() {
 
   if (!content.includes(oldPattern)) {
     throw new Error(
-      'Could not find VitestCoreResolver pattern to patch in ' + cliApiChunk + '. ' +
+      'Could not find VitestCoreResolver pattern to patch in ' +
+        cliApiChunk +
+        '. ' +
         'This likely means vitest code has changed and the patch needs to be updated.',
     );
   }

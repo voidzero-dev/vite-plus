@@ -57,6 +57,9 @@ jobs:
         run: |
           pnpm install --no-frozen-lockfile
           pnpm dedupe
+      
+      - name: Format code
+        run: pnpm fmt
 
       - name: Close and delete previous PR
         env:

@@ -19,9 +19,23 @@ export default (<UserConfig>{
     ],
   },
   fmt: {
-    ignorePatterns: ['**/tmp/**', '/ecosystem-ci/*/**', '/rolldown', '/rolldown-vite'],
+    ignorePatterns: [
+      '**/tmp/**',
+      '/ecosystem-ci/*/**',
+      '/packages/test/**.cjs',
+      '/packages/test/**.cts',
+      '/packages/test/**.d.mjs',
+      '/packages/test/**.d.ts',
+      '/packages/test/**.mjs',
+      '/packages/test/browser/',
+      '/rolldown-vite',
+      '/rolldown',
+    ],
     singleQuote: true,
     semi: true,
+    experimentalSortPackageJson: {
+      sortScripts: true,
+    },
     experimentalSortImports: {
       groups: [
         ['type-import'],

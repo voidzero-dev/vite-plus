@@ -9,16 +9,14 @@ const RESET = `${CSI}0m`;
 const fgRgb = (r: number, g: number, b: number) => `${CSI}38;2;${r};${g};${b}m`;
 
 const shouldColorize = (stream = process.stdout) =>
-  stream?.isTTY &&
-  (typeof stream.hasColors === 'function' ? stream.hasColors() : true);
+  stream?.isTTY && (typeof stream.hasColors === 'function' ? stream.hasColors() : true);
 
 function supportsTrueColor(stream = process.stdout) {
   if (!stream?.isTTY) {
     return false;
   }
 
-  const depth =
-    typeof stream.getColorDepth === 'function' ? stream.getColorDepth() : 1;
+  const depth = typeof stream.getColorDepth === 'function' ? stream.getColorDepth() : 1;
   return depth >= 24;
 }
 
@@ -192,16 +190,11 @@ export async function getVitePlusHeader() {
 
   if (!colors) {
     const fg = await getForegroundColor();
-    colors = fg
-      ? gradient(text.length, fg, purple)
-      : fadeToColor(text.length, purple);
+    colors = fg ? gradient(text.length, fg, purple) : fadeToColor(text.length, purple);
   }
 
   return `${styleText(
     'bold',
-    `VITE+(${styleText(
-      'blueBright',
-      '⚡︎',
-    )}) - The Unified Toolchain ${colorize(text, colors)}`,
+    `VITE+(${styleText('blueBright', '⚡︎')}) - The Unified Toolchain ${colorize(text, colors)}`,
   )}`;
 }

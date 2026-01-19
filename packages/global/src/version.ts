@@ -52,10 +52,7 @@ function readPackageVersionFromPath(packageJsonPath: string): string | null {
   return readPackageJsonFromPath(packageJsonPath)?.version ?? null;
 }
 
-function resolvePackageJson(
-  packageName: string,
-  baseDir: string,
-): PackageJson | null {
+function resolvePackageJson(packageName: string, baseDir: string): PackageJson | null {
   try {
     const packageJsonPath = require.resolve(`${packageName}/package.json`, {
       paths: [baseDir],
@@ -66,13 +63,10 @@ function resolvePackageJson(
   }
 }
 
-function resolveToolVersion(
-  tool: ToolVersionSpec,
-  localPackagePath: string,
-): string | null {
+function resolveToolVersion(tool: ToolVersionSpec, localPackagePath: string): string | null {
   const pkg = resolvePackageJson(tool.packageName, localPackagePath);
   const bundledVersion = tool.bundledVersionKey
-    ? pkg?.bundledVersions?.[tool.bundledVersionKey] ?? null
+    ? (pkg?.bundledVersions?.[tool.bundledVersionKey] ?? null)
     : null;
   if (bundledVersion) {
     return bundledVersion;
@@ -86,18 +80,14 @@ function resolveToolVersion(
   return null;
 }
 
-function formatToolVersion(
-  tool: ToolVersionSpec,
-  version: string | null,
-): string {
+function formatToolVersion(tool: ToolVersionSpec, version: string | null): string {
   return `${tool.displayName} ${version ? `v${version}` : `Not found`}`;
 }
 
 const cliLabel = 'vite-plus-cli';
 const localLabel = 'vite-plus';
 const columnWidth = cliLabel.length + 1;
-const getColumnWidth = (label: string) =>
-  Math.max(0, columnWidth - label.length);
+const getColumnWidth = (label: string) => Math.max(0, columnWidth - label.length);
 
 /**
  * Print version information for both local and global CLI
@@ -172,11 +162,7 @@ export async function printVersion(cwd: string) {
     tool,
     version: resolveToolVersion(tool, localMetadata.path),
   }));
-  if (
-    resolvedTools.some(
-      ({ tool, version }) => tool.bundledVersionKey && !version,
-    )
-  ) {
+  if (resolvedTools.some(({ tool, version }) => tool.bundledVersionKey && !version)) {
     return;
   }
 
