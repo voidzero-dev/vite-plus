@@ -15,13 +15,13 @@
  * Native binding is built first because TypeScript may depend on generated binding types.
  */
 
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createBuildCommand, NapiCli } from '@napi-rs/cli';
-import { format, formatEmbeddedCode } from 'oxfmt';
+import { format } from 'oxfmt';
 import {
   createCompilerHost,
   createProgram,
@@ -79,20 +79,22 @@ async function buildNapiBinding() {
   });
 
   const outputs = await task;
-  const fmtConfigPath = join(projectDir, '../../node_modules/.vite/task-cache/.oxfmtrc.json');
-  if (!existsSync(fmtConfigPath)) {
-    const viteConfig = await import('../../vite.config');
-    mkdirSync(dirname(fmtConfigPath), { recursive: true });
-    writeFileSync(fmtConfigPath, JSON.stringify(viteConfig.default.fmt, null, 2));
+  const viteConfig = await import('../../vite.config');
+  for (const output of outputs) {
+    if (output.kind !== 'node') {
+      const { code, errors } = await format(output.path, await readFile(output.path, 'utf8'), {
+        ...viteConfig.default.fmt,
+        embeddedCode: true,
+      });
+      if (errors.length > 0) {
+        for (const error of errors) {
+          console.error(error);
+        }
+        process.exit(1);
+      }
+      await writeFile(output.path, code);
+    }
   }
-  await format(
-    [
-      '-c',
-      '../../node_modules/.vite/task-cache/.oxfmtrc.json',
-      ...outputs.filter((o) => o.kind !== 'node').map((o) => o.path),
-    ],
-    formatEmbeddedCode,
-  );
 }
 
 async function buildCli() {

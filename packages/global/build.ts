@@ -1,9 +1,9 @@
-import { existsSync, mkdirSync, writeFileSync, cpSync } from 'node:fs';
+import { cpSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, parse } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createBuildCommand, NapiCli } from '@napi-rs/cli';
-import { format, formatEmbeddedCode } from 'oxfmt';
+import { format } from 'oxfmt';
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
 
@@ -24,20 +24,23 @@ async function buildNapiBinding() {
   });
 
   const outputs = await task;
-  const fmtConfigPath = join(projectDir, '../../node_modules/.vite/task-cache/.oxfmtrc.json');
-  if (!existsSync(fmtConfigPath)) {
-    const viteConfig = await import('../../vite.config');
-    mkdirSync(dirname(fmtConfigPath), { recursive: true });
-    writeFileSync(fmtConfigPath, JSON.stringify(viteConfig.default.fmt, null, 2));
+  const viteConfig = await import('../../vite.config');
+
+  for (const output of outputs) {
+    if (output.kind !== 'node') {
+      const { code, errors } = await format(output.path, readFileSync(output.path, 'utf8'), {
+        ...viteConfig.default.fmt,
+        embeddedCode: true,
+      });
+      if (errors.length > 0) {
+        for (const error of errors) {
+          console.error(error);
+        }
+        process.exit(1);
+      }
+      writeFileSync(output.path, code);
+    }
   }
-  await format(
-    [
-      '-c',
-      '../../node_modules/.vite/task-cache/.oxfmtrc.json',
-      ...outputs.filter((o) => o.kind !== 'node').map((o) => o.path),
-    ],
-    formatEmbeddedCode,
-  );
 
   const nodeFile = outputs.find((o) => o.kind === 'node');
   if (nodeFile) {

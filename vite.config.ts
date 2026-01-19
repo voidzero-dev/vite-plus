@@ -33,9 +33,7 @@ export default (<UserConfig>{
     ],
     singleQuote: true,
     semi: true,
-    experimentalSortPackageJson: {
-      sortScripts: true,
-    },
+    experimentalSortPackageJson: true,
     experimentalSortImports: {
       groups: [
         ['type-import'],

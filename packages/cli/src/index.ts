@@ -1,7 +1,7 @@
 import { defineConfig } from '@voidzero-dev/vite-plus-test/config';
 
 import type { LibUserConfig } from './lib';
-import type { OxfmtConfig } from './oxfmt-config';
+import type { FormatOptions } from './oxfmt-config';
 import type { OxlintConfig } from './oxlint-config';
 
 declare module '@voidzero-dev/vite-plus-core' {
@@ -11,7 +11,7 @@ declare module '@voidzero-dev/vite-plus-core' {
      */
     lint?: OxlintConfig;
 
-    fmt?: OxfmtConfig;
+    fmt?: FormatOptions;
 
     lib?: LibUserConfig | LibUserConfig[];
 
