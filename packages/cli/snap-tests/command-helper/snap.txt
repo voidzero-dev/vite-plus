@@ -75,11 +75,19 @@ Options:
 > vite fmt -h # fmt help message
 Usage: [-c=PATH] [PATH]...
 
-Output Options
-        --check              Check mode - check if files are formatted, also show statistics
-        --list-different     List mode - list files that would be changed
+Mode Options:
+        --init               Initialize `.oxfmtrc.json` with default values
+        --migrate=SOURCE     Migrate configuration to `.oxfmtrc.json` from specified source
+                             Available sources: prettier
+        --lsp                Start language server protocol (LSP) server
+        --stdin-filepath=PATH  Specify the file name to use to infer which parser to use
 
-Basic Options
+Output Options:
+        --write              Format and write files in place (default)
+        --check              Check if files are formatted, also show statistics
+        --list-different     List files that would be changed
+
+Config Options
     -c, --config=PATH        Path to the configuration file
 
 Ignore Options
@@ -88,8 +96,7 @@ Ignore Options
                              used.
         --with-node-modules  Format code in node_modules directory (skipped by default)
 
-Misc Options
-        --lsp                Start language server protocol (LSP) server
+Runtime Options
         --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
         --threads=INT        Number of threads to use. Set to 1 for using only 1 CPU core.
 
@@ -138,8 +145,9 @@ Enable/Disable Plugins
         --disable-unicorn-plugin  Disable unicorn plugin, which is turned on by default
         --disable-oxc-plugin  Disable oxc unique rules, which is turned on by default
         --disable-typescript-plugin  Disable TypeScript plugin, which is turned on by default
-        --import-plugin       Enable import plugin and detect ESM problems. It is recommended to use
-                              alongside the `--tsconfig` option.
+        --import-plugin       Enable import plugin and detect ESM problems. It should be used with
+                              the `--tsconfig` flag if your project has a tsconfig with a name other
+                              than `tsconfig.json`.
         --react-plugin        Enable react plugin, which is turned off by default
         --jsdoc-plugin        Enable jsdoc plugin and detect JSDoc problems
         --jest-plugin         Enable the Jest plugin and detect test problems
@@ -150,7 +158,6 @@ Enable/Disable Plugins
                               problems
         --promise-plugin      Enable the promise plugin and detect promise usage problems
         --node-plugin         Enable the node plugin and detect node usage problems
-        --regex-plugin        Enable the regex plugin and detect regex usage problems
         --vue-plugin          Enable the vue plugin and detect vue usage problems
 
 Fix Problems
