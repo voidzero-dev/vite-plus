@@ -56,18 +56,42 @@ async function updateUpstreamVersions() {
 }
 
 // ============ Update pnpm-workspace.yaml ============
-async function updatePnpmWorkspace(vitestVersion, tsdownVersion) {
+async function updatePnpmWorkspace(versions) {
   const filePath = path.join(ROOT, 'pnpm-workspace.yaml');
   let content = fs.readFileSync(filePath, 'utf8');
 
   // Update vitest-dev override (handle pre-release versions like -beta.1, -rc.0)
   content = content.replace(
     /vitest-dev: 'npm:vitest@\^[\d.]+(-[\w.]+)?'/,
-    `vitest-dev: 'npm:vitest@^${vitestVersion}'`,
+    `vitest-dev: 'npm:vitest@^${versions.vitest}'`,
   );
 
   // Update tsdown in catalog (handle pre-release versions)
-  content = content.replace(/tsdown: \^[\d.]+(-[\w.]+)?/, `tsdown: ^${tsdownVersion}`);
+  content = content.replace(/tsdown: \^[\d.]+(-[\w.]+)?/, `tsdown: ^${versions.tsdown}`);
+
+  // Update @oxc-node/cli in catalog
+  content = content.replace(
+    /'@oxc-node\/cli': \^[\d.]+(-[\w.]+)?/,
+    `'@oxc-node/cli': ^${versions.oxcNodeCli}`,
+  );
+
+  // Update @oxc-node/core in catalog
+  content = content.replace(
+    /'@oxc-node\/core': \^[\d.]+(-[\w.]+)?/,
+    `'@oxc-node/core': ^${versions.oxcNodeCore}`,
+  );
+
+  // Update oxfmt in catalog
+  content = content.replace(/oxfmt: \^[\d.]+(-[\w.]+)?/, `oxfmt: ^${versions.oxfmt}`);
+
+  // Update oxlint in catalog (but not oxlint-tsgolint)
+  content = content.replace(/oxlint: \^[\d.]+(-[\w.]+)?\n/, `oxlint: ^${versions.oxlint}\n`);
+
+  // Update oxlint-tsgolint in catalog
+  content = content.replace(
+    /oxlint-tsgolint: \^[\d.]+(-[\w.]+)?/,
+    `oxlint-tsgolint: ^${versions.oxlintTsgolint}`,
+  );
 
   fs.writeFileSync(filePath, content);
   console.log('Updated pnpm-workspace.yaml');
@@ -113,29 +137,48 @@ async function updateCorePackage(devtoolsVersion) {
   console.log('Updated packages/core/package.json');
 }
 
-// ============ Main ============
-async function main() {
-  console.log('Fetching latest versions...');
+console.log('Fetching latest versions...');
 
-  const [vitestVersion, tsdownVersion, devtoolsVersion] = await Promise.all([
-    getLatestNpmVersion('vitest'),
-    getLatestNpmVersion('tsdown'),
-    getLatestNpmVersion('@vitejs/devtools'),
-  ]);
+const [
+  vitestVersion,
+  tsdownVersion,
+  devtoolsVersion,
+  oxcNodeCliVersion,
+  oxcNodeCoreVersion,
+  oxfmtVersion,
+  oxlintVersion,
+  oxlintTsgolintVersion,
+] = await Promise.all([
+  getLatestNpmVersion('vitest'),
+  getLatestNpmVersion('tsdown'),
+  getLatestNpmVersion('@vitejs/devtools'),
+  getLatestNpmVersion('@oxc-node/cli'),
+  getLatestNpmVersion('@oxc-node/core'),
+  getLatestNpmVersion('oxfmt'),
+  getLatestNpmVersion('oxlint'),
+  getLatestNpmVersion('oxlint-tsgolint'),
+]);
 
-  console.log(`vitest: ${vitestVersion}`);
-  console.log(`tsdown: ${tsdownVersion}`);
-  console.log(`@vitejs/devtools: ${devtoolsVersion}`);
+console.log(`vitest: ${vitestVersion}`);
+console.log(`tsdown: ${tsdownVersion}`);
+console.log(`@vitejs/devtools: ${devtoolsVersion}`);
+console.log(`@oxc-node/cli: ${oxcNodeCliVersion}`);
+console.log(`@oxc-node/core: ${oxcNodeCoreVersion}`);
+console.log(`oxfmt: ${oxfmtVersion}`);
+console.log(`oxlint: ${oxlintVersion}`);
+console.log(`oxlint-tsgolint: ${oxlintTsgolintVersion}`);
 
-  await updateUpstreamVersions();
-  await updatePnpmWorkspace(vitestVersion, tsdownVersion);
-  await updateTestPackage(vitestVersion);
-  await updateCorePackage(devtoolsVersion);
-
-  console.log('Done!');
-}
-
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
+await updateUpstreamVersions();
+await updatePnpmWorkspace({
+  vitest: vitestVersion,
+  tsdown: tsdownVersion,
+  oxcNodeCli: oxcNodeCliVersion,
+  oxcNodeCore: oxcNodeCoreVersion,
+  oxfmt: oxfmtVersion,
+  oxlint: oxlintVersion,
+  oxlintTsgolint: oxlintTsgolintVersion,
 });
+await updateTestPackage(vitestVersion);
+await updateCorePackage(devtoolsVersion);
+
+console.log('Done!');
