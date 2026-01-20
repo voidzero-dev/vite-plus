@@ -12,8 +12,8 @@ vite.config.ts
 > cat vite-plus-monorepo/package.json # check package.json
 {
   "name": "vite-plus-monorepo",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "ready": "vite fmt && vite lint --type-aware && vite run test -r && vite run build -r",
@@ -82,17 +82,14 @@ vite-plus-generator
 {
   "name": "vite-plus-generator",
   "version": "0.0.0",
-  "type": "module",
   "private": true,
   "description": "A starter for creating a Vite+ code generator.",
-  "bin": "./bin/index.ts",
-  "engines": {
-    "node": ">=22.12.0"
-  },
   "keywords": [
     "bingo-template",
     "vite-plus-generator"
   ],
+  "bin": "./bin/index.ts",
+  "type": "module",
   "scripts": {
     "test": "vite test",
     "dev": "node bin/index.ts"
@@ -104,6 +101,9 @@ vite-plus-generator
   "devDependencies": {
     "@types/node": "catalog:",
     "typescript": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }
 
@@ -121,8 +121,8 @@ vite.config.ts
 > cat my-vite-plus-monorepo/package.json # check package.json
 {
   "name": "my-vite-plus-monorepo",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "ready": "vite fmt && vite lint --type-aware && vite run test -r && vite run build -r",

@@ -388,19 +388,23 @@ The automatic migration only supports JSON format lint-staged configurations (`.
 After migration completes:
 
 1. **Verify the build**:
+
    ```bash
    vite run build
    ```
+
    ::: tip
    `vite run` automatically installs dependencies if needed, so you don't need to run `pnpm install` / `npm install` / `yarn install` manually.
    :::
 
 2. **Run tests**:
+
    ```bash
    vite test
    ```
 
 3. **Check linting**:
+
    ```bash
    vite lint
    ```

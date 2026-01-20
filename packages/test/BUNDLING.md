@@ -237,6 +237,7 @@ If this validation fails, the build will report which packages need to be added.
 When upgrading the vitest version:
 
 1. **Update version** in `packages/test/package.json`:
+
    ```json
    {
      "devDependencies": {
@@ -249,6 +250,7 @@ When upgrading the vitest version:
    ```
 
 2. **Run build**:
+
    ```bash
    pnpm -C packages/test build
    ```
@@ -259,6 +261,7 @@ When upgrading the vitest version:
    - If it's a new leaf dep, it will be automatically bundled
 
 4. **Run tests**:
+
    ```bash
    pnpm test
    ```
@@ -274,7 +277,7 @@ When upgrading the vitest version:
 | ----------------------- | ------------------------------ | -------------------------------------------------- |
 | New undeclared external | New vitest dependency          | Add to `dependencies` or `EXTERNAL_BLOCKLIST`      |
 | Browser test crashes    | Node.js code leaked to browser | Check import rewriting in `rewriteVitestImports()` |
-| Missing export          | New @vitest/* subpath export   | Add to `VITEST_PACKAGE_TO_PATH`                    |
+| Missing export          | New @vitest/\* subpath export  | Add to `VITEST_PACKAGE_TO_PATH`                    |
 | pnpm override fails     | New plugin export needed       | Add to `createPluginExports()`                     |
 
 ---

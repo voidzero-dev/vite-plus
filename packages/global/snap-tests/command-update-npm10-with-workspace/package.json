@@ -1,11 +1,11 @@
 {
   "name": "command-update-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@10.9.4",
   "workspaces": [
     "packages/*"
   ],
   "dependencies": {
     "testnpm2": "*"
-  }
+  },
+  "packageManager": "npm@10.9.4"
 }

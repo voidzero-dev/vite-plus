@@ -4,7 +4,6 @@ added 3 packages in <variable>ms
 {
   "name": "command-update-npm10",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "dependencies": {
     "testnpm2": "*"
   },
@@ -13,7 +12,8 @@ added 3 packages in <variable>ms
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "*"
-  }
+  },
+  "packageManager": "npm@<semver>"
 }
 
 > vite up testnpm2 --latest -- --no-audit && cat package.json # should to absolute latest version
@@ -23,7 +23,6 @@ up to date in <variable>ms
 {
   "name": "command-update-npm10",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "dependencies": {
     "testnpm2": "*"
   },
@@ -32,7 +31,8 @@ up to date in <variable>ms
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "*"
-  }
+  },
+  "packageManager": "npm@<semver>"
 }
 
 > vite update -D -- --no-audit && cat package.json # should update only dev dependencies
@@ -41,7 +41,6 @@ up to date in <variable>ms
 {
   "name": "command-update-npm10",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "dependencies": {
     "testnpm2": "*"
   },
@@ -50,7 +49,8 @@ up to date in <variable>ms
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "*"
-  }
+  },
+  "packageManager": "npm@<semver>"
 }
 
 > vite update -P --no-save -- --no-audit && cat package.json # should update only dependencies and optionalDependencies without saving
@@ -59,7 +59,6 @@ up to date in <variable>ms
 {
   "name": "command-update-npm10",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "dependencies": {
     "testnpm2": "*"
   },
@@ -68,7 +67,8 @@ up to date in <variable>ms
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "*"
-  }
+  },
+  "packageManager": "npm@<semver>"
 }
 
 > vite rm testnpm2 && vite add testnpm2@1.0.0 -O -- --no-audit && vite update --no-optional --latest -- --no-audit && cat package.json # should skip optional dependencies
@@ -86,14 +86,14 @@ changed 1 package in <variable>ms
 {
   "name": "command-update-npm10",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "devDependencies": {
     "test-vite-plus-package": "*"
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "*",
     "testnpm2": "^1.0.0"
-  }
+  },
+  "packageManager": "npm@<semver>"
 }
 
 > vite update -- --no-audit && cat package.json # should update all packages but won't change the package.json
@@ -102,12 +102,12 @@ added 2 packages in <variable>ms
 {
   "name": "command-update-npm10",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "devDependencies": {
     "test-vite-plus-package": "*"
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "*",
     "testnpm2": "^1.0.0"
-  }
+  },
+  "packageManager": "npm@<semver>"
 }

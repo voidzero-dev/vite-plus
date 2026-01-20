@@ -21,7 +21,7 @@
 
 
 > cat .lintstagedrc # check .lintstagedrc is not updated
-"*.js":
+'*.js':
   - oxlint
   - oxfmt
 

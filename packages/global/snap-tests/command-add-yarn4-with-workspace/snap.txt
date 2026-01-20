@@ -11,10 +11,10 @@
 {
   "name": "command-add-yarn4-with-workspace",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "yarn@<semver>",
   "devDependencies": {
     "testnpm2": "^1.0.1"
   }
@@ -40,10 +40,10 @@
 {
   "name": "command-add-yarn4-with-workspace",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "yarn@<semver>",
   "devDependencies": {
     "testnpm2": "^1.0.1"
   },
@@ -74,10 +74,10 @@ Done in <variable>ms <variable>ms
 {
   "name": "command-add-yarn4-with-workspace",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "yarn@<semver>",
   "devDependencies": {
     "testnpm2": "^1.0.1"
   },
@@ -111,10 +111,10 @@ Done in <variable>ms <variable>ms
 {
   "name": "command-add-yarn4-with-workspace",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "yarn@<semver>",
   "devDependencies": {
     "testnpm2": "^1.0.1"
   },
@@ -173,10 +173,10 @@ Done in <variable>ms <variable>ms
 {
   "name": "command-add-yarn4-with-workspace",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "yarn@<semver>",
   "devDependencies": {
     "testnpm2": "^1.0.1"
   },
@@ -240,10 +240,10 @@ Done in <variable>ms <variable>ms
 {
   "name": "command-add-yarn4-with-workspace",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "yarn@<semver>",
   "devDependencies": {
     "testnpm2": "^1.0.1"
   },

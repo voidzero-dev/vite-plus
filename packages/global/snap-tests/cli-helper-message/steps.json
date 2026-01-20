@@ -1,5 +1,4 @@
 {
-  
   "commands": [
     "vite -h # show help message",
     "vite -V # show version",

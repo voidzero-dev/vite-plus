@@ -84,9 +84,9 @@ node_modules/test-vite-plus-package
                     "package": {
                       "name": "app",
                       "dependencies": {
-                        "testnpm2": "1.0.0",
+                        "@vite-plus-test/utils": "*",
                         "test-vite-plus-install": "1.0.0",
-                        "@vite-plus-test/utils": "*"
+                        "testnpm2": "1.0.0"
                       },
                       "devDependencies": {
                         "test-vite-plus-package": "1.0.0"
@@ -159,9 +159,9 @@ node_modules/test-vite-plus-package
           "package": {
             "name": "app",
             "dependencies": {
-              "testnpm2": "1.0.0",
+              "@vite-plus-test/utils": "*",
               "test-vite-plus-install": "1.0.0",
-              "@vite-plus-test/utils": "*"
+              "testnpm2": "1.0.0"
             },
             "devDependencies": {
               "test-vite-plus-package": "1.0.0"

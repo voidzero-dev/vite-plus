@@ -1,17 +1,14 @@
 {
   "name": "vite-plus-generator-template",
   "version": "0.0.0",
-  "type": "module",
   "private": true,
   "description": "A starter for creating a Vite+ code generator.",
-  "bin": "./bin/index.ts",
-  "engines": {
-    "node": ">=22.12.0"
-  },
   "keywords": [
     "bingo-template",
     "vite-plus-generator"
   ],
+  "bin": "./bin/index.ts",
+  "type": "module",
   "scripts": {
     "test": "vite test",
     "dev": "node bin/index.ts"
@@ -23,5 +20,8 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "typescript": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

@@ -1,16 +1,19 @@
 {
   "name": "@voidzero-dev/vite-plus-test",
   "version": "0.0.0",
-  "type": "module",
-  "sideEffects": false,
   "files": [
-    "dist/**",
-    "browser/**",
-    "*.d.ts",
     "*.cjs",
     "*.cts",
-    "*.mjs"
+    "*.d.ts",
+    "*.mjs",
+    "browser/**",
+    "dist/**"
   ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "imports": {
     "#module-evaluator": {
       "types": "./dist/module-evaluator.d.ts",
@@ -249,42 +252,8 @@
       "default": "./dist/plugins/browser-preview.mjs"
     }
   },
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "scripts": {
     "build": "oxnode -C dev ./build.ts"
-  },
-  "engines": {
-    "node": "^20.0.0 || ^22.0.0 || >=24.0.0"
-  },
-  "peerDependencies": {
-    "@edge-runtime/vm": "*",
-    "@opentelemetry/api": "^1.9.0",
-    "@types/node": "^20.0.0 || ^22.0.0 || >=24.0.0",
-    "happy-dom": "*",
-    "jsdom": "*",
-    "@vitest/ui": "4.0.17"
-  },
-  "peerDependenciesMeta": {
-    "@edge-runtime/vm": {
-      "optional": true
-    },
-    "@opentelemetry/api": {
-      "optional": true
-    },
-    "@types/node": {
-      "optional": true
-    },
-    "@vitest/ui": {
-      "optional": true
-    },
-    "happy-dom": {
-      "optional": true
-    },
-    "jsdom": {
-      "optional": true
-    }
   },
   "dependencies": {
     "@types/chai": "^5.2.2",
@@ -326,6 +295,37 @@
     "tinyrainbow": "^3.0.3",
     "vitest-dev": "^4.0.17",
     "why-is-node-running": "^2.3.0"
+  },
+  "peerDependencies": {
+    "@edge-runtime/vm": "*",
+    "@opentelemetry/api": "^1.9.0",
+    "@types/node": "^20.0.0 || ^22.0.0 || >=24.0.0",
+    "@vitest/ui": "4.0.17",
+    "happy-dom": "*",
+    "jsdom": "*"
+  },
+  "peerDependenciesMeta": {
+    "@edge-runtime/vm": {
+      "optional": true
+    },
+    "@opentelemetry/api": {
+      "optional": true
+    },
+    "@types/node": {
+      "optional": true
+    },
+    "@vitest/ui": {
+      "optional": true
+    },
+    "happy-dom": {
+      "optional": true
+    },
+    "jsdom": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": "^20.0.0 || ^22.0.0 || >=24.0.0"
   },
   "bundledVersions": {
     "vitest": "4.0.17"

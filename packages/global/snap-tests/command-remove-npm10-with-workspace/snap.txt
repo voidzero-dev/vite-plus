@@ -8,10 +8,10 @@ added 1 package in <variable>ms
 {
   "name": "command-remove-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "npm@<semver>",
   "devDependencies": {
     "testnpm2": "^1.0.1"
   },
@@ -52,10 +52,10 @@ removed 1 package in <variable>ms
 {
   "name": "command-remove-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "npm@<semver>",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
   }
@@ -87,10 +87,10 @@ removed 1 package in <variable>ms
 {
   "name": "command-remove-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "npm@<semver>",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
   }
@@ -116,10 +116,10 @@ up to date in <variable>ms
 {
   "name": "command-remove-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "npm@<semver>",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
   }
@@ -142,10 +142,10 @@ up to date in <variable>ms
 {
   "name": "command-remove-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "npm@<semver>",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
   }

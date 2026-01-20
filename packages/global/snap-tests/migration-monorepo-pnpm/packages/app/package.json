@@ -1,9 +1,14 @@
 {
   "name": "app",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "test": "vitest"
+  },
   "dependencies": {
-    "testnpm2": "catalog:",
+    "@vite-plus-test/utils": "workspace:*",
     "test-vite-plus-install": "1.0.0",
-    "@vite-plus-test/utils": "workspace:*"
+    "testnpm2": "catalog:"
   },
   "devDependencies": {
     "test-vite-plus-package": "1.0.0",
@@ -12,10 +17,5 @@
   },
   "optionalDependencies": {
     "test-vite-plus-other-optional": "1.0.0"
-  },
-  "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "test": "vitest"
   }
 }

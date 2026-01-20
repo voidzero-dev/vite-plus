@@ -2,7 +2,5 @@
   "env": {
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
-  "commands": [
-    "vite pm list # should show warning that yarn@2+ does not support list command"
-  ]
+  "commands": ["vite pm list # should show warning that yarn@2+ does not support list command"]
 }

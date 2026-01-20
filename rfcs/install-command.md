@@ -1005,9 +1005,9 @@ This is a new feature with no breaking changes:
 | Feature                | pnpm | yarn@1 | yarn@2+                 | npm             | Notes                     |
 | ---------------------- | ---- | ------ | ----------------------- | --------------- | ------------------------- |
 | Basic install          | ✅   | ✅     | ✅                      | ✅              | All supported             |
-| `--prod`               | ✅   | ✅     | ⚠️                       | ✅              | yarn@2+ needs .yarnrc.yml |
+| `--prod`               | ✅   | ✅     | ⚠️                      | ✅              | yarn@2+ needs .yarnrc.yml |
 | `--dev`                | ✅   | ❌     | ❌                      | ✅              | Limited support           |
-| `--no-optional`        | ✅   | ✅     | ⚠️                       | ✅              | yarn@2+ needs .yarnrc.yml |
+| `--no-optional`        | ✅   | ✅     | ⚠️                      | ✅              | yarn@2+ needs .yarnrc.yml |
 | `--frozen-lockfile`    | ✅   | ✅     | ✅ `--immutable`        | ✅ `ci`         | npm uses `npm ci`         |
 | `--no-frozen-lockfile` | ✅   | ✅     | ✅ `--no-immutable`     | ✅ `install`    | Pass through to PM        |
 | `--lockfile-only`      | ✅   | ❌     | ✅                      | ✅              | yarn@1 not supported      |
@@ -1019,7 +1019,7 @@ This is a new feature with no breaking changes:
 | `--fix-lockfile`       | ✅   | ❌     | ✅ `--refresh-lockfile` | ❌              | pnpm and yarn@2+ only     |
 | `--shamefully-hoist`   | ✅   | ❌     | ❌                      | ❌              | pnpm only                 |
 | `--resolution-only`    | ✅   | ❌     | ❌                      | ❌              | pnpm only                 |
-| `--silent`             | ✅   | ✅     | ⚠️ (use env var)         | ✅ `--loglevel` | yarn@2+ use env var       |
+| `--silent`             | ✅   | ✅     | ⚠️ (use env var)        | ✅ `--loglevel` | yarn@2+ use env var       |
 | `--filter`             | ✅   | ❌     | ✅ `workspaces foreach` | ✅              | yarn@1 not supported      |
 
 ## Future Enhancements

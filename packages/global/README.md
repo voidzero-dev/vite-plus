@@ -33,21 +33,21 @@ $ vite --help
 Usage: vite [OPTIONS] [TASK] [-- <TASK_ARGS>...] [COMMAND]
 
 Commands:
-  run      
-  lint     
-  fmt      
-  build    
-  test     
-  install  
+  run
+  lint
+  fmt
+  build
+  test
+  install
   help     Print this message or the help of the given subcommand(s)
 
 Arguments:
-  [TASK]          
+  [TASK]
   [TASK_ARGS]...  Optional arguments for the tasks, captured after '--'
 
 Options:
   -d, --debug     Display cache for debugging
-      --no-debug  
+      --no-debug
   -h, --help      Print help
   -V, --version   Print version
 ```

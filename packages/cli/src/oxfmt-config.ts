@@ -1,1 +1,1 @@
-export type { FormatOptions, SortImportsOptions, TailwindcssOptions } from 'oxfmt'
+export type { FormatOptions, SortImportsOptions, TailwindcssOptions } from 'oxfmt';

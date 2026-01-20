@@ -65,13 +65,13 @@ added 3 packages in <variable>ms
 {
   "version": "1.0.0",
   "name": "command-list-npm10",
-  "packageManager": "npm@<semver>",
   "devDependencies": {
     "test-vite-plus-package": "1.0.0"
   },
   "peerDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
   },
+  "packageManager": "npm@<semver>",
   "_id": "command-list-npm10@<semver>",
   "extraneous": false,
   "path": "<cwd>",

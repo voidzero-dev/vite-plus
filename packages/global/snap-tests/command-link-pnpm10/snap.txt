@@ -32,10 +32,10 @@ dependencies:
 {
   "name": "command-link-pnpm10",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {
     "testnpm2": "*"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 lockfileVersion: '9.0'
 
@@ -60,10 +60,10 @@ Lockfile is up to date, resolution step is skipped
 {
   "name": "command-link-pnpm10",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {
     "testnpm2": "*"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 lockfileVersion: '9.0'
 
@@ -88,10 +88,10 @@ Nothing to unlink
 {
   "name": "command-link-pnpm10",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {
     "testnpm2": "*"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 lockfileVersion: '9.0'
 

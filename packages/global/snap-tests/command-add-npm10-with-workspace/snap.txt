@@ -4,10 +4,10 @@ added 3 packages in <variable>ms
 {
   "name": "command-add-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "npm@<semver>",
   "devDependencies": {
     "testnpm2": "^1.0.1"
   }
@@ -27,10 +27,10 @@ up to date in <variable>ms
 {
   "name": "command-add-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "npm@<semver>",
   "devDependencies": {
     "testnpm2": "^1.0.1"
   },
@@ -53,10 +53,10 @@ added 1 package in <variable>ms
 {
   "name": "command-add-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "npm@<semver>",
   "devDependencies": {
     "testnpm2": "^1.0.1"
   },
@@ -83,10 +83,10 @@ up to date in <variable>ms
 {
   "name": "command-add-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "npm@<semver>",
   "devDependencies": {
     "testnpm2": "^1.0.1"
   },
@@ -114,10 +114,10 @@ up to date in <variable>ms
 {
   "name": "command-add-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "npm@<semver>",
   "devDependencies": {
     "testnpm2": "^1.0.1"
   },
@@ -149,10 +149,10 @@ up to date in <variable>ms
 {
   "name": "command-add-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "npm@<semver>",
   "devDependencies": {
     "testnpm2": "1.0.1"
   },
@@ -185,10 +185,10 @@ added 1 package in <variable>ms
 {
   "name": "command-add-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "npm@<semver>",
   "devDependencies": {
     "testnpm2": "1.0.1"
   },

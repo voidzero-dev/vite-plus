@@ -45,14 +45,14 @@ export default defineConfig({
 > cat package.json # check package.json
 {
   "name": "migration-from-tsdown",
-  "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest"
-  },
   "scripts": {
     "build": "vite lib",
     "build:watch": "vite lib --watch",
     "build:dts": "vite lib --dts"
+  },
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
   },
   "pnpm": {
     "overrides": {
@@ -100,14 +100,14 @@ export default defineConfig({
 > cat package.json # check package.json
 {
   "name": "migration-from-tsdown",
-  "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest"
-  },
   "scripts": {
     "build": "vite lib",
     "build:watch": "vite lib --watch",
     "build:dts": "vite lib --dts"
+  },
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
   },
   "pnpm": {
     "overrides": {

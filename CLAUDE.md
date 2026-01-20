@@ -31,6 +31,7 @@ vite dev                             # runs dev script from package.json
 ## Task Dependencies
 
 1. **Explicit** (always applied): Defined in `vite-task.json`
+
    ```json
    {
      "tasks": {

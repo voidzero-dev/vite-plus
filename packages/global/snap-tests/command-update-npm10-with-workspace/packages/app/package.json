@@ -1,8 +1,8 @@
 {
   "name": "app",
   "dependencies": {
-    "testnpm2": "*",
-    "test-vite-plus-install": "*"
+    "test-vite-plus-install": "*",
+    "testnpm2": "*"
   },
   "devDependencies": {
     "test-vite-plus-package": "*"

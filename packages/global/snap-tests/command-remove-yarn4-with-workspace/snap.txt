@@ -112,10 +112,10 @@ Done in <variable>ms <variable>ms
 {
   "name": "command-remove-yarn4-with-workspace",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "yarn@<semver>",
   "devDependencies": {
     "testnpm2": "^1.0.1"
   },
@@ -177,10 +177,10 @@ Done in <variable>ms <variable>ms
 {
   "name": "command-remove-yarn4-with-workspace",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "yarn@<semver>",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
   },
@@ -230,10 +230,10 @@ Done in <variable>ms <variable>ms
 {
   "name": "command-remove-yarn4-with-workspace",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "yarn@<semver>",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
   }
@@ -271,10 +271,10 @@ Done in <variable>ms <variable>ms
 {
   "name": "command-remove-yarn4-with-workspace",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "yarn@<semver>",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
   }
@@ -334,10 +334,10 @@ Done in <variable>ms <variable>ms
 {
   "name": "command-remove-yarn4-with-workspace",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "workspaces": [
     "packages/*"
-  ]
+  ],
+  "packageManager": "yarn@<semver>"
 }
 {
   "name": "app"

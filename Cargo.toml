@@ -1,11 +1,6 @@
 [workspace]
 resolver = "3"
-members = [
-  "bench",
-  "crates/*",
-  "packages/cli/binding",
-  "packages/global/binding",
-]
+members = ["bench", "crates/*", "packages/cli/binding", "packages/global/binding"]
 
 [workspace.package]
 authors = ["Vite+ Authors"]
@@ -19,10 +14,7 @@ rust-version = "1.92.0"
 absolute_paths_not_starting_with_crate = "warn"
 non_ascii_idents = "warn"
 unit-bindings = "warn"
-unexpected_cfgs = { level = "warn", check-cfg = [
-  'cfg(coverage)',
-  'cfg(coverage_nightly)',
-] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(coverage_nightly)'] }
 unsafe_op_in_unsafe_fn = "warn"
 unused_unsafe = "warn"
 
@@ -58,10 +50,7 @@ backon = "1.3.0"
 base-encode = "0.3.1"
 base64-simd = "0.8.0"
 bincode = "2.0.1"
-bstr = { version = "1.12.0", default-features = false, features = [
-  "alloc",
-  "std",
-] }
+bstr = { version = "1.12.0", default-features = false, features = ["alloc", "std"] }
 bitflags = "2.9.1"
 blake3 = "1.8.2"
 clap = "4.5.40"
@@ -99,15 +88,9 @@ memchr = "2.7.4"
 mimalloc-safe = "0.1.52"
 mime = "0.3.17"
 monostate = "1.0.2"
-napi = { version = "3.0.0", default-features = false, features = [
-  "async",
-  "error_anyhow",
-] }
+napi = { version = "3.0.0", default-features = false, features = ["async", "error_anyhow"] }
 napi-build = "2"
-napi-derive = { version = "3.0.0", default-features = false, features = [
-  "type-def",
-  "strict",
-] }
+napi-derive = { version = "3.0.0", default-features = false, features = ["type-def", "strict"] }
 nix = { version = "0.30.1", features = ["dir"] }
 nodejs-built-in-modules = "1.0.0"
 nom = "8.0.0"
@@ -150,7 +133,13 @@ thiserror = "2"
 tokio = { version = "1.48.0", default-features = false }
 tracing = "0.1.41"
 tracing-chrome = "0.7.2"
-tracing-subscriber = { version = "0.3.19", default-features = false, features = ["env-filter", "fmt", "json", "serde", "std"] }
+tracing-subscriber = { version = "0.3.19", default-features = false, features = [
+  "env-filter",
+  "fmt",
+  "json",
+  "serde",
+  "std",
+] }
 ts-rs = "11.0"
 typedmap = "0.6.0"
 url = "2.5.4"
@@ -275,5 +264,5 @@ opt-level = 3
 lto = "fat"
 codegen-units = 1
 strip = "symbols" # set to `false` for debug information
-debug = false     # set to `true` for debug information
-panic = "abort"   # Let it crash and force ourselves to write safe Rust.
+debug = false # set to `true` for debug information
+panic = "abort" # Let it crash and force ourselves to write safe Rust.

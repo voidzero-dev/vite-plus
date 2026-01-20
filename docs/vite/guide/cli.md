@@ -276,10 +276,7 @@ Tasks are configured in `vite-task.json` files:
       "cacheable": true,
       "dependsOn": ["lint"],
       "envs": ["NODE_ENV"],
-      "fingerprintIgnores": [
-        "node_modules/**/*",
-        "!node_modules/**/package.json"
-      ]
+      "fingerprintIgnores": ["node_modules/**/*", "!node_modules/**/package.json"]
     }
   }
 }
@@ -308,10 +305,7 @@ Control which files trigger cache invalidation:
     "install": {
       "command": "pnpm install",
       "cacheable": true,
-      "fingerprintIgnores": [
-        "node_modules/**/*",
-        "!node_modules/**/package.json"
-      ]
+      "fingerprintIgnores": ["node_modules/**/*", "!node_modules/**/package.json"]
     }
   }
 }

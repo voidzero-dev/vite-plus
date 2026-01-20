@@ -1,7 +1,6 @@
 {
   "ignoredPlatforms": ["win32"],
-  "env": {
-  },
+  "env": {},
   "commands": [
     "cat array.json # should show original array.json file",
     "tool json-sort array.json '_.name' && cat array.json # should sort array.json file by name",

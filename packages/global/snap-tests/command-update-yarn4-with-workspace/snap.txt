@@ -11,13 +11,13 @@
 {
   "name": "command-update-yarn4-with-workspace",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "workspaces": [
     "packages/*"
   ],
   "dependencies": {
     "testnpm2": "^1.0.1"
-  }
+  },
+  "packageManager": "yarn@<semver>"
 }
 {
   "name": "@vite-plus-test/utils",
@@ -121,13 +121,13 @@ Done in <variable>ms <variable>ms
 {
   "name": "command-update-yarn4-with-workspace",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "workspaces": [
     "packages/*"
   ],
   "dependencies": {
     "testnpm2": "^1.0.1"
-  }
+  },
+  "packageManager": "yarn@<semver>"
 }
 {
   "name": "app",

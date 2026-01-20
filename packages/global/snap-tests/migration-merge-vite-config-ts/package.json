@@ -1,11 +1,4 @@
 {
-  "devDependencies": {
-    "vite": "^7.0.0",
-    "vitest": "^4.0.0",
-    "@vitejs/plugin-react": "^4.2.0",
-    "oxlint": "1",
-    "oxfmt": "1"
-  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -21,5 +14,12 @@
     "fmt:fix": "oxfmt --fix",
     "fmt:staged": "oxfmt --staged",
     "fmt:staged:fix": "oxfmt --staged --fix"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.0",
+    "oxfmt": "1",
+    "oxlint": "1",
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0"
   }
 }

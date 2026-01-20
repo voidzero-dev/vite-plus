@@ -861,8 +861,8 @@ Examples:
 
 ## Package Manager Compatibility
 
-| Feature           | pnpm    | npm     | yarn@1 | yarn@2+ | Notes                    |
-| ----------------- | ------- | ------- | ------ | ------- | ------------------------ |
+| Feature           | pnpm    | npm     | yarn@1  | yarn@2+ | Notes                    |
+| ----------------- | ------- | ------- | ------- | ------- | ------------------------ |
 | Basic execution   | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full | yarn@1 uses npx fallback |
 | Version specifier | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full |                          |
 | --package flag    | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full |                          |

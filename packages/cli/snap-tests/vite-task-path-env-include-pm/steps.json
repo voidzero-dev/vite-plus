@@ -1,6 +1,3 @@
 {
-  "commands": [
-    "vite install --no-frozen-lockfile",
-    "vite run check-yarn-version"
-  ]
+  "commands": ["vite install --no-frozen-lockfile", "vite run check-yarn-version"]
 }

@@ -11,7 +11,6 @@
 {
   "name": "command-update-yarn4",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "dependencies": {
     "testnpm2": "^1.0.1"
   },
@@ -20,7 +19,8 @@
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "*"
-  }
+  },
+  "packageManager": "yarn@<semver>"
 }
 
 > vite rm testnpm2 && vite add testnpm2@1.0.0 -D && vite update testnpm2 --latest && cat package.json # should to absolute latest version
@@ -55,14 +55,14 @@
 {
   "name": "command-update-yarn4",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "devDependencies": {
     "test-vite-plus-package": "*",
     "testnpm2": "^1.0.1"
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "*"
-  }
+  },
+  "packageManager": "yarn@<semver>"
 }
 
 > vite update -D && cat package.json # should update and ignore -D options
@@ -77,14 +77,14 @@
 {
   "name": "command-update-yarn4",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "devDependencies": {
     "test-vite-plus-package": "*",
     "testnpm2": "^1.0.1"
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "*"
-  }
+  },
+  "packageManager": "yarn@<semver>"
 }
 
 > vite update --recursive && cat package.json # should update all packages but won't change the package.json
@@ -99,12 +99,12 @@
 {
   "name": "command-update-yarn4",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "devDependencies": {
     "test-vite-plus-package": "*",
     "testnpm2": "^1.0.1"
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "*"
-  }
+  },
+  "packageManager": "yarn@<semver>"
 }

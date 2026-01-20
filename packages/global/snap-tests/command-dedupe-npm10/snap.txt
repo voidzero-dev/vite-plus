@@ -4,7 +4,6 @@ added 3 packages in <variable>ms
 {
   "name": "command-dedupe-npm10",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -13,7 +12,8 @@ added 3 packages in <variable>ms
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "npm@<semver>"
 }
 
 > vite dedupe --check && cat package.json # should check if deduplication would make changes
@@ -22,7 +22,6 @@ up to date in <variable>ms
 {
   "name": "command-dedupe-npm10",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -31,7 +30,8 @@ up to date in <variable>ms
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "npm@<semver>"
 }
 
 > vite ddp -- --loglevel=warn && cat package.json # support pass through arguments
@@ -40,7 +40,6 @@ up to date in <variable>ms
 {
   "name": "command-dedupe-npm10",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -49,5 +48,6 @@ up to date in <variable>ms
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "npm@<semver>"
 }

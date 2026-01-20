@@ -19,17 +19,17 @@
 > cat package.json # check package.json
 {
   "name": "migration-from-vitest-files",
-  "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "vite-plus": "latest"
-  },
   "scripts": {
     "test:run": "vite test run",
     "test:ui": "vite test --ui",
     "test:coverage": "vite test run --coverage",
     "test:watch": "vite test --watch",
     "test": "vite test"
+  },
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+    "vite-plus": "latest"
   },
   "pnpm": {
     "overrides": {

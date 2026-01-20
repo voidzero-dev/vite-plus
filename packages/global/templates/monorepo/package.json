@@ -1,13 +1,13 @@
 {
   "name": "vite-plus-monorepo-template",
-  "private": true,
   "version": "0.0.0",
-  "type": "module",
+  "private": true,
   "workspaces": [
     "packages/*",
     "apps/*",
     "tools/*"
   ],
+  "type": "module",
   "scripts": {
     "ready": "vite fmt && vite lint --type-aware && vite run test -r && vite run build -r",
     "dev": "vite run website#dev"

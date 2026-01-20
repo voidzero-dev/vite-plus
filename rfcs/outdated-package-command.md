@@ -1286,21 +1286,21 @@ vite outdated -g typescript
 
 ## Package Manager Compatibility
 
-| Feature             | pnpm               | npm                           | yarn@1           | yarn@2+            | Notes                    |
-| ------------------- | ------------------ | ----------------------------- | ---------------- | ------------------ | ------------------------ |
+| Feature             | pnpm               | npm                           | yarn@1           | yarn@2+             | Notes                    |
+| ------------------- | ------------------ | ----------------------------- | ---------------- | ------------------- | ------------------------ |
 | Basic command       | ✅ `outdated`      | ✅ `outdated`                 | ✅ `outdated`    | ⚠️ `upgrade-int...` | yarn@2+ uses interactive |
-| Pattern matching    | ✅ Glob patterns   | ⚠️ Package names               | ⚠️ Package names  | ❌ Not supported   | pnpm supports globs      |
-| JSON output         | ✅ `--format json` | ✅ `--json`                   | ❌ Not supported | ❌ Not supported   | Different flags          |
-| Long output         | ✅ `--long`        | ✅ `--long`                   | ❌ Not supported | ❌ Not supported   | pnpm and npm only        |
-| Parseable           | ❌ Not supported   | ✅ `--parseable`              | ❌ Not supported | ❌ Not supported   | npm only                 |
-| Recursive           | ✅ `-r`            | ❌ Not supported              | ❌ Not supported | ❌ Not supported   | pnpm only                |
-| Workspace filter    | ✅ `--filter`      | ✅ `--workspace`              | ❌ Not supported | ❌ Not supported   | Different flags          |
-| Workspace root      | ✅ `-w`            | ✅ `--include-workspace-root` | ❌ Not supported | ❌ Not supported   | Different flags          |
-| Dep type filter     | ✅ `--prod/--dev`  | ❌ Not supported              | ❌ Not supported | ❌ Not supported   | pnpm only                |
-| Compatible only     | ✅ `--compatible`  | ❌ Not supported              | ❌ Not supported | ❌ Not supported   | pnpm only                |
-| Sort results        | ✅ `--sort-by`     | ❌ Not supported              | ❌ Not supported | ❌ Not supported   | pnpm only                |
-| Global check        | ✅ `-g`            | ✅ `-g`                       | ❌ Not supported | ❌ Not supported   | pnpm and npm             |
-| Show all transitive | ⚠️ Use `-r`         | ✅ `--all`                    | ❌ Not supported | ❌ Not supported   | Different approaches     |
+| Pattern matching    | ✅ Glob patterns   | ⚠️ Package names              | ⚠️ Package names | ❌ Not supported    | pnpm supports globs      |
+| JSON output         | ✅ `--format json` | ✅ `--json`                   | ❌ Not supported | ❌ Not supported    | Different flags          |
+| Long output         | ✅ `--long`        | ✅ `--long`                   | ❌ Not supported | ❌ Not supported    | pnpm and npm only        |
+| Parseable           | ❌ Not supported   | ✅ `--parseable`              | ❌ Not supported | ❌ Not supported    | npm only                 |
+| Recursive           | ✅ `-r`            | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | pnpm only                |
+| Workspace filter    | ✅ `--filter`      | ✅ `--workspace`              | ❌ Not supported | ❌ Not supported    | Different flags          |
+| Workspace root      | ✅ `-w`            | ✅ `--include-workspace-root` | ❌ Not supported | ❌ Not supported    | Different flags          |
+| Dep type filter     | ✅ `--prod/--dev`  | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | pnpm only                |
+| Compatible only     | ✅ `--compatible`  | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | pnpm only                |
+| Sort results        | ✅ `--sort-by`     | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | pnpm only                |
+| Global check        | ✅ `-g`            | ✅ `-g`                       | ❌ Not supported | ❌ Not supported    | pnpm and npm             |
+| Show all transitive | ⚠️ Use `-r`        | ✅ `--all`                    | ❌ Not supported | ❌ Not supported    | Different approaches     |
 
 ## Future Enhancements
 

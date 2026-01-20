@@ -14,6 +14,7 @@ rule:
       regex: 'vite\s+[^-]'
 fix: vite dev
 
+
 # oxlint => vite lint (handles all cases: with/without env var prefix and args)
 # Match command_name to preserve env var prefix and arguments
 ---
@@ -24,6 +25,7 @@ rule:
   regex: '^oxlint$'
 fix: vite lint
 
+
 # oxfmt => vite fmt
 ---
 id: replace-oxfmt
@@ -33,6 +35,7 @@ rule:
   regex: '^oxfmt$'
 fix: vite fmt
 
+
 # vitest => vite test
 ---
 id: replace-vitest
@@ -41,6 +44,7 @@ rule:
   kind: command_name
   regex: '^vitest$'
 fix: vite test
+
 
 # tsdown => vite lib
 ---

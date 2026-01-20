@@ -1,12 +1,12 @@
 {
-  "devDependencies": {
-    "vite": "^7.0.0",
-    "@vitejs/plugin-react": "^4.2.0",
-    "oxlint": "1"
-  },
   "scripts": {
     "dev": "vite --port 3000",
     "build": "vite build",
     "lint": "oxlint"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.0",
+    "oxlint": "1",
+    "vite": "^7.0.0"
   }
 }

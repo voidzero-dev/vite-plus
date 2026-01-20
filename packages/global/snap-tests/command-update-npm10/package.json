@@ -1,7 +1,6 @@
 {
   "name": "command-update-npm10",
   "version": "1.0.0",
-  "packageManager": "npm@10.9.2",
   "dependencies": {
     "testnpm2": "*"
   },
@@ -10,5 +9,6 @@
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "*"
-  }
+  },
+  "packageManager": "npm@10.9.2"
 }

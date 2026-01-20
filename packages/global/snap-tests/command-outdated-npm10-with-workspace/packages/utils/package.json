@@ -1,6 +1,5 @@
 {
   "name": "@vite-plus-test/utils",
   "version": "1.0.0",
-  "dependencies": {
-  }
+  "dependencies": {}
 }

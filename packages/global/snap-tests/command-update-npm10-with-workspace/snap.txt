@@ -4,13 +4,13 @@ added 5 packages in <variable>ms
 {
   "name": "command-update-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "workspaces": [
     "packages/*"
   ],
   "dependencies": {
     "testnpm2": "*"
-  }
+  },
+  "packageManager": "npm@<semver>"
 }
 
 > vite update testnpm2 --latest --filter app -- --no-audit && cat packages/app/package.json # should update in specific package
@@ -20,8 +20,8 @@ up to date in <variable>ms
 {
   "name": "app",
   "dependencies": {
-    "testnpm2": "*",
-    "test-vite-plus-install": "*"
+    "test-vite-plus-install": "*",
+    "testnpm2": "*"
   },
   "devDependencies": {
     "test-vite-plus-package": "*"
@@ -35,8 +35,8 @@ up to date in <variable>ms
 {
   "name": "app",
   "dependencies": {
-    "testnpm2": "*",
-    "test-vite-plus-install": "*"
+    "test-vite-plus-install": "*",
+    "testnpm2": "*"
   },
   "devDependencies": {
     "test-vite-plus-package": "*"
@@ -51,8 +51,8 @@ up to date in <variable>ms
 {
   "name": "app",
   "dependencies": {
-    "testnpm2": "*",
-    "test-vite-plus-install": "*"
+    "test-vite-plus-install": "*",
+    "testnpm2": "*"
   },
   "devDependencies": {
     "test-vite-plus-package": "*"
@@ -74,19 +74,19 @@ up to date in <variable>ms
 {
   "name": "command-update-npm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>",
   "workspaces": [
     "packages/*"
   ],
   "dependencies": {
     "testnpm2": "*"
-  }
+  },
+  "packageManager": "npm@<semver>"
 }
 {
   "name": "app",
   "dependencies": {
-    "testnpm2": "*",
-    "test-vite-plus-install": "*"
+    "test-vite-plus-install": "*",
+    "testnpm2": "*"
   },
   "devDependencies": {
     "test-vite-plus-package": "*"
@@ -99,8 +99,8 @@ up to date in <variable>ms
 {
   "name": "app",
   "dependencies": {
-    "testnpm2": "*",
-    "test-vite-plus-install": "*"
+    "test-vite-plus-install": "*",
+    "testnpm2": "*"
   },
   "devDependencies": {
     "test-vite-plus-package": "*"

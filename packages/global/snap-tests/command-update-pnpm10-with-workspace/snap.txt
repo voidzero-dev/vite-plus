@@ -7,10 +7,10 @@ Done in <variable>ms using pnpm v<semver>
 {
   "name": "command-update-pnpm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {
     "testnpm2": "^1.0.1"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 
 > vite update testnpm2 --latest --filter app && cat packages/app/package.json # should update in specific package
@@ -76,10 +76,10 @@ Done in <variable>ms using pnpm v<semver>
 {
   "name": "command-update-pnpm10-with-workspace",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {
     "testnpm2": "^1.0.1"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 {
   "name": "app",

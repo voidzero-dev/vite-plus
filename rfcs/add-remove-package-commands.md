@@ -1231,15 +1231,15 @@ vite add "@myorg/utils@workspace:^" --filter app
 
 ### Package Manager Compatibility
 
-| Feature                    | pnpm               | yarn                 | npm                    | Notes                    |
-| -------------------------- | ------------------ | -------------------- | ---------------------- | ------------------------ |
+| Feature                    | pnpm               | yarn                  | npm                     | Notes                    |
+| -------------------------- | ------------------ | --------------------- | ----------------------- | ------------------------ |
 | `--filter <pattern>`       | ✅ Native          | ⚠️ `workspace <name>` | ⚠️ `--workspace <name>` | Syntax differs           |
-| Multiple filters           | ✅ Repeatable flag | ❌ Single only       | ⚠️ Limited              | pnpm most flexible       |
-| Wildcard patterns          | ✅ Full support    | ⚠️ Limited            | ❌ No wildcards        | pnpm best                |
-| Exclusion `!`              | ✅ Supported       | ❌ Not supported     | ❌ Not supported       | pnpm only                |
-| Dependency selectors `...` | ✅ Supported       | ❌ Not supported     | ❌ Not supported       | pnpm only                |
-| `-w` (root)                | ✅ `-w`            | ✅ `-W`              | ✅ `-w`                | Slightly different flags |
-| `--workspace` protocol     | ✅ Supported       | ❌ Manual            | ❌ Manual              | pnpm feature             |
+| Multiple filters           | ✅ Repeatable flag | ❌ Single only        | ⚠️ Limited              | pnpm most flexible       |
+| Wildcard patterns          | ✅ Full support    | ⚠️ Limited            | ❌ No wildcards         | pnpm best                |
+| Exclusion `!`              | ✅ Supported       | ❌ Not supported      | ❌ Not supported        | pnpm only                |
+| Dependency selectors `...` | ✅ Supported       | ❌ Not supported      | ❌ Not supported        | pnpm only                |
+| `-w` (root)                | ✅ `-w`            | ✅ `-W`               | ✅ `-w`                 | Slightly different flags |
+| `--workspace` protocol     | ✅ Supported       | ❌ Manual             | ❌ Manual               | pnpm feature             |
 
 **Graceful Degradation**:
 

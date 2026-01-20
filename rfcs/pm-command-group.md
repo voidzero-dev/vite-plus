@@ -1602,16 +1602,16 @@ Examples:
 
 ## Package Manager Compatibility
 
-| Subcommand | pnpm      | npm     | yarn@1    | yarn@2+         | Notes                                   |
-| ---------- | --------- | ------- | --------- | --------------- | --------------------------------------- |
-| prune      | ✅ Full   | ✅ Full | ❌ N/A    | ❌ N/A          | npm uses --omit flags, yarn auto-prunes |
-| pack       | ✅ Full   | ✅ Full | ✅ Full   | ✅ Full         | All supported                           |
-| list/ls    | ✅ Full   | ✅ Full | ⚠️ Limited | ❌ N/A          | yarn@1 no -r, yarn@2+ not supported     |
-| view       | ✅ Full   | ✅ Full | ⚠️ `info`  | ⚠️ `info`        | yarn uses different name                |
-| publish    | ✅ Full   | ✅ Full | ✅ Full   | ⚠️ `npm publish` | yarn@2+ uses npm plugin                 |
-| owner      | ✅ Full   | ✅ Full | ✅ Full   | ⚠️ `npm owner`   | yarn@2+ uses npm plugin                 |
-| cache      | ⚠️ `store` | ✅ Full | ✅ Full   | ✅ Full         | pnpm uses different command             |
-| config     | ✅ Full   | ✅ Full | ✅ Full   | ⚠️ Different     | yarn@2+ has different API               |
+| Subcommand | pnpm       | npm     | yarn@1     | yarn@2+          | Notes                                   |
+| ---------- | ---------- | ------- | ---------- | ---------------- | --------------------------------------- |
+| prune      | ✅ Full    | ✅ Full | ❌ N/A     | ❌ N/A           | npm uses --omit flags, yarn auto-prunes |
+| pack       | ✅ Full    | ✅ Full | ✅ Full    | ✅ Full          | All supported                           |
+| list/ls    | ✅ Full    | ✅ Full | ⚠️ Limited | ❌ N/A           | yarn@1 no -r, yarn@2+ not supported     |
+| view       | ✅ Full    | ✅ Full | ⚠️ `info`  | ⚠️ `info`        | yarn uses different name                |
+| publish    | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ `npm publish` | yarn@2+ uses npm plugin                 |
+| owner      | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ `npm owner`   | yarn@2+ uses npm plugin                 |
+| cache      | ⚠️ `store` | ✅ Full | ✅ Full    | ✅ Full          | pnpm uses different command             |
+| config     | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ Different     | yarn@2+ has different API               |
 
 ## Future Enhancements
 

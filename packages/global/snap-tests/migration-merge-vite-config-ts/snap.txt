@@ -61,12 +61,6 @@ cat: .oxfmtrc.json: No such file or directory
 
 > cat package.json # check package.json
 {
-  "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "@vitejs/plugin-react": "^4.2.0",
-    "vite-plus": "latest"
-  },
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
@@ -82,6 +76,12 @@ cat: .oxfmtrc.json: No such file or directory
     "fmt:fix": "vite fmt --fix",
     "fmt:staged": "vite fmt --staged",
     "fmt:staged:fix": "vite fmt --staged --fix"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+    "vite-plus": "latest"
   },
   "pnpm": {
     "overrides": {

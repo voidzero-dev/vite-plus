@@ -782,7 +782,7 @@ vite update --no-optional
 | Update command   | `update`           | `upgrade`        | `up`             | `update`         | Different command names    |
 | Latest flag      | `--latest` / `-L`  | `--latest`       | N/A (default)    | ❌ Not supported | npm only updates in range  |
 | Interactive      | `--interactive`    | ❌ Not supported | `--interactive`  | ❌ Not supported | Limited support            |
-| Workspace filter | `--filter`         | ⚠️ Limited        | ⚠️ Limited        | `--workspace`    | pnpm most flexible         |
+| Workspace filter | `--filter`         | ⚠️ Limited       | ⚠️ Limited       | `--workspace`    | pnpm most flexible         |
 | Recursive        | `--recursive`      | ❌ Not supported | `--recursive`    | `--workspaces`   | Different flags            |
 | Dev/Prod filter  | `--dev` / `--prod` | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only                  |
 | Global           | `-g`               | `global upgrade` | ❌ Not supported | `-g`             | Use npm for global         |

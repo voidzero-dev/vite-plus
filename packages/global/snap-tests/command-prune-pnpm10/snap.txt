@@ -34,7 +34,6 @@ Already up to date
 {
   "name": "command-prune-pnpm10",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -43,7 +42,8 @@ Already up to date
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 
 > vite pm prune --prod && cat package.json # should prune dev dependencies
@@ -57,7 +57,6 @@ devDependencies:
 {
   "name": "command-prune-pnpm10",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -66,7 +65,8 @@ devDependencies:
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 
 > vite pm prune --no-optional && cat package.json # should prune optional dependencies
@@ -84,7 +84,6 @@ devDependencies:
 {
   "name": "command-prune-pnpm10",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -93,7 +92,8 @@ devDependencies:
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 
 > vite pm prune --prod --no-optional && cat package.json # should prune both dev and optional dependencies
@@ -109,7 +109,6 @@ devDependencies:
 {
   "name": "command-prune-pnpm10",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -118,14 +117,14 @@ devDependencies:
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 
 > vite pm prune -- --loglevel=warn && cat package.json # should support pass through arguments
 {
   "name": "command-prune-pnpm10",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -134,5 +133,6 @@ devDependencies:
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }

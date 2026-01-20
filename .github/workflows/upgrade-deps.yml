@@ -52,12 +52,11 @@ jobs:
         uses: ./.github/actions/build-upstream
         with:
           target: x86_64-unknown-linux-gnu
-
       - name: Update lockfile
         run: |
           pnpm install --no-frozen-lockfile
           pnpm dedupe
-      
+
       - name: Format code
         run: pnpm fmt
 

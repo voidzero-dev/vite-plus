@@ -1,11 +1,7 @@
 {
   "name": "vite-plus-monorepo",
-  "license": "BUSL-1.1",
   "private": true,
-  "packageManager": "pnpm@10.28.0",
-  "engines": {
-    "node": ">=22.18.0"
-  },
+  "license": "BUSL-1.1",
   "type": "module",
   "scripts": {
     "build": "pnpm -F @voidzero-dev/* -F vite-plus -F vite-plus-cli build",
@@ -48,5 +44,9 @@
     "*.rs": [
       "cargo fmt --"
     ]
-  }
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "packageManager": "pnpm@10.28.0"
 }

@@ -36,15 +36,9 @@ cat: .oxlintrc.json: No such file or directory
 {
   "name": "migration-monorepo-yarn4",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
-  "dependencies": {
-    "testnpm2": "1.0.0"
-  },
-  "devDependencies": {
-    "vite": "catalog:",
-    "vitest": "catalog:",
-    "vite-plus": "catalog:"
-  },
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
@@ -56,9 +50,15 @@ cat: .oxlintrc.json: No such file or directory
     "lint": "vite lint",
     "fmt": "vite fmt"
   },
-  "workspaces": [
-    "packages/*"
-  ],
+  "dependencies": {
+    "testnpm2": "1.0.0"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "yarn@<semver>",
   "resolutions": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
@@ -78,10 +78,15 @@ npmScopes:
 > cat packages/app/package.json # check app package.json
 {
   "name": "app",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "test": "vite test"
+  },
   "dependencies": {
-    "testnpm2": "catalog:",
+    "@vite-plus-test/utils": "workspace:*",
     "test-vite-plus-install": "1.0.0",
-    "@vite-plus-test/utils": "workspace:*"
+    "testnpm2": "catalog:"
   },
   "devDependencies": {
     "test-vite-plus-package": "1.0.0",
@@ -91,17 +96,17 @@ npmScopes:
   },
   "optionalDependencies": {
     "test-vite-plus-other-optional": "1.0.0"
-  },
-  "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "test": "vite test"
   }
 }
 
 > cat packages/utils/package.json # check utils package.json
 {
   "name": "@vite-plus-test/utils",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "test": "vite test"
+  },
   "dependencies": {
     "testnpm2": "1.0.0"
   },
@@ -109,10 +114,5 @@ npmScopes:
     "vite": "catalog:",
     "vitest": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "test": "vite test"
   }
 }

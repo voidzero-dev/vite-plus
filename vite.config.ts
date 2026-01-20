@@ -1,6 +1,6 @@
 import type { UserConfig } from 'vite-plus';
 
-export default (<UserConfig>{
+export default <UserConfig>{
   lint: {
     rules: {
       'no-console': 'warn',
@@ -54,4 +54,4 @@ export default (<UserConfig>{
       order: 'asc',
     },
   },
-});
+};

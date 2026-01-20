@@ -52,18 +52,6 @@ cat: .oxfmtrc.json: No such file or directory
 {
   "name": "migration-monorepo-pnpm",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
-  "dependencies": {
-    "testnpm2": "1.0.0"
-  },
-  "resolutions": {
-    "vue": "3.5.25"
-  },
-  "devDependencies": {
-    "vite": "catalog:",
-    "vitest": "catalog:",
-    "vite-plus": "catalog:"
-  },
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
@@ -74,7 +62,19 @@ cat: .oxfmtrc.json: No such file or directory
     "test": "vite test",
     "lint": "vite lint",
     "fmt": "vite fmt"
-  }
+  },
+  "dependencies": {
+    "testnpm2": "1.0.0"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "resolutions": {
+    "vue": "3.5.25"
+  },
+  "packageManager": "pnpm@<semver>"
 }
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml
@@ -112,10 +112,15 @@ minimumReleaseAgeExclude:
 > cat packages/app/package.json # check app package.json
 {
   "name": "app",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "test": "vite test"
+  },
   "dependencies": {
-    "testnpm2": "catalog:",
+    "@vite-plus-test/utils": "workspace:*",
     "test-vite-plus-install": "1.0.0",
-    "@vite-plus-test/utils": "workspace:*"
+    "testnpm2": "catalog:"
   },
   "devDependencies": {
     "test-vite-plus-package": "1.0.0",
@@ -125,17 +130,17 @@ minimumReleaseAgeExclude:
   },
   "optionalDependencies": {
     "test-vite-plus-other-optional": "1.0.0"
-  },
-  "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "test": "vite test"
   }
 }
 
 > cat packages/utils/package.json # check utils package.json
 {
   "name": "@vite-plus-test/utils",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "test": "vite test"
+  },
   "dependencies": {
     "testnpm2": "1.0.0"
   },
@@ -143,22 +148,17 @@ minimumReleaseAgeExclude:
     "vite": "catalog:",
     "vitest": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "test": "vite test"
   }
 }
 
 > cat packages/only-oxlint/package.json # check only-oxlint package.json
 {
   "name": "@vite-plus-test/only-oxlint",
-  "devDependencies": {
-    "vite-plus": "catalog:"
-  },
   "scripts": {
     "lint": "vite lint --fix"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
   }
 }
 

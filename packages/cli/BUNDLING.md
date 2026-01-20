@@ -174,8 +174,8 @@ The CLI package creates thin shim files that re-export from `@voidzero-dev/vite-
 
 ### Export Mapping (Core)
 
-| Upstream Vite Export | CLI Package Export                      | Description                                |
-| -------------------- | --------------------------------------- | ------------------------------------------ |
+| Upstream Vite Export | CLI Package Export        | Description                                |
+| -------------------- | ------------------------- | ------------------------------------------ |
 | `vite/client`        | `vite-plus/client`        | Ambient types for HMR, CSS modules, assets |
 | `vite/module-runner` | `vite-plus/module-runner` | SSR/Environment module runner              |
 | `vite/internal`      | `vite-plus/internal`      | Internal APIs                              |
@@ -231,8 +231,8 @@ Instead of copying the actual dist files from the test package, we create thin s
 
 All test package exports are mapped under `./test/*`:
 
-| Test Package Export                               | CLI Package Export                                |
-| ------------------------------------------------- | ------------------------------------------------- |
+| Test Package Export                               | CLI Package Export                  |
+| ------------------------------------------------- | ----------------------------------- |
 | `@voidzero-dev/vite-plus-test`                    | `vite-plus/test`                    |
 | `@voidzero-dev/vite-plus-test/browser`            | `vite-plus/test/browser`            |
 | `@voidzero-dev/vite-plus-test/browser-playwright` | `vite-plus/test/browser-playwright` |

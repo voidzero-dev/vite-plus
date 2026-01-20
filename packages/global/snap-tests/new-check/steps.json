@@ -1,5 +1,4 @@
 {
-  
   "commands": [
     "vite new --help # show help",
     "vite new --list # list templates",

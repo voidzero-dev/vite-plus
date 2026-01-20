@@ -1,67 +1,28 @@
 {
   "name": "vite-plus",
   "version": "0.0.0",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "bin": {
     "vite": "./bin/vite"
-  },
-  "engines": {
-    "node": "^20.19.0 || >=22.12.0"
-  },
-  "sideEffects": false,
-  "scripts": {
-    "build": "oxnode -C dev ./build.ts",
-    "build-ts": "oxnode -C dev ./build.ts --skip-native",
-    "build-native": "oxnode -C dev ./build.ts --skip-ts",
-    "snap-test": "tool snap-test",
-    "publish-native": "node ./publish-native-addons.ts",
-    "test": "vitest run"
   },
   "files": [
     "bin",
     "dist",
+    "binding/*.node",
+    "binding/index.cjs",
+    "binding/index.d.cts",
     "binding/index.d.ts",
     "binding/index.js",
-    "binding/index.d.cts",
-    "binding/index.cjs",
-    "binding/*.node",
     "dist/test"
   ],
-  "dependencies": {
-    "@oxc-project/types": "catalog:",
-    "@voidzero-dev/vite-plus-core": "workspace:*",
-    "@voidzero-dev/vite-plus-test": "workspace:*",
-    "cac": "catalog:",
-    "oxfmt": "catalog:",
-    "oxlint": "catalog:",
-    "oxlint-tsgolint": "catalog:"
-  },
-  "devDependencies": {
-    "@napi-rs/cli": "^3.4.1",
-    "@oxc-node/core": "^0.0.32",
-    "@voidzero-dev/vite-plus-tools": "workspace:",
-    "rolldown": "workspace:*",
-    "rolldown-plugin-dts": "catalog:",
-    "tsdown": "catalog:",
-    "vite": "workspace:*"
-  },
-  "napi": {
-    "binaryName": "vite-plus",
-    "packageName": "@voidzero-dev/vite-plus",
-    "targets": [
-      "aarch64-apple-darwin",
-      "aarch64-unknown-linux-gnu",
-      "x86_64-unknown-linux-gnu",
-      "x86_64-pc-windows-msvc"
-    ]
-  },
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.cjs"
     },
     "./client": {
       "types": "./dist/client.d.ts"
@@ -83,14 +44,14 @@
       "import": "./dist/bin.js"
     },
     "./binding": {
+      "types": "./binding/index.d.cts",
       "import": "./binding/index.cjs",
-      "require": "./binding/index.cjs",
-      "types": "./binding/index.d.cts"
+      "require": "./binding/index.cjs"
     },
     "./package.json": "./package.json",
     "./lib": {
-      "import": "./dist/lib.js",
-      "types": "./dist/lib.d.ts"
+      "types": "./dist/lib.d.ts",
+      "import": "./dist/lib.js"
     },
     "./test": {
       "import": {
@@ -148,8 +109,8 @@
     },
     "./test/config": {
       "types": "./dist/test/config.d.ts",
-      "default": "./dist/test/config.js",
-      "require": "./dist/test/config.cjs"
+      "require": "./dist/test/config.cjs",
+      "default": "./dist/test/config.js"
     },
     "./test/coverage": {
       "types": "./dist/test/coverage.d.ts",
@@ -320,5 +281,44 @@
     "./test/plugins/browser-preview": {
       "default": "./dist/test/plugins/browser-preview.js"
     }
+  },
+  "scripts": {
+    "build": "oxnode -C dev ./build.ts",
+    "build-ts": "oxnode -C dev ./build.ts --skip-native",
+    "build-native": "oxnode -C dev ./build.ts --skip-ts",
+    "snap-test": "tool snap-test",
+    "publish-native": "node ./publish-native-addons.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@oxc-project/types": "catalog:",
+    "@voidzero-dev/vite-plus-core": "workspace:*",
+    "@voidzero-dev/vite-plus-test": "workspace:*",
+    "cac": "catalog:",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.4.1",
+    "@oxc-node/core": "^0.0.32",
+    "@voidzero-dev/vite-plus-tools": "workspace:",
+    "rolldown": "workspace:*",
+    "rolldown-plugin-dts": "catalog:",
+    "tsdown": "catalog:",
+    "vite": "workspace:*"
+  },
+  "napi": {
+    "binaryName": "vite-plus",
+    "packageName": "@voidzero-dev/vite-plus",
+    "targets": [
+      "aarch64-apple-darwin",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-unknown-linux-gnu",
+      "x86_64-pc-windows-msvc"
+    ]
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

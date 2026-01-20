@@ -1,25 +1,25 @@
 {
   "name": "@voidzero-dev/vite-plus-tools",
   "private": true,
-  "type": "module",
   "bin": {
-    "tool": "./src/bin.js",
-    "json-edit": "./src/json-edit.ts"
+    "json-edit": "./src/json-edit.ts",
+    "tool": "./src/bin.js"
   },
-  "devDependencies": {
-    "@oxc-node/cli": "catalog:",
-    "@oxc-node/core": "catalog:",
-    "@std/yaml": "catalog:",
-    "@voidzero-dev/vite-plus-test": "workspace:*",
-    "@types/semver": "catalog:",
-    "minimatch": "catalog:",
-    "semver": "catalog:"
-  },
+  "type": "module",
   "scripts": {
     "snap-test": "tool snap-test"
   },
   "dependencies": {
     "@yarnpkg/fslib": "catalog:",
     "@yarnpkg/shell": "catalog:"
+  },
+  "devDependencies": {
+    "@oxc-node/cli": "catalog:",
+    "@oxc-node/core": "catalog:",
+    "@std/yaml": "catalog:",
+    "@types/semver": "catalog:",
+    "@voidzero-dev/vite-plus-test": "workspace:*",
+    "minimatch": "catalog:",
+    "semver": "catalog:"
   }
 }

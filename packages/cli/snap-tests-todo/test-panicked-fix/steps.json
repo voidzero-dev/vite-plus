@@ -3,7 +3,5 @@
   "env": {
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
-  "commands": [
-    "vite lint --help | head -n 20 # print help message and no panicked"
-  ]
+  "commands": ["vite lint --help | head -n 20 # print help message and no panicked"]
 }

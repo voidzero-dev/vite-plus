@@ -18,22 +18,26 @@ Merge a child Cargo workspace (located in a subdirectory) into a parent root Car
 ## Step-by-Step Process
 
 ### Step 1: Analyze the Child Workspace
+
 - Read the child workspace's `Cargo.toml` (e.g., `./rolldown/Cargo.toml`)
 - Identify all workspace members from the `[workspace.members]` section
 - Extract all `[workspace.dependencies]` definitions
 
 ### Step 2: Identify Crates to Add
+
 - For each workspace member, locate its `Cargo.toml`
 - Extract the crate name from `[package].name`
 - Build a list of path references in the format: `crate_name = { path = "./child/crates/crate_name" }`
 
 ### Step 3: Analyze Dependency Usage
+
 - For each crate in the child workspace, read its `Cargo.toml`
 - Collect all dependencies from `[dependencies]`, `[dev-dependencies]`, and `[build-dependencies]`
 - Focus on dependencies that reference `workspace = true` - these need the workspace-level definition
 - Create a set of actually-used workspace dependencies
 
 ### Step 4: Filter and Merge Dependencies
+
 - From the child's `[workspace.dependencies]`, only include those that are actually used by the crates
 - Check for conflicts with existing root workspace dependencies:
   - Same dependency, same version: Skip (already exists)
@@ -41,6 +45,7 @@ Merge a child Cargo workspace (located in a subdirectory) into a parent root Car
 - Exclude dev-only dependencies that aren't needed for the merged crates
 
 ### Step 5: Update Root Cargo.toml
+
 - Add all crate path references to `[workspace.dependencies]`
 - Add filtered workspace dependencies to `[workspace.dependencies]`
 - Maintain alphabetical ordering within sections for cleanliness
@@ -49,6 +54,7 @@ Merge a child Cargo workspace (located in a subdirectory) into a parent root Car
 ## Output Format
 
 Provide:
+
 1. A summary of crates being added
 2. A summary of dependencies being merged
 3. Any conflicts or issues requiring manual attention
@@ -73,6 +79,7 @@ Provide:
 ### Workspace Package Inheritance
 
 Child crates may inherit fields from `[workspace.package]` using `field.workspace = true`. Common inherited fields include:
+
 - `homepage`
 - `repository`
 - `license`
@@ -81,12 +88,14 @@ Child crates may inherit fields from `[workspace.package]` using `field.workspac
 - `rust-version`
 
 **Important**: If the child workspace's `[workspace.package]` defines fields that the root workspace does not, you must add those fields to the root workspace's `[workspace.package]` section. Otherwise, crates that inherit these fields will fail to build with errors like:
+
 ```
 error inheriting `homepage` from workspace root manifest's `workspace.package.homepage`
 Caused by: `workspace.package.homepage` was not defined
 ```
 
 **Steps to handle this**:
+
 1. Read the child workspace's `[workspace.package]` section
 2. Compare with the root workspace's `[workspace.package]` section
 3. Add any missing fields to the root workspace (use the root project's own values, not the child's)
@@ -104,6 +113,7 @@ Some crates use `env!()` macros that require compile-time environment variables 
 **Example**: `rolldown_workspace` uses `env!("WORKSPACE_DIR")` which is set in `rolldown/.cargo/config.toml`.
 
 **How to handle**:
+
 1. Check child workspace's `.cargo/config.toml` for `[env]` section
 2. If crates use these env vars with `relative = true`, copy those env vars to root `.cargo/config.toml` with paths adjusted to point to the child workspace directory
 3. Example: If child has `WORKSPACE_DIR = { value = "", relative = true }`, root should have `WORKSPACE_DIR = { value = "child-dir", relative = true }`

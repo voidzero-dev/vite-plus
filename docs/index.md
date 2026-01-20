@@ -3,9 +3,9 @@
 layout: home
 
 hero:
-  name: "Vite+"
-  text: "The Unified Toolchain for the Web"
-  tagline: "dev, build, test, lint, format, monorepo caching & more in a single dependency, build for scale, speed, and sanity"
+  name: 'Vite+'
+  text: 'The Unified Toolchain for the Web'
+  tagline: 'dev, build, test, lint, format, monorepo caching & more in a single dependency, build for scale, speed, and sanity'
   actions:
     - theme: brand
       text: Get Started

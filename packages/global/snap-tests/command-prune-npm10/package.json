@@ -1,7 +1,6 @@
 {
   "name": "command-prune-npm10",
   "version": "1.0.0",
-  "packageManager": "npm@10.9.4",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -10,5 +9,6 @@
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "npm@10.9.4"
 }

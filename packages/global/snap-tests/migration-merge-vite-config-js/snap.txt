@@ -31,15 +31,15 @@ cat: .oxlintrc.json: No such file or directory
 
 > cat package.json # check package.json
 {
-  "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "@vitejs/plugin-react": "^4.2.0",
-    "vite-plus": "latest"
-  },
   "scripts": {
     "dev": "vite dev --port 3000",
     "build": "vite build",
     "lint": "vite lint"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
   },
   "pnpm": {
     "overrides": {

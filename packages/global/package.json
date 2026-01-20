@@ -1,7 +1,6 @@
 {
   "name": "vite-plus-cli",
   "version": "0.0.0",
-  "type": "module",
   "repository": {
     "type": "git",
     "url": "https://github.com/voidzero-dev/vite-plus.git"
@@ -10,12 +9,13 @@
     "vite": "./bin/vite"
   },
   "files": [
+    "AGENTS.md",
     "bin",
     "dist",
-    "AGENTS.md",
-    "templates",
-    "rules"
+    "rules",
+    "templates"
   ],
+  "type": "module",
   "scripts": {
     "build": "pnpm build-ts && pnpm build-native",
     "build-ts": "rolldown -c rolldown.config.ts",
@@ -47,9 +47,6 @@
     "validate-npm-package-name": "catalog:",
     "yaml": "catalog:"
   },
-  "engines": {
-    "node": "^20.19.0 || >=22.12.0"
-  },
   "napi": {
     "binaryName": "vite-plus-cli",
     "packageName": "@voidzero-dev/vite-plus-cli",
@@ -59,5 +56,8 @@
       "x86_64-unknown-linux-gnu",
       "x86_64-pc-windows-msvc"
     ]
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

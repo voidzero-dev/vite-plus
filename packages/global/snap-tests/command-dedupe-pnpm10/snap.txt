@@ -26,7 +26,6 @@ devDependencies:
 {
   "name": "command-dedupe-pnpm10",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -35,7 +34,8 @@ devDependencies:
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 
 > vite dedupe --check && cat package.json # should check if deduplication would make changes
@@ -44,7 +44,6 @@ Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <
 {
   "name": "command-dedupe-pnpm10",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -53,14 +52,14 @@ Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 
 > vite ddp -- --loglevel=warn && cat package.json # support pass through arguments
 {
   "name": "command-dedupe-pnpm10",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -69,21 +68,22 @@ Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 
 [1]> json-edit package.json '_.dependencies = {}' && cat package.json && vite dedupe --check # should check fails because no dependencies
 {
   "name": "command-dedupe-pnpm10",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {},
   "devDependencies": {
     "test-vite-plus-package": "1.0.0"
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
@@ -111,14 +111,14 @@ dependencies:
 {
   "name": "command-dedupe-pnpm10",
   "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
   "dependencies": {},
   "devDependencies": {
     "test-vite-plus-package": "1.0.0"
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 

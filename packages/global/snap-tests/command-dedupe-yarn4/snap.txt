@@ -14,7 +14,6 @@
 {
   "name": "command-dedupe-yarn4",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -23,7 +22,8 @@
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "yarn@<semver>"
 }
 
 > vite dedupe --check && cat package.json # should check if deduplication would make changes
@@ -33,7 +33,6 @@
 {
   "name": "command-dedupe-yarn4",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -42,14 +41,14 @@
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "yarn@<semver>"
 }
 
 > vite ddp -- --json && cat package.json # support pass through arguments
 {
   "name": "command-dedupe-yarn4",
   "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
   "dependencies": {
     "testnpm2": "1.0.1"
   },
@@ -58,5 +57,6 @@
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "1.0.0"
-  }
+  },
+  "packageManager": "yarn@<semver>"
 }

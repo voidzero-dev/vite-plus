@@ -14,5 +14,5 @@
 
 > cat CLAUDE.md | head -3 # verify CLAUDE.md was created
 <!--VITE PLUS START-->
-# Using Vite+, the Unified Toolchain for the Web
 
+# Using Vite+, the Unified Toolchain for the Web

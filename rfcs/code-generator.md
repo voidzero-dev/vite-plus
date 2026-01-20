@@ -327,7 +327,7 @@ export default createTemplate({
   // Optional: Prepare default values
   async prepare({ fs, options }) {
     return {
-      name: options.name || await fs.readdir('.').then(d => d[0]),
+      name: options.name || (await fs.readdir('.').then((d) => d[0])),
     };
   },
 
@@ -413,9 +413,9 @@ interface Creation {
 // Strings become files, objects become directories
 const files = {
   'README.md': '# My App',
-  'src': {
+  src: {
     'index.ts': 'export {}',
-    'utils': {
+    utils: {
       'helpers.ts': 'export const helper = () => {}',
     },
   },
@@ -842,7 +842,7 @@ Templates can be located in multiple places:
 
 1. **Built-in scaffolds**: `@vite-plus/create-generator` - Scaffold for creating new generators
 2. **Workspace packages**: Generators within the monorepo (e.g., `@company/generator-api`, `tools/create-microservice`)
-3. **npm packages**: Any template from npm - bingo templates, create-* templates, etc.
+3. **npm packages**: Any template from npm - bingo templates, create-\* templates, etc.
 4. **Built-in vite+**: Optional monorepo-specific generators (e.g., `vite:application`)
 
 **Resolution Order:**
@@ -898,12 +898,7 @@ packages:
 {
   "name": "my-monorepo",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*",
-    "services/*",
-    "tools/*"
-  ]
+  "workspaces": ["apps/*", "packages/*", "services/*", "tools/*"]
 }
 ```
 
@@ -1500,21 +1495,16 @@ export default createTemplate({
   },
 
   options: {
-    name: z.string()
+    name: z
+      .string()
       .regex(/^[a-z][a-z0-9-]*$/, 'Must be lowercase with hyphens')
       .describe('Library name (e.g., design-system, ui-components)'),
 
-    framework: z.enum(['react', 'vue', 'svelte'])
-      .default('react')
-      .describe('UI framework'),
+    framework: z.enum(['react', 'vue', 'svelte']).default('react').describe('UI framework'),
 
-    storybook: z.boolean()
-      .default(true)
-      .describe('Include Storybook for component documentation'),
+    storybook: z.boolean().default(true).describe('Include Storybook for component documentation'),
 
-    cssInJs: z.boolean()
-      .default(false)
-      .describe('Include CSS-in-JS library (styled-components)'),
+    cssInJs: z.boolean().default(false).describe('Include CSS-in-JS library (styled-components)'),
   },
 
   async produce({ options }) {
@@ -1664,8 +1654,11 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
         [`${servicePath}/.env.example`]: [
           `PORT=${options.port}`,
           `NODE_ENV=development`,
-          options.database !== 'none' && `DATABASE_URL=${getDatabaseUrl(options.database, options.name)}`,
-        ].filter(Boolean).join('\n'),
+          options.database !== 'none' &&
+            `DATABASE_URL=${getDatabaseUrl(options.database, options.name)}`,
+        ]
+          .filter(Boolean)
+          .join('\n'),
 
         [`${servicePath}/README.md`]: `
 # ${packageName}
@@ -1699,10 +1692,7 @@ vite build
       scripts: [
         {
           phase: 0,
-          commands: [
-            `cd ${libPath}`,
-            'vite install',
-          ],
+          commands: [`cd ${libPath}`, 'vite install'],
         },
       ],
 
@@ -1998,7 +1988,7 @@ describe('Template Detection', () => {
   it('detects bingo template from package.json', async () => {
     const pkg = {
       name: 'create-typescript-app',
-      dependencies: { 'bingo': '^0.5.0' },
+      dependencies: { bingo: '^0.5.0' },
       bin: { 'create-typescript-app': './bin/index.js' },
     };
 
@@ -2032,23 +2022,23 @@ describe('Workspace Package Discovery', () => {
       excludeGenerators: true,
     });
 
-    expect(packages.every(pkg => !pkg.name.includes('generator'))).toBe(true);
+    expect(packages.every((pkg) => !pkg.name.includes('generator'))).toBe(true);
   });
 });
 ```
 
 ## Comparison: Bingo vs Universal Templates
 
-| Aspect                 | Bingo Templates              | Universal Templates             |
-| ---------------------- | ---------------------------- | ------------------------------- |
+| Aspect                 | Bingo Templates              | Universal Templates              |
+| ---------------------- | ---------------------------- | -------------------------------- |
 | **Writing Experience** | ✅ Type-safe (Zod), testable | ⚠️ No standard, varies           |
-| **Examples**           | @company/generator-ui-lib    | create-vite, create-next-app    |
+| **Examples**           | @company/generator-ui-lib    | create-vite, create-next-app     |
 | **Customization**      | ✅ Full control              | ⚠️ Limited to template options   |
-| **Auto-Migration**     | ✅ Yes (same as universal)   | ✅ Yes (same as bingo)          |
-| **Ecosystem**          | ~5-10 bingo templates        | Thousands of create-* templates |
-| **Learning Curve**     | Medium (learn bingo)         | Zero (use familiar templates)   |
-| **Maintenance**        | Maintained by you            | Maintained by template authors  |
-| **Best For**           | Custom company generators    | Quick starts, standard setups   |
+| **Auto-Migration**     | ✅ Yes (same as universal)   | ✅ Yes (same as bingo)           |
+| **Ecosystem**          | ~5-10 bingo templates        | Thousands of create-\* templates |
+| **Learning Curve**     | Medium (learn bingo)         | Zero (use familiar templates)    |
+| **Maintenance**        | Maintained by you            | Maintained by template authors   |
+| **Best For**           | Custom company generators    | Quick starts, standard setups    |
 
 **Key Point**: Both bingo and universal templates get the **same auto-migration to vite-plus**. The difference is only in the authoring experience:
 
@@ -2088,7 +2078,7 @@ A successful implementation should:
 ### Template Support
 
 1. ✅ Run ANY bingo template from npm without modification (via npx/pnpm dlx)
-2. ✅ Run ANY create-* or other universal templates (via npx/pnpm dlx)
+2. ✅ Run ANY create-\* or other universal templates (via npx/pnpm dlx)
 3. ✅ Support workspace-local bingo generators (scan workspace patterns)
 4. ✅ Auto-detect template type (bingo vs universal)
 5. ✅ Parse CLI arguments correctly (vite+ options before `--`, template options after `--`)
@@ -2135,7 +2125,7 @@ A successful implementation should:
 
 ### For vite+ Users
 
-- 🎯 **Maximum Choice**: Use bingo templates OR any create-* template
+- 🎯 **Maximum Choice**: Use bingo templates OR any create-\* template
 - 🚀 **Zero Learning Curve**: Use familiar templates (create-vite, create-next-app, etc.)
 - 🔧 **Automatic Optimization**: Intelligent migration to vite+ toolchain
 - 🌍 **Entire Ecosystem**: Access to thousands of existing templates

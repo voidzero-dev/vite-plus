@@ -3,7 +3,5 @@
   "env": {
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
-  "commands": [
-    "vite command-not-exists # should exit with non-zero code"
-  ]
+  "commands": ["vite command-not-exists # should exit with non-zero code"]
 }
