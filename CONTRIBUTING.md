@@ -48,7 +48,7 @@ pnpm bootstrap-cli && pnpm test && git status
 
 ## Pull upstream dependencies (On-demand)
 
-> Only after the ["upgrade upstream dependencies"](https://github.com/voidzero-dev/vite-plus/pulls?q=is%3Apr+feat%28deps%29%3A+upgrade+upstream+dependencies+merged) pull request was merged will be necessary to re-sync the upstream code.
+> It is only necessary to re-sync the upstream code after the ["upgrade upstream dependencies"](https://github.com/voidzero-dev/vite-plus/pulls?q=is%3Apr+feat%28deps%29%3A+upgrade+upstream+dependencies+merged) pull request has been merged.
 
 When you want to pull the latest upstream dependencies such as Rolldown and Vite, run:
 
