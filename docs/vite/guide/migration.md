@@ -238,15 +238,6 @@ Add to root `package.json`:
 }
 ```
 
-### 2. Configure Registry Access
-
-Add to `.npmrc`:
-
-```ini
-@voidzero-dev:registry=https://npm.pkg.github.com/
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
 ### 3. Update Configuration Files
 
 #### Update vite.config.ts

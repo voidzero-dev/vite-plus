@@ -70,10 +70,6 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
   vite-plus: latest
-npmScopes:
-  voidzero-dev:
-    npmRegistryServer: https://npm.pkg.github.com
-    npmAuthToken: ${GITHUB_TOKEN}
 
 > cat packages/app/package.json # check app package.json
 {

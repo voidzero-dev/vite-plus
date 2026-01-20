@@ -301,20 +301,6 @@ function rewriteYarnrcYml(projectPath: string): void {
   editYamlFile(yarnrcYmlPath, (doc) => {
     // catalog
     rewriteCatalog(doc);
-
-    // TODO: remove this when vite-plus is released to npm
-    // npmScopes:
-    //   voidzero-dev:
-    //     npmRegistryServer: 'https://npm.pkg.github.com'
-    //     npmAuthToken: '${GITHUB_TOKEN}'
-    doc.setIn(
-      ['npmScopes', 'voidzero-dev', 'npmRegistryServer'],
-      scalarString('https://npm.pkg.github.com'),
-    );
-    // don't set if it already exists
-    if (!doc.getIn(['npmScopes', 'voidzero-dev', 'npmAuthToken'])) {
-      doc.setIn(['npmScopes', 'voidzero-dev', 'npmAuthToken'], scalarString('${GITHUB_TOKEN}'));
-    }
   });
 }
 
