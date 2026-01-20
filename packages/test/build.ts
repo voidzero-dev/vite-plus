@@ -51,6 +51,7 @@ import { basename, join, parse, resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseSync } from 'oxc-parser';
+import { format } from 'oxfmt';
 import { build } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
 
@@ -376,7 +377,20 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
     }
   }
 
-  await writeFile(destPackageJsonPath, JSON.stringify(destPkg, null, 2) + '\n');
+  const { code, errors } = await format(
+    destPackageJsonPath,
+    JSON.stringify(destPkg, null, 2) + '\n',
+    {
+      experimentalSortPackageJson: true,
+    },
+  );
+  if (errors.length > 0) {
+    for (const error of errors) {
+      console.error(error);
+    }
+    process.exit(1);
+  }
+  await writeFile(destPackageJsonPath, code);
 }
 
 async function bundleVitest() {

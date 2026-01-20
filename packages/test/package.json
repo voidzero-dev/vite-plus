@@ -288,6 +288,7 @@
     "expect-type": "^1.2.2",
     "magic-string": "^0.30.21",
     "oxc-parser": "catalog:",
+    "oxfmt": "catalog:",
     "pathe": "^2.0.3",
     "picomatch": "^4.0.3",
     "rolldown": "workspace:*",

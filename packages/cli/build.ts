@@ -100,7 +100,11 @@ async function buildNapiBinding() {
 async function buildCli() {
   const tsconfig = readJsonConfigFile(join(projectDir, 'tsconfig.json'), sys.readFile);
 
-  const { options: initialOptions } = parseJsonSourceFileConfigFileContent(tsconfig, sys, projectDir);
+  const { options: initialOptions } = parseJsonSourceFileConfigFileContent(
+    tsconfig,
+    sys,
+    projectDir,
+  );
   const options = {
     ...initialOptions,
     noEmit: false,
@@ -525,5 +529,15 @@ async function updateCliPackageJson(pkgPath: string, generatedExports: Record<st
     pkg.files.push('dist/test');
   }
 
-  await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+  const { code, errors } = await format(pkgPath, JSON.stringify(pkg, null, 2) + '\n', {
+    experimentalSortPackageJson: true,
+  });
+  if (errors.length > 0) {
+    for (const error of errors) {
+      console.error(error);
+    }
+    process.exit(1);
+  }
+
+  await writeFile(pkgPath, code);
 }

@@ -4,6 +4,8 @@ import path from 'node:path';
 import { dirname, join, parse, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { format } from 'oxfmt';
+
 // Convert native path to POSIX format for glob patterns
 function toPosixPath(nativePath: string): string {
   return nativePath.split(path.sep).join(path.posix.sep);
@@ -53,6 +55,7 @@ await mergePackageJson();
 async function buildVite() {
   const newViteRolldownConfig = viteRolldownConfig.map((config) => {
     config.tsconfig = join(projectDir, 'tsconfig.json');
+    config.cwd = projectDir;
 
     if (Array.isArray(config.external)) {
       config.external = config.external.filter((external) => {
@@ -430,5 +433,14 @@ async function mergePackageJson() {
     tsdown: tsdownPkg.version,
   };
 
-  await writeFile(destPkgPath, JSON.stringify(destPkg, null, 2) + '\n');
+  const { code, errors } = await format(destPkgPath, JSON.stringify(destPkg, null, 2) + '\n', {
+    experimentalSortPackageJson: true,
+  });
+  if (errors.length > 0) {
+    for (const error of errors) {
+      console.error(error);
+    }
+    process.exit(1);
+  }
+  await writeFile(destPkgPath, code);
 }
