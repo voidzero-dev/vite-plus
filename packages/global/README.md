@@ -1,162 +1,107 @@
-# Vite+ Global CLI
+# VITE+(⚡︎)
 
-- Global `vite` CLI for Vite+
-- Everything else is delegated to [vite-plus local CLI][1] for local tasks
+**The Unified Toolchain for the Web**
+_dev, build, test, lint, format, monorepo caching & more in a single dependency, built for scale, speed, and sanity_
 
-## Install
+---
+
+Vite+ combines [Vite](https://vite.dev/), [Vitest](https://vitest.dev/), [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), [tsdown](https://tsdown.dev/) and [Rolldown](https://rolldown.rs/) as a single zero-config toolchain:
+
+- **Dev Server:** Powered by Vite's fast development experience with native ES modules and instant HMR
+- **Build Tool:** Optimized production builds using Rolldown and Oxc
+- **Testing:** Seamless Vitest integration with fast feedback loops
+- **Linting:** Ships with Oxlint for quick code quality checks
+- **Task Runner:** Monorepo task execution with automated caching and dependency resolution
+- **Package Management:** Vite+ wraps package managers to provide a unified interface
+
+Vite+ is built to scale with your codebase while reducing your devtools to a single dependency.
+
+## Getting Started
+
+Vite+ requires Node.js 22+. Install `vite-plus-cli` globally as `vite`:
 
 ```bash
 npm install -g vite-plus-cli
 ```
 
-## Get Started
+`vite` handles the full development lifecycle such as package management, development servers, linting, formatting, testing and building for production.
+
+### Vite+ Commands
+
+- **dev** - Run the development server
+- **build** - Build for production
+- **lint** - Lint code
+- **test** - Run tests
+- **fmt** - Format code
+- **lib** - Build library
+- **migrate** - Migrate an existing project to Vite+
+- **new** - Create a new monorepo package (in-project) or a new project (global)
+- **run** - Run tasks from `package.json` scripts
+
+### Package Manager Commands
+
+Vite+ automatically detects and wraps the underlying package manager such as pnpm, npm, or Yarn through the `packageManager` field in `package.json` or package manager-specific lockfiles.
+
+- **install** - Install all dependencies, or add packages if package names are provided
+- **add** - Add packages to dependencies
+- **remove** - Remove packages from dependencies
+- **dlx** - Execute a package binary without installing it as a dependency
+- **info** - View package information from the registry, including latest versions
+- **link** - Link packages for local development
+- **outdated** - Check for outdated packages
+- **pm** - Forward a command to the package manager
+- **unlink** - Unlink packages
+- **update** - Update packages to their latest versions
+- **why** - Show why a package is installed
 
 ### Scaffolding your first Vite+ project
 
-Use the `vite new` command to start, it will ask you a few questions to help you scaffold your project, supports both `MonoRepo` and `SingleRepo`.
+Use `vite new` to create a new project:
 
 ```bash
 vite new
 ```
 
-If you select `Monorepo`, you can add new `app` or `lib` to your project.
+You can run `vite new` inside of a project to add new apps or libraries to your project.
+
+### Migrating an existing project
+
+You can migrate an existing project to Vite+:
 
 ```bash
-vite new --app apps/website
-vite new --lib packages/utils
+vite migrate
 ```
 
-## Overview
+#### Manual Installation & Migration
+
+If you are manually migrating a project to Vite+, install these dev dependencies first:
 
 ```bash
-$ vite --help
-Usage: vite [OPTIONS] [TASK] [-- <TASK_ARGS>...] [COMMAND]
-
-Commands:
-  run
-  lint
-  fmt
-  build
-  test
-  install
-  help     Print this message or the help of the given subcommand(s)
-
-Arguments:
-  [TASK]
-  [TASK_ARGS]...  Optional arguments for the tasks, captured after '--'
-
-Options:
-  -d, --debug     Display cache for debugging
-      --no-debug
-  -h, --help      Print help
-  -V, --version   Print version
+npm install -D vite-plus @voidzero-dev/vite-plus-core@latest
 ```
 
-## Commands Usage
-
-### Built-in commands: `lint`, `build`, `test`
-
-Execute our own toolchain in current directory, see [vite-plus local CLI][1] for more details.
-
-### task runner
-
-`vite run [name]` runs script with the same `name` from `package.json` across the monorepo (topologically sorted).
-
-e.g.:
+You need to add overrides to your package manager for `vite` and `vitest` so that other packages depending on Vite and Vitest will use the Vite+ versions:
 
 ```json
-// package.json
-{
-  "scripts": {
-    "ready": "vite lint && vite run -r build && vite test"
-  },
-  "devDependencies": {
-    "vite-plus": "*"
-  }
+"overrides": {
+  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+  "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
 }
 ```
 
-Run the `ready` task with global CLI `vite`:
+If you are using `pnpm`, add this to your `pnpm-workspace.yaml`:
 
-```bash
-vite run ready
+```yaml
+overrides:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
 ```
 
-## Display tracing logs
+Or, if you are using Yarn:
 
-You can use the `VITE_LOG` environment variable to display tracing logs.
-
-```bash
-# display trace level logs
-VITE_LOG=trace vite run ready
-
-# display debug level logs
-VITE_LOG=debug vite run ready
+```json
+"resolutions": {
+  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+  "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+}
 ```
-
-## Development
-
-- The global executable is `vite`, use `vite-dev` for development
-
-Example workflow:
-
-1. Make `vite` (and `vite-dev`) available globally:
-
-```sh
-cd packages/global
-pnpm link
-pnpm dev
-```
-
-2. From `vite-plus` package, link `multiplexer` package and use `vite-plus` in
-   any project's `package.json`:
-
-```sh
-cd packages/cli
-pnpm link ../multiplexer/
-pnpm dev
-```
-
-3. Build multiplexer
-
-```sh
-cd packages/multiplexer
-pnpm dev
-```
-
-4. Install in project
-
-Use `vite new` anywhere, or run this directly inside this repo:
-
-```sh
-cd packages/global/templates/minimal
-pnpm link ../../../cli/
-```
-
-Outside this repo do `pnpm link to/vite-plus/packages/cli/`
-
-5. Run tasks
-
-Now the following commands all do the same thing:
-
-```sh
-vite lint
-pnpm vite-plus lint
-```
-
-Or use the task runner for
-
-```sh
-vite task build lint
-pnpm vite-plus task build lint
-pnpm run all
-```
-
-## Verdaccio
-
-Install [Verdaccio][2] for local actual package installs ([pkg.pr.new][3]
-publishes only from CI and e.g. `npm link` doesn't always cut it).
-
-[1]: ../cli/README.md
-[2]: ./verdaccio.md
-[3]: https://github.com/stackblitz-labs/pkg.pr.new
