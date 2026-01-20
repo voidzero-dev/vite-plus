@@ -29,15 +29,6 @@ To create a release build of Vite+ and all upstream dependencies, run:
 just build
 ```
 
-## Pull upstream dependencies
-
-When you want to pull the latest upstream dependencies such as Rolldown and Vite, run:
-
-```
-node packages/tools/src/index.ts sync-remote
-pnpm install
-```
-
 ## Install Vite+ Global CLI from source code
 
 ```
@@ -46,3 +37,24 @@ vp --version
 ```
 
 Note: Local development installs the CLI as `vp` (package name: `vite-plus-cli-dev`) to avoid overriding the published `vite-plus-cli` package and its `vite` bin name. In CI, `pnpm bootstrap-cli:ci` installs it as `vite`.
+
+## Workflow for build and test
+
+One command to run build, unit tests, snap tests and check if there are any changes:
+
+```
+pnpm bootstrap-cli && pnpm test && git status
+```
+
+## Pull upstream dependencies (On-demand)
+
+> It is only necessary to re-sync the upstream code after the ["upgrade upstream dependencies"](https://github.com/voidzero-dev/vite-plus/pulls?q=is%3Apr+feat%28deps%29%3A+upgrade+upstream+dependencies+merged) pull request has been merged.
+
+When you want to pull the latest upstream dependencies such as Rolldown and Vite, run:
+
+```
+pnpm tool sync-remote
+
+# build all packages again
+just build
+```

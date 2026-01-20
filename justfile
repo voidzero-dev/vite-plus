@@ -12,9 +12,9 @@ init:
   cargo binstall watchexec-cli cargo-insta typos-cli cargo-shear dprint taplo-cli -y
   node packages/tools/src/index.ts sync-remote
   pnpm install
-  pnpm bootstrap-cli
 
 build:
+  pnpm install
   pnpm --filter @rolldown/pluginutils build
   pnpm --filter rolldown build-binding:release
   pnpm --filter rolldown build-node
