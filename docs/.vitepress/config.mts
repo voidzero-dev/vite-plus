@@ -4,16 +4,12 @@ import { extendConfig } from "@voidzero-dev/vitepress-theme/config";
 // https://vitepress.dev/reference/site-config
 export default extendConfig(defineConfig({
   title: 'Vite+',
-  titleTemplate: ':title | The UnifiedToolchain for the Web',
+  titleTemplate: ':title | The Unified Toolchain for the Web',
   description: 'The Unified Toolchain for the Web',
   head: [['link', { rel: 'icon', href: 'https://viteplus.dev/favicon.svg' }]],
   themeConfig: {
-    variant: "viteplus",
-    logo: { src: 'https://viteplus.dev/favicon.svg', width: 24, height: 24 },
-
-    // https://vitepress.dev/reference/default-theme-config
+    variant: 'viteplus',
     nav: [
-      { text: 'Home', link: '/' },
       {
         text: 'Guide',
         activeMatch: '/vite/guide/',

@@ -3,16 +3,16 @@
 
 @source "./**/*.vue";
 
-/* Project specific branding colors */
-/* :root[data-variant="viteplus"] {
-  --color-brand: #6b1eb9;
+/* Viteplus */
+:root[data-variant="viteplus"] {
+  --color-brand: #4f30e8;
 }
 
 :root.dark:not([data-theme])[data-variant="viteplus"],
 :root[data-theme="dark"][data-variant="viteplus"] {
-  --color-brand: var(--color-vite);
+  --color-brand: #6b77f8;
 }
 
 :root[data-theme="light"][data-variant="viteplus"] {
-  --color-brand: #6b1eb9;
-} */
+  --color-brand: #4f30e8;
+}

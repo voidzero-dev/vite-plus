@@ -4,6 +4,5 @@ import BaseTheme from '@voidzero-dev/vitepress-theme/src/viteplus'
 import './styles.css'
 
 export default {
-    extends: BaseTheme,
-    // Layout
+  extends: BaseTheme,
 } satisfies Theme
