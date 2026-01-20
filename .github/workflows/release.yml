@@ -111,6 +111,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write # Required for OIDC
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: ./.github/actions/clone
@@ -182,17 +183,11 @@ jobs:
       - name: 'Setup npm'
         run: |
           npm install -g npm@latest
-          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish native addons
         run: |
           node ./packages/cli/publish-native-addons.ts
           node ./packages/global/publish-native-addons.ts
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish
         run: |
@@ -200,9 +195,6 @@ jobs:
           pnpm publish --filter=./packages/test --access public --no-git-checks
           pnpm publish --filter=./packages/cli --access public --no-git-checks
           pnpm publish --filter=./packages/global --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create release body
         run: |
