@@ -205,7 +205,6 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create release body
-        id: release_body
         run: |
           cat > ./RELEASE_BODY.md <<EOF
           ## vite-plus v${{ env.VERSION }}
@@ -227,11 +226,6 @@ jobs:
 
           View the full commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
           EOF
-          {
-            echo "content<<EOF"
-            cat ./RELEASE_BODY.md
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
@@ -248,5 +242,14 @@ jobs:
         with:
           webhook-url: ${{ secrets.DISCORD_RELEASES_WEBHOOK_URL }}
           embed-title: vite-plus v${{ env.VERSION }}
-          embed-description: ${{ steps.release_body.outputs.content }}
+          embed-description: |
+            A new snapshot release is available!
+
+            **Published Packages:**
+            • @voidzero-dev/vite-plus-core@${{ env.VERSION }}
+            • @voidzero-dev/vite-plus-test@${{ env.VERSION }}
+            • vite-plus@${{ env.VERSION }}
+            • vite-plus-cli@${{ env.VERSION }}
+
+            **Install:** npm install -g vite-plus-cli@${{ env.VERSION }}
           embed-url: https://github.com/${{ github.repository }}/releases/tag/v${{ env.VERSION }}
