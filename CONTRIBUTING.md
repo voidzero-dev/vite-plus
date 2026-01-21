@@ -29,7 +29,7 @@ To create a release build of Vite+ and all upstream dependencies, run:
 just build
 ```
 
-## Install Vite+ Global CLI from source code
+## Install the Vite+ Global CLI from source code
 
 ```
 pnpm bootstrap-cli
@@ -40,21 +40,25 @@ Note: Local development installs the CLI as `vp` (package name: `vite-plus-cli-d
 
 ## Workflow for build and test
 
-One command to run build, unit tests, snap tests and check if there are any changes:
+You can run this command to build, test and check if there are any snapshot changes:
 
 ```
 pnpm bootstrap-cli && pnpm test && git status
 ```
 
-## Pull upstream dependencies (On-demand)
+## Pull upstream dependencies
 
-> It is only necessary to re-sync the upstream code after the ["upgrade upstream dependencies"](https://github.com/voidzero-dev/vite-plus/pulls?q=is%3Apr+feat%28deps%29%3A+upgrade+upstream+dependencies+merged) pull request has been merged.
+> [!NOTE]
+>
+> Upstream dependencies only need to be updated when an ["upgrade upstream dependencies"](https://github.com/voidzero-dev/vite-plus/pulls?q=is%3Apr+feat%28deps%29%3A+upgrade+upstream+dependencies+merged) pull request is merged.
 
-When you want to pull the latest upstream dependencies such as Rolldown and Vite, run:
+To sync the latest upstream dependencies such as Rolldown and Vite, run:
 
 ```
 pnpm tool sync-remote
-
-# build all packages again
 just build
 ```
+
+## macOS Performance Tip
+
+If you are using macOS, add your terminal app (Ghostty, iTerm2, Terminal, …) to the approved "Developer Tools" apps in the Privacy panel of System Settings and restart your terminal app. Your Rust builds will be about ~30% faster.
