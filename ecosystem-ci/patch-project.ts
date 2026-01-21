@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -36,4 +37,20 @@ async function migrateProject(project: string) {
   });
 }
 
+async function patchRollipop(repoRoot: string) {
+  const pkgPath = join(repoRoot, 'package.json');
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+  if (!pkg.type) {
+    pkg.type = 'module';
+    writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+    console.log('Added "type": "module" to rollipop package.json');
+  }
+}
+
 await migrateProject(project);
+
+// Apply project-specific patches
+if (project === 'rollipop') {
+  const repoRoot = join(projectDir, project);
+  await patchRollipop(repoRoot);
+}
