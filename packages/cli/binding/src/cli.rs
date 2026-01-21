@@ -3,7 +3,9 @@
 //! This module contains all the CLI-related code.
 //! It handles argument parsing, command dispatching, and orchestration of the task execution.
 
-use std::{collections::HashMap, env, ffi::OsStr, future::Future, iter, pin::Pin, sync::Arc};
+use std::{
+    collections::HashMap, env, ffi::OsStr, future::Future, iter, path::PathBuf, pin::Pin, sync::Arc,
+};
 
 use clap::Subcommand;
 use monostate::MustBe;
@@ -26,6 +28,8 @@ use vite_task::{
 /// Resolved configuration from vite.config.ts
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ResolvedUniversalViteConfig {
+    #[serde(rename = "configFile")]
+    pub config_file: Option<String>,
     pub lint: Option<serde_json::Value>,
     pub fmt: Option<serde_json::Value>,
     pub tasks: Option<HashMap<String, serde_json::Value>>,
@@ -144,6 +148,8 @@ pub struct CliOptions {
 pub struct VitePlusTaskSynthesizer {
     cli_options: Option<CliOptions>,
     workspace_path: Arc<AbsolutePath>,
+    /// Track temporary config files created during task synthesis for cleanup
+    temp_config_files: Vec<AbsolutePathBuf>,
 }
 
 impl std::fmt::Debug for VitePlusTaskSynthesizer {
@@ -151,13 +157,84 @@ impl std::fmt::Debug for VitePlusTaskSynthesizer {
         f.debug_struct("VitePlusTaskSynthesizer")
             .field("has_cli_options", &self.cli_options.is_some())
             .field("workspace_path", &self.workspace_path)
+            .field("temp_config_files_count", &self.temp_config_files.len())
             .finish()
     }
 }
 
 impl VitePlusTaskSynthesizer {
     pub fn new(workspace_path: Arc<AbsolutePath>) -> Self {
-        Self { cli_options: None, workspace_path }
+        Self { cli_options: None, workspace_path, temp_config_files: Vec::new() }
+    }
+
+    /// Clean up temporary config files created during task synthesis.
+    /// Should be called after command execution completes (success or failure).
+    pub async fn cleanup_temp_files(&mut self) {
+        for path in self.temp_config_files.drain(..) {
+            if let Err(e) = tokio::fs::remove_file(&path).await {
+                // Only warn if file exists but couldn't be deleted
+                // Ignore "file not found" errors (already deleted or never created)
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    tracing::warn!(
+                        "Failed to cleanup temp config file {}: {}",
+                        path.as_path().display(),
+                        e
+                    );
+                }
+            }
+        }
+    }
+
+    /// Write a temporary config file and prepend `-c <path>` to args.
+    /// The file will be tracked for cleanup after command execution.
+    /// The `config_file_path` must be an absolute path.
+    async fn write_temp_config_file(
+        &mut self,
+        config: &serde_json::Value,
+        config_file_path: &str,
+        temp_filename: &str,
+        args: &mut Vec<String>,
+    ) -> anyhow::Result<()> {
+        // Clone config so we can modify it
+        let mut config = config.clone();
+
+        // Add temp file to ignorePatterns to prevent self-checking
+        if let Some(obj) = config.as_object_mut() {
+            if let Some(patterns) = obj.get_mut("ignorePatterns") {
+                if let Some(array) = patterns.as_array_mut() {
+                    array.push(serde_json::json!(temp_filename));
+                }
+            } else {
+                obj.insert("ignorePatterns".to_string(), serde_json::json!([temp_filename]));
+            }
+        }
+
+        // config_file_path must be absolute
+        let path = PathBuf::from(config_file_path);
+        if !path.is_absolute() {
+            anyhow::bail!("config_file_path must be an absolute path, got: {config_file_path}");
+        }
+
+        // Get the parent directory of the config file
+        let config_dir = AbsolutePathBuf::new(path)
+            .and_then(|p| p.parent().map(|p| p.to_absolute_path_buf()))
+            .ok_or_else(|| {
+                anyhow::anyhow!("Failed to get parent directory of config file: {config_file_path}")
+            })?;
+
+        let config_path = config_dir.join(temp_filename);
+        write(&config_path, serde_json::to_string(&config)?).await?;
+
+        // Track for cleanup
+        self.temp_config_files.push(config_path.clone());
+
+        let config_path_str = config_path
+            .as_path()
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("config path is not valid UTF-8"))?;
+        args.insert(0, config_path_str.to_string());
+        args.insert(0, "-c".to_string());
+        Ok(())
     }
 
     pub fn with_cli_options(mut self, cli_options: CliOptions) -> Self {
@@ -217,18 +294,17 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         tracing::error!("Failed to parse vite config: {vite_config_json}");
                     })?;
 
-                // If lint config exists, write to tmp-config and add -c arg
-                if let Some(lint_config) = resolved_vite_config.lint {
-                    let config_dir = self.workspace_path.join("node_modules/.vite/tmp-config");
-                    tokio::fs::create_dir_all(&config_dir).await?;
-                    let oxlint_config_path = config_dir.join(".oxlintrc.json");
-                    write(&oxlint_config_path, serde_json::to_string(&lint_config)?).await?;
-                    let oxlint_config_path_str = oxlint_config_path
-                        .as_path()
-                        .to_str()
-                        .ok_or_else(|| anyhow::anyhow!("oxlint config path is not valid UTF-8"))?;
-                    args.insert(0, oxlint_config_path_str.to_string());
-                    args.insert(0, "-c".to_string());
+                // If lint config and config_file both exist, write temp config file and add -c arg
+                if let (Some(lint_config), Some(config_file)) =
+                    (&resolved_vite_config.lint, &resolved_vite_config.config_file)
+                {
+                    self.write_temp_config_file(
+                        lint_config,
+                        config_file,
+                        ".vite-plus-lint.tmp.json",
+                        &mut args,
+                    )
+                    .await?;
                 }
 
                 let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("lint"))
@@ -280,18 +356,17 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         tracing::error!("Failed to parse vite config: {vite_config_json}");
                     })?;
 
-                // If fmt config exists, write to tmp-config and add -c arg
-                if let Some(fmt_config) = resolved_vite_config.fmt {
-                    let config_dir = self.workspace_path.join("node_modules/.vite/tmp-config");
-                    tokio::fs::create_dir_all(&config_dir).await?;
-                    let oxfmt_config_path = config_dir.join(".oxfmtrc.json");
-                    write(&oxfmt_config_path, serde_json::to_string(&fmt_config)?).await?;
-                    let oxfmt_config_path_str = oxfmt_config_path
-                        .as_path()
-                        .to_str()
-                        .ok_or_else(|| anyhow::anyhow!("oxfmt config path is not valid UTF-8"))?;
-                    args.insert(0, oxfmt_config_path_str.to_string());
-                    args.insert(0, "-c".to_string());
+                // If fmt config and config_file both exist, write temp config file and add -c arg
+                if let (Some(fmt_config), Some(config_file)) =
+                    (&resolved_vite_config.fmt, &resolved_vite_config.config_file)
+                {
+                    self.write_temp_config_file(
+                        fmt_config,
+                        config_file,
+                        ".vite-plus-fmt.tmp.json",
+                        &mut args,
+                    )
+                    .await?;
                 }
 
                 let direct_execution_cache_key: Arc<[Str]> = iter::once(Str::from("fmt"))
@@ -695,14 +770,25 @@ pub async fn main(
                 }
             }
 
-            // Plan and execute the main command
+            // Plan and execute the main command, capturing results without early return
             let cwd_arc: Arc<AbsolutePath> = cwd.into();
-            let plan = session
-                .plan_from_cli(cwd_arc, task_cli_args)
-                .await
-                .map_err(|e| Error::Anyhow(e.into()))?;
-            let reporter = LabeledReporter::new(std::io::stdout(), session.workspace_path());
-            Ok(session.execute(plan, Box::new(reporter)).await.err().unwrap_or(ExitStatus::SUCCESS))
+            let final_result = match session.plan_from_cli(cwd_arc, task_cli_args).await {
+                Ok(plan) => {
+                    let reporter =
+                        LabeledReporter::new(std::io::stdout(), session.workspace_path());
+                    Ok(session
+                        .execute(plan, Box::new(reporter))
+                        .await
+                        .err()
+                        .unwrap_or(ExitStatus::SUCCESS))
+                }
+                Err(e) => Err(Error::Anyhow(e.into())),
+            };
+
+            // Cleanup temp config files (always, regardless of plan/execution result)
+            task_synthesizer.cleanup_temp_files().await;
+
+            final_result
         }
     }
 }

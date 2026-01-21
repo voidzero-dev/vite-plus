@@ -1,0 +1,7 @@
+[1]> vite fmt --check # Test that vite fmt --check ignores the temp config file
+Checking formatting...
+src/valid.js (<variable>ms)
+
+Format issues found in above 1 files. Run without `--check` to fix.
+Finished in <variable>ms on 4 files using <variable> threads.
+

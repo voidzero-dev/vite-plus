@@ -1,0 +1,8 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite lint src/ # Test that lint ignorePatterns works - ignored files should not be linted"
+  ]
+}

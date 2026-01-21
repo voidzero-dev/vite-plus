@@ -8,6 +8,7 @@ export async function resolveUniversalViteConfig(err: null | Error, viteConfigCw
 
     return Promise.resolve(
       JSON.stringify({
+        configFile: config.configFile,
         lint: config.lint,
         fmt: config.fmt,
         tasks: config.tasks,

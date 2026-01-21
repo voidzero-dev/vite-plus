@@ -199,7 +199,6 @@ jobs:
           vite -h
 
       - name: Run CLI fmt
-        if: ${{ matrix.os != 'windows-latest' }}
         run: vite fmt --check
 
       - name: Run CLI lint

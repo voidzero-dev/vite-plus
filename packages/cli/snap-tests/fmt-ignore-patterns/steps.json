@@ -1,0 +1,9 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite fmt src/ # Test that fmt ignorePatterns works - ignored files should not be formatted",
+    "cat src/ignored/badly-formatted.js # Verify that ignored file still has bad formatting (was not formatted)"
+  ]
+}
