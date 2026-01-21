@@ -1,9 +1,12 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "outDir": "./dist",
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "rootDir": "./src",
     "experimentalDecorators": true
   },
-  "files": [],
-  "include": [],
-  "exclude": ["**/*"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist/**/*"]
 }

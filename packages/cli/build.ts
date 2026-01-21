@@ -15,7 +15,7 @@
  * Native binding is built first because TypeScript may depend on generated binding types.
  */
 
-import { existsSync, globSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -101,20 +101,12 @@ async function buildNapiBinding() {
 async function buildCli() {
   const tsconfig = readJsonConfigFile(join(projectDir, 'tsconfig.json'), sys.readFile);
 
-  const { options: initialOptions } = parseJsonSourceFileConfigFileContent(
-    tsconfig,
-    sys,
-    projectDir,
-  );
-  const options = {
-    ...initialOptions,
-    noEmit: false,
-    outDir: join(projectDir, 'dist'),
-  };
+  const { options, fileNames } = parseJsonSourceFileConfigFileContent(tsconfig, sys, projectDir);
+
   const host = createCompilerHost(options);
 
   const program = createProgram({
-    rootNames: globSync('src/**/*.ts', { cwd: projectDir }),
+    rootNames: fileNames,
     options,
     host,
   });
