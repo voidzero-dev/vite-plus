@@ -257,8 +257,9 @@ jobs:
 
           # Create label if it doesn't exist
           if ! gh label list --json name --jq '.[].name' | grep -q "^${ISSUE_LABEL}$"; then
-            gh label create "$ISSUE_LABEL" --color "d73a4a" --description "E2E test scheduled run failure"
-            echo "Created label: $ISSUE_LABEL"
+            gh label create "$ISSUE_LABEL" --color "d73a4a" --description "E2E test scheduled run failure" \
+              && echo "Created label: $ISSUE_LABEL" \
+              || echo "Warning: Failed to create label '$ISSUE_LABEL', it may already exist"
           fi
 
           # Search for existing open issue with the label
