@@ -114,7 +114,7 @@ async function buildCli() {
   const host = createCompilerHost(options);
 
   const program = createProgram({
-    rootNames: globSync('src/**/*.ts', { cwd: projectDir }),
+    rootNames: globSync('src/**/*.{ts,cts}', { cwd: projectDir, exclude: ['**/*/__tests__'] }),
     options,
     host,
   });
