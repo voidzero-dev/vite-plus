@@ -8,6 +8,7 @@ import { format } from 'oxfmt';
 const projectDir = dirname(fileURLToPath(import.meta.url));
 
 await buildNapiBinding();
+syncReadmeFromRoot();
 
 async function buildNapiBinding() {
   const buildCommand = createBuildCommand(process.argv.slice(2));
@@ -46,4 +47,37 @@ async function buildNapiBinding() {
   if (nodeFile) {
     cpSync(nodeFile.path, join(projectDir, `dist/${parse(nodeFile.path).base}`));
   }
+}
+
+function syncReadmeFromRoot() {
+  const rootReadmePath = join(projectDir, '..', '..', 'README.md');
+  const packageReadmePath = join(projectDir, 'README.md');
+  const rootReadme = readFileSync(rootReadmePath, 'utf8');
+  const packageReadme = readFileSync(packageReadmePath, 'utf8');
+
+  const { suffix: rootSuffix } = splitReadme(rootReadme, rootReadmePath);
+  const { prefix: packagePrefix } = splitReadme(packageReadme, packageReadmePath);
+  const nextReadme = `${packagePrefix}\n\n${rootSuffix}\n`;
+
+  if (nextReadme !== packageReadme) {
+    writeFileSync(packageReadmePath, nextReadme);
+  }
+}
+
+function splitReadme(content: string, label: string) {
+  const match = /^---\s*$/m.exec(content);
+  if (!match || match.index === undefined) {
+    throw new Error(`Expected ${label} to include a '---' separator.`);
+  }
+
+  const delimiterStart = match.index;
+  const delimiterEnd = delimiterStart + match[0].length;
+  const afterDelimiter = content.slice(delimiterEnd);
+  const newlineMatch = /^\r?\n/.exec(afterDelimiter);
+  const delimiterWithNewlineEnd = delimiterEnd + (newlineMatch ? newlineMatch[0].length : 0);
+
+  return {
+    prefix: content.slice(0, delimiterWithNewlineEnd).trim(),
+    suffix: content.slice(delimiterWithNewlineEnd).trim(),
+  };
 }
