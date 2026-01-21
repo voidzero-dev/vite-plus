@@ -199,6 +199,6 @@
   "bundledVersions": {
     "vite": "8.0.0-beta.8",
     "rolldown": "1.0.0-beta.60",
-    "tsdown": "0.20.0-beta.3"
+    "tsdown": "0.20.0-beta.4"
   }
 }
