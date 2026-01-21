@@ -7,17 +7,17 @@
 │
 ●  pnpm@<semver> installed
 │
-▲  ❌ .lintstagedrc is not JSON format file, auto migration is not supported
+▲  ✘ .lintstagedrc is not JSON format file, auto migration is not supported
 │
-▲  ❌ .lintstagedrc.yaml is not supported by auto migration
+▲  ✘ .lintstagedrc.yaml is not supported by auto migration
 │
-▲  ❌ lint-staged.config.mjs is not supported by auto migration
+▲  ✘ lint-staged.config.mjs is not supported by auto migration
 │
 ▲  Please migrate the lint-staged config manually, see https://viteplus.dev/migration/#lint-staged for more details
 │
 ◆  Wrote agent instructions to AGENTS.md
 │
-└  ✨ Migration completed!
+└  ✔ Migration completed!
 
 
 > cat .lintstagedrc # check .lintstagedrc is not updated

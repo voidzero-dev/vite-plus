@@ -35,7 +35,7 @@ This creates several issues:
 1. **Cognitive Load**: Developers must remember different commands and flags for each package manager
 2. **Context Switching**: When working across projects with different package managers, developers need to switch mental models
 3. **Script Portability**: Scripts that use package manager utilities are tied to a specific package manager
-4. **Missing Abstraction**: While vite+ provides abstractions for install/add/remove/update, it lacks utilities for cache, publish, config, etc.
+4. **Missing Abstraction**: While Vite+ provides abstractions for install/add/remove/update, it lacks utilities for cache, publish, config, etc.
 
 ### Current Pain Points
 
@@ -1319,7 +1319,7 @@ impl PmCommand {
 
 **Rationale**:
 
-- Keeps vite+ CLI namespace clean
+- Keeps Vite+ CLI namespace clean
 - Clear categorization (pm utilities vs task running)
 - Matches Bun's design pattern
 - Extensible for future utilities

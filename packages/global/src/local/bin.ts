@@ -4,15 +4,10 @@ import { pathToFileURL } from 'node:url';
 import * as prompts from '@clack/prompts';
 
 import { detectWorkspace as detectWorkspaceBinding } from '../../binding/index.js';
-import {
-  defaultInteractive,
-  detectPackageMetadata,
-  readNearestPackageJson,
-  VITE_PLUS_NAME,
-  cancelAndExit,
-  runViteInstall,
-  runCommand,
-} from '../utils/index.js';
+import { runCommand } from '../utils/command.js';
+import { VITE_PLUS_NAME } from '../utils/constants.js';
+import { detectPackageMetadata, readNearestPackageJson } from '../utils/package.js';
+import { cancelAndExit, defaultInteractive, runViteInstall } from '../utils/prompts.js';
 
 const cwd = process.cwd();
 const interactive = defaultInteractive();
@@ -26,13 +21,13 @@ if (!localCliMetadata) {
     dependencies?: Record<string, string>;
   }>(cwd);
   if (pkg?.devDependencies?.[VITE_PLUS_NAME] || pkg?.dependencies?.[VITE_PLUS_NAME]) {
-    prompts.intro(`Vite+ Local CLI "${VITE_PLUS_NAME}" not found`);
+    prompts.intro(`Local "${VITE_PLUS_NAME}" package was not found`);
     startPrompts = true;
     // run vite install and detect package metadata again
     await runViteInstall(cwd, interactive);
     localCliMetadata = detectPackageMetadata(cwd, VITE_PLUS_NAME);
     if (localCliMetadata) {
-      prompts.outro(`Using Vite+ Local CLI`);
+      prompts.outro(`Using local Vite+ CLI`);
     }
   }
 }
@@ -40,7 +35,7 @@ if (!localCliMetadata) {
 if (!localCliMetadata) {
   let autoInstall = true;
   if (!startPrompts) {
-    prompts.intro(`Vite+ Local CLI "${VITE_PLUS_NAME}" not found`);
+    prompts.intro(`Local "${VITE_PLUS_NAME}" package was not found`);
   }
   if (interactive) {
     const selected = await prompts.confirm({
@@ -77,9 +72,9 @@ if (!localCliMetadata) {
   localCliMetadata = detectPackageMetadata(cwd, VITE_PLUS_NAME);
   if (!localCliMetadata) {
     prompts.log.info(`You may need to run "vite ${args.join(' ')}" manually in ${cwd}`);
-    cancelAndExit(`Failed to locate Vite+ Local CLI`, 2);
+    cancelAndExit(`Failed to locate local Vite+ CLI`, 2);
   }
-  prompts.outro(`Using Vite+ Local CLI`);
+  prompts.outro(`Using local Vite+ CLI`);
 }
 
 // delegate to local CLI

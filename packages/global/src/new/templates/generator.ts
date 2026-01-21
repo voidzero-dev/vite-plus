@@ -4,7 +4,8 @@ import path from 'node:path';
 import * as prompts from '@clack/prompts';
 
 import type { WorkspaceInfo } from '../../types/index.js';
-import { editJsonFile, templatesDir } from '../../utils/index.js';
+import { editJsonFile } from '../../utils/json.js';
+import { templatesDir } from '../../utils/path.js';
 import type { ExecutionResult } from '../command.js';
 import { copyDir } from '../utils.js';
 import type { BuiltinTemplateInfo } from './types.js';

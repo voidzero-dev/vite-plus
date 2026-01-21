@@ -7,13 +7,13 @@
 │
 ●  pnpm@<semver> installed
 │
-◆  ✅ Rewrote imports in 1 file(s)
+◆  Rewrote imports in one file
 │
 ●    src/index.ts
 │
 ◆  Wrote agent instructions to AGENTS.md
 │
-└  ✨ Migration completed!
+└  ✔ Migration completed!
 
 
 > cat src/index.ts # vite imports should NOT be rewritten, vitest imports SHOULD be rewritten

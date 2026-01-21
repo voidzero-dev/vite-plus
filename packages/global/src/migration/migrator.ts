@@ -14,18 +14,14 @@ import {
 } from '../../binding/index.js';
 import { PackageManager, type WorkspaceInfo } from '../types/index.js';
 import {
-  scalarString,
-  editJsonFile,
-  editYamlFile,
-  rulesDir,
-  type YamlDocument,
-  isJsonFile,
-  displayRelative,
-  detectPackageMetadata,
   VITE_PLUS_NAME,
-  VITE_PLUS_VERSION,
   VITE_PLUS_OVERRIDE_PACKAGES,
-} from '../utils/index.js';
+  VITE_PLUS_VERSION,
+} from '../utils/constants.js';
+import { editJsonFile, isJsonFile } from '../utils/json.js';
+import { detectPackageMetadata } from '../utils/package.js';
+import { displayRelative, rulesDir } from '../utils/path.js';
+import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.js';
 import { detectConfigs, type ConfigFiles } from './detector.js';
 
 // packages that are replaced with vite-plus
@@ -63,7 +59,7 @@ function checkPackageVersion(projectPath: string, name: string, minVersion: stri
   if (semver.satisfies(metadata.version, `<${minVersion}`)) {
     const packageJsonFilePath = path.join(projectPath, 'package.json');
     prompts.log.error(
-      `❌ ${name}@${metadata.version} in ${displayRelative(packageJsonFilePath)} is not supported by auto migration`,
+      `✘ ${name}@${metadata.version} in ${displayRelative(packageJsonFilePath)} is not supported by auto migration`,
     );
     prompts.log.info(`Please upgrade ${name} to version >=${minVersion} first`);
     return false;
@@ -481,7 +477,7 @@ function rewriteLintStagedConfigFile(projectPath: string): void {
     }
     if (filename === '.lintstagedrc' && !isJsonFile(lintStagedConfigJsonPath)) {
       prompts.log.warn(
-        `❌ ${displayRelative(lintStagedConfigJsonPath)} is not JSON format file, auto migration is not supported`,
+        `✘ ${displayRelative(lintStagedConfigJsonPath)} is not JSON format file, auto migration is not supported`,
       );
       hasUnsupported = true;
       continue;
@@ -493,7 +489,7 @@ function rewriteLintStagedConfigFile(projectPath: string): void {
       );
       if (updated) {
         prompts.log.success(
-          `✅ Rewrote lint-staged config in ${displayRelative(lintStagedConfigJsonPath)}`,
+          `✔ Rewrote lint-staged config in ${displayRelative(lintStagedConfigJsonPath)}`,
         );
         return JSON.parse(updated);
       }
@@ -516,7 +512,7 @@ function rewriteLintStagedConfigFile(projectPath: string): void {
       continue;
     }
     prompts.log.warn(
-      `❌ ${displayRelative(lintStagedConfigPath)} is not supported by auto migration`,
+      `✘ ${displayRelative(lintStagedConfigPath)} is not supported by auto migration`,
     );
     hasUnsupported = true;
   }
@@ -542,7 +538,7 @@ function ensureViteConfig(projectPath: string, configs: ConfigFiles): string {
 export default defineConfig({});
 `,
     );
-    prompts.log.success(`✅ Created vite.config.ts in ${displayRelative(viteConfigPath)}`);
+    prompts.log.success(`✔ Created vite.config.ts in ${displayRelative(viteConfigPath)}`);
   }
   return configs.viteConfig;
 }
@@ -574,12 +570,12 @@ function mergeTsdownConfigFile(projectPath: string): void {
   if (result.updated) {
     fs.writeFileSync(fullViteConfigPath, result.content);
     prompts.log.success(
-      `✅ Added import for ${displayRelative(fullTsdownConfigPath)} in ${displayRelative(fullViteConfigPath)}`,
+      `✔ Added import for ${displayRelative(fullTsdownConfigPath)} in ${displayRelative(fullViteConfigPath)}`,
     );
   }
   // Show documentation link for manual merging since we only added the import
   prompts.log.info(
-    `📦 Please manually merge ${displayRelative(fullTsdownConfigPath)} into ${displayRelative(fullViteConfigPath)}, see https://viteplus.dev/migration/#tsdown`,
+    `Please manually merge ${displayRelative(fullTsdownConfigPath)} into ${displayRelative(fullViteConfigPath)}, see https://viteplus.dev/migration/#tsdown`,
   );
 }
 
@@ -615,11 +611,11 @@ function mergeAndRemoveJsonConfig(
     fs.writeFileSync(fullViteConfigPath, result.content);
     fs.unlinkSync(fullJsonConfigPath);
     prompts.log.success(
-      `✅ Merged ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
+      `✔ Merged ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
     );
   } else {
     prompts.log.warn(
-      `❌ Failed to merge ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
+      `✘ Failed to merge ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
     );
     prompts.log.info(
       `Please complete the merge manually and follow the instructions in the documentation: https://viteplus.dev/config/`,
@@ -634,14 +630,16 @@ function mergeAndRemoveJsonConfig(
  */
 function rewriteAllImports(projectPath: string): void {
   const result = rewriteImportsInDirectory(projectPath);
+  const modified = result.modifiedFiles.length;
+  const errors = result.errors.length;
 
-  if (result.modifiedFiles.length > 0) {
-    prompts.log.success(`✅ Rewrote imports in ${result.modifiedFiles.length} file(s)`);
+  if (modified > 0) {
+    prompts.log.success(`Rewrote imports in ${modified === 1 ? 'one file' : `${modified} files`}`);
     prompts.log.info(result.modifiedFiles.map((file) => `  ${displayRelative(file)}`).join('\n'));
   }
 
-  if (result.errors.length > 0) {
-    prompts.log.warn(`⚠️ ${result.errors.length} file(s) had errors:`);
+  if (errors > 0) {
+    prompts.log.warn(`⚠ ${errors === 1 ? 'one file had an error' : `${errors} files had errors`}:`);
     for (const error of result.errors) {
       prompts.log.error(`  ${displayRelative(error.path)}: ${error.message}`);
     }

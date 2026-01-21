@@ -2,12 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@clack/prompts';
-import colors from 'picocolors';
 import validateNpmPackageName from 'validate-npm-package-name';
 
+import { accent } from '../utils/terminal.js';
 import { getProjectDirFromPackageName } from './utils.js';
-
-const { cyan } = colors;
 
 export async function promptPackageNameAndTargetDir(
   defaultPackageName: string,
@@ -38,7 +36,7 @@ export async function promptPackageNameAndTargetDir(
     // --no-interactive: use default
     packageName = defaultPackageName;
     targetDir = getProjectDirFromPackageName(packageName);
-    prompts.log.info(`Using default package name: ${cyan(packageName)}`);
+    prompts.log.info(`Using default package name: ${accent(packageName)}`);
   }
 
   return { packageName, targetDir };

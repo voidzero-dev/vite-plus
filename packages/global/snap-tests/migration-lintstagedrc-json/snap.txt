@@ -34,11 +34,11 @@ Aliases: migrate
 │
 ●  pnpm@<semver> installed
 │
-◆  ✅ Rewrote lint-staged config in .lintstagedrc.json
+◆  ✔ Rewrote lint-staged config in .lintstagedrc.json
 │
 ◆  Wrote agent instructions to AGENTS.md
 │
-└  ✨ Migration completed!
+└  ✔ Migration completed!
 
 
 > cat .lintstagedrc.json # check lintstagedrc.json

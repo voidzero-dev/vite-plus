@@ -7,11 +7,11 @@
 │
 ●  pnpm@<semver> installed
 │
-◆  ✅ Merged .oxlintrc.json into vite.config.js
+◆  ✔ Merged .oxlintrc.json into vite.config.js
 │
 ◆  Wrote agent instructions to AGENTS.md
 │
-└  ✨ Migration completed!
+└  ✔ Migration completed!
 
 
 > cat vite.config.js # check vite.config.js

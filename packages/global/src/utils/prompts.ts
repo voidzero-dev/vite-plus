@@ -1,11 +1,9 @@
 import * as prompts from '@clack/prompts';
-import colors from 'picocolors';
 
 import { downloadPackageManager as downloadPackageManagerBinding } from '../../binding/index.js';
 import { PackageManager } from '../types/index.js';
 import { runCommandSilently } from './command.js';
-
-const { cyan } = colors;
+import { accent } from './terminal.js';
 
 export function cancelAndExit(message = 'Operation cancelled', exitCode = 0): never {
   prompts.cancel(message);
@@ -31,7 +29,7 @@ export async function selectPackageManager(interactive?: boolean) {
     return selected;
   } else {
     // --no-interactive: use pnpm as default
-    prompts.log.info(`Using default package manager: ${cyan(PackageManager.pnpm)}`);
+    prompts.log.info(`Using default package manager: ${accent(PackageManager.pnpm)}`);
     return PackageManager.pnpm;
   }
 }

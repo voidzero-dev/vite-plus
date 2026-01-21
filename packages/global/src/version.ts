@@ -3,8 +3,9 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
-import { detectPackageMetadata, VITE_PLUS_NAME } from './utils/index.js';
-import { getVitePlusHeader } from './utils/terminal.js';
+import { VITE_PLUS_NAME } from './utils/constants.ts';
+import { detectPackageMetadata } from './utils/package.ts';
+import { getVitePlusHeader, headline, log } from './utils/terminal.ts';
 
 const require = createRequire(import.meta.url);
 
@@ -97,10 +98,10 @@ export async function printVersion(cwd: string) {
   const localMetadata = getLocalMetadata(cwd);
   const localVersion = localMetadata?.version ?? null;
 
-  console.log((await getVitePlusHeader()) + '\n');
-  console.log(styleText(['bold', 'underline'], 'Package Versions:'));
-  console.log(`  ${styleText('bold', `${cliLabel}:`)} v${globalVersion}`);
-  console.log(
+  log((await getVitePlusHeader()) + '\n');
+  log(headline('Package Versions:'));
+  log(`  ${styleText('bold', `${cliLabel}:`)} v${globalVersion}`);
+  log(
     `  ${styleText('bold', `${localLabel}:`)}${' '.repeat(
       getColumnWidth(localLabel),
     )}${localVersion ? `v${localVersion}` : 'Not found'}`,
@@ -166,10 +167,10 @@ export async function printVersion(cwd: string) {
     return;
   }
 
-  console.log('');
-  console.log(styleText(['bold', 'underline'], 'Bundled with vite-plus:'));
+  log('');
+  log(headline('Bundled with vite-plus:'));
   for (const { tool, version } of resolvedTools) {
-    console.log(
+    log(
       `  ${styleText('bold', `${tool.command}:`)}${' '.repeat(
         getColumnWidth(tool.command),
       )}${formatToolVersion(tool, version)}`,

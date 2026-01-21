@@ -22,7 +22,7 @@ This creates friction in local development workflows and requires remembering di
 1. **Simplify local development**: One command works across all package managers
 2. **Auto-detection**: Automatically uses the correct package manager
 3. **Consistency**: Same syntax regardless of underlying tool
-4. **Integration**: Works seamlessly with existing vite+ features
+4. **Integration**: Works seamlessly with existing Vite+ features
 
 ### Current Pain Points
 

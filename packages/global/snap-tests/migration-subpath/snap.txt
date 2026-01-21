@@ -9,7 +9,7 @@
 │
 ◆  Wrote agent instructions to AGENTS.md
 │
-└  ✨ Migration completed!
+└  ✔ Migration completed!
 
 
 > cat foo/package.json # check package.json

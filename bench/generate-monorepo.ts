@@ -226,7 +226,7 @@ module.exports = { ${pkg.name.replace('-', '_')} };
   }
 
   public generate(): void {
-    console.log('Generating monorepo structure...');
+    console.log('Generating monorepo structure…');
 
     // Clean and create root directory
     if (fs.existsSync(this.rootDir)) {
@@ -244,7 +244,7 @@ module.exports = { ${pkg.name.replace('-', '_')} };
       this.writePackage(pkg);
       count++;
       if (count % 100 === 0) {
-        console.log(`Generated ${count} packages...`);
+        console.log(`Generated ${count} packages…`);
       }
     }
 

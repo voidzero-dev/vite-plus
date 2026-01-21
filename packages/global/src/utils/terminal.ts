@@ -179,22 +179,52 @@ async function getForegroundColor(): Promise<null | RGB> {
   });
 }
 
-const text = 'for the Web';
 const purple = [101, 63, 246] as const;
-let colors: Array<RGB> | null = null;
+let gradientColors: Array<RGB> | null = null;
+
+async function getGradientColors(text: string) {
+  if (!gradientColors) {
+    const fg = await getForegroundColor();
+    gradientColors = fg ? gradient(text.length, fg, purple) : fadeToColor(text.length, purple);
+  }
+  return gradientColors;
+}
 
 export async function getVitePlusHeader() {
-  if (!shouldColorize(process.stdout) || !supportsTrueColor(process.stdout)) {
-    return `VITE+(⚡︎) - The Unified Toolchain ${text}`;
-  }
+  const textA = 'The Unified ';
+  const textB = 'Toolchain for the Web';
 
-  if (!colors) {
-    const fg = await getForegroundColor();
-    colors = fg ? gradient(text.length, fg, purple) : fadeToColor(text.length, purple);
+  if (!shouldColorize(process.stdout) || !supportsTrueColor(process.stdout)) {
+    return `VITE+(⚡︎) - ${textA}${textB}`;
   }
 
   return `${styleText(
     'bold',
-    `VITE+(${styleText('blueBright', '⚡︎')}) - The Unified Toolchain ${colorize(text, colors)}`,
+    `VITE+(${accent('⚡︎')}) - ${textA}${colorize(textB, await getGradientColors(textB))}`,
   )}`;
+}
+
+export function log(message: string) {
+  /* oxlint-disable-next-line no-console */
+  console.log(message);
+}
+
+export function accent(text: string) {
+  return styleText('blueBright', text);
+}
+
+export function headline(text: string) {
+  return styleText('bold', text.toUpperCase());
+}
+
+export function muted(text: string) {
+  return styleText('gray', text);
+}
+
+export function success(text: string) {
+  return styleText('green', text);
+}
+
+export function error(text: string) {
+  return styleText('red', text);
 }

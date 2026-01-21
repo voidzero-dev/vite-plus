@@ -87,7 +87,7 @@ ANY template (bingo or universal)
   ↓
 Template generates code
   ↓
-vite+ auto-detects vite-related tools:
+Vite+ auto-detects vite-related tools:
   • Standalone vite, vitest, oxlint, oxfmt
   ↓
 Auto-migrate to unified vite-plus:
@@ -157,11 +157,11 @@ Monorepo integration:
 
 ## Monorepo-Specific Enhancements
 
-After any template runs, vite+ adds monorepo-specific features:
+After any template runs, Vite+ adds monorepo-specific features:
 
 ### 1. Auto-Migration to vite-plus Unified Toolchain (for ALL templates)
 
-**After any template runs** (bingo or universal), vite+ automatically detects standalone vite-related tools and offers to consolidate them into the unified vite-plus dependency.
+**After any template runs** (bingo or universal), Vite+ automatically detects standalone vite-related tools and offers to consolidate them into the unified vite-plus dependency.
 
 **Purpose**: Simplify dependency management by consolidating vite, vitest, oxlint, and oxfmt into a single vite-plus package.
 
@@ -175,7 +175,7 @@ $ vite new create-vite --template react-ts
 
 Scaffolding project in ./packages/my-app...
 
-# After template completes, vite+ detects standalone tools
+# After template completes, Vite+ detects standalone tools
 ◇  Template completed! Detecting vite-related tools...
 │
 ◆  Detected standalone vite tools:
@@ -192,7 +192,7 @@ Scaffolding project in ./packages/my-app...
 │  Benefits:
 │  • Simplified dependency management (1 instead of 2+ dependencies)
 │  • Unified configuration in vite.config.ts
-│  • Better integration with vite+ task runner and caching
+│  • Better integration with Vite+ task runner and caching
 │
 │  ● Yes / ○ No
 │
@@ -239,7 +239,7 @@ This is a **dependency consolidation** feature, not a tool replacement feature.
 
 ### 2. Target Directory Selection (Monorepo)
 
-When running `vite new` in a monorepo workspace, vite+ prompts users to select which parent directory to create the new package in:
+When running `vite new` in a monorepo workspace, Vite+ prompts users to select which parent directory to create the new package in:
 
 ```bash
 $ vite new create-vite
@@ -277,7 +277,7 @@ $ vite new create-vite
 
 ### 3. Workspace Dependency Prompts
 
-Inspired by [Turbo's generator](https://turborepo.com/docs/guides/generating-code), vite+ prompts users to select existing workspace packages as dependencies:
+Inspired by [Turbo's generator](https://turborepo.com/docs/guides/generating-code), Vite+ prompts users to select existing workspace packages as dependencies:
 
 ```bash
 $ vite new @company/generator-ui-lib --name=design-system
@@ -536,7 +536,7 @@ $ vite new
 ┌  🎨 Vite+ Code Generator
 │
 ◆  Which template would you like to use?
-│  ○ Vite+ Monorepo (Create a new vite+ monorepo project)
+│  ○ Vite+ Monorepo (Create a new Vite+ monorepo project)
 │  ○ Vite+ Generator (Scaffold a new code generator)
 │  ○ Vite (Create vite applications and libraries)
 │  ○ TanStack Start (Create TanStack applications and libraries)
@@ -550,7 +550,7 @@ Interactive mode includes pre-configured templates with automatic argument injec
 
 | Template Option     | Built-in Alias           | Description                                |
 | ------------------- | ------------------------ | ------------------------------------------ |
-| **Vite+ Monorepo**  | `vite:monorepo`          | Create a new vite+ monorepo project        |
+| **Vite+ Monorepo**  | `vite:monorepo`          | Create a new Vite+ monorepo project        |
 | **Vite+ Generator** | `vite:generator`         | Scaffold a new code generator              |
 | **Vite**            | `create-vite`            | Create vite applications and libraries     |
 | **TanStack Start**  | `@tanstack/create-start` | Create TanStack applications and libraries |
@@ -585,7 +585,7 @@ When selecting "Other", users can input any npm template:
 # Interactive mode - prompts for template selection
 vite new
 
-# Built-in vite+ templates
+# Built-in Vite+ templates
 vite new vite:monorepo                               # Vite+ monorepo
 vite new vite:generator                              # Vite+ generator scaffold
 vite new vite:application                            # Vite+ application
@@ -601,7 +601,7 @@ vite new create-nuxt              # Nuxt
 vite new create-typescript-app    # TypeScript (bingo)
 vite new @company/generator-api   # Workspace-local bingo generator
 
-# Run built-in vite+ generators
+# Run built-in Vite+ generators
 vite new vite:monorepo
 vite new vite:generator
 vite new vite:application
@@ -611,18 +611,18 @@ vite new vite:library
 vite new create-vite -- --template react-ts
 vite new create-next-app -- --typescript --app
 
-# Control migrations (vite+ options, before --)
+# Control migrations (Vite+ options, before --)
 vite new create-vite --no-migrate                    # Skip all migrations
 vite new create-vite --migrate=vite-plus             # Only migrate to vite-plus
 
-# Control target directory (vite+ options, before --)
+# Control target directory (Vite+ options, before --)
 vite new create-vite --directory=packages            # Skip directory selection
 
-# Control workspace dependencies (vite+ options, before --)
+# Control workspace dependencies (Vite+ options, before --)
 vite new create-vite --deps=@company/utils,@company/logger  # Pre-select
 vite new create-vite --no-prompt                     # Skip workspace dependency prompt
 
-# Combine vite+ options and template options
+# Combine Vite+ options and template options
 vite new create-vite --directory=apps --no-migrate --deps=@company/utils -- --template react-ts
 
 # List available templates
@@ -757,7 +757,7 @@ You get:
 - Provide event stream of package.json operations
 - Efficient event-based watching without polling
 
-**How vite+ Uses It**:
+**How Vite+ Uses It**:
 
 1. Start fspy watcher to monitor package.json operations before executing template
 2. Execute template (template creates package.json in new project)
@@ -843,13 +843,13 @@ Templates can be located in multiple places:
 1. **Built-in scaffolds**: `@vite-plus/create-generator` - Scaffold for creating new generators
 2. **Workspace packages**: Generators within the monorepo (e.g., `@company/generator-api`, `tools/create-microservice`)
 3. **npm packages**: Any template from npm - bingo templates, create-\* templates, etc.
-4. **Built-in vite+**: Optional monorepo-specific generators (e.g., `vite:application`)
+4. **Built-in Vite+**: Optional monorepo-specific generators (e.g., `vite:application`)
 
 **Resolution Order:**
 
 ```
 1. Check if name is "@vite-plus/create-generator" → generator scaffold
-2. Check if name starts with "vite:" → built-in vite+ generator
+2. Check if name starts with "vite:" → built-in Vite+ generator
 3. Check workspace packages for matching name → workspace-local generator
 4. Check node_modules/{name}/package.json → installed template (any type)
 5. Check if it's an npm package name → offer to install from registry
@@ -911,7 +911,7 @@ packages:
 
 ### Template Execution Pipeline
 
-vite+ acts as an intelligent wrapper that:
+Vite+ acts as an intelligent wrapper that:
 
 1. **Pre-processing**:
    - Detect template type (bingo vs universal)
@@ -920,7 +920,7 @@ vite+ acts as an intelligent wrapper that:
    - Capture pre-generation snapshot (for universal templates)
 
 2. **Execution**:
-   - Parse CLI arguments: options before `--` are for vite+, options after `--` are for template
+   - Parse CLI arguments: options before `--` are for Vite+, options after `--` are for template
    - Execute the template using Node.js: `node node_modules/{template}/bin/index.js [args-after---]`
    - Pass through template arguments (everything after `--`)
    - Template runs with full interactivity
@@ -938,7 +938,7 @@ vite+ acts as an intelligent wrapper that:
 
 **Implementation Note**:
 
-- vite+ CLI parses options before `--` (e.g., `--no-migrate`, `--deps`)
+- Vite+ CLI parses options before `--` (e.g., `--no-migrate`, `--deps`)
 - Options after `--` are passed through to the template as-is
 - No Rust-JS bridge needed - we shell out to Node.js to run templates
 
@@ -947,35 +947,35 @@ vite+ acts as an intelligent wrapper that:
 ```
 1. User runs: vite new [template-name] [vite-options] -- [template-options]
    ↓
-2. vite+ parses CLI arguments (split on -- separator)
+2. Vite+ parses CLI arguments (split on -- separator)
    ↓
 3. IF no template-name provided: Enter interactive mode
    ├─ Show template selection menu (Vite+ Monorepo, Vite+ Generator, Vite, TanStack, Other)
    ├─ Handle special templates with auto-argument injection
    └─ Continue with selected template
    ↓
-4. vite+ checks if running in a monorepo workspace
+4. Vite+ checks if running in a monorepo workspace
    ↓
 5. IF in monorepo: Prompt user to select target directory (apps, packages, etc.)
    ↓
-6. vite+ discovers and identifies template type (bingo vs universal)
+6. Vite+ discovers and identifies template type (bingo vs universal)
    ↓
-7. vite+ captures pre-generation snapshot (file list)
+7. Vite+ captures pre-generation snapshot (file list)
    ↓
-8. vite+ loads workspace packages for dependency selection
+8. Vite+ loads workspace packages for dependency selection
    ↓
-9. vite+ starts fspy watcher to monitor package.json operations
+9. Vite+ starts fspy watcher to monitor package.json operations
    ↓
-10. vite+ executes template: node node_modules/{template}/bin/index.js [template-options]
+10. Vite+ executes template: node node_modules/{template}/bin/index.js [template-options]
     (with cwd set to selected directory or passing directory as argument)
     ↓
 11. Template runs (handles all prompts, validation, file generation)
     ↓
 12. Template completes successfully
     ↓
-13. vite+ stops fspy watcher and derives project directory from package.json path
+13. Vite+ stops fspy watcher and derives project directory from package.json path
     ↓
-14. vite+ post-processes in detected project directory (same for ALL templates):
+14. Vite+ post-processes in detected project directory (same for ALL templates):
 
    AUTO-MIGRATE TO VITE-PLUS:
    ├─ Detect standalone vite/vitest/oxlint/oxfmt
@@ -1002,7 +1002,7 @@ This approach is **simple and robust**:
 - ✅ No need to maintain compatibility with template APIs
 - ✅ Any template works out of the box (bingo or universal)
 - ✅ Template authors can publish to npm normally
-- ✅ Adds vite+ optimization through intelligent migration
+- ✅ Adds Vite+ optimization through intelligent migration
 - ✅ Seamless monorepo integration
 
 **Implementation Notes**:
@@ -1016,7 +1016,7 @@ This approach is **simple and robust**:
 
 ### Example 1: Universal Template (create-vite) with Auto-Execution
 
-When a template is not installed locally, vite+ automatically uses the appropriate package manager runner:
+When a template is not installed locally, Vite+ automatically uses the appropriate package manager runner:
 
 ```bash
 $ vite new create-vite -- --template react-ts
@@ -1033,7 +1033,7 @@ $ vite new create-vite -- --template react-ts
 │
 # Template runs interactively via pnpm dlx...
 
-# vite+ prompts for target directory in monorepo
+# Vite+ prompts for target directory in monorepo
 ◆  Where should we create the new package?
 │  ○ apps/        (Applications)
 │  ● packages/    (Shared packages)
@@ -1053,7 +1053,7 @@ Done. Now run:
   vite install
   vite dev
 
-# vite+ detects standalone vite tools
+# Vite+ detects standalone vite tools
 ◇  Template completed! Detecting vite-related tools...
 │
 ◆  Detected standalone vite tools:
@@ -1070,7 +1070,7 @@ Done. Now run:
 │  Benefits:
 │  • Unified dependency management
 │  • Single configuration file
-│  • Better integration with vite+ task runner
+│  • Better integration with Vite+ task runner
 │
 │  ● Yes / ○ No
 │
@@ -1146,7 +1146,7 @@ Done. Now run:
 │
 ◆  Detected project directory: packages/ui-components
 │
-◇  Auto-migration to vite+...
+◇  Auto-migration to Vite+...
 │
 ●  Detected standalone vite tools: vite, vitest
 │
@@ -1261,7 +1261,7 @@ The generated scaffold includes:
 
 ### Example 4: Built-in vite:application Generator
 
-Use the built-in `vite:application` generator for a vite+ optimized project:
+Use the built-in `vite:application` generator for a Vite+ optimized project:
 
 ```bash
 $ vite new vite:application
@@ -1288,12 +1288,12 @@ $ vite new vite:application
 │
 # create-vite runs...
 │
-◆  Project generated with vite+ configuration
+◆  Project generated with Vite+ configuration
 │  • Added vite-task.json with build/test/lint/dev tasks
 │
 ◆  Detected project directory: my-app
 │
-◇  Auto-migration to vite+...
+◇  Auto-migration to Vite+...
 │
 ●  Detected standalone vite tools: vite
 │
@@ -1316,7 +1316,7 @@ The generated project includes:
 - Standard create-vite project structure
 - **vite-task.json**: Pre-configured tasks (build, test, lint, dev)
 - **Migrated**: Already using vite-plus instead of standalone vite
-- **Ready**: Immediately usable with vite+ task runner
+- **Ready**: Immediately usable with Vite+ task runner
 
 ### Example 5: Bingo Template (create-typescript-app)
 
@@ -1326,7 +1326,7 @@ vite new create-typescript-app
 
 ┌  vite new create-typescript-app
 │
-# vite+ prompts for target directory first
+# Vite+ prompts for target directory first
 ◆  Where should we create the new package?
 │  ○ apps/
 │  ● packages/
@@ -1341,7 +1341,7 @@ vite new create-typescript-app
 │
 └  Template completed successfully!
 
-# vite+ ALSO detects standalone vite tools (even for bingo templates)
+# Vite+ ALSO detects standalone vite tools (even for bingo templates)
 ◇  Template completed! Detecting vite-related tools...
 │
 ◆  Detected standalone vite tools:
@@ -1376,14 +1376,14 @@ vite new create-typescript-app
 │
 └  Done!
 
-🎉 Successfully created my-lib with vite+ optimizations
+🎉 Successfully created my-lib with Vite+ optimizations
 
 Next steps:
   cd packages/my-lib
   vite dev
 ```
 
-**Notice**: Even though create-typescript-app is a bingo template, it still gets the same auto-migration treatment to optimize for vite+!
+**Notice**: Even though create-typescript-app is a bingo template, it still gets the same auto-migration treatment to optimize for Vite+!
 
 ### Example 3: Creating a Workspace-Local Bingo Generator
 
@@ -1783,7 +1783,7 @@ vite new @company/generator-ui-lib
 │
 └  Template completed!
 
-# vite+ ALSO detects standalone vite tools (even for bingo templates!)
+# Vite+ ALSO detects standalone vite tools (even for bingo templates!)
 ◇  Template completed! Detecting vite-related tools...
 │
 ◆  Detected standalone vite tools:
@@ -1819,7 +1819,7 @@ vite new @company/generator-ui-lib
 │
 └  Done!
 
-✅ Created design-system component library with vite+ optimizations
+✅ Created design-system component library with Vite+ optimizations
 
 Next steps:
   1. cd packages/design-system
@@ -1833,7 +1833,7 @@ vite new @company/generator-ui-lib --name=icons --no-migrate  # Skip migrations
 vite new @company/generator-ui-lib --name=hooks --deps=@company/utils  # Pre-select deps
 ```
 
-**Key Point**: Even your own bingo generators benefit from auto-migration! You can generate code using standalone vite/vitest/oxlint, and vite+ will automatically consolidate them into vite-plus.
+**Key Point**: Even your own bingo generators benefit from auto-migration! You can generate code using standalone vite/vitest/oxlint, and Vite+ will automatically consolidate them into vite-plus.
 
 **Tip**: Use `vite new @vite-plus/create-generator` to quickly scaffold a new generator in your monorepo!
 
@@ -1878,9 +1878,9 @@ describe('UI Library Generator', () => {
 });
 ```
 
-### Built-in vite+ Generator (Optional)
+### Built-in Vite+ Generator (Optional)
 
-For monorepo-specific needs, vite+ can provide thin wrappers:
+For monorepo-specific needs, Vite+ can provide thin wrappers:
 
 ```bash
 # Built-in generator that configures vite-task.json automatically
@@ -1953,7 +1953,7 @@ vite new vite:library --name=shared-utils
 
 ### 5. Error Handling
 
-- **Clear Messages**: Distinguish between vite+ errors and template errors
+- **Clear Messages**: Distinguish between Vite+ errors and template errors
 - **Installation Failures**: Handle vite install failures gracefully
 - **Partial Completion**: If template creates files but errors, inform user
 - **Troubleshooting**: Provide hints for common issues (Node.js not found, etc.)
@@ -1977,7 +1977,7 @@ test('generates React app', async () => {
 });
 ```
 
-vite+ template runner logic is also tested using TypeScript/Vitest:
+Vite+ template runner logic is also tested using TypeScript/Vitest:
 
 ```typescript
 // In vite_generator package
@@ -2081,7 +2081,7 @@ A successful implementation should:
 2. ✅ Run ANY create-\* or other universal templates (via npx/pnpm dlx)
 3. ✅ Support workspace-local bingo generators (scan workspace patterns)
 4. ✅ Auto-detect template type (bingo vs universal)
-5. ✅ Parse CLI arguments correctly (vite+ options before `--`, template options after `--`)
+5. ✅ Parse CLI arguments correctly (Vite+ options before `--`, template options after `--`)
 6. ✅ Pass through template options correctly (everything after `--`)
 7. ✅ Handle interactive prompts properly (stdio inheritance)
 8. ✅ Detect generated project directory (directory scanning for package.json)
@@ -2114,7 +2114,7 @@ A successful implementation should:
 ### Developer Experience
 
 26. ✅ No installation required (use npx/pnpm dlx/yarn dlx/bunx)
-27. ✅ Clear error messages distinguishing vite+ vs template errors
+27. ✅ Clear error messages distinguishing Vite+ vs template errors
 28. ✅ Beautiful interactive prompts with @clack/prompts
 29. ✅ Show progress and feedback during generation/migration
 30. ✅ Display helpful next steps after completion (with correct directory path)
@@ -2123,11 +2123,11 @@ A successful implementation should:
 
 ## Benefits of This Approach
 
-### For vite+ Users
+### For Vite+ Users
 
 - 🎯 **Maximum Choice**: Use bingo templates OR any create-\* template
 - 🚀 **Zero Learning Curve**: Use familiar templates (create-vite, create-next-app, etc.)
-- 🔧 **Automatic Optimization**: Intelligent migration to vite+ toolchain
+- 🔧 **Automatic Optimization**: Intelligent migration to Vite+ toolchain
 - 🌍 **Entire Ecosystem**: Access to thousands of existing templates
 - 💼 **Company Generators**: Build reusable bingo templates for your team
 - 🔄 **Future-proof**: Works with templates created in the future
@@ -2144,16 +2144,16 @@ A successful implementation should:
 **Universal Template Authors:**
 
 - ⚡ **Zero Effort**: Templates work as-is
-- 👥 **Wider Audience**: Automatically compatible with vite+
-- 🔄 **No Maintenance**: vite+ handles the optimization
+- 👥 **Wider Audience**: Automatically compatible with Vite+
+- 🔄 **No Maintenance**: Vite+ handles the optimization
 
-### For vite+ Maintainers
+### For Vite+ Maintainers
 
 - 🎯 **Best of Both Worlds**: Support both approaches
 - 🐛 **Simpler Architecture**: Templates run as-is, no complex API
 - 📚 **Leverage Docs**: Point to existing template documentation
 - ⚡ **Immediate Value**: Add value through intelligent post-processing
-- 🔧 **Extensible**: Easy to add new migrations as vite+ evolves
+- 🔧 **Extensible**: Easy to add new migrations as Vite+ evolves
 
 ## Related RFCs
 

@@ -7,7 +7,7 @@
 │
 ●  pnpm@<semver> installed
 │
-└  ✨ Migration completed!
+└  ✔ Migration completed!
 
 
 > ls -la | grep -E '(AGENTS|CLAUDE)' || echo 'No agent file created' # verify no agent file was created

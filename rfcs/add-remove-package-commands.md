@@ -19,7 +19,7 @@ This creates friction in monorepo workflows and requires remembering different s
 1. **Simplify workflows**: One command works across all package managers
 2. **Auto-detection**: Automatically uses the correct package manager
 3. **Consistency**: Same syntax regardless of underlying tool
-4. **Integration**: Works seamlessly with existing vite+ features
+4. **Integration**: Works seamlessly with existing Vite+ features
 
 ### Current Pain Points
 
@@ -1344,7 +1344,7 @@ Proceed? (Y/n)
 6. **Should we support workspace protocol configuration?**
    - Proposed: Pass through to pnpm, document in .npmrc for users
    - Example: `save-workspace-protocol=rolling` in .npmrc
-   - vite+ doesn't need to handle this explicitly
+   - Vite+ doesn't need to handle this explicitly
 
 7. **Should we validate that filtered packages exist?**
    - Proposed: Let package manager validate

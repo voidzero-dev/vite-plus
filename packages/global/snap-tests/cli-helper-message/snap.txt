@@ -1,5 +1,5 @@
 > vite -h # show help message
-vite+/<semver>
+Vite+/<semver>
 
 Usage: vite <COMMAND>
 
@@ -36,7 +36,7 @@ Options:
 > vite -V # show version
 VITE+(⚡︎) - The Unified Toolchain for the Web
 
-Package Versions:
+PACKAGE VERSIONS:
   vite-plus-cli: v<semver>
   vite-plus:     Not found
 

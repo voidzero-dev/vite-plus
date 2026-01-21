@@ -5,6 +5,6 @@ run({})
     process.exit(exitCode);
   })
   .catch((err) => {
-    console.error('[vite+] run error:', err);
+    console.error('[Vite+] run error:', err);
     process.exit(1);
   });

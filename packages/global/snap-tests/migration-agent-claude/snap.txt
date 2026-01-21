@@ -9,7 +9,7 @@
 │
 ◆  Wrote agent instructions to CLAUDE.md
 │
-└  ✨ Migration completed!
+└  ✔ Migration completed!
 
 
 > cat CLAUDE.md | head -3 # verify CLAUDE.md was created

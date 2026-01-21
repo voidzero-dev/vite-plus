@@ -5,15 +5,15 @@
 │
 ●  yarn@<semver> installed
 │
-◆  ✅ Merged .oxlintrc.json into vite.config.ts
+◆  ✔ Merged .oxlintrc.json into vite.config.ts
 │
-◆  ✅ Rewrote imports in 1 file(s)
+◆  Rewrote imports in one file
 │
 ●    vite.config.ts
 │
 ◆  Wrote agent instructions to AGENTS.md
 │
-└  ✨ Migration completed!
+└  ✔ Migration completed!
 
 
 > cat vite.config.ts # check vite.config.ts

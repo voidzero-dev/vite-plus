@@ -273,7 +273,7 @@ jobs:
 
           for repo_info in "${repos[@]}"; do
             IFS=':' read -r repo dir_name <<< "$repo_info"
-            echo "Testing vite install on $repo..."
+            echo "Testing vite install on $repo…"
             # remove the directory if it exists
             if [ -d "$RUNNER_TEMP/$dir_name" ]; then
               rm -rf "$RUNNER_TEMP/$dir_name"

@@ -19,7 +19,7 @@ This creates friction in dependency management workflows and requires rememberin
 1. **Simplify dependency updates**: One command works across all package managers
 2. **Auto-detection**: Automatically uses the correct package manager
 3. **Consistency**: Same syntax regardless of underlying tool
-4. **Integration**: Works seamlessly with existing vite+ features
+4. **Integration**: Works seamlessly with existing Vite+ features
 
 ### Current Pain Points
 
@@ -756,7 +756,7 @@ impl OutdatedCommand {
 - Different package managers use different flags
 - Translate flags appropriately
 - Warn when flag not supported
-- Consistent with other vite+ commands
+- Consistent with other Vite+ commands
 
 ### 6. Dependency Type Filtering
 

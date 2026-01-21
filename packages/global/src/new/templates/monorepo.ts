@@ -7,7 +7,8 @@ import spawn from 'cross-spawn';
 
 import { rewriteMonorepoProject } from '../../migration/migrator.js';
 import { PackageManager, type WorkspaceInfo } from '../../types/index.js';
-import { editJsonFile, templatesDir } from '../../utils/index.js';
+import { editJsonFile } from '../../utils/json.js';
+import { templatesDir } from '../../utils/path.js';
 import type { ExecutionResult } from '../command.js';
 import { discoverTemplate } from '../discovery.js';
 import { copyDir, setPackageName } from '../utils.js';
@@ -20,7 +21,7 @@ export async function executeMonorepoTemplate(
   templateInfo: BuiltinTemplateInfo,
   interactive: boolean,
 ): Promise<ExecutionResult> {
-  prompts.log.step('Creating vite+ monorepo...');
+  prompts.log.step('Creating Vite+ monorepo...');
   assert(templateInfo.packageName, 'packageName is required');
   assert(templateInfo.targetDir, 'targetDir is required');
 

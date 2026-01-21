@@ -16,7 +16,7 @@ export async function executeRemoteTemplate(
   workspaceInfo: WorkspaceInfo,
   templateInfo: TemplateInfo,
 ): Promise<ExecutionResult> {
-  prompts.log.step('Executing template...');
+  prompts.log.step('Generating project…');
 
   let isGitHubTemplate = templateInfo.command === 'degit';
   let result: ExecutionResult;

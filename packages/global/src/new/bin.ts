@@ -1,8 +1,8 @@
 import path from 'node:path';
+import { styleText } from 'node:util';
 
 import * as prompts from '@clack/prompts';
 import mri from 'mri';
-import colors from 'picocolors';
 
 import {
   rewriteMonorepo,
@@ -11,18 +11,22 @@ import {
 } from '../migration/migrator.js';
 import { DependencyType, type WorkspaceInfo } from '../types/index.js';
 import {
+  detectExistingAgentTargetPath,
+  selectAgentTargetPath,
+  writeAgentInstructions,
+} from '../utils/agent.js';
+import {
   defaultInteractive,
-  detectWorkspace,
-  selectPackageManager,
   downloadPackageManager,
+  runViteInstall,
+  selectPackageManager,
+} from '../utils/prompts.js';
+import { accent, getVitePlusHeader, headline, muted, log, success } from '../utils/terminal.js';
+import {
+  detectWorkspace,
   updatePackageJsonWithDeps,
   updateWorkspaceConfig,
-  runViteInstall,
-  selectAgentTargetPath,
-  detectExistingAgentTargetPath,
-  writeAgentInstructions,
-} from '../utils/index.js';
-import { getVitePlusHeader } from '../utils/terminal.js';
+} from '../utils/workspace.js';
 import type { ExecutionResult } from './command.js';
 import { discoverTemplate, inferParentDir } from './discovery.js';
 import { cancelAndExit, checkProjectDirExists, promptPackageNameAndTargetDir } from './prompts.js';
@@ -34,64 +38,47 @@ import {
 import { BuiltinTemplate, TemplateType } from './templates/types.js';
 import { formatTargetDir } from './utils.js';
 
-const { blue, cyan, green, gray } = colors;
-
-// prettier-ignore
 const helpMessage = `\
-Usage: vite new [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
+${headline(`Usage:`)} ${styleText('bold', `vite new [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]`)}
 
-Run any template (builtin, remote, or local) with automatic vite+ integration.
+Use any builtin, local or remote template with Vite+.
 
-Arguments:
-  TEMPLATE                   Template name (optional; you will be prompted if omitted)
-                            - Built-in: vite:monorepo, vite:application, vite:library, vite:generator
-                            - Remote: create-vite, @tanstack/create-start, create-next-app, create-nuxt,
-                                      github:user/repo, https://github.com/user/template-repo
-                            - Local: @company/generator-*, ./tools/create-ui-component
+${headline(`Arguments:`)}
+  TEMPLATE            Template name. Run \`vite new --list\` to see available templates.
+                      - Default: vite:monorepo, vite:application, vite:library, vite:generator
+                      - Remote: create-vite, @tanstack/create-start, create-next-app,
+                        create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
+                      - Local: @company/generator-*, ./tools/create-ui-component
 
-Options (before --):
-  --directory DIR           Target directory for the generated project.
-                            Only works for built-in templates; auto-detected for remote templates.
-  --agent NAME              Write agent instructions file into the generated project (e.g. chatgpt, claude, opencode).
-  --no-interactive          Run in non-interactive mode (skip prompts and use defaults)
-  --list                    List all available templates
-  -h, --help                Show this help message
+${headline(`Options:`)}
+  --directory DIR     Target directory for the generated project.
+  --agent NAME        Create an agent instructions file for the specified agent.
+  --no-interactive    Run in non-interactive mode
+  --list              List all available templates
+  -h, --help          Show this help message
 
-Template options (after --):
-  All arguments after -- are passed directly through to the template command.
+${headline(`Template options:`)}
+  Any arguments after -- are passed directly to the template.
 
-Examples:
-  ${gray('# Interactive mode - choose template via prompt')}
-  vite new
+${headline(`Examples:`)}
+  ${muted('# Interactive mode')}
+  ${accent(`vite new`)}
 
-  ${gray('# Run any existing template (npx / pnpm dlx / yarn dlx / bunx auto-detected)')}
-  vite new create-vite
-  vite new create-next-app
-  vite new @tanstack/create-start
+  ${muted('# Use existing templates')}
+  ${accent(`vite new create-vite`)}
+  ${accent(`vite new create-next-app`)}
+  ${accent(`vite new @tanstack/create-start`)}
+  ${accent(`vite new create-vite -- --template react-ts`)}
 
-  ${gray('# With template-specific options (after --)')}
-  vite new create-vite -- --template react-ts
-  vite new create-next-app -- --typescript --app
+  ${muted('# Create Vite+ monorepo, application, library, or generator scaffolds')}
+  ${accent(`vite new vite:monorepo`)}
+  ${accent(`vite new vite:application`)}
+  ${accent(`vite new vite:library`)}
+  ${accent(`vite new vite:generator`)}
 
-  ${gray('# Create vite+ monorepo, application, library, or generator scaffolds')}
-  vite new vite:monorepo
-  vite new vite:application
-  vite new vite:library
-  vite new vite:generator
-
-  ${gray('# Monorepo: specify target directory')}
-  vite new vite:application --directory=packages/my-app
-
-  ${gray('# Combine new command options and template options')}
-  vite new vite:application --directory=apps/my-app -- --template vue-ts
-
-  ${gray('# Run templates from GitHub (via degit)')}
-  vite new github:user/repo
-  vite new https://github.com/user/template-repo
-
-Note: Templates are executed via npx / pnpm dlx / yarn dlx / bunx,
-      based on the detected package manager.
-      No global installation required - always uses the latest version.
+  ${muted('# Use templates from GitHub (via degit)')}
+  ${accent(`vite new github:user/repo`)}
+  ${accent(`vite new https://github.com/user/template-repo`)}
 `;
 
 export interface Options {
@@ -107,7 +94,7 @@ function parseArgs() {
   const args = process.argv.slice(3); // Skip 'node', 'vite', 'gen'
   const separatorIndex = args.indexOf('--');
 
-  // Arguments before -- are vite+ options
+  // Arguments before -- are Vite+ options
   const viteArgs = separatorIndex >= 0 ? args.slice(0, separatorIndex) : args;
 
   // Arguments after -- are template options
@@ -146,14 +133,15 @@ async function main() {
 
   // #region Handle help flag
   if (options.help) {
-    console.log(helpMessage);
+    log((await getVitePlusHeader()) + '\n');
+    log(helpMessage);
     return;
   }
   // #endregion
 
   // #region Handle list flag
   if (options.list) {
-    showAvailableTemplates();
+    await showAvailableTemplates();
     return;
   }
   // #endregion
@@ -161,12 +149,12 @@ async function main() {
   // #region Handle required arguments
   if (!templateName && !options.interactive) {
     console.error(`
-Template name is required when running in non-interactive mode
+A template name is required when running in non-interactive mode
 
 Usage: vite new [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
 
 Example: 
-  ${gray('# Create a new application in non-interactive mode with a custom target directory')}
+  ${muted('# Create a new application in non-interactive mode with a custom target directory')}
   vite new vite:application --no-interactive --directory=apps/my-app
 
 Use \`vite new --list\` to list all available templates, or run \`vite new --help\` for more information.
@@ -217,7 +205,7 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
       templates.push({
         label: 'Vite+ Monorepo',
         value: BuiltinTemplate.monorepo,
-        hint: 'Create a new vite+ monorepo project',
+        hint: 'Create a new Vite+ monorepo project',
       });
     }
     const template = await prompts.select({
@@ -422,7 +410,7 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
 
   // #region Handle monorepo template
   if (templateInfo.command === BuiltinTemplate.monorepo) {
-    prompts.log.info(`Target directory: ${cyan(targetDir)}`);
+    prompts.log.info(`Target directory: ${accent(targetDir)}`);
     await checkProjectDirExists(path.join(workspaceInfo.rootDir, targetDir), options.interactive);
     const result = await executeMonorepoTemplate(
       workspaceInfo,
@@ -444,8 +432,8 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
     workspaceInfo.rootDir = fullPath;
     rewriteMonorepo(workspaceInfo);
     await runViteInstall(fullPath, options.interactive);
-    prompts.outro(green('✨ Generation completed!'));
-    showNextSteps(projectDir, true);
+    prompts.outro(success(`✔ Created ${accent(projectDir)}!`));
+    showNextSteps(projectDir, false);
     return;
   }
   // #endregion
@@ -467,7 +455,7 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
         : selected.targetDir;
     }
     await checkProjectDirExists(targetDir, options.interactive);
-    prompts.log.info(`Target directory: ${cyan(targetDir)}`);
+    prompts.log.info(`Target directory: ${accent(targetDir)}`);
     result = await executeBuiltinTemplate(workspaceInfo, {
       ...templateInfo,
       packageName,
@@ -485,8 +473,7 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
     process.exit(0);
   }
 
-  // Show detected project directory
-  prompts.log.success(`Detected project directory: ${green(projectDir)}`);
+  prompts.log.success(`Project directory: ${accent(projectDir)}`);
   const fullPath = path.join(workspaceInfo.rootDir, projectDir);
   await writeAgentInstructions({
     projectRoot: fullPath,
@@ -494,7 +481,6 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
     interactive: options.interactive,
   });
 
-  // Monorepo integration
   if (isMonorepo) {
     prompts.log.step('Monorepo integration...');
     rewriteMonorepoProject(fullPath, workspaceInfo.packageManager);
@@ -502,7 +488,7 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
     if (workspaceInfo.packages.length > 0) {
       if (options.interactive) {
         const selectedDepTypeOptions = await prompts.multiselect({
-          message: `Add workspace dependencies to the ${green(projectDir)}?`,
+          message: `Add workspace dependencies to ${accent(projectDir)}?`,
           options: [
             {
               value: DependencyType.dependencies,
@@ -527,7 +513,7 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
 
         for (const selectedDepType of selectedDepTypes) {
           const selected = await prompts.multiselect({
-            message: `Which packages should be added as ${selectedDepType} to ${green(
+            message: `Which packages should be added as ${selectedDepType} to ${success(
               projectDir,
             )}?`,
             // FIXME: ignore itself as dependency
@@ -556,72 +542,54 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
     }
 
     updateWorkspaceConfig(projectDir, workspaceInfo);
-    // install dependencies in the root of the monorepo
     await runViteInstall(workspaceInfo.rootDir, options.interactive);
   } else {
-    // single project
     rewriteStandaloneProject(fullPath, workspaceInfo);
-    // install dependencies in the project directory
     await runViteInstall(fullPath, options.interactive);
   }
 
-  // Show comprehensive summary
-  prompts.outro(green('✨ Generation completed!'));
+  prompts.outro(success(`✔ Created ${accent(projectDir)}!`));
 
-  // Display summary
-  console.log(`\n${blue('Summary:')}`);
-  console.log(`  ${gray('•')} Template: ${cyan(selectedTemplateName)}`);
-  console.log(`  ${gray('•')} Created: ${green(projectDir)}`);
-
-  // Show next steps
   showNextSteps(projectDir, isMonorepo);
   // #endregion
 }
 
 function showNextSteps(projectDir: string, isMonorepo: boolean) {
-  console.log(`\n${gray('Next steps:')}`);
+  log(`${styleText('bold', 'Next steps:')}`);
   if (isMonorepo) {
-    console.log(`  ${gray('Installed in')} ${green(projectDir)}`);
-    console.log(`  ${cyan(`vite dev ${projectDir}`)}`);
+    log(`  ${accent(`vite dev ${projectDir}`)}`);
   } else {
-    console.log(`  ${cyan(`cd ${projectDir}`)}`);
-    console.log(`  ${cyan('vite dev')}`);
+    log(`  ${accent(`cd ${projectDir}`)}`);
+    log(`  ${accent('vite dev')}`);
   }
-  console.log('');
+  log('');
 }
 
-function showAvailableTemplates() {
-  console.log('');
-  console.log(cyan('📦 Available Templates'));
-  console.log('');
+async function showAvailableTemplates() {
+  log((await getVitePlusHeader()) + '\n');
 
-  console.log(blue('Vite+ Built-in Templates:'));
-  console.log('  • vite:monorepo                 ' + gray('- Create a new monorepo'));
-  console.log('  • vite:application              ' + gray('- Create a new application'));
-  console.log('  • vite:library                  ' + gray('- Create a new library'));
-  console.log('  • vite:generator                ' + gray('- Scaffold a new code generator'));
-  console.log('');
-
-  console.log(green('Popular Remote Templates:'));
-  console.log('  • create-vite                   ' + gray('- Official Vite templates'));
-  console.log('  • @tanstack/create-start        ' + gray('- TanStack applications'));
-  console.log('  • create-next-app               ' + gray('- Next.js application'));
-  console.log('  • create-nuxt                   ' + gray('- Nuxt application'));
-  console.log('  • create-typescript-app         ' + gray('- TypeScript application'));
-  console.log('  • create-react-router           ' + gray('- React Router application'));
-  console.log('  • create-vue                    ' + gray('- Vue application'));
-
-  console.log('\n' + gray('Run ') + cyan('vite new') + gray(' for interactive mode'));
-  console.log(gray('Run ') + cyan('vite new <template>') + gray(' to use any template'));
-  console.log(
-    gray('Run ') +
-      cyan('vite new <template> -- <options>') +
-      gray(' to pass options to the template'),
+  log(headline('Vite+ Built-in Templates:'));
+  log(`  vite:monorepo            ${muted('Create a new monorepo')}`);
+  log(`  vite:application         ${muted('Create a new application')}`);
+  log(`  vite:library             ${muted('Create a new library')}`);
+  log(`  vite:generator           ${muted('Scaffold a new code generator')}`);
+  log('');
+  log(headline('Popular Templates:'));
+  log(`  create-vite              ${muted('Official Vite templates')}`);
+  log(`  create-typescript-app    ${muted('TypeScript application')}`);
+  log(`  @tanstack/create-start   ${muted('TanStack applications')}`);
+  log(`  create-next-app          ${muted('Next.js application')}`);
+  log(`  create-nuxt              ${muted('Nuxt application')}`);
+  log(`  create-react-router      ${muted('React Router application')}`);
+  log(`  create-vue               ${muted('Vue application')}`);
+  log('');
+  log(headline(`Examples:`));
+  log(`  ${accent('vite new')} ${muted('# interactive mode')}`);
+  log(`  ${accent('vite new <template>')} ${muted('# use any template')}`);
+  log(
+    `  ${accent('vite new <template> -- <options>')} ${muted('# pass options to the template')}\n`,
   );
-
-  console.log('');
-  console.log('✨ Tip: You can use ANY npm template with vite new!');
-  console.log('');
+  log(`✨ Tip: You can use any npm template or git repo with ${accent('vite new')}!\n`);
 }
 
 main().catch((err) => {

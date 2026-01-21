@@ -7,19 +7,19 @@
 │
 ●  pnpm@<semver> installed
 │
-◆  ✅ Created vite.config.ts in vite.config.ts
+◆  ✔ Created vite.config.ts in vite.config.ts
 │
-◆  ✅ Added import for tsdown.config.ts in vite.config.ts
+◆  ✔ Added import for tsdown.config.ts in vite.config.ts
 │
-●  📦 Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/migration/#tsdown
+●  Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/migration/#tsdown
 │
-◆  ✅ Rewrote imports in 1 file(s)
+◆  Rewrote imports in one file
 │
 ●    tsdown.config.ts
 │
 ◆  Wrote agent instructions to AGENTS.md
 │
-└  ✨ Migration completed!
+└  ✔ Migration completed!
 
 
 > cat tsdown.config.ts # check tsdown.config.ts
@@ -70,11 +70,11 @@ export default defineConfig({
 │
 ●  pnpm@<semver> installed
 │
-●  📦 Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/migration/#tsdown
+●  Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/migration/#tsdown
 │
 ●  Skipped writing AGENTS.md (already exists)
 │
-└  ✨ Migration completed!
+└  ✔ Migration completed!
 
 
 > cat tsdown.config.ts # check tsdown.config.ts

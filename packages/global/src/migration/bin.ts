@@ -6,18 +6,17 @@ import colors from 'picocolors';
 import semver from 'semver';
 
 import { PackageManager, type WorkspaceInfo } from '../types/index.js';
+import { selectAgentTargetPath, writeAgentInstructions } from '../utils/agent.js';
 import {
+  cancelAndExit,
   defaultInteractive,
-  detectWorkspace,
-  selectPackageManager,
   downloadPackageManager,
   runViteInstall,
+  selectPackageManager,
   upgradeYarn,
-  cancelAndExit,
-  selectAgentTargetPath,
-  writeAgentInstructions,
-} from '../utils/index.js';
-import { getVitePlusHeader } from '../utils/terminal.js';
+} from '../utils/prompts.js';
+import { getVitePlusHeader, log } from '../utils/terminal.js';
+import { detectWorkspace } from '../utils/workspace.js';
 import {
   checkVitestVersion,
   checkViteVersion,
@@ -95,7 +94,7 @@ async function main() {
   const { projectPath, options } = parseArgs();
 
   if (options.help) {
-    console.log(helpMessage);
+    log(helpMessage);
     return;
   }
 
@@ -130,18 +129,18 @@ async function main() {
   ) {
     // required pnpm@>=9.5.0 to support catalog https://pnpm.io/9.x/catalogs
     prompts.log.error(
-      `❌ pnpm@${downloadResult.version} is not supported by auto migration, please upgrade pnpm to >=9.5.0 first`,
+      `✘ pnpm@${downloadResult.version} is not supported by auto migration, please upgrade pnpm to >=9.5.0 first`,
     );
-    cancelAndExit('The project is not supported by auto migration', 1);
+    cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
   } else if (
     packageManager === PackageManager.npm &&
     semver.satisfies(downloadResult.version, '< 8.3.0')
   ) {
     // required npm@>=8.3.0 to support overrides https://github.com/npm/cli/releases/tag/v8.3.0
     prompts.log.error(
-      `❌ npm@${downloadResult.version} is not supported by auto migration, please upgrade npm to >=8.3.0 first`,
+      `✘ npm@${downloadResult.version} is not supported by auto migration, please upgrade npm to >=8.3.0 first`,
     );
-    cancelAndExit('The project is not supported by auto migration', 1);
+    cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
   }
 
   // run vite install first to ensure the project is ready
@@ -150,7 +149,7 @@ async function main() {
   const isViteSupported = checkViteVersion(workspaceInfo.rootDir);
   const isVitestSupported = checkVitestVersion(workspaceInfo.rootDir);
   if (!isViteSupported || !isVitestSupported) {
-    cancelAndExit('The project is not supported by auto migration', 1);
+    cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
   }
 
   if (workspaceInfo.isMonorepo) {
@@ -173,7 +172,7 @@ async function main() {
 
   // reinstall after migration
   await runViteInstall(workspaceInfo.rootDir, options.interactive);
-  prompts.outro(green('✨ Migration completed!'));
+  prompts.outro(green('✔ Migration completed!'));
 }
 
 main().catch((err) => {

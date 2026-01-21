@@ -1,89 +1,77 @@
 > vite new --help # show help
-Usage: vite new [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
+VITE+(⚡︎) - The Unified Toolchain for the Web
 
-Run any template (builtin, remote, or local) with automatic vite+ integration.
+USAGE: vite new [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
 
-Arguments:
-  TEMPLATE                   Template name (optional; you will be prompted if omitted)
-                            - Built-in: vite:monorepo, vite:application, vite:library, vite:generator
-                            - Remote: create-vite, @tanstack/create-start, create-next-app, create-nuxt,
-                                      github:user/repo, https://github.com/user/template-repo
-                            - Local: @company/generator-*, ./tools/create-ui-component
+Use any builtin, local or remote template with Vite+.
 
-Options (before --):
-  --directory DIR           Target directory for the generated project.
-                            Only works for built-in templates; auto-detected for remote templates.
-  --agent NAME              Write agent instructions file into the generated project (e.g. chatgpt, claude, opencode).
-  --no-interactive          Run in non-interactive mode (skip prompts and use defaults)
-  --list                    List all available templates
-  -h, --help                Show this help message
+ARGUMENTS:
+  TEMPLATE            Template name. Run `vite new --list` to see available templates.
+                      - Default: vite:monorepo, vite:application, vite:library, vite:generator
+                      - Remote: create-vite, @tanstack/create-start, create-next-app,
+                        create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
+                      - Local: @company/generator-*, ./tools/create-ui-component
 
-Template options (after --):
-  All arguments after -- are passed directly through to the template command.
+OPTIONS:
+  --directory DIR     Target directory for the generated project.
+  --agent NAME        Create an agent instructions file for the specified agent.
+  --no-interactive    Run in non-interactive mode
+  --list              List all available templates
+  -h, --help          Show this help message
 
-Examples:
-  # Interactive mode - choose template via prompt
+TEMPLATE OPTIONS:
+  Any arguments after -- are passed directly to the template.
+
+EXAMPLES:
+  # Interactive mode
   vite new
 
-  # Run any existing template (npx / pnpm dlx / yarn dlx / bunx auto-detected)
+  # Use existing templates
   vite new create-vite
   vite new create-next-app
   vite new @tanstack/create-start
-
-  # With template-specific options (after --)
   vite new create-vite -- --template react-ts
-  vite new create-next-app -- --typescript --app
 
-  # Create vite+ monorepo, application, library, or generator scaffolds
+  # Create Vite+ monorepo, application, library, or generator scaffolds
   vite new vite:monorepo
   vite new vite:application
   vite new vite:library
   vite new vite:generator
 
-  # Monorepo: specify target directory
-  vite new vite:application --directory=packages/my-app
-
-  # Combine new command options and template options
-  vite new vite:application --directory=apps/my-app -- --template vue-ts
-
-  # Run templates from GitHub (via degit)
+  # Use templates from GitHub (via degit)
   vite new github:user/repo
   vite new https://github.com/user/template-repo
 
-Note: Templates are executed via npx / pnpm dlx / yarn dlx / bunx,
-      based on the detected package manager.
-      No global installation required - always uses the latest version.
-
 
 > vite new --list # list templates
+VITE+(⚡︎) - The Unified Toolchain for the Web
 
-📦 Available Templates
+VITE+ BUILT-IN TEMPLATES:
+  vite:monorepo            Create a new monorepo
+  vite:application         Create a new application
+  vite:library             Create a new library
+  vite:generator           Scaffold a new code generator
 
-Vite+ Built-in Templates:
-  • vite:monorepo                 - Create a new monorepo
-  • vite:application              - Create a new application
-  • vite:library                  - Create a new library
-  • vite:generator                - Scaffold a new code generator
+POPULAR TEMPLATES:
+  create-vite              Official Vite templates
+  create-typescript-app    TypeScript application
+  @tanstack/create-start   TanStack applications
+  create-next-app          Next.js application
+  create-nuxt              Nuxt application
+  create-react-router      React Router application
+  create-vue               Vue application
 
-Popular Remote Templates:
-  • create-vite                   - Official Vite templates
-  • @tanstack/create-start        - TanStack applications
-  • create-next-app               - Next.js application
-  • create-nuxt                   - Nuxt application
-  • create-typescript-app         - TypeScript application
-  • create-react-router           - React Router application
-  • create-vue                    - Vue application
+EXAMPLES:
+  vite new # interactive mode
+  vite new <template> # use any template
+  vite new <template> -- <options> # pass options to the template
 
-Run vite new for interactive mode
-Run vite new <template> to use any template
-Run vite new <template> -- <options> to pass options to the template
-
-✨ Tip: You can use ANY npm template with vite new!
+✨ Tip: You can use any npm template or git repo with vite new!
 
 
 [1]> vite new --no-interactive # run in non-interactive mode without template name will show error
 
-Template name is required when running in non-interactive mode
+A template name is required when running in non-interactive mode
 
 Usage: vite new [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
 

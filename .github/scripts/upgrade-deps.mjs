@@ -137,7 +137,7 @@ async function updateCorePackage(devtoolsVersion) {
   console.log('Updated packages/core/package.json');
 }
 
-console.log('Fetching latest versions...');
+console.log('Fetching latest versions…');
 
 const [
   vitestVersion,

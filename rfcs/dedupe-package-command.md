@@ -19,7 +19,7 @@ This creates friction in dependency management workflows and requires rememberin
 1. **Simplify dependency optimization**: One command works across all package managers
 2. **Auto-detection**: Automatically uses the correct package manager
 3. **Consistency**: Same syntax regardless of underlying tool
-4. **Integration**: Works seamlessly with existing vite+ features
+4. **Integration**: Works seamlessly with existing Vite+ features
 
 ### Current Pain Points
 
@@ -148,7 +148,7 @@ vite dedupe --check
 - 0: Success or no changes needed
 - Non-zero: Changes would be made (when using `--check`)
 
-**Note**: yarn@1 does not have a dedupe command and is not supported by vite+
+**Note**: yarn@1 does not have a dedupe command and is not supported by Vite+
 
 ### Implementation Architecture
 

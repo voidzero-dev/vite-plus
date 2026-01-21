@@ -19,7 +19,7 @@ This creates friction in dependency analysis workflows and requires remembering 
 1. **Simplify dependency analysis**: One command works across all package managers
 2. **Auto-detection**: Automatically uses the correct package manager
 3. **Consistency**: Same syntax regardless of underlying tool
-4. **Integration**: Works seamlessly with existing vite+ features
+4. **Integration**: Works seamlessly with existing Vite+ features
 
 ### Current Pain Points
 
@@ -283,7 +283,7 @@ info Reasons this module exists
 **Options:**
 
 - `--recursive`: Check across workspaces
-- `--peers`: Include peer dependencies (added by default via vite+)
+- `--peers`: Include peer dependencies (added by default via Vite+)
 - Different plugin system may affect output
 
 ### Implementation Architecture
@@ -731,7 +731,7 @@ impl WhyCommand {
 - npm uses `--workspace` after command: `npm explain --workspace app react`
 - Vite+ uses unified `--filter` flag that translates appropriately
 - yarn doesn't support workspace filtering
-- Consistent with other vite+ commands
+- Consistent with other Vite+ commands
 
 ### 6. Dependency Type Filtering
 

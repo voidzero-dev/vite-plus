@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 import type { WorkspaceInfo, WorkspaceInfoOptional } from '../types/index.js';
-import { readJsonFile } from '../utils/index.js';
+import { readJsonFile } from '../utils/json.js';
 import { prependToPathToEnvs } from './command.js';
 import { BuiltinTemplate, type TemplateInfo, TemplateType } from './templates/types.js';
 

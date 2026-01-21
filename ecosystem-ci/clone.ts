@@ -40,12 +40,12 @@ function getCurrentHash(dir: string): string | null {
 }
 
 function cloneRepo(repoUrl: string, branch: string, targetDir: string): void {
-  console.info(`Cloning ${repoUrl} (branch: ${branch})...`);
+  console.info(`Cloning ${repoUrl} (branch: ${branch})…`);
   exec(`git clone --branch ${branch} ${repoUrl} ${targetDir}`);
 }
 
 function checkoutHash(dir: string, hash: string): void {
-  console.info(`Checking out ${hash}...`);
+  console.info(`Checking out ${hash}…`);
   exec(`git fetch origin`, dir);
   exec(`git checkout ${hash}`, dir);
 }
@@ -54,7 +54,7 @@ for (const [repoName, repo] of Object.entries(repos)) {
   const targetDir = join(cwd, repoName);
 
   if (existsSync(targetDir)) {
-    console.info(`\nDirectory ${repoName} exists, validating...`);
+    console.info(`\nDirectory ${repoName} exists, validating…`);
 
     const remoteUrl = getRemoteUrl(targetDir);
     if (!remoteUrl) {

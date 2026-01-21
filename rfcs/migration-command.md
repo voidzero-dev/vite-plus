@@ -2,7 +2,7 @@
 
 ## Background
 
-When transitioning to vite+, projects typically use standalone tools like vite, oxlint, oxfmt, and vitest, each with their own dependencies and configuration files. The `vite migration` command automates the process of consolidating these tools into the unified vite+ toolchain.
+When transitioning to Vite+, projects typically use standalone tools like vite, oxlint, oxfmt, and vitest, each with their own dependencies and configuration files. The `vite migration` command automates the process of consolidating these tools into the unified Vite+ toolchain.
 
 **Problem**: Manual migration is error-prone and time-consuming:
 

@@ -1,5 +1,5 @@
 > vite -h # help message
-vite+/<semver>
+Vite+/<semver>
 
 [1;4mUsage:[0m [1mvite[0m <COMMAND>
 

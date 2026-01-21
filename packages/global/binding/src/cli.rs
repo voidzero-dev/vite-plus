@@ -469,7 +469,7 @@ pub enum Commands {
         #[arg(required = true)]
         name: String,
     },
-    /// Migrate an existing project to vite+
+    /// Migrate an existing project to Vite+
     Migrate {
         /// Project directory
         #[arg(required = true)]
@@ -1134,7 +1134,7 @@ pub fn command_with_help() -> clap::Command {
 "
     );
     let help_template = format!(
-        "vite+/{version}
+        "Vite+/{version}
 
 {{usage-heading}} {{usage}}{{after-help}}
 {bold_underline}Options:{reset}

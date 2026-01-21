@@ -68,7 +68,7 @@ jobs:
           PR_NUMBER=$(gh pr list --head deps/upstream-update --json number --jq '.[0].number')
 
           if [ -n "$PR_NUMBER" ]; then
-            echo "Found existing PR #$PR_NUMBER, closing and deleting branch..."
+            echo "Found existing PR #$PR_NUMBER, closing and deleting branch…"
             gh pr close "$PR_NUMBER" --delete-branch
           else
             echo "No existing PR found with branch deps/upstream-update"

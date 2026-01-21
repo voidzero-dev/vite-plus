@@ -579,7 +579,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
     let mut selected_index = 0;
 
     // Print header and instructions with proper line breaks
-    println!("\n📦 No package manager detected. Please select one:");
+    println!("\nNo package manager detected. Please select one:");
     println!(
         "   Use ↑↓ arrows to navigate, Enter to select, 1-{} for quick selection",
         options.len()

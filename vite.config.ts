@@ -3,8 +3,24 @@ import type { UserConfig } from 'vite-plus';
 export default <UserConfig>{
   lint: {
     rules: {
-      'no-console': 'warn',
+      'no-console': ['error', { allow: ['error'] }],
     },
+    overrides: [
+      {
+        files: [
+          '.github/**/*',
+          'bench/**/*.ts',
+          'ecosystem-ci/**/*',
+          'packages/*/build.ts',
+          'packages/core/rollupLicensePlugin.ts',
+          'packages/core/vite-rolldown.config.ts',
+          'packages/tools/**/*.ts',
+        ],
+        rules: {
+          'no-console': 'off',
+        },
+      },
+    ],
     ignorePatterns: ['**/snap-tests/**', '**/snap-tests-todo/**'],
   },
   test: {

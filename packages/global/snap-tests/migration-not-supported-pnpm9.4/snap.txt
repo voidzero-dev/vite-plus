@@ -5,8 +5,8 @@
 │
 ●  pnpm@<semver> installed
 │
-■  ❌ pnpm@<semver> is not supported by auto migration, please upgrade pnpm to >=9.5.0 first
-└  The project is not supported by auto migration
+■  ✘ pnpm@<semver> is not supported by auto migration, please upgrade pnpm to >=9.5.0 first
+└  Vite+ cannot automatically migrate this project yet.
 
 
 > cat package.json # check package.json is not updated

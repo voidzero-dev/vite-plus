@@ -7,13 +7,13 @@
 │
 ●  pnpm@<semver> installed
 │
-◆  ✅ Rewrote imports in 1 file(s)
+◆  Rewrote imports in one file
 │
 ●    test/hello.ts
 │
 ◆  Wrote agent instructions to AGENTS.md
 │
-└  ✨ Migration completed!
+└  ✔ Migration completed!
 
 
 > cat package.json # check package.json

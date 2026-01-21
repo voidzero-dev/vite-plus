@@ -5,8 +5,8 @@
 │
 ●  npm@<semver> installed
 │
-■  ❌ npm@<semver> is not supported by auto migration, please upgrade npm to >=8.3.0 first
-└  The project is not supported by auto migration
+■  ✘ npm@<semver> is not supported by auto migration, please upgrade npm to >=8.3.0 first
+└  Vite+ cannot automatically migrate this project yet.
 
 
 > cat package.json # check package.json is not updated

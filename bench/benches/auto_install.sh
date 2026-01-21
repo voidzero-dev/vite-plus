@@ -9,13 +9,13 @@ echo "=== Performance comparison: auto-install enabled vs disabled ==="
 echo ""
 
 # Test with auto-install enabled (default behavior)
-echo "Testing with auto-install enabled..."
+echo "Testing with auto-install enabled…"
 time ${AUTO_INSTALL_CMD}
 
 echo ""
 
 # Test with auto-install disabled (simulating nested execution)
-echo "Testing with auto-install disabled (nested execution simulation)..."
+echo "Testing with auto-install disabled (nested execution simulation)…"
 time VITE_DISABLE_AUTO_INSTALL=1 ${AUTO_INSTALL_CMD}
 
 echo ""

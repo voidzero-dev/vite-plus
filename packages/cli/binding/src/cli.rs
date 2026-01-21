@@ -810,7 +810,7 @@ fn print_help() {
     let bold_underline = "\x1b[1;4m";
     let reset = "\x1b[0m";
     println!(
-        "vite+/{version}
+        "Vite+/{version}
 
 {bold_underline}Usage:{reset} {bold}vite{reset} <COMMAND>
 
