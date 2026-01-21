@@ -26,6 +26,8 @@ import {
   createCompilerHost,
   createProgram,
   formatDiagnostics,
+  ModuleKind,
+  ModuleResolutionKind,
   parseJsonSourceFileConfigFileContent,
   readJsonConfigFile,
   sys,
@@ -109,6 +111,8 @@ async function buildCli() {
     ...initialOptions,
     noEmit: false,
     outDir: join(projectDir, 'dist'),
+    module: ModuleKind.ESNext,
+    moduleResolution: ModuleResolutionKind.Bundler,
   };
   const host = createCompilerHost(options);
 

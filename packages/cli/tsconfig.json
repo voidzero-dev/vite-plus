@@ -1,6 +1,16 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "composite": true,
+    "outDir": "./dist",
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "skipLibCheck": true,
+    "rootDir": "./src",
+    "customConditions": ["dev"],
+    "preserveSymlinks": true,
     "experimentalDecorators": true
   },
   "files": [],
