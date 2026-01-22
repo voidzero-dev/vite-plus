@@ -30,15 +30,17 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      build-ts-changed: ${{ steps.filter.outputs.build-ts }}
+      related-files-changed: ${{ steps.filter.outputs.related-files }}
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: filter
         with:
           filters: |
-            build-ts:
+            related-files:
               - 'packages/**/build.ts'
+              - .github/workflows/e2e-test.yml
+              - 'ecosystem-ci/*'
 
   download-previous-rolldown-binaries:
     needs: detect-changes
@@ -48,7 +50,7 @@ jobs:
       github.event_name != 'pull_request' ||
       contains(github.event.pull_request.labels.*.name, 'test: e2e') ||
       github.head_ref == 'deps/upstream-update' ||
-      needs.detect-changes.outputs.build-ts-changed == 'true'
+      needs.detect-changes.outputs.related-files-changed == 'true'
     permissions:
       contents: read
       packages: read
@@ -218,6 +220,15 @@ jobs:
               npx playwright install chromium
               vite run test
               vite run build
+          - name: oxlint-plugin-complexity
+            node-version: 22
+            command: |
+              vite run format
+              vite run format:check
+              vite run build
+              vite run lint
+              vite run test:run
+              npx tsc --noEmit
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: windows-latest

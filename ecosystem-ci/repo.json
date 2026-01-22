@@ -38,5 +38,10 @@
     "repository": "https://github.com/fengmk2/tanstack-start-helloworld.git",
     "branch": "main",
     "hash": "09bafe177bbcd1e3108c441a67601ae6380ad352"
+  },
+  "oxlint-plugin-complexity": {
+    "repository": "https://github.com/itaymendel/oxlint-plugin-complexity.git",
+    "branch": "main",
+    "hash": "0db2fd94497ca21952ba0a000a8ce81fd4854e36"
   }
 }
