@@ -7,9 +7,6 @@ import repos from './repo.json' with { type: 'json' };
 
 const cwd = import.meta.dirname;
 
-// Ensure the directory exists
-mkdirSync(ecosystemCiDir, { recursive: true });
-
 function exec(cmd: string, execCwd: string = cwd): string {
   return execSync(cmd, { cwd: execCwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 }
@@ -43,34 +40,38 @@ function getCurrentHash(dir: string): string | null {
   }
 }
 
-function cloneRepo(repoUrl: string, branch: string, targetDir: string): void {
-  console.info(`Cloning ${repoUrl} (branch: ${branch})…`);
-  exec(`git clone --branch ${branch} ${repoUrl} ${targetDir}`);
+function cloneRepo(repoUrl: string, targetDir: string): void {
+  console.info(`Cloning ${repoUrl}…`);
+  exec(`git clone --depth 1 ${repoUrl} ${targetDir}`);
 }
 
 function checkoutHash(dir: string, hash: string): void {
-  console.info(`Checking out ${hash}…`);
-  exec(`git fetch origin`, dir);
+  console.info(`Checking out ${hash.slice(0, 7)}…`);
+  exec(`git fetch --depth 1 origin ${hash}`, dir);
   exec(`git checkout ${hash}`, dir);
 }
 
-console.info(`Cloning ecosystem-ci projects to ${ecosystemCiDir}\n`);
+function cloneProject(repoName: string): void {
+  const repo = repos[repoName as keyof typeof repos];
+  if (!repo) {
+    console.error(`Project ${repoName} is not defined in repo.json`);
+    process.exit(1);
+  }
 
-for (const [repoName, repo] of Object.entries(repos)) {
   const targetDir = join(ecosystemCiDir, repoName);
 
   if (existsSync(targetDir)) {
-    console.info(`\nDirectory ${repoName} exists, validating…`);
+    console.info(`Directory ${repoName} exists, validating…`);
 
     const remoteUrl = getRemoteUrl(targetDir);
     if (!remoteUrl) {
       console.error(`  ✗ ${repoName} is not a git repository`);
-      continue;
+      process.exit(1);
     }
 
     if (!isSameRepo(remoteUrl, repo.repository)) {
       console.error(`  ✗ Remote mismatch: expected ${repo.repository}, got ${remoteUrl}`);
-      continue;
+      process.exit(1);
     }
 
     console.info(`  ✓ Remote matches`);
@@ -84,10 +85,28 @@ for (const [repoName, repo] of Object.entries(repos)) {
       console.info(`  ✓ Checked out ${repo.hash.slice(0, 7)}`);
     }
   } else {
-    cloneRepo(repo.repository, repo.branch, targetDir);
+    cloneRepo(repo.repository, targetDir);
     checkoutHash(targetDir, repo.hash);
     console.info(`✓ Cloned and checked out ${repo.hash.slice(0, 7)}`);
   }
 }
 
-console.info('\nDone!');
+// Ensure the directory exists
+mkdirSync(ecosystemCiDir, { recursive: true });
+
+const project = process.argv[2];
+
+if (project) {
+  // Clone a single project
+  console.info(`Cloning ${project} to ${ecosystemCiDir}\n`);
+  cloneProject(project);
+} else {
+  // Clone all projects
+  console.info(`Cloning all ecosystem-ci projects to ${ecosystemCiDir}\n`);
+  for (const repoName of Object.keys(repos)) {
+    cloneProject(repoName);
+    console.info('');
+  }
+}
+
+console.info('Done!');

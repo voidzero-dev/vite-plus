@@ -53,9 +53,4 @@ runs:
     - name: Clone ecosystem ci project
       if: ${{ inputs.ecosystem-ci-project != '' }}
       shell: bash
-      run: |
-        mkdir -p ${{ runner.temp }}/vite-plus-ecosystem-ci
-        git clone --depth 1 https://github.com/${{ steps.ecosystem-ci-project-hash.outputs.ECOSYSTEM_CI_PROJECT_REPOSITORY }}.git ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ inputs.ecosystem-ci-project }}
-        cd ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ inputs.ecosystem-ci-project }}
-        git fetch --depth 1 origin ${{ steps.ecosystem-ci-project-hash.outputs.ECOSYSTEM_CI_PROJECT_HASH }}
-        git checkout ${{ steps.ecosystem-ci-project-hash.outputs.ECOSYSTEM_CI_PROJECT_HASH }}
+      run: npx tsx ecosystem-ci/clone.ts ${{ inputs.ecosystem-ci-project }}
