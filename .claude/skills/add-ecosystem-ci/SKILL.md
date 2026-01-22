@@ -1,4 +1,5 @@
 ---
+name: add-ecosystem-ci
 description: Add a new ecosystem-ci test case for testing real-world projects against vite-plus
 allowed-tools: Bash, Read, Edit, Write, WebFetch, AskUserQuestion
 ---
@@ -12,6 +13,7 @@ Add a new ecosystem-ci test case following this process:
 Ask the user for the GitHub repository URL if not provided as argument: $ARGUMENTS
 
 Use GitHub CLI to get repository info:
+
 ```bash
 gh api repos/OWNER/REPO --jq '.default_branch'
 gh api repos/OWNER/REPO/commits/BRANCH --jq '.sha'
@@ -22,6 +24,7 @@ gh api repos/OWNER/REPO/commits/BRANCH --jq '.sha'
 Fetch the repository's root to check if the main package.json is in a subdirectory (like `web/`, `app/`, `frontend/`).
 
 Ask the user:
+
 - Which directory contains the main package.json? (root or subdirectory)
 - What Node.js version to use? (22 or 24)
 - Which commands to run? (e.g., lint, build, test, type-check)
@@ -29,13 +32,14 @@ Ask the user:
 ## Step 3: Update Files
 
 1. **Add to `ecosystem-ci/repo.json`**:
+
    ```json
    {
      "project-name": {
        "repository": "https://github.com/owner/repo.git",
        "branch": "main",
        "hash": "full-commit-sha",
-       "directory": "web"  // only if subdirectory is needed
+       "directory": "web" // only if subdirectory is needed
      }
    }
    ```
@@ -44,7 +48,7 @@ Ask the user:
    ```yaml
    - name: project-name
      node-version: 24
-     directory: web  # only if subdirectory is needed
+     directory: web # only if subdirectory is needed
      command: |
        vite run lint
        vite run build
@@ -53,8 +57,9 @@ Ask the user:
 ## Step 4: Verify
 
 Test the clone locally:
+
 ```bash
-pnpm dlx tsx ecosystem-ci/clone.ts project-name
+node ecosystem-ci/clone.ts project-name
 ```
 
 ## Important Notes

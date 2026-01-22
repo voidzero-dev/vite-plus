@@ -68,6 +68,10 @@ vite dev                             # runs dev script from package.json
   - Only convert to std paths when interfacing with std library functions, and this should be implicit in most cases thanks to `AsRef<Path>` implementations
   - Add necessary methods in `vite_path` instead of falling back to std path types
 
+## Git Workflow
+
+- Run `vite fmt` before committing to format code
+
 ## Quick Reference
 
 - **Compound Commands**: `"build": "tsc && rollup"` splits into subtasks
