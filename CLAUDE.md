@@ -106,3 +106,56 @@ pnpm -F vite-plus-cli snap-test migration-skip-vite-peer-dependency
 ```
 
 The snap test will automatically generate/update the `snap.txt` file with the command outputs. It exits with zero status even if there are output differences; you need to manually check the diffs(`git diff`) to verify correctness.
+
+## Ecosystem-CI Tests
+
+Ecosystem-CI tests real-world projects against vite-plus. Located in `ecosystem-ci/`.
+
+### Adding a New Test Case
+
+1. **Get repository info** using GitHub CLI:
+   ```bash
+   gh api repos/OWNER/REPO --jq '.default_branch'
+   gh api repos/OWNER/REPO/commits/BRANCH --jq '.sha'
+   ```
+
+2. **Add entry to `ecosystem-ci/repo.json`**:
+   ```json
+   {
+     "project-name": {
+       "repository": "https://github.com/owner/repo.git",
+       "branch": "main",
+       "hash": "full-commit-sha",
+       "directory": "web"  // optional: subdirectory containing package.json
+     }
+   }
+   ```
+
+3. **Add test matrix entry to `.github/workflows/e2e-test.yml`**:
+   ```yaml
+   - name: project-name
+     node-version: 24
+     directory: web  # optional: must match repo.json if specified
+     command: |
+       vite run lint
+       vite run build
+   ```
+
+4. **Test locally**:
+   ```bash
+   pnpm dlx tsx ecosystem-ci/clone.ts project-name
+   ```
+
+### Key Files
+
+- `ecosystem-ci/repo.json` - Project definitions (repository, branch, hash, optional directory)
+- `ecosystem-ci/clone.ts` - Clones projects to temp directory
+- `ecosystem-ci/patch-project.ts` - Runs `vite migrate` on cloned projects
+- `.github/workflows/e2e-test.yml` - CI workflow with test matrix
+
+### Subdirectory Support
+
+For projects where the web app is in a subdirectory (e.g., `dify/web`):
+- Add `"directory": "subdir"` to repo.json entry
+- Add `directory: subdir` to workflow matrix entry
+- `patch-project.ts` and workflow steps automatically use the subdirectory
