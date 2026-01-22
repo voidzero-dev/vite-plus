@@ -38,7 +38,8 @@
   },
   "lint-staged": {
     "*.@(js|ts|tsx)": [
-      "oxlint -- --fix"
+      "vite run lint --fix",
+      "vite fmt --no-error-on-unmatched-pattern"
     ],
     "*.rs": [
       "cargo fmt --"
