@@ -16,6 +16,7 @@
     "verbatimModuleSyntax": true
   },
   "exclude": [
+    "ecosystem-ci",
     "packages/cli/snap-tests",
     "packages/global/snap-tests",
     "rolldown-vite",
