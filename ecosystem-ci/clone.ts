@@ -1,10 +1,14 @@
 import { execSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { ecosystemCiDir } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
 
 const cwd = import.meta.dirname;
+
+// Ensure the directory exists
+mkdirSync(ecosystemCiDir, { recursive: true });
 
 function exec(cmd: string, execCwd: string = cwd): string {
   return execSync(cmd, { cwd: execCwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
@@ -50,8 +54,10 @@ function checkoutHash(dir: string, hash: string): void {
   exec(`git checkout ${hash}`, dir);
 }
 
+console.info(`Cloning ecosystem-ci projects to ${ecosystemCiDir}\n`);
+
 for (const [repoName, repo] of Object.entries(repos)) {
-  const targetDir = join(cwd, repoName);
+  const targetDir = join(ecosystemCiDir, repoName);
 
   if (existsSync(targetDir)) {
     console.info(`\nDirectory ${repoName} exists, validating…`);

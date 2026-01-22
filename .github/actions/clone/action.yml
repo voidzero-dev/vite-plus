@@ -7,6 +7,11 @@ inputs:
     required: false
     default: ''
 
+outputs:
+  ecosystem-ci-project-path:
+    description: 'The path where the ecosystem ci project was cloned'
+    value: ${{ steps.ecosystem-ci-project-hash.outputs.ECOSYSTEM_CI_PROJECT_PATH }}
+
 runs:
   using: 'composite'
   steps:
@@ -24,6 +29,7 @@ runs:
       run: |
         node -e "console.log('ECOSYSTEM_CI_PROJECT_HASH=' + require('./ecosystem-ci/repo.json')['${{ inputs.ecosystem-ci-project }}'].hash)" >> $GITHUB_OUTPUT
         node -e "console.log('ECOSYSTEM_CI_PROJECT_REPOSITORY=' + require('./ecosystem-ci/repo.json')['${{ inputs.ecosystem-ci-project }}'].repository.replace('https://github.com/', '').replace('.git', ''))" >> $GITHUB_OUTPUT
+        echo "ECOSYSTEM_CI_PROJECT_PATH=${{ runner.temp }}/vite-plus-ecosystem-ci/${{ inputs.ecosystem-ci-project }}" >> $GITHUB_OUTPUT
 
     - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       with:
@@ -48,5 +54,5 @@ runs:
       if: ${{ inputs.ecosystem-ci-project != '' }}
       with:
         repository: ${{ steps.ecosystem-ci-project-hash.outputs.ECOSYSTEM_CI_PROJECT_REPOSITORY }}
-        path: ecosystem-ci/${{ inputs.ecosystem-ci-project }}
+        path: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ inputs.ecosystem-ci-project }}
         ref: ${{ steps.ecosystem-ci-project-hash.outputs.ECOSYSTEM_CI_PROJECT_HASH }}

@@ -1,10 +1,8 @@
 import { execSync } from 'node:child_process';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
+import { ecosystemCiDir, tgzDir } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
-
-const projectDir = dirname(fileURLToPath(import.meta.url));
 
 const projects = Object.keys(repos);
 
@@ -15,10 +13,8 @@ if (!projects.includes(project)) {
   process.exit(1);
 }
 
-const tgzPath = join(projectDir, '..', 'tmp', 'tgz');
-
 async function migrateProject(project: string) {
-  const repoRoot = join(projectDir, project);
+  const repoRoot = join(ecosystemCiDir, project);
   // run vite migrate
   execSync('vite migrate --no-agent', {
     cwd: repoRoot,
@@ -26,12 +22,12 @@ async function migrateProject(project: string) {
     env: {
       ...process.env,
       VITE_PLUS_OVERRIDE_PACKAGES: JSON.stringify({
-        vite: `file:${tgzPath}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
-        vitest: `file:${tgzPath}/voidzero-dev-vite-plus-test-0.0.0.tgz`,
-        '@voidzero-dev/vite-plus-core': `file:${tgzPath}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
-        '@voidzero-dev/vite-plus-test': `file:${tgzPath}/voidzero-dev-vite-plus-test-0.0.0.tgz`,
+        vite: `file:${tgzDir}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
+        vitest: `file:${tgzDir}/voidzero-dev-vite-plus-test-0.0.0.tgz`,
+        '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
+        '@voidzero-dev/vite-plus-test': `file:${tgzDir}/voidzero-dev-vite-plus-test-0.0.0.tgz`,
       }),
-      VITE_PLUS_VERSION: `file:${tgzPath}/vite-plus-0.0.0.tgz`,
+      VITE_PLUS_VERSION: `file:${tgzDir}/vite-plus-0.0.0.tgz`,
     },
   });
 }
