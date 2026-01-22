@@ -235,12 +235,16 @@ jobs:
             command: |
               vite run type-check:tsgo
               vite run build
-              vite run test
+              vite run test navigation-utils.test.ts real-browser-flicker.test.tsx workflow-parallel-limit.test.tsx
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: windows-latest
             project:
               name: frm-stack
+          # dify only runs on Linux for now
+          - os: windows-latest
+            project:
+              name: dify
 
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1

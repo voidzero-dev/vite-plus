@@ -19,15 +19,38 @@ gh api repos/OWNER/REPO --jq '.default_branch'
 gh api repos/OWNER/REPO/commits/BRANCH --jq '.sha'
 ```
 
-## Step 2: Check for Subdirectory
+## Step 2: Auto-detect Project Configuration
+
+### 2.1 Check for Subdirectory
 
 Fetch the repository's root to check if the main package.json is in a subdirectory (like `web/`, `app/`, `frontend/`).
 
-Ask the user:
+### 2.2 Auto-detect Commands from GitHub Workflows
 
-- Which directory contains the main package.json? (root or subdirectory)
-- What Node.js version to use? (22 or 24)
-- Which commands to run? (e.g., lint, build, test, type-check)
+Fetch the project's GitHub workflow files to detect available commands:
+
+```bash
+# List workflow files
+gh api repos/OWNER/REPO/contents/.github/workflows --jq '.[].name'
+
+# Fetch workflow content (for each .yml/.yaml file)
+gh api repos/OWNER/REPO/contents/.github/workflows/ci.yml --jq '.content' | base64 -d
+```
+
+Look for common patterns in workflow files:
+
+- `pnpm run <command>` / `npm run <command>` / `yarn <command>`
+- Commands like: `lint`, `build`, `test`, `type-check`, `typecheck`, `format`, `format:check`
+- Map detected commands to vite equivalents: `vite run lint`, `vite run build`, etc.
+
+### 2.3 Ask User to Confirm
+
+Present the auto-detected configuration and ask user to confirm or modify:
+
+- Which directory contains the main package.json? (auto-detected or manual)
+- What Node.js version to use? (22 or 24, try to detect from workflow)
+- Which commands to run? (show detected commands as multi-select options)
+- Which OS to run on? (both, ubuntu-only, windows-only) - default: both
 
 ## Step 3: Update Files
 
@@ -62,8 +85,29 @@ Test the clone locally:
 node ecosystem-ci/clone.ts project-name
 ```
 
+3. **Add OS exclusion to `.github/workflows/e2e-test.yml`** (if not running on both):
+
+   For ubuntu-only:
+
+   ```yaml
+   exclude:
+     - os: windows-latest
+       project:
+         name: project-name
+   ```
+
+   For windows-only:
+
+   ```yaml
+   exclude:
+     - os: ubuntu-latest
+       project:
+         name: project-name
+   ```
+
 ## Important Notes
 
 - The `directory` field is optional - only add it if the package.json is not in the project root
 - If `directory` is specified in repo.json, it must also be specified in the workflow matrix
 - `patch-project.ts` automatically handles running `vite migrate` in the correct directory
+- OS exclusions are added to the existing `exclude` section in the workflow matrix
