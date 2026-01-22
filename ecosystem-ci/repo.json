@@ -1,4 +1,10 @@
 {
+  "dify": {
+    "repository": "https://github.com/langgenius/dify.git",
+    "branch": "main",
+    "hash": "356a156f365a3c762f29303176defb28cbed3710",
+    "directory": "web"
+  },
   "skeleton": {
     "repository": "https://github.com/skeletonlabs/skeleton.git",
     "branch": "main",

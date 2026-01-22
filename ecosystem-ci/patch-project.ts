@@ -15,9 +15,12 @@ if (!projects.includes(project)) {
 
 async function migrateProject(project: string) {
   const repoRoot = join(ecosystemCiDir, project);
+  const repoConfig = repos[project as keyof typeof repos];
+  const directory = 'directory' in repoConfig ? repoConfig.directory : undefined;
+  const cwd = directory ? join(repoRoot, directory) : repoRoot;
   // run vite migrate
   execSync('vite migrate --no-agent', {
-    cwd: repoRoot,
+    cwd,
     stdio: 'inherit',
     env: {
       ...process.env,
