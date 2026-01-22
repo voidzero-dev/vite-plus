@@ -6,6 +6,8 @@ export default extendConfig(defineConfig({
   title: 'Vite+',
   titleTemplate: ':title | The Unified Toolchain for the Web',
   description: 'The Unified Toolchain for the Web',
+  cleanUrls: true,
+  srcDir: './src',
   head: [['link', { rel: 'icon', href: 'https://viteplus.dev/favicon.svg' }]],
   themeConfig: {
     variant: 'viteplus',
