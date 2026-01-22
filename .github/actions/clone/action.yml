@@ -50,9 +50,12 @@ runs:
       shell: bash
       run: git config --global core.autocrlf false
 
-    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+    - name: Clone ecosystem ci project
       if: ${{ inputs.ecosystem-ci-project != '' }}
-      with:
-        repository: ${{ steps.ecosystem-ci-project-hash.outputs.ECOSYSTEM_CI_PROJECT_REPOSITORY }}
-        path: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ inputs.ecosystem-ci-project }}
-        ref: ${{ steps.ecosystem-ci-project-hash.outputs.ECOSYSTEM_CI_PROJECT_HASH }}
+      shell: bash
+      run: |
+        mkdir -p ${{ runner.temp }}/vite-plus-ecosystem-ci
+        git clone --depth 1 https://github.com/${{ steps.ecosystem-ci-project-hash.outputs.ECOSYSTEM_CI_PROJECT_REPOSITORY }}.git ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ inputs.ecosystem-ci-project }}
+        cd ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ inputs.ecosystem-ci-project }}
+        git fetch --depth 1 origin ${{ steps.ecosystem-ci-project-hash.outputs.ECOSYSTEM_CI_PROJECT_HASH }}
+        git checkout ${{ steps.ecosystem-ci-project-hash.outputs.ECOSYSTEM_CI_PROJECT_HASH }}
