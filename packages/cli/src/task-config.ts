@@ -4,29 +4,29 @@ export type Task = {
    *
    * If omitted, the script from `package.json` with the same name will be used
    */
-  command: string | null;
+  command?: string;
   /**
    * The working directory for the task, relative to the package root (not workspace root).
    */
-  cwd: string;
+  cwd?: string;
   /**
    * Dependencies of this task. Use `package-name#task-name` to refer to tasks in other packages.
    */
-  dependsOn: Array<string>;
+  dependsOn?: Array<string>;
 } & (
   | {
       /**
        * Whether to cache the task
        */
-      cache: true;
+      cache?: true;
       /**
        * Environment variable names to be fingerprinted and passed to the task.
        */
-      envs: Array<string>;
+      envs?: Array<string>;
       /**
        * Environment variable names to be passed to the task without fingerprinting.
        */
-      passThroughEnvs: Array<string>;
+      passThroughEnvs?: Array<string>;
     }
   | {
       /**

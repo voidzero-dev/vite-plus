@@ -8,7 +8,6 @@ use std::{
 };
 
 use clap::Subcommand;
-use monostate::MustBe;
 use serde::{Deserialize, Serialize};
 use tokio::fs::write;
 use vite_error::Error;
@@ -318,11 +317,11 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .collect(),
                     task_options: UserTaskOptions {
                         cache_config: UserCacheConfig::Enabled {
-                            cache: MustBe!(true),
+                            cache: None,
                             enabled_cache_config: EnabledCacheConfig {
                                 // Fingerprint OXLINT_TSGOLINT_PATH for type-aware linting cache invalidation
-                                envs: Box::new([Str::from("OXLINT_TSGOLINT_PATH")]),
-                                pass_through_envs: vec![],
+                                envs: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
+                                pass_through_envs: None,
                             },
                         },
                         ..Default::default()

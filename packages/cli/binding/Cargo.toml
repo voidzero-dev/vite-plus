@@ -14,7 +14,6 @@ rolldown = ["dep:rolldown_binding"]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
-monostate = { workspace = true }
 napi = { workspace = true }
 napi-derive = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
