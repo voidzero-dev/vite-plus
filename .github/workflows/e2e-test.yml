@@ -236,6 +236,12 @@ jobs:
               vite run type-check:tsgo
               vite run build
               vite run test navigation-utils.test.ts real-browser-flicker.test.tsx workflow-parallel-limit.test.tsx
+          - name: happy-dom
+            node-version: 24
+            command: |
+              vite run compile
+              vite run lint
+              vite run test
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: windows-latest
@@ -245,6 +251,10 @@ jobs:
           - os: windows-latest
             project:
               name: dify
+          # happy-dom only runs on Linux
+          - os: windows-latest
+            project:
+              name: happy-dom
 
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1

@@ -49,5 +49,10 @@
     "repository": "https://github.com/itaymendel/oxlint-plugin-complexity.git",
     "branch": "main",
     "hash": "0db2fd94497ca21952ba0a000a8ce81fd4854e36"
+  },
+  "happy-dom": {
+    "repository": "https://github.com/capricorn86/happy-dom.git",
+    "branch": "master",
+    "hash": "aa2dbb813416e54c4b34c77e3834952cdcc8dd6d"
   }
 }
