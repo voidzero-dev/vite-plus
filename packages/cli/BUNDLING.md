@@ -55,7 +55,7 @@ The build generates platform-specific native binaries and formats the generated 
 
 Creates shim files that re-export from `@voidzero-dev/vite-plus-core`, enabling this package to be a drop-in replacement for upstream `vite`. This is critical for compatibility with existing Vite plugins and configurations.
 
-**Prerequisites**: The core package must be built first (its `dist/vite/` directory must exist).
+**Prerequisites**: The core package must be built first (its `dist/vite/` directory must exist). See [Core Package Bundling](../core/BUNDLING.md) for details on how the core package bundles vite, rolldown, and tsdown.
 
 **Export paths created**:
 
@@ -161,6 +161,120 @@ These targets are defined in `package.json` under the `napi.targets` field.
 
 ---
 
+## Rolldown Native Binding Integration
+
+The CLI package integrates with Rolldown at the native binding level, allowing vite-plus to ship as a self-contained package without requiring users to install separate `@rolldown/binding-*` packages.
+
+### Conditional Compilation
+
+Rolldown bindings are **optionally** compiled into the vite-plus native module via Cargo feature flags.
+
+**In `binding/Cargo.toml`**:
+
+```toml
+[dependencies]
+rolldown_binding = { workspace = true, optional = true }
+
+[features]
+rolldown = ["dep:rolldown_binding"]
+```
+
+**In `binding/src/lib.rs`**:
+
+```rust
+#[cfg(feature = "rolldown")]
+pub extern crate rolldown_binding;
+```
+
+### Build-Time Feature Activation
+
+The rolldown feature is only enabled during release builds:
+
+```typescript
+// In build.ts
+await cli.build({
+  features: process.env.RELEASE_BUILD ? ['rolldown'] : void 0,
+  release: process.env.VITE_PLUS_CLI_DEBUG !== '1',
+});
+```
+
+**When `RELEASE_BUILD=1`**:
+
+1. Enables the `rolldown` Cargo feature
+2. Compiles `rolldown_binding` into the `.node` file
+3. Extracts `napi.dtsHeader` from rolldown's package.json for type definitions
+4. Prepends custom type definitions to the generated `.d.ts` file
+
+### Why Conditional Compilation?
+
+| Build Type                  | rolldown Feature | Use Case                                |
+| --------------------------- | ---------------- | --------------------------------------- |
+| Development (`pnpm build`)  | Disabled         | Faster builds, smaller binaries         |
+| Release (`RELEASE_BUILD=1`) | Enabled          | Full distribution with bundled rolldown |
+
+### Module Specifier Rewriting
+
+During release builds, the core package rewrites all `@rolldown/binding-*` imports to point to `vite-plus/binding`:
+
+```typescript
+// In packages/core/build.ts
+if (process.env.RELEASE_BUILD) {
+  // @rolldown/binding-darwin-arm64 → vite-plus/binding
+  source = source.replace(/@rolldown\/binding-([a-z0-9-]+)/g, 'vite-plus/binding');
+}
+```
+
+**Transformation examples**:
+
+| Original Import                    | After Rewrite       |
+| ---------------------------------- | ------------------- |
+| `@rolldown/binding-darwin-arm64`   | `vite-plus/binding` |
+| `@rolldown/binding-linux-x64-gnu`  | `vite-plus/binding` |
+| `@rolldown/binding-win32-x64-msvc` | `vite-plus/binding` |
+
+This means:
+
+1. The bundled rolldown code in `@voidzero-dev/vite-plus-core/rolldown` resolves native bindings from `vite-plus/binding`
+2. Users don't need to install separate `@rolldown/binding-*` platform packages
+3. The single `.node` file contains both vite-plus task runner and rolldown bindings
+
+### Native Binding Contents
+
+When compiled with `RELEASE_BUILD=1`, the `.node` file contains:
+
+| Component          | Source                             | Purpose                        |
+| ------------------ | ---------------------------------- | ------------------------------ |
+| `vite_task`        | `packages/cli/binding/src/lib.rs`  | Task runner session management |
+| `rolldown_binding` | `rolldown/crates/rolldown_binding` | Rolldown bundler NAPI bindings |
+
+### Export Chain
+
+```
+User imports 'vite-plus/rolldown'
+  → packages/cli re-exports from @voidzero-dev/vite-plus-core/rolldown
+    → packages/core/dist/rolldown/index.mjs
+      → Native binding: vite-plus/binding (rewritten from @rolldown/binding-*)
+        → binding/vite-plus.darwin-arm64.node (contains rolldown_binding)
+```
+
+### Platform-Specific Publishing
+
+Native bindings are published as separate platform packages for optimal install size:
+
+| Platform    | Published Package                         |
+| ----------- | ----------------------------------------- |
+| macOS ARM64 | `@voidzero-dev/vite-plus-darwin-arm64`    |
+| macOS x64   | `@voidzero-dev/vite-plus-darwin-x64`      |
+| Linux ARM64 | `@voidzero-dev/vite-plus-linux-arm64-gnu` |
+| Linux x64   | `@voidzero-dev/vite-plus-linux-x64-gnu`   |
+| Windows x64 | `@voidzero-dev/vite-plus-win32-x64-msvc`  |
+
+These are automatically installed via `optionalDependencies` based on the user's platform.
+
+See `publish-native-addons.ts` for the publishing pipeline.
+
+---
+
 ## Core Package Export Sync Details
 
 ### Why Shim Files?
@@ -171,6 +285,8 @@ The CLI package creates thin shim files that re-export from `@voidzero-dev/vite-
 2. **Keeps packages in sync** - No need to rebuild CLI when core package changes
 3. **Reduces duplication** - No file copying, just re-exports
 4. **Preserves module resolution** - Node.js resolves to the actual core package
+
+**Note**: The `@voidzero-dev/vite-plus-core` package itself bundles multiple upstream projects (rolldown-vite, rolldown, tsdown, vitepress). See [Core Package Bundling](../core/BUNDLING.md) for details.
 
 ### Export Mapping (Core)
 
