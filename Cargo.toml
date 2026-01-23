@@ -102,6 +102,7 @@ parking_lot = "0.12.5"
 pathdiff = "0.2.3"
 percent-encoding = "2.3.1"
 petgraph = "0.8.2"
+pretty_assertions = "1.4.1"
 phf = "0.13.0"
 rayon = "1.10.0"
 regex = "1.11.1"
@@ -244,13 +245,13 @@ string_wizard = { path = "./rolldown/crates/string_wizard", features = ["serde"]
 # To use: Ensure vite-task is cloned at ../vite-task relative to vite-plus.
 # Comment out this section before committing.
 # =============================================================================
-# [patch."ssh://git@github.com/voidzero-dev/vite-task.git"]
-# fspy = { path = "../vite-task/crates/fspy" }
-# vite_glob = { path = "../vite-task/crates/vite_glob" }
-# vite_path = { path = "../vite-task/crates/vite_path" }
-# vite_str = { path = "../vite-task/crates/vite_str" }
-# vite_task = { path = "../vite-task/crates/vite_task" }
-# vite_workspace = { path = "../vite-task/crates/vite_workspace" }
+[patch."ssh://git@github.com/voidzero-dev/vite-task.git"]
+fspy = { path = "../vite-task/crates/fspy" }
+vite_glob = { path = "../vite-task/crates/vite_glob" }
+vite_path = { path = "../vite-task/crates/vite_path" }
+vite_str = { path = "../vite-task/crates/vite_str" }
+vite_task = { path = "../vite-task/crates/vite_task" }
+vite_workspace = { path = "../vite-task/crates/vite_workspace" }
 
 [profile.dev]
 # Disabling debug info speeds up local and CI builds,

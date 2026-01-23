@@ -3,6 +3,7 @@ import { defineConfig } from '@voidzero-dev/vite-plus-test/config';
 import type { LibUserConfig } from './lib';
 import type { FormatOptions } from './oxfmt-config';
 import type { OxlintConfig } from './oxlint-config';
+import type { Tasks } from './task-config';
 
 declare module '@voidzero-dev/vite-plus-core' {
   interface UserConfig {
@@ -15,7 +16,7 @@ declare module '@voidzero-dev/vite-plus-core' {
 
     lib?: LibUserConfig | LibUserConfig[];
 
-    tasks?: Record<string, any>;
+    tasks?: Tasks;
   }
 }
 
