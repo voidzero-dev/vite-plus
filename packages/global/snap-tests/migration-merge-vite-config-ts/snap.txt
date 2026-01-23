@@ -1,4 +1,4 @@
-> vite migration # migration should merge vite.config.ts and remove oxlintrc and oxfmtrc
+> vite migrate --no-interactive # migration should merge vite.config.ts and remove oxlintrc and oxfmtrc
 ┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm

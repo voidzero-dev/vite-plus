@@ -1,26 +1,28 @@
-> vite migration --help # show help
-Usage: vite migration [PATH] [OPTIONS]
+> vite migrate --help # show help
+VITE+(⚡︎) - The Unified Toolchain for the Web
 
-Migrate standalone vite, vitest, oxlint, and oxfmt to unified vite-plus.
+USAGE: vite migrate [PATH] [OPTIONS]
 
-Arguments:
+Migrate standalone Vite, Vitest, Oxlint, and Oxfmt projects to unified Vite+.
+
+ARGUMENTS:
   PATH                       Target directory to migrate (default: current directory)
 
-Options:
+OPTIONS:
   --agent NAME               Write agent instructions file into the project (e.g. chatgpt, claude, opencode).
   --no-agent                 Skip writing agent instructions file
   --no-interactive           Run in non-interactive mode (skip prompts and use defaults)
+  --non-interactive          Alias for --no-interactive
   -h, --help                 Show this help message
 
-Examples:
+EXAMPLES:
   # Migrate current package
-  vite migration
+  vite migrate
 
   # Migrate specific directory
-  vite migration my-app
+  vite migrate my-app
 
   # Non-interactive mode
-  vite migration --no-interactive
+  vite migrate --no-interactive
 
-Aliases: migrate
 

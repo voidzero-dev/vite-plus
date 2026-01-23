@@ -1,5 +1,5 @@
 > vite install # install dependencies first
-[1]> vite migration # migration should fail because vite version is not supported
+[1]> vite migrate --no-interactive # migration should fail because vite version is not supported
 ┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  pnpm@<semver> installing...

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { styleText } from 'node:util';
 
 import * as prompts from '@clack/prompts';
 import mri from 'mri';
@@ -15,7 +16,7 @@ import {
   selectPackageManager,
   upgradeYarn,
 } from '../utils/prompts.js';
-import { getVitePlusHeader, log } from '../utils/terminal.js';
+import { accent, getVitePlusHeader, headline, log, muted } from '../utils/terminal.js';
 import { detectWorkspace } from '../utils/workspace.js';
 import {
   checkVitestVersion,
@@ -24,34 +25,34 @@ import {
   rewriteStandaloneProject,
 } from './migrator.js';
 
-const { green, gray } = colors;
+const { green } = colors;
 
 // prettier-ignore
 const helpMessage = `\
-Usage: vite migration [PATH] [OPTIONS]
+${headline(`Usage:`)} ${styleText('bold', `vite migrate [PATH] [OPTIONS]`)}
 
-Migrate standalone vite, vitest, oxlint, and oxfmt to unified vite-plus.
+Migrate standalone Vite, Vitest, Oxlint, and Oxfmt projects to unified Vite+.
 
-Arguments:
+${headline(`Arguments:`)}
   PATH                       Target directory to migrate (default: current directory)
 
-Options:
+${headline(`Options:`)}
   --agent NAME               Write agent instructions file into the project (e.g. chatgpt, claude, opencode).
   --no-agent                 Skip writing agent instructions file
   --no-interactive           Run in non-interactive mode (skip prompts and use defaults)
+  --non-interactive          Alias for --no-interactive
   -h, --help                 Show this help message
 
-Examples:
-  ${gray('# Migrate current package')}
-  vite migration
+${headline(`Examples:`)}
+  ${muted('# Migrate current package')}
+  ${accent(`vite migrate`)}
 
-  ${gray('# Migrate specific directory')}
-  vite migration my-app
+  ${muted('# Migrate specific directory')}
+  ${accent(`vite migrate my-app`)}
 
-  ${gray('# Non-interactive mode')}
-  vite migration --no-interactive
+  ${muted('# Non-interactive mode')}
+  ${accent(`vite migrate --no-interactive`)}
 
-Aliases: ${gray('migrate')}
 `;
 
 export interface MigrationOptions {
@@ -61,17 +62,21 @@ export interface MigrationOptions {
 }
 
 function parseArgs() {
-  const args = process.argv.slice(3); // Skip 'node', 'vite', 'migration'
+  const args = process.argv.slice(3); // Skip 'node', 'vite', 'migrate'
 
   const parsed = mri<{
     help?: boolean;
     interactive?: boolean;
+    nonInteractive?: boolean;
+    'non-interactive'?: boolean;
     agent?: string | false;
   }>(args, {
     alias: { h: 'help' },
-    boolean: ['help', 'interactive'],
+    boolean: ['help', 'interactive', 'non-interactive', 'nonInteractive'],
     default: { interactive: defaultInteractive() },
   });
+  const nonInteractive = parsed['non-interactive'] ?? parsed.nonInteractive;
+  const interactive = nonInteractive ? false : parsed.interactive;
 
   let projectPath = parsed._[0] as string;
   if (projectPath) {
@@ -83,7 +88,7 @@ function parseArgs() {
   return {
     projectPath,
     options: {
-      interactive: parsed.interactive,
+      interactive,
       help: parsed.help,
       agent: parsed.agent,
     } as MigrationOptions,
@@ -94,11 +99,30 @@ async function main() {
   const { projectPath, options } = parseArgs();
 
   if (options.help) {
+    log((await getVitePlusHeader()) + '\n');
     log(helpMessage);
     return;
   }
 
   prompts.intro(await getVitePlusHeader());
+
+  if (options.interactive) {
+    prompts.log.info(
+      [
+        styleText('bold', 'Migration plan:'),
+        '- Inspect workspace and package manager',
+        `- Run ${accent('vite install')} to prepare dependencies`,
+        '- Rewrite configs and dependencies for Vite+',
+      ].join('\n'),
+    );
+    const approved = await prompts.confirm({
+      message: 'Migrate this project to Vite+?',
+      initialValue: true,
+    });
+    if (prompts.isCancel(approved) || !approved) {
+      cancelAndExit('Migration cancelled');
+    }
+  }
 
   const workspaceInfoOptional = await detectWorkspace(projectPath);
   const packageManager =

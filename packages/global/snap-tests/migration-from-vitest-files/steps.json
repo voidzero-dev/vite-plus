@@ -3,7 +3,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite migration # migration should rewrite imports to vite-plus",
+    "vite migrate --no-interactive # migration should rewrite imports to vite-plus",
     "cat package.json # check package.json",
     "cat test/hello.ts # check test/hello.ts"
   ]

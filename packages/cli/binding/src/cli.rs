@@ -794,7 +794,17 @@ pub async fn main(
 }
 
 fn normalize_help_args(args: Vec<String>) -> Vec<String> {
-    args
+    match args.as_slice() {
+        [arg] if arg == "help" => vec!["--help".to_string()],
+        [first, command, rest @ ..] if first == "help" => {
+            let mut normalized = Vec::with_capacity(rest.len() + 2);
+            normalized.push(command.to_string());
+            normalized.push("--help".to_string());
+            normalized.extend(rest.iter().cloned());
+            normalized
+        }
+        _ => args,
+    }
 }
 
 fn should_print_help(args: &[String]) -> bool {

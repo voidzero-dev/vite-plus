@@ -1,4 +1,4 @@
-> vite migration # migration should rewrite imports to vite-plus
+> vite migrate --no-interactive # migration should rewrite imports to vite-plus
 ┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
@@ -56,7 +56,7 @@ export default defineConfig({
   "packageManager": "pnpm@<semver>"
 }
 
-> vite migration # run migration again to check if it is idempotent
+> vite migrate --no-interactive # run migration again to check if it is idempotent
 ┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  pnpm@<semver> installing...

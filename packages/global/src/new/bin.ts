@@ -91,7 +91,7 @@ export interface Options {
 
 // Parse CLI arguments: split on '--' separator
 function parseArgs() {
-  const args = process.argv.slice(3); // Skip 'node', 'vite', 'gen'
+  const args = process.argv.slice(3); // Skip 'node', 'vite'
   const separatorIndex = args.indexOf('--');
 
   // Arguments before -- are Vite+ options

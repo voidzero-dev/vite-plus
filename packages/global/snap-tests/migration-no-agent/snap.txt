@@ -1,4 +1,4 @@
-> vite migration --no-agent # migration with --no-agent should skip agent instructions
+> vite migrate --no-agent --no-interactive # migration with --no-agent should skip agent instructions
 ┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm

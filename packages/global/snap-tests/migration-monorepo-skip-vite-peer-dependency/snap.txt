@@ -1,4 +1,4 @@
-> vite migration # migration should check each package's peerDependencies
+> vite migrate --no-interactive # migration should check each package's peerDependencies
 ┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  pnpm@latest installing...

@@ -1,4 +1,4 @@
-> vite migration # migration should not support non-json format lintstagedrc
+> vite migrate --no-interactive # migration should not support non-json format lintstagedrc
 ┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm

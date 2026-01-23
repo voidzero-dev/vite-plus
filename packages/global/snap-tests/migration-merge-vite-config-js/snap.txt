@@ -1,4 +1,4 @@
-> vite migration # migration should merge vite.config.js and remove oxlintrc
+> vite migrate --no-interactive # migration should merge vite.config.js and remove oxlintrc
 ┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm

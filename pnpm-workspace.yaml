@@ -36,7 +36,7 @@ catalog:
   '@types/strip-comments': ^2.0.4
   '@types/validate-npm-package-name': ^4.0.2
   '@types/ws': ^8.18.0
-  '@typescript/native-preview': 7.0.0-dev.20260117.1
+  '@typescript/native-preview': 7.0.0-dev.20260122.2
   '@vitest/browser': ^4.0.9
   '@vitest/browser-playwright': ^4.0.9
   '@vueuse/core': ^14.0.0

@@ -1,4 +1,4 @@
-> vite migration # migration should merge vite.config.ts and remove oxlintrc
+> vite migrate --no-interactive # migration should merge vite.config.ts and remove oxlintrc
 ┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  yarn@<semver> installing...

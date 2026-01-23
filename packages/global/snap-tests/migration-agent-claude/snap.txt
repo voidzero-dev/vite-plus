@@ -1,4 +1,4 @@
-> vite migration --agent claude # migration with --agent claude should write CLAUDE.md
+> vite migrate --agent claude --no-interactive # migration with --agent claude should write CLAUDE.md
 ┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm

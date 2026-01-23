@@ -7,7 +7,7 @@
       "command": "vite install # install dependencies first",
       "ignoreOutput": true
     },
-    "vite migration # migration should fail because vitest version is not supported",
+    "vite migrate --no-interactive # migration should fail because vitest version is not supported",
     "cat package.json # check package.json is not updated"
   ]
 }
