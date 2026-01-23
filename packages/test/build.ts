@@ -753,6 +753,7 @@ async function rewriteVitestImports(leafDepToVendorPath: Map<string, string>) {
     join(distDir, '*.js'),
     join(distDir, '*.d.ts'),
     join(distDir, 'chunks/*.js'),
+    join(distDir, 'chunks/*.d.ts'),
   ]);
 
   for await (const file of jsFiles) {
