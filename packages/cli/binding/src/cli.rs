@@ -18,9 +18,7 @@ use vite_task::{
     CLIArgs, LabeledReporter, Session, SessionCallbacks, TaskSynthesizer,
     config::{
         UserConfigFile,
-        user::{
-            EnabledCacheConfig, UserCacheConfig, UserConfigTasks, UserTaskConfig, UserTaskOptions,
-        },
+        user::{EnabledCacheConfig, UserCacheConfig, UserConfigTasks, UserTaskOptions},
     },
     loader::UserConfigLoader,
     plan_request::SyntheticPlanRequest,
@@ -878,8 +876,7 @@ mod tests {
     fn task_config_types_in_sync() {
         // Remove \r for cross-platform consistency
         let ts_type = UserConfigTasks::TS_TYPE.replace('\r', "");
-        let manifest_dir =
-            std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
         let task_config_path = PathBuf::from(manifest_dir).join("../src/task-config.ts");
 
         if std::env::var("VITE_UPDATE_TASK_TYPES").as_deref() == Ok("1") {
