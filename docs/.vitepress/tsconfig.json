@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "declaration": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@local-assets/*": ["./theme/assets/*"],
+      "@assets/*": ["../node_modules/@voidzero-dev/vitepress-theme/src/assets/*"],
+      "@components/*": ["../node_modules/@voidzero-dev/vitepress-theme/src/components/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.d.ts", "**/*.vue"]
+}

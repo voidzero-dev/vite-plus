@@ -1,24 +1,12 @@
 ---
-# https://vitepress.dev/reference/default-theme-home-page
+home: true
 layout: home
-
-hero:
-  name: 'Vite+'
-  text: 'The Unified Toolchain for the Web'
-  tagline: 'dev, build, test, lint, format, monorepo caching & more in a single dependency, build for scale, speed, and sanity'
-  actions:
-    - theme: brand
-      text: Get Started
-      link: /vite/guide/
-    - theme: alt
-      text: GitHub
-      link: https://github.com/voidzero-dev/vite-plus
-
-features:
-  - title: Feature A
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
-  - title: Feature B
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
-  - title: Feature C
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
+theme: light
+titleTemplate: The Unified Toolchain for the Web
 ---
+
+<script setup>
+import Home from '@layouts/Home.vue'
+</script>
+
+<Home />

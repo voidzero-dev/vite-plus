@@ -1,0 +1,23 @@
+/* styles.css */
+@import '@voidzero-dev/vitepress-theme/src/styles/index.css';
+
+@source "./**/*.vue";
+
+/* Viteplus */
+:root[data-variant='viteplus'] {
+  --color-brand: #4f30e8;
+}
+
+:root.dark:not([data-theme])[data-variant='viteplus'],
+:root[data-theme='dark'][data-variant='viteplus'] {
+  --color-brand: #6b77f8;
+}
+
+:root[data-theme='light'][data-variant='viteplus'] {
+  --color-brand: #4f30e8;
+}
+
+/* Update fonts for marketing pages */
+.marketing-layout {
+  --font-sans: 'APK Protocol', sans-serif;
+}
