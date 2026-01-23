@@ -16,11 +16,12 @@ runs:
 
     # Compute cache key once before any builds modify files
     # (packages/cli/package.json is modified by syncTestPackageExports during build-ts)
+    # Include env vars (RELEASE_BUILD, DEBUG, VERSION) to ensure cache miss on release builds
     - name: Compute NAPI binding cache key
       id: cache-key
       shell: bash
       run: |
-        echo "key=napi-binding-v1-${{ inputs.target }}-${{ hashFiles('packages/tools/.upstream-versions.json', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/*/binding/**/*.rs', 'packages/*/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/global/package.json', 'packages/global/build.ts') }}" >> $GITHUB_OUTPUT
+        echo "key=napi-binding-v1-${{ inputs.target }}-${{ env.RELEASE_BUILD }}-${{ env.DEBUG }}-${{ env.VERSION }}-${{ hashFiles('packages/tools/.upstream-versions.json', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/*/binding/**/*.rs', 'packages/*/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/global/package.json', 'packages/global/build.ts') }}" >> $GITHUB_OUTPUT
 
     # Cache only NAPI bindings (the slow part, especially on Windows)
     - name: Restore NAPI binding cache
