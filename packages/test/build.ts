@@ -145,6 +145,7 @@ const EXTERNAL_BLOCKLIST = new Set([
   // Peer dependencies - consumers must provide these
   '@edge-runtime/vm',
   '@opentelemetry/api',
+  '@standard-schema/spec', // Types-only import from @vitest/expect
   'happy-dom',
   'jsdom',
 

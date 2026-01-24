@@ -72,15 +72,16 @@ These remain in `dependencies` and are installed with the package:
 
 These packages are explicitly kept external in `EXTERNAL_BLOCKLIST` during the Rolldown build:
 
-| Package            | Reason                                    |
-| ------------------ | ----------------------------------------- |
-| `playwright`       | Native bindings, user must install        |
-| `webdriverio`      | Native bindings, user must install        |
-| `debug`            | Environment detection breaks when bundled |
-| `happy-dom`        | Optional peer dependency                  |
-| `jsdom`            | Optional peer dependency                  |
-| `@edge-runtime/vm` | Optional peer dependency                  |
-| `msw`, `msw/*`     | Optional peer dependency for mocking      |
+| Package                 | Reason                                    |
+| ----------------------- | ----------------------------------------- |
+| `playwright`            | Native bindings, user must install        |
+| `webdriverio`           | Native bindings, user must install        |
+| `debug`                 | Environment detection breaks when bundled |
+| `happy-dom`             | Optional peer dependency                  |
+| `jsdom`                 | Optional peer dependency                  |
+| `@edge-runtime/vm`      | Optional peer dependency                  |
+| `@standard-schema/spec` | Types-only import from @vitest/expect     |
+| `msw`, `msw/*`          | Optional peer dependency for mocking      |
 
 ### Browser Plugin Exclude List
 
@@ -398,6 +399,7 @@ const EXTERNAL_BLOCKLIST = new Set([
   // Peer dependencies - consumers must provide these
   '@edge-runtime/vm',
   '@opentelemetry/api',
+  '@standard-schema/spec', // Types-only import from @vitest/expect
   'happy-dom',
   'jsdom',
 

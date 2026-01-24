@@ -256,6 +256,7 @@
     "build": "oxnode -C dev ./build.ts"
   },
   "dependencies": {
+    "@standard-schema/spec": "^1.1.0",
     "@types/chai": "^5.2.2",
     "@voidzero-dev/vite-plus-core": "workspace:*",
     "es-module-lexer": "^1.7.0",
