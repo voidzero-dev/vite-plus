@@ -699,7 +699,7 @@ async function bundleLeafDeps(leafDeps: Set<string>): Promise<Map<string, string
         dts({
           dtsInput: true,
           oxc: true,
-          resolve: true,
+          resolver: 'oxc',
           emitDtsOnly: true,
           tsconfig: false,
         }),

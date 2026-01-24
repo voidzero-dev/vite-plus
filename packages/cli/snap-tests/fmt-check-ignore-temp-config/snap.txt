@@ -1,4 +1,5 @@
 [1]> vite fmt --check # Test that vite fmt --check ignores the temp config file
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 Checking formatting...
 src/valid.js (<variable>ms)
 

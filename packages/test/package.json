@@ -272,17 +272,17 @@
   "devDependencies": {
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
-    "@vitest/browser": "4.0.17",
-    "@vitest/browser-playwright": "4.0.17",
-    "@vitest/browser-preview": "4.0.17",
-    "@vitest/browser-webdriverio": "4.0.17",
-    "@vitest/expect": "4.0.17",
-    "@vitest/mocker": "4.0.17",
-    "@vitest/pretty-format": "4.0.17",
-    "@vitest/runner": "4.0.17",
-    "@vitest/snapshot": "4.0.17",
-    "@vitest/spy": "4.0.17",
-    "@vitest/utils": "4.0.17",
+    "@vitest/browser": "4.0.18",
+    "@vitest/browser-playwright": "4.0.18",
+    "@vitest/browser-preview": "4.0.18",
+    "@vitest/browser-webdriverio": "4.0.18",
+    "@vitest/expect": "4.0.18",
+    "@vitest/mocker": "4.0.18",
+    "@vitest/pretty-format": "4.0.18",
+    "@vitest/runner": "4.0.18",
+    "@vitest/snapshot": "4.0.18",
+    "@vitest/spy": "4.0.18",
+    "@vitest/utils": "4.0.18",
     "chai": "^6.2.1",
     "estree-walker": "^3.0.3",
     "expect-type": "^1.2.2",
@@ -294,14 +294,14 @@
     "rolldown": "workspace:*",
     "rolldown-plugin-dts": "catalog:",
     "tinyrainbow": "^3.0.3",
-    "vitest-dev": "^4.0.17",
+    "vitest-dev": "^4.0.18",
     "why-is-node-running": "^2.3.0"
   },
   "peerDependencies": {
     "@edge-runtime/vm": "*",
     "@opentelemetry/api": "^1.9.0",
     "@types/node": "^20.0.0 || ^22.0.0 || >=24.0.0",
-    "@vitest/ui": "4.0.17",
+    "@vitest/ui": "4.0.18",
     "happy-dom": "*",
     "jsdom": "*"
   },
@@ -329,6 +329,6 @@
     "node": "^20.0.0 || ^22.0.0 || >=24.0.0"
   },
   "bundledVersions": {
-    "vitest": "4.0.17"
+    "vitest": "4.0.18"
   }
 }

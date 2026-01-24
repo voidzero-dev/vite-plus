@@ -1,5 +1,6 @@
 > # Test that task config is picked up from vite.config.ts
 > vite run build
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 $ echo 'build from vite.config.ts' ⊘ cache disabled: built-in command
 build from vite.config.ts
 

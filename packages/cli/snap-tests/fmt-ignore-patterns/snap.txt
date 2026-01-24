@@ -1,4 +1,5 @@
 > vite fmt src/ # Test that fmt ignorePatterns works - ignored files should not be formatted
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 
 
 > cat src/ignored/badly-formatted.js # Verify that ignored file still has bad formatting (was not formatted)

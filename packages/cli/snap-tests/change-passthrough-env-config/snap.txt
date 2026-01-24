@@ -1,4 +1,5 @@
 > MY_ENV=1 vite run hello
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 $ node -p process.env.MY_ENV
 1
 
@@ -17,6 +18,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > MY_ENV=2 vite run hello # MY_ENV is pass-through. should hit the cache created in step 1
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 $ node -p process.env.MY_ENV ✓ cache hit, replaying
 1
 
@@ -36,6 +38,7 @@ Task Details:
 
 > # add a new pass through env via VITE_TASK_PASS_THROUGH_ENVS
 > VITE_TASK_PASS_THROUGH_ENVS=MY_ENV,MY_ENV2 MY_ENV=2 vite run hello # cache should be invalidated because passThroughEnvs config changed
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 $ node -p process.env.MY_ENV ✗ cache miss: pass-through env config changed, executing
 2
 

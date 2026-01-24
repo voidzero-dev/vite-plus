@@ -2,6 +2,7 @@
 > # vite lint
 > # Test that fmt picks up workspace root config - specify file
 > vite fmt packages/app-b/index.js --check
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 Checking formatting...
 All matched files use the correct format.
 Finished in <variable>ms on 1 files using <variable> threads.

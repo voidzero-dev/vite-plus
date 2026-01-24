@@ -1,4 +1,5 @@
 > FOO=1 vite run hello
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 $ node hello.mjs
 input_content 1
 
@@ -17,6 +18,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > FOO=1 vite run hello # hit cache
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 $ node hello.mjs ✓ cache hit, replaying
 input_content 1
 
@@ -35,6 +37,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > FOO=2 vite run hello # env changed
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 $ node hello.mjs ✗ cache miss: envs changed, executing
 input_content 2
 
@@ -53,6 +56,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > FOO=2 BAR=1 vite run hello # env added
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 $ node hello.mjs ✗ cache miss: envs changed, executing
 input_content 2
 
@@ -71,6 +75,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run hello # env removed
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 $ node hello.mjs ✗ cache miss: envs changed, executing
 input_content undefined
 
@@ -90,6 +95,7 @@ Task Details:
 
 > echo bar > input.txt
 > vite run hello # input changed
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 $ node hello.mjs ✗ cache miss: content of input 'input.txt' changed, executing
 bar undefined
 
@@ -109,6 +115,7 @@ Task Details:
 
 > # set passThroughEnvs via env var
 > VITE_TASK_PASS_THROUGH_ENVS=PTE vite run hello # passThroughEnvs changed
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 $ node hello.mjs ✗ cache miss: pass-through env config changed, executing
 bar undefined
 
@@ -128,6 +135,7 @@ Task Details:
 
 > # set cwd via env var (keep passThroughEnvs from previous step)
 > VITE_TASK_PASS_THROUGH_ENVS=PTE VITE_TASK_CWD=subfolder vite run hello # cwd changed
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 ~/subfolder$ node hello.mjs ✗ cache miss: working directory changed, executing
 hello from subfolder
 

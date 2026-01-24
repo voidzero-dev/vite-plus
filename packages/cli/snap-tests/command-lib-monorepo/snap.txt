@@ -3,6 +3,8 @@
 index.cjs
 
 > vite run hello#build | grep 'cache hit' # should hit cache
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 ~/packages/hello$ vite lib ✓ cache hit, replaying
 Statistics:   1 tasks • 1 cache hits • 0 cache misses 
 Performance:  100% cache hit rate, <variable>ms saved in total
@@ -13,6 +15,8 @@ index.d.mts
 index.mjs
 
 > vite run array-config#build | grep 'cache hit' # should hit cache
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 ~/packages/array-config$ vite lib ✓ cache hit, replaying
 Statistics:   1 tasks • 1 cache hits • 0 cache misses 
 Performance:  100% cache hit rate, <variable>ms saved in total
@@ -22,6 +26,8 @@ Performance:  100% cache hit rate, <variable>ms saved in total
 index.mjs
 
 > vite run default-config#build | grep 'cache hit' # should hit cache
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
+`inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
 ~/packages/default-config$ vite lib ✓ cache hit, replaying
 Statistics:   1 tasks • 1 cache hits • 0 cache misses 
 Performance:  100% cache hit rate, <variable>ms saved in total
