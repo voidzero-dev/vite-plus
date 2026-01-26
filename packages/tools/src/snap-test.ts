@@ -119,6 +119,12 @@ interface Steps {
   ignoredPlatforms?: string[];
   env: Record<string, string>;
   commands: (string | Command)[];
+  /**
+   * Commands to run after the test completes, regardless of success or failure.
+   * Useful for cleanup tasks like killing background processes.
+   * These commands are not included in the snap output.
+   */
+  after?: string[];
 }
 
 async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
@@ -168,56 +174,76 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
 
   const startTime = Date.now();
   const cwd = npath.toPortablePath(caseTmpDir);
-  for (const command of steps.commands) {
-    const cmd = typeof command === 'string' ? { command } : command;
-    debug('running command: %o, cwd: %s, env: %o', cmd, caseTmpDir, env);
 
-    // While `@yarnpkg/shell` supports capturing output via in-memory `Writable` streams,
-    // it seems not to have stable ordering of stdout/stderr chunks.
-    // To ensure stable ordering, we redirect outputs to a file instead.
-    const outputStreamPath = path.join(caseTmpDir, 'output.log');
-    const outputStream = await open(outputStreamPath, 'w');
+  try {
+    for (const command of steps.commands) {
+      const cmd = typeof command === 'string' ? { command } : command;
+      debug('running command: %o, cwd: %s, env: %o', cmd, caseTmpDir, env);
 
-    const exitCode = await Promise.race([
-      execute(stripComments(cmd.command), [], {
-        env,
-        cwd,
-        stdin: null,
-        // Declared to be `Writable` but `FileHandle` works too.
-        // @ts-expect-error
-        stderr: outputStream,
-        // @ts-expect-error
-        stdout: outputStream,
-        glob: {
-          // Disable glob expansion. Pass args like '--filter=*' as-is.
-          isGlobPattern: () => false,
-          match: async () => [],
-        },
-      }),
-      setTimeout(30 * 1000),
-    ]);
+      // While `@yarnpkg/shell` supports capturing output via in-memory `Writable` streams,
+      // it seems not to have stable ordering of stdout/stderr chunks.
+      // To ensure stable ordering, we redirect outputs to a file instead.
+      const outputStreamPath = path.join(caseTmpDir, 'output.log');
+      const outputStream = await open(outputStreamPath, 'w');
 
-    await outputStream.close();
+      const exitCode = await Promise.race([
+        execute(stripComments(cmd.command), [], {
+          env,
+          cwd,
+          stdin: null,
+          // Declared to be `Writable` but `FileHandle` works too.
+          // @ts-expect-error
+          stderr: outputStream,
+          // @ts-expect-error
+          stdout: outputStream,
+          glob: {
+            // Disable glob expansion. Pass args like '--filter=*' as-is.
+            isGlobPattern: () => false,
+            match: async () => [],
+          },
+        }),
+        setTimeout(30 * 1000),
+      ]);
 
-    let output = readFileSync(outputStreamPath, 'utf-8');
+      await outputStream.close();
 
-    let commandLine = `> ${cmd.command}`;
-    if (exitCode !== 0) {
-      commandLine = (exitCode === undefined ? '[timeout]' : `[${exitCode}]`) + commandLine;
-    } else {
-      // only allow ignore output if the command is successful
-      if (cmd.ignoreOutput) {
-        output = '';
+      let output = readFileSync(outputStreamPath, 'utf-8');
+
+      let commandLine = `> ${cmd.command}`;
+      if (exitCode !== 0) {
+        commandLine = (exitCode === undefined ? '[timeout]' : `[${exitCode}]`) + commandLine;
+      } else {
+        // only allow ignore output if the command is successful
+        if (cmd.ignoreOutput) {
+          output = '';
+        }
+      }
+      newSnap.push(commandLine);
+      if (output.length > 0) {
+        newSnap.push(replaceUnstableOutput(output, caseTmpDir));
+      }
+      if (exitCode === undefined) {
+        break; // Stop executing further commands on timeout
       }
     }
-    newSnap.push(commandLine);
-    if (output.length > 0) {
-      newSnap.push(replaceUnstableOutput(output, caseTmpDir));
-    }
-    if (exitCode === undefined) {
-      break; // Stop executing further commands on timeout
+  } finally {
+    // Run after commands for cleanup, regardless of success or failure
+    if (steps.after) {
+      for (const afterCmd of steps.after) {
+        debug('running after command: %s, cwd: %s', afterCmd, caseTmpDir);
+        try {
+          await execute(stripComments(afterCmd), [], {
+            env,
+            cwd,
+            stdin: null,
+          });
+        } catch (error) {
+          debug('after command failed: %s, error: %o', afterCmd, error);
+        }
+      }
     }
   }
+
   const newSnapContent = newSnap.join('\n');
 
   await fsPromises.writeFile(`${casesDir}/${name}/snap.txt`, newSnapContent);
