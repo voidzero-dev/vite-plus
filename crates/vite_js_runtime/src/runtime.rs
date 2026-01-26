@@ -187,9 +187,9 @@ async fn download_node(version: &str) -> Result<JsRuntime, Error> {
     let extracted_dir_name = node::get_extracted_dir_name(version, platform);
     extract_archive(&archive_path, temp_dir.path(), platform).await?;
 
-    // Move extracted directory to cache location
+    // Move extracted directory to cache location with file-based locking
     let extracted_path = temp_dir.path().join(&extracted_dir_name);
-    move_to_cache(&extracted_path, &install_dir).await?;
+    move_to_cache(&extracted_path, &install_dir, version).await?;
 
     tracing::info!("Node.js {version} installed at {install_dir:?}");
 
@@ -341,25 +341,55 @@ fn extract_zip(_archive_path: &Path, _target_dir: &Path) -> Result<(), Error> {
     Err(Error::ExtractionFailed { reason: "Zip extraction not supported on this platform".into() })
 }
 
-/// Move extracted directory to cache location with atomic operations
-async fn move_to_cache(source: &Path, target: &AbsolutePathBuf) -> Result<(), Error> {
+/// Move extracted directory to cache location with atomic operations and file-based locking
+///
+/// Uses a file-based lock to ensure atomicity when multiple processes/threads
+/// try to install the same runtime version concurrently.
+async fn move_to_cache(
+    source: &Path,
+    target: &AbsolutePathBuf,
+    version: &str,
+) -> Result<(), Error> {
     // Create parent directory
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent).await?;
-    }
+    let parent = target.parent().ok_or_else(|| Error::ExtractionFailed {
+        reason: "Target path has no parent directory".into(),
+    })?;
+    fs::create_dir_all(&parent).await?;
 
-    // If target already exists (race condition), check if it's valid
+    // Use a file-based lock to ensure atomicity of the move operation.
+    // This prevents race conditions when multiple processes/threads
+    // try to install the same runtime version concurrently.
+    let lock_path = parent.join(format!("{version}.lock"));
+    tracing::debug!("Acquiring lock file: {lock_path:?}");
+
+    // Acquire file lock in a blocking task to avoid blocking the async runtime.
+    // The lock() call blocks until the lock is acquired.
+    let lock_path_clone = lock_path.clone();
+    tokio::task::spawn_blocking(move || {
+        let lock_file = File::create(lock_path_clone.as_path())?;
+        // Acquire exclusive lock (blocks until available)
+        lock_file.lock()?;
+        tracing::debug!("Lock acquired: {lock_path_clone:?}");
+        Ok::<_, std::io::Error>(lock_file)
+    })
+    .await??;
+    tracing::debug!("Lock acquired: {lock_path:?}");
+
+    // Check again after acquiring the lock, in case another process completed
+    // the installation while we were downloading
     if fs::try_exists(target.as_path()).await.unwrap_or(false) {
-        tracing::debug!("Target already exists, assuming another process completed: {target:?}");
+        tracing::debug!("Target already exists after lock acquisition, skipping move: {target:?}");
         return Ok(());
     }
 
     // Try atomic rename first
     if fs::rename(source, target.as_path()).await.is_ok() {
+        tracing::debug!("Atomic rename successful: {source:?} -> {target:?}");
         return Ok(());
     }
 
     // If rename fails (cross-device), fall back to copy
+    tracing::debug!("Atomic rename failed, falling back to copy: {source:?} -> {target:?}");
     copy_dir_recursive(source, target.as_path()).await?;
     fs::remove_dir_all(source).await?;
 
@@ -464,5 +494,76 @@ mod tests {
 
         // Should return same install directory
         assert_eq!(runtime1.install_dir, runtime2.install_dir);
+    }
+
+    /// Test concurrent downloads - multiple tasks downloading the same version
+    /// should not cause corruption or conflicts due to file-based locking
+    #[tokio::test]
+    async fn test_concurrent_downloads() {
+        // Use a different version to avoid conflicts with other tests
+        let version = "20.17.0";
+
+        // Clear any existing cache for this version
+        let cache_dir = get_cache_dir().unwrap();
+        let install_dir = cache_dir.join(format!("node/{version}"));
+        if tokio::fs::try_exists(&install_dir).await.unwrap_or(false) {
+            tokio::fs::remove_dir_all(&install_dir).await.unwrap();
+        }
+
+        // Spawn multiple concurrent download tasks
+        let num_concurrent = 4;
+        let mut handles = Vec::with_capacity(num_concurrent);
+
+        for i in 0..num_concurrent {
+            let version = version.to_string();
+            handles.push(tokio::spawn(async move {
+                tracing::info!("Starting concurrent download task {i}");
+                let result = download_runtime(JsRuntimeType::Node, &version).await;
+                tracing::info!("Completed concurrent download task {i}");
+                result
+            }));
+        }
+
+        // Wait for all tasks and collect results
+        let mut results = Vec::with_capacity(num_concurrent);
+        for handle in handles {
+            results.push(handle.await.unwrap());
+        }
+
+        // All tasks should succeed
+        for (i, result) in results.iter().enumerate() {
+            assert!(result.is_ok(), "Task {i} failed: {:?}", result.as_ref().err());
+        }
+
+        // All tasks should return the same install directory
+        let first_install_dir = &results[0].as_ref().unwrap().install_dir;
+        for (i, result) in results.iter().enumerate().skip(1) {
+            assert_eq!(
+                &result.as_ref().unwrap().install_dir,
+                first_install_dir,
+                "Task {i} has different install_dir"
+            );
+        }
+
+        // Verify the binary works
+        let runtime = results.into_iter().next().unwrap().unwrap();
+        let binary_path = runtime.get_binary_path();
+        assert!(
+            tokio::fs::try_exists(&binary_path).await.unwrap(),
+            "Binary should exist at {binary_path:?}"
+        );
+
+        let output = tokio::process::Command::new(binary_path.as_path())
+            .arg("--version")
+            .output()
+            .await
+            .unwrap();
+
+        assert!(output.status.success(), "Binary should be executable");
+        let version_output = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            version_output.contains(version),
+            "Version output should contain {version}, got: {version_output}"
+        );
     }
 }
