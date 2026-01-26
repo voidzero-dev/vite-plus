@@ -1,0 +1,17 @@
+{
+  "ignoredPlatforms": ["win32", "linux"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "bash run-watch.sh",
+    "bash wait-for-dist.sh # wait for initial build",
+    "ls dist # should have initial build",
+    "sed -i.bak \"s/outDir: 'dist'/outDir: 'dist2'/\" vite.config.ts",
+    "bash wait-for-dist2.sh # wait for rebuild with new config",
+    "ls dist2 # should have rebuild with new outDir after config change",
+    "grep 'Reload config' .watch-output.log # verify restart was triggered",
+    "cat .watch-output.log # show watch output"
+  ],
+  "after": ["bash kill-watch.sh"]
+}
