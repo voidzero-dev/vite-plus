@@ -1,4 +1,8 @@
-![Vite+](./logo.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/logo-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="/logo.svg">
+  <img alt="Vite+" src="/logo.svg">
+</picture>
 
 **The Unified Toolchain for the Web**
 _dev, build, test, lint, format, monorepo caching & more in a single dependency, built for scale, speed, and sanity_
