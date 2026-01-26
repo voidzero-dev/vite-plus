@@ -4,16 +4,6 @@ use vite_str::Str;
 /// Errors that can occur during JavaScript runtime management
 #[derive(Error, Debug)]
 pub enum Error {
-    /// Invalid runtime specification format
-    #[error(
-        "Invalid runtime specification: {spec}. Expected format: 'runtime@version' (e.g., 'node@22.13.1')"
-    )]
-    InvalidRuntimeSpec { spec: Str },
-
-    /// Unsupported runtime type
-    #[error("Unsupported runtime type: {runtime}. Supported: node")]
-    UnsupportedRuntime { runtime: Str },
-
     /// Version not found in official releases
     #[error("Version {version} not found for {runtime}")]
     VersionNotFound { runtime: Str, version: Str },

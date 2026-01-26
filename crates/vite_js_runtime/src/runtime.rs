@@ -84,37 +84,6 @@ impl JsRuntime {
     }
 }
 
-/// Parse a runtime specification string (e.g., "node@22.13.1")
-///
-/// # Arguments
-/// * `spec` - The runtime specification string
-///
-/// # Returns
-/// A tuple of (runtime type, version string)
-///
-/// # Errors
-/// Returns an error if the spec format is invalid or the runtime is unsupported
-pub fn parse_runtime_spec(spec: &str) -> Result<(JsRuntimeType, Str), Error> {
-    let parts: Vec<&str> = spec.splitn(2, '@').collect();
-    if parts.len() != 2 {
-        return Err(Error::InvalidRuntimeSpec { spec: spec.into() });
-    }
-
-    let runtime_name = parts[0];
-    let version = parts[1];
-
-    if version.is_empty() {
-        return Err(Error::InvalidRuntimeSpec { spec: spec.into() });
-    }
-
-    let runtime_type = match runtime_name {
-        "node" => JsRuntimeType::Node,
-        _ => return Err(Error::UnsupportedRuntime { runtime: runtime_name.into() }),
-    };
-
-    Ok((runtime_type, version.into()))
-}
-
 /// Download and cache a JavaScript runtime
 ///
 /// # Arguments
@@ -421,31 +390,6 @@ async fn copy_dir_recursive(src: &AbsolutePath, dst: &AbsolutePath) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_parse_runtime_spec_valid() {
-        let (runtime_type, version) = parse_runtime_spec("node@22.13.1").unwrap();
-        assert_eq!(runtime_type, JsRuntimeType::Node);
-        assert_eq!(version, "22.13.1");
-    }
-
-    #[test]
-    fn test_parse_runtime_spec_invalid_no_at() {
-        let result = parse_runtime_spec("node22.13.1");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_runtime_spec_invalid_empty_version() {
-        let result = parse_runtime_spec("node@");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_runtime_spec_unsupported_runtime() {
-        let result = parse_runtime_spec("unknown@1.0.0");
-        assert!(result.is_err());
-    }
 
     #[test]
     fn test_js_runtime_type_display() {

@@ -79,9 +79,6 @@ pub struct JsRuntime {
 ### Public API
 
 ```rust
-/// Parse a runtime specification string (e.g., "node@22.13.1")
-pub fn parse_runtime_spec(spec: &str) -> Result<(JsRuntimeType, String), Error>;
-
 /// Download and cache a JavaScript runtime
 /// Returns the JsRuntime with installation path
 pub async fn download_runtime(
@@ -107,15 +104,10 @@ impl JsRuntime {
 ### Usage Example
 
 ```rust
-use vite_js_runtime::{JsRuntimeType, download_runtime, parse_runtime_spec};
+use vite_js_runtime::{JsRuntimeType, download_runtime};
 
-// Option 1: Direct download with known runtime type
 let runtime = download_runtime(JsRuntimeType::Node, "22.13.1").await?;
 println!("Node.js installed at: {}", runtime.get_binary_path());
-
-// Option 2: Parse spec string first
-let (runtime_type, version) = parse_runtime_spec("node@22.13.1")?;
-let runtime = download_runtime(runtime_type, &version).await?;
 println!("Version: {}", runtime.version()); // "22.13.1"
 ```
 
@@ -255,12 +247,6 @@ New error variants for `vite_error`:
 
 ```rust
 pub enum JsRuntimeError {
-    /// Invalid runtime specification format
-    InvalidRuntimeSpec { spec: String },
-
-    /// Unsupported runtime type
-    UnsupportedRuntime { runtime: String },
-
     /// Version not found in official releases
     VersionNotFound { runtime: String, version: String },
 
@@ -282,11 +268,7 @@ pub enum JsRuntimeError {
 
 ### Unit Tests
 
-1. **Runtime spec parsing**
-   - Valid formats: `node@22.13.1`
-   - Invalid formats: `node`, `22.13.1`, `unknown@1.0.0`, `node@`
-
-2. **Platform detection**
+1. **Platform detection**
    - Test all supported platform/arch combinations
    - Test mapping to Node.js distribution names
 
