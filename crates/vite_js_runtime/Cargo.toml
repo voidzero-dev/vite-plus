@@ -8,6 +8,7 @@ publish = false
 rust-version.workspace = true
 
 [dependencies]
+async-trait = { workspace = true }
 backon = { workspace = true }
 directories = { workspace = true }
 flate2 = { workspace = true }
@@ -21,10 +22,10 @@ tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }
+zip = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 reqwest = { workspace = true, features = ["stream", "native-tls-vendored"] }
-zip = { workspace = true }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 reqwest = { workspace = true, features = ["stream", "rustls-tls"] }

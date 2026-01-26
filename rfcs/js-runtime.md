@@ -52,10 +52,14 @@ crates/vite_js_runtime/
 ├── Cargo.toml
 └── src/
     ├── lib.rs              # Public API exports
-    ├── runtime.rs          # JsRuntime struct, download, and core logic
-    ├── node.rs             # Node.js specific implementation
     ├── error.rs            # Error types
-    └── platform.rs         # Platform detection and binary selection
+    ├── platform.rs         # Platform detection (Os, Arch, Platform)
+    ├── provider.rs         # JsRuntimeProvider trait and types
+    ├── providers/          # Provider implementations
+    │   ├── mod.rs
+    │   └── node.rs         # NodeProvider implementing JsRuntimeProvider
+    ├── download.rs         # Generic download utilities
+    └── runtime.rs          # JsRuntime struct and download orchestration
 ```
 
 ### Core Types
@@ -73,8 +77,67 @@ pub struct JsRuntime {
     pub runtime_type: JsRuntimeType,
     pub version: Str,                   // Resolved version (e.g., "22.13.1")
     pub install_dir: AbsolutePathBuf,
+    binary_relative_path: Str,          // e.g., "bin/node" or "node.exe"
+    bin_dir_relative_path: Str,         // e.g., "bin" or ""
+}
+
+/// Archive format for runtime distributions
+pub enum ArchiveFormat {
+    TarGz,  // .tar.gz (Linux, macOS)
+    Zip,    // .zip (Windows)
+}
+
+/// How to verify the integrity of a downloaded archive
+pub enum HashVerification {
+    ShasumsFile { url: Str },  // Download and parse SHASUMS file
+    None,                       // No verification
+}
+
+/// Information needed to download a runtime
+pub struct DownloadInfo {
+    pub archive_url: Str,
+    pub archive_filename: Str,
+    pub archive_format: ArchiveFormat,
+    pub hash_verification: HashVerification,
+    pub extracted_dir_name: Str,
 }
 ```
+
+### Provider Trait
+
+The `JsRuntimeProvider` trait abstracts runtime-specific logic, making it easy to add new runtimes:
+
+```rust
+#[async_trait]
+pub trait JsRuntimeProvider: Send + Sync {
+    /// Get the name of this runtime (e.g., "node", "bun", "deno")
+    fn name(&self) -> &'static str;
+
+    /// Get the platform string used in download URLs
+    fn platform_string(&self, platform: Platform) -> Str;
+
+    /// Get download information for a specific version and platform
+    fn get_download_info(&self, version: &str, platform: Platform) -> DownloadInfo;
+
+    /// Get the relative path to the runtime binary from the install directory
+    fn binary_relative_path(&self, platform: Platform) -> Str;
+
+    /// Get the relative path to the bin directory from the install directory
+    fn bin_dir_relative_path(&self, platform: Platform) -> Str;
+
+    /// Parse a SHASUMS file to extract the hash for a specific filename
+    fn parse_shasums(&self, shasums_content: &str, filename: &str) -> Result<Str, Error>;
+}
+```
+
+### Adding a New Runtime
+
+To add support for a new runtime (e.g., Bun):
+
+1. Create `src/providers/bun.rs` implementing `JsRuntimeProvider`
+2. Add `Bun` variant to `JsRuntimeType` enum
+3. Add match arm in `download_runtime()` to use the new provider
+4. Export the provider from `src/providers/mod.rs`
 
 ### Public API
 
@@ -193,23 +256,29 @@ i9j0k1l2...  node-v22.13.1-linux-arm64.tar.gz
 ```
 1. Receive runtime type and exact version as input
 
-2. Determine platform and architecture
-   └── Map to Node.js distribution naming
+2. Select the appropriate JsRuntimeProvider
+   └── e.g., NodeProvider for JsRuntimeType::Node
 
-3. Check cache for existing installation
+3. Get download info from provider
+   ├── Platform string (e.g., "linux-x64", "win-x64")
+   ├── Archive URL and filename
+   ├── Hash verification method
+   └── Extracted directory name
+
+4. Check cache for existing installation
    └── If exists: return cached path
    └── If not: continue to download
 
-4. Download with atomic operations
+5. Download with atomic operations
    ├── Create temp directory
-   ├── Download SHASUMS256.txt and parse expected hash
+   ├── Download SHASUMS file and parse expected hash (via provider)
    ├── Download archive with retry logic
-   ├── Verify archive hash against SHASUMS256.txt
-   ├── Extract archive
+   ├── Verify archive hash
+   ├── Extract archive (tar.gz or zip based on format)
    ├── Acquire file lock (prevent concurrent installs)
    └── Atomic rename to final location
 
-5. Return JsRuntime with install path
+6. Return JsRuntime with install path and relative paths
 ```
 
 ### Concurrent Download Protection
@@ -344,14 +413,25 @@ pub enum JsRuntimeError {
 
 - Node.js is the most widely used runtime
 - Allows focused, well-tested implementation
-- Architecture supports easy addition of Bun/Deno later
+- Trait-based architecture (`JsRuntimeProvider`) makes adding Bun/Deno straightforward
 - Reduces initial complexity and scope
+
+### 5. Trait-Based Provider Architecture
+
+**Decision**: Use a `JsRuntimeProvider` trait to abstract runtime-specific logic.
+
+**Rationale**:
+
+- Clean separation between generic download logic and runtime-specific details
+- Each provider encapsulates: platform strings, URL construction, hash verification, binary paths
+- Adding a new runtime only requires implementing the trait
+- Generic download utilities are reusable across all providers
 
 ## Future Enhancements
 
 1. **Version aliases**: Support `latest` and `lts` aliases with cached version index
-2. **Bun support**: Add `bun@x.y.z` runtime option with Bun release downloads
-3. **Deno support**: Add `deno@x.y.z` runtime option with Deno release downloads
+2. **Bun support**: Create `BunProvider` implementing `JsRuntimeProvider`
+3. **Deno support**: Create `DenoProvider` implementing `JsRuntimeProvider`
 4. **Version ranges**: Support semver ranges like `node@^22.0.0`
 5. **Offline mode**: Use cached versions without network access
 

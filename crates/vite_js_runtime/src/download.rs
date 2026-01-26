@@ -1,0 +1,213 @@
+//! Generic download utilities for JavaScript runtime management.
+//!
+//! This module provides platform-agnostic utilities for downloading,
+//! verifying, and extracting runtime archives.
+
+use std::{fs::File, time::Duration};
+
+use backon::{ExponentialBuilder, Retryable};
+use futures_util::StreamExt;
+use sha2::{Digest, Sha256};
+use tokio::{fs, io::AsyncWriteExt};
+use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_str::Str;
+
+use crate::{Error, provider::ArchiveFormat};
+
+/// Download a file with retry logic
+pub async fn download_file(url: &str, target_path: &AbsolutePath) -> Result<(), Error> {
+    tracing::debug!("Downloading {url} to {target_path:?}");
+
+    let response = (|| async { reqwest::get(url).await?.error_for_status() })
+        .retry(
+            ExponentialBuilder::default()
+                .with_jitter()
+                .with_min_delay(Duration::from_millis(500))
+                .with_max_times(3),
+        )
+        .await
+        .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
+
+    // Stream to file
+    let mut file = fs::File::create(target_path).await?;
+    let mut stream = response.bytes_stream();
+
+    while let Some(chunk_result) = stream.next().await {
+        let chunk = chunk_result?;
+        file.write_all(&chunk).await?;
+    }
+
+    file.flush().await?;
+    tracing::debug!("Download completed: {target_path:?}");
+
+    Ok(())
+}
+
+/// Download text content from a URL with retry logic
+#[expect(clippy::disallowed_types, reason = "HTTP response body is a String")]
+pub async fn download_text(url: &str) -> Result<String, Error> {
+    tracing::debug!("Downloading text from {url}");
+
+    let content = (|| async { reqwest::get(url).await?.text().await })
+        .retry(
+            ExponentialBuilder::default()
+                .with_jitter()
+                .with_min_delay(Duration::from_millis(500))
+                .with_max_times(3),
+        )
+        .await
+        .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
+
+    Ok(content)
+}
+
+/// Verify file hash against expected SHA256 hash
+pub async fn verify_file_hash(
+    file_path: &AbsolutePath,
+    expected_hash: &str,
+    filename: &str,
+) -> Result<(), Error> {
+    tracing::debug!("Verifying hash for {filename}");
+
+    let content = fs::read(file_path).await?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(&content);
+    let actual_hash: Str = hex::encode(hasher.finalize()).into();
+
+    if actual_hash != expected_hash {
+        return Err(Error::HashMismatch {
+            filename: filename.into(),
+            expected: expected_hash.into(),
+            actual: actual_hash,
+        });
+    }
+
+    tracing::debug!("Hash verification successful for {filename}");
+    Ok(())
+}
+
+/// Extract archive based on format
+pub async fn extract_archive(
+    archive_path: &AbsolutePath,
+    target_dir: &AbsolutePath,
+    format: ArchiveFormat,
+) -> Result<(), Error> {
+    let archive_path = AbsolutePathBuf::new(archive_path.as_path().to_path_buf()).unwrap();
+    let target_dir = AbsolutePathBuf::new(target_dir.as_path().to_path_buf()).unwrap();
+
+    tokio::task::spawn_blocking(move || match format {
+        ArchiveFormat::Zip => extract_zip(&archive_path, &target_dir),
+        ArchiveFormat::TarGz => extract_tar_gz(&archive_path, &target_dir),
+    })
+    .await??;
+
+    Ok(())
+}
+
+/// Extract a tar.gz archive
+fn extract_tar_gz(archive_path: &AbsolutePath, target_dir: &AbsolutePath) -> Result<(), Error> {
+    use flate2::read::GzDecoder;
+    use tar::Archive;
+
+    tracing::debug!("Extracting tar.gz: {archive_path:?} to {target_dir:?}");
+
+    let file = File::open(archive_path)?;
+    let tar_stream = GzDecoder::new(file);
+    let mut archive = Archive::new(tar_stream);
+    archive.unpack(target_dir)?;
+
+    tracing::debug!("Extraction completed");
+    Ok(())
+}
+
+/// Extract a zip archive
+fn extract_zip(archive_path: &AbsolutePath, target_dir: &AbsolutePath) -> Result<(), Error> {
+    tracing::debug!("Extracting zip: {archive_path:?} to {target_dir:?}");
+
+    let file = File::open(archive_path)?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| Error::ExtractionFailed { reason: vite_str::format!("{e}") })?;
+
+    archive
+        .extract(target_dir)
+        .map_err(|e| Error::ExtractionFailed { reason: vite_str::format!("{e}") })?;
+
+    tracing::debug!("Extraction completed");
+    Ok(())
+}
+
+/// Move extracted directory to cache location with atomic operations and file-based locking
+///
+/// Uses a file-based lock to ensure atomicity when multiple processes/threads
+/// try to install the same runtime version concurrently.
+pub async fn move_to_cache(
+    source: &AbsolutePath,
+    target: &AbsolutePathBuf,
+    version: &str,
+) -> Result<(), Error> {
+    // Create parent directory
+    let parent = target.parent().ok_or_else(|| Error::ExtractionFailed {
+        reason: "Target path has no parent directory".into(),
+    })?;
+    fs::create_dir_all(&parent).await?;
+
+    // Use a file-based lock to ensure atomicity of the move operation.
+    // This prevents race conditions when multiple processes/threads
+    // try to install the same runtime version concurrently.
+    let lock_path = parent.join(vite_str::format!("{version}.lock"));
+    tracing::debug!("Acquiring lock file: {lock_path:?}");
+
+    // Acquire file lock in a blocking task to avoid blocking the async runtime.
+    // The lock() call blocks until the lock is acquired.
+    let lock_path_clone = lock_path.clone();
+    tokio::task::spawn_blocking(move || {
+        let lock_file = File::create(lock_path_clone.as_path())?;
+        // Acquire exclusive lock (blocks until available)
+        lock_file.lock()?;
+        tracing::debug!("Lock acquired: {lock_path_clone:?}");
+        Ok::<_, std::io::Error>(lock_file)
+    })
+    .await??;
+    tracing::debug!("Lock acquired: {lock_path:?}");
+
+    // Check again after acquiring the lock, in case another process completed
+    // the installation while we were downloading
+    if fs::try_exists(target.as_path()).await.unwrap_or(false) {
+        tracing::debug!("Target already exists after lock acquisition, skipping move: {target:?}");
+        return Ok(());
+    }
+
+    // Try atomic rename first
+    if fs::rename(source.as_path(), target.as_path()).await.is_ok() {
+        tracing::debug!("Atomic rename successful: {source:?} -> {target:?}");
+        return Ok(());
+    }
+
+    // If rename fails (cross-device), fall back to copy
+    tracing::debug!("Atomic rename failed, falling back to copy: {source:?} -> {target:?}");
+    copy_dir_recursive(source, target).await?;
+    fs::remove_dir_all(source).await?;
+
+    Ok(())
+}
+
+/// Recursively copy a directory
+pub async fn copy_dir_recursive(src: &AbsolutePath, dst: &AbsolutePath) -> Result<(), Error> {
+    fs::create_dir_all(dst).await?;
+
+    let mut entries = fs::read_dir(src).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        // entry.path() returns absolute path when src is absolute
+        let src_path = AbsolutePathBuf::new(entry.path()).unwrap();
+        let dst_path = dst.join(entry.file_name());
+
+        if entry.file_type().await?.is_dir() {
+            Box::pin(copy_dir_recursive(&src_path, &dst_path)).await?;
+        } else {
+            fs::copy(&src_path, &dst_path).await?;
+        }
+    }
+
+    Ok(())
+}

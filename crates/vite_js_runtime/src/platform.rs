@@ -1,7 +1,5 @@
 use std::fmt;
 
-use vite_str::Str;
-
 /// Represents a platform (OS + architecture) combination
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Platform {
@@ -30,36 +28,11 @@ impl Platform {
     pub const fn current() -> Self {
         Self { os: Os::current(), arch: Arch::current() }
     }
-
-    /// Get the platform string for Node.js distribution naming
-    /// e.g., "linux-x64", "darwin-arm64", "win-x64"
-    #[must_use]
-    pub fn node_platform_string(self) -> Str {
-        let os = match self.os {
-            Os::Linux => "linux",
-            Os::Darwin => "darwin",
-            Os::Windows => "win",
-        };
-        let arch = match self.arch {
-            Arch::X64 => "x64",
-            Arch::Arm64 => "arm64",
-        };
-        vite_str::format!("{os}-{arch}")
-    }
-
-    /// Get the archive extension for this platform
-    #[must_use]
-    pub const fn archive_extension(self) -> &'static str {
-        match self.os {
-            Os::Windows => "zip",
-            Os::Linux | Os::Darwin => "tar.gz",
-        }
-    }
 }
 
 impl fmt::Display for Platform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.node_platform_string())
+        write!(f, "{}-{}", self.os, self.arch)
     }
 }
 
@@ -82,6 +55,16 @@ impl Os {
     }
 }
 
+impl fmt::Display for Os {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Linux => write!(f, "linux"),
+            Self::Darwin => write!(f, "darwin"),
+            Self::Windows => write!(f, "windows"),
+        }
+    }
+}
+
 impl Arch {
     /// Detect the current CPU architecture
     #[must_use]
@@ -97,6 +80,15 @@ impl Arch {
     }
 }
 
+impl fmt::Display for Arch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::X64 => write!(f, "x64"),
+            Self::Arm64 => write!(f, "arm64"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,7 +98,7 @@ mod tests {
         let platform = Platform::current();
 
         // Just verify it doesn't panic and returns a valid platform
-        let platform_str = platform.node_platform_string();
+        let platform_str = platform.to_string();
         assert!(!platform_str.is_empty());
 
         // Verify format is "os-arch"
@@ -115,25 +107,31 @@ mod tests {
     }
 
     #[test]
-    fn test_node_platform_strings() {
+    fn test_platform_display() {
         let cases = [
             (Platform { os: Os::Linux, arch: Arch::X64 }, "linux-x64"),
             (Platform { os: Os::Linux, arch: Arch::Arm64 }, "linux-arm64"),
             (Platform { os: Os::Darwin, arch: Arch::X64 }, "darwin-x64"),
             (Platform { os: Os::Darwin, arch: Arch::Arm64 }, "darwin-arm64"),
-            (Platform { os: Os::Windows, arch: Arch::X64 }, "win-x64"),
-            (Platform { os: Os::Windows, arch: Arch::Arm64 }, "win-arm64"),
+            (Platform { os: Os::Windows, arch: Arch::X64 }, "windows-x64"),
+            (Platform { os: Os::Windows, arch: Arch::Arm64 }, "windows-arm64"),
         ];
 
         for (platform, expected) in cases {
-            assert_eq!(platform.node_platform_string(), expected);
+            assert_eq!(platform.to_string(), expected);
         }
     }
 
     #[test]
-    fn test_archive_extension() {
-        assert_eq!(Platform { os: Os::Linux, arch: Arch::X64 }.archive_extension(), "tar.gz");
-        assert_eq!(Platform { os: Os::Darwin, arch: Arch::Arm64 }.archive_extension(), "tar.gz");
-        assert_eq!(Platform { os: Os::Windows, arch: Arch::X64 }.archive_extension(), "zip");
+    fn test_os_display() {
+        assert_eq!(Os::Linux.to_string(), "linux");
+        assert_eq!(Os::Darwin.to_string(), "darwin");
+        assert_eq!(Os::Windows.to_string(), "windows");
+    }
+
+    #[test]
+    fn test_arch_display() {
+        assert_eq!(Arch::X64.to_string(), "x64");
+        assert_eq!(Arch::Arm64.to_string(), "arm64");
     }
 }

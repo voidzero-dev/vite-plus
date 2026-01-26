@@ -12,12 +12,24 @@
 //! let runtime = download_runtime(JsRuntimeType::Node, "22.13.1").await?;
 //! println!("Node.js installed at: {}", runtime.get_binary_path());
 //! ```
+//!
+//! # Adding a New Runtime
+//!
+//! To add support for a new JavaScript runtime (e.g., Bun, Deno):
+//!
+//! 1. Create a new provider in `src/providers/` implementing `JsRuntimeProvider`
+//! 2. Add the runtime type to `JsRuntimeType` enum
+//! 3. Add a match arm in `download_runtime()` to use the new provider
 
+mod download;
 mod error;
-mod node;
 mod platform;
+mod provider;
+mod providers;
 mod runtime;
 
 pub use error::Error;
-pub use platform::Platform;
-pub use runtime::{JsRuntime, JsRuntimeType, download_runtime};
+pub use platform::{Arch, Os, Platform};
+pub use provider::{ArchiveFormat, DownloadInfo, HashVerification, JsRuntimeProvider};
+pub use providers::NodeProvider;
+pub use runtime::{JsRuntime, JsRuntimeType, download_runtime, download_runtime_with_provider};

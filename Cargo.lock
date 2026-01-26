@@ -6990,6 +6990,7 @@ dependencies = [
 name = "vite_js_runtime"
 version = "0.0.0"
 dependencies = [
+ "async-trait",
  "backon",
  "directories",
  "flate2",
