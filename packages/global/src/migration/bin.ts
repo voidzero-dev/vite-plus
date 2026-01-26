@@ -8,6 +8,7 @@ import semver from 'semver';
 
 import { PackageManager, type WorkspaceInfo } from '../types/index.js';
 import { selectAgentTargetPath, writeAgentInstructions } from '../utils/agent.js';
+import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.js';
 import {
   cancelAndExit,
   defaultInteractive,
@@ -17,6 +18,7 @@ import {
   upgradeYarn,
 } from '../utils/prompts.js';
 import { accent, getVitePlusHeader, headline, log, muted } from '../utils/terminal.js';
+import type { PackageDependencies } from '../utils/types.js';
 import { detectWorkspace } from '../utils/workspace.js';
 import {
   checkVitestVersion,
@@ -106,6 +108,16 @@ async function main() {
 
   prompts.intro(await getVitePlusHeader());
 
+  const workspaceInfoOptional = await detectWorkspace(projectPath);
+  if (
+    hasVitePlusDependency(
+      readNearestPackageJson<PackageDependencies>(workspaceInfoOptional.rootDir),
+    )
+  ) {
+    prompts.outro(`This project is already using Vite+! ${accent(`Happy coding!`)}`);
+    return;
+  }
+
   if (options.interactive) {
     prompts.log.info(
       [
@@ -124,7 +136,6 @@ async function main() {
     }
   }
 
-  const workspaceInfoOptional = await detectWorkspace(projectPath);
   const packageManager =
     workspaceInfoOptional.packageManager ?? (await selectPackageManager(options.interactive));
 

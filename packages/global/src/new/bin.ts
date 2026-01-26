@@ -35,6 +35,7 @@ import {
   executeMonorepoTemplate,
   executeRemoteTemplate,
 } from './templates/index.js';
+import { InitialMonorepoAppDir } from './templates/monorepo.js';
 import { BuiltinTemplate, TemplateType } from './templates/types.js';
 import { formatTargetDir } from './utils.js';
 
@@ -432,8 +433,10 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
     workspaceInfo.rootDir = fullPath;
     rewriteMonorepo(workspaceInfo);
     await runViteInstall(fullPath, options.interactive);
-    prompts.outro(success(`✔ Created ${accent(projectDir)}!`));
-    showNextSteps(projectDir, false);
+    prompts.outro(`✔ Created ${accent(projectDir)}!`);
+    log(`${styleText('bold', 'Next steps:')}`);
+    log(`  ${accent(`cd ${projectDir}`)}`);
+    log(`  ${accent(`vite dev ${InitialMonorepoAppDir}`)}`);
     return;
   }
   // #endregion
@@ -548,7 +551,7 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
     await runViteInstall(fullPath, options.interactive);
   }
 
-  prompts.outro(success(`✔ Created ${accent(projectDir)}!`));
+  prompts.outro(`✔ Created ${accent(projectDir)}!`);
 
   showNextSteps(projectDir, isMonorepo);
   // #endregion

@@ -6,29 +6,25 @@ import * as prompts from '@clack/prompts';
 import { detectWorkspace as detectWorkspaceBinding } from '../../binding/index.js';
 import { runCommand } from '../utils/command.js';
 import { VITE_PLUS_NAME } from '../utils/constants.js';
-import { detectPackageMetadata, readNearestPackageJson } from '../utils/package.js';
+import {
+  detectPackageMetadata,
+  hasVitePlusDependency,
+  readNearestPackageJson,
+} from '../utils/package.js';
 import { cancelAndExit, defaultInteractive, runViteInstall } from '../utils/prompts.js';
+import type { PackageDependencies } from '../utils/types.js';
 
 const cwd = process.cwd();
 const interactive = defaultInteractive();
 let localCliMetadata = detectPackageMetadata(cwd, VITE_PLUS_NAME);
 let startPrompts = false;
 
-// check local CLI already added to devDependencies but not installed
 if (!localCliMetadata) {
-  const pkg = readNearestPackageJson<{
-    devDependencies?: Record<string, string>;
-    dependencies?: Record<string, string>;
-  }>(cwd);
-  if (pkg?.devDependencies?.[VITE_PLUS_NAME] || pkg?.dependencies?.[VITE_PLUS_NAME]) {
-    prompts.intro(`Local "${VITE_PLUS_NAME}" package was not found`);
+  if (hasVitePlusDependency(readNearestPackageJson<PackageDependencies>(cwd))) {
+    prompts.intro(`Installing "${VITE_PLUS_NAME}"…`);
     startPrompts = true;
-    // run vite install and detect package metadata again
     await runViteInstall(cwd, interactive);
     localCliMetadata = detectPackageMetadata(cwd, VITE_PLUS_NAME);
-    if (localCliMetadata) {
-      prompts.outro(`Using local Vite+ CLI`);
-    }
   }
 }
 

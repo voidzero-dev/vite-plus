@@ -1,0 +1,3 @@
+{
+  "commands": ["vite migrate --no-interactive # should detect existing vite-plus and exit"]
+}

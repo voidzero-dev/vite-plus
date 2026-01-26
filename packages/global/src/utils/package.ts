@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
+import { VITE_PLUS_NAME } from './constants.js';
 import { readJsonFile } from './json.js';
 
 export function getScopeFromPackageName(packageName: string): string {
@@ -51,4 +52,13 @@ export function readNearestPackageJson<T = Record<string, any>>(currentDir: stri
     currentDir = path.dirname(currentDir);
   } while (currentDir !== path.dirname(currentDir));
   return null;
+}
+
+export function hasVitePlusDependency(
+  pkg?: {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  } | null,
+) {
+  return Boolean(pkg?.dependencies?.[VITE_PLUS_NAME] || pkg?.devDependencies?.[VITE_PLUS_NAME]);
 }

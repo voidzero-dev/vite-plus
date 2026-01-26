@@ -15,6 +15,8 @@ import { copyDir, setPackageName } from '../utils.js';
 import { runRemoteTemplateCommand } from './remote.js';
 import { type BuiltinTemplateInfo } from './types.js';
 
+export const InitialMonorepoAppDir = 'apps/website';
+
 // Execute vite:monorepo - copy from templates/monorepo
 export async function executeMonorepoTemplate(
   workspaceInfo: WorkspaceInfo,
@@ -117,10 +119,9 @@ export async function executeMonorepoTemplate(
   // Automatically create a default application in apps/website
   prompts.log.step('Creating default application in apps/website...');
 
-  const appDir = 'apps/website';
   const appTemplateInfo = discoverTemplate(
     'create-vite@latest',
-    [appDir, '--template', 'vanilla-ts', '--no-interactive'],
+    [InitialMonorepoAppDir, '--template', 'vanilla-ts', '--no-interactive'],
     workspaceInfo,
   );
   const appResult = await runRemoteTemplateCommand(workspaceInfo, fullPath, appTemplateInfo);
@@ -133,7 +134,7 @@ export async function executeMonorepoTemplate(
   const appPackageName = workspaceInfo.monorepoScope
     ? `${workspaceInfo.monorepoScope}/website`
     : 'website';
-  const appProjectPath = path.join(fullPath, appDir);
+  const appProjectPath = path.join(fullPath, InitialMonorepoAppDir);
   setPackageName(appProjectPath, appPackageName);
   // Perform auto-migration on the created app
   rewriteMonorepoProject(appProjectPath, workspaceInfo.packageManager);
