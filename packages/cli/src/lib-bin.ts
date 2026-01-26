@@ -75,23 +75,30 @@ cli
   .option('-F, --filter <pattern>', 'Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name')
   .option('--exports', 'Generate export-related metadata for package.json (experimental)')
   .action(async (input: string[], flags: InlineConfig) => {
-    const viteConfig = await resolveConfig({ root: process.cwd() }, 'build');
     if (input.length > 0) flags.entry = input;
     if (flags.envPrefix === undefined) {
       flags.envPrefix = DEFAULT_ENV_PREFIXES;
     }
 
-    const configFiles: string[] = [];
-    if (viteConfig.configFile) configFiles.push(viteConfig.configFile);
+    async function runBuild() {
+      const viteConfig = await resolveConfig({ root: process.cwd() }, 'build');
 
-    const configs: ResolvedConfig[] = [];
-    const libConfigs = Array.isArray(viteConfig.lib) ? viteConfig.lib : [viteConfig.lib ?? {}];
-    for (const libConfig of libConfigs) {
-      const resolvedConfig = await resolveUserConfig({ ...libConfig, ...flags }, flags);
-      configs.push(...resolvedConfig);
+      const configFiles: string[] = [];
+      if (viteConfig.configFile) configFiles.push(viteConfig.configFile);
+
+      const configs: ResolvedConfig[] = [];
+      const libConfigs = Array.isArray((viteConfig as any).lib)
+        ? (viteConfig as any).lib
+        : [(viteConfig as any).lib ?? {}];
+      for (const libConfig of libConfigs) {
+        const resolvedConfig = await resolveUserConfig({ ...libConfig, ...flags }, flags);
+        configs.push(...resolvedConfig);
+      }
+
+      await buildWithConfigs(configs, configFiles, runBuild);
     }
 
-    await buildWithConfigs(configs, configFiles, () => {});
+    await runBuild();
   });
 
 export async function runCLI(): Promise<void> {
@@ -110,4 +117,4 @@ export async function runCLI(): Promise<void> {
 if (module.enableCompileCache) {
   module.enableCompileCache();
 }
-runCLI();
+void runCLI();
