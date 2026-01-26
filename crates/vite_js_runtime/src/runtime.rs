@@ -420,9 +420,7 @@ mod tests {
     }
 
     /// Integration test that downloads a real Node.js version
-    /// Run with: cargo test -p vite_js_runtime -- --ignored
     #[tokio::test]
-    #[ignore]
     async fn test_download_node_integration() {
         // Use a small, old version for faster download
         let version = "20.18.0";
@@ -450,7 +448,6 @@ mod tests {
 
     /// Test cache reuse - second call should be instant
     #[tokio::test]
-    #[ignore]
     async fn test_download_node_cache_reuse() {
         let version = "20.18.0";
 
