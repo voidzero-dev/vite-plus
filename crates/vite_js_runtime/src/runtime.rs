@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use tar::Archive;
 use tempfile::TempDir;
 use tokio::{fs, io::AsyncWriteExt};
-use vite_path::{AbsolutePathBuf, current_dir};
+use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_str::Str;
 
 use crate::{Error, Platform, node};
@@ -171,8 +171,10 @@ async fn download_node(version: &str) -> Result<JsRuntime, Error> {
     let shasums_url = node::get_shasums_url(version);
 
     // Create temp directory for download
+    // TempDir::path() always returns an absolute path (e.g., /tmp/xxx)
     let temp_dir = TempDir::new()?;
-    let archive_path = temp_dir.path().join(&archive_filename);
+    let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+    let archive_path = temp_path.join(&archive_filename);
 
     // Download SHASUMS256.txt and parse expected hash
     let expected_hash = download_and_parse_shasums(&shasums_url, &archive_filename).await?;
@@ -185,10 +187,10 @@ async fn download_node(version: &str) -> Result<JsRuntime, Error> {
 
     // Extract archive
     let extracted_dir_name = node::get_extracted_dir_name(version, platform);
-    extract_archive(&archive_path, temp_dir.path(), platform).await?;
+    extract_archive(&archive_path, &temp_path, platform).await?;
 
     // Move extracted directory to cache location with file-based locking
-    let extracted_path = temp_dir.path().join(&extracted_dir_name);
+    let extracted_path = temp_path.join(&extracted_dir_name);
     move_to_cache(&extracted_path, &install_dir, version).await?;
 
     tracing::info!("Node.js {version} installed at {install_dir:?}");
@@ -229,8 +231,7 @@ async fn download_and_parse_shasums(shasums_url: &str, filename: &str) -> Result
 }
 
 /// Download a file with retry logic
-#[expect(clippy::disallowed_types)] // std::path::Path required for tempfile interop
-async fn download_file(url: &str, target_path: &std::path::Path) -> Result<(), Error> {
+async fn download_file(url: &str, target_path: &AbsolutePath) -> Result<(), Error> {
     tracing::debug!("Downloading {url} to {target_path:?}");
 
     let response = (|| async { reqwest::get(url).await?.error_for_status() })
@@ -259,9 +260,8 @@ async fn download_file(url: &str, target_path: &std::path::Path) -> Result<(), E
 }
 
 /// Verify file hash against expected SHA256 hash
-#[expect(clippy::disallowed_types)] // std::path::Path required for tempfile interop
 async fn verify_file_hash(
-    file_path: &std::path::Path,
+    file_path: &AbsolutePath,
     expected_hash: &str,
     filename: &str,
 ) -> Result<(), Error> {
@@ -286,14 +286,13 @@ async fn verify_file_hash(
 }
 
 /// Extract archive based on platform
-#[expect(clippy::disallowed_types)] // std::path::Path required for tempfile/tar/zip interop
 async fn extract_archive(
-    archive_path: &std::path::Path,
-    target_dir: &std::path::Path,
+    archive_path: &AbsolutePath,
+    target_dir: &AbsolutePath,
     platform: Platform,
 ) -> Result<(), Error> {
-    let archive_path = archive_path.to_path_buf();
-    let target_dir = target_dir.to_path_buf();
+    let archive_path = AbsolutePathBuf::new(archive_path.as_path().to_path_buf()).unwrap();
+    let target_dir = AbsolutePathBuf::new(target_dir.as_path().to_path_buf()).unwrap();
     let is_windows = platform.os == crate::platform::Os::Windows;
 
     tokio::task::spawn_blocking(move || {
@@ -309,11 +308,7 @@ async fn extract_archive(
 }
 
 /// Extract a tar.gz archive
-#[expect(clippy::disallowed_types)] // std::path::Path required for tar crate interop
-fn extract_tar_gz(
-    archive_path: &std::path::Path,
-    target_dir: &std::path::Path,
-) -> Result<(), Error> {
+fn extract_tar_gz(archive_path: &AbsolutePath, target_dir: &AbsolutePath) -> Result<(), Error> {
     tracing::debug!("Extracting tar.gz: {archive_path:?} to {target_dir:?}");
 
     let file = File::open(archive_path)?;
@@ -327,8 +322,7 @@ fn extract_tar_gz(
 
 /// Extract a zip archive (Windows)
 #[cfg(target_os = "windows")]
-#[expect(clippy::disallowed_types)] // std::path::Path required for zip crate interop
-fn extract_zip(archive_path: &std::path::Path, target_dir: &std::path::Path) -> Result<(), Error> {
+fn extract_zip(archive_path: &AbsolutePath, target_dir: &AbsolutePath) -> Result<(), Error> {
     tracing::debug!("Extracting zip: {archive_path:?} to {target_dir:?}");
 
     let file = File::open(archive_path)?;
@@ -344,11 +338,7 @@ fn extract_zip(archive_path: &std::path::Path, target_dir: &std::path::Path) -> 
 }
 
 #[cfg(not(target_os = "windows"))]
-#[expect(clippy::disallowed_types)] // std::path::Path for signature consistency
-fn extract_zip(
-    _archive_path: &std::path::Path,
-    _target_dir: &std::path::Path,
-) -> Result<(), Error> {
+fn extract_zip(_archive_path: &AbsolutePath, _target_dir: &AbsolutePath) -> Result<(), Error> {
     // This should never be called on non-Windows platforms
     Err(Error::ExtractionFailed { reason: "Zip extraction not supported on this platform".into() })
 }
@@ -357,9 +347,8 @@ fn extract_zip(
 ///
 /// Uses a file-based lock to ensure atomicity when multiple processes/threads
 /// try to install the same runtime version concurrently.
-#[expect(clippy::disallowed_types)] // std::path::Path required for tempfile interop
 async fn move_to_cache(
-    source: &std::path::Path,
+    source: &AbsolutePath,
     target: &AbsolutePathBuf,
     version: &str,
 ) -> Result<(), Error> {
@@ -396,15 +385,15 @@ async fn move_to_cache(
     }
 
     // Try atomic rename first
-    if fs::rename(source, target.as_path()).await.is_ok() {
+    if fs::rename(source.as_path(), target.as_path()).await.is_ok() {
         tracing::debug!("Atomic rename successful: {source:?} -> {target:?}");
         return Ok(());
     }
 
     // If rename fails (cross-device), fall back to copy
     tracing::debug!("Atomic rename failed, falling back to copy: {source:?} -> {target:?}");
-    copy_dir_recursive(source, target.as_path()).await?;
-    fs::remove_dir_all(source).await?;
+    copy_dir_recursive(source.as_path(), target.as_path()).await?;
+    fs::remove_dir_all(source.as_path()).await?;
 
     Ok(())
 }
