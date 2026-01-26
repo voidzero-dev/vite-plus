@@ -14,8 +14,8 @@ catalog:
   '@napi-rs/wasm-runtime': ^1.0.0
   '@oxc-node/cli': ^0.0.35
   '@oxc-node/core': ^0.0.35
-  '@oxc-project/runtime': =0.108.0
-  '@oxc-project/types': =0.108.0
+  '@oxc-project/runtime': =0.110.0
+  '@oxc-project/types': =0.110.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
@@ -75,9 +75,9 @@ catalog:
   mocha: ^11.7.5
   mri: ^1.2.0
   next: ^15.4.3
-  oxc-minify: =0.108.0
-  oxc-parser: =0.108.0
-  oxc-transform: =0.108.0
+  oxc-minify: =0.110.0
+  oxc-parser: =0.110.0
+  oxc-transform: =0.110.0
   oxfmt: ^0.26.0
   oxlint: ^1.41.0
   oxlint-tsgolint: ^0.11.1
@@ -89,7 +89,7 @@ catalog:
   react-dom: ^19.1.0
   remark-parse: ^11.0.0
   remeda: ^2.10.0
-  rolldown-plugin-dts: ^0.20.0
+  rolldown-plugin-dts: ^0.21.0
   rolldown-vite: ^7.1.19
   rollup: ^4.18.0
   semver: ^7.7.3
@@ -101,14 +101,14 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.20.0-beta.4
+  tsdown: ^0.20.1
   tsx: ^4.20.6
   typescript: ^5.9.3
   unified: ^11.0.5
   valibot: 1.2.0
   validate-npm-package-name: ^7.0.2
   vitepress: ^2.0.0-alpha.15
-  vitepress-plugin-group-icons: ^1.0.0
+  vitepress-plugin-group-icons: ^1.7.1
   vitepress-plugin-llms: ^1.1.0
   vitest: ^4.0.15
   vue: ^3.5.21
@@ -153,7 +153,7 @@ overrides:
   rolldown: 'workspace:rolldown@*'
   vite: 'workspace:@voidzero-dev/vite-plus-core@*'
   vitest: 'workspace:@voidzero-dev/vite-plus-test@*'
-  vitest-dev: 'npm:vitest@^4.0.17'
+  vitest-dev: 'npm:vitest@^4.0.18'
 packageExtensions:
   sass-embedded:
     peerDependencies:

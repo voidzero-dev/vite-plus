@@ -99,6 +99,7 @@ num_cpus = "1.17"
 owo-colors = "4.2.2"
 parking_lot = "0.12.5"
 pathdiff = "0.2.3"
+pnp = "0.12.7"
 percent-encoding = "2.3.1"
 petgraph = "0.8.2"
 pretty_assertions = "1.4.1"
@@ -161,7 +162,7 @@ which = "8.0.0"
 xxhash-rust = "0.8.15"
 
 # oxc crates with the same version
-oxc = { version = "0.108.0", features = [
+oxc = { version = "0.110.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -173,12 +174,12 @@ oxc = { version = "0.108.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.108.0", features = ["pool"] }
-oxc_ecmascript = "0.108.0"
-oxc_minify_napi = "0.108.0"
-oxc_parser_napi = "0.108.0"
-oxc_transform_napi = "0.108.0"
-oxc_traverse = "0.108.0"
+oxc_allocator = { version = "0.110.0", features = ["pool"] }
+oxc_ecmascript = "0.110.0"
+oxc_minify_napi = "0.110.0"
+oxc_parser_napi = "0.110.0"
+oxc_transform_napi = "0.110.0"
+oxc_traverse = "0.110.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "4", features = ["rayon", "serde"] }

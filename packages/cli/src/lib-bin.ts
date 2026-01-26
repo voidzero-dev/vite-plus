@@ -91,7 +91,7 @@ cli
       configs.push(...resolvedConfig);
     }
 
-    await buildWithConfigs(configs, configFiles);
+    await buildWithConfigs(configs, configFiles, () => {});
   });
 
 export async function runCLI(): Promise<void> {
