@@ -1,3 +1,5 @@
+use vite_str::Str;
+
 use crate::{Error, Platform};
 
 /// Node.js distribution base URL
@@ -11,10 +13,10 @@ const NODE_DIST_URL: &str = "https://nodejs.org/dist";
 ///
 /// # Returns
 /// The archive filename (e.g., "node-v22.13.1-linux-x64.tar.gz")
-pub fn get_archive_filename(version: &str, platform: Platform) -> String {
+pub fn get_archive_filename(version: &str, platform: Platform) -> Str {
     let platform_str = platform.node_platform_string();
     let ext = platform.archive_extension();
-    format!("node-v{version}-{platform_str}.{ext}")
+    vite_str::format!("node-v{version}-{platform_str}.{ext}")
 }
 
 /// Get the download URL for a Node.js archive
@@ -25,9 +27,9 @@ pub fn get_archive_filename(version: &str, platform: Platform) -> String {
 ///
 /// # Returns
 /// The full download URL
-pub fn get_download_url(version: &str, platform: Platform) -> String {
+pub fn get_download_url(version: &str, platform: Platform) -> Str {
     let filename = get_archive_filename(version, platform);
-    format!("{NODE_DIST_URL}/v{version}/{filename}")
+    vite_str::format!("{NODE_DIST_URL}/v{version}/{filename}")
 }
 
 /// Get the URL for SHASUMS256.txt for a Node.js version
@@ -37,8 +39,8 @@ pub fn get_download_url(version: &str, platform: Platform) -> String {
 ///
 /// # Returns
 /// The SHASUMS256.txt URL
-pub fn get_shasums_url(version: &str) -> String {
-    format!("{NODE_DIST_URL}/v{version}/SHASUMS256.txt")
+pub fn get_shasums_url(version: &str) -> Str {
+    vite_str::format!("{NODE_DIST_URL}/v{version}/SHASUMS256.txt")
 }
 
 /// Parse SHASUMS256.txt content and extract the hash for a specific filename
@@ -52,7 +54,7 @@ pub fn get_shasums_url(version: &str) -> String {
 ///
 /// # Format
 /// Each line in SHASUMS256.txt is: `<hash>  <filename>`
-pub fn parse_shasums(shasums_content: &str, filename: &str) -> Result<String, Error> {
+pub fn parse_shasums(shasums_content: &str, filename: &str) -> Result<Str, Error> {
     for line in shasums_content.lines() {
         // Format: "<hash>  <filename>" (two spaces between hash and filename)
         let parts: Vec<&str> = line.splitn(2, "  ").collect();
@@ -60,7 +62,7 @@ pub fn parse_shasums(shasums_content: &str, filename: &str) -> Result<String, Er
             let hash = parts[0].trim();
             let file = parts[1].trim();
             if file == filename {
-                return Ok(hash.to_string());
+                return Ok(hash.into());
             }
         }
     }
@@ -73,9 +75,9 @@ pub fn parse_shasums(shasums_content: &str, filename: &str) -> Result<String, Er
 /// For Node.js, the archive contains a directory named like:
 /// - Linux/macOS: `node-v22.13.1-linux-x64/`
 /// - Windows: `node-v22.13.1-win-x64/`
-pub fn get_extracted_dir_name(version: &str, platform: Platform) -> String {
+pub fn get_extracted_dir_name(version: &str, platform: Platform) -> Str {
     let platform_str = platform.node_platform_string();
-    format!("node-v{version}-{platform_str}")
+    vite_str::format!("node-v{version}-{platform_str}")
 }
 
 #[cfg(test)]

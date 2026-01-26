@@ -18,11 +18,6 @@
 //! let runtime = download_runtime(runtime_type, &version).await?;
 //! ```
 
-// Allow std types for internal use - this crate deals with file system and HTTP operations
-// where std::path::Path and String are the natural types to use
-#![allow(clippy::disallowed_types)]
-#![allow(clippy::disallowed_macros)]
-
 mod error;
 mod node;
 mod platform;

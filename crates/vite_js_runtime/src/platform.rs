@@ -1,5 +1,7 @@
 use std::fmt;
 
+use vite_str::Str;
+
 /// Represents a platform (OS + architecture) combination
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Platform {
@@ -32,7 +34,7 @@ impl Platform {
     /// Get the platform string for Node.js distribution naming
     /// e.g., "linux-x64", "darwin-arm64", "win-x64"
     #[must_use]
-    pub fn node_platform_string(self) -> String {
+    pub fn node_platform_string(self) -> Str {
         let os = match self.os {
             Os::Linux => "linux",
             Os::Darwin => "darwin",
@@ -42,7 +44,7 @@ impl Platform {
             Arch::X64 => "x64",
             Arch::Arm64 => "arm64",
         };
-        format!("{os}-{arch}")
+        vite_str::format!("{os}-{arch}")
     }
 
     /// Get the archive extension for this platform

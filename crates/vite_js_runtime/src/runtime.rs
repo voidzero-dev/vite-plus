@@ -1,4 +1,4 @@
-use std::{fs::File, path::Path, time::Duration};
+use std::{fs::File, time::Duration};
 
 use backon::{ExponentialBuilder, Retryable};
 use directories::BaseDirs;
@@ -94,7 +94,7 @@ impl JsRuntime {
 ///
 /// # Errors
 /// Returns an error if the spec format is invalid or the runtime is unsupported
-pub fn parse_runtime_spec(spec: &str) -> Result<(JsRuntimeType, String), Error> {
+pub fn parse_runtime_spec(spec: &str) -> Result<(JsRuntimeType, Str), Error> {
     let parts: Vec<&str> = spec.splitn(2, '@').collect();
     if parts.len() != 2 {
         return Err(Error::InvalidRuntimeSpec { spec: spec.into() });
@@ -112,7 +112,7 @@ pub fn parse_runtime_spec(spec: &str) -> Result<(JsRuntimeType, String), Error> 
         _ => return Err(Error::UnsupportedRuntime { runtime: runtime_name.into() }),
     };
 
-    Ok((runtime_type, version.to_string()))
+    Ok((runtime_type, version.into()))
 }
 
 /// Download and cache a JavaScript runtime
@@ -150,7 +150,7 @@ async fn download_node(version: &str) -> Result<JsRuntime, Error> {
     let cache_dir = get_cache_dir()?;
 
     // Cache path: $CACHE_DIR/vite/js_runtime/node/{version}/{platform}/
-    let install_dir = cache_dir.join(format!("node/{version}/{platform}"));
+    let install_dir = cache_dir.join(vite_str::format!("node/{version}/{platform}"));
 
     // Check if already cached
     let binary_path = get_node_binary_path(&install_dir);
@@ -209,7 +209,7 @@ fn get_node_binary_path(install_dir: &AbsolutePathBuf) -> AbsolutePathBuf {
 }
 
 /// Download SHASUMS256.txt and parse the expected hash for a filename
-async fn download_and_parse_shasums(shasums_url: &str, filename: &str) -> Result<String, Error> {
+async fn download_and_parse_shasums(shasums_url: &str, filename: &str) -> Result<Str, Error> {
     tracing::debug!("Downloading SHASUMS256.txt from {shasums_url}");
 
     let content = (|| async { reqwest::get(shasums_url).await?.text().await })
@@ -222,14 +222,15 @@ async fn download_and_parse_shasums(shasums_url: &str, filename: &str) -> Result
         .await
         .map_err(|e| Error::DownloadFailed {
             url: shasums_url.into(),
-            reason: e.to_string().into(),
+            reason: vite_str::format!("{e}"),
         })?;
 
     node::parse_shasums(&content, filename)
 }
 
 /// Download a file with retry logic
-async fn download_file(url: &str, target_path: &Path) -> Result<(), Error> {
+#[expect(clippy::disallowed_types)] // std::path::Path required for tempfile interop
+async fn download_file(url: &str, target_path: &std::path::Path) -> Result<(), Error> {
     tracing::debug!("Downloading {url} to {target_path:?}");
 
     let response = (|| async { reqwest::get(url).await?.error_for_status() })
@@ -240,7 +241,7 @@ async fn download_file(url: &str, target_path: &Path) -> Result<(), Error> {
                 .with_max_times(3),
         )
         .await
-        .map_err(|e| Error::DownloadFailed { url: url.into(), reason: e.to_string().into() })?;
+        .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
 
     // Stream to file
     let mut file = fs::File::create(target_path).await?;
@@ -258,8 +259,9 @@ async fn download_file(url: &str, target_path: &Path) -> Result<(), Error> {
 }
 
 /// Verify file hash against expected SHA256 hash
+#[expect(clippy::disallowed_types)] // std::path::Path required for tempfile interop
 async fn verify_file_hash(
-    file_path: &Path,
+    file_path: &std::path::Path,
     expected_hash: &str,
     filename: &str,
 ) -> Result<(), Error> {
@@ -269,13 +271,13 @@ async fn verify_file_hash(
 
     let mut hasher = Sha256::new();
     hasher.update(&content);
-    let actual_hash = hex::encode(hasher.finalize());
+    let actual_hash: Str = hex::encode(hasher.finalize()).into();
 
     if actual_hash != expected_hash {
         return Err(Error::HashMismatch {
             filename: filename.into(),
             expected: expected_hash.into(),
-            actual: actual_hash.into(),
+            actual: actual_hash,
         });
     }
 
@@ -284,9 +286,10 @@ async fn verify_file_hash(
 }
 
 /// Extract archive based on platform
+#[expect(clippy::disallowed_types)] // std::path::Path required for tempfile/tar/zip interop
 async fn extract_archive(
-    archive_path: &Path,
-    target_dir: &Path,
+    archive_path: &std::path::Path,
+    target_dir: &std::path::Path,
     platform: Platform,
 ) -> Result<(), Error> {
     let archive_path = archive_path.to_path_buf();
@@ -306,7 +309,11 @@ async fn extract_archive(
 }
 
 /// Extract a tar.gz archive
-fn extract_tar_gz(archive_path: &Path, target_dir: &Path) -> Result<(), Error> {
+#[expect(clippy::disallowed_types)] // std::path::Path required for tar crate interop
+fn extract_tar_gz(
+    archive_path: &std::path::Path,
+    target_dir: &std::path::Path,
+) -> Result<(), Error> {
     tracing::debug!("Extracting tar.gz: {archive_path:?} to {target_dir:?}");
 
     let file = File::open(archive_path)?;
@@ -320,23 +327,28 @@ fn extract_tar_gz(archive_path: &Path, target_dir: &Path) -> Result<(), Error> {
 
 /// Extract a zip archive (Windows)
 #[cfg(target_os = "windows")]
-fn extract_zip(archive_path: &Path, target_dir: &Path) -> Result<(), Error> {
+#[expect(clippy::disallowed_types)] // std::path::Path required for zip crate interop
+fn extract_zip(archive_path: &std::path::Path, target_dir: &std::path::Path) -> Result<(), Error> {
     tracing::debug!("Extracting zip: {archive_path:?} to {target_dir:?}");
 
     let file = File::open(archive_path)?;
     let mut archive = zip::ZipArchive::new(file)
-        .map_err(|e| Error::ExtractionFailed { reason: e.to_string().into() })?;
+        .map_err(|e| Error::ExtractionFailed { reason: vite_str::format!("{e}") })?;
 
     archive
         .extract(target_dir)
-        .map_err(|e| Error::ExtractionFailed { reason: e.to_string().into() })?;
+        .map_err(|e| Error::ExtractionFailed { reason: vite_str::format!("{e}") })?;
 
     tracing::debug!("Extraction completed");
     Ok(())
 }
 
 #[cfg(not(target_os = "windows"))]
-fn extract_zip(_archive_path: &Path, _target_dir: &Path) -> Result<(), Error> {
+#[expect(clippy::disallowed_types)] // std::path::Path for signature consistency
+fn extract_zip(
+    _archive_path: &std::path::Path,
+    _target_dir: &std::path::Path,
+) -> Result<(), Error> {
     // This should never be called on non-Windows platforms
     Err(Error::ExtractionFailed { reason: "Zip extraction not supported on this platform".into() })
 }
@@ -345,8 +357,9 @@ fn extract_zip(_archive_path: &Path, _target_dir: &Path) -> Result<(), Error> {
 ///
 /// Uses a file-based lock to ensure atomicity when multiple processes/threads
 /// try to install the same runtime version concurrently.
+#[expect(clippy::disallowed_types)] // std::path::Path required for tempfile interop
 async fn move_to_cache(
-    source: &Path,
+    source: &std::path::Path,
     target: &AbsolutePathBuf,
     version: &str,
 ) -> Result<(), Error> {
@@ -359,7 +372,7 @@ async fn move_to_cache(
     // Use a file-based lock to ensure atomicity of the move operation.
     // This prevents race conditions when multiple processes/threads
     // try to install the same runtime version concurrently.
-    let lock_path = parent.join(format!("{version}.lock"));
+    let lock_path = parent.join(vite_str::format!("{version}.lock"));
     tracing::debug!("Acquiring lock file: {lock_path:?}");
 
     // Acquire file lock in a blocking task to avoid blocking the async runtime.
@@ -397,7 +410,8 @@ async fn move_to_cache(
 }
 
 /// Recursively copy a directory
-async fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), Error> {
+#[expect(clippy::disallowed_types)] // std::path::Path required for fs operations
+async fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), Error> {
     fs::create_dir_all(dst).await?;
 
     let mut entries = fs::read_dir(src).await?;
@@ -505,7 +519,7 @@ mod tests {
 
         // Clear any existing cache for this version
         let cache_dir = get_cache_dir().unwrap();
-        let install_dir = cache_dir.join(format!("node/{version}"));
+        let install_dir = cache_dir.join(vite_str::format!("node/{version}"));
         if tokio::fs::try_exists(&install_dir).await.unwrap_or(false) {
             tokio::fs::remove_dir_all(&install_dir).await.unwrap();
         }
