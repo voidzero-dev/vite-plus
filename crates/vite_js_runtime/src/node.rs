@@ -1,0 +1,146 @@
+use crate::{Error, Platform};
+
+/// Node.js distribution base URL
+const NODE_DIST_URL: &str = "https://nodejs.org/dist";
+
+/// Get the archive filename for a Node.js version on a specific platform
+///
+/// # Arguments
+/// * `version` - The Node.js version (e.g., "22.13.1")
+/// * `platform` - The target platform
+///
+/// # Returns
+/// The archive filename (e.g., "node-v22.13.1-linux-x64.tar.gz")
+pub fn get_archive_filename(version: &str, platform: Platform) -> String {
+    let platform_str = platform.node_platform_string();
+    let ext = platform.archive_extension();
+    format!("node-v{version}-{platform_str}.{ext}")
+}
+
+/// Get the download URL for a Node.js archive
+///
+/// # Arguments
+/// * `version` - The Node.js version (e.g., "22.13.1")
+/// * `platform` - The target platform
+///
+/// # Returns
+/// The full download URL
+pub fn get_download_url(version: &str, platform: Platform) -> String {
+    let filename = get_archive_filename(version, platform);
+    format!("{NODE_DIST_URL}/v{version}/{filename}")
+}
+
+/// Get the URL for SHASUMS256.txt for a Node.js version
+///
+/// # Arguments
+/// * `version` - The Node.js version (e.g., "22.13.1")
+///
+/// # Returns
+/// The SHASUMS256.txt URL
+pub fn get_shasums_url(version: &str) -> String {
+    format!("{NODE_DIST_URL}/v{version}/SHASUMS256.txt")
+}
+
+/// Parse SHASUMS256.txt content and extract the hash for a specific filename
+///
+/// # Arguments
+/// * `shasums_content` - The content of SHASUMS256.txt
+/// * `filename` - The filename to find the hash for
+///
+/// # Returns
+/// The SHA256 hash for the filename
+///
+/// # Format
+/// Each line in SHASUMS256.txt is: `<hash>  <filename>`
+pub fn parse_shasums(shasums_content: &str, filename: &str) -> Result<String, Error> {
+    for line in shasums_content.lines() {
+        // Format: "<hash>  <filename>" (two spaces between hash and filename)
+        let parts: Vec<&str> = line.splitn(2, "  ").collect();
+        if parts.len() == 2 {
+            let hash = parts[0].trim();
+            let file = parts[1].trim();
+            if file == filename {
+                return Ok(hash.to_string());
+            }
+        }
+    }
+
+    Err(Error::HashNotFound { filename: filename.into() })
+}
+
+/// Get the directory name inside the archive after extraction
+///
+/// For Node.js, the archive contains a directory named like:
+/// - Linux/macOS: `node-v22.13.1-linux-x64/`
+/// - Windows: `node-v22.13.1-win-x64/`
+pub fn get_extracted_dir_name(version: &str, platform: Platform) -> String {
+    let platform_str = platform.node_platform_string();
+    format!("node-v{version}-{platform_str}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::platform::{Arch, Os};
+
+    #[test]
+    fn test_get_archive_filename() {
+        let cases = [
+            (
+                "22.13.1",
+                Platform { os: Os::Linux, arch: Arch::X64 },
+                "node-v22.13.1-linux-x64.tar.gz",
+            ),
+            (
+                "22.13.1",
+                Platform { os: Os::Darwin, arch: Arch::Arm64 },
+                "node-v22.13.1-darwin-arm64.tar.gz",
+            ),
+            ("22.13.1", Platform { os: Os::Windows, arch: Arch::X64 }, "node-v22.13.1-win-x64.zip"),
+        ];
+
+        for (version, platform, expected) in cases {
+            assert_eq!(get_archive_filename(version, platform), expected);
+        }
+    }
+
+    #[test]
+    fn test_get_download_url() {
+        let platform = Platform { os: Os::Linux, arch: Arch::X64 };
+        let url = get_download_url("22.13.1", platform);
+        assert_eq!(url, "https://nodejs.org/dist/v22.13.1/node-v22.13.1-linux-x64.tar.gz");
+    }
+
+    #[test]
+    fn test_get_shasums_url() {
+        let url = get_shasums_url("22.13.1");
+        assert_eq!(url, "https://nodejs.org/dist/v22.13.1/SHASUMS256.txt");
+    }
+
+    #[test]
+    fn test_parse_shasums() {
+        let content = r"abc123def456  node-v22.13.1-linux-x64.tar.gz
+789xyz000111  node-v22.13.1-darwin-arm64.tar.gz
+fedcba987654  node-v22.13.1-win-x64.zip";
+
+        assert_eq!(
+            parse_shasums(content, "node-v22.13.1-linux-x64.tar.gz").unwrap(),
+            "abc123def456"
+        );
+        assert_eq!(
+            parse_shasums(content, "node-v22.13.1-darwin-arm64.tar.gz").unwrap(),
+            "789xyz000111"
+        );
+        assert_eq!(parse_shasums(content, "node-v22.13.1-win-x64.zip").unwrap(), "fedcba987654");
+
+        // Test missing filename
+        let result = parse_shasums(content, "nonexistent.tar.gz");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_extracted_dir_name() {
+        let platform = Platform { os: Os::Linux, arch: Arch::X64 };
+        assert_eq!(get_extracted_dir_name("22.13.1", platform), "node-v22.13.1-linux-x64");
+    }
+}

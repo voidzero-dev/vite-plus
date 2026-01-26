@@ -149,6 +149,7 @@ uuid = "1.17.0"
 vfs = "0.12.1"
 vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
+vite_js_runtime = { path = "crates/vite_js_runtime" }
 vite_glob = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "d1824f23d28fdac7024c80c25f8e84b24b4f7704" }
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
@@ -160,6 +161,7 @@ walkdir = "2.5.0"
 wax = "0.6.0"
 which = "8.0.0"
 xxhash-rust = "0.8.15"
+zip = "7.2"
 
 # oxc crates with the same version
 oxc = { version = "0.110.0", features = [
