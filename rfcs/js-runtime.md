@@ -52,9 +52,9 @@ crates/vite_js_runtime/
 ├── Cargo.toml
 └── src/
     ├── lib.rs              # Public API exports
-    ├── runtime.rs          # JsRuntime struct and core logic
+    ├── runtime.rs          # JsRuntime struct, download, and core logic
     ├── node.rs             # Node.js specific implementation
-    ├── download.rs         # Download and extraction utilities
+    ├── error.rs            # Error types
     └── platform.rs         # Platform detection and binary selection
 ```
 
