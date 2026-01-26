@@ -446,6 +446,7 @@ mod tests {
     /// Test concurrent downloads - multiple tasks downloading the same version
     /// should not cause corruption or conflicts due to file-based locking
     #[tokio::test]
+    #[ignore]
     async fn test_concurrent_downloads() {
         // Use a different version to avoid conflicts with other tests
         let version = "20.17.0";

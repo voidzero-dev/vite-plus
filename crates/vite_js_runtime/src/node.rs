@@ -1,9 +1,23 @@
+use std::env;
+
 use vite_str::Str;
 
 use crate::{Error, Platform};
 
-/// Node.js distribution base URL
-const NODE_DIST_URL: &str = "https://nodejs.org/dist";
+/// Default Node.js distribution base URL
+const DEFAULT_NODE_DIST_URL: &str = "https://nodejs.org/dist";
+
+/// Environment variable to override the Node.js distribution URL
+const NODE_DIST_MIRROR_ENV: &str = "VITE_NODE_DIST_MIRROR";
+
+/// Get the Node.js distribution base URL
+///
+/// Returns the value of `VITE_NODE_DIST_MIRROR` environment variable if set,
+/// otherwise returns the default `https://nodejs.org/dist`.
+fn get_dist_url() -> Str {
+    env::var(NODE_DIST_MIRROR_ENV)
+        .map_or_else(|_| DEFAULT_NODE_DIST_URL.into(), |url| url.trim_end_matches('/').into())
+}
 
 /// Get the archive filename for a Node.js version on a specific platform
 ///
@@ -21,6 +35,9 @@ pub fn get_archive_filename(version: &str, platform: Platform) -> Str {
 
 /// Get the download URL for a Node.js archive
 ///
+/// Uses `VITE_NODE_DIST_MIRROR` environment variable if set,
+/// otherwise defaults to `https://nodejs.org/dist`.
+///
 /// # Arguments
 /// * `version` - The Node.js version (e.g., "22.13.1")
 /// * `platform` - The target platform
@@ -28,11 +45,15 @@ pub fn get_archive_filename(version: &str, platform: Platform) -> Str {
 /// # Returns
 /// The full download URL
 pub fn get_download_url(version: &str, platform: Platform) -> Str {
+    let base_url = get_dist_url();
     let filename = get_archive_filename(version, platform);
-    vite_str::format!("{NODE_DIST_URL}/v{version}/{filename}")
+    vite_str::format!("{base_url}/v{version}/{filename}")
 }
 
 /// Get the URL for SHASUMS256.txt for a Node.js version
+///
+/// Uses `VITE_NODE_DIST_MIRROR` environment variable if set,
+/// otherwise defaults to `https://nodejs.org/dist`.
 ///
 /// # Arguments
 /// * `version` - The Node.js version (e.g., "22.13.1")
@@ -40,7 +61,8 @@ pub fn get_download_url(version: &str, platform: Platform) -> Str {
 /// # Returns
 /// The SHASUMS256.txt URL
 pub fn get_shasums_url(version: &str) -> Str {
-    vite_str::format!("{NODE_DIST_URL}/v{version}/SHASUMS256.txt")
+    let base_url = get_dist_url();
+    vite_str::format!("{base_url}/v{version}/SHASUMS256.txt")
 }
 
 /// Parse SHASUMS256.txt content and extract the hash for a specific filename
@@ -144,5 +166,27 @@ fedcba987654  node-v22.13.1-win-x64.zip";
     fn test_get_extracted_dir_name() {
         let platform = Platform { os: Os::Linux, arch: Arch::X64 };
         assert_eq!(get_extracted_dir_name("22.13.1", platform), "node-v22.13.1-linux-x64");
+    }
+
+    #[test]
+    fn test_get_dist_url_default() {
+        // When env var is not set, should return default URL
+        unsafe { env::remove_var(NODE_DIST_MIRROR_ENV) };
+        assert_eq!(get_dist_url(), "https://nodejs.org/dist");
+    }
+
+    #[test]
+    fn test_get_dist_url_with_mirror() {
+        unsafe { env::set_var(NODE_DIST_MIRROR_ENV, "https://nodejs.org/dist") };
+        assert_eq!(get_dist_url(), "https://nodejs.org/dist");
+        unsafe { env::remove_var(NODE_DIST_MIRROR_ENV) };
+    }
+
+    #[test]
+    fn test_get_dist_url_trims_trailing_slash() {
+        // Should trim trailing slash from mirror URL
+        unsafe { env::set_var(NODE_DIST_MIRROR_ENV, "https://nodejs.org/dist/") };
+        assert_eq!(get_dist_url(), "https://nodejs.org/dist");
+        unsafe { env::remove_var(NODE_DIST_MIRROR_ENV) };
     }
 }

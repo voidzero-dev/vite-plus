@@ -152,6 +152,16 @@ https://nodejs.org/dist/v{version}/node-v{version}-{platform}.{ext}
 | macOS    | `.tar.gz`      | `node-v22.13.1-darwin-arm64.tar.gz` |
 | Windows  | `.zip`         | `node-v22.13.1-win-x64.zip`         |
 
+### Custom Mirror Support
+
+The distribution URL can be overridden using the `VITE_NODE_DIST_MIRROR` environment variable. This is useful for corporate environments or regions where nodejs.org might be slow or blocked.
+
+```bash
+VITE_NODE_DIST_MIRROR=https://example.com/mirrors/node vite build
+```
+
+The mirror URL should have the same directory structure as the official distribution. Trailing slashes are automatically trimmed.
+
 ### Integrity Verification
 
 Node.js provides SHASUMS256.txt for each release:
@@ -272,7 +282,7 @@ pub enum JsRuntimeError {
    - Test all supported platform/arch combinations
    - Test mapping to Node.js distribution names
 
-3. **Cache path generation**
+2. **Cache path generation**
    - Verify correct directory structure
 
 ### Integration Tests
@@ -343,8 +353,7 @@ pub enum JsRuntimeError {
 2. **Bun support**: Add `bun@x.y.z` runtime option with Bun release downloads
 3. **Deno support**: Add `deno@x.y.z` runtime option with Deno release downloads
 4. **Version ranges**: Support semver ranges like `node@^22.0.0`
-5. **Custom mirrors**: Support custom download URLs for corporate environments
-6. **Offline mode**: Use cached versions without network access
+5. **Offline mode**: Use cached versions without network access
 
 ## Success Criteria
 
@@ -354,6 +363,7 @@ pub enum JsRuntimeError {
 4. ✅ Handles concurrent downloads safely
 5. ✅ Returns version and binary path
 6. ✅ Comprehensive test coverage
+7. ✅ Custom mirrors via `VITE_NODE_DIST_MIRROR` environment variable
 
 ## References
 
