@@ -32,7 +32,7 @@ function stripComments(command: string): string {
  */
 async function runWithConcurrencyLimit(
   tasks: (() => Promise<void>)[],
-  maxConcurrency = cpus().length,
+  maxConcurrency: number,
 ): Promise<void> {
   const executing: Promise<void>[] = [];
   const errors: Error[] = [];
@@ -95,9 +95,9 @@ export async function snapTest() {
   }
 
   if (taskFunctions.length > 0) {
-    const cpuCount = cpus().length;
+    const cpuCount = cpus().length * 2;
     console.log(
-      'Running %d test cases with concurrency limit of %d (CPU count)',
+      'Running %d test cases with concurrency limit of %d (CPU count * 2)',
       taskFunctions.length,
       cpuCount,
     );
