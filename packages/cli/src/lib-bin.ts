@@ -87,9 +87,7 @@ cli
       if (viteConfig.configFile) configFiles.push(viteConfig.configFile);
 
       const configs: ResolvedConfig[] = [];
-      const libConfigs = Array.isArray((viteConfig as any).lib)
-        ? (viteConfig as any).lib
-        : [(viteConfig as any).lib ?? {}];
+      const libConfigs = Array.isArray(viteConfig.lib) ? viteConfig.lib : [viteConfig.lib ?? {}];
       for (const libConfig of libConfigs) {
         const resolvedConfig = await resolveUserConfig({ ...libConfig, ...flags }, flags);
         configs.push(...resolvedConfig);
@@ -117,4 +115,4 @@ export async function runCLI(): Promise<void> {
 if (module.enableCompileCache) {
   module.enableCompileCache();
 }
-void runCLI();
+runCLI();

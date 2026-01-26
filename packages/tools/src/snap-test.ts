@@ -113,6 +113,11 @@ interface Command {
    * This is useful for commands that stdout/stderr is unstable.
    */
   ignoreOutput?: boolean;
+  /**
+   * The timeout in milliseconds for the command.
+   * If not specified, the default timeout is 30 seconds.
+   */
+  timeout?: number;
 }
 
 interface Steps {
@@ -202,7 +207,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
             match: async () => [],
           },
         }),
-        setTimeout(30 * 1000),
+        setTimeout(cmd.timeout ?? 30 * 1000),
       ]);
 
       await outputStream.close();
