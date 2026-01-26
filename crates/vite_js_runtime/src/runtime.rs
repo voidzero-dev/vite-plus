@@ -131,6 +131,14 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
         });
     }
 
+    // If install_dir exists but binary doesn't, it's an incomplete installation - clean it up
+    if tokio::fs::try_exists(&install_dir).await.unwrap_or(false) {
+        tracing::warn!(
+            "Incomplete installation detected at {install_dir:?}, removing before re-download"
+        );
+        tokio::fs::remove_dir_all(&install_dir).await?;
+    }
+
     tracing::info!("Downloading {} {version} for {platform_str}...", provider.name());
 
     // Get download info from provider
@@ -242,6 +250,37 @@ mod tests {
 
         // Should return same install directory
         assert_eq!(runtime1.install_dir, runtime2.install_dir);
+    }
+
+    /// Test that incomplete installations are cleaned up and re-downloaded
+    #[tokio::test]
+    async fn test_incomplete_installation_cleanup() {
+        // Use a different version to avoid interference with other tests
+        let version = "20.18.1";
+
+        // First, ensure we have a valid cached version
+        let runtime = download_runtime(JsRuntimeType::Node, version).await.unwrap();
+        let install_dir = runtime.install_dir.clone();
+        let binary_path = runtime.get_binary_path();
+
+        // Simulate an incomplete installation by removing the binary but keeping the directory
+        tokio::fs::remove_file(&binary_path).await.unwrap();
+        assert!(!tokio::fs::try_exists(&binary_path).await.unwrap());
+        assert!(tokio::fs::try_exists(&install_dir).await.unwrap());
+
+        // Now download again - it should detect the incomplete installation and re-download
+        let runtime2 = download_runtime(JsRuntimeType::Node, version).await.unwrap();
+
+        // Verify the binary exists again
+        assert!(tokio::fs::try_exists(&runtime2.get_binary_path()).await.unwrap());
+
+        // Verify binary is executable
+        let output = tokio::process::Command::new(runtime2.get_binary_path().as_path())
+            .arg("--version")
+            .output()
+            .await
+            .unwrap();
+        assert!(output.status.success());
     }
 
     /// Test concurrent downloads - multiple tasks downloading the same version
