@@ -272,48 +272,6 @@ pub enum JsRuntimeError {
 }
 ```
 
-## NAPI Binding
-
-Expose to JavaScript for use in the global CLI:
-
-```rust
-// packages/global/binding/src/js_runtime.rs
-
-#[napi(object)]
-pub struct JsRuntimeInfo {
-    pub runtime_type: String,
-    pub version: String,        // Resolved exact version
-    pub binary_path: String,
-    pub bin_prefix: String,
-}
-
-/// Download a JavaScript runtime by specification string
-/// @param spec - Runtime specification (e.g., "node@22.13.1")
-#[napi]
-pub async fn download_js_runtime(spec: String) -> napi::Result<JsRuntimeInfo> {
-    let (runtime_type, version) = parse_runtime_spec(&spec)?;
-    let runtime = download_runtime(runtime_type, &version).await?;
-
-    Ok(JsRuntimeInfo {
-        runtime_type: runtime.runtime_type().to_string(),
-        version: runtime.version().to_string(),
-        binary_path: runtime.get_binary_path().to_string(),
-        bin_prefix: runtime.get_bin_prefix().to_string(),
-    })
-}
-```
-
-### JavaScript Usage
-
-```typescript
-import { downloadJsRuntime } from '@voidzero-dev/vite-plus-binding';
-
-// Download specific version
-const runtime = await downloadJsRuntime('node@22.13.1');
-console.log(runtime.binaryPath); // /Users/.../.cache/vite/js_runtime/node/22.13.1/darwin-arm64/bin/node
-console.log(runtime.version);    // "22.13.1"
-```
-
 ## Testing Strategy
 
 ### Unit Tests
@@ -403,8 +361,7 @@ console.log(runtime.version);    // "22.13.1"
 3. ✅ Verifies download integrity using SHASUMS256.txt
 4. ✅ Handles concurrent downloads safely
 5. ✅ Returns version and binary path
-6. ✅ Exposed via NAPI for JavaScript CLI usage
-7. ✅ Comprehensive test coverage
+6. ✅ Comprehensive test coverage
 
 ## References
 
