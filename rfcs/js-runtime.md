@@ -35,11 +35,11 @@ The library accepts runtime specification as a string parameter:
 
 ### Examples
 
-| Runtime | Example |
-|---|---|
-| Node.js | `node@22.13.1` |
-| Bun (future) | `bun@1.2.0` |
-| Deno (future) | `deno@2.0.0` |
+| Runtime       | Example        |
+| ------------- | -------------- |
+| Node.js       | `node@22.13.1` |
+| Bun (future)  | `bun@1.2.0`    |
+| Deno (future) | `deno@2.0.0`   |
 
 Only exact versions are supported. Version aliases (like `latest` or `lts`) may be added in future versions.
 
@@ -128,20 +128,21 @@ $CACHE_DIR/vite/js_runtime/{runtime}/{version}/{platform}-{arch}/
 ```
 
 Examples:
+
 - Linux x64: `~/.cache/vite/js_runtime/node/22.13.1/linux-x64/`
 - macOS ARM: `~/Library/Caches/vite/js_runtime/node/22.13.1/darwin-arm64/`
 - Windows x64: `%LOCALAPPDATA%\vite\js_runtime\node\22.13.1\win-x64\`
 
 ### Platform Detection
 
-| OS | Architecture | Platform String |
-|---|---|---|
-| Linux | x64 | `linux-x64` |
-| Linux | ARM64 | `linux-arm64` |
-| macOS | x64 | `darwin-x64` |
-| macOS | ARM64 | `darwin-arm64` |
-| Windows | x64 | `win-x64` |
-| Windows | ARM64 | `win-arm64` |
+| OS      | Architecture | Platform String |
+| ------- | ------------ | --------------- |
+| Linux   | x64          | `linux-x64`     |
+| Linux   | ARM64        | `linux-arm64`   |
+| macOS   | x64          | `darwin-x64`    |
+| macOS   | ARM64        | `darwin-arm64`  |
+| Windows | x64          | `win-x64`       |
+| Windows | ARM64        | `win-arm64`     |
 
 ## Download Sources
 
@@ -153,26 +154,29 @@ Official distribution from nodejs.org:
 https://nodejs.org/dist/v{version}/node-v{version}-{platform}.{ext}
 ```
 
-| Platform | Archive Format | Example |
-|---|---|---|
-| Linux | `.tar.gz` | `node-v22.13.1-linux-x64.tar.gz` |
-| macOS | `.tar.gz` | `node-v22.13.1-darwin-arm64.tar.gz` |
-| Windows | `.zip` | `node-v22.13.1-win-x64.zip` |
+| Platform | Archive Format | Example                             |
+| -------- | -------------- | ----------------------------------- |
+| Linux    | `.tar.gz`      | `node-v22.13.1-linux-x64.tar.gz`    |
+| macOS    | `.tar.gz`      | `node-v22.13.1-darwin-arm64.tar.gz` |
+| Windows  | `.zip`         | `node-v22.13.1-win-x64.zip`         |
 
 ### Integrity Verification
 
 Node.js provides SHASUMS256.txt for each release:
+
 ```
 https://nodejs.org/dist/v{version}/SHASUMS256.txt
 ```
 
 The implementation verifies download integrity automatically:
+
 1. Download SHASUMS256.txt for the target version
 2. Parse and extract the SHA256 hash for the target archive filename
 3. After downloading the archive, verify it against the expected hash
 4. Fail with error if hash doesn't match (corrupted download)
 
 Example SHASUMS256.txt content:
+
 ```
 a1b2c3d4...  node-v22.13.1-darwin-arm64.tar.gz
 e5f6g7h8...  node-v22.13.1-darwin-x64.tar.gz
@@ -209,6 +213,7 @@ i9j0k1l2...  node-v22.13.1-linux-arm64.tar.gz
 ### Concurrent Download Protection
 
 Same pattern as PackageManager:
+
 - Use tempfile for atomic operations
 - File-based locking to prevent race conditions
 - Check cache after acquiring lock (another process may have completed)
@@ -216,6 +221,7 @@ Same pattern as PackageManager:
 ## Integration with vite_install
 
 The `vite_install` crate can use `vite_js_runtime` to:
+
 1. Ensure the correct Node.js version before running package manager commands
 2. Use the managed Node.js to execute package manager binaries
 
@@ -309,6 +315,7 @@ pub enum JsRuntimeError {
 **Decision**: Pure library that receives runtime name and version as input.
 
 **Rationale**:
+
 - Maximum flexibility - callers decide how to obtain the runtime specification
 - No coupling to specific configuration formats (package.json, .nvmrc, etc.)
 - Easier to test in isolation
@@ -319,6 +326,7 @@ pub enum JsRuntimeError {
 **Decision**: Create a new `vite_js_runtime` crate.
 
 **Rationale**:
+
 - Clear separation of concerns (runtime vs. package manager)
 - Reusable by other crates without pulling in package manager logic
 - Easier to maintain and test independently
@@ -329,6 +337,7 @@ pub enum JsRuntimeError {
 **Decision**: Use `runtime@version` format with exact versions only.
 
 **Rationale**:
+
 - Mirrors the established `packageManager` format
 - Exact versions ensure reproducibility
 - No network requests needed for version resolution
@@ -340,6 +349,7 @@ pub enum JsRuntimeError {
 **Decision**: Support only Node.js in the initial version.
 
 **Rationale**:
+
 - Node.js is the most widely used runtime
 - Allows focused, well-tested implementation
 - Architecture supports easy addition of Bun/Deno later

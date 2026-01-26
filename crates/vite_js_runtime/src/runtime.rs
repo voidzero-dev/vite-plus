@@ -392,20 +392,20 @@ async fn move_to_cache(
 
     // If rename fails (cross-device), fall back to copy
     tracing::debug!("Atomic rename failed, falling back to copy: {source:?} -> {target:?}");
-    copy_dir_recursive(source.as_path(), target.as_path()).await?;
-    fs::remove_dir_all(source.as_path()).await?;
+    copy_dir_recursive(source, target).await?;
+    fs::remove_dir_all(source).await?;
 
     Ok(())
 }
 
 /// Recursively copy a directory
-#[expect(clippy::disallowed_types)] // std::path::Path required for fs operations
-async fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), Error> {
+async fn copy_dir_recursive(src: &AbsolutePath, dst: &AbsolutePath) -> Result<(), Error> {
     fs::create_dir_all(dst).await?;
 
     let mut entries = fs::read_dir(src).await?;
     while let Some(entry) = entries.next_entry().await? {
-        let src_path = entry.path();
+        // entry.path() returns absolute path when src is absolute
+        let src_path = AbsolutePathBuf::new(entry.path()).unwrap();
         let dst_path = dst.join(entry.file_name());
 
         if entry.file_type().await?.is_dir() {
