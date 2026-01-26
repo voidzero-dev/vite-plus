@@ -178,36 +178,9 @@ pub async fn move_to_cache(
         return Ok(());
     }
 
-    // Try atomic rename first
-    if fs::rename(source.as_path(), target.as_path()).await.is_ok() {
-        tracing::debug!("Atomic rename successful: {source:?} -> {target:?}");
-        return Ok(());
-    }
-
-    // If rename fails (cross-device), fall back to copy
-    tracing::debug!("Atomic rename failed, falling back to copy: {source:?} -> {target:?}");
-    copy_dir_recursive(source, target).await?;
-    fs::remove_dir_all(source).await?;
-
-    Ok(())
-}
-
-/// Recursively copy a directory
-pub async fn copy_dir_recursive(src: &AbsolutePath, dst: &AbsolutePath) -> Result<(), Error> {
-    fs::create_dir_all(dst).await?;
-
-    let mut entries = fs::read_dir(src).await?;
-    while let Some(entry) = entries.next_entry().await? {
-        // entry.path() returns absolute path when src is absolute
-        let src_path = AbsolutePathBuf::new(entry.path()).unwrap();
-        let dst_path = dst.join(entry.file_name());
-
-        if entry.file_type().await?.is_dir() {
-            Box::pin(copy_dir_recursive(&src_path, &dst_path)).await?;
-        } else {
-            fs::copy(&src_path, &dst_path).await?;
-        }
-    }
+    // Atomic rename
+    fs::rename(source.as_path(), target.as_path()).await?;
+    tracing::debug!("Atomic rename successful: {source:?} -> {target:?}");
 
     Ok(())
 }
