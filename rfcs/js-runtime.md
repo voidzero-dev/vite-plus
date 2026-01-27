@@ -179,14 +179,14 @@ println!("Version: {}", runtime.version()); // "22.13.1"
 Following the PackageManager pattern:
 
 ```
-$CACHE_DIR/vite/js_runtime/{runtime}/{version}/{platform}-{arch}/
+$CACHE_DIR/vite/js_runtime/{runtime}/{version}/
 ```
 
 Examples:
 
-- Linux x64: `~/.cache/vite/js_runtime/node/22.13.1/linux-x64/`
-- macOS ARM: `~/Library/Caches/vite/js_runtime/node/22.13.1/darwin-arm64/`
-- Windows x64: `%LOCALAPPDATA%\vite\js_runtime\node\22.13.1\win-x64\`
+- Linux x64: `~/.cache/vite/js_runtime/node/22.13.1/`
+- macOS ARM: `~/Library/Caches/vite/js_runtime/node/22.13.1/`
+- Windows x64: `%LOCALAPPDATA%\vite\js_runtime\node\22.13.1\`
 
 ### Platform Detection
 

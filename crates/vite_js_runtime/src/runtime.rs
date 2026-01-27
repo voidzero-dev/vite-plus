@@ -114,9 +114,8 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     let binary_relative_path = provider.binary_relative_path(platform);
     let bin_dir_relative_path = provider.bin_dir_relative_path(platform);
 
-    // Cache path: $CACHE_DIR/vite/js_runtime/{runtime}/{version}/{platform}/
-    let install_dir =
-        cache_dir.join(vite_str::format!("{}/{version}/{platform_str}", provider.name()));
+    // Cache path: $CACHE_DIR/vite/js_runtime/{runtime}/{version}/
+    let install_dir = cache_dir.join(vite_str::format!("{}/{version}", provider.name()));
 
     // Check if already cached
     let binary_path = install_dir.join(&binary_relative_path);
