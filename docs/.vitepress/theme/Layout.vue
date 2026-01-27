@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted, watch } from "vue";
 import { useData } from 'vitepress';
 import BaseTheme from '@voidzero-dev/vitepress-theme/src/viteplus';
 import Header from './components/Header.vue';
@@ -8,6 +9,25 @@ import Home from './layouts/Home.vue';
 
 const { frontmatter } = useData();
 const { Layout: BaseLayout } = BaseTheme;
+
+const ensureHomeLight = () => {
+  if (frontmatter.value?.layout !== "home" || typeof document === "undefined") {
+    return;
+  }
+
+  document.documentElement.classList.remove("dark");
+};
+
+onMounted(() => {
+  ensureHomeLight();
+});
+
+watch(
+  () => frontmatter.value?.layout,
+  () => {
+    ensureHomeLight();
+  },
+);
 </script>
 
 <template>

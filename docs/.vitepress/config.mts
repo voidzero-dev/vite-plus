@@ -749,18 +749,7 @@ export default extendConfig(
         ],
       ];
 
-      // return [...ogInfo, canonicalUrlEntry];
-      const headExtras: HeadConfig[] = [...ogInfo, canonicalUrlEntry];
-
-      if (pageData.frontmatter?.layout === 'home') {
-        headExtras.unshift([
-          'script',
-          {},
-          "document.documentElement.setAttribute('data-theme', 'light')",
-        ]);
-      }
-
-      return headExtras;
+      return [...ogInfo, canonicalUrlEntry];
     },
   }),
 );
