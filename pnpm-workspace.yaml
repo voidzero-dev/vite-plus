@@ -78,9 +78,9 @@ catalog:
   oxc-minify: =0.110.0
   oxc-parser: =0.110.0
   oxc-transform: =0.110.0
-  oxfmt: ^0.26.0
-  oxlint: ^1.41.0
-  oxlint-tsgolint: ^0.11.1
+  oxfmt: ^0.27.0
+  oxlint: ^1.42.0
+  oxlint-tsgolint: ^0.11.2
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
