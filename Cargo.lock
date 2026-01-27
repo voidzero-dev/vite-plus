@@ -7001,7 +7001,6 @@ version = "0.0.0"
 dependencies = [
  "backon",
  "crossterm",
- "directories",
  "flate2",
  "futures-util",
  "hex",
@@ -7023,6 +7022,7 @@ dependencies = [
  "vite_error",
  "vite_glob",
  "vite_path",
+ "vite_shared",
  "vite_str",
  "vite_workspace",
 ]
@@ -7033,7 +7033,6 @@ version = "0.0.0"
 dependencies = [
  "async-trait",
  "backon",
- "directories",
  "flate2",
  "futures-util",
  "hex",
@@ -7048,6 +7047,7 @@ dependencies = [
  "tokio",
  "tracing",
  "vite_path",
+ "vite_shared",
  "vite_str",
  "zip",
 ]
@@ -7076,6 +7076,14 @@ dependencies = [
  "serde",
  "thiserror 2.0.17",
  "vite_str",
+]
+
+[[package]]
+name = "vite_shared"
+version = "0.0.0"
+dependencies = [
+ "directories",
+ "vite_path",
 ]
 
 [[package]]

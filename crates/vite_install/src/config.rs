@@ -1,8 +1,7 @@
 use std::{env, sync::LazyLock};
 
-use directories::BaseDirs;
 use vite_error::Error;
-use vite_path::{AbsolutePathBuf, current_dir};
+use vite_path::AbsolutePathBuf;
 
 pub static NPM_REGISTRY: LazyLock<String> = LazyLock::new(|| {
     env::var("npm_config_registry")
@@ -26,11 +25,7 @@ pub fn get_npm_package_version_url(name: &str, version_or_tag: &str) -> String {
 /// It will use the cache directory of the operating system if available,
 /// otherwise it will use the current directory.
 pub fn get_cache_dir() -> Result<AbsolutePathBuf, Error> {
-    let cache_dir = match BaseDirs::new() {
-        Some(dirs) => AbsolutePathBuf::new(dirs.cache_dir().to_path_buf()).unwrap(),
-        None => current_dir()?.join(".cache"),
-    };
-    Ok(cache_dir.join("vite"))
+    Ok(vite_shared::get_cache_dir()?)
 }
 
 #[cfg(test)]
@@ -52,11 +47,5 @@ mod tests {
             get_npm_package_tgz_url("@vitejs/release-scripts", "1.6.0"),
             "https://registry.npmjs.org/@vitejs/release-scripts/-/release-scripts-1.6.0.tgz"
         );
-    }
-
-    #[test]
-    fn test_get_cache_dir() {
-        let cache_dir = get_cache_dir().unwrap();
-        assert!(cache_dir.ends_with("vite"));
     }
 }

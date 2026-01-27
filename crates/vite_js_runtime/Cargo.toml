@@ -10,7 +10,6 @@ rust-version.workspace = true
 [dependencies]
 async-trait = { workspace = true }
 backon = { workspace = true }
-directories = { workspace = true }
 flate2 = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
@@ -24,6 +23,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 vite_path = { workspace = true }
+vite_shared = { workspace = true }
 vite_str = { workspace = true }
 zip = { workspace = true }
 

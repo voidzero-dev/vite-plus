@@ -6,10 +6,9 @@ use std::{
 };
 
 use async_trait::async_trait;
-use directories::BaseDirs;
 use node_semver::{Range, Version};
 use serde::{Deserialize, Serialize};
-use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
+use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
 
 use crate::{
@@ -157,7 +156,7 @@ impl NodeProvider {
     ///
     /// Returns an error if the download fails or the JSON is invalid.
     pub async fn fetch_version_index(&self) -> Result<Vec<NodeVersionEntry>, Error> {
-        let cache_dir = get_cache_dir()?;
+        let cache_dir = crate::cache::get_cache_dir()?;
         let cache_path = cache_dir.join("node/index_cache.json");
 
         // Try to load from cache
@@ -349,15 +348,6 @@ async fn save_cache(cache_path: &AbsolutePathBuf, cache: &VersionIndexCache) {
 fn calculate_expires_at(max_age: Option<u64>) -> u64 {
     let ttl = max_age.unwrap_or(DEFAULT_CACHE_TTL_SECS);
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + ttl
-}
-
-/// Get the cache directory for JavaScript runtimes.
-fn get_cache_dir() -> Result<AbsolutePathBuf, Error> {
-    let cache_dir = match BaseDirs::new() {
-        Some(dirs) => AbsolutePathBuf::new(dirs.cache_dir().to_path_buf()).unwrap(),
-        None => current_dir()?.join(".cache"),
-    };
-    Ok(cache_dir.join("vite/js_runtime"))
 }
 
 /// Get the Node.js distribution base URL

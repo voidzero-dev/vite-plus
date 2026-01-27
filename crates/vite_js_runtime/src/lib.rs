@@ -33,6 +33,7 @@
 //! 2. Add the runtime type to `JsRuntimeType` enum
 //! 3. Add a match arm in `download_runtime()` to use the new provider
 
+mod cache;
 mod dev_engines;
 mod download;
 mod error;

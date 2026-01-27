@@ -1,6 +1,5 @@
-use directories::BaseDirs;
 use tempfile::TempDir;
-use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
+use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
 
 use crate::{
@@ -108,7 +107,7 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     version: &str,
 ) -> Result<JsRuntime, Error> {
     let platform = Platform::current();
-    let cache_dir = get_cache_dir()?;
+    let cache_dir = crate::cache::get_cache_dir()?;
 
     // Get paths from provider
     let platform_str = provider.platform_string(platform);
@@ -212,7 +211,7 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
     let package_json_path = project_path.join("package.json");
     let dev_engines = read_dev_engines(&package_json_path).await?;
     let provider = NodeProvider::new();
-    let cache_dir = get_cache_dir()?;
+    let cache_dir = crate::cache::get_cache_dir()?;
 
     // Find the "node" runtime configuration (supports both single object and array)
     let node_runtime = dev_engines
@@ -286,15 +285,6 @@ async fn read_dev_engines(
     let content = tokio::fs::read_to_string(package_json_path).await?;
     let pkg: PackageJson = serde_json::from_str(&content)?;
     Ok(pkg.dev_engines)
-}
-
-/// Get the cache directory for JavaScript runtimes
-fn get_cache_dir() -> Result<AbsolutePathBuf, Error> {
-    let cache_dir = match BaseDirs::new() {
-        Some(dirs) => AbsolutePathBuf::new(dirs.cache_dir().to_path_buf()).unwrap(),
-        None => current_dir()?.join(".cache"),
-    };
-    Ok(cache_dir.join("vite/js_runtime"))
 }
 
 #[cfg(test)]
@@ -576,7 +566,7 @@ mod tests {
         let version = "20.17.0";
 
         // Clear any existing cache for this version
-        let cache_dir = get_cache_dir().unwrap();
+        let cache_dir = crate::cache::get_cache_dir().unwrap();
         let install_dir = cache_dir.join(vite_str::format!("node/{version}"));
         if tokio::fs::try_exists(&install_dir).await.unwrap_or(false) {
             tokio::fs::remove_dir_all(&install_dir).await.unwrap();
