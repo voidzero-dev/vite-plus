@@ -137,9 +137,8 @@ impl NodeProvider {
             }
         }
 
-        // Return highest matching version
-        matching_versions.sort();
-        Ok(matching_versions.pop().map(|v| v.to_string().into()))
+        // Return highest matching version using semver comparison
+        Ok(matching_versions.into_iter().max().map(|v| v.to_string().into()))
     }
 
     /// Get the archive format for a platform

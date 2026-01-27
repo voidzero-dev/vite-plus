@@ -312,12 +312,27 @@ The `download_runtime_for_project` function reads the `devEngines.runtime` field
 
 ### Version Resolution
 
-When a semver range is specified (e.g., `^24.4.0`), the library:
+The version resolution is optimized to minimize network requests:
 
-1. Fetches the version index from `https://nodejs.org/dist/index.json`
-2. Caches the index locally with 1-hour TTL
-3. Uses `node-semver` crate for npm-compatible range matching
-4. Returns the first (highest) version that satisfies the range
+| Version Specified  | Local Cache | Network Request | Result                     |
+| ------------------ | ----------- | --------------- | -------------------------- |
+| Exact (`20.18.0`)  | -           | **No**          | Use exact version directly |
+| Range (`^20.18.0`) | Match found | **No**          | Use cached version         |
+| Range (`^20.18.0`) | No match    | **Yes**         | Resolve from network       |
+| Empty/None         | -           | **Yes**         | Get latest LTS version     |
+
+**Exact versions** (e.g., `20.18.0`, `v20.18.0`) are detected using `node_semver::Version::parse()` and used directly without network validation. The `v` prefix is normalized (stripped) since download URLs already add it.
+
+**Partial versions** like `20` or `20.18` are treated as ranges, not exact versions.
+
+**Semver ranges** (e.g., `^24.4.0`) trigger version resolution:
+
+1. First, check locally cached Node.js installations for a version that satisfies the range
+2. If a matching cached version exists, use the highest one (no network request)
+3. Otherwise, fetch the version index from `https://nodejs.org/dist/index.json`
+4. Cache the index locally with 1-hour TTL (supports ETag-based conditional requests)
+5. Use `node-semver` crate for npm-compatible range matching
+6. Return the highest version that satisfies the range
 
 ### Fallback Behavior
 
@@ -626,7 +641,7 @@ pub enum Error {
 2. **Bun support**: Create `BunProvider` implementing `JsRuntimeProvider`
 3. **Deno support**: Create `DenoProvider` implementing `JsRuntimeProvider`
 4. ✅ **Version ranges**: Support semver ranges like `node@^22.0.0`
-5. **Offline mode**: Use cached versions without network access
+5. **Offline mode**: Full offline support (partial: ranges check local cache first)
 6. **LTS alias**: Support `lts` alias to download latest LTS version
 
 ## Success Criteria
@@ -643,6 +658,7 @@ pub enum Error {
 10. ✅ Version index caching with 1-hour TTL
 11. ✅ Support both single runtime and array of runtimes in devEngines
 12. ✅ Write resolved version back to package.json (with formatting preservation)
+13. ✅ Optimized version resolution (skip network for exact versions, check local cache for ranges)
 
 ## References
 
