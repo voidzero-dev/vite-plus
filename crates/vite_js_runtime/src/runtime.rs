@@ -210,6 +210,7 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
     let package_json_path = project_path.join("package.json");
     let dev_engines = read_dev_engines(&package_json_path).await?;
     let provider = NodeProvider::new();
+    let cache_dir = get_cache_dir()?;
 
     // Find the "node" runtime configuration (supports both single object and array)
     let node_runtime = dev_engines
@@ -224,15 +225,32 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
     };
 
     let version = match node_runtime {
-        Some(runtime) => {
-            // Resolve version range or get latest
-            if runtime.version.is_empty() {
-                tracing::debug!("Node runtime configured without version, using latest");
-                provider.resolve_latest_version().await?
+        Some(runtime) if !runtime.version.is_empty() => {
+            let version_str = runtime.version.as_str();
+
+            // Optimization 1: Exact version - use directly without network request
+            if NodeProvider::is_exact_version(version_str) {
+                // Strip 'v' prefix if present (e.g., "v20.18.0" -> "20.18.0")
+                // because download URLs already add the 'v' prefix
+                let normalized = version_str.strip_prefix('v').unwrap_or(version_str);
+                tracing::debug!("Using exact version: {normalized}");
+                normalized.into()
             } else {
-                tracing::debug!("Resolving Node version requirement: {}", runtime.version);
-                provider.resolve_version(&runtime.version).await?
+                // Optimization 2: Range - check local cache first
+                if let Some(cached) = provider.find_cached_version(version_str, &cache_dir).await? {
+                    tracing::debug!("Found cached version {cached} satisfying {version_str}");
+                    cached
+                } else {
+                    // No cached version satisfies range, resolve from network
+                    tracing::debug!("Resolving version requirement from network: {version_str}");
+                    provider.resolve_version(version_str).await?
+                }
             }
+        }
+        Some(_) => {
+            // Runtime configured but no version specified, use latest
+            tracing::debug!("Node runtime configured without version, using latest");
+            provider.resolve_latest_version().await?
         }
         // No node runtime configured, use latest
         None => {
@@ -434,6 +452,26 @@ mod tests {
         assert!(content.contains("\"version\": \"^20.18.0\""));
         // Content should be unchanged
         assert_eq!(content, package_json);
+    }
+
+    #[tokio::test]
+    async fn test_download_runtime_for_project_with_v_prefix_exact_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create package.json with exact version including 'v' prefix
+        let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"v20.18.0"}}}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+
+        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+        // Version should be normalized (without 'v' prefix)
+        assert_eq!(runtime.version(), "20.18.0");
+
+        // Verify the binary exists and works
+        let binary_path = runtime.get_binary_path();
+        assert!(tokio::fs::try_exists(&binary_path).await.unwrap());
     }
 
     #[tokio::test]

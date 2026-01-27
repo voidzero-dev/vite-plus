@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use directories::BaseDirs;
 use node_semver::{Range, Version};
 use serde::{Deserialize, Serialize};
-use vite_path::{AbsolutePathBuf, current_dir};
+use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_str::Str;
 
 use crate::{
@@ -80,6 +80,66 @@ impl NodeProvider {
     #[must_use]
     pub const fn new() -> Self {
         Self
+    }
+
+    /// Check if a version string is an exact version (not a range).
+    ///
+    /// Returns `true` for exact versions like "20.18.0", "22.13.1".
+    /// Returns `false` for ranges like "^20.18.0", "~20.18.0", ">=20 <22", "20.x".
+    #[must_use]
+    pub fn is_exact_version(version_str: &str) -> bool {
+        Version::parse(version_str).is_ok()
+    }
+
+    /// Find a locally cached version that satisfies the version requirement.
+    ///
+    /// This checks the local cache directory for installed Node.js versions
+    /// and returns the highest version that satisfies the semver range.
+    ///
+    /// # Arguments
+    /// * `version_req` - A semver range requirement (e.g., "^20.18.0")
+    /// * `cache_dir` - The cache directory path (e.g., `~/.cache/vite/js_runtime`)
+    ///
+    /// # Returns
+    /// The highest cached version that satisfies the requirement, or `None` if
+    /// no cached version matches.
+    ///
+    /// # Errors
+    /// Returns an error if the version requirement is invalid.
+    pub async fn find_cached_version(
+        &self,
+        version_req: &str,
+        cache_dir: &AbsolutePath,
+    ) -> Result<Option<Str>, Error> {
+        let node_cache = cache_dir.join("node");
+
+        // List directories in cache
+        let mut entries = match tokio::fs::read_dir(&node_cache).await {
+            Ok(entries) => entries,
+            Err(_) => return Ok(None), // Cache dir doesn't exist
+        };
+
+        let range = Range::parse(version_req)?;
+        let mut matching_versions: Vec<Version> = Vec::new();
+        let platform = Platform::current();
+
+        while let Some(entry) = entries.next_entry().await? {
+            let name = entry.file_name().to_string_lossy().to_string();
+            // Skip non-version entries (index_cache.json, .lock files)
+            if let Ok(version) = Version::parse(&name) {
+                // Check if binary exists (valid installation)
+                let binary_path = node_cache.join(&name).join(self.binary_relative_path(platform));
+                if tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
+                    if range.satisfies(&version) {
+                        matching_versions.push(version);
+                    }
+                }
+            }
+        }
+
+        // Return highest matching version
+        matching_versions.sort();
+        Ok(matching_versions.pop().map(|v| v.to_string().into()))
     }
 
     /// Get the archive format for a platform
@@ -763,5 +823,84 @@ fedcba987654  node-v22.13.1-win-x64.zip";
         let no_lts_field: NodeVersionEntry =
             serde_json::from_str(r#"{"version": "v23.0.0"}"#).unwrap();
         assert!(!no_lts_field.is_lts());
+    }
+
+    #[test]
+    fn test_is_exact_version() {
+        // Exact versions should return true
+        assert!(NodeProvider::is_exact_version("20.18.0"));
+        assert!(NodeProvider::is_exact_version("22.13.1"));
+        assert!(NodeProvider::is_exact_version("18.20.5"));
+        assert!(NodeProvider::is_exact_version("0.0.1"));
+        assert!(NodeProvider::is_exact_version("v20.18.0")); // With 'v' prefix is also exact
+
+        // Ranges and partial versions should return false
+        assert!(!NodeProvider::is_exact_version("^20.18.0"));
+        assert!(!NodeProvider::is_exact_version("~20.18.0"));
+        assert!(!NodeProvider::is_exact_version(">=20.0.0"));
+        assert!(!NodeProvider::is_exact_version(">=20 <22"));
+        assert!(!NodeProvider::is_exact_version("20.x"));
+        assert!(!NodeProvider::is_exact_version("20.*"));
+        assert!(!NodeProvider::is_exact_version(">20.18.0"));
+        assert!(!NodeProvider::is_exact_version("<22.0.0"));
+        assert!(!NodeProvider::is_exact_version("20")); // Major only
+        assert!(!NodeProvider::is_exact_version("20.18")); // Major.minor only
+
+        // Invalid versions should return false
+        assert!(!NodeProvider::is_exact_version("invalid"));
+        assert!(!NodeProvider::is_exact_version(""));
+    }
+
+    #[tokio::test]
+    async fn test_find_cached_version() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let cache_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let provider = NodeProvider::new();
+
+        // Initially, no cache exists
+        let result = provider.find_cached_version("^20.18.0", &cache_dir).await.unwrap();
+        assert!(result.is_none());
+
+        // Create mock cached versions
+        let node_cache = cache_dir.join("node");
+        tokio::fs::create_dir_all(&node_cache).await.unwrap();
+
+        // Create version directories with mock binary
+        let platform = Platform::current();
+        let binary_path = provider.binary_relative_path(platform);
+
+        for version in ["20.17.0", "20.18.0", "20.19.0", "21.0.0"] {
+            let version_dir = node_cache.join(version);
+            let binary_full_path = version_dir.join(&binary_path);
+            tokio::fs::create_dir_all(binary_full_path.parent().unwrap()).await.unwrap();
+            tokio::fs::write(&binary_full_path, "mock binary").await.unwrap();
+        }
+
+        // Create incomplete installation (no binary)
+        let incomplete_dir = node_cache.join("20.20.0");
+        tokio::fs::create_dir_all(&incomplete_dir).await.unwrap();
+
+        // Test: ^20.18.0 should find highest matching version (20.19.0)
+        let result = provider.find_cached_version("^20.18.0", &cache_dir).await.unwrap();
+        assert_eq!(result, Some("20.19.0".into()));
+
+        // Test: ~20.18.0 should find highest 20.18.x (only 20.18.0)
+        let result = provider.find_cached_version("~20.18.0", &cache_dir).await.unwrap();
+        assert_eq!(result, Some("20.18.0".into()));
+
+        // Test: ^21.0.0 should find 21.0.0
+        let result = provider.find_cached_version("^21.0.0", &cache_dir).await.unwrap();
+        assert_eq!(result, Some("21.0.0".into()));
+
+        // Test: ^22.0.0 should find nothing
+        let result = provider.find_cached_version("^22.0.0", &cache_dir).await.unwrap();
+        assert!(result.is_none());
+
+        // Test: ^20.20.0 should find nothing (20.20.0 exists but no binary)
+        let result = provider.find_cached_version("^20.20.0", &cache_dir).await.unwrap();
+        assert!(result.is_none());
     }
 }
