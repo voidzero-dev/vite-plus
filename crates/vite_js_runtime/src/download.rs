@@ -14,6 +14,19 @@ use vite_str::Str;
 
 use crate::{Error, provider::ArchiveFormat};
 
+/// Response from a cached fetch operation
+pub struct CachedFetchResponse {
+    /// Response body (None if 304 Not Modified)
+    #[expect(clippy::disallowed_types, reason = "HTTP response body is a String")]
+    pub body: Option<String>,
+    /// ETag header value
+    pub etag: Option<Str>,
+    /// Cache max-age in seconds (from Cache-Control header)
+    pub max_age: Option<u64>,
+    /// Whether this was a 304 Not Modified response
+    pub not_modified: bool,
+}
+
 /// Download a file with retry logic
 pub async fn download_file(url: &str, target_path: &AbsolutePath) -> Result<(), Error> {
     tracing::debug!("Downloading {url} to {target_path:?}");
@@ -59,6 +72,75 @@ pub async fn download_text(url: &str) -> Result<String, Error> {
         .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
 
     Ok(content)
+}
+
+/// Fetch text with conditional request support
+///
+/// If `if_none_match` is provided, sends `If-None-Match` header for conditional request.
+/// Returns response with cache headers and not_modified flag.
+pub async fn fetch_with_cache_headers(
+    url: &str,
+    if_none_match: Option<&str>,
+) -> Result<CachedFetchResponse, Error> {
+    tracing::debug!("Fetching with cache headers from {url}");
+
+    let response = (|| async {
+        let client = reqwest::Client::new();
+        let mut request = client.get(url);
+
+        if let Some(etag) = if_none_match {
+            request = request.header("If-None-Match", etag);
+        }
+
+        request.send().await
+    })
+    .retry(
+        ExponentialBuilder::default()
+            .with_jitter()
+            .with_min_delay(Duration::from_millis(500))
+            .with_max_times(3),
+    )
+    .await
+    .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
+
+    // Check for 304 Not Modified
+    if response.status() == reqwest::StatusCode::NOT_MODIFIED {
+        tracing::debug!("Received 304 Not Modified for {url}");
+        return Ok(CachedFetchResponse {
+            body: None,
+            etag: None,
+            max_age: None,
+            not_modified: true,
+        });
+    }
+
+    // Extract headers before consuming response
+    let etag = response.headers().get("etag").and_then(|v| v.to_str().ok()).map(|s| s.into());
+
+    let max_age = response
+        .headers()
+        .get("cache-control")
+        .and_then(|v| v.to_str().ok())
+        .and_then(parse_max_age);
+
+    let body = response
+        .text()
+        .await
+        .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
+
+    Ok(CachedFetchResponse { body: Some(body), etag, max_age, not_modified: false })
+}
+
+/// Parse max-age from Cache-Control header value
+/// Example: "public, max-age=300" -> Some(300)
+fn parse_max_age(cache_control: &str) -> Option<u64> {
+    for directive in cache_control.split(',') {
+        let directive = directive.trim();
+        if let Some(value) = directive.strip_prefix("max-age=") {
+            return value.trim().parse().ok();
+        }
+    }
+    None
 }
 
 /// Verify file hash against expected SHA256 hash
@@ -183,4 +265,19 @@ pub async fn move_to_cache(
     tracing::debug!("Atomic rename successful: {source:?} -> {target:?}");
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_max_age() {
+        assert_eq!(parse_max_age("max-age=300"), Some(300));
+        assert_eq!(parse_max_age("public, max-age=300"), Some(300));
+        assert_eq!(parse_max_age("public, max-age=3600, immutable"), Some(3600));
+        assert_eq!(parse_max_age("no-cache"), None);
+        assert_eq!(parse_max_age(""), None);
+        assert_eq!(parse_max_age("max-age=invalid"), None);
+    }
 }
