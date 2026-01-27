@@ -16,7 +16,7 @@ futures-util = { workspace = true }
 hex = { workspace = true }
 node-semver = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = ["preserve_order"] }
 sha2 = { workspace = true }
 tar = { workspace = true }
 tempfile = { workspace = true }
