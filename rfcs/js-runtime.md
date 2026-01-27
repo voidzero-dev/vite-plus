@@ -156,9 +156,18 @@ pub async fn download_runtime(
 
 /// Download runtime based on project's devEngines.runtime configuration
 /// Reads package.json, resolves semver ranges, downloads the matching version
+/// If no version was specified, writes the resolved version back to package.json
 pub async fn download_runtime_for_project(
     project_path: &AbsolutePath,
 ) -> Result<JsRuntime, Error>;
+
+/// Update devEngines.runtime in package.json with the resolved version
+/// Preserves original formatting (indentation, key order, trailing newline)
+pub async fn update_runtime_version(
+    package_json_path: &AbsolutePath,
+    runtime_name: &str,
+    version: &str,
+) -> Result<(), Error>;
 
 impl JsRuntime {
     /// Get the path to the runtime binary (e.g., node, bun)
@@ -315,6 +324,54 @@ When a semver range is specified (e.g., `^24.4.0`), the library:
 - If no `devEngines.runtime` is configured, downloads the latest Node.js version
 - If `name` is not `"node"`, the runtime is skipped
 - If `version` is empty, downloads the latest Node.js version
+
+### Version Write-Back
+
+When `download_runtime_for_project` resolves a version (i.e., no version was specified), it writes the resolved version back to `package.json`. This ensures subsequent executions can skip version resolution and use the cached exact version directly.
+
+**Write-back occurs when:**
+
+- `devEngines.runtime` doesn't exist (creates the entire structure)
+- `devEngines.runtime` exists but has no `version` field
+- `devEngines.runtime` is an array and the matching entry has no `version` field
+
+**Write-back does NOT occur when:**
+
+- A version range is already specified (e.g., `^20.18.0`)
+- An exact version is already specified (e.g., `20.18.0`)
+
+**Example: Before download (no version specified)**
+
+```json
+{
+  "name": "my-project",
+  "devEngines": {
+    "runtime": {
+      "name": "node"
+    }
+  }
+}
+```
+
+**After download (version written back)**
+
+```json
+{
+  "name": "my-project",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "24.5.0"
+    }
+  }
+}
+```
+
+**Formatting preservation:**
+
+- Original indentation style is preserved (2 spaces, 4 spaces, or tabs)
+- Key order is preserved using `serde_json` with `preserve_order` feature
+- Trailing newline is preserved if present in original
 
 ## Download Sources
 
@@ -585,6 +642,7 @@ pub enum Error {
 9. ✅ Support semver ranges (^, ~, etc.) with version resolution
 10. ✅ Version index caching with 1-hour TTL
 11. ✅ Support both single runtime and array of runtimes in devEngines
+12. ✅ Write resolved version back to package.json (with formatting preservation)
 
 ## References
 
