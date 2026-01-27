@@ -13,6 +13,18 @@
 //! println!("Node.js installed at: {}", runtime.get_binary_path());
 //! ```
 //!
+//! # Project-Based Runtime Download
+//!
+//! You can also download a runtime based on a project's `devEngines.runtime` configuration:
+//!
+//! ```rust,ignore
+//! use vite_js_runtime::download_runtime_for_project;
+//! use vite_path::AbsolutePathBuf;
+//!
+//! let project_path = AbsolutePathBuf::new("/path/to/project".into()).unwrap();
+//! let runtime = download_runtime_for_project(&project_path).await?;
+//! ```
+//!
 //! # Adding a New Runtime
 //!
 //! To add support for a new JavaScript runtime (e.g., Bun, Deno):
@@ -21,6 +33,7 @@
 //! 2. Add the runtime type to `JsRuntimeType` enum
 //! 3. Add a match arm in `download_runtime()` to use the new provider
 
+mod dev_engines;
 mod download;
 mod error;
 mod platform;
@@ -32,4 +45,7 @@ pub use error::Error;
 pub use platform::{Arch, Os, Platform};
 pub use provider::{ArchiveFormat, DownloadInfo, HashVerification, JsRuntimeProvider};
 pub use providers::NodeProvider;
-pub use runtime::{JsRuntime, JsRuntimeType, download_runtime, download_runtime_with_provider};
+pub use runtime::{
+    JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project,
+    download_runtime_with_provider,
+};

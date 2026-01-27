@@ -1,6 +1,7 @@
 [default.extend-words]
 ratatui = "ratatui"
 PUNICODE = "PUNICODE"
+Jod = "Jod" # Node.js v22 LTS codename
 
 [files]
 extend-exclude = [

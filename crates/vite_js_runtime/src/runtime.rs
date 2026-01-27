@@ -1,10 +1,11 @@
 use directories::BaseDirs;
 use tempfile::TempDir;
-use vite_path::{AbsolutePathBuf, current_dir};
+use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_str::Str;
 
 use crate::{
     Error, Platform,
+    dev_engines::PackageJson,
     download::{download_file, download_text, extract_archive, move_to_cache, verify_file_hash},
     provider::{HashVerification, JsRuntimeProvider},
     providers::NodeProvider,
@@ -186,6 +187,72 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     })
 }
 
+/// Download runtime based on project's devEngines.runtime configuration.
+///
+/// Reads the `devEngines.runtime` field from the project's package.json and downloads
+/// the appropriate runtime version. If no configuration is found, downloads the latest
+/// Node.js version.
+///
+/// # Arguments
+/// * `project_path` - The path to the project directory containing package.json
+///
+/// # Returns
+/// A `JsRuntime` instance with the installation path
+///
+/// # Errors
+/// Returns an error if package.json cannot be read/parsed, version resolution fails,
+/// or download/extraction fails.
+///
+/// # Note
+/// Currently only supports Node.js runtime. Other runtimes in the configuration
+/// (e.g., "deno", "bun") are ignored.
+pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result<JsRuntime, Error> {
+    let package_json_path = project_path.join("package.json");
+    let dev_engines = read_dev_engines(&package_json_path).await?;
+    let provider = NodeProvider::new();
+
+    // Find the "node" runtime configuration (supports both single object and array)
+    let node_runtime = dev_engines
+        .as_ref()
+        .and_then(|de| de.runtime.as_ref())
+        .and_then(|rt| rt.find_by_name("node"));
+
+    let version = match node_runtime {
+        Some(runtime) => {
+            // Resolve version range or get latest
+            if runtime.version.is_empty() {
+                tracing::debug!("Node runtime configured without version, using latest");
+                provider.resolve_latest_version().await?
+            } else {
+                tracing::debug!("Resolving Node version requirement: {}", runtime.version);
+                provider.resolve_version(&runtime.version).await?
+            }
+        }
+        // No node runtime configured, use latest
+        None => {
+            tracing::debug!("No devEngines.runtime configuration found, using latest Node.js");
+            provider.resolve_latest_version().await?
+        }
+    };
+
+    tracing::info!("Resolved Node.js version: {version}");
+    download_runtime(JsRuntimeType::Node, &version).await
+}
+
+/// Read devEngines configuration from package.json.
+async fn read_dev_engines(
+    package_json_path: &AbsolutePathBuf,
+) -> Result<Option<crate::dev_engines::DevEngines>, Error> {
+    if !tokio::fs::try_exists(package_json_path).await.unwrap_or(false) {
+        tracing::debug!("package.json not found at {:?}", package_json_path);
+        return Ok(None);
+    }
+
+    let content = tokio::fs::read_to_string(package_json_path).await?;
+    let pkg: PackageJson = serde_json::from_str(&content)?;
+    Ok(pkg.dev_engines)
+}
+
 /// Get the cache directory for JavaScript runtimes
 fn get_cache_dir() -> Result<AbsolutePathBuf, Error> {
     let cache_dir = match BaseDirs::new() {
@@ -197,11 +264,93 @@ fn get_cache_dir() -> Result<AbsolutePathBuf, Error> {
 
 #[cfg(test)]
 mod tests {
+    use tempfile::TempDir;
+
     use super::*;
 
     #[test]
     fn test_js_runtime_type_display() {
         assert_eq!(JsRuntimeType::Node.to_string(), "node");
+    }
+
+    #[tokio::test]
+    async fn test_download_runtime_for_project_with_dev_engines() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create package.json with devEngines.runtime
+        let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"^20.18.0"}}}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+
+        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+        // Version should be >= 20.18.0 and < 21.0.0
+        let version = runtime.version();
+        let parsed = node_semver::Version::parse(version).unwrap();
+        assert_eq!(parsed.major, 20);
+        assert!(parsed.minor >= 18);
+
+        // Verify the binary exists and works
+        let binary_path = runtime.get_binary_path();
+        assert!(tokio::fs::try_exists(&binary_path).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_download_runtime_for_project_with_multiple_runtimes() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create package.json with array of runtimes
+        let package_json = r#"{
+            "devEngines": {
+                "runtime": [
+                    {"name": "deno", "version": "^2.0.0"},
+                    {"name": "node", "version": "^20.18.0"}
+                ]
+            }
+        }"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+
+        // Should use node runtime (deno is not supported yet)
+        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+        let version = runtime.version();
+        let parsed = node_semver::Version::parse(version).unwrap();
+        assert_eq!(parsed.major, 20);
+    }
+
+    #[tokio::test]
+    async fn test_download_runtime_for_project_no_dev_engines() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create package.json without devEngines
+        let package_json = r#"{"name": "test-project"}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+
+        // Should download latest Node.js
+        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+
+        // Should have a valid version
+        let version = runtime.version();
+        let parsed = node_semver::Version::parse(version).unwrap();
+        assert!(parsed.major >= 20);
+    }
+
+    #[tokio::test]
+    async fn test_download_runtime_for_project_no_package_json() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // No package.json file
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+
+        // Should download latest Node.js
+        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
     }
 
     /// Integration test that downloads a real Node.js version

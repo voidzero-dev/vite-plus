@@ -20,7 +20,7 @@ The PackageManager implementation in `vite_install` successfully handles automat
 
 ## Non-Goals (Initial Version)
 
-- Configuration auto-detection (no reading from package.json, .nvmrc, etc.)
+- ~~Configuration auto-detection (no reading from package.json, .nvmrc, etc.)~~ **Now supported via `devEngines.runtime`**
 - Managing multiple runtime versions simultaneously
 - Providing a version manager CLI (like nvm/fnm)
 - Supporting custom/unofficial Node.js builds
@@ -41,7 +41,12 @@ The library accepts runtime specification as a string parameter:
 | Bun (future)  | `bun@1.2.0`    |
 | Deno (future) | `deno@2.0.0`   |
 
-Only exact versions are supported. Version aliases (like `latest` or `lts`) may be added in future versions.
+Both exact versions and semver ranges are supported:
+
+- Exact: `22.13.1`
+- Caret range: `^22.0.0` (>=22.0.0 <23.0.0)
+- Tilde range: `~22.13.0` (>=22.13.0 <22.14.0)
+- Latest: omit version to get the latest release
 
 ## Architecture
 
@@ -52,12 +57,13 @@ crates/vite_js_runtime/
 ├── Cargo.toml
 └── src/
     ├── lib.rs              # Public API exports
+    ├── dev_engines.rs      # devEngines.runtime parsing from package.json
     ├── error.rs            # Error types
     ├── platform.rs         # Platform detection (Os, Arch, Platform)
     ├── provider.rs         # JsRuntimeProvider trait and types
     ├── providers/          # Provider implementations
     │   ├── mod.rs
-    │   └── node.rs         # NodeProvider implementing JsRuntimeProvider
+    │   └── node.rs         # NodeProvider with version resolution
     ├── download.rs         # Generic download utilities
     └── runtime.rs          # JsRuntime struct and download orchestration
 ```
@@ -142,11 +148,16 @@ To add support for a new runtime (e.g., Bun):
 ### Public API
 
 ```rust
-/// Download and cache a JavaScript runtime
-/// Returns the JsRuntime with installation path
+/// Download and cache a JavaScript runtime by exact version
 pub async fn download_runtime(
     runtime_type: JsRuntimeType,
     version: &str,           // Exact version (e.g., "22.13.1")
+) -> Result<JsRuntime, Error>;
+
+/// Download runtime based on project's devEngines.runtime configuration
+/// Reads package.json, resolves semver ranges, downloads the matching version
+pub async fn download_runtime_for_project(
+    project_path: &AbsolutePath,
 ) -> Result<JsRuntime, Error>;
 
 impl JsRuntime {
@@ -162,9 +173,22 @@ impl JsRuntime {
     /// Get the resolved version string (always exact, e.g., "22.13.1")
     pub fn version(&self) -> &str;
 }
+
+impl NodeProvider {
+    /// Fetch version index from nodejs.org/dist/index.json (with HTTP caching)
+    pub async fn fetch_version_index(&self) -> Result<Vec<NodeVersionEntry>, Error>;
+
+    /// Resolve version requirement (e.g., "^24.4.0") to exact version
+    pub async fn resolve_version(&self, version_req: &str) -> Result<Str, Error>;
+
+    /// Get latest version (first entry in index)
+    pub async fn resolve_latest_version(&self) -> Result<Str, Error>;
+}
 ```
 
-### Usage Example
+### Usage Examples
+
+**Direct version download:**
 
 ```rust
 use vite_js_runtime::{JsRuntimeType, download_runtime};
@@ -172,6 +196,17 @@ use vite_js_runtime::{JsRuntimeType, download_runtime};
 let runtime = download_runtime(JsRuntimeType::Node, "22.13.1").await?;
 println!("Node.js installed at: {}", runtime.get_binary_path());
 println!("Version: {}", runtime.version()); // "22.13.1"
+```
+
+**Project-based download (reads devEngines.runtime from package.json):**
+
+```rust
+use vite_js_runtime::download_runtime_for_project;
+use vite_path::AbsolutePathBuf;
+
+let project_path = AbsolutePathBuf::new("/path/to/project".into()).unwrap();
+let runtime = download_runtime_for_project(&project_path).await?;
+// Version is resolved from devEngines.runtime or uses latest
 ```
 
 ## Cache Directory Structure
@@ -188,6 +223,32 @@ Examples:
 - macOS ARM: `~/Library/Caches/vite/js_runtime/node/22.13.1/`
 - Windows x64: `%LOCALAPPDATA%\vite\js_runtime\node\22.13.1\`
 
+### Version Index Cache
+
+The Node.js version index is cached locally to avoid repeated network requests:
+
+```
+$CACHE_DIR/vite/js_runtime/node/index_cache.json
+```
+
+Cache structure:
+
+```json
+{
+  "expires_at": 1706400000,
+  "etag": null,
+  "versions": [
+    {"version": "v25.5.0", "lts": false},
+    {"version": "v24.4.0", "lts": "Jod"},
+    ...
+  ]
+}
+```
+
+- Default TTL: 1 hour (3600 seconds)
+- Cache is refreshed when expired
+- Falls back to full fetch if cache is corrupted
+
 ### Platform Detection
 
 | OS      | Architecture | Platform String |
@@ -198,6 +259,62 @@ Examples:
 | macOS   | ARM64        | `darwin-arm64`  |
 | Windows | x64          | `win-x64`       |
 | Windows | ARM64        | `win-arm64`     |
+
+## Project Configuration (devEngines.runtime)
+
+The `download_runtime_for_project` function reads the `devEngines.runtime` field from the project's package.json. This follows the [npm devEngines RFC](https://github.com/npm/rfcs/blob/main/accepted/0048-devEngines.md).
+
+### Single Runtime
+
+```json
+{
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^24.4.0",
+      "onFail": "download"
+    }
+  }
+}
+```
+
+### Multiple Runtimes (Array)
+
+```json
+{
+  "devEngines": {
+    "runtime": [
+      {
+        "name": "node",
+        "version": "^24.4.0",
+        "onFail": "download"
+      },
+      {
+        "name": "deno",
+        "version": "^2.4.3",
+        "onFail": "download"
+      }
+    ]
+  }
+}
+```
+
+**Note:** Currently only the `"node"` runtime is supported. Other runtimes are ignored.
+
+### Version Resolution
+
+When a semver range is specified (e.g., `^24.4.0`), the library:
+
+1. Fetches the version index from `https://nodejs.org/dist/index.json`
+2. Caches the index locally with 1-hour TTL
+3. Uses `node-semver` crate for npm-compatible range matching
+4. Returns the first (highest) version that satisfies the range
+
+### Fallback Behavior
+
+- If no `devEngines.runtime` is configured, downloads the latest Node.js version
+- If `name` is not `"node"`, the runtime is skipped
+- If `version` is empty, downloads the latest Node.js version
 
 ## Download Sources
 
@@ -322,24 +439,43 @@ async fn run_with_managed_node(
 
 ## Error Handling
 
-New error variants for `vite_error`:
+Error variants in `vite_js_runtime::Error`:
 
 ```rust
-pub enum JsRuntimeError {
+pub enum Error {
     /// Version not found in official releases
-    VersionNotFound { runtime: String, version: String },
+    VersionNotFound { runtime: Str, version: Str },
 
     /// Platform not supported for this runtime
-    UnsupportedPlatform { platform: String, runtime: String },
+    UnsupportedPlatform { platform: Str, runtime: Str },
 
     /// Download failed after retries
-    DownloadFailed { url: String, reason: String },
+    DownloadFailed { url: Str, reason: Str },
 
     /// Hash verification failed (download corrupted)
-    HashMismatch { expected: String, actual: String },
+    HashMismatch { filename: Str, expected: Str, actual: Str },
 
     /// Archive extraction failed
-    ExtractionFailed { reason: String },
+    ExtractionFailed { reason: Str },
+
+    /// SHASUMS file parsing failed
+    ShasumsParseFailed { reason: Str },
+
+    /// Hash not found in SHASUMS file
+    HashNotFound { filename: Str },
+
+    /// Failed to parse version index
+    VersionIndexParseFailed { reason: Str },
+
+    /// No version matching the requirement found
+    NoMatchingVersion { version_req: Str },
+
+    /// IO, HTTP, JSON, and semver errors
+    Io(std::io::Error),
+    Reqwest(reqwest::Error),
+    JoinError(tokio::task::JoinError),
+    Json(serde_json::Error),
+    SemverRange(node_semver::SemverError),
 }
 ```
 
@@ -395,15 +531,15 @@ pub enum JsRuntimeError {
 
 ### 3. Version Specification Format
 
-**Decision**: Use `runtime@version` format with exact versions only.
+**Decision**: Support both exact versions and semver ranges.
 
 **Rationale**:
 
-- Mirrors the established `packageManager` format
-- Exact versions ensure reproducibility
-- No network requests needed for version resolution
-- Simpler implementation without caching complexity
-- Version aliases can be added as a future enhancement
+- Mirrors the established `packageManager` format for exact versions
+- Semver ranges provide flexibility for automatic updates within constraints
+- Version index is cached locally (1-hour TTL) to minimize network requests
+- Uses `node-semver` crate for npm-compatible range parsing
+- `download_runtime()` takes exact versions; `download_runtime_for_project()` handles range resolution
 
 ### 4. Initial Node.js Only
 
@@ -429,11 +565,12 @@ pub enum JsRuntimeError {
 
 ## Future Enhancements
 
-1. **Version aliases**: Support `latest` and `lts` aliases with cached version index
+1. ✅ **Version aliases**: Support `latest` alias with cached version index
 2. **Bun support**: Create `BunProvider` implementing `JsRuntimeProvider`
 3. **Deno support**: Create `DenoProvider` implementing `JsRuntimeProvider`
-4. **Version ranges**: Support semver ranges like `node@^22.0.0`
+4. ✅ **Version ranges**: Support semver ranges like `node@^22.0.0`
 5. **Offline mode**: Use cached versions without network access
+6. **LTS alias**: Support `lts` alias to download latest LTS version
 
 ## Success Criteria
 
@@ -444,6 +581,10 @@ pub enum JsRuntimeError {
 5. ✅ Returns version and binary path
 6. ✅ Comprehensive test coverage
 7. ✅ Custom mirrors via `VITE_NODE_DIST_MIRROR` environment variable
+8. ✅ Support `devEngines.runtime` from package.json
+9. ✅ Support semver ranges (^, ~, etc.) with version resolution
+10. ✅ Version index caching with 1-hour TTL
+11. ✅ Support both single runtime and array of runtimes in devEngines
 
 ## References
 

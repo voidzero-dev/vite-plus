@@ -32,6 +32,14 @@ pub enum Error {
     #[error("Hash not found for {filename} in SHASUMS256.txt")]
     HashNotFound { filename: Str },
 
+    /// Failed to parse version index
+    #[error("Failed to parse version index: {reason}")]
+    VersionIndexParseFailed { reason: Str },
+
+    /// No version matching the requirement found
+    #[error("No version matching '{version_req}' found")]
+    NoMatchingVersion { version_req: Str },
+
     /// IO error
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -43,4 +51,12 @@ pub enum Error {
     /// Join error from tokio
     #[error(transparent)]
     JoinError(#[from] tokio::task::JoinError),
+
+    /// JSON parsing error
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+
+    /// Semver range parsing error
+    #[error(transparent)]
+    SemverRange(#[from] node_semver::SemverError),
 }
