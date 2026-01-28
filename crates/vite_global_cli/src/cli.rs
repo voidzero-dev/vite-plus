@@ -135,7 +135,7 @@ pub enum Commands {
         #[arg(short = 'g', long)]
         global: bool,
 
-        /// Packages to add (if provided, acts as `vite add`)
+        /// Packages to add (if provided, acts as `vp add`)
         #[arg(required = false)]
         packages: Option<Vec<String>>,
 
@@ -512,12 +512,12 @@ pub enum Commands {
     ///   - Local: @company/generator-*, ./tools/create-ui-component
     ///
     /// Examples:
-    ///   vite new                              # Interactive mode
-    ///   vite new vite:monorepo                # Create monorepo
-    ///   vite new create-vite                  # Use create-vite template
-    ///   vite new create-vite -- --template react-ts  # Pass options to template
+    ///   vp new                              # Interactive mode
+    ///   vp new vite:monorepo                # Create monorepo
+    ///   vp new create-vite                  # Use create-vite template
+    ///   vp new create-vite -- --template react-ts  # Pass options to template
     #[command(
-        after_help = "Run 'vite new --list' to see available templates.\nArguments after -- are passed directly to the template."
+        after_help = "Run 'vp new --list' to see available templates.\nArguments after -- are passed directly to the template."
     )]
     New {
         /// All arguments (template, options, and template args after --)

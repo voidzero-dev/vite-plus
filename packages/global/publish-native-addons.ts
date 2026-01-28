@@ -73,8 +73,9 @@ await cli.prePublish({
 });
 
 // Publish each platform package
+const npmTag = process.env.NPM_TAG || 'latest';
 for (const file of platformDirs) {
-  execSync(`npm publish --tag latest --access public --no-git-checks`, {
+  execSync(`npm publish --tag ${npmTag} --access public --no-git-checks`, {
     cwd: join(currentDir, 'npm', file),
     env: process.env,
     stdio: 'inherit',

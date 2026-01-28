@@ -6973,7 +6973,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vite-plus-global-cli"
+name = "vite-plus-global-cli-binding"
 version = "0.0.0"
 dependencies = [
  "fspy",

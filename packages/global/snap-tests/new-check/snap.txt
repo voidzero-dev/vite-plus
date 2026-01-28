@@ -5,7 +5,7 @@ Use any builtin, local or remote template with Vite+.
 
 Templates: - Builtin: vite:monorepo, vite:application, vite:library, vite:generator - Remote: create-vite, @tanstack/create-start, create-next-app, etc. - GitHub: github:user/repo, https://github.com/user/template-repo - Local: @company/generator-*, ./tools/create-ui-component
 
-Examples: vite new                              # Interactive mode vite new vite:monorepo                # Create monorepo vite new create-vite                  # Use create-vite template vite new create-vite -- --template react-ts  # Pass options to template
+Examples: vp new                              # Interactive mode vp new vite:monorepo                # Create monorepo vp new create-vite                  # Use create-vite template vp new create-vite -- --template react-ts  # Pass options to template
 
 Usage: vp new [ARGS]...
 
@@ -17,7 +17,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-Run 'vite new --list' to see available templates.
+Run 'vp new --list' to see available templates.
 Arguments after -- are passed directly to the template.
 
 > vp new --list # list templates

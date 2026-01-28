@@ -30,12 +30,12 @@ use crate::{error::Error, js_executor::JsExecutor};
 /// # Examples
 ///
 /// ```text
-/// vite new                              # Interactive mode
-/// vite new vite:monorepo                # Create a monorepo
-/// vite new create-vite                  # Use create-vite template
-/// vite new create-vite -- --template react-ts  # Pass options to template
-/// vite new --list                       # List available templates
-/// vite new --help                       # Show help
+/// vp new                              # Interactive mode
+/// vp new vite:monorepo                # Create a monorepo
+/// vp new create-vite                  # Use create-vite template
+/// vp new create-vite -- --template react-ts  # Pass options to template
+/// vp new --list                       # List available templates
+/// vp new --help                       # Show help
 /// ```
 pub async fn execute(cwd: AbsolutePathBuf, args: &[String]) -> Result<ExitStatus, Error> {
     let mut executor = JsExecutor::new(None);

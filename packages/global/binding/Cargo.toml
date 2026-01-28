@@ -1,8 +1,7 @@
 [package]
-name = "vite-plus-global-cli"
+name = "vite-plus-global-cli-binding"
 version = "0.0.0"
 edition = "2024"
-description = "Vite+ Global CLI"
 
 [dependencies]
 fspy = { workspace = true }

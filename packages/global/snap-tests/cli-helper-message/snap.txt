@@ -46,7 +46,7 @@ Install all dependencies, or add packages if package names are provided
 Usage: vp install [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
-  [PACKAGES]...           Packages to add (if provided, acts as `vite add`)
+  [PACKAGES]...           Packages to add (if provided, acts as `vp add`)
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:

@@ -27,9 +27,10 @@ await cli.prePublish({
   skipOptionalPublish: true,
 });
 
+const npmTag = process.env.NPM_TAG || 'latest';
 const npmDir = await readdir(join(currentDir, 'npm'));
 for (const file of npmDir) {
-  execSync(`npm publish --tag latest --access public --no-git-checks`, {
+  execSync(`npm publish --tag ${npmTag} --access public --no-git-checks`, {
     cwd: join(currentDir, 'npm', file),
     env: process.env,
     stdio: 'inherit',

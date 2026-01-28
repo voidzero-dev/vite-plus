@@ -18,8 +18,8 @@ async function migrateProject(project: string) {
   const repoConfig = repos[project as keyof typeof repos];
   const directory = 'directory' in repoConfig ? repoConfig.directory : undefined;
   const cwd = directory ? join(repoRoot, directory) : repoRoot;
-  // run vite migrate
-  execSync('vite migrate --no-agent', {
+  // run vp migrate
+  execSync('vp migrate --no-agent', {
     cwd,
     stdio: 'inherit',
     env: {

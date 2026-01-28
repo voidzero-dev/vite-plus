@@ -214,7 +214,7 @@ jobs:
           git diff --exit-code
 
   install-e2e-test:
-    name: vite install E2E test
+    name: Local CLI `vite install` E2E test
     needs:
       - download-previous-rolldown-binaries
     runs-on: ubuntu-latest
@@ -250,11 +250,11 @@ jobs:
       - name: Build CLI
         run: pnpm bootstrap-cli:ci
 
-      - name: Run local CLI vp install
+      - name: Run local CLI `vite install`
         run: |
           export PATH=$PWD/node_modules/.bin:$PATH
-          vp -h
-          # Test vp install on various repositories with different package managers
+          vite -h
+          # Test vite install on various repositories with different package managers
           repos=(
             # pnpm workspace
             "pnpm/pnpm:pnpm"
@@ -269,16 +269,16 @@ jobs:
 
           for repo_info in "${repos[@]}"; do
             IFS=':' read -r repo dir_name <<< "$repo_info"
-            echo "Testing vp install on $repo…"
+            echo "Testing vite install on $repo…"
             # remove the directory if it exists
             if [ -d "$RUNNER_TEMP/$dir_name" ]; then
               rm -rf "$RUNNER_TEMP/$dir_name"
             fi
             git clone --depth 1 "https://github.com/$repo.git" "$RUNNER_TEMP/$dir_name"
             cd "$RUNNER_TEMP/$dir_name"
-            vp install
+            vite install
             # run again to show install cache increase by time
-            time vp install
+            time vite install
             echo "✓ Successfully installed dependencies for $repo"
             echo ""
           done

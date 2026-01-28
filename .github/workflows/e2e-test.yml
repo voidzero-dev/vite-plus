@@ -150,11 +150,11 @@ jobs:
           # - name: skeleton
           #   node-version: 24
           #   command: |
-          #     vite run format
-          #     vite run lint:check
-          #     vite run check
+          #     vp run format
+          #     vp run lint:check
+          #     vp run check
           #     npx playwright install chromium
-          #     vite run test
+          #     vp run test
           - name: rollipop
             node-version: 22
             command: |
@@ -199,11 +199,11 @@ jobs:
           # - name: vite-plugin-react
           #   node-version: 22
           #   command: |
-          #     vite run format
-          #     vite run lint -- --fix
+          #     vp run format
+          #     vp run lint -- --fix
           #     # TODO(fengmk2): run all builds and tests after tsdown version upgrade
-          #     vite run @vitejs/plugin-rsc#build
-          #     vite run @vitejs/plugin-rsc#test
+          #     vp run @vitejs/plugin-rsc#build
+          #     vp run @vitejs/plugin-rsc#test
           - name: vitepress
             node-version: 24
             command: |

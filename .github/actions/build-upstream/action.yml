@@ -24,7 +24,7 @@ runs:
       id: cache-key
       shell: bash
       run: |
-        echo "key=napi-binding-v2-${{ inputs.target }}-${{ env.RELEASE_BUILD }}-${{ env.DEBUG }}-${{ env.VERSION }}-${{ hashFiles('packages/tools/.upstream-versions.json', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/*/binding/**/*.rs', 'packages/*/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/global/package.json', 'packages/global/build.ts') }}" >> $GITHUB_OUTPUT
+        echo "key=napi-binding-v2-${{ inputs.target }}-${{ env.RELEASE_BUILD }}-${{ env.DEBUG }}-${{ env.VERSION }}-${{ env.NPM_TAG }}-${{ hashFiles('packages/tools/.upstream-versions.json', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/*/binding/**/*.rs', 'packages/*/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/global/package.json', 'packages/global/build.ts') }}" >> $GITHUB_OUTPUT
 
     # Cache NAPI bindings and Rust CLI binary (the slow parts, especially on Windows)
     - name: Restore NAPI binding cache

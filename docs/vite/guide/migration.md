@@ -66,15 +66,12 @@ Vite+ provides an automated migration command that handles most of the migration
 
 ```bash
 # Migrate current directory
-vite migration
-
-# Alias
-vite migrate
+vp migrate
 ```
 
 ### What the Migration Does
 
-The `vite migration` command automatically:
+The `vp migrate` command automatically:
 
 1. **Updates dependencies**: Replaces standalone `vite`, `vitest`, `oxlint`, and `oxfmt` with unified Vite+ packages
 2. **Configures overrides**: Adds package manager overrides to ensure all dependencies use Vite+ versions
@@ -87,7 +84,7 @@ The `vite migration` command automatically:
 When you run the migration command, you'll see a preview of changes:
 
 ```bash
-$ vite migration
+$ vp migrate
 
 ◇  Analyzing project...
 │
