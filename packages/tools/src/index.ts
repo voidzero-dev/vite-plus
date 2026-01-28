@@ -21,14 +21,10 @@ switch (subcommand) {
     const { mergePeerDeps } = await import('./merge-peer-deps.ts');
     mergePeerDeps();
     break;
-  case 'install-global-cli':
-    const { installGlobalCli } = await import('./install-global-cli.ts');
-    installGlobalCli();
-    break;
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
     console.error(
-      'Available subcommands: snap-test, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli',
+      'Available subcommands: snap-test, replace-file-content, sync-remote, json-sort, merge-peer-deps',
     );
     process.exit(1);
 }

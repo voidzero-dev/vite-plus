@@ -22,8 +22,8 @@ use crate::{
 /// Vite+ Global CLI
 #[derive(Parser, Debug)]
 #[clap(
-    name = "vite",
-    bin_name = "vite",
+    name = "vp",
+    bin_name = "vp",
     author,
     about = "Vite+ - A next-generation build tool",
     long_about = None

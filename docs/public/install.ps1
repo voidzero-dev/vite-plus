@@ -135,7 +135,7 @@ function Main {
 set VITE_GLOBAL_CLI_JS_SCRIPTS_DIR=$DistDir
 "$BinDir\$binaryName" %*
 "@
-    $wrapperPath = Join-Path $BinDir "vite.cmd"
+    $wrapperPath = Join-Path $BinDir "vp.cmd"
     Set-Content -Path $wrapperPath -Value $wrapperContent -Encoding ASCII
 
     # Download and extract JS bundle
@@ -161,7 +161,7 @@ set VITE_GLOBAL_CLI_JS_SCRIPTS_DIR=$DistDir
         $env:Path = "$BinDir;$env:Path"
         Write-Success "PATH has been updated"
         Write-Host ""
-        Write-Host "  Restart your terminal to use vite, or run:"
+        Write-Host "  Restart your terminal to use vp, or run:"
         Write-Host ""
         Write-Host "    `$env:Path = `"$BinDir;`$env:Path`""
     } else {
@@ -171,7 +171,7 @@ set VITE_GLOBAL_CLI_JS_SCRIPTS_DIR=$DistDir
     Write-Host ""
     Write-Host "  Then run:"
     Write-Host ""
-    Write-Host "    vite --version"
+    Write-Host "    vp --version"
     Write-Host ""
 }
 

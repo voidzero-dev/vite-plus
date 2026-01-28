@@ -1,5 +1,5 @@
-> vite pm cache dir # should show cache directory (uses npm config get cache)
+> vp pm cache dir # should show cache directory (uses npm config get cache)
 <homedir>/.npm
 
-> vite pm cache path # should show cache path (alias for dir, uses npm config get cache)
+> vp pm cache path # should show cache path (alias for dir, uses npm config get cache)
 <homedir>/.npm

@@ -1,52 +1,13 @@
-> vite add testnpm2 -D -w --filter=* -- --no-audit && vite add test-vite-plus-install -w --filter=* -- --no-audit && vite add test-vite-plus-package-optional -O --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # prepare packages
+[2]> vp add testnpm2 -D -w --filter=* -- --no-audit && vite add test-vite-plus-install -w --filter=* -- --no-audit && vite add test-vite-plus-package-optional -O --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # prepare packages
 
 added 3 packages in <variable>ms
+error: unrecognized subcommand 'add'
 
-added 1 package in <variable>ms
+Usage: vite <COMMAND>
 
-added 1 package in <variable>ms
-{
-  "name": "command-remove-npm10-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
-}
-{
-  "name": "app",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true,
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
+For more information, try '--help'.
 
-> vite remove testnpm2 -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package from all workspaces and root
+> vp remove testnpm2 -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package from all workspaces and root
 
 removed 1 package in <variable>ms
 {
@@ -55,74 +16,7 @@ removed 1 package in <variable>ms
   "workspaces": [
     "packages/*"
   ],
-  "packageManager": "npm@<semver>",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
-}
-{
-  "name": "app",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
-
-> vite remove -O test-vite-plus-package-optional -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove optional package from all workspaces
-
-removed 1 package in <variable>ms
-{
-  "name": "command-remove-npm10-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
-}
-{
-  "name": "app",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
-}
-
-> vite remove test-vite-plus-install --filter=app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=app
-
-up to date in <variable>ms
-{
-  "name": "command-remove-npm10-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
+  "packageManager": "npm@<semver>"
 }
 {
   "name": "app"
@@ -130,13 +24,10 @@ up to date in <variable>ms
 {
   "name": "@vite-plus-test/utils",
   "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
+  "private": true
 }
 
-> vite remove test-vite-plus-install --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=*
+> vp remove -O test-vite-plus-package-optional -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove optional package from all workspaces
 
 up to date in <variable>ms
 {
@@ -145,10 +36,47 @@ up to date in <variable>ms
   "workspaces": [
     "packages/*"
   ],
-  "packageManager": "npm@<semver>",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
+  "packageManager": "npm@<semver>"
+}
+{
+  "name": "app"
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+> vp remove test-vite-plus-install --filter=app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=app
+
+up to date in <variable>ms
+{
+  "name": "command-remove-npm10-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "npm@<semver>"
+}
+{
+  "name": "app"
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+> vp remove test-vite-plus-install --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=*
+
+up to date in <variable>ms
+{
+  "name": "command-remove-npm10-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "npm@<semver>"
 }
 {
   "name": "app"

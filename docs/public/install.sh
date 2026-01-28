@@ -181,14 +181,14 @@ main() {
   # Make binary executable
   chmod +x "$BIN_DIR/$binary_name"
 
-  # Create a wrapper script named 'vite' that calls the binary with proper env
-  cat > "$BIN_DIR/vite" << EOF
+  # Create a wrapper script named 'vp' that calls the binary with proper env
+  cat > "$BIN_DIR/vp" << EOF
 #!/bin/bash
 # Vite+ CLI wrapper
 export VITE_GLOBAL_CLI_JS_SCRIPTS_DIR="$DIST_DIR"
 exec "$BIN_DIR/$binary_name" "\$@"
 EOF
-  chmod +x "$BIN_DIR/vite"
+  chmod +x "$BIN_DIR/vp"
 
   # Download and extract JS bundle from main package
   local main_url="${NPM_REGISTRY}/vite-plus-cli/-/vite-plus-cli-${VITE_VERSION}.tgz"
@@ -243,7 +243,7 @@ EOF
   if [ "$path_added" = true ]; then
     success "PATH updated in ~/$shell_config"
     echo ""
-    echo "  To start using vite, run:"
+    echo "  To start using vp, run:"
     echo ""
     echo "    source ~/$shell_config"
     echo ""
@@ -259,7 +259,7 @@ EOF
   echo ""
   echo "  Then run:"
   echo ""
-  echo "    vite --version"
+  echo "    vp --version"
   echo ""
 }
 

@@ -2,8 +2,8 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -80,7 +80,7 @@ if (binaryPath) {
 } else {
   // JS-only fallback mode for unsupported platforms
   // Import the JS entry point directly
-  import('node:module').then(module => {
+  import('node:module').then((module) => {
     if (module.default.enableCompileCache) {
       module.default.enableCompileCache();
     }

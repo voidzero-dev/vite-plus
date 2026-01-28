@@ -1,7 +1,7 @@
-> vite migrate --help # show help
+> vp migrate --help # show help
 Migrate an existing project to Vite+<repeat>
 
-Usage: vite migrate [ARGS]...
+Usage: vp migrate [ARGS]...
 
 Arguments:
   [ARGS]...  All arguments for the migration command

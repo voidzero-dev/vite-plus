@@ -1,4 +1,4 @@
-> vite pm pack --json # should pack current workspace root
+> vp pm pack --json # should pack current workspace root
 [
   {
     "id": "command-pack-npm10-with-workspace@<semver>",
@@ -46,7 +46,7 @@
   }
 ]
 
-> vite pm pack --recursive --json && rm -rf *.tgz # should pack all packages in workspace (uses --workspaces)
+> vp pm pack --recursive --json && rm -rf *.tgz # should pack all packages in workspace (uses --workspaces)
 [
   {
     "id": "app@<semver>",
@@ -88,7 +88,7 @@
   }
 ]
 
-> vite pm pack --filter app --json && rm -rf *.tgz # should pack specific package (uses --workspace app)
+> vp pm pack --filter app --json && rm -rf *.tgz # should pack specific package (uses --workspace app)
 [
   {
     "id": "app@<semver>",
@@ -111,7 +111,7 @@
   }
 ]
 
-> vite pm pack --filter app --filter @vite-plus-test/utils --json && rm -rf *.tgz # should pack multiple packages
+> vp pm pack --filter app --filter @vite-plus-test/utils --json && rm -rf *.tgz # should pack multiple packages
 [
   {
     "id": "app@<semver>",
@@ -153,7 +153,7 @@
   }
 ]
 
-> vite pm pack --pack-destination ./dist --json && rm -rf ./dist # should pack with destination
+> vp pm pack --pack-destination ./dist --json && rm -rf ./dist # should pack with destination
 [
   {
     "id": "command-pack-npm10-with-workspace@<semver>",

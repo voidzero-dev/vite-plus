@@ -1,7 +1,7 @@
-> vite add --help # should show help
+> vp add --help # should show help
 Add packages to dependencies
 
-Usage: vite add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   <PACKAGES>...           Packages to add
@@ -22,15 +22,15 @@ Options:
   -g, --global                            Install globally
   -h, --help                              Print help
 
-[2]> vite add # should error because no packages specified
+[2]> vp add # should error because no packages specified
 error: the following required arguments were not provided:
   <PACKAGES>...
 
-Usage: vite add <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp add <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 For more information, try '--help'.
 
-> vite add testnpm2 -D -- --loglevel=verbose --verbose && cat package.json # should add package as dev dependencies
+> vp add testnpm2 -D -- --loglevel=verbose --verbose && cat package.json # should add package as dev dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -48,7 +48,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vite add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies
+> vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -69,7 +69,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vite install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
+> vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -97,7 +97,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vite add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
+> vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -125,7 +125,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vite add test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support pass through arguments
+> vp add test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support pass through arguments
 {
   "name": "command-add-pnpm10",
   "version": "1.0.0",

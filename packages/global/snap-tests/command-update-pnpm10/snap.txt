@@ -1,7 +1,7 @@
-> vite update --help # should show help
+> vp update --help # should show help
 Update packages to their latest versions
 
-Usage: vite update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   [PACKAGES]...           Packages to update (optional - updates all if omitted)
@@ -21,7 +21,7 @@ Options:
       --workspace         Only update if package exists in workspace (pnpm-specific)
   -h, --help              Print help
 
-> vite update testnpm2 && cat package.json # should update package within semver range
+> vp update testnpm2 && cat package.json # should update package within semver range
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -51,7 +51,7 @@ Done in <variable>ms using pnpm v<semver>
   "packageManager": "pnpm@<semver>"
 }
 
-> vite up testnpm2 --latest && cat package.json # should to absolute latest version
+> vp up testnpm2 --latest && cat package.json # should to absolute latest version
 Already up to date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
@@ -71,7 +71,7 @@ Done in <variable>ms using pnpm v<semver>
   "packageManager": "pnpm@<semver>"
 }
 
-> vite update -D && cat package.json # should update only dev dependencies
+> vp update -D && cat package.json # should update only dev dependencies
 Already up to date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
@@ -95,7 +95,7 @@ Done in <variable>ms using pnpm v<semver>
   "packageManager": "pnpm@<semver>"
 }
 
-> vite update -P --no-save && cat package.json # should update only dependencies and optionalDependencies without saving
+> vp update -P --no-save && cat package.json # should update only dependencies and optionalDependencies without saving
 Already up to date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
@@ -117,8 +117,8 @@ Done in <variable>ms using pnpm v<semver>
   "packageManager": "pnpm@<semver>"
 }
 
-> vite rm testnpm2 # should remove package from dependencies for the next test
-> vite add testnpm2@1.0.0 -O && vite update --no-optional --latest && cat package.json # should skip optional dependencies
+> vp rm testnpm2 # should remove package from dependencies for the next test
+[2]> vp add testnpm2@1.0.0 -O && vite update --no-optional --latest && cat package.json # should skip optional dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -127,49 +127,19 @@ optionalDependencies:
 + testnpm2 <semver> (1.0.1 is available)
 
 Done in <variable>ms using pnpm v<semver>
-Packages: -2
---
+error: unrecognized subcommand 'update'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp update && vite update --recursive && cat package.json # should update all packages and change the package.json
+Already up to date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
-optionalDependencies:
-- test-vite-plus-package-optional <semver>
-- testnpm2 <semver>
-
 Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-update-pnpm10",
-  "version": "1.0.0",
-  "devDependencies": {
-    "test-vite-plus-package": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0",
-    "testnpm2": "1.0.1"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+error: unrecognized subcommand 'update'
 
-> vite update && vite update --recursive && cat package.json # should update all packages and change the package.json
-Packages: +<variable>
-+<repeat>
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Usage: vite <COMMAND>
 
-optionalDependencies:
-+ test-vite-plus-package-optional <semver>
-+ testnpm2 <semver>
-
-Done in <variable>ms using pnpm v<semver>
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-update-pnpm10",
-  "version": "1.0.0",
-  "devDependencies": {
-    "test-vite-plus-package": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0",
-    "testnpm2": "1.0.1"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+For more information, try '--help'.
