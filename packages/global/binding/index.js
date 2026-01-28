@@ -771,7 +771,6 @@ const {
   mergeTsdownConfig,
   rewriteImportsInDirectory,
   rewriteScripts,
-  run,
   runCommand,
 } = nativeBinding;
 export { detectWorkspace };
@@ -780,5 +779,4 @@ export { mergeJsonConfig };
 export { mergeTsdownConfig };
 export { rewriteImportsInDirectory };
 export { rewriteScripts };
-export { run };
 export { runCommand };

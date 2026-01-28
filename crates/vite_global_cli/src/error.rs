@@ -17,9 +17,6 @@ pub enum Error {
     #[error("Command execution failed: {0}")]
     CommandExecution(#[from] io::Error),
 
-    #[error("Local CLI not found. Please install vite-plus in your project: npm install vite-plus")]
-    LocalCliNotFound,
-
     #[error(
         "JS scripts directory not found. Set VITE_GLOBAL_CLI_JS_SCRIPTS_DIR or ensure scripts are bundled."
     )]

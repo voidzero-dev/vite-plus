@@ -15,8 +15,8 @@ use crate::error::Error;
 /// JavaScript executor using managed Node.js runtime.
 ///
 /// Handles two runtime resolution strategies:
-/// - CLI runtime: For package manager commands and bundled JS scripts
-/// - Project runtime: For delegating to local vite-plus CLI
+/// - CLI runtime: For package manager commands and bundled JS scripts (Categories A & B)
+/// - Project runtime: For delegating to local vite-plus CLI (Category C)
 pub struct JsExecutor {
     /// Cached runtime for CLI commands (Categories A & B)
     cli_runtime: Option<JsRuntime>,
@@ -183,8 +183,11 @@ impl JsExecutor {
     /// Delegate to local vite-plus CLI (Category C commands).
     ///
     /// Uses the project's runtime version via `download_runtime_for_project`.
-    /// The local CLI is executed with `PATH` set to include the managed Node.js
-    /// binary directory first, ensuring the managed runtime is used.
+    /// Passes the command through `dist/index.js` which handles:
+    /// - Detecting if vite-plus is installed locally
+    /// - Auto-installing if it's a dependency but not installed
+    /// - Prompting user to add it if not found
+    /// - Delegating to the local CLI's `dist/bin.js`
     ///
     /// # Arguments
     /// * `project_path` - Path to the project directory
@@ -194,32 +197,20 @@ impl JsExecutor {
         project_path: &AbsolutePath,
         args: &[String],
     ) -> Result<ExitStatus, Error> {
+        // Use project's runtime based on its devEngines.runtime configuration
         let runtime = self.ensure_project_runtime(project_path).await?;
         let node_binary = runtime.get_binary_path();
 
-        // Find local vite-plus CLI
-        let local_cli = project_path.join("node_modules/.bin/vite");
-        if !tokio::fs::try_exists(local_cli.as_path()).await.unwrap_or(false) {
-            return Err(Error::LocalCliNotFound);
-        }
+        // Get the JS entry point (dist/index.js)
+        let scripts_dir = self.get_scripts_dir()?;
+        let entry_point = scripts_dir.join("index.js");
 
-        tracing::debug!("Delegating to local CLI: {:?} {:?}", local_cli, args);
+        tracing::debug!("Delegating to local CLI via JS entry point: {:?} {:?}", entry_point, args);
 
-        // Get the directory containing the managed Node.js binary
-        let node_bin_dir = node_binary
-            .parent()
-            .ok_or_else(|| Error::Other("Failed to get Node.js binary directory".into()))?;
-
-        // Prepend managed Node.js to PATH so the shell script uses it
-        let current_path = std::env::var("PATH").unwrap_or_default();
-        let path_separator = if cfg!(windows) { ";" } else { ":" };
-        let new_path =
-            format!("{}{}{}", node_bin_dir.as_path().display(), path_separator, current_path);
-
-        // Execute the local CLI shell script directly (it has a shebang)
-        // The shell script will find and use `node` from PATH (our managed version)
-        let mut cmd = Command::new(local_cli.as_path());
-        cmd.args(args).current_dir(project_path.as_path()).env("PATH", new_path);
+        // Execute dist/index.js with the command and args
+        // The JS layer handles detecting/installing local vite-plus
+        let mut cmd = Command::new(node_binary.as_path());
+        cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
 
         let status = cmd.status().await?;
         Ok(status)
