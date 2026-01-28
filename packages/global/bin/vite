@@ -1,7 +1,89 @@
 #!/usr/bin/env node
 
-import module from 'node:module';
-if (module.enableCompileCache) {
-  module.enableCompileCache();
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
+
+// Platform to package mapping
+// Package names follow napi-rs convention: @voidzero-dev/vite-plus-cli-{platform}-{arch}[-{libc}]
+const PLATFORMS = {
+  'darwin-arm64': '@voidzero-dev/vite-plus-cli-darwin-arm64',
+  'darwin-x64': '@voidzero-dev/vite-plus-cli-darwin-x64',
+  'linux-arm64': '@voidzero-dev/vite-plus-cli-linux-arm64-gnu',
+  'linux-x64': '@voidzero-dev/vite-plus-cli-linux-x64-gnu',
+  'win32-arm64': '@voidzero-dev/vite-plus-cli-win32-arm64-msvc',
+  'win32-x64': '@voidzero-dev/vite-plus-cli-win32-x64-msvc',
+};
+
+function getBinaryPath() {
+  const binaryName = process.platform === 'win32' ? 'vp.exe' : 'vp';
+
+  // 1. First check for local binary in same directory (local development)
+  const localBinaryPath = join(__dirname, binaryName);
+  if (existsSync(localBinaryPath)) {
+    return localBinaryPath;
+  }
+
+  // 2. Find binary from platform-specific optionalDependency
+  const platform = `${process.platform}-${process.arch}`;
+  const packageName = PLATFORMS[platform];
+
+  if (!packageName) {
+    // Fall back to JS-only mode for unsupported platforms
+    return null;
+  }
+
+  // Try to find the binary in node_modules (sibling of this package)
+  const nodeModulesPath = join(__dirname, '..', '..', packageName, binaryName);
+  if (existsSync(nodeModulesPath)) {
+    return nodeModulesPath;
+  }
+
+  // Try require.resolve for hoisted dependencies
+  try {
+    const packagePath = require.resolve(`${packageName}/package.json`);
+    const binaryPath = join(dirname(packagePath), binaryName);
+    if (existsSync(binaryPath)) {
+      return binaryPath;
+    }
+  } catch {
+    // Package not installed, fall back to JS mode
+  }
+
+  return null;
 }
-import "../dist/index.js";
+
+const binaryPath = getBinaryPath();
+
+if (binaryPath) {
+  // Rust binary mode: execute the native binary
+  // Set VITE_GLOBAL_CLI_JS_SCRIPTS_DIR to point to the dist/ directory
+  const jsScriptsDir = join(__dirname, '..', 'dist');
+
+  try {
+    execFileSync(binaryPath, process.argv.slice(2), {
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        VITE_GLOBAL_CLI_JS_SCRIPTS_DIR: jsScriptsDir,
+      },
+    });
+  } catch (error) {
+    // execFileSync throws on non-zero exit codes, propagate the exit code
+    process.exit(error.status ?? 1);
+  }
+} else {
+  // JS-only fallback mode for unsupported platforms
+  // Import the JS entry point directly
+  import('node:module').then(module => {
+    if (module.default.enableCompileCache) {
+      module.default.enableCompileCache();
+    }
+  });
+  await import('../dist/index.js');
+}

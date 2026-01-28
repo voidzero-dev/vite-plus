@@ -1,2 +1,5 @@
 /npm
 /artifacts
+# Rust CLI binary (copied for local development)
+/bin/vp
+/bin/vp.exe

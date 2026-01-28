@@ -91,6 +91,20 @@ jobs:
           path: ./packages/global/binding/*.node
           if-no-files-found: error
 
+      - name: Build Rust CLI binary
+        shell: bash
+        run: |
+          cargo build --release --target ${{ matrix.settings.target }} -p vite_global_cli
+
+      - name: Upload Rust CLI binary artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vite-global-cli-${{ matrix.settings.target }}
+          path: |
+            ./target/${{ matrix.settings.target }}/release/vp
+            ./target/${{ matrix.settings.target }}/release/vp.exe
+          if-no-files-found: warn
+
       - name: Remove .node files before upload dist
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         run: |
@@ -186,6 +200,30 @@ jobs:
         with:
           path: packages/global/artifacts
           pattern: vite-plus-cli-native-*
+
+      - name: Download Rust CLI binaries
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: target
+          pattern: vite-global-cli-*
+
+      - name: Reorganize Rust CLI binaries for publish script
+        run: |
+          # Move binaries to expected locations: target/{target}/release/vp
+          for dir in target/vite-global-cli-*; do
+            if [ -d "$dir" ]; then
+              target_name=$(basename "$dir" | sed 's/vite-global-cli-//')
+              mkdir -p "target/${target_name}/release"
+              if [ -f "$dir/vp" ]; then
+                mv "$dir/vp" "target/${target_name}/release/"
+              fi
+              if [ -f "$dir/vp.exe" ]; then
+                mv "$dir/vp.exe" "target/${target_name}/release/"
+              fi
+            fi
+          done
+          # Show what we have
+          find target -name "vp*" -type f 2>/dev/null || true
 
       - name: Set npm packages version
         run: |
