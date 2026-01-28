@@ -6976,13 +6976,10 @@ dependencies = [
 name = "vite-plus-global-cli"
 version = "0.0.0"
 dependencies = [
- "clap",
  "fspy",
  "napi",
  "napi-build",
  "napi-derive",
- "tempfile",
- "tokio",
  "tracing",
  "tracing-subscriber",
  "vite_command",
@@ -7043,10 +7040,7 @@ dependencies = [
 name = "vite_global_cli"
 version = "0.0.0"
 dependencies = [
- "anyhow",
  "clap",
- "serde",
- "serde_json",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
@@ -7056,7 +7050,6 @@ dependencies = [
  "vite_install",
  "vite_js_runtime",
  "vite_path",
- "vite_shared",
  "vite_str",
  "vite_workspace",
 ]

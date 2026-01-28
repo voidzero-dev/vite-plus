@@ -2,10 +2,6 @@
 resolver = "3"
 members = ["bench", "crates/*", "packages/cli/binding", "packages/global/binding"]
 
-# Ignore vite_js_runtime - new crate pending integration with vite_install
-[workspace.metadata.cargo-shear]
-ignored = ["vite_js_runtime"]
-
 [workspace.package]
 authors = ["Vite+ Authors"]
 edition = "2024"

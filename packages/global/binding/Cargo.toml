@@ -5,11 +5,9 @@ edition = "2024"
 description = "Vite+ Global CLI"
 
 [dependencies]
-clap = { workspace = true, features = ["derive", "help"] }
 fspy = { workspace = true }
 napi = { workspace = true }
 napi-derive = { workspace = true }
-tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 vite_command = { workspace = true }
@@ -21,9 +19,6 @@ vite_workspace = { workspace = true }
 
 [build-dependencies]
 napi-build = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]

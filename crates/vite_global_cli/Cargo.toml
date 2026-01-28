@@ -12,10 +12,7 @@ name = "vp"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
@@ -24,7 +21,6 @@ vite_error = { workspace = true }
 vite_install = { workspace = true }
 vite_js_runtime = { workspace = true }
 vite_path = { workspace = true }
-vite_shared = { workspace = true }
 vite_str = { workspace = true }
 vite_workspace = { workspace = true }
 
