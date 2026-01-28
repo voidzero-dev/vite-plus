@@ -50,17 +50,17 @@ for (const platformDir of platformDirs) {
   const rustBinarySource = join(repoRoot, 'target', rustTarget, 'release', binaryName);
   const rustBinaryDest = join(npmDir, platformDir, binaryName);
 
-  if (existsSync(rustBinarySource)) {
-    copyFileSync(rustBinarySource, rustBinaryDest);
-    // Make the binary executable on Unix
-    if (!isWindows) {
-      chmodSync(rustBinaryDest, 0o755);
-    }
-    // eslint-disable-next-line no-console
-    console.log(`Copied Rust binary: ${rustBinarySource} -> ${rustBinaryDest}`);
-  } else {
-    console.error(`Warning: Rust binary not found at ${rustBinarySource}`);
+  if (!existsSync(rustBinarySource)) {
+    throw new Error(`Rust binary not found at ${rustBinarySource}`);
   }
+
+  copyFileSync(rustBinarySource, rustBinaryDest);
+  // Make the binary executable on Unix
+  if (!isWindows) {
+    chmodSync(rustBinaryDest, 0o755);
+  }
+  // eslint-disable-next-line no-console
+  console.log(`Copied Rust binary: ${rustBinarySource} -> ${rustBinaryDest}`);
 }
 
 // Pre-publish (updates package.json files in npm directories)

@@ -10,7 +10,7 @@
   },
   "files": [
     "AGENTS.md",
-    "bin",
+    "bin/*.js",
     "dist",
     "rules",
     "templates"
