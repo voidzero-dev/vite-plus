@@ -24,6 +24,7 @@ This architecture requires users to have Node.js pre-installed before they can u
 ### Opportunity
 
 The `vite_js_runtime` crate already provides robust Node.js download and management capabilities:
+
 - Automatic Node.js version resolution and download
 - Multi-platform support (Linux, macOS, Windows; x64, arm64)
 - Intelligent caching with ETag support
@@ -31,6 +32,7 @@ The `vite_js_runtime` crate already provides robust Node.js download and managem
 - Per-project version control via `devEngines.runtime` in package.json
 
 By making the global CLI a Rust binary entry point:
+
 1. **Users can download and run it immediately** without pre-installing Node.js
 2. **Projects control their JS runtime version** via `devEngines.runtime` configuration
 3. **Consistent development environments** across teams - everyone uses the same runtime version
@@ -136,20 +138,20 @@ Based on the current global CLI analysis, commands fall into four categories:
 
 These commands wrap existing package managers (pnpm/npm/yarn), which are Node.js programs. The Rust CLI handles argument parsing and workspace detection, then uses managed Node.js to execute the actual package manager:
 
-| Command | Description | Implementation |
-|---------|-------------|----------------|
-| `install [packages]` | Install dependencies | Rust CLI → Managed Node.js → pnpm/npm/yarn |
-| `add <packages>` | Add packages | Rust CLI → Managed Node.js → pnpm/npm/yarn |
-| `remove <packages>` | Remove packages | Rust CLI → Managed Node.js → pnpm/npm/yarn |
-| `update [packages]` | Update packages | Rust CLI → Managed Node.js → pnpm/npm/yarn |
-| `outdated [packages]` | Check outdated | Rust CLI → Managed Node.js → pnpm/npm/yarn |
-| `dedupe` | Deduplicate deps | Rust CLI → Managed Node.js → pnpm/npm/yarn |
-| `why <package>` | Explain dependency | Rust CLI → Managed Node.js → pnpm/npm/yarn |
-| `info <package>` | View package info | Rust CLI → Managed Node.js → pnpm/npm/yarn |
-| `link [package]` | Link packages | Rust CLI → Managed Node.js → pnpm/npm/yarn |
-| `unlink [package]` | Unlink packages | Rust CLI → Managed Node.js → pnpm/npm/yarn |
-| `dlx <package>` | Execute package | Rust CLI → Managed Node.js → pnpm/npm dlx |
-| `pm <subcommand>` | Forward to PM | Rust CLI → Managed Node.js → pnpm/npm/yarn |
+| Command               | Description          | Implementation                             |
+| --------------------- | -------------------- | ------------------------------------------ |
+| `install [packages]`  | Install dependencies | Rust CLI → Managed Node.js → pnpm/npm/yarn |
+| `add <packages>`      | Add packages         | Rust CLI → Managed Node.js → pnpm/npm/yarn |
+| `remove <packages>`   | Remove packages      | Rust CLI → Managed Node.js → pnpm/npm/yarn |
+| `update [packages]`   | Update packages      | Rust CLI → Managed Node.js → pnpm/npm/yarn |
+| `outdated [packages]` | Check outdated       | Rust CLI → Managed Node.js → pnpm/npm/yarn |
+| `dedupe`              | Deduplicate deps     | Rust CLI → Managed Node.js → pnpm/npm/yarn |
+| `why <package>`       | Explain dependency   | Rust CLI → Managed Node.js → pnpm/npm/yarn |
+| `info <package>`      | View package info    | Rust CLI → Managed Node.js → pnpm/npm/yarn |
+| `link [package]`      | Link packages        | Rust CLI → Managed Node.js → pnpm/npm/yarn |
+| `unlink [package]`    | Unlink packages      | Rust CLI → Managed Node.js → pnpm/npm/yarn |
+| `dlx <package>`       | Execute package      | Rust CLI → Managed Node.js → pnpm/npm dlx  |
+| `pm <subcommand>`     | Forward to PM        | Rust CLI → Managed Node.js → pnpm/npm/yarn |
 
 **Note:** Since pnpm, npm, and yarn are all Node.js programs, these commands require Node.js to execute. The global CLI will use `vite_js_runtime` to download and manage Node.js automatically when running any PM command.
 
@@ -157,18 +159,18 @@ These commands wrap existing package managers (pnpm/npm/yarn), which are Node.js
 
 These commands execute JavaScript scripts bundled with the CLI:
 
-| Command | JS Dependency | Implementation |
-|---------|---------------|----------------|
+| Command          | JS Dependency                        | Implementation                          |
+| ---------------- | ------------------------------------ | --------------------------------------- |
 | `new [template]` | Remote templates (create-vite, etc.) | Rust CLI → Managed Node.js → JS scripts |
-| `migrate [path]` | Migration rules and transformations | Rust CLI → Managed Node.js → JS scripts |
-| `--version` | Version display logic | Rust CLI → Managed Node.js → JS scripts |
+| `migrate [path]` | Migration rules and transformations  | Rust CLI → Managed Node.js → JS scripts |
+| `--version`      | Version display logic                | Rust CLI → Managed Node.js → JS scripts |
 
 #### Category C: Local CLI Delegation (Rust CLI + Managed Node.js + JS Entry Point)
 
 These commands delegate to the local `vite-plus` package through the JS entry point (`dist/index.js`), which handles detecting/installing local vite-plus:
 
-| Command | Implementation |
-|---------|----------------|
+| Command                                                          | Implementation                                           |
+| ---------------------------------------------------------------- | -------------------------------------------------------- |
 | `dev`, `build`, `test`, `lint`, `fmt`, `run`, `preview`, `cache` | Rust CLI → Managed Node.js → `dist/index.js` → local CLI |
 
 **Note:** The global CLI uses `vite_js_runtime` to ensure Node.js is available, resolving the version from the project's `devEngines.runtime` configuration. The JS entry point handles detecting if vite-plus is installed locally, auto-installing if needed, and delegating to the local CLI's `dist/bin.js`.
@@ -177,9 +179,9 @@ These commands delegate to the local `vite-plus` package through the JS entry po
 
 Only these commands can run without any Node.js:
 
-| Command | Description | Implementation |
-|---------|-------------|----------------|
-| `help` | Show help | Pure Rust (clap) |
+| Command | Description | Implementation   |
+| ------- | ----------- | ---------------- |
+| `help`  | Show help   | Pure Rust (clap) |
 
 **Note:** Even `help` might trigger Node.js download if the user runs `vite help new` and needs to display JS-specific help.
 
@@ -368,6 +370,7 @@ impl JsExecutor {
 ```
 
 **Key points:**
+
 - Both flows use `download_runtime_for_project()` - the only difference is the directory path
 - `vite_js_runtime` handles all `devEngines.runtime` logic internally (reading package.json, resolving versions, caching)
 - CLI commands use CLI's package.json directory (e.g., `packages/global/`)
@@ -379,6 +382,7 @@ impl JsExecutor {
 #### Phase 1: Foundation & All Package Manager Commands
 
 **Scope:**
+
 - Set up `vite_global_cli` crate structure
 - Implement CLI parsing with clap
 - Implement workspace detection (reuse from `vite_task`)
@@ -398,29 +402,31 @@ impl JsExecutor {
   - `pm <subcommand>` - Forward to package manager (list, prune, pack)
 
 **Files to create:**
+
 - `crates/vite_global_cli/Cargo.toml`
 - `crates/vite_global_cli/src/main.rs`
 - `crates/vite_global_cli/src/cli.rs`
 - `crates/vite_global_cli/src/commands/mod.rs`
-- `crates/vite_global_cli/src/commands/add.rs`       # Add packages (struct-based: AddCommand)
-- `crates/vite_global_cli/src/commands/install.rs`   # Install dependencies (struct-based: InstallCommand)
-- `crates/vite_global_cli/src/commands/remove.rs`    # Remove packages (struct-based: RemoveCommand)
-- `crates/vite_global_cli/src/commands/update.rs`    # Update packages (struct-based: UpdateCommand)
-- `crates/vite_global_cli/src/commands/dedupe.rs`    # Deduplicate deps (struct-based: DedupeCommand)
-- `crates/vite_global_cli/src/commands/outdated.rs`  # Check outdated (struct-based: OutdatedCommand)
-- `crates/vite_global_cli/src/commands/why.rs`       # Explain dependency (struct-based: WhyCommand)
-- `crates/vite_global_cli/src/commands/link.rs`      # Link packages (struct-based: LinkCommand)
-- `crates/vite_global_cli/src/commands/unlink.rs`    # Unlink packages (struct-based: UnlinkCommand)
-- `crates/vite_global_cli/src/commands/dlx.rs`       # Execute package (struct-based: DlxCommand)
-- `crates/vite_global_cli/src/commands/pm.rs`        # PM subcommands (prune, pack, list, etc.)
-- `crates/vite_global_cli/src/commands/new.rs`       # Project scaffolding
-- `crates/vite_global_cli/src/commands/migrate.rs`   # Migration command
-- `crates/vite_global_cli/src/commands/delegate.rs`  # Local CLI delegation
-- `crates/vite_global_cli/src/commands/version.rs`   # Version display
+- `crates/vite_global_cli/src/commands/add.rs` # Add packages (struct-based: AddCommand)
+- `crates/vite_global_cli/src/commands/install.rs` # Install dependencies (struct-based: InstallCommand)
+- `crates/vite_global_cli/src/commands/remove.rs` # Remove packages (struct-based: RemoveCommand)
+- `crates/vite_global_cli/src/commands/update.rs` # Update packages (struct-based: UpdateCommand)
+- `crates/vite_global_cli/src/commands/dedupe.rs` # Deduplicate deps (struct-based: DedupeCommand)
+- `crates/vite_global_cli/src/commands/outdated.rs` # Check outdated (struct-based: OutdatedCommand)
+- `crates/vite_global_cli/src/commands/why.rs` # Explain dependency (struct-based: WhyCommand)
+- `crates/vite_global_cli/src/commands/link.rs` # Link packages (struct-based: LinkCommand)
+- `crates/vite_global_cli/src/commands/unlink.rs` # Unlink packages (struct-based: UnlinkCommand)
+- `crates/vite_global_cli/src/commands/dlx.rs` # Execute package (struct-based: DlxCommand)
+- `crates/vite_global_cli/src/commands/pm.rs` # PM subcommands (prune, pack, list, etc.)
+- `crates/vite_global_cli/src/commands/new.rs` # Project scaffolding
+- `crates/vite_global_cli/src/commands/migrate.rs` # Migration command
+- `crates/vite_global_cli/src/commands/delegate.rs` # Local CLI delegation
+- `crates/vite_global_cli/src/commands/version.rs` # Version display
 - `crates/vite_global_cli/src/js_executor.rs`
 - `crates/vite_global_cli/src/error.rs`
 
 **Success Criteria:**
+
 - [x] All PM commands work without pre-installed Node.js (uses managed Node.js)
 - [x] Managed Node.js is downloaded automatically when first PM command runs
 - [x] Auto-detects pnpm/npm/yarn in the project
@@ -432,22 +438,26 @@ impl JsExecutor {
 #### Phase 2: Project Scaffolding
 
 **Scope:**
+
 - Implement `new` command for built-in templates (vite:monorepo, etc.)
 - Implement JS executor for remote templates
 - Integrate with `vite_js_runtime` for Node.js download
 
 **Success Criteria:**
+
 - [x] `vite new vite:monorepo` works without Node.js
 - [x] `vite new create-vite` downloads Node.js and executes correctly
 
 #### Phase 3: Migration & Remaining Commands
 
 **Scope:**
+
 - Implement `migrate` command
 - Implement local CLI delegation
 - Implement `--version` and help system
 
 **Success Criteria:**
+
 - [x] `vite migrate` works correctly
 - [x] Local commands delegate properly
 - [x] Full feature parity with Node.js CLI
@@ -455,12 +465,14 @@ impl JsExecutor {
 #### Phase 4: Distribution & Testing
 
 **Scope:**
+
 - Set up cross-platform builds (Linux, macOS, Windows)
 - Create installation scripts
 - Add to Homebrew, cargo install, etc.
 - Comprehensive testing
 
 **Success Criteria:**
+
 - [x] Binary available via multiple channels
 - [x] Installation scripts work on all platforms
 - [x] All snap tests pass
@@ -512,6 +524,7 @@ For package manager commands, `new`, `migrate`, and `--version`, the runtime ver
 ```
 
 **Rationale:**
+
 - These commands are part of the global CLI's functionality
 - They should use a consistent, tested Node.js version
 - The version can be updated with CLI releases
@@ -534,24 +547,27 @@ For commands delegated to local `vite-plus` (`dev`, `build`, `test`, `lint`, etc
 ```
 
 **Resolution order for Category C:**
+
 1. Project's `devEngines.runtime` (if present)
 2. Fallback to CLI's default version (from `packages/global/package.json`)
 
 **Rationale:**
+
 - Projects may require specific Node.js versions for their builds
 - Team members need consistent runtime versions for reproducibility
 - Different projects can use different Node.js versions
 
 #### Summary Table
 
-| Command Category | Runtime Source | Example Commands |
-|------------------|----------------|------------------|
-| A: PM Commands | CLI's package.json | install, add, remove, update |
-| B: JS Scripts | CLI's package.json | new, migrate, --version |
-| C: Delegation | Project's package.json → CLI fallback | dev, build, test, lint |
-| D: Pure Rust | None | help |
+| Command Category | Runtime Source                        | Example Commands             |
+| ---------------- | ------------------------------------- | ---------------------------- |
+| A: PM Commands   | CLI's package.json                    | install, add, remove, update |
+| B: JS Scripts    | CLI's package.json                    | new, migrate, --version      |
+| C: Delegation    | Project's package.json → CLI fallback | dev, build, test, lint       |
+| D: Pure Rust     | None                                  | help                         |
 
 **Benefits:**
+
 - **Separation of concerns**: CLI commands use CLI's runtime, project commands use project's runtime
 - **Per-project control**: Each project specifies its required runtime version for builds
 - **Team consistency**: All developers use the same runtime version for a project
@@ -568,14 +584,14 @@ Since `new` and `migrate` commands are still implemented via JS scripts, we need
 
 Create platform-specific npm packages containing only the native binary:
 
-| Package Name | Platform | Architecture |
-|--------------|----------|--------------|
-| `@voidzero-dev/vite-plus-cli-darwin-arm64` | macOS | ARM64 (Apple Silicon) |
-| `@voidzero-dev/vite-plus-cli-darwin-x64` | macOS | Intel x64 |
-| `@voidzero-dev/vite-plus-cli-linux-arm64` | Linux | ARM64 |
-| `@voidzero-dev/vite-plus-cli-linux-x64` | Linux | Intel x64 |
-| `@voidzero-dev/vite-plus-cli-win32-arm64` | Windows | ARM64 |
-| `@voidzero-dev/vite-plus-cli-win32-x64` | Windows | Intel x64 |
+| Package Name                               | Platform | Architecture          |
+| ------------------------------------------ | -------- | --------------------- |
+| `@voidzero-dev/vite-plus-cli-darwin-arm64` | macOS    | ARM64 (Apple Silicon) |
+| `@voidzero-dev/vite-plus-cli-darwin-x64`   | macOS    | Intel x64             |
+| `@voidzero-dev/vite-plus-cli-linux-arm64`  | Linux    | ARM64                 |
+| `@voidzero-dev/vite-plus-cli-linux-x64`    | Linux    | Intel x64             |
+| `@voidzero-dev/vite-plus-cli-win32-arm64`  | Windows  | ARM64                 |
+| `@voidzero-dev/vite-plus-cli-win32-x64`    | Windows  | Intel x64             |
 
 **Package structure:**
 
@@ -693,6 +709,7 @@ execFileSync(binaryPath, process.argv.slice(2), {
 ```
 
 **How it works:**
+
 1. `bin/vite` finds the Rust binary (`vp`) from the platform-specific optional dependency
 2. Sets `VITE_GLOBAL_CLI_JS_SCRIPTS_DIR` pointing to the package root (where `dist/index.js` is)
 3. Executes the Rust binary with all arguments
@@ -889,11 +906,13 @@ if ($PathAdded) {
 **Windows installation options:**
 
 1. **PowerShell one-liner:**
+
    ```powershell
    irm https://viteplus.dev/install.ps1 | iex
    ```
 
 2. **npm (if Node.js is available):**
+
    ```cmd
    npm install -g vite-plus-cli
    ```
@@ -923,6 +942,7 @@ When the Rust binary needs to execute JS (for `new`, `migrate`, `--version`, or 
 4. Execute the JS entry point with managed Node.js, passing command and arguments
 
 **Auto-detection logic:**
+
 - For npm installation: binary is in `node_modules/vite-plus-cli/bin/`, JS entry point is `node_modules/vite-plus-cli/dist/index.js`
 - For standalone installation: binary is in `~/.vite/bin/`, JS entry point is `~/.vite/dist/index.js`
 - For local development: binary is in `packages/global/bin/`, JS entry point is `packages/global/dist/index.js`
@@ -972,6 +992,7 @@ async fn run_js_command(&self, command: &str, args: &[&str]) -> Result<(), Error
 The existing `packages/global/publish-native-addons.ts` script already publishes platform-specific packages via `@napi-rs/cli`. We only need to modify it to also include the Rust binary.
 
 **Current artifact structure** (see [@voidzero-dev/vite-plus-cli-darwin-arm64 on unpkg](https://app.unpkg.com/@voidzero-dev/vite-plus-cli-darwin-arm64)):
+
 ```
 @voidzero-dev/vite-plus-cli-darwin-arm64/
 ├── package.json
@@ -1005,14 +1026,14 @@ if (fs.existsSync(rustBinarySource)) {
 
 **Rust binary targets:**
 
-| Platform Package | Rust Target |
-|------------------|-------------|
-| darwin-arm64 | `aarch64-apple-darwin` |
-| darwin-x64 | `x86_64-apple-darwin` |
-| linux-arm64 | `aarch64-unknown-linux-gnu` |
-| linux-x64 | `x86_64-unknown-linux-gnu` |
-| win32-arm64 | `aarch64-pc-windows-msvc` |
-| win32-x64 | `x86_64-pc-windows-msvc` |
+| Platform Package | Rust Target                 |
+| ---------------- | --------------------------- |
+| darwin-arm64     | `aarch64-apple-darwin`      |
+| darwin-x64       | `x86_64-apple-darwin`       |
+| linux-arm64      | `aarch64-unknown-linux-gnu` |
+| linux-x64        | `x86_64-unknown-linux-gnu`  |
+| win32-arm64      | `aarch64-pc-windows-msvc`   |
+| win32-x64        | `x86_64-pc-windows-msvc`    |
 
 **CI/CD Integration:**
 
@@ -1074,6 +1095,7 @@ packages/global/
 6. Local development and snap tests work unchanged
 
 **Directory structure after setup:**
+
 ```
 packages/global/
 ├── bin/
@@ -1084,12 +1106,14 @@ packages/global/
 ```
 
 **Implementation note for `install-global-cli.ts`:**
+
 ```typescript
 // Update package.json bin entry to point to Rust binary
 packageJson.bin = { vp: './bin/vp' };
 ```
 
 **Benefits:**
+
 - Consistent experience with production
 - Snap tests run against the actual Rust binary
 - Auto-detection finds `dist/index.js` relative to binary location
@@ -1098,16 +1122,19 @@ packageJson.bin = { vp: './bin/vp' };
 ### Testing Strategy
 
 **Unit Tests:**
+
 - CLI argument parsing
 - Workspace detection
 - Command routing
 
 **Integration Tests:**
+
 - Full command execution in test fixtures
 - Cross-platform behavior
 - JS executor with real Node.js download
 
 **Snap Tests:**
+
 - Reuse existing snap test infrastructure
 - Add new tests for Rust binary behavior
 - Tests run against the Rust binary in `packages/global/bin/vp`
@@ -1134,17 +1161,20 @@ async fn test_js_executor_downloads_node() {
 Node.js 22 is the current LTS line with long-term support. Version 22.22.0 is chosen as a stable point release.
 
 **Configuration approach:**
+
 - Default version is configured in `packages/global/package.json` via `devEngines.runtime`
 - Can be updated in future releases without rebuilding the Rust binary
 - Projects can override via their own `devEngines.runtime` configuration
 
 **Version resolution priority:**
+
 1. Project's `devEngines.runtime` (if present)
 2. CLI's default from bundled `package.json`
 
 ### 2. Why Not Bundle Node.js?
 
 Bundling Node.js would significantly increase binary size (~100MB+). Instead, downloading on-demand:
+
 - Keeps initial download small (~20MB)
 - Allows version flexibility
 - Leverages existing `vite_js_runtime` caching
@@ -1152,6 +1182,7 @@ Bundling Node.js would significantly increase binary size (~100MB+). Instead, do
 ### 3. Why Wrap Package Managers Instead of Reimplementing?
 
 Reimplementing pnpm/npm/yarn would be a massive undertaking with subtle compatibility issues. Wrapping existing package managers:
+
 - Ensures compatibility
 - Reduces maintenance burden
 - Allows users to use their preferred PM
@@ -1159,12 +1190,14 @@ Reimplementing pnpm/npm/yarn would be a massive undertaking with subtle compatib
 ### 4. Why Keep NAPI Bindings?
 
 The NAPI bindings serve the local CLI (`vite-plus` package) use case where Node.js is already available. This allows the same Rust code to be used in both:
+
 - Standalone binary (for global CLI)
 - Node.js addon (for local CLI performance)
 
 ### 5. Why Platform-Specific npm Packages?
 
 This approach (used by esbuild, swc, rolldown, etc.) provides several benefits:
+
 - **npm compatibility**: Users can still `npm install -g vite-plus-cli`
 - **Automatic platform detection**: npm handles installing the correct binary
 - **Dual-use distribution**: Same binaries work for both npm and standalone installation
@@ -1174,12 +1207,14 @@ This approach (used by esbuild, swc, rolldown, etc.) provides several benefits:
 ### 6. Why Keep JS Scripts for `new` and `migrate`?
 
 These commands involve:
+
 - Complex template rendering with user prompts (@clack/prompts)
 - Remote template downloads and execution (create-vite, etc.)
 - Code transformation rules that may change frequently
 - Integration with the existing vite-plus ecosystem
 
 Rewriting these in Rust would be significant effort with limited benefit. Instead:
+
 - JS scripts continue to work as-is
 - Rust binary invokes them via managed Node.js runtime
 - Updates to templates/migrations don't require binary rebuilds
@@ -1222,7 +1257,7 @@ Rewriting these in Rust would be significant effort with limited benefit. Instea
 6. [x] Existing snap tests pass
 7. [x] Platform-specific npm packages published and installable
 8. [x] `npm install -g vite-plus-cli` works on all supported platforms
-9. [ ] Standalone installation via `curl | bash` works
+9. [x] Standalone installation via `curl | bash` works
 10. [x] JS scripts for `new` and `migrate` correctly bundled and executed
 
 ## References
