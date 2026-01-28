@@ -37,7 +37,14 @@ impl fmt::Display for Platform {
 }
 
 impl Os {
-    /// Detect the current operating system
+    /// Detect the current operating system.
+    ///
+    /// # Supported platforms
+    /// - Linux (`target_os = "linux"`)
+    /// - macOS (`target_os = "macos"`)
+    /// - Windows (`target_os = "windows"`)
+    ///
+    /// Compilation will fail on unsupported operating systems.
     #[must_use]
     pub const fn current() -> Self {
         #[cfg(target_os = "linux")]
@@ -51,6 +58,12 @@ impl Os {
         #[cfg(target_os = "windows")]
         {
             Self::Windows
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        {
+            compile_error!(
+                "Unsupported operating system. vite_js_runtime only supports Linux, macOS, and Windows."
+            )
         }
     }
 }
@@ -66,7 +79,13 @@ impl fmt::Display for Os {
 }
 
 impl Arch {
-    /// Detect the current CPU architecture
+    /// Detect the current CPU architecture.
+    ///
+    /// # Supported architectures
+    /// - x86_64 (`target_arch = "x86_64"`)
+    /// - ARM64/AArch64 (`target_arch = "aarch64"`)
+    ///
+    /// Compilation will fail on unsupported architectures.
     #[must_use]
     pub const fn current() -> Self {
         #[cfg(target_arch = "x86_64")]
@@ -76,6 +95,12 @@ impl Arch {
         #[cfg(target_arch = "aarch64")]
         {
             Self::Arm64
+        }
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        {
+            compile_error!(
+                "Unsupported CPU architecture. vite_js_runtime only supports x86_64 and aarch64."
+            )
         }
     }
 }
