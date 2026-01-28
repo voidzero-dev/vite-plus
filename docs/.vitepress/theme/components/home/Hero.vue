@@ -13,16 +13,16 @@
         </p>
       </div>
       <div class="flex items-center gap-5">
-        <a
-          href="https://tally.so/r/nGWebL"
+        <a href="/vite/guide" target="_self" class="button button--primary"> Get started </a>
+        <!--<a href="#intro" @click="smoothScrollTo($event, 'intro')" class="button">-->
+        <!-- <a
+          href="https://voidzero.dev/posts/announcing-vite-plus?utm_source=viteplusdev&utm_content=top_learn_more"
           target="_blank"
           rel="noopener noreferrer"
-          class="button button--primary"
+          class="button"
         >
-          Join early access
-        </a>
-        <!--<a href="#intro" @click="smoothScrollTo($event, 'intro')" class="button">-->
-        <a href="./vite/guide" rel="noopener noreferrer" class="button"> Learn more </a>
+          Learn more
+        </a> -->
       </div>
     </div>
   </div>
@@ -40,9 +40,9 @@
 </template>
 
 <script setup lang="ts">
-import RiveAnimation from '@components/shared/RiveAnimation.vue';
-import homepageAnimation from '@local-assets/animations/1280_x_580_vite+_masthead.riv';
-import homepageAnimationMobile from '@local-assets/animations/253_x_268_vite+_masthead_mobile.riv';
+import RiveAnimation from "@components/shared/RiveAnimation.vue";
+import homepageAnimation from "@local-assets/animations/1280_x_580_vite+_masthead.riv";
+import homepageAnimationMobile from "@local-assets/animations/253_x_268_vite+_masthead_mobile.riv";
 
 const smoothScrollTo = (e: Event, targetId: string) => {
   e.preventDefault();

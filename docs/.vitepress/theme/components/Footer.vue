@@ -8,16 +8,15 @@
           Take your team's productivity to the next level with Vite+
         </h2>
         <div class="flex items-center gap-5">
-          <a
-            href="https://tally.so/r/nGWebL"
+          <a href="/vite/guide" target="_self" class="button button--white">Get started</a>
+          <!-- <a
+            href="https://voidzero.dev/posts/announcing-vite-plus?utm_source=viteplusdev&utm_content=bottom_learn_more"
             target="_blank"
             rel="noopener noreferrer"
             class="button button--white"
-            >Register your interest</a
           >
-          <a href="./vite/guide" rel="noopener noreferrer" class="button button--white">
             Learn more
-          </a>
+          </a> -->
         </div>
       </div>
       <div

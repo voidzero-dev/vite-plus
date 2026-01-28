@@ -114,14 +114,7 @@ onUnmounted(() => {
           <img class="h-3" src="@assets/logos/voidzero-dark.svg" alt="VoidZero" />
         </a>
       </span>
-      <a
-        href="https://tally.so/r/nGWebL"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="button hidden md:block"
-      >
-        Join early access
-      </a>
+      <a href="/vite/guide" target="_self" class="button hidden md:block"> Get started </a>
 
       <!-- Mobile hamburger/close button - Right aligned -->
       <button
@@ -242,13 +235,12 @@ onUnmounted(() => {
             <!-- CTA Button -->
             <div class="px-6">
               <a
-                href="https://viteplus.dev"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/vite/guide"
+                target="_self"
                 class="button button--primary button--white block text-center bg-white text-primary hover:bg-white/90"
                 @click="closeMobileMenu"
               >
-                <span>Explore Vite+</span>
+                <span>Get started</span>
               </a>
             </div>
 
