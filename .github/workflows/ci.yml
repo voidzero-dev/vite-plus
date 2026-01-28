@@ -67,7 +67,8 @@ jobs:
         env:
           RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
 
-      - run: cargo test -p vite_command -p vite_install -p vite_migration
+      # Test all crates/* packages. New crates are automatically included.
+      - run: cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done)
 
   lint:
     name: Lint
