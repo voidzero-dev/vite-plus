@@ -243,7 +243,8 @@ pub async fn move_to_cache(
     // Acquire file lock in a blocking task to avoid blocking the async runtime.
     // The lock() call blocks until the lock is acquired.
     let lock_path_clone = lock_path.clone();
-    tokio::task::spawn_blocking(move || {
+    // Store the lock file to keep it alive until end of function
+    let _lock_file = tokio::task::spawn_blocking(move || {
         let lock_file = File::create(lock_path_clone.as_path())?;
         // Acquire exclusive lock (blocks until available)
         lock_file.lock()?;
@@ -257,10 +258,11 @@ pub async fn move_to_cache(
     // the installation while we were downloading
     if fs::try_exists(target.as_path()).await.unwrap_or(false) {
         tracing::debug!("Target already exists after lock acquisition, skipping move: {target:?}");
+        // Lock is released when lock_file is dropped at end of scope
         return Ok(());
     }
 
-    // Atomic rename
+    // Atomic rename (lock is still held)
     fs::rename(source.as_path(), target.as_path()).await?;
     tracing::debug!("Atomic rename successful: {source:?} -> {target:?}");
 
