@@ -1091,8 +1091,7 @@ packages/global/
 2. Build JS: `pnpm -F vite-plus-cli build`
 3. Run install script: `pnpm bootstrap-cli` (which internally runs `install-global-cli.ts`)
 4. The script copies the binary to `packages/global/bin/vp`
-5. The script updates `package.json` bin entry: `{ "vp": "./bin/vp" }`
-6. Local development and snap tests work unchanged
+5. Local development and snap tests work unchanged
 
 **Directory structure after setup:**
 
@@ -1103,13 +1102,6 @@ packages/global/
 ├── dist/
 │   └── index.js        # Bundled JS entry point
 └── package.json        # Contains devEngines.runtime: "22.22.0"
-```
-
-**Implementation note for `install-global-cli.ts`:**
-
-```typescript
-// Update package.json bin entry to point to Rust binary
-packageJson.bin = { vp: './bin/vp' };
 ```
 
 **Benefits:**
