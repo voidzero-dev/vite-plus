@@ -9,16 +9,16 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
-// Platform to package mapping
-// Package names follow napi-rs convention: @voidzero-dev/vite-plus-cli-{platform}-{arch}[-{libc}]
-const PLATFORMS = {
-  'darwin-arm64': '@voidzero-dev/vite-plus-cli-darwin-arm64',
-  'darwin-x64': '@voidzero-dev/vite-plus-cli-darwin-x64',
-  'linux-arm64': '@voidzero-dev/vite-plus-cli-linux-arm64-gnu',
-  'linux-x64': '@voidzero-dev/vite-plus-cli-linux-x64-gnu',
-  'win32-arm64': '@voidzero-dev/vite-plus-cli-win32-arm64-msvc',
-  'win32-x64': '@voidzero-dev/vite-plus-cli-win32-x64-msvc',
-};
+function getPackageName() {
+  const { platform, arch } = process;
+  let suffix = '';
+  if (platform === 'linux') {
+    suffix = '-gnu';
+  } else if (platform === 'win32') {
+    suffix = '-msvc';
+  }
+  return `@voidzero-dev/vite-plus-cli-${platform}-${arch}${suffix}`;
+}
 
 function getBinaryPath() {
   const binaryName = process.platform === 'win32' ? 'vp.exe' : 'vp';
@@ -30,13 +30,7 @@ function getBinaryPath() {
   }
 
   // 2. Find binary from platform-specific optionalDependency
-  const platform = `${process.platform}-${process.arch}`;
-  const packageName = PLATFORMS[platform];
-
-  if (!packageName) {
-    // Fall back to JS-only mode for unsupported platforms
-    return null;
-  }
+  const packageName = getPackageName();
 
   // Try to find the binary in node_modules (sibling of this package)
   const nodeModulesPath = join(__dirname, '..', '..', packageName, binaryName);
