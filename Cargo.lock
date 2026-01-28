@@ -7040,6 +7040,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "vite_global_cli"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "vite_error",
+ "vite_install",
+ "vite_js_runtime",
+ "vite_path",
+ "vite_shared",
+ "vite_str",
+ "vite_workspace",
+]
+
+[[package]]
 name = "vite_graph_ser"
 version = "0.1.0"
 source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=d1824f23d28fdac7024c80c25f8e84b24b4f7704#d1824f23d28fdac7024c80c25f8e84b24b4f7704"
