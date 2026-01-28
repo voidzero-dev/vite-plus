@@ -163,15 +163,15 @@ These commands execute JavaScript scripts bundled with the CLI:
 | `migrate [path]` | Migration rules and transformations | Rust CLI → Managed Node.js → JS scripts |
 | `--version` | Version display logic | Rust CLI → Managed Node.js → JS scripts |
 
-#### Category C: Local CLI Delegation (Rust CLI + Managed Node.js + Local Package)
+#### Category C: Local CLI Delegation (Rust CLI + Managed Node.js + JS Entry Point)
 
-These commands delegate to the local `vite-plus` package, using managed Node.js from `vite_js_runtime`:
+These commands delegate to the local `vite-plus` package through the JS entry point (`dist/index.js`), which handles detecting/installing local vite-plus:
 
 | Command | Implementation |
 |---------|----------------|
-| `dev`, `build`, `test`, `lint`, `fmt`, `run`, `preview`, `cache` | Rust CLI → Managed Node.js → `node_modules/.bin/vite` |
+| `dev`, `build`, `test`, `lint`, `fmt`, `run`, `preview`, `cache` | Rust CLI → Managed Node.js → `dist/index.js` → local CLI |
 
-**Note:** The global CLI uses `vite_js_runtime` to ensure Node.js is available, resolving the version from the project's `devEngines.runtime` configuration. This ensures the local CLI runs with the project's intended Node.js version.
+**Note:** The global CLI uses `vite_js_runtime` to ensure Node.js is available, resolving the version from the project's `devEngines.runtime` configuration. The JS entry point handles detecting if vite-plus is installed locally, auto-installing if needed, and delegating to the local CLI's `dist/bin.js`.
 
 #### Category D: Pure Rust Commands (No Node.js Required)
 
@@ -246,15 +246,16 @@ Only these commands can run without any Node.js:
 │    (CLI's version: 22.22.0)         │    │    (Project's version)         │
 │                                     │    │                                │
 │  ┌─────────────┐  ┌──────────────┐  │    │  ┌──────────────────────────┐  │
-│  │ pnpm/npm/   │  │ Bundled      │  │    │  │ Local vite-plus          │  │
-│  │ yarn        │  │ JS Scripts   │  │    │  │ node_modules/.bin/vite   │  │
-│  │ (Cat. A)    │  │ (Cat. B)     │  │    │  │ (Cat. C)                 │  │
+│  │ pnpm/npm/   │  │ Bundled      │  │    │  │ dist/index.js            │  │
+│  │ yarn        │  │ JS Scripts   │  │    │  │ → detects/installs local │  │
+│  │ (Cat. A)    │  │ (Cat. B)     │  │    │  │ → delegates to local CLI │  │
 │  └─────────────┘  └──────────────┘  │    │  └──────────────────────────┘  │
 └─────────────────────────────────────┘    └────────────────────────────────┘
 
 Legend:
 - Both flows use download_runtime_for_project(), just with different directory paths
 - vite_js_runtime handles all devEngines.runtime logic internally
+- Category C delegates through dist/index.js which handles local CLI detection
 - Category D: No Node.js required (pure Rust)
 ```
 
@@ -337,6 +338,12 @@ impl JsExecutor {
     }
 
     /// Delegate to local vite-plus CLI (Category C)
+    ///
+    /// Passes the command through `dist/index.js` which handles:
+    /// - Detecting if vite-plus is installed locally
+    /// - Auto-installing if it's a dependency but not installed
+    /// - Prompting user to add it if not found
+    /// - Delegating to the local CLI's `dist/bin.js`
     pub async fn delegate_to_local_cli(
         &mut self,
         project_path: &Path,
@@ -344,10 +351,16 @@ impl JsExecutor {
     ) -> Result<ExitStatus, Error> {
         // Use project's runtime version via download_runtime_for_project
         let runtime = self.ensure_project_runtime(project_path).await?;
-        let local_cli = project_path.join("node_modules/.bin/vite");
+
+        // Get the JS entry point (dist/index.js)
+        let entry_point = self.scripts_dir.join("index.js");
+
+        // Execute dist/index.js with the command and args
+        // The JS layer handles detecting/installing local vite-plus
         let status = Command::new(runtime.get_binary_path())
-            .arg(&local_cli)
+            .arg(&entry_point)
             .args(args)
+            .current_dir(project_path)
             .status()?;
         Ok(status)
     }
@@ -358,7 +371,8 @@ impl JsExecutor {
 - Both flows use `download_runtime_for_project()` - the only difference is the directory path
 - `vite_js_runtime` handles all `devEngines.runtime` logic internally (reading package.json, resolving versions, caching)
 - CLI commands use CLI's package.json directory (e.g., `packages/global/`)
-- Project delegation uses project's directory (e.g., current working directory)
+- Project delegation uses project's directory and passes commands through `dist/index.js`
+- The JS entry point handles local CLI detection, auto-installation, and delegation
 
 ### Implementation Phases
 
@@ -1024,12 +1038,11 @@ pub enum Error {
     #[error("Command execution failed: {0}")]
     CommandExecution(std::io::Error),
 
-    #[error("Local CLI not found. Please install vite-plus in your project.")]
-    LocalCliNotFound,
-
     // ... more variants
 }
 ```
+
+**Note:** Local CLI detection errors are handled by the JS layer (`dist/index.js`), which provides better UX with auto-install prompts and user-friendly messages.
 
 ### Local Development
 
