@@ -388,21 +388,32 @@ impl JsExecutor {
 - `crates/vite_global_cli/src/main.rs`
 - `crates/vite_global_cli/src/cli.rs`
 - `crates/vite_global_cli/src/commands/mod.rs`
-- `crates/vite_global_cli/src/commands/pm.rs`        # All PM commands (install, add, remove, update, etc.)
+- `crates/vite_global_cli/src/commands/add.rs`       # Add packages (struct-based: AddCommand)
+- `crates/vite_global_cli/src/commands/install.rs`   # Install dependencies (struct-based: InstallCommand)
+- `crates/vite_global_cli/src/commands/remove.rs`    # Remove packages (struct-based: RemoveCommand)
+- `crates/vite_global_cli/src/commands/update.rs`    # Update packages (struct-based: UpdateCommand)
+- `crates/vite_global_cli/src/commands/dedupe.rs`    # Deduplicate deps (struct-based: DedupeCommand)
+- `crates/vite_global_cli/src/commands/outdated.rs`  # Check outdated (struct-based: OutdatedCommand)
+- `crates/vite_global_cli/src/commands/why.rs`       # Explain dependency (struct-based: WhyCommand)
+- `crates/vite_global_cli/src/commands/link.rs`      # Link packages (struct-based: LinkCommand)
+- `crates/vite_global_cli/src/commands/unlink.rs`    # Unlink packages (struct-based: UnlinkCommand)
+- `crates/vite_global_cli/src/commands/dlx.rs`       # Execute package (struct-based: DlxCommand)
+- `crates/vite_global_cli/src/commands/pm.rs`        # PM subcommands (prune, pack, list, etc.)
 - `crates/vite_global_cli/src/commands/new.rs`       # Project scaffolding
 - `crates/vite_global_cli/src/commands/migrate.rs`   # Migration command
 - `crates/vite_global_cli/src/commands/delegate.rs`  # Local CLI delegation
+- `crates/vite_global_cli/src/commands/version.rs`   # Version display
 - `crates/vite_global_cli/src/js_executor.rs`
-- `crates/vite_global_cli/src/workspace.rs`
+- `crates/vite_global_cli/src/error.rs`
 
 **Success Criteria:**
-- [ ] All PM commands work without pre-installed Node.js (uses managed Node.js)
-- [ ] Managed Node.js is downloaded automatically when first PM command runs
-- [ ] Auto-detects pnpm/npm/yarn in the project
-- [ ] Package manager is downloaded via managed Node.js if not available
-- [ ] All PM commands work identically to current Node.js CLI
-- [ ] `--help` documentation matches current CLI
-- [ ] Command aliases work correctly (i, rm, up, etc.)
+- [x] All PM commands work without pre-installed Node.js (uses managed Node.js)
+- [x] Managed Node.js is downloaded automatically when first PM command runs
+- [x] Auto-detects pnpm/npm/yarn in the project
+- [x] Package manager is downloaded via managed Node.js if not available
+- [x] All PM commands work identically to current Node.js CLI
+- [x] `--help` documentation matches current CLI
+- [x] Command aliases work correctly (i, rm, up, etc.)
 
 #### Phase 2: Project Scaffolding
 
@@ -412,8 +423,8 @@ impl JsExecutor {
 - Integrate with `vite_js_runtime` for Node.js download
 
 **Success Criteria:**
-- [ ] `vite new vite:monorepo` works without Node.js
-- [ ] `vite new create-vite` downloads Node.js and executes correctly
+- [x] `vite new vite:monorepo` works without Node.js
+- [x] `vite new create-vite` downloads Node.js and executes correctly
 
 #### Phase 3: Migration & Remaining Commands
 
@@ -423,9 +434,9 @@ impl JsExecutor {
 - Implement `--version` and help system
 
 **Success Criteria:**
-- [ ] `vite migrate` works correctly
-- [ ] Local commands delegate properly
-- [ ] Full feature parity with Node.js CLI
+- [x] `vite migrate` works correctly
+- [x] Local commands delegate properly
+- [x] Full feature parity with Node.js CLI
 
 #### Phase 4: Distribution & Testing
 
@@ -436,9 +447,9 @@ impl JsExecutor {
 - Comprehensive testing
 
 **Success Criteria:**
-- [ ] Binary available via multiple channels
-- [ ] Installation scripts work on all platforms
-- [ ] All snap tests pass
+- [x] Binary available via multiple channels
+- [x] Installation scripts work on all platforms
+- [x] All snap tests pass
 
 ### Dependency Changes
 
@@ -1190,16 +1201,16 @@ Rewriting these in Rust would be significant effort with limited benefit. Instea
 
 ## Success Criteria
 
-1. [ ] Binary runs on Linux, macOS, and Windows without pre-installed Node.js
-2. [ ] Managed Node.js is downloaded automatically when needed (PM commands, new, migrate)
-3. [ ] All current commands work identically to the existing Node.js CLI
-4. [ ] Cold start time < 100ms (excluding Node.js/PM download)
-5. [ ] Binary size < 30MB
-6. [ ] Existing snap tests pass
-7. [ ] Platform-specific npm packages published and installable
-8. [ ] `npm install -g vite-plus-cli` works on all supported platforms
+1. [x] Binary runs on Linux, macOS, and Windows without pre-installed Node.js
+2. [x] Managed Node.js is downloaded automatically when needed (PM commands, new, migrate)
+3. [x] All current commands work identically to the existing Node.js CLI
+4. [x] Cold start time < 100ms (excluding Node.js/PM download)
+5. [x] Binary size < 30MB
+6. [x] Existing snap tests pass
+7. [x] Platform-specific npm packages published and installable
+8. [x] `npm install -g vite-plus-cli` works on all supported platforms
 9. [ ] Standalone installation via `curl | bash` works
-10. [ ] JS scripts for `new` and `migrate` correctly bundled and executed
+10. [x] JS scripts for `new` and `migrate` correctly bundled and executed
 
 ## References
 
