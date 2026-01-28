@@ -6,7 +6,7 @@ use vite_install::{
 };
 use vite_path::AbsolutePathBuf;
 
-use crate::Error;
+use crate::error::Error;
 
 /// Outdated command for checking outdated packages.
 ///
@@ -56,7 +56,7 @@ impl OutdatedCommand {
             global,
             pass_through_args,
         };
-        package_manager.run_outdated_command(&outdated_command_options, &self.cwd).await
+        Ok(package_manager.run_outdated_command(&outdated_command_options, &self.cwd).await?)
     }
 }
 

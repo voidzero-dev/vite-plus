@@ -4,11 +4,11 @@ Unlink packages
 Usage: vite unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
 
 Arguments:
-  [PACKAGE|DIR]  Package name to unlink If empty, unlinks current package globally
+  [PACKAGE|DIR]  Package name to unlink
   [ARGS]...      Arguments to pass to package manager
 
 Options:
-  -r, --recursive  Unlink in every workspace package (pnpm/yarn@2+-specific)
+  -r, --recursive  Unlink in every workspace package
   -h, --help       Print help
 
 > mkdir -p ../unlink-test-lib && echo '{"name": "unlink-test-lib", "version": "1.0.0"}' > ../unlink-test-lib/package.json # create test library

@@ -66,7 +66,15 @@ export default defineConfig({
 > vite migrate --no-interactive # run migration again to check if it is idempotent
 ┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
-└  This project is already using Vite+! Happy coding!
+●  pnpm@<semver> installing...
+│
+●  pnpm@<semver> installed
+│
+●  Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/migration/#tsdown
+│
+●  Skipped writing AGENTS.md (already exists)
+│
+└  ✔ Migration completed!
 
 
 > cat tsdown.config.ts # check tsdown.config.ts

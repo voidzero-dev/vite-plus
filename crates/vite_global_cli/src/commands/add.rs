@@ -6,7 +6,7 @@ use vite_install::{
 };
 use vite_path::AbsolutePathBuf;
 
-use crate::Error;
+use crate::error::Error;
 
 /// Add command for adding packages to dependencies.
 ///
@@ -50,7 +50,7 @@ impl AddCommand {
         // Detect package manager
         let package_manager = PackageManager::builder(&self.cwd).build_with_default().await?;
 
-        package_manager.run_add_command(&add_command_options, &self.cwd).await
+        Ok(package_manager.run_add_command(&add_command_options, &self.cwd).await?)
     }
 }
 

@@ -3,7 +3,7 @@ use std::process::ExitStatus;
 use vite_install::{commands::why::WhyCommandOptions, package_manager::PackageManager};
 use vite_path::AbsolutePathBuf;
 
-use crate::Error;
+use crate::error::Error;
 
 /// Why command for showing why a package is installed.
 ///
@@ -57,7 +57,7 @@ impl WhyCommand {
             find_by,
             pass_through_args,
         };
-        package_manager.run_why_command(&why_command_options, &self.cwd).await
+        Ok(package_manager.run_why_command(&why_command_options, &self.cwd).await?)
     }
 }
 

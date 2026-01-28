@@ -5,7 +5,7 @@ Usage: vite pm cache <SUBCOMMAND> [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   <SUBCOMMAND>            Subcommand: dir, path, clean
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+  [PASS_THROUGH_ARGS]...  Additional arguments
 
 Options:
   -h, --help  Print help

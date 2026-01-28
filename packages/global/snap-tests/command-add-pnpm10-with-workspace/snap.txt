@@ -137,7 +137,7 @@ Done in <variable>ms using pnpm v<semver>
   },
   "dependencies": {
     "@vite-plus-test/utils": "workspace:*",
-    "test-vite-plus-package": "catalog:"
+    "test-vite-plus-package": "1.0.0"
   }
 }
 {
@@ -145,7 +145,7 @@ Done in <variable>ms using pnpm v<semver>
   "dependencies": {
     "@vite-plus-test/utils": "workspace:*",
     "test-vite-plus-install": "1.0.0",
-    "test-vite-plus-package": "catalog:",
+    "test-vite-plus-package": "1.0.0",
     "testnpm2": "^1.0.1"
   }
 }
@@ -155,15 +155,12 @@ Done in <variable>ms using pnpm v<semver>
   "private": true,
   "dependencies": {
     "test-vite-plus-install": "1.0.0",
-    "test-vite-plus-package": "catalog:",
+    "test-vite-plus-package": "1.0.0",
     "testnpm2": "^1.0.1"
   }
 }
 packages:
   - packages/*
-
-catalog:
-  test-vite-plus-package: <semver>
 
 > vite add --filter app test-vite-plus-package-optional --save-catalog-name v1 && cat packages/app/package.json pnpm-workspace.yaml # should add with save-catalog-name
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -174,16 +171,13 @@ Done in <variable>ms using pnpm v<semver>
   "dependencies": {
     "@vite-plus-test/utils": "workspace:*",
     "test-vite-plus-install": "1.0.0",
-    "test-vite-plus-package": "catalog:",
+    "test-vite-plus-package": "1.0.0",
     "test-vite-plus-package-optional": "catalog:v1",
     "testnpm2": "^1.0.1"
   }
 }
 packages:
   - packages/*
-
-catalog:
-  test-vite-plus-package: <semver>
 
 catalogs:
   v1:
@@ -198,7 +192,7 @@ Done in <variable>ms using pnpm v<semver>
   "private": true,
   "dependencies": {
     "test-vite-plus-install": "1.0.0",
-    "test-vite-plus-package": "catalog:",
+    "test-vite-plus-package": "1.0.0",
     "testnpm2": "^1.0.1"
   },
   "optionalDependencies": {
@@ -207,9 +201,6 @@ Done in <variable>ms using pnpm v<semver>
 }
 packages:
   - packages/*
-
-catalog:
-  test-vite-plus-package: <semver>
 
 catalogs:
   v1:

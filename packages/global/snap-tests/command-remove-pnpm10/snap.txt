@@ -13,7 +13,7 @@ Options:
   -P, --save-prod         Only remove from `dependencies` (pnpm-specific)
       --filter <PATTERN>  Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root    Remove from workspace root
-  -r, --recursive         Remove recursively from all workspace packages, including workspace root
+  -r, --recursive         Remove recursively from all workspace packages
   -g, --global            Remove global packages
   -h, --help              Print help
 

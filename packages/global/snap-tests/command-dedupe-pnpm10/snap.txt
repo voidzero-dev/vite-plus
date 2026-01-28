@@ -1,5 +1,5 @@
 > vite dedupe --help # should show help
-Deduplicate dependencies by removing older versions
+Deduplicate dependencies
 
 Usage: vite dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 

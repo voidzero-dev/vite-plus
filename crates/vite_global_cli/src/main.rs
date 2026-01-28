@@ -14,11 +14,10 @@ mod js_executor;
 
 use std::process::ExitCode;
 
-use clap::Parser;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 use vite_path::AbsolutePathBuf;
 
-use crate::cli::{Args, run_command};
+use crate::cli::{parse_args, run_command};
 
 fn main() -> ExitCode {
     // Initialize tracing
@@ -40,8 +39,8 @@ fn main() -> ExitCode {
         }
     };
 
-    // Parse CLI arguments
-    let args = Args::parse();
+    // Parse CLI arguments (using custom help formatting)
+    let args = parse_args();
 
     // Run the async runtime
     let runtime = tokio::runtime::Builder::new_multi_thread()

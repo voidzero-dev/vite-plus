@@ -3,7 +3,7 @@ use std::process::ExitStatus;
 use vite_install::{commands::update::UpdateCommandOptions, package_manager::PackageManager};
 use vite_path::AbsolutePathBuf;
 
-use crate::Error;
+use crate::error::Error;
 
 /// Update command for updating packages to their latest versions.
 ///
@@ -18,6 +18,7 @@ impl UpdateCommand {
         Self { cwd }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn execute(
         self,
         packages: &[String],
@@ -52,7 +53,7 @@ impl UpdateCommand {
             workspace_only,
             pass_through_args,
         };
-        package_manager.run_update_command(&update_command_options, &self.cwd).await
+        Ok(package_manager.run_update_command(&update_command_options, &self.cwd).await?)
     }
 }
 

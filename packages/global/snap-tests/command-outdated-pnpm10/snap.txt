@@ -4,20 +4,20 @@ Check for outdated packages
 Usage: vite outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
-  [PACKAGES]...           Package name(s) to check (supports glob patterns in pnpm)
+  [PACKAGES]...           Package name(s) to check
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
       --long              Show extended information
       --format <FORMAT>   Output format: table (default), list, or json
   -r, --recursive         Check recursively across all workspaces
-      --filter <PATTERN>  Filter packages in monorepo (can be used multiple times)
+      --filter <PATTERN>  Filter packages in monorepo
   -w, --workspace-root    Include workspace root
-  -P, --prod              Only production and optional dependencies (pnpm-specific)
-  -D, --dev               Only dev dependencies (pnpm-specific)
-      --no-optional       Exclude optional dependencies (pnpm-specific)
-      --compatible        Only show compatible versions (pnpm-specific)
-      --sort-by <FIELD>   Sort results by field (pnpm-specific)
+  -P, --prod              Only production and optional dependencies
+  -D, --dev               Only dev dependencies
+      --no-optional       Exclude optional dependencies
+      --compatible        Only show compatible versions
+      --sort-by <FIELD>   Sort results by field
   -g, --global            Check globally installed packages
   -h, --help              Print help
 

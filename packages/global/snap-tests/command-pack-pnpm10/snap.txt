@@ -4,23 +4,16 @@ Create a tarball of the package
 Usage: vite pm pack [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+  [PASS_THROUGH_ARGS]...  Additional arguments
 
 Options:
-  -r, --recursive
-          Pack all workspace packages
-      --filter <PATTERN>
-          Filter packages to pack (can be used multiple times)
-      --out <OUT>
-          Customizes the output path for the tarball. Use %s and %v to include the package name and version (pnpm and yarn@2+ only), e.g., %s.tgz or some-dir/%s-%v.tgz
-      --pack-destination <PACK_DESTINATION>
-          Directory where the tarball will be saved (pnpm and npm only)
-      --pack-gzip-level <PACK_GZIP_LEVEL>
-          Gzip compression level (0-9)
-      --json
-          Output in JSON format
-  -h, --help
-          Print help
+  -r, --recursive                            Pack all workspace packages
+      --filter <PATTERN>                     Filter packages to pack
+      --out <OUT>                            Output path for the tarball
+      --pack-destination <PACK_DESTINATION>  Directory where the tarball will be saved
+      --pack-gzip-level <PACK_GZIP_LEVEL>    Gzip compression level (0-9)
+      --json                                 Output in JSON format
+  -h, --help                                 Print help
 
 > vite pm pack && rm -rf *.tgz # should pack current package
 📦  command-pack-pnpm10@<semver>

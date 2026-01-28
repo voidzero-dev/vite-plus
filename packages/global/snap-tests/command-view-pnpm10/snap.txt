@@ -6,7 +6,7 @@ Usage: vite pm view [OPTIONS] <PACKAGE> [FIELD] [-- <PASS_THROUGH_ARGS>...]
 Arguments:
   <PACKAGE>               Package name with optional version
   [FIELD]                 Specific field to view
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+  [PASS_THROUGH_ARGS]...  Additional arguments
 
 Options:
       --json  Output in JSON format
