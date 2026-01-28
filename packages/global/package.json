@@ -6,7 +6,7 @@
     "url": "https://github.com/voidzero-dev/vite-plus.git"
   },
   "bin": {
-    "vite": "./bin/vite"
+    "vp": "./bin/wrapper.js"
   },
   "files": [
     "AGENTS.md",

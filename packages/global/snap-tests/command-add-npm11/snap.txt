@@ -1,7 +1,7 @@
-> vite add --help # should show help
+> vp add --help # should show help
 Add packages to dependencies
 
-Usage: vite add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   <PACKAGES>...           Packages to add
@@ -22,7 +22,7 @@ Options:
   -g, --global                            Install globally
   -h, --help                              Print help
 
-> vite add testnpm2 -D -- --no-audit && cat package.json # should add package as dev dependencies
+> vp add testnpm2 -D -- --no-audit && cat package.json # should add package as dev dependencies
 
 added 1 package in <variable>ms
 {
@@ -34,7 +34,7 @@ added 1 package in <variable>ms
   }
 }
 
-> vite add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install -- --no-audit && cat package.json # should add packages to dependencies
+> vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install -- --no-audit && cat package.json # should add packages to dependencies
 
 added 1 package in <variable>ms
 {
@@ -49,7 +49,7 @@ added 1 package in <variable>ms
   }
 }
 
-> vite install test-vite-plus-package@1.0.0 --save-peer -- --no-audit && cat package.json # should install package alias for add
+> vp install test-vite-plus-package@1.0.0 --save-peer -- --no-audit && cat package.json # should install package alias for add
 
 added 1 package in <variable>ms
 {
@@ -67,7 +67,7 @@ added 1 package in <variable>ms
   }
 }
 
-> vite add test-vite-plus-package-optional -O -- --no-audit && cat package.json # should add package as optional dependencies
+> vp add test-vite-plus-package-optional -O -- --no-audit && cat package.json # should add package as optional dependencies
 
 added 1 package in <variable>ms
 {
@@ -88,7 +88,7 @@ added 1 package in <variable>ms
   }
 }
 
-> vite add test-vite-plus-package-optional -- --loglevel=warn --no-audit && cat package.json # support pass through arguments
+> vp add test-vite-plus-package-optional -- --loglevel=warn --no-audit && cat package.json # support pass through arguments
 
 up to date in <variable>ms
 {

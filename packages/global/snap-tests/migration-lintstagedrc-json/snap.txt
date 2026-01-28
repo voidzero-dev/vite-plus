@@ -1,7 +1,7 @@
-> vite migrate -h # migration help message
+> vp migrate -h # migration help message
 Migrate an existing project to Vite+<repeat>
 
-Usage: vite migrate [ARGS]...
+Usage: vp migrate [ARGS]...
 
 Arguments:
   [ARGS]...  All arguments for the migration command
@@ -9,7 +9,7 @@ Arguments:
 Options:
   -h, --help  Print help
 
-> vite migrate --no-interactive # migration work with lintstagedrc.json
+> vp migrate --no-interactive # migration work with lintstagedrc.json
 ┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm

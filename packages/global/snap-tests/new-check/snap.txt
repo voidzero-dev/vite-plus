@@ -1,4 +1,4 @@
-> vite new --help # show help
+> vp new --help # show help
 Create a new project from a template
 
 Use any builtin, local or remote template with Vite+.
@@ -7,7 +7,7 @@ Templates: - Builtin: vite:monorepo, vite:application, vite:library, vite:genera
 
 Examples: vite new                              # Interactive mode vite new vite:monorepo                # Create monorepo vite new create-vite                  # Use create-vite template vite new create-vite -- --template react-ts  # Pass options to template
 
-Usage: vite new [ARGS]...
+Usage: vp new [ARGS]...
 
 Arguments:
   [ARGS]...
@@ -20,7 +20,7 @@ Options:
 Run 'vite new --list' to see available templates.
 Arguments after -- are passed directly to the template.
 
-> vite new --list # list templates
+> vp new --list # list templates
 VITE+(⚡︎) - The Unified Toolchain for the Web
 
 VITE+ BUILT-IN TEMPLATES:
@@ -46,7 +46,7 @@ EXAMPLES:
 ✨ Tip: You can use any npm template or git repo with vite new!
 
 
-[1]> vite new --no-interactive # run in non-interactive mode without template name will show error
+[1]> vp new --no-interactive # run in non-interactive mode without template name will show error
 
 A template name is required when running in non-interactive mode
 

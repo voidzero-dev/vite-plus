@@ -1,4 +1,4 @@
-> vite update testnpm2 -- --no-audit && cat package.json # should update package within semver range
+> vp update testnpm2 -- --no-audit && cat package.json # should update package within semver range
 
 added 3 packages in <variable>ms
 {
@@ -16,7 +16,7 @@ added 3 packages in <variable>ms
   "packageManager": "npm@<semver>"
 }
 
-> vite up testnpm2 --latest -- --no-audit && cat package.json # should to absolute latest version
+> vp up testnpm2 --latest -- --no-audit && cat package.json # should to absolute latest version
 Warning: npm doesn't support --latest flag. Updating within semver range only.
 
 up to date in <variable>ms
@@ -35,7 +35,7 @@ up to date in <variable>ms
   "packageManager": "npm@<semver>"
 }
 
-> vite update -D -- --no-audit && cat package.json # should update only dev dependencies
+> vp update -D -- --no-audit && cat package.json # should update only dev dependencies
 
 up to date in <variable>ms
 {
@@ -53,7 +53,7 @@ up to date in <variable>ms
   "packageManager": "npm@<semver>"
 }
 
-> vite update -P --no-save -- --no-audit && cat package.json # should update only dependencies and optionalDependencies without saving
+> vp update -P --no-save -- --no-audit && cat package.json # should update only dependencies and optionalDependencies without saving
 
 up to date in <variable>ms
 {
@@ -71,18 +71,18 @@ up to date in <variable>ms
   "packageManager": "npm@<semver>"
 }
 
-> vite rm testnpm2 && vite add testnpm2@1.0.0 -O -- --no-audit && vite update --no-optional --latest -- --no-audit && cat package.json # should skip optional dependencies
+[2]> vp rm testnpm2 && vite add testnpm2@1.0.0 -O -- --no-audit && vite update --no-optional --latest -- --no-audit && cat package.json # should skip optional dependencies
 
 removed 1 package in <variable>ms
+error: unrecognized subcommand 'add'
 
-added 1 package in <variable>ms
-Warning: npm doesn't support --latest flag. Updating within semver range only.
-npm warn config optional Use `--omit=optional` to exclude optional dependencies, or
-npm warn config `--include=optional` to include them.
-npm warn config
-npm warn config       Default value does install optional deps unless otherwise omitted.
+Usage: vite <COMMAND>
 
-changed 1 package in <variable>ms
+For more information, try '--help'.
+
+> vp update -- --no-audit && cat package.json # should update all packages but won't change the package.json
+
+up to date in <variable>ms
 {
   "name": "command-update-npm10",
   "version": "1.0.0",
@@ -90,24 +90,7 @@ changed 1 package in <variable>ms
     "test-vite-plus-package": "*"
   },
   "optionalDependencies": {
-    "test-vite-plus-package-optional": "*",
-    "testnpm2": "^1.0.0"
-  },
-  "packageManager": "npm@<semver>"
-}
-
-> vite update -- --no-audit && cat package.json # should update all packages but won't change the package.json
-
-added 2 packages in <variable>ms
-{
-  "name": "command-update-npm10",
-  "version": "1.0.0",
-  "devDependencies": {
-    "test-vite-plus-package": "*"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "*",
-    "testnpm2": "^1.0.0"
+    "test-vite-plus-package-optional": "*"
   },
   "packageManager": "npm@<semver>"
 }

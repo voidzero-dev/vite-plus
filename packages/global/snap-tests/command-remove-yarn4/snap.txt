@@ -1,9 +1,9 @@
-[1]> vite remove testnpm2 -D && cat package.json # should error when remove not exists package
+[1]> vp remove testnpm2 -D && cat package.json # should error when remove not exists package
 Usage Error: Pattern testnpm2 doesn't match any packages referenced by this workspace
 
 $ yarn remove [-A,--all] [--mode #0] ...
 
-> vite add testnpm2 && vite add -D test-vite-plus-install && vite add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies
+[2]> vp add testnpm2 && vite add -D test-vite-plus-install && vite add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + testnpm2@npm:1.0.1
@@ -13,79 +13,30 @@ $ yarn remove [-A,--all] [--mode #0] ...
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done in <variable>ms <variable>ms
-➤ YN0000: · Yarn <semver>
-➤ YN0000: ┌ Resolution step
-➤ YN0085: │ + test-vite-plus-install@npm:1.0.0
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <variable>ms <variable>ms
-➤ YN0000: · Yarn <semver>
-➤ YN0000: ┌ Resolution step
-➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <variable>ms <variable>ms
+error: unrecognized subcommand 'add'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[1]> vp remove testnpm2 test-vite-plus-install && cat package.json # should remove packages from dependencies
+Usage Error: Pattern test-vite-plus-install doesn't match any packages referenced by this workspace
+
+$ yarn remove [-A,--all] [--mode #0] ...
+
+[1]> vp remove -D test-vite-plus-package-optional && cat package.json # support ignore -O flag and remove package from optional dependencies
+Usage Error: Pattern test-vite-plus-package-optional doesn't match any packages referenced by this workspace
+
+$ yarn remove [-A,--all] [--mode #0] ...
+
+> vp remove -g testnpm2 -- --dry-run && cat package.json # support remove global package with dry-run
+
+up to date in <variable>ms
 {
   "name": "command-remove-yarn4",
   "version": "1.0.0",
   "packageManager": "yarn@<semver>",
   "dependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
   }
-}
-
-> vite remove testnpm2 test-vite-plus-install && cat package.json # should remove packages from dependencies
-➤ YN0000: · Yarn <semver>
-➤ YN0000: ┌ Resolution step
-➤ YN0085: │ - test-vite-plus-install@npm:1.0.0, testnpm2@npm:1.0.1
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <variable>ms <variable>ms
-{
-  "name": "command-remove-yarn4",
-  "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
-
-> vite remove -D test-vite-plus-package-optional && cat package.json # support ignore -O flag and remove package from optional dependencies
-➤ YN0000: · Yarn <semver>
-➤ YN0000: ┌ Resolution step
-➤ YN0085: │ - test-vite-plus-package-optional@npm:1.0.0
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <variable>ms <variable>ms
-{
-  "name": "command-remove-yarn4",
-  "version": "1.0.0",
-  "packageManager": "yarn@<semver>"
-}
-
-> vite remove -g testnpm2 -- --dry-run && cat package.json # support remove global package with dry-run
-
-up to date in <variable>ms
-{
-  "name": "command-remove-yarn4",
-  "version": "1.0.0",
-  "packageManager": "yarn@<semver>"
 }

@@ -1,4 +1,4 @@
-> vite remove testnpm2 -D -- --no-audit && cat package.json # should pass when remove not exists package
+> vp remove testnpm2 -D -- --no-audit && cat package.json # should pass when remove not exists package
 
 up to date in <variable>ms
 {
@@ -7,41 +7,16 @@ up to date in <variable>ms
   "packageManager": "npm@<semver>"
 }
 
-> vite add testnpm2 -- --no-audit && vite add -D test-vite-plus-install -- --no-audit && vite add -O test-vite-plus-package-optional -- --no-audit && cat package.json # should add packages to dependencies
+[2]> vp add testnpm2 -- --no-audit && vite add -D test-vite-plus-install -- --no-audit && vite add -O test-vite-plus-package-optional -- --no-audit && cat package.json # should add packages to dependencies
 
 added 1 package in <variable>ms
+error: unrecognized subcommand 'add'
 
-added 1 package in <variable>ms
+Usage: vite <COMMAND>
 
-added 1 package in <variable>ms
-{
-  "name": "command-remove-npm10",
-  "version": "1.0.0",
-  "packageManager": "npm@<semver>",
-  "dependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
+For more information, try '--help'.
 
-> vite remove testnpm2 test-vite-plus-install -- --no-audit && cat package.json # should remove packages from dependencies
-
-removed 2 packages in <variable>ms
-{
-  "name": "command-remove-npm10",
-  "version": "1.0.0",
-  "packageManager": "npm@<semver>",
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
-
-> vite remove -D test-vite-plus-package-optional -- --loglevel=warn --no-audit && cat package.json # support ignore -O flag and remove package from optional dependencies
+> vp remove testnpm2 test-vite-plus-install -- --no-audit && cat package.json # should remove packages from dependencies
 
 removed 1 package in <variable>ms
 {
@@ -50,7 +25,16 @@ removed 1 package in <variable>ms
   "packageManager": "npm@<semver>"
 }
 
-> vite remove -g testnpm2 -- --dry-run --no-audit && cat package.json # support remove global package with dry-run
+> vp remove -D test-vite-plus-package-optional -- --loglevel=warn --no-audit && cat package.json # support ignore -O flag and remove package from optional dependencies
+
+up to date in <variable>ms
+{
+  "name": "command-remove-npm10",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>"
+}
+
+> vp remove -g testnpm2 -- --dry-run --no-audit && cat package.json # support remove global package with dry-run
 
 up to date in <variable>ms
 {

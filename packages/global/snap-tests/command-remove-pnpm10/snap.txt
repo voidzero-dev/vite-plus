@@ -1,7 +1,7 @@
-> vite remove --help # should show help
+> vp remove --help # should show help
 Remove packages from dependencies
 
-Usage: vite remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   <PACKAGES>...           Packages to remove
@@ -17,18 +17,18 @@ Options:
   -g, --global            Remove global packages
   -h, --help              Print help
 
-[2]> vite remove # should error because no packages specified
+[2]> vp remove # should error because no packages specified
 error: the following required arguments were not provided:
   <PACKAGES>...
 
-Usage: vite remove <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp remove <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 For more information, try '--help'.
 
-[1]> vite remove testnpm2 -D && cat package.json # should error when remove not exists package from dev dependencies
+[1]> vp remove testnpm2 -D && cat package.json # should error when remove not exists package from dev dependencies
  ERR_PNPM_CANNOT_REMOVE_MISSING_DEPS  Cannot remove 'testnpm2': project has no 'devDependencies'
 
-> vite add testnpm2 && vite add -D test-vite-plus-install && vite add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies
+[2]> vp add testnpm2 && vite add -D test-vite-plus-install && vite add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -37,79 +37,37 @@ dependencies:
 + testnpm2 <semver>
 
 Done in <variable>ms using pnpm v<semver>
-Packages: +<variable>
-+<repeat>
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+error: unrecognized subcommand 'add'
 
-devDependencies:
-+ test-vite-plus-install <semver>
+Usage: vite <COMMAND>
 
-Done in <variable>ms using pnpm v<semver>
-Packages: +<variable>
-+<repeat>
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+For more information, try '--help'.
 
-optionalDependencies:
-+ test-vite-plus-package-optional <semver>
+[1]> vp remove testnpm2 test-vite-plus-install && cat package.json # should remove packages from dependencies
+ ERR_PNPM_CANNOT_REMOVE_MISSING_DEPS  Cannot remove 'test-vite-plus-install': no such dependency found
 
-Done in <variable>ms using pnpm v<semver>
+Available dependencies: testnpm2
+
+[1]> vp remove -O test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support remove package from optional dependencies and pass through arguments
+ ERR_PNPM_CANNOT_REMOVE_MISSING_DEPS  Cannot remove 'test-vite-plus-package-optional': project has no 'optionalDependencies'
+
+> vp remove -g testnpm2 -- --dry-run && cat package.json # support remove global package with dry-run
+
+up to date in <variable>ms
 {
   "name": "command-remove-pnpm10",
   "version": "1.0.0",
   "packageManager": "pnpm@<semver>",
   "dependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
   }
 }
 
-> vite remove testnpm2 test-vite-plus-install && cat package.json # should remove packages from dependencies
-Packages: -2
---
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
-
-dependencies:
-- testnpm2 <semver>
-
-devDependencies:
-- test-vite-plus-install <semver>
-
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-remove-pnpm10",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
-
-> vite remove -O test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support remove package from optional dependencies and pass through arguments
-{
-  "name": "command-remove-pnpm10",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>"
-}
-
-> vite remove -g testnpm2 -- --dry-run && cat package.json # support remove global package with dry-run
-
-up to date in <variable>ms
-{
-  "name": "command-remove-pnpm10",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>"
-}
-
-[2]> vite rm --stream foo && should show tips to use pass through arguments when options are not supported
+[2]> vp rm --stream foo && should show tips to use pass through arguments when options are not supported
 error: unexpected argument '--stream' found
 
   tip: to pass '--stream' as a value, use '-- --stream'
 
-Usage: vite remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 For more information, try '--help'.

@@ -36,8 +36,6 @@ pnpm bootstrap-cli
 vp --version
 ```
 
-Note: Local development installs the CLI as `vp` (package name: `vite-plus-cli-dev`) to avoid overriding the published `vite-plus-cli` package and its `vite` bin name. In CI, `pnpm bootstrap-cli:ci` installs it as `vite`.
-
 ## Workflow for build and test
 
 You can run this command to build, test and check if there are any snapshot changes:

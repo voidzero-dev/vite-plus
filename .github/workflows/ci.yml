@@ -137,13 +137,13 @@ jobs:
 
       - name: Print help for built-in commands
         run: |
-          which vite
-          vite -h
-          vite run -h
-          vite lint -h
-          vite test -h
-          vite build -h
-          vite fmt -h
+          which vp
+          vp -h
+          vp run -h
+          vp lint -h
+          vp test -h
+          vp build -h
+          vp fmt -h
 
   cli-e2e-test:
     name: CLI E2E test
@@ -195,23 +195,18 @@ jobs:
       - name: Build CLI
         run: |
           pnpm bootstrap-cli:ci
-          which vite
-          vite --version
-          vite -h
+          which vp
+          vp --version
+          vp -h
 
       - name: Run CLI fmt
-        run: vite fmt --check
+        run: vp fmt --check
 
       - name: Run CLI lint
-        run: vite run lint
+        run: vp run lint
 
       - name: Install Playwright browsers
         run: pnpx playwright install chromium
-
-      - name: Create vite.cmd shim file for Windows
-        if: ${{ matrix.os == 'windows-latest' }}
-        run: |
-          printf '@echo off\nnode "%%~dp0vite" %%*\n' > packages/global/bin/vite.cmd
 
       - name: Run CLI snapshot tests
         run: |
@@ -255,11 +250,11 @@ jobs:
       - name: Build CLI
         run: pnpm bootstrap-cli:ci
 
-      - name: Run local CLI vite install
+      - name: Run local CLI vp install
         run: |
           export PATH=$PWD/node_modules/.bin:$PATH
-          vite -h
-          # Test vite install on various repositories with different package managers
+          vp -h
+          # Test vp install on various repositories with different package managers
           repos=(
             # pnpm workspace
             "pnpm/pnpm:pnpm"
@@ -274,16 +269,16 @@ jobs:
 
           for repo_info in "${repos[@]}"; do
             IFS=':' read -r repo dir_name <<< "$repo_info"
-            echo "Testing vite install on $repo…"
+            echo "Testing vp install on $repo…"
             # remove the directory if it exists
             if [ -d "$RUNNER_TEMP/$dir_name" ]; then
               rm -rf "$RUNNER_TEMP/$dir_name"
             fi
             git clone --depth 1 "https://github.com/$repo.git" "$RUNNER_TEMP/$dir_name"
             cd "$RUNNER_TEMP/$dir_name"
-            vite install
+            vp install
             # run again to show install cache increase by time
-            time vite install
+            time vp install
             echo "✓ Successfully installed dependencies for $repo"
             echo ""
           done

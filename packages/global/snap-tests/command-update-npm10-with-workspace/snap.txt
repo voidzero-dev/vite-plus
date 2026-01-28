@@ -1,4 +1,4 @@
-> vite update testnpm2 -w -- --no-audit && cat package.json # should update in workspace root
+> vp update testnpm2 -w -- --no-audit && cat package.json # should update in workspace root
 
 added 5 packages in <variable>ms
 {
@@ -13,7 +13,7 @@ added 5 packages in <variable>ms
   "packageManager": "npm@<semver>"
 }
 
-> vite update testnpm2 --latest --filter app -- --no-audit && cat packages/app/package.json # should update in specific package
+> vp update testnpm2 --latest --filter app -- --no-audit && cat packages/app/package.json # should update in specific package
 Warning: npm doesn't support --latest flag. Updating within semver range only.
 
 up to date in <variable>ms
@@ -28,7 +28,7 @@ up to date in <variable>ms
   }
 }
 
-> vite up -D --filter app -- --no-audit && cat packages/app/package.json # should update dev dependencies in app
+> vp up -D --filter app -- --no-audit && cat packages/app/package.json # should update dev dependencies in app
 npm warn workspaces app in filter set, but no workspace folder present
 
 up to date in <variable>ms
@@ -43,7 +43,7 @@ up to date in <variable>ms
   }
 }
 
-> vite update --filter "*" -- --no-audit && cat packages/app/package.json packages/utils/package.json # should update in all packages
+> vp update --filter "*" -- --no-audit && cat packages/app/package.json packages/utils/package.json # should update in all packages
 npm warn workspaces app in filter set, but no workspace folder present
 npm warn workspaces @vite-plus-test/utils in filter set, but no workspace folder present
 
@@ -66,7 +66,7 @@ up to date in <variable>ms
   }
 }
 
-> vite update -r --no-save -- --no-audit && cat package.json packages/app/package.json # should update recursively without saving
+> vp update -r --no-save -- --no-audit && cat package.json packages/app/package.json # should update recursively without saving
 npm warn workspaces app in filter set, but no workspace folder present
 npm warn workspaces @vite-plus-test/utils in filter set, but no workspace folder present
 
@@ -93,7 +93,7 @@ up to date in <variable>ms
   }
 }
 
-> vite update --workspace --filter app @vite-plus-test/utils -- --no-audit && cat packages/app/package.json # should update workspace dependency
+> vp update --workspace --filter app @vite-plus-test/utils -- --no-audit && cat packages/app/package.json # should update workspace dependency
 
 up to date in <variable>ms
 {
