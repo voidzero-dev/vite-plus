@@ -244,7 +244,7 @@ pub async fn move_to_cache(
     // The lock() call blocks until the lock is acquired.
     let lock_path_clone = lock_path.clone();
     // Store the lock file to keep it alive until end of function
-    let _lock_file = tokio::task::spawn_blocking(move || {
+    let _lock_guard = tokio::task::spawn_blocking(move || {
         let lock_file = File::create(lock_path_clone.as_path())?;
         // Acquire exclusive lock (blocks until available)
         lock_file.lock()?;

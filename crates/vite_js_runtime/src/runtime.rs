@@ -144,8 +144,10 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     // Get download info from provider
     let download_info = provider.get_download_info(version, platform);
 
-    // Create temp directory for download
-    let temp_dir = TempDir::new()?;
+    // Create temp directory for download under cache_dir to ensure rename works
+    // (rename fails with EXDEV if source and target are on different filesystems)
+    tokio::fs::create_dir_all(&cache_dir).await?;
+    let temp_dir = TempDir::new_in(&cache_dir)?;
     let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
     let archive_path = temp_path.join(&download_info.archive_filename);
 
