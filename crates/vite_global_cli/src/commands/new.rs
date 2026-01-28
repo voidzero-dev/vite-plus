@@ -1,7 +1,13 @@
 //! Project scaffolding command (Category B).
 //!
 //! This command creates new projects using templates. It uses managed Node.js
-//! from `vite_js_runtime` to execute JavaScript-based templates.
+//! from `vite_js_runtime` to execute the bundled JavaScript scaffolding scripts.
+//!
+//! The command supports:
+//! - Builtin templates: vite:monorepo, vite:application, vite:library, vite:generator
+//! - Remote templates: npm packages like create-vite, @tanstack/create-start
+//! - GitHub templates: github:user/repo or full URLs
+//! - Local templates: workspace packages or local directories
 
 use std::process::ExitStatus;
 
@@ -11,32 +17,32 @@ use crate::{error::Error, js_executor::JsExecutor};
 
 /// Execute the new command.
 ///
+/// This delegates to the bundled JavaScript implementation which handles:
+/// - Template discovery and resolution
+/// - Interactive prompts for template selection
+/// - Template execution (via package manager dlx, degit, or local execution)
+/// - Post-processing (package name updates, workspace configuration)
+///
 /// # Arguments
 /// * `cwd` - Current working directory
-/// * `template` - Optional template name (e.g., "vite:monorepo", "create-vite")
-/// * `name` - Optional project name or directory
-/// * `args` - Additional arguments to pass to the template
-pub async fn execute(
-    _cwd: AbsolutePathBuf,
-    template: Option<String>,
-    name: Option<String>,
-    args: &[String],
-) -> Result<ExitStatus, Error> {
+/// * `args` - All arguments passed to the command (template name, options, template args)
+///
+/// # Examples
+///
+/// ```text
+/// vite new                              # Interactive mode
+/// vite new vite:monorepo                # Create a monorepo
+/// vite new create-vite                  # Use create-vite template
+/// vite new create-vite -- --template react-ts  # Pass options to template
+/// vite new --list                       # List available templates
+/// vite new --help                       # Show help
+/// ```
+pub async fn execute(cwd: AbsolutePathBuf, args: &[String]) -> Result<ExitStatus, Error> {
     let mut executor = JsExecutor::new(None);
 
-    // Build args for the JS script
-    let mut script_args = Vec::new();
-    if let Some(t) = &template {
-        script_args.push(t.clone());
-    }
-    if let Some(n) = &name {
-        script_args.push(n.clone());
-    }
-    script_args.extend(args.iter().cloned());
-
-    // Execute the bundled JS script
-    // The script handles template resolution and project creation
-    executor.execute_cli_script("index.js", "new", &script_args).await
+    // Execute the bundled JS script with the "new" command
+    // The JS script handles all argument parsing, template discovery, and execution
+    executor.execute_cli_script("index.js", "new", args, &cwd).await
 }
 
 #[cfg(test)]

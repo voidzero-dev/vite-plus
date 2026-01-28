@@ -1,7 +1,13 @@
 //! Migration command (Category B).
 //!
 //! This command migrates existing projects to Vite+. It uses managed Node.js
-//! from `vite_js_runtime` to execute JavaScript-based migration scripts.
+//! from `vite_js_runtime` to execute the bundled JavaScript migration scripts.
+//!
+//! The migration process:
+//! - Detects project type and configuration
+//! - Updates build configuration for Vite+
+//! - Adds necessary dependencies
+//! - Configures workspace settings if in a monorepo
 
 use std::process::ExitStatus;
 
@@ -11,27 +17,21 @@ use crate::{error::Error, js_executor::JsExecutor};
 
 /// Execute the migrate command.
 ///
+/// This delegates to the bundled JavaScript implementation which handles:
+/// - Project detection and analysis
+/// - Configuration migration
+/// - Dependency updates
+/// - Workspace integration
+///
 /// # Arguments
 /// * `cwd` - Current working directory
-/// * `directory` - Optional project directory to migrate
-/// * `args` - Additional arguments to pass to the migration script
-pub async fn execute(
-    _cwd: AbsolutePathBuf,
-    directory: Option<String>,
-    args: &[String],
-) -> Result<ExitStatus, Error> {
+/// * `args` - All arguments for the migration command
+pub async fn execute(cwd: AbsolutePathBuf, args: &[String]) -> Result<ExitStatus, Error> {
     let mut executor = JsExecutor::new(None);
 
-    // Build args for the JS script
-    let mut script_args = Vec::new();
-    if let Some(dir) = &directory {
-        script_args.push(dir.clone());
-    }
-    script_args.extend(args.iter().cloned());
-
-    // Execute the bundled JS script
-    // The script handles migration logic
-    executor.execute_cli_script("index.js", "migrate", &script_args).await
+    // Execute the bundled JS script with the "migrate" command
+    // The JS script handles all migration logic
+    executor.execute_cli_script("index.js", "migrate", args, &cwd).await
 }
 
 #[cfg(test)]

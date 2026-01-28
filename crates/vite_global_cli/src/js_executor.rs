@@ -124,11 +124,13 @@ impl JsExecutor {
     /// * `script_name` - Name of the script file (e.g., "index.js")
     /// * `command` - Command to pass to the script (e.g., "new", "migrate")
     /// * `args` - Additional arguments for the command
+    /// * `cwd` - Working directory for the script execution
     pub async fn execute_cli_script(
         &mut self,
         script_name: &str,
         command: &str,
         args: &[String],
+        cwd: &AbsolutePath,
     ) -> Result<ExitStatus, Error> {
         let scripts_dir = self.get_scripts_dir()?;
         let script_path = scripts_dir.join(script_name);
@@ -140,10 +142,16 @@ impl JsExecutor {
         let runtime = self.ensure_cli_runtime().await?;
         let binary_path = runtime.get_binary_path();
 
-        tracing::debug!("Executing CLI script: {:?} {} {:?}", script_path, command, args);
+        tracing::debug!(
+            "Executing CLI script: {:?} {} {:?} in {:?}",
+            script_path,
+            command,
+            args,
+            cwd
+        );
 
         let mut cmd = Command::new(binary_path.as_path());
-        cmd.arg(script_path.as_path()).arg(command).args(args);
+        cmd.arg(script_path.as_path()).arg(command).args(args).current_dir(cwd.as_path());
 
         let status = cmd.status().await?;
         Ok(status)
@@ -175,6 +183,8 @@ impl JsExecutor {
     /// Delegate to local vite-plus CLI (Category C commands).
     ///
     /// Uses the project's runtime version via `download_runtime_for_project`.
+    /// The local CLI is executed with `PATH` set to include the managed Node.js
+    /// binary directory first, ensuring the managed runtime is used.
     ///
     /// # Arguments
     /// * `project_path` - Path to the project directory
@@ -195,8 +205,21 @@ impl JsExecutor {
 
         tracing::debug!("Delegating to local CLI: {:?} {:?}", local_cli, args);
 
-        let mut cmd = Command::new(node_binary.as_path());
-        cmd.arg(local_cli.as_path()).args(args);
+        // Get the directory containing the managed Node.js binary
+        let node_bin_dir = node_binary
+            .parent()
+            .ok_or_else(|| Error::Other("Failed to get Node.js binary directory".into()))?;
+
+        // Prepend managed Node.js to PATH so the shell script uses it
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        let path_separator = if cfg!(windows) { ";" } else { ":" };
+        let new_path =
+            format!("{}{}{}", node_bin_dir.as_path().display(), path_separator, current_path);
+
+        // Execute the local CLI shell script directly (it has a shebang)
+        // The shell script will find and use `node` from PATH (our managed version)
+        let mut cmd = Command::new(local_cli.as_path());
+        cmd.args(args).current_dir(project_path.as_path()).env("PATH", new_path);
 
         let status = cmd.status().await?;
         Ok(status)

@@ -16,14 +16,17 @@ use crate::{commands, error::Error};
 #[clap(
     name = "vite",
     author,
-    version,
     about = "Vite+ - A next-generation build tool",
     long_about = None
 )]
 #[command(disable_help_subcommand = true)]
 pub struct Args {
+    /// Print version (delegates to JS for full version info)
+    #[arg(short = 'V', long = "version", global = true)]
+    pub version: bool,
+
     #[clap(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
 }
 
 /// Available commands
@@ -486,27 +489,36 @@ pub enum Commands {
     Pm(PmCommands),
 
     // =========================================================================
-    // Category B: JS Script Commands (stubs for now)
+    // Category B: JS Script Commands
+    // These commands are implemented in JavaScript and executed via managed Node.js
     // =========================================================================
-    /// Generate a new project
+    /// Create a new project from a template
+    ///
+    /// Use any builtin, local or remote template with Vite+.
+    ///
+    /// Templates:
+    ///   - Builtin: vite:monorepo, vite:application, vite:library, vite:generator
+    ///   - Remote: create-vite, @tanstack/create-start, create-next-app, etc.
+    ///   - GitHub: github:user/repo, https://github.com/user/template-repo
+    ///   - Local: @company/generator-*, ./tools/create-ui-component
+    ///
+    /// Examples:
+    ///   vite new                              # Interactive mode
+    ///   vite new vite:monorepo                # Create monorepo
+    ///   vite new create-vite                  # Use create-vite template
+    ///   vite new create-vite -- --template react-ts  # Pass options to template
+    #[command(
+        after_help = "Run 'vite new --list' to see available templates.\nArguments after -- are passed directly to the template."
+    )]
     New {
-        /// Template to use (e.g., vite:monorepo, create-vite)
-        template: Option<String>,
-
-        /// Project name or directory
-        name: Option<String>,
-
-        /// Additional arguments
+        /// All arguments (template, options, and template args after --)
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
 
     /// Migrate an existing project to Vite+
     Migrate {
-        /// Project directory
-        directory: Option<String>,
-
-        /// Additional arguments
+        /// All arguments for the migration command
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
@@ -890,7 +902,22 @@ pub enum OwnerCommands {
 
 /// Run the CLI command.
 pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus, Error> {
-    match args.command {
+    // Handle --version flag (Category B: delegates to JS)
+    if args.version {
+        return commands::version::execute(cwd).await;
+    }
+
+    // If no command provided, show help and exit
+    let Some(command) = args.command else {
+        // Use clap's help mechanism by printing the help manually
+        use clap::CommandFactory;
+        Args::command().print_help().ok();
+        println!();
+        // Return a successful exit status since help was requested implicitly
+        return Ok(std::process::ExitStatus::default());
+    };
+
+    match command {
         // Category A: Package Manager Commands
         Commands::Install {
             prod,
@@ -1161,14 +1188,10 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
 
         Commands::Pm(pm_command) => commands::pm::execute_pm_subcommand(cwd, pm_command).await,
 
-        // Category B: JS Script Commands (stubs)
-        Commands::New { template, name, args } => {
-            commands::new::execute(cwd, template, name, &args).await
-        }
+        // Category B: JS Script Commands
+        Commands::New { args } => commands::new::execute(cwd, &args).await,
 
-        Commands::Migrate { directory, args } => {
-            commands::migrate::execute(cwd, directory, &args).await
-        }
+        Commands::Migrate { args } => commands::migrate::execute(cwd, &args).await,
 
         // Category C: Local CLI Delegation (stubs)
         Commands::Dev { args } => commands::delegate::execute(cwd, "dev", &args).await,
