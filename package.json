@@ -6,7 +6,7 @@
   "scripts": {
     "build": "pnpm -F @voidzero-dev/* -F vite-plus build && pnpm -F vite-plus-cli build",
     "bootstrap-cli": "pnpm build && cargo build -p vite_global_cli --release && pnpm copy-vp-binary && pnpm install-global-cli",
-    "bootstrap-cli:ci": "pnpm copy-vp-binary && pnpm install-global-cli",
+    "bootstrap-cli:ci": "pnpm install-global-cli",
     "copy-vp-binary": "cp target/release/vp packages/global/bin/vp || cp target/release/vp.exe packages/global/bin/vp.exe",
     "install-global-cli": "pnpm --filter=vite-plus-cli copy-binding && npm install -g ./packages/global --force",
     "tsgo": "tsgo -b tsconfig.json",
