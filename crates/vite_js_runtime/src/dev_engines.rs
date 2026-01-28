@@ -229,14 +229,33 @@ fn update_or_create_runtime(
                 }));
             }
             serde_json::Value::Object(obj) => {
-                // Single object format - update it
-                obj.insert("version".to_string(), serde_json::Value::String(version.to_string()));
-                // Ensure name is set
-                if !obj.contains_key("name") {
+                // Single object format - check if name matches
+                let name_matches =
+                    obj.get("name").and_then(|n| n.as_str()).is_some_and(|n| n == runtime_name);
+                let name_missing = !obj.contains_key("name");
+
+                if name_matches || name_missing {
+                    // Name matches or no name set - update in place
                     obj.insert(
-                        "name".to_string(),
-                        serde_json::Value::String(runtime_name.to_string()),
+                        "version".to_string(),
+                        serde_json::Value::String(version.to_string()),
                     );
+                    if name_missing {
+                        obj.insert(
+                            "name".to_string(),
+                            serde_json::Value::String(runtime_name.to_string()),
+                        );
+                    }
+                } else {
+                    // Different runtime - convert to array format
+                    let existing = runtime.clone();
+                    *runtime = serde_json::json!([
+                        existing,
+                        {
+                            "name": runtime_name,
+                            "version": version
+                        }
+                    ]);
                 }
             }
             _ => {
@@ -508,6 +527,37 @@ mod tests {
         let deno = &runtimes[0];
         assert_eq!(deno["name"].as_str().unwrap(), "deno");
         assert_eq!(deno["version"].as_str().unwrap(), "^2.0.0");
+    }
+
+    #[test]
+    fn test_update_or_create_runtime_different_runtime_converts_to_array() {
+        // When updating with a different runtime name, should convert to array format
+        // to preserve both runtimes instead of corrupting the existing one
+        let mut json: serde_json::Value = serde_json::json!({
+            "name": "test-project",
+            "devEngines": {
+                "runtime": {
+                    "name": "deno",
+                    "version": "^2.0.0"
+                }
+            }
+        });
+
+        update_or_create_runtime(&mut json, "node", "20.18.0");
+
+        // Should be converted to array format
+        let runtimes = json["devEngines"]["runtime"].as_array().unwrap();
+        assert_eq!(runtimes.len(), 2);
+
+        // Deno should be preserved at index 0
+        let deno = &runtimes[0];
+        assert_eq!(deno["name"].as_str().unwrap(), "deno");
+        assert_eq!(deno["version"].as_str().unwrap(), "^2.0.0");
+
+        // Node should be added at index 1
+        let node = &runtimes[1];
+        assert_eq!(node["name"].as_str().unwrap(), "node");
+        assert_eq!(node["version"].as_str().unwrap(), "20.18.0");
     }
 
     #[test]
