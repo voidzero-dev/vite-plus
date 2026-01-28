@@ -91,19 +91,14 @@ jobs:
           path: ./packages/global/binding/*.node
           if-no-files-found: error
 
-      - name: Build Rust CLI binary
-        shell: bash
-        run: |
-          cargo build --release --target ${{ matrix.settings.target }} -p vite_global_cli
-
       - name: Upload Rust CLI binary artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: vite-global-cli-${{ matrix.settings.target }}
           path: |
-            ./target/${{ matrix.settings.target }}/release/vp
-            ./target/${{ matrix.settings.target }}/release/vp.exe
-          if-no-files-found: warn
+            ./packages/global/bin/vp
+            ./packages/global/bin/vp.exe
+          if-no-files-found: error
 
       - name: Remove .node files before upload dist
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}

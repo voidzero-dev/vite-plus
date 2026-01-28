@@ -24,9 +24,9 @@ runs:
       id: cache-key
       shell: bash
       run: |
-        echo "key=napi-binding-v1-${{ inputs.target }}-${{ env.RELEASE_BUILD }}-${{ env.DEBUG }}-${{ env.VERSION }}-${{ hashFiles('packages/tools/.upstream-versions.json', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/*/binding/**/*.rs', 'packages/*/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/global/package.json', 'packages/global/build.ts') }}" >> $GITHUB_OUTPUT
+        echo "key=napi-binding-v2-${{ inputs.target }}-${{ env.RELEASE_BUILD }}-${{ env.DEBUG }}-${{ env.VERSION }}-${{ hashFiles('packages/tools/.upstream-versions.json', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/*/binding/**/*.rs', 'packages/*/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/global/package.json', 'packages/global/build.ts') }}" >> $GITHUB_OUTPUT
 
-    # Cache only NAPI bindings (the slow part, especially on Windows)
+    # Cache NAPI bindings and Rust CLI binary (the slow parts, especially on Windows)
     - name: Restore NAPI binding cache
       id: cache-restore
       uses: actions/cache/restore@94b89442628ad1d101e352b7ee38f30e1bef108e # v5
@@ -40,6 +40,8 @@ runs:
           packages/global/binding/*.node
           packages/global/binding/index.js
           packages/global/binding/index.d.ts
+          packages/global/bin/vp
+          packages/global/bin/vp.exe
         key: ${{ steps.cache-key.outputs.key }}
 
     # Build upstream TypeScript packages first (don't depend on native bindings)
@@ -96,6 +98,19 @@ runs:
         pnpm vite build -h
         pnpm vite fmt -h
 
+    - name: Build Rust CLI binary
+      if: steps.cache-restore.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        cargo build --release --target ${{ inputs.target }} -p vite_global_cli
+        # Copy binary to packages/global/bin/
+        mkdir -p packages/global/bin
+        if [[ "${{ inputs.target }}" == *"windows"* ]]; then
+          cp target/${{ inputs.target }}/release/vp.exe packages/global/bin/vp.exe
+        else
+          cp target/${{ inputs.target }}/release/vp packages/global/bin/vp
+        fi
+
     - name: Save NAPI binding cache
       if: steps.cache-restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@94b89442628ad1d101e352b7ee38f30e1bef108e # v5
@@ -109,4 +124,6 @@ runs:
           packages/global/binding/*.node
           packages/global/binding/index.js
           packages/global/binding/index.d.ts
+          packages/global/bin/vp
+          packages/global/bin/vp.exe
         key: ${{ steps.cache-key.outputs.key }}
