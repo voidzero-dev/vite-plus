@@ -1,13 +1,5 @@
 > vite migrate --no-interactive # should detect existing vite-plus and exit
 ┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+└  This project is already using Vite+! Happy coding!
 
