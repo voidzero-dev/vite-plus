@@ -3,7 +3,7 @@ use std::process::ExitStatus;
 use vite_install::{commands::remove::RemoveCommandOptions, package_manager::PackageManager};
 use vite_path::AbsolutePathBuf;
 
-use crate::Error;
+use crate::error::Error;
 
 /// Remove command for removing packages from dependencies.
 ///
@@ -44,7 +44,7 @@ impl RemoveCommand {
             save_prod,
             pass_through_args,
         };
-        package_manager.run_remove_command(&remove_command_options, &self.cwd).await
+        Ok(package_manager.run_remove_command(&remove_command_options, &self.cwd).await?)
     }
 }
 

@@ -9,18 +9,18 @@ Arguments:
 
 Options:
       --json                   Output in JSON format
-      --long                   Show extended information (pnpm-specific)
-      --parseable              Show parseable output (pnpm-specific)
+      --long                   Show extended information
+      --parseable              Show parseable output
   -r, --recursive              Check recursively across all workspaces
-      --filter <PATTERN>       Filter packages in monorepo (pnpm/npm-specific)
-  -w, --workspace-root         Check in workspace root (pnpm-specific)
-  -P, --prod                   Only production dependencies (pnpm-specific)
-  -D, --dev                    Only dev dependencies (pnpm-specific)
-      --depth <DEPTH>          Limit tree depth (pnpm-specific)
-      --no-optional            Exclude optional dependencies (pnpm-specific)
+      --filter <PATTERN>       Filter packages in monorepo
+  -w, --workspace-root         Check in workspace root
+  -P, --prod                   Only production dependencies
+  -D, --dev                    Only dev dependencies
+      --depth <DEPTH>          Limit tree depth
+      --no-optional            Exclude optional dependencies
   -g, --global                 Check globally installed packages
-      --exclude-peers          Exclude peer dependencies (pnpm/yarn@2+-specific)
-      --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs (pnpm-specific)
+      --exclude-peers          Exclude peer dependencies
+      --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
   -h, --help                   Print help
 
 > vite install # should install packages first

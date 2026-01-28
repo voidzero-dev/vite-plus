@@ -5,24 +5,33 @@
 
 use std::process::ExitStatus;
 
-use clap::{Parser, Subcommand};
-use vite_install::commands::{install::InstallCommandOptions, outdated::Format};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
+use vite_install::commands::{
+    add::SaveDependencyType, install::InstallCommandOptions, outdated::Format,
+};
 use vite_path::AbsolutePathBuf;
 
-use crate::{commands, error::Error};
+use crate::{
+    commands::{
+        self, AddCommand, DedupeCommand, DlxCommand, InstallCommand, LinkCommand, OutdatedCommand,
+        RemoveCommand, UnlinkCommand, UpdateCommand, WhyCommand,
+    },
+    error::Error,
+};
 
 /// Vite+ Global CLI
 #[derive(Parser, Debug)]
 #[clap(
     name = "vite",
+    bin_name = "vite",
     author,
     about = "Vite+ - A next-generation build tool",
     long_about = None
 )]
-#[command(disable_help_subcommand = true)]
+#[command(disable_help_subcommand = true, disable_version_flag = true)]
 pub struct Args {
     /// Print version (delegates to JS for full version info)
-    #[arg(short = 'V', long = "version", global = true)]
+    #[arg(short = 'V', long = "version")]
     pub version: bool,
 
     #[clap(subcommand)]
@@ -900,6 +909,26 @@ pub enum OwnerCommands {
     },
 }
 
+/// Determine the save dependency type from CLI flags.
+fn determine_save_dependency_type(
+    save_dev: bool,
+    save_peer: bool,
+    save_optional: bool,
+    save_prod: bool,
+) -> Option<SaveDependencyType> {
+    if save_dev {
+        Some(SaveDependencyType::Dev)
+    } else if save_peer {
+        Some(SaveDependencyType::Peer)
+    } else if save_optional {
+        Some(SaveDependencyType::Optional)
+    } else if save_prod {
+        Some(SaveDependencyType::Production)
+    } else {
+        None
+    }
+}
+
 /// Run the CLI command.
 pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus, Error> {
     // Handle --version flag (Category B: delegates to JS)
@@ -909,9 +938,8 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
 
     // If no command provided, show help and exit
     let Some(command) = args.command else {
-        // Use clap's help mechanism by printing the help manually
-        use clap::CommandFactory;
-        Args::command().print_help().ok();
+        // Use custom help formatting to match the JS CLI output
+        command_with_help().print_help().ok();
         println!();
         // Return a successful exit status since help was requested implicitly
         return Ok(std::process::ExitStatus::default());
@@ -949,24 +977,23 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             if let Some(pkgs) = packages
                 && !pkgs.is_empty()
             {
-                return commands::pm::execute_add(
-                    cwd,
-                    pkgs,
-                    prod,
-                    dev,
-                    save_peer,
-                    save_optional,
-                    save_exact,
-                    save_catalog,
-                    None, // save_catalog_name
-                    filter.as_deref(),
-                    workspace_root,
-                    false, // workspace
-                    global,
-                    None, // allow_build
-                    pass_through_args.as_deref(),
-                )
-                .await;
+                let save_dependency_type =
+                    determine_save_dependency_type(dev, save_peer, save_optional, prod);
+
+                return AddCommand::new(cwd)
+                    .execute(
+                        &pkgs,
+                        save_dependency_type,
+                        save_exact,
+                        if save_catalog { Some("default") } else { None },
+                        filter.as_deref(),
+                        workspace_root,
+                        false, // workspace_only
+                        global,
+                        None, // allow_build
+                        pass_through_args.as_deref(),
+                    )
+                    .await;
             }
 
             // No packages provided, run regular install
@@ -990,7 +1017,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
                 workspace_root,
                 pass_through_args: pass_through_args.as_deref(),
             };
-            commands::pm::execute_install(cwd, &options).await
+            InstallCommand::new(cwd).execute(&options).await
         }
 
         Commands::Add {
@@ -1009,24 +1036,26 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             packages,
             pass_through_args,
         } => {
-            commands::pm::execute_add(
-                cwd,
-                packages,
-                save_prod,
-                save_dev,
-                save_peer,
-                save_optional,
-                save_exact,
-                save_catalog,
-                save_catalog_name,
-                filter.as_deref(),
-                workspace_root,
-                workspace,
-                global,
-                allow_build,
-                pass_through_args.as_deref(),
-            )
-            .await
+            let save_dependency_type =
+                determine_save_dependency_type(save_dev, save_peer, save_optional, save_prod);
+
+            let catalog_name =
+                if save_catalog { Some("default") } else { save_catalog_name.as_deref() };
+
+            AddCommand::new(cwd)
+                .execute(
+                    &packages,
+                    save_dependency_type,
+                    save_exact,
+                    catalog_name,
+                    filter.as_deref(),
+                    workspace_root,
+                    workspace,
+                    global,
+                    allow_build.as_deref(),
+                    pass_through_args.as_deref(),
+                )
+                .await
         }
 
         Commands::Remove {
@@ -1040,19 +1069,19 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             packages,
             pass_through_args,
         } => {
-            commands::pm::execute_remove(
-                cwd,
-                packages,
-                save_dev,
-                save_optional,
-                save_prod,
-                filter.as_deref(),
-                workspace_root,
-                recursive,
-                global,
-                pass_through_args.as_deref(),
-            )
-            .await
+            RemoveCommand::new(cwd)
+                .execute(
+                    &packages,
+                    save_dev,
+                    save_optional,
+                    save_prod,
+                    filter.as_deref(),
+                    workspace_root,
+                    recursive,
+                    global,
+                    pass_through_args.as_deref(),
+                )
+                .await
         }
 
         Commands::Update {
@@ -1070,27 +1099,27 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             packages,
             pass_through_args,
         } => {
-            commands::pm::execute_update(
-                cwd,
-                packages,
-                latest,
-                global,
-                recursive,
-                filter.as_deref(),
-                workspace_root,
-                dev,
-                prod,
-                interactive,
-                no_optional,
-                no_save,
-                workspace,
-                pass_through_args.as_deref(),
-            )
-            .await
+            UpdateCommand::new(cwd)
+                .execute(
+                    &packages,
+                    latest,
+                    global,
+                    recursive,
+                    filter.as_deref(),
+                    workspace_root,
+                    dev,
+                    prod,
+                    interactive,
+                    no_optional,
+                    no_save,
+                    workspace,
+                    pass_through_args.as_deref(),
+                )
+                .await
         }
 
         Commands::Dedupe { check, pass_through_args } => {
-            commands::pm::execute_dedupe(cwd, check, pass_through_args.as_deref()).await
+            DedupeCommand::new(cwd).execute(check, pass_through_args.as_deref()).await
         }
 
         Commands::Outdated {
@@ -1108,23 +1137,23 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             global,
             pass_through_args,
         } => {
-            commands::pm::execute_outdated(
-                cwd,
-                packages,
-                long,
-                format,
-                recursive,
-                filter.as_deref(),
-                workspace_root,
-                prod,
-                dev,
-                no_optional,
-                compatible,
-                sort_by,
-                global,
-                pass_through_args.as_deref(),
-            )
-            .await
+            OutdatedCommand::new(cwd)
+                .execute(
+                    &packages,
+                    long,
+                    format,
+                    recursive,
+                    filter.as_deref(),
+                    workspace_root,
+                    prod,
+                    dev,
+                    no_optional,
+                    compatible,
+                    sort_by.as_deref(),
+                    global,
+                    pass_through_args.as_deref(),
+                )
+                .await
         }
 
         Commands::Why {
@@ -1144,25 +1173,25 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             find_by,
             pass_through_args,
         } => {
-            commands::pm::execute_why(
-                cwd,
-                packages,
-                json,
-                long,
-                parseable,
-                recursive,
-                filter.as_deref(),
-                workspace_root,
-                prod,
-                dev,
-                depth,
-                no_optional,
-                global,
-                exclude_peers,
-                find_by,
-                pass_through_args.as_deref(),
-            )
-            .await
+            WhyCommand::new(cwd)
+                .execute(
+                    &packages,
+                    json,
+                    long,
+                    parseable,
+                    recursive,
+                    filter.as_deref(),
+                    workspace_root,
+                    prod,
+                    dev,
+                    depth,
+                    no_optional,
+                    global,
+                    exclude_peers,
+                    find_by.as_deref(),
+                    pass_through_args.as_deref(),
+                )
+                .await
         }
 
         Commands::Info { package, field, json, pass_through_args } => {
@@ -1176,14 +1205,18 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             .await
         }
 
-        Commands::Link { package, args } => commands::pm::execute_link(cwd, package, &args).await,
+        Commands::Link { package, args } => {
+            let pass_through = if args.is_empty() { None } else { Some(args.as_slice()) };
+            LinkCommand::new(cwd).execute(package.as_deref(), pass_through).await
+        }
 
         Commands::Unlink { package, recursive, args } => {
-            commands::pm::execute_unlink(cwd, package, recursive, &args).await
+            let pass_through = if args.is_empty() { None } else { Some(args.as_slice()) };
+            UnlinkCommand::new(cwd).execute(package.as_deref(), recursive, pass_through).await
         }
 
         Commands::Dlx { package, shell_mode, silent, args } => {
-            commands::pm::execute_dlx(cwd, package, shell_mode, silent, &args).await
+            DlxCommand::new(cwd).execute(package, shell_mode, silent, args).await
         }
 
         Commands::Pm(pm_command) => commands::pm::execute_pm_subcommand(cwd, pm_command).await,
@@ -1210,4 +1243,63 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
 
         Commands::Cache { args } => commands::delegate::execute(cwd, "cache", &args).await,
     }
+}
+
+/// Build a clap Command with custom help formatting matching the JS CLI output.
+pub fn command_with_help() -> clap::Command {
+    apply_custom_help(Args::command())
+}
+
+/// Apply custom help formatting to a clap Command to match the JS CLI output.
+fn apply_custom_help(cmd: clap::Command) -> clap::Command {
+    let bold = "\x1b[1m";
+    let bold_underline = "\x1b[1;4m";
+    let reset = "\x1b[0m";
+    let version = env!("CARGO_PKG_VERSION");
+
+    let after_help = format!(
+        "{bold_underline}Vite+ Commands:{reset}
+  {bold}dev{reset}        Run the development server
+  {bold}build{reset}      Build for production
+  {bold}lint{reset}       Lint code
+  {bold}test{reset}       Run tests
+  {bold}fmt{reset}        Format code
+  {bold}lib{reset}        Build library
+  {bold}migrate{reset}    Migrate an existing project to Vite+
+  {bold}cache{reset}      Manage the task cache
+  {bold}new{reset}        Generate a new project
+  {bold}run{reset}        Run tasks
+
+{bold_underline}Package Manager Commands:{reset}
+  {bold}install{reset}    Install all dependencies, or add packages if package names are provided
+  {bold}add{reset}        Add packages to dependencies
+  {bold}remove{reset}     Remove packages from dependencies
+  {bold}dedupe{reset}     Deduplicate dependencies by removing older versions
+  {bold}dlx{reset}        Execute a package binary without installing it as a dependency
+  {bold}info{reset}       View package information from the registry
+  {bold}link{reset}       Link packages for local development
+  {bold}outdated{reset}   Check for outdated packages
+  {bold}pm{reset}         Forward a command to the package manager
+  {bold}unlink{reset}     Unlink packages
+  {bold}update{reset}     Update packages to their latest versions
+  {bold}why{reset}        Show why a package is installed
+"
+    );
+    let help_template = format!(
+        "Vite+/{version}
+
+{{usage-heading}} {{usage}}{{after-help}}
+{bold_underline}Options:{reset}
+{{options}}
+"
+    );
+
+    cmd.after_help(after_help).help_template(help_template)
+}
+
+/// Parse CLI arguments with custom help formatting.
+pub fn parse_args() -> Args {
+    // We need to parse with the custom help template to ensure -h shows the right format
+    let cmd = apply_custom_help(Args::command());
+    Args::from_arg_matches(&cmd.get_matches()).expect("Failed to parse CLI arguments")
 }

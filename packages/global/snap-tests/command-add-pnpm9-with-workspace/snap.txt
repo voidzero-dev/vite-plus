@@ -142,7 +142,8 @@ packages:
 Did you mean 'save-optional'? Use "--config.unknown=value" to force an unknown option.
 For help, run: pnpm help add
 
-[1]> vite add --filter=./packages/utils test-vite-plus-package-optional -O --save-catalog v2 # should error because save-catalog is not supported at pnpm@9
- ERROR  Unknown option: 'save-catalog'
-Did you mean 'save-exact', or 'save-prod'? Use "--config.unknown=value" to force an unknown option.
-For help, run: pnpm help add
+> vite add --filter=./packages/utils test-vite-plus-package-optional -O --save-catalog v2 # should error because save-catalog is not supported at pnpm@9
+.                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+.                                        |   +2 +<repeat>
+Done in <variable>ms using pnpm v<semver>

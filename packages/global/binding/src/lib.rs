@@ -1,7 +1,9 @@
 //! NAPI binding layer for vite-plus global CLI
+//!
+//! Note: Package manager commands have been moved to the vite_global_cli crate.
+//! This binding is now minimal and mainly exists for migration utilities.
 
 mod cli;
-mod commands;
 mod migration;
 mod package_manager;
 mod utils;

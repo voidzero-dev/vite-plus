@@ -1,14 +1,14 @@
 > vite dlx --help # should show help message
-Execute a package binary without installing it as a dependency
+Execute a package binary without installing it
 
 Usage: vite dlx [OPTIONS] <ARGS>...
 
 Arguments:
-  <ARGS>...  Package to execute (with optional @version) and arguments
+  <ARGS>...  Package to execute and arguments
 
 Options:
-  -p, --package <NAME>  Package(s) to install before running the command (can be used multiple times)
-  -c, --shell-mode      Execute the command within a shell environment
+  -p, --package <NAME>  Package(s) to install before running
+  -c, --shell-mode      Execute within a shell environment
   -s, --silent          Suppress all output except the executed command's output
   -h, --help            Print help
 

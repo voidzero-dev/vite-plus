@@ -1,47 +1,24 @@
 > vite new --help # show help
-VITE+(⚡︎) - The Unified Toolchain for the Web
-
-USAGE: vite new [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
+Create a new project from a template
 
 Use any builtin, local or remote template with Vite+.
 
-ARGUMENTS:
-  TEMPLATE            Template name. Run `vite new --list` to see available templates.
-                      - Default: vite:monorepo, vite:application, vite:library, vite:generator
-                      - Remote: create-vite, @tanstack/create-start, create-next-app,
-                        create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
-                      - Local: @company/generator-*, ./tools/create-ui-component
+Templates: - Builtin: vite:monorepo, vite:application, vite:library, vite:generator - Remote: create-vite, @tanstack/create-start, create-next-app, etc. - GitHub: github:user/repo, https://github.com/user/template-repo - Local: @company/generator-*, ./tools/create-ui-component
 
-OPTIONS:
-  --directory DIR     Target directory for the generated project.
-  --agent NAME        Create an agent instructions file for the specified agent.
-  --no-interactive    Run in non-interactive mode
-  --list              List all available templates
-  -h, --help          Show this help message
+Examples: vite new                              # Interactive mode vite new vite:monorepo                # Create monorepo vite new create-vite                  # Use create-vite template vite new create-vite -- --template react-ts  # Pass options to template
 
-TEMPLATE OPTIONS:
-  Any arguments after -- are passed directly to the template.
+Usage: vite new [ARGS]...
 
-EXAMPLES:
-  # Interactive mode
-  vite new
+Arguments:
+  [ARGS]...
+          All arguments (template, options, and template args after --)
 
-  # Use existing templates
-  vite new create-vite
-  vite new create-next-app
-  vite new @tanstack/create-start
-  vite new create-vite -- --template react-ts
+Options:
+  -h, --help
+          Print help (see a summary with '-h')
 
-  # Create Vite+ monorepo, application, library, or generator scaffolds
-  vite new vite:monorepo
-  vite new vite:application
-  vite new vite:library
-  vite new vite:generator
-
-  # Use templates from GitHub (via degit)
-  vite new github:user/repo
-  vite new https://github.com/user/template-repo
-
+Run 'vite new --list' to see available templates.
+Arguments after -- are passed directly to the template.
 
 > vite new --list # list templates
 VITE+(⚡︎) - The Unified Toolchain for the Web

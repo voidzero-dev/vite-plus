@@ -19,7 +19,7 @@ Usage: vite pm list [OPTIONS] [PATTERN] [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   [PATTERN]               Package pattern to filter
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+  [PASS_THROUGH_ARGS]...  Additional arguments
 
 Options:
       --depth <DEPTH>          Maximum depth of dependency tree
@@ -30,10 +30,10 @@ Options:
   -D, --dev                    Only dev dependencies
       --no-optional            Exclude optional dependencies
       --exclude-peers          Exclude peer dependencies
-      --only-projects          Show only project packages (pnpm-specific)
-      --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs (pnpm-specific)
+      --only-projects          Show only project packages
+      --find-by <FINDER_NAME>  Use a finder function
   -r, --recursive              List across all workspaces
-      --filter <PATTERN>       Filter packages in monorepo (can be used multiple times)
+      --filter <PATTERN>       Filter packages in monorepo
   -g, --global                 List global packages
   -h, --help                   Print help
 

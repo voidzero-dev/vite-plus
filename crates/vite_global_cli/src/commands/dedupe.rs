@@ -3,7 +3,7 @@ use std::process::ExitStatus;
 use vite_install::{commands::dedupe::DedupeCommandOptions, package_manager::PackageManager};
 use vite_path::AbsolutePathBuf;
 
-use crate::Error;
+use crate::error::Error;
 
 /// Dedupe command for deduplicating dependencies by removing older versions.
 ///
@@ -27,7 +27,7 @@ impl DedupeCommand {
         let package_manager = PackageManager::builder(&self.cwd).build_with_default().await?;
 
         let dedupe_command_options = DedupeCommandOptions { check, pass_through_args };
-        package_manager.run_dedupe_command(&dedupe_command_options, &self.cwd).await
+        Ok(package_manager.run_dedupe_command(&dedupe_command_options, &self.cwd).await?)
     }
 }
 

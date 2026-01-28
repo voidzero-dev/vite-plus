@@ -1,31 +1,17 @@
 //! Package manager commands (Category A).
 //!
-//! These commands wrap existing package managers (pnpm/npm/yarn) and use
-//! managed Node.js from `vite_js_runtime` to execute them.
+//! This module handles the `pm` subcommand and the `info` command which are
+//! routed through helper functions. Other PM commands (add, install, remove, etc.)
+//! are implemented as separate command modules with struct-based patterns.
 
 use std::process::ExitStatus;
 
 use vite_install::{
     PackageManager,
     commands::{
-        add::{AddCommandOptions, SaveDependencyType},
-        cache::CacheCommandOptions,
-        config::ConfigCommandOptions,
-        dedupe::DedupeCommandOptions,
-        dlx::DlxCommandOptions,
-        install::InstallCommandOptions,
-        link::LinkCommandOptions,
-        list::ListCommandOptions,
-        outdated::{Format, OutdatedCommandOptions},
-        owner::OwnerSubcommand,
-        pack::PackCommandOptions,
-        prune::PruneCommandOptions,
-        publish::PublishCommandOptions,
-        remove::RemoveCommandOptions,
-        unlink::UnlinkCommandOptions,
-        update::UpdateCommandOptions,
-        view::ViewCommandOptions,
-        why::WhyCommandOptions,
+        cache::CacheCommandOptions, config::ConfigCommandOptions, list::ListCommandOptions,
+        owner::OwnerSubcommand, pack::PackCommandOptions, prune::PruneCommandOptions,
+        publish::PublishCommandOptions, view::ViewCommandOptions,
     },
 };
 use vite_path::AbsolutePathBuf;
@@ -34,229 +20,6 @@ use crate::{
     cli::{ConfigCommands, OwnerCommands, PmCommands},
     error::Error,
 };
-
-/// Execute the install command.
-pub async fn execute_install(
-    cwd: AbsolutePathBuf,
-    options: &InstallCommandOptions<'_>,
-) -> Result<ExitStatus, Error> {
-    let package_manager = PackageManager::builder(&cwd).build_with_default().await?;
-    Ok(package_manager.run_install_command(options, &cwd).await?)
-}
-
-/// Execute the add command.
-#[expect(clippy::too_many_arguments)]
-pub async fn execute_add(
-    cwd: AbsolutePathBuf,
-    packages: Vec<String>,
-    save_prod: bool,
-    save_dev: bool,
-    save_peer: bool,
-    save_optional: bool,
-    save_exact: bool,
-    _save_catalog: bool,
-    save_catalog_name: Option<String>,
-    filter: Option<&[String]>,
-    workspace_root: bool,
-    workspace_only: bool,
-    global: bool,
-    allow_build: Option<String>,
-    pass_through_args: Option<&[String]>,
-) -> Result<ExitStatus, Error> {
-    let package_manager = PackageManager::builder(&cwd).build_with_default().await?;
-
-    let save_dependency_type = if save_dev {
-        Some(SaveDependencyType::Dev)
-    } else if save_peer {
-        Some(SaveDependencyType::Peer)
-    } else if save_optional {
-        Some(SaveDependencyType::Optional)
-    } else if save_prod {
-        Some(SaveDependencyType::Production)
-    } else {
-        None
-    };
-
-    let options = AddCommandOptions {
-        packages: &packages,
-        save_dependency_type,
-        save_exact,
-        save_catalog_name: save_catalog_name.as_deref(),
-        allow_build: allow_build.as_deref(),
-        filters: filter,
-        workspace_root,
-        workspace_only,
-        global,
-        pass_through_args,
-    };
-
-    Ok(package_manager.run_add_command(&options, &cwd).await?)
-}
-
-/// Execute the remove command.
-#[expect(clippy::too_many_arguments)]
-pub async fn execute_remove(
-    cwd: AbsolutePathBuf,
-    packages: Vec<String>,
-    save_dev: bool,
-    save_optional: bool,
-    save_prod: bool,
-    filter: Option<&[String]>,
-    workspace_root: bool,
-    recursive: bool,
-    global: bool,
-    pass_through_args: Option<&[String]>,
-) -> Result<ExitStatus, Error> {
-    let package_manager = PackageManager::builder(&cwd).build_with_default().await?;
-
-    let options = RemoveCommandOptions {
-        packages: &packages,
-        save_dev,
-        save_optional,
-        save_prod,
-        filters: filter,
-        workspace_root,
-        recursive,
-        global,
-        pass_through_args,
-    };
-
-    Ok(package_manager.run_remove_command(&options, &cwd).await?)
-}
-
-/// Execute the update command.
-#[expect(clippy::too_many_arguments)]
-pub async fn execute_update(
-    cwd: AbsolutePathBuf,
-    packages: Vec<String>,
-    latest: bool,
-    global: bool,
-    recursive: bool,
-    filter: Option<&[String]>,
-    workspace_root: bool,
-    dev: bool,
-    prod: bool,
-    interactive: bool,
-    no_optional: bool,
-    no_save: bool,
-    workspace_only: bool,
-    pass_through_args: Option<&[String]>,
-) -> Result<ExitStatus, Error> {
-    let package_manager = PackageManager::builder(&cwd).build_with_default().await?;
-
-    let options = UpdateCommandOptions {
-        packages: &packages,
-        latest,
-        global,
-        recursive,
-        filters: filter,
-        workspace_root,
-        dev,
-        prod,
-        interactive,
-        no_optional,
-        no_save,
-        workspace_only,
-        pass_through_args,
-    };
-
-    Ok(package_manager.run_update_command(&options, &cwd).await?)
-}
-
-/// Execute the dedupe command.
-pub async fn execute_dedupe(
-    cwd: AbsolutePathBuf,
-    check: bool,
-    pass_through_args: Option<&[String]>,
-) -> Result<ExitStatus, Error> {
-    let package_manager = PackageManager::builder(&cwd).build_with_default().await?;
-
-    let options = DedupeCommandOptions { check, pass_through_args };
-
-    Ok(package_manager.run_dedupe_command(&options, &cwd).await?)
-}
-
-/// Execute the outdated command.
-#[expect(clippy::too_many_arguments)]
-pub async fn execute_outdated(
-    cwd: AbsolutePathBuf,
-    packages: Vec<String>,
-    long: bool,
-    format: Option<Format>,
-    recursive: bool,
-    filter: Option<&[String]>,
-    workspace_root: bool,
-    prod: bool,
-    dev: bool,
-    no_optional: bool,
-    compatible: bool,
-    sort_by: Option<String>,
-    global: bool,
-    pass_through_args: Option<&[String]>,
-) -> Result<ExitStatus, Error> {
-    let package_manager = PackageManager::builder(&cwd).build_with_default().await?;
-
-    let options = OutdatedCommandOptions {
-        packages: &packages,
-        long,
-        format,
-        recursive,
-        filters: filter,
-        workspace_root,
-        prod,
-        dev,
-        no_optional,
-        compatible,
-        sort_by: sort_by.as_deref(),
-        global,
-        pass_through_args,
-    };
-
-    Ok(package_manager.run_outdated_command(&options, &cwd).await?)
-}
-
-/// Execute the why command.
-#[expect(clippy::too_many_arguments)]
-pub async fn execute_why(
-    cwd: AbsolutePathBuf,
-    packages: Vec<String>,
-    json: bool,
-    long: bool,
-    parseable: bool,
-    recursive: bool,
-    filter: Option<&[String]>,
-    workspace_root: bool,
-    prod: bool,
-    dev: bool,
-    depth: Option<u32>,
-    no_optional: bool,
-    global: bool,
-    exclude_peers: bool,
-    find_by: Option<String>,
-    pass_through_args: Option<&[String]>,
-) -> Result<ExitStatus, Error> {
-    let package_manager = PackageManager::builder(&cwd).build_with_default().await?;
-
-    let options = WhyCommandOptions {
-        packages: &packages,
-        json,
-        long,
-        parseable,
-        recursive,
-        filters: filter,
-        workspace_root,
-        prod,
-        dev,
-        depth,
-        no_optional,
-        global,
-        exclude_peers,
-        find_by: find_by.as_deref(),
-        pass_through_args,
-    };
-
-    Ok(package_manager.run_why_command(&options, &cwd).await?)
-}
 
 /// Execute the info command.
 pub async fn execute_info(
@@ -271,68 +34,6 @@ pub async fn execute_info(
     let options = ViewCommandOptions { package, field, json, pass_through_args };
 
     Ok(package_manager.run_view_command(&options, &cwd).await?)
-}
-
-/// Execute the link command.
-pub async fn execute_link(
-    cwd: AbsolutePathBuf,
-    package: Option<String>,
-    args: &[String],
-) -> Result<ExitStatus, Error> {
-    let package_manager = PackageManager::builder(&cwd).build_with_default().await?;
-
-    let options = LinkCommandOptions {
-        package: package.as_deref(),
-        pass_through_args: if args.is_empty() { None } else { Some(args) },
-    };
-
-    Ok(package_manager.run_link_command(&options, &cwd).await?)
-}
-
-/// Execute the unlink command.
-pub async fn execute_unlink(
-    cwd: AbsolutePathBuf,
-    package: Option<String>,
-    recursive: bool,
-    args: &[String],
-) -> Result<ExitStatus, Error> {
-    let package_manager = PackageManager::builder(&cwd).build_with_default().await?;
-
-    let options = UnlinkCommandOptions {
-        package: package.as_deref(),
-        recursive,
-        pass_through_args: if args.is_empty() { None } else { Some(args) },
-    };
-
-    Ok(package_manager.run_unlink_command(&options, &cwd).await?)
-}
-
-/// Execute the dlx command.
-pub async fn execute_dlx(
-    cwd: AbsolutePathBuf,
-    packages: Vec<String>,
-    shell_mode: bool,
-    silent: bool,
-    args: &[String],
-) -> Result<ExitStatus, Error> {
-    let package_manager = PackageManager::builder(&cwd).build_with_default().await?;
-
-    // Extract the package spec from args (first positional argument)
-    let (package_spec, remaining_args) = if args.is_empty() {
-        return Err(Error::Other("dlx requires a package to execute".into()));
-    } else {
-        (&args[0], &args[1..])
-    };
-
-    let options = DlxCommandOptions {
-        packages: &packages,
-        package_spec,
-        args: remaining_args,
-        shell_mode,
-        silent,
-    };
-
-    Ok(package_manager.run_dlx_command(&options, &cwd).await?)
 }
 
 /// Execute a pm subcommand.
@@ -525,7 +226,7 @@ pub async fn execute_pm_subcommand(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use vite_install::commands::add::SaveDependencyType;
 
     #[test]
     fn test_save_dependency_type() {

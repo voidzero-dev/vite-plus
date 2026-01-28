@@ -4,7 +4,7 @@ Link packages for local development
 Usage: vite link [PACKAGE|DIR] [ARGS]...
 
 Arguments:
-  [PACKAGE|DIR]  Package name or directory to link If empty, registers current package globally
+  [PACKAGE|DIR]  Package name or directory to link
   [ARGS]...      Arguments to pass to package manager
 
 Options:

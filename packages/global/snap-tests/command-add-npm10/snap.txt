@@ -8,32 +8,19 @@ Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-  -P, --save-prod
-          Save to `dependencies` (default)
-  -D, --save-dev
-          Save to `devDependencies`
-      --save-peer
-          Save to `peerDependencies` and `devDependencies`
-  -O, --save-optional
-          Save to `optionalDependencies`
-  -E, --save-exact
-          Save exact version rather than semver range (e.g., `^1.0.0` -> `1.0.0`)
-      --save-catalog-name <CATALOG_NAME>
-          Save the new dependency to the specified catalog name. Example: `vite add vue --save-catalog-name vue3`
-      --save-catalog
-          Save the new dependency to the default catalog
-      --allow-build <NAMES>
-          A list of package names allowed to run postinstall
-      --filter <PATTERN>
-          Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root
-          Add to workspace root (ignore-workspace-root-check)
-      --workspace
-          Only add if package exists in workspace (pnpm-specific)
-  -g, --global
-          Install globally
-  -h, --help
-          Print help
+  -P, --save-prod                         Save to `dependencies` (default)
+  -D, --save-dev                          Save to `devDependencies`
+      --save-peer                         Save to `peerDependencies` and `devDependencies`
+  -O, --save-optional                     Save to `optionalDependencies`
+  -E, --save-exact                        Save exact version rather than semver range
+      --save-catalog-name <CATALOG_NAME>  Save the new dependency to the specified catalog name
+      --save-catalog                      Save the new dependency to the default catalog
+      --allow-build <NAMES>               A list of package names allowed to run postinstall
+      --filter <PATTERN>                  Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root                    Add to workspace root
+      --workspace                         Only add if package exists in workspace (pnpm-specific)
+  -g, --global                            Install globally
+  -h, --help                              Print help
 
 > vite add testnpm2 -D -- --no-audit && cat package.json # should add package as dev dependencies
 

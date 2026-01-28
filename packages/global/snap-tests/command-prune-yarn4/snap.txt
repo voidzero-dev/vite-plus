@@ -4,7 +4,7 @@ Remove unnecessary packages
 Usage: vite pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+  [PASS_THROUGH_ARGS]...  Additional arguments
 
 Options:
       --prod         Remove devDependencies
