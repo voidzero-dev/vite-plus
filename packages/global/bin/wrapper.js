@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { accessSync, chmodSync, constants, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -52,9 +52,32 @@ function getBinaryPath() {
   return null;
 }
 
+function ensureExecutable(binaryPath) {
+  // Windows doesn't need executable permission check
+  if (process.platform === 'win32') {
+    return;
+  }
+
+  try {
+    accessSync(binaryPath, constants.X_OK);
+  } catch {
+    // Not executable, try to fix permissions
+    try {
+      chmodSync(binaryPath, 0o755);
+    } catch (chmodError) {
+      console.error(`Error: Failed to set executable permission on ${binaryPath}`);
+      console.error(`  ${chmodError.message}`);
+      process.exit(1);
+    }
+  }
+}
+
 const binaryPath = getBinaryPath();
 
 if (binaryPath) {
+  // Ensure the binary is executable (auto-fix on non-Windows)
+  ensureExecutable(binaryPath);
+
   // Rust binary mode: execute the native binary
   // Set VITE_GLOBAL_CLI_JS_SCRIPTS_DIR to point to the dist/ directory
   const jsScriptsDir = join(__dirname, '..', 'dist');
@@ -72,12 +95,17 @@ if (binaryPath) {
     process.exit(error.status ?? 1);
   }
 } else {
-  // JS-only fallback mode for unsupported platforms
-  // Import the JS entry point directly
-  import('node:module').then((module) => {
-    if (module.default.enableCompileCache) {
-      module.default.enableCompileCache();
-    }
-  });
-  await import('../dist/index.js');
+  // Binary not found - show installation instructions
+  const isWindows = process.platform === 'win32';
+  const installCommand = isWindows
+    ? 'irm https://viteplus.dev/install.ps1 | iex'
+    : 'curl -fsSL https://viteplus.dev/install.sh | bash';
+
+  console.error('Error: Vite+ CLI binary not found.');
+  console.error('');
+  console.error('Please install vite-plus using:');
+  console.error(`  ${installCommand}`);
+  console.error('');
+  console.error('For more information, visit: https://viteplus.dev');
+  process.exit(1);
 }
