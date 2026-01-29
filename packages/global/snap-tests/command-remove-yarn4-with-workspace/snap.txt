@@ -1,4 +1,4 @@
-[2]> vp add testnpm2 -D && vite add testnpm2 -D --filter=* --filter=@vite-plus-test/utils && vite add test-vite-plus-install --filter=* --filter=@vite-plus-test/utils && vite add test-vite-plus-package-optional -O --filter=* --filter=@vite-plus-test/utils && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # prepare packages
+> vp add testnpm2 -D && vp add testnpm2 -D --filter=* --filter=@vite-plus-test/utils && vp add test-vite-plus-install --filter=* --filter=@vite-plus-test/utils && vp add test-vite-plus-package-optional -O --filter=* --filter=@vite-plus-test/utils && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # prepare packages
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + testnpm2@npm:1.0.1
@@ -8,11 +8,161 @@
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done in <variable>ms <variable>ms
-error: unrecognized subcommand 'add'
-
-Usage: vite <COMMAND>
-
-For more information, try '--help'.
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0085: │ + test-vite-plus-install@npm:1.0.0
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+Done in <variable>ms <variable>ms
+{
+  "name": "command-remove-yarn4-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "yarn@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "admin",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
 
 > vp remove testnpm2 -r && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package from all workspaces and root
 ➤ YN0000: · Yarn <semver>
@@ -30,6 +180,163 @@ For more information, try '--help'.
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "yarn@<semver>",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "admin",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+
+> vp remove -O test-vite-plus-package-optional -r && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove optional package from all workspaces
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0085: │ - test-vite-plus-package-optional@npm:1.0.0
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+{
+  "name": "command-remove-yarn4-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "yarn@<semver>",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+{
+  "name": "admin",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+
+> vp remove test-vite-plus-install --filter=app && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package by filter=app
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+Done in <variable>ms <variable>ms
+{
+  "name": "command-remove-yarn4-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "yarn@<semver>",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+{
+  "name": "app"
+}
+{
+  "name": "admin",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+
+> vp add test-vite-plus-install --filter=app && vp remove test-vite-plus-install --filter=* && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package by filter=*
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+Done in <variable>ms <variable>ms
+{
+  "name": "command-remove-yarn4-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
   "packageManager": "yarn@<semver>"
 }
 {
@@ -40,36 +347,8 @@ For more information, try '--help'.
 }
 {
   "name": "@vite-plus-test/utils",
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
 }
-
-[1]> vp remove -O test-vite-plus-package-optional -r && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove optional package from all workspaces
-Usage Error: Pattern test-vite-plus-package-optional doesn't match any packages referenced by any workspace
-
-$ yarn remove [-A,--all] [--mode #0] ...
-
-[1]> vp remove test-vite-plus-install --filter=app && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package by filter=app
-Usage Error: Pattern test-vite-plus-install doesn't match any packages referenced by this workspace
-
-$ yarn remove [-A,--all] [--mode #0] ...
-The command failed in workspace app@workspace:packages/app with exit code 1
-Failed with errors in <variable>ms <variable>ms
-
-[2]> vp add test-vite-plus-install --filter=app && vite remove test-vite-plus-install --filter=* && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should remove package by filter=*
-➤ YN0000: · Yarn <semver>
-➤ YN0000: ┌ Resolution step
-➤ YN0085: │ + test-vite-plus-install@npm:1.0.0
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <variable>ms <variable>ms
-Done in <variable>ms <variable>ms
-error: unrecognized subcommand 'remove'
-
-  tip: a similar subcommand exists: 'preview'
-
-Usage: vite <COMMAND>
-
-For more information, try '--help'.

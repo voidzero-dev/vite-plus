@@ -290,6 +290,7 @@ jobs:
           target_commitish: ${{ github.sha }}
 
       - name: Send Discord notification
+        if: ${{ inputs.npm_tag == 'latest' }}
         uses: tsickert/discord-webhook@b217a69502f52803de774ded2b1ab7c282e99645 # v7.0.0
         with:
           webhook-url: ${{ secrets.DISCORD_RELEASES_WEBHOOK_URL }}
@@ -303,5 +304,7 @@ jobs:
             • vite-plus@${{ env.VERSION }}
             • vite-plus-cli@${{ env.VERSION }}
 
-            **Install:** npm install -g vite-plus-cli@${{ env.VERSION }}
+            **Install:**
+            • macOS/Linux: `curl -fsSL https://viteplus.dev/install.sh | bash`
+            • Windows: `irm https://viteplus.dev/install.ps1 | iex`
           embed-url: https://github.com/${{ github.repository }}/releases/tag/v${{ env.VERSION }}

@@ -23,7 +23,7 @@
   "packageManager": "yarn@<semver>"
 }
 
-[2]> vp rm testnpm2 && vite add testnpm2@1.0.0 -D && vite update testnpm2 --latest && cat package.json # should to absolute latest version
+> vp rm testnpm2 && vp add testnpm2@1.0.0 -D && vp update testnpm2 --latest && cat package.json # should to absolute latest version
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ - testnpm2@npm:1.0.1
@@ -33,11 +33,37 @@
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done in <variable>ms <variable>ms
-error: unrecognized subcommand 'add'
-
-Usage: vite <COMMAND>
-
-For more information, try '--help'.
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0085: │ + testnpm2@npm:1.0.0
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+➤ YN0000: · Yarn <semver>
+➤ YN0000: ┌ Resolution step
+➤ YN0085: │ + testnpm2@npm:1.0.1
+➤ YN0085: │ - testnpm2@npm:1.0.0
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <variable>ms <variable>ms
+{
+  "name": "command-update-yarn4",
+  "version": "1.0.0",
+  "devDependencies": {
+    "test-vite-plus-package": "*",
+    "testnpm2": "^1.0.1"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "*"
+  },
+  "packageManager": "yarn@<semver>"
+}
 
 > vp update -D && cat package.json # should update and ignore -D options
 ➤ YN0000: · Yarn <semver>
@@ -52,7 +78,8 @@ For more information, try '--help'.
   "name": "command-update-yarn4",
   "version": "1.0.0",
   "devDependencies": {
-    "test-vite-plus-package": "*"
+    "test-vite-plus-package": "*",
+    "testnpm2": "^1.0.1"
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "*"
@@ -73,7 +100,8 @@ For more information, try '--help'.
   "name": "command-update-yarn4",
   "version": "1.0.0",
   "devDependencies": {
-    "test-vite-plus-package": "*"
+    "test-vite-plus-package": "*",
+    "testnpm2": "^1.0.1"
   },
   "optionalDependencies": {
     "test-vite-plus-package-optional": "*"

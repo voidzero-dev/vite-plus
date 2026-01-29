@@ -118,7 +118,7 @@ Done in <variable>ms using pnpm v<semver>
 }
 
 > vp rm testnpm2 # should remove package from dependencies for the next test
-[2]> vp add testnpm2@1.0.0 -O && vite update --no-optional --latest && cat package.json # should skip optional dependencies
+> vp add testnpm2@1.0.0 -O && vp update --no-optional --latest && cat package.json # should skip optional dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -127,19 +127,49 @@ optionalDependencies:
 + testnpm2 <semver> (1.0.1 is available)
 
 Done in <variable>ms using pnpm v<semver>
-error: unrecognized subcommand 'update'
-
-Usage: vite <COMMAND>
-
-For more information, try '--help'.
-
-[2]> vp update && vite update --recursive && cat package.json # should update all packages and change the package.json
-Already up to date
+Packages: -2
+--
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
+optionalDependencies:
+- test-vite-plus-package-optional <semver>
+- testnpm2 <semver>
+
 Done in <variable>ms using pnpm v<semver>
-error: unrecognized subcommand 'update'
+{
+  "name": "command-update-pnpm10",
+  "version": "1.0.0",
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0",
+    "testnpm2": "1.0.1"
+  },
+  "packageManager": "pnpm@<semver>"
+}
 
-Usage: vite <COMMAND>
+> vp update && vp update --recursive && cat package.json # should update all packages and change the package.json
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
-For more information, try '--help'.
+optionalDependencies:
++ test-vite-plus-package-optional <semver>
++ testnpm2 <semver>
+
+Done in <variable>ms using pnpm v<semver>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-update-pnpm10",
+  "version": "1.0.0",
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0",
+    "testnpm2": "1.0.1"
+  },
+  "packageManager": "pnpm@<semver>"
+}

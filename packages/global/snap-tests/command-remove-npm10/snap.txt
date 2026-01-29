@@ -7,27 +7,43 @@ up to date in <variable>ms
   "packageManager": "npm@<semver>"
 }
 
-[2]> vp add testnpm2 -- --no-audit && vite add -D test-vite-plus-install -- --no-audit && vite add -O test-vite-plus-package-optional -- --no-audit && cat package.json # should add packages to dependencies
+> vp add testnpm2 -- --no-audit && vp add -D test-vite-plus-install -- --no-audit && vp add -O test-vite-plus-package-optional -- --no-audit && cat package.json # should add packages to dependencies
 
 added 1 package in <variable>ms
-error: unrecognized subcommand 'add'
 
-Usage: vite <COMMAND>
+added 1 package in <variable>ms
 
-For more information, try '--help'.
-
-> vp remove testnpm2 test-vite-plus-install -- --no-audit && cat package.json # should remove packages from dependencies
-
-removed 1 package in <variable>ms
+added 1 package in <variable>ms
 {
   "name": "command-remove-npm10",
   "version": "1.0.0",
-  "packageManager": "npm@<semver>"
+  "packageManager": "npm@<semver>",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+
+> vp remove testnpm2 test-vite-plus-install -- --no-audit && cat package.json # should remove packages from dependencies
+
+removed 2 packages in <variable>ms
+{
+  "name": "command-remove-npm10",
+  "version": "1.0.0",
+  "packageManager": "npm@<semver>",
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
 }
 
 > vp remove -D test-vite-plus-package-optional -- --loglevel=warn --no-audit && cat package.json # support ignore -O flag and remove package from optional dependencies
 
-up to date in <variable>ms
+removed 1 package in <variable>ms
 {
   "name": "command-remove-npm10",
   "version": "1.0.0",

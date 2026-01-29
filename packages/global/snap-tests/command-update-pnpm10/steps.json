@@ -13,7 +13,7 @@
       "command": "vp rm testnpm2 # should remove package from dependencies for the next test",
       "ignoreOutput": true
     },
-    "vp add testnpm2@1.0.0 -O && vite update --no-optional --latest && cat package.json # should skip optional dependencies",
-    "vp update && vite update --recursive && cat package.json # should update all packages and change the package.json"
+    "vp add testnpm2@1.0.0 -O && vp update --no-optional --latest && cat package.json # should skip optional dependencies",
+    "vp update && vp update --recursive && cat package.json # should update all packages and change the package.json"
   ]
 }
