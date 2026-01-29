@@ -54,15 +54,12 @@ impl JsExecutor {
         }
 
         // 3. Auto-detect from binary location
-        let exe_path = std::env::current_exe().map_err(|_| Error::JsScriptsDirNotFound)?;
-        let exe_dir = exe_path.parent().ok_or(Error::JsScriptsDirNotFound)?;
-
         // JS scripts are at ../dist relative to bin/
         // e.g., packages/global/bin/vp -> packages/global/dist/
-        let scripts_dir = exe_dir.join("..").join("dist");
-        // Use dunce::canonicalize to avoid \\?\ prefix on Windows
-        let scripts_dir =
-            dunce::canonicalize(&scripts_dir).map_err(|_| Error::JsScriptsDirNotFound)?;
+        let exe_path = std::env::current_exe().map_err(|_| Error::JsScriptsDirNotFound)?;
+        let bin_dir = exe_path.parent().ok_or(Error::JsScriptsDirNotFound)?;
+        let package_dir = bin_dir.parent().ok_or(Error::JsScriptsDirNotFound)?;
+        let scripts_dir = package_dir.join("dist");
 
         AbsolutePathBuf::new(scripts_dir).ok_or(Error::JsScriptsDirNotFound)
     }
