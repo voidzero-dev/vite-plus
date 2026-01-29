@@ -6967,6 +6967,7 @@ dependencies = [
  "vite_error",
  "vite_install",
  "vite_path",
+ "vite_shared",
  "vite_str",
  "vite_task",
  "vite_workspace",
@@ -7050,6 +7051,7 @@ dependencies = [
  "vite_install",
  "vite_js_runtime",
  "vite_path",
+ "vite_shared",
  "vite_str",
  "vite_workspace",
 ]
@@ -7152,6 +7154,7 @@ name = "vite_shared"
 version = "0.0.0"
 dependencies = [
  "directories",
+ "tracing-subscriber",
  "vite_path",
 ]
 

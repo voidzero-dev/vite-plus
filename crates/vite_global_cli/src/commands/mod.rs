@@ -57,6 +57,7 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
     let mut new_paths = vec![node_bin_path];
     new_paths.extend(paths);
     let new_path = std::env::join_paths(new_paths).expect("Failed to join paths");
+    tracing::debug!("Set PATH to {:?}", new_path);
     // SAFETY: We're modifying PATH at the start of command execution before any
     // parallel operations. This is safe because package manager commands run
     // sequentially and child processes inherit the modified environment.

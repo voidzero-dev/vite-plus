@@ -9,6 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 directories = { workspace = true }
+tracing-subscriber = { workspace = true }
 vite_path = { workspace = true }
 
 [lints]

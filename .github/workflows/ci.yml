@@ -213,6 +213,9 @@ jobs:
         run: |
           printf '@echo off\n"%%~dp0vp.exe" %%*\n' > packages/global/bin/vp.cmd
           ls -al packages/global/bin
+          VITE_LOG=trace ./packages/global/bin/vp.cmd -V
+          RUST_BACKTRACE=1 VITE_LOG=trace pnpm -F ./packages/global snap-test cli-helper-message
+          git diff --exit-code
 
       - name: Run CLI snapshot tests
         run: |
