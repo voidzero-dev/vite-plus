@@ -4868,6 +4868,7 @@ dependencies = [
 name = "rolldown_ecmascript_utils"
 version = "0.1.0"
 dependencies = [
+ "memchr",
  "oxc",
  "rolldown_common",
  "rolldown_utils",
@@ -5141,6 +5142,7 @@ version = "0.1.0"
 dependencies = [
  "memchr",
  "rolldown_plugin",
+ "rolldown_utils",
 ]
 
 [[package]]
