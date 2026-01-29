@@ -21,6 +21,8 @@ jobs:
         settings:
           - target: aarch64-apple-darwin
             os: namespace-profile-mac-default
+          - target: x86_64-apple-darwin
+            os: namespace-profile-mac-default
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
           - target: x86_64-unknown-linux-gnu
