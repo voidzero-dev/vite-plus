@@ -5,18 +5,16 @@
 #   irm https://viteplus.dev/install.ps1 | iex
 #
 # Environment variables:
-#   VITE_VERSION - Version to install (default: latest)
-#   VITE_INSTALL_DIR - Installation directory (default: $env:USERPROFILE\.vite)
-#   npm_config_registry - Custom npm registry URL (default: https://registry.npmjs.org)
+#   VITE_PLUS_VERSION - Version to install (default: latest)
+#   VITE_PLUS_INSTALL_DIR - Installation directory (default: $env:USERPROFILE\.vite-plus)
+#   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 
 $ErrorActionPreference = "Stop"
 
-$ViteVersion = if ($env:VITE_VERSION) { $env:VITE_VERSION } else { "latest" }
-$InstallDir = if ($env:VITE_INSTALL_DIR) { $env:VITE_INSTALL_DIR } else { "$env:USERPROFILE\.vite" }
-$BinDir = "$InstallDir\bin"
-$DistDir = "$InstallDir\dist"
+$ViteVersion = if ($env:VITE_PLUS_VERSION) { $env:VITE_PLUS_VERSION } else { "latest" }
+$InstallDir = if ($env:VITE_PLUS_INSTALL_DIR) { $env:VITE_PLUS_INSTALL_DIR } else { "$env:USERPROFILE\.vite-plus" }
 # npm registry URL (strip trailing slash if present)
-$NpmRegistry = if ($env:npm_config_registry) { $env:npm_config_registry.TrimEnd('/') } else { "https://registry.npmjs.org" }
+$NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
 
 function Write-Info {
     param([string]$Message)
@@ -96,6 +94,28 @@ function Download-AndExtract {
     }
 }
 
+function Cleanup-OldVersions {
+    param([string]$InstallDir)
+
+    $maxVersions = 5
+    $versions = Get-ChildItem -Path $InstallDir -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -ne "current" }
+
+    if ($null -eq $versions -or $versions.Count -le $maxVersions) {
+        return
+    }
+
+    # Sort by creation time (oldest first) and select excess
+    $toDelete = $versions |
+        Sort-Object CreationTime |
+        Select-Object -First ($versions.Count - $maxVersions)
+
+    foreach ($old in $toDelete) {
+        Write-Info "Removing old version: $($old.Name)"
+        Remove-Item -Path $old.FullName -Recurse -Force
+    }
+}
+
 function Main {
     Write-Host ""
     Write-Host "  Vite+ CLI Installer"
@@ -111,6 +131,12 @@ function Main {
     }
     Write-Info "Installing vite-plus-cli v$ViteVersion"
 
+    # Set up version-specific directories
+    $VersionDir = "$InstallDir\$ViteVersion"
+    $BinDir = "$VersionDir\bin"
+    $DistDir = "$VersionDir\dist"
+    $CurrentLink = "$InstallDir\current"
+
     # Package name (follows napi-rs convention)
     if ($arch -eq "arm64") {
         Write-Error-Exit "win32-arm64 is not currently supported. Only win32-x64 is supported."
@@ -124,48 +150,110 @@ function Main {
     New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
     New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 
-    # Download and extract native binary
-    $binaryUrl = "$NpmRegistry/$packageName/-/vite-plus-cli-$packageSuffix-$ViteVersion.tgz"
-    Write-Info "Downloading native binary..."
-    Download-AndExtract -Url $binaryUrl -DestDir $BinDir -Filter $binaryName
+    # Download and extract native binary and .node files from platform package
+    $platformUrl = "$NpmRegistry/$packageName/-/vite-plus-cli-$packageSuffix-$ViteVersion.tgz"
+    Write-Info "Downloading platform package..."
 
-    # Create wrapper batch file
-    $wrapperContent = @"
-@echo off
-set VITE_GLOBAL_CLI_JS_SCRIPTS_DIR=$DistDir
-"$BinDir\$binaryName" %*
-"@
-    $wrapperPath = Join-Path $BinDir "vp.cmd"
-    Set-Content -Path $wrapperPath -Value $wrapperContent -Encoding ASCII
+    $platformTempFile = New-TemporaryFile
+    try {
+        Invoke-WebRequest -Uri $platformUrl -OutFile $platformTempFile -UseBasicParsing
+
+        # Create temp extraction directory
+        $platformTempExtract = Join-Path $env:TEMP "vite-platform-$(Get-Random)"
+        New-Item -ItemType Directory -Force -Path $platformTempExtract | Out-Null
+
+        # Extract the package
+        tar -xzf $platformTempFile -C $platformTempExtract
+
+        # Copy binary to BinDir
+        $binarySource = Join-Path $platformTempExtract "package" $binaryName
+        if (Test-Path $binarySource) {
+            Copy-Item -Path $binarySource -Destination $BinDir -Force
+        }
+
+        # Copy .node files to DistDir (delete existing first to avoid system cache issues)
+        $nodeFilesPath = Join-Path $platformTempExtract "package"
+        Get-ChildItem -Path $nodeFilesPath -Filter "*.node" -ErrorAction SilentlyContinue | ForEach-Object {
+            $destFile = Join-Path $DistDir $_.Name
+            if (Test-Path $destFile) {
+                Remove-Item -Path $destFile -Force
+            }
+            Copy-Item -Path $_.FullName -Destination $DistDir -Force
+        }
+
+        Remove-Item -Recurse -Force $platformTempExtract
+    } finally {
+        Remove-Item $platformTempFile -ErrorAction SilentlyContinue
+    }
 
     # Download and extract JS bundle
     $mainUrl = "$NpmRegistry/vite-plus-cli/-/vite-plus-cli-$ViteVersion.tgz"
     Write-Info "Downloading JS scripts..."
-    Download-AndExtract -Url $mainUrl -DestDir $DistDir -Filter "dist\*"
 
-    # Move files from dist subdirectory if needed
-    $distSubdir = Join-Path $DistDir "dist"
-    if (Test-Path $distSubdir) {
-        Get-ChildItem -Path $distSubdir | Move-Item -Destination $DistDir -Force
-        Remove-Item -Path $distSubdir -Force -ErrorAction SilentlyContinue
+    $mainTempFile = New-TemporaryFile
+    try {
+        Invoke-WebRequest -Uri $mainUrl -OutFile $mainTempFile -UseBasicParsing
+
+        # Create temp extraction directory
+        $mainTempExtract = Join-Path $env:TEMP "vite-main-$(Get-Random)"
+        New-Item -ItemType Directory -Force -Path $mainTempExtract | Out-Null
+
+        # Extract the package
+        tar -xzf $mainTempFile -C $mainTempExtract
+
+        # Copy dist contents to DistDir
+        $distSource = Join-Path $mainTempExtract "package" "dist" "*"
+        if (Test-Path $distSource) {
+            Copy-Item -Path $distSource -Destination $DistDir -Recurse -Force
+        }
+
+        # Copy package.json to VersionDir for devEngines.runtime configuration
+        $packageJsonSource = Join-Path $mainTempExtract "package" "package.json"
+        if (Test-Path $packageJsonSource) {
+            Copy-Item -Path $packageJsonSource -Destination $VersionDir -Force
+        }
+
+        Remove-Item -Recurse -Force $mainTempExtract
+    } finally {
+        Remove-Item $mainTempFile -ErrorAction SilentlyContinue
     }
 
-    Write-Success "Vite+ CLI installed to $InstallDir"
+    # Create/update current junction (symlink)
+    if (Test-Path $CurrentLink) {
+        # Remove existing junction
+        cmd /c rmdir "$CurrentLink" 2>$null
+        Remove-Item -Path $CurrentLink -Force -ErrorAction SilentlyContinue
+    }
+    # Create new junction pointing to the version directory
+    cmd /c mklink /J "$CurrentLink" "$VersionDir" | Out-Null
+
+    # Cleanup old versions
+    Cleanup-OldVersions -InstallDir $InstallDir
+
+    Write-Success "Vite+ CLI installed to $VersionDir"
 
     # Update PATH
     Write-Host ""
+    $pathToAdd = "$InstallDir\current\bin"
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    if ($userPath -notlike "*$BinDir*") {
-        $newPath = "$BinDir;$userPath"
+
+    # Check if we need to update PATH
+    $needsPathUpdate = $true
+    if ($userPath -like "*$pathToAdd*") {
+        $needsPathUpdate = $false
+    }
+
+    if ($needsPathUpdate) {
+        $newPath = "$pathToAdd;$userPath"
         [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-        $env:Path = "$BinDir;$env:Path"
+        $env:Path = "$pathToAdd;$env:Path"
         Write-Success "PATH has been updated"
         Write-Host ""
         Write-Host "  Restart your terminal to use vp, or run:"
         Write-Host ""
-        Write-Host "    `$env:Path = `"$BinDir;`$env:Path`""
+        Write-Host "    `$env:Path = `"$pathToAdd;`$env:Path`""
     } else {
-        Write-Info "PATH already contains $BinDir"
+        Write-Info "PATH already contains $pathToAdd"
     }
 
     Write-Host ""

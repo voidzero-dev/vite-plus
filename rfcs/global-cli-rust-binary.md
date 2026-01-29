@@ -724,114 +724,50 @@ For users who prefer standalone installation without npm:
 ```bash
 #!/bin/bash
 # https://viteplus.dev/install.sh
+#
+# Environment variables:
+#   VITE_PLUS_VERSION - Version to install (default: latest)
+#   VITE_PLUS_INSTALL_DIR - Installation directory (default: ~/.vite-plus)
+#   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 
 set -e
 
-VITE_VERSION="${VITE_VERSION:-latest}"
-INSTALL_DIR="${VITE_INSTALL_DIR:-$HOME/.vite}"
-BIN_DIR="$INSTALL_DIR/bin"
-DIST_DIR="$INSTALL_DIR/dist"
+VITE_PLUS_VERSION="${VITE_PLUS_VERSION:-latest}"
+INSTALL_DIR="${VITE_PLUS_INSTALL_DIR:-$HOME/.vite-plus}"
+NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
+NPM_REGISTRY="${NPM_REGISTRY%/}"
 
-# Detect platform
-OS="$(uname -s)"
-ARCH="$(uname -m)"
+# Detect platform and get version...
+# (platform detection code omitted for brevity)
 
-case "$OS" in
-  Darwin) PLATFORM="darwin" ;;
-  Linux)  PLATFORM="linux" ;;
-  MINGW*|MSYS*|CYGWIN*) PLATFORM="win32" ;;
-  *) echo "Unsupported OS: $OS"; exit 1 ;;
-esac
-
-case "$ARCH" in
-  x86_64|amd64) ARCH="x64" ;;
-  arm64|aarch64) ARCH="arm64" ;;
-  *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
-esac
-
-PACKAGE_NAME="@voidzero-dev/vite-plus-cli-${PLATFORM}-${ARCH}"
-
-# Get version if "latest"
-if [ "$VITE_VERSION" = "latest" ]; then
-  VITE_VERSION=$(curl -s "https://registry.npmjs.org/vite-plus-cli/latest" | jq -r '.version')
-fi
-
-echo "Installing vite-plus-cli v${VITE_VERSION} for ${PLATFORM}-${ARCH}..."
+# Set up version-specific directories
+VERSION_DIR="$INSTALL_DIR/$VITE_PLUS_VERSION"
+BIN_DIR="$VERSION_DIR/bin"
+DIST_DIR="$VERSION_DIR/dist"
+CURRENT_LINK="$INSTALL_DIR/current"
 
 # Create directories
 mkdir -p "$BIN_DIR" "$DIST_DIR"
 
-# Download and extract native binary from platform package
-BINARY_URL="https://registry.npmjs.org/${PACKAGE_NAME}/-/vite-plus-cli-${PLATFORM}-${ARCH}-${VITE_VERSION}.tgz"
-curl -sL "$BINARY_URL" | tar xz -C "$BIN_DIR" --strip-components=1 package/vite
+# Download platform package (binary + .node files)
+platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${package_suffix}-${VITE_PLUS_VERSION}.tgz"
+# Extract to temp dir, copy binary to BIN_DIR, copy .node files to DIST_DIR
 
-# Download and extract JS bundle from main package
-MAIN_URL="https://registry.npmjs.org/vite-plus-cli/-/vite-plus-cli-${VITE_VERSION}.tgz"
-curl -sL "$MAIN_URL" | tar xz -C "$DIST_DIR" --strip-components=2 package/dist
+# Download main package (JS scripts + package.json)
+main_url="${NPM_REGISTRY}/vite-plus-cli/-/vite-plus-cli-${VITE_PLUS_VERSION}.tgz"
+# Extract dist/* to DIST_DIR, copy package.json to VERSION_DIR
 
-# Make binary executable
-chmod +x "$BIN_DIR/vite"
+# Create/update current symlink
+ln -sfn "$VITE_PLUS_VERSION" "$CURRENT_LINK"
 
-# Automatically add to PATH
-add_to_path() {
-  local shell_config="$1"
-  local path_line="export PATH=\"$BIN_DIR:\$PATH\""
+# Cleanup old versions (keep max 5)
+cleanup_old_versions
 
-  if [ -f "$shell_config" ]; then
-    if ! grep -q "$BIN_DIR" "$shell_config" 2>/dev/null; then
-      echo "" >> "$shell_config"
-      echo "# Added by vite-plus installer" >> "$shell_config"
-      echo "$path_line" >> "$shell_config"
-      return 0
-    fi
-  fi
-  return 1
-}
-
-PATH_ADDED=false
-
-# Detect shell and update appropriate config
-case "$SHELL" in
-  */zsh)
-    if add_to_path "$HOME/.zshrc"; then
-      PATH_ADDED=true
-      SHELL_CONFIG=".zshrc"
-    fi
-    ;;
-  */bash)
-    # Try .bashrc first, then .bash_profile
-    if add_to_path "$HOME/.bashrc"; then
-      PATH_ADDED=true
-      SHELL_CONFIG=".bashrc"
-    elif add_to_path "$HOME/.bash_profile"; then
-      PATH_ADDED=true
-      SHELL_CONFIG=".bash_profile"
-    fi
-    ;;
-  */fish)
-    FISH_CONFIG="$HOME/.config/fish/config.fish"
-    if [ -f "$FISH_CONFIG" ] && ! grep -q "$BIN_DIR" "$FISH_CONFIG" 2>/dev/null; then
-      echo "" >> "$FISH_CONFIG"
-      echo "# Added by vite-plus installer" >> "$FISH_CONFIG"
-      echo "set -gx PATH $BIN_DIR \$PATH" >> "$FISH_CONFIG"
-      PATH_ADDED=true
-      SHELL_CONFIG="config.fish"
-    fi
-    ;;
-esac
-
-echo ""
-echo "Vite+ installed successfully!"
-echo ""
-
-if [ "$PATH_ADDED" = true ]; then
-  echo "PATH has been updated in ~/$SHELL_CONFIG"
-  echo "Run 'source ~/$SHELL_CONFIG' or restart your terminal to use vite."
-else
-  echo "Could not automatically update PATH. Please add the following to your shell profile:"
-  echo "  export PATH=\"$BIN_DIR:\$PATH\""
-fi
+# Add ~/.vite-plus/current/bin to PATH
+# (shell profile update code omitted for brevity)
 ```
+
+See [`packages/global/install.sh`](../packages/global/install.sh) for the full implementation.
 
 #### Windows Installation (install.ps1)
 
@@ -839,69 +775,50 @@ For Windows users, provide a PowerShell script:
 
 ```powershell
 # https://viteplus.dev/install.ps1
+#
+# Environment variables:
+#   VITE_PLUS_VERSION - Version to install (default: latest)
+#   VITE_PLUS_INSTALL_DIR - Installation directory (default: $env:USERPROFILE\.vite-plus)
+#   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 
 $ErrorActionPreference = "Stop"
 
-$ViteVersion = if ($env:VITE_VERSION) { $env:VITE_VERSION } else { "latest" }
-$InstallDir = if ($env:VITE_INSTALL_DIR) { $env:VITE_INSTALL_DIR } else { "$env:USERPROFILE\.vite" }
-$BinDir = "$InstallDir\bin"
-$DistDir = "$InstallDir\dist"
+$ViteVersion = if ($env:VITE_PLUS_VERSION) { $env:VITE_PLUS_VERSION } else { "latest" }
+$InstallDir = if ($env:VITE_PLUS_INSTALL_DIR) { $env:VITE_PLUS_INSTALL_DIR } else { "$env:USERPROFILE\.vite-plus" }
+$NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
 
-# Detect architecture
-$Arch = if ([Environment]::Is64BitOperatingSystem) {
-    if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
-} else {
-    throw "32-bit Windows is not supported"
-}
+# Detect architecture and get version...
+# (detection code omitted for brevity)
 
-$PackageName = "@voidzero-dev/vite-plus-cli-win32-$Arch"
-
-# Get version if "latest"
-if ($ViteVersion -eq "latest") {
-    $ViteVersion = (Invoke-RestMethod "https://registry.npmjs.org/vite-plus-cli/latest").version
-}
-
-Write-Host "Installing vite-plus-cli v$ViteVersion for win32-$Arch..."
+# Set up version-specific directories
+$VersionDir = "$InstallDir\$ViteVersion"
+$BinDir = "$VersionDir\bin"
+$DistDir = "$VersionDir\dist"
+$CurrentLink = "$InstallDir\current"
 
 # Create directories
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 
-# Download and extract native binary
-$BinaryUrl = "https://registry.npmjs.org/$PackageName/-/vite-plus-cli-win32-$Arch-$ViteVersion.tgz"
-$TempFile = New-TemporaryFile
-Invoke-WebRequest -Uri $BinaryUrl -OutFile $TempFile
-tar -xzf $TempFile -C $BinDir --strip-components=1 "package/vp.exe"
-Remove-Item $TempFile
+# Download platform package (binary + .node files)
+# Extract binary to BinDir, .node files to DistDir
 
-# Download and extract JS bundle
-$MainUrl = "https://registry.npmjs.org/vite-plus-cli/-/vite-plus-cli-$ViteVersion.tgz"
-$TempFile = New-TemporaryFile
-Invoke-WebRequest -Uri $MainUrl -OutFile $TempFile
-tar -xzf $TempFile -C $DistDir --strip-components=2 "package/dist"
-Remove-Item $TempFile
+# Download main package (JS scripts + package.json)
+# Extract dist/* to DistDir, package.json to VersionDir
 
-# Add to user PATH
-$UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($UserPath -notlike "*$BinDir*") {
-    $NewPath = "$BinDir;$UserPath"
-    [Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
-    $env:Path = "$BinDir;$env:Path"
-    $PathAdded = $true
-} else {
-    $PathAdded = $false
+# Create/update current junction (Windows symlink equivalent)
+if (Test-Path $CurrentLink) {
+    cmd /c rmdir "$CurrentLink" 2>$null
 }
+cmd /c mklink /J "$CurrentLink" "$VersionDir" | Out-Null
 
-Write-Host ""
-Write-Host "Vite+ installed successfully!"
-Write-Host ""
+# Cleanup old versions (keep max 5)
+Cleanup-OldVersions -InstallDir $InstallDir
 
-if ($PathAdded) {
-    Write-Host "PATH has been updated. Restart your terminal to use vite."
-} else {
-    Write-Host "PATH already contains $BinDir"
-}
+# Add $InstallDir\current\bin to user PATH
 ```
+
+See [`packages/global/install.ps1`](../packages/global/install.ps1) for the full implementation.
 
 **Windows installation options:**
 
@@ -924,13 +841,27 @@ if ($PathAdded) {
 
 #### Directory Layout for Standalone Installation
 
+The installer supports multiple versions with symlinks, allowing version switching without PATH changes:
+
 ```
-~/.vite/
-├── bin/
-│   └── vite           # Native Rust binary
-└── dist/
-    └── index.js       # Bundled JS entry point (all commands)
+~/.vite-plus/
+├── current -> 0.0.0-abc123     # Symlink to active version
+├── 0.0.0-abc123/               # Version directory
+│   ├── bin/
+│   │   └── vp                  # Native Rust binary
+│   ├── dist/
+│   │   ├── index.js            # Bundled JS entry point
+│   │   └── *.node              # NAPI bindings
+│   └── package.json            # For devEngines.runtime configuration
+├── 0.0.0-def456/               # Another version
+│   └── ...
+└── ...
 ```
+
+**Key features:**
+- PATH points to `~/.vite-plus/current/bin` (stable location)
+- Installing a new version updates the `current` symlink
+- Old versions are automatically cleaned up (keeps max 5 versions)
 
 #### How the Rust Binary Uses JS Scripts
 
@@ -938,41 +869,51 @@ When the Rust binary needs to execute JS (for `new`, `migrate`, `--version`, or 
 
 1. Check `VITE_GLOBAL_CLI_JS_SCRIPTS_DIR` environment variable (optional)
 2. If not set, auto-detect by looking for `dist/index.js` relative to the binary
-3. Download Node.js via `vite_js_runtime` if not cached
+3. Download Node.js via `vite_js_runtime` if not cached (version from `package.json` devEngines.runtime)
 4. Execute the JS entry point with managed Node.js, passing command and arguments
 
 **Auto-detection logic:**
 
 - For npm installation: binary is in `node_modules/vite-plus-cli/bin/`, JS entry point is `node_modules/vite-plus-cli/dist/index.js`
-- For standalone installation: binary is in `~/.vite/bin/`, JS entry point is `~/.vite/dist/index.js`
+- For standalone installation: binary is in `~/.vite-plus/current/bin/`, JS entry point is `~/.vite-plus/current/dist/index.js`
 - For local development: binary is in `packages/global/bin/`, JS entry point is `packages/global/dist/index.js`
+
+**Standalone installation contents:**
+
+- `bin/vp` - Native Rust binary
+- `dist/index.js` - Bundled JS entry point
+- `dist/*.node` - NAPI bindings for JS scripts
+- `package.json` - Contains devEngines.runtime configuration
 
 ```rust
 // In the Rust binary
-fn get_js_entry_point() -> Result<PathBuf, Error> {
+fn get_js_scripts_dir() -> Result<PathBuf, Error> {
     // 1. Check environment variable first
     if let Ok(dir) = std::env::var("VITE_GLOBAL_CLI_JS_SCRIPTS_DIR") {
-        return Ok(PathBuf::from(dir).join("dist/index.js"));
+        return Ok(PathBuf::from(dir));
     }
 
     // 2. Auto-detect based on binary location
+    // Binary is at ~/.vite-plus/current/bin/vp
+    // Scripts are at ~/.vite-plus/current/dist/
     let exe_path = std::env::current_exe()?;
     let exe_dir = exe_path.parent().ok_or(Error::JsEntryPointNotFound)?;
 
-    // JS entry point is always at ../dist/index.js relative to bin/
-    let entry_point = exe_dir.join("../dist/index.js");
+    // JS scripts dir is always at ../dist/ relative to bin/
+    let scripts_dir = exe_dir.join("../dist");
 
-    if entry_point.exists() {
-        return Ok(entry_point.canonicalize()?);
+    if scripts_dir.exists() {
+        return Ok(scripts_dir.canonicalize()?);
     }
 
     Err(Error::JsEntryPointNotFound)
 }
 
 async fn run_js_command(&self, command: &str, args: &[&str]) -> Result<(), Error> {
-    let entry_point = get_js_entry_point()?;
+    let scripts_dir = get_js_scripts_dir()?;
+    let entry_point = scripts_dir.join("index.js");
 
-    // Ensure Node.js is available
+    // Ensure Node.js is available (version from package.json devEngines.runtime)
     let runtime = self.js_executor.ensure_cli_runtime().await?;
 
     // Execute JS entry point with command and arguments

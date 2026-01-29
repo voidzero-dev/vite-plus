@@ -6,18 +6,16 @@
 #   curl -fsSL https://viteplus.dev/install.sh | bash
 #
 # Environment variables:
-#   VITE_VERSION - Version to install (default: latest)
-#   VITE_INSTALL_DIR - Installation directory (default: ~/.vite)
-#   npm_config_registry - Custom npm registry URL (default: https://registry.npmjs.org)
+#   VITE_PLUS_VERSION - Version to install (default: latest)
+#   VITE_PLUS_INSTALL_DIR - Installation directory (default: ~/.vite-plus)
+#   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 
 set -e
 
-VITE_VERSION="${VITE_VERSION:-latest}"
-INSTALL_DIR="${VITE_INSTALL_DIR:-$HOME/.vite}"
-BIN_DIR="$INSTALL_DIR/bin"
-DIST_DIR="$INSTALL_DIR/dist"
+VITE_PLUS_VERSION="${VITE_PLUS_VERSION:-latest}"
+INSTALL_DIR="${VITE_PLUS_INSTALL_DIR:-$HOME/.vite-plus}"
 # npm registry URL (strip trailing slash if present)
-NPM_REGISTRY="${npm_config_registry:-https://registry.npmjs.org}"
+NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
 NPM_REGISTRY="${NPM_REGISTRY%/}"
 
 # Colors for output
@@ -114,17 +112,65 @@ download_and_extract() {
 # Add to shell profile
 add_to_path() {
   local shell_config="$1"
-  local path_line="export PATH=\"$BIN_DIR:\$PATH\""
+  local path_to_add="$INSTALL_DIR/current/bin"
+  local path_line="export PATH=\"$path_to_add:\$PATH\""
 
   if [ -f "$shell_config" ]; then
-    if ! grep -q "$BIN_DIR" "$shell_config" 2>/dev/null; then
-      echo "" >> "$shell_config"
-      echo "# Added by vite-plus installer" >> "$shell_config"
-      echo "$path_line" >> "$shell_config"
-      return 0
+    # Check if already has the current/bin path
+    if grep -q "$path_to_add" "$shell_config" 2>/dev/null; then
+      return 1
     fi
+    echo "" >> "$shell_config"
+    echo "# Added by vite-plus installer" >> "$shell_config"
+    echo "$path_line" >> "$shell_config"
+    return 0
   fi
   return 1
+}
+
+# Cleanup old versions, keeping only the most recent ones
+cleanup_old_versions() {
+  local max_versions=5
+  local versions=()
+
+  # List version directories (exclude 'current' symlink)
+  for dir in "$INSTALL_DIR"/*/; do
+    local name
+    name=$(basename "$dir")
+    if [ "$name" != "current" ] && [ -d "$dir" ]; then
+      versions+=("$dir")
+    fi
+  done
+
+  local count=${#versions[@]}
+  if [ "$count" -le "$max_versions" ]; then
+    return 0
+  fi
+
+  # Sort by creation time (oldest first) and delete excess
+  local sorted_versions
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS: use stat -f %B for birth time
+    sorted_versions=$(for v in "${versions[@]}"; do
+      echo "$(stat -f %B "$v") $v"
+    done | sort -n | head -n $((count - max_versions)) | cut -d' ' -f2-)
+  else
+    # Linux: use stat -c %W for birth time, fallback to %Y (mtime)
+    sorted_versions=$(for v in "${versions[@]}"; do
+      local btime
+      btime=$(stat -c %W "$v" 2>/dev/null)
+      if [ "$btime" = "0" ] || [ -z "$btime" ]; then
+        btime=$(stat -c %Y "$v")
+      fi
+      echo "$btime $v"
+    done | sort -n | head -n $((count - max_versions)) | cut -d' ' -f2-)
+  fi
+
+  # Delete oldest versions
+  for old_version in $sorted_versions; do
+    info "Removing old version: $(basename "$old_version")"
+    rm -rf "$old_version"
+  done
 }
 
 main() {
@@ -139,11 +185,17 @@ main() {
   info "Detected platform: $platform"
 
   # Get version
-  if [ "$VITE_VERSION" = "latest" ]; then
+  if [ "$VITE_PLUS_VERSION" = "latest" ]; then
     info "Fetching latest version..."
-    VITE_VERSION=$(get_latest_version)
+    VITE_PLUS_VERSION=$(get_latest_version)
   fi
-  info "Installing vite-plus-cli v${VITE_VERSION}"
+  info "Installing vite-plus-cli v${VITE_PLUS_VERSION}"
+
+  # Set up version-specific directories
+  VERSION_DIR="$INSTALL_DIR/$VITE_PLUS_VERSION"
+  BIN_DIR="$VERSION_DIR/bin"
+  DIST_DIR="$VERSION_DIR/dist"
+  CURRENT_LINK="$INSTALL_DIR/current"
 
   # Platform package name mapping (follows napi-rs convention)
   local package_suffix
@@ -173,39 +225,53 @@ main() {
   info "Creating directories..."
   mkdir -p "$BIN_DIR" "$DIST_DIR"
 
-  # Download and extract native binary from platform package
-  local binary_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${package_suffix}-${VITE_VERSION}.tgz"
-  info "Downloading native binary..."
-  download_and_extract "$binary_url" "$BIN_DIR" 1 "package/${binary_name}"
+  # Download and extract native binary and .node files from platform package
+  local platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${package_suffix}-${VITE_PLUS_VERSION}.tgz"
+  info "Downloading platform package..."
 
-  # Make binary executable
+  # Create temp directory for extraction
+  local platform_temp_dir
+  platform_temp_dir=$(mktemp -d)
+  download_and_extract "$platform_url" "$platform_temp_dir" 1
+
+  # Copy binary to BIN_DIR
+  cp "$platform_temp_dir/$binary_name" "$BIN_DIR/"
   chmod +x "$BIN_DIR/$binary_name"
 
-  # Create a wrapper script named 'vp' that calls the binary with proper env
-  cat > "$BIN_DIR/vp" << EOF
-#!/bin/bash
-# Vite+ CLI wrapper
-export VITE_GLOBAL_CLI_JS_SCRIPTS_DIR="$DIST_DIR"
-exec "$BIN_DIR/$binary_name" "\$@"
-EOF
-  chmod +x "$BIN_DIR/vp"
+  # Copy .node files to DIST_DIR (delete existing first to avoid system cache issues)
+  for node_file in "$platform_temp_dir"/*.node; do
+    rm -f "$DIST_DIR/$(basename "$node_file")"
+    cp "$node_file" "$DIST_DIR/"
+  done
+  rm -rf "$platform_temp_dir"
 
   # Download and extract JS bundle from main package
-  local main_url="${NPM_REGISTRY}/vite-plus-cli/-/vite-plus-cli-${VITE_VERSION}.tgz"
+  local main_url="${NPM_REGISTRY}/vite-plus-cli/-/vite-plus-cli-${VITE_PLUS_VERSION}.tgz"
   info "Downloading JS scripts..."
 
   # Create temp directory for extraction
   local temp_dir
   temp_dir=$(mktemp -d)
-  download_and_extract "$main_url" "$temp_dir" 1 "package/dist"
+  download_and_extract "$main_url" "$temp_dir" 1
 
   # Copy dist contents to DIST_DIR
   if [ -d "$temp_dir/dist" ]; then
     cp -r "$temp_dir/dist/"* "$DIST_DIR/"
   fi
+
+  # Copy package.json to VERSION_DIR for devEngines.runtime configuration
+  if [ -f "$temp_dir/package.json" ]; then
+    cp "$temp_dir/package.json" "$VERSION_DIR/"
+  fi
   rm -rf "$temp_dir"
 
-  success "Vite+ CLI installed to $INSTALL_DIR"
+  # Create/update current symlink (use relative path for portability)
+  ln -sfn "$VITE_PLUS_VERSION" "$CURRENT_LINK"
+
+  # Cleanup old versions
+  cleanup_old_versions
+
+  success "Vite+ CLI installed to $VERSION_DIR"
 
   # Update PATH
   echo ""
@@ -230,12 +296,17 @@ EOF
       ;;
     */fish)
       local fish_config="$HOME/.config/fish/config.fish"
-      if [ -f "$fish_config" ] && ! grep -q "$BIN_DIR" "$fish_config" 2>/dev/null; then
-        echo "" >> "$fish_config"
-        echo "# Added by vite-plus installer" >> "$fish_config"
-        echo "set -gx PATH $BIN_DIR \$PATH" >> "$fish_config"
-        path_added=true
-        shell_config="config.fish"
+      local path_to_add="$INSTALL_DIR/current/bin"
+      if [ -f "$fish_config" ]; then
+        if grep -q "$path_to_add" "$fish_config" 2>/dev/null; then
+          : # Already has current/bin path
+        else
+          echo "" >> "$fish_config"
+          echo "# Added by vite-plus installer" >> "$fish_config"
+          echo "set -gx PATH $path_to_add \$PATH" >> "$fish_config"
+          path_added=true
+          shell_config="config.fish"
+        fi
       fi
       ;;
   esac
@@ -248,12 +319,14 @@ EOF
     echo "    source ~/$shell_config"
     echo ""
     echo "  Or restart your terminal."
+  elif [ -n "$shell_config" ]; then
+    info "PATH already configured in ~/$shell_config"
   else
     warn "Could not automatically update PATH"
     echo ""
     echo "  Please add the following to your shell profile:"
     echo ""
-    echo "    export PATH=\"$BIN_DIR:\$PATH\""
+    echo "    export PATH=\"$INSTALL_DIR/current/bin:\$PATH\""
   fi
 
   echo ""
