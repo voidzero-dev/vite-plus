@@ -54,7 +54,8 @@ if (!localCliMetadata) {
     args.push('-w');
   }
   const exitCode = await runCommand({
-    command: 'vite',
+    // use VITE_PLUS_CLI_BIN environment variable if set, otherwise use 'vp'
+    command: process.env.VITE_PLUS_CLI_BIN ?? 'vp',
     args,
     cwd,
     envs: process.env,

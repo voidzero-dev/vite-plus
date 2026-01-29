@@ -22,6 +22,9 @@ pub enum Error {
     )]
     JsScriptsDirNotFound,
 
+    #[error("Failed to determine CLI binary path")]
+    CliBinaryNotFound,
+
     #[error("JS entry point not found at {0}")]
     JsEntryPointNotFound(Str),
 

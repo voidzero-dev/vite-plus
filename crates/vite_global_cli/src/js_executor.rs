@@ -66,6 +66,26 @@ impl JsExecutor {
         AbsolutePathBuf::new(scripts_dir).ok_or(Error::JsScriptsDirNotFound)
     }
 
+    /// Get the path to the current Rust binary (vp).
+    ///
+    /// This is passed to JS scripts via `VITE_PLUS_CLI_BIN` environment variable
+    /// so they can invoke vp commands when needed.
+    fn get_bin_path() -> Result<AbsolutePathBuf, Error> {
+        let exe_path = std::env::current_exe().map_err(|_| Error::CliBinaryNotFound)?;
+        AbsolutePathBuf::new(exe_path).ok_or(Error::CliBinaryNotFound)
+    }
+
+    /// Create a Node.js command with common environment variables set.
+    ///
+    /// Sets `VITE_PLUS_CLI_BIN` so JS scripts can invoke vp commands.
+    fn create_node_command(node_binary: &AbsolutePath) -> Command {
+        let mut cmd = Command::new(node_binary.as_path());
+        if let Ok(bin_path) = Self::get_bin_path() {
+            cmd.env("VITE_PLUS_CLI_BIN", bin_path.as_path());
+        }
+        cmd
+    }
+
     /// Get the CLI's package.json directory (parent of `scripts_dir`).
     ///
     /// This is used for resolving the CLI's default Node.js version
@@ -150,7 +170,7 @@ impl JsExecutor {
             cwd
         );
 
-        let mut cmd = Command::new(binary_path.as_path());
+        let mut cmd = Self::create_node_command(&binary_path);
         cmd.arg(script_path.as_path()).arg(command).args(args).current_dir(cwd.as_path());
 
         let status = cmd.status().await?;
@@ -173,7 +193,7 @@ impl JsExecutor {
 
         tracing::debug!("Executing PM command: {:?} {:?}", pm_binary, args);
 
-        let mut cmd = Command::new(node_binary.as_path());
+        let mut cmd = Self::create_node_command(&node_binary);
         cmd.arg(pm_binary.as_path()).args(args);
 
         let status = cmd.status().await?;
@@ -209,7 +229,7 @@ impl JsExecutor {
 
         // Execute dist/index.js with the command and args
         // The JS layer handles detecting/installing local vite-plus
-        let mut cmd = Command::new(node_binary.as_path());
+        let mut cmd = Self::create_node_command(&node_binary);
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
 
         let status = cmd.status().await?;
