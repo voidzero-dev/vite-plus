@@ -243,16 +243,25 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
     let provider = NodeProvider::new();
     let cache_dir = crate::cache::get_cache_dir()?;
 
-    // 1. Read all version sources
-    let node_version_file = read_node_version_file(project_path).await;
-    let engines_node = pkg.as_ref().and_then(|p| p.engines.as_ref()).and_then(|e| e.node.clone());
+    // 1. Read all version sources (with validation)
+    let node_version_file = read_node_version_file(project_path)
+        .await
+        .and_then(|v| normalize_version(&v, ".node-version"));
+
+    let engines_node = pkg
+        .as_ref()
+        .and_then(|p| p.engines.as_ref())
+        .and_then(|e| e.node.clone())
+        .and_then(|v| normalize_version(&v, "engines.node"));
+
     let dev_engines_runtime = pkg
         .as_ref()
         .and_then(|p| p.dev_engines.as_ref())
         .and_then(|de| de.runtime.as_ref())
         .and_then(|rt| rt.find_by_name("node"))
         .map(|r| r.version.clone())
-        .filter(|v| !v.is_empty());
+        .filter(|v| !v.is_empty())
+        .and_then(|v| normalize_version(&v, "devEngines.runtime"));
 
     tracing::debug!(
         "Version sources - .node-version: {:?}, engines.node: {:?}, devEngines.runtime: {:?}",
@@ -384,6 +393,32 @@ fn check_constraint(
             tracing::debug!("Failed to parse {constraint_source} constraint '{constraint}': {e}");
         }
     }
+}
+
+/// Normalize and validate a version string as semver (exact version or range).
+/// Trims whitespace and returns the normalized version, or None with a warning if invalid.
+fn normalize_version(version: &Str, source: &str) -> Option<Str> {
+    // Trim leading/trailing whitespace
+    let trimmed: Str = version.trim().into();
+
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // Try parsing as exact version (strip 'v' prefix for exact version check)
+    let without_v = trimmed.strip_prefix('v').unwrap_or(&trimmed);
+    if Version::parse(without_v).is_ok() {
+        return Some(trimmed);
+    }
+
+    // Try parsing as range
+    if Range::parse(&trimmed).is_ok() {
+        return Some(trimmed);
+    }
+
+    // Invalid version
+    println!("warning: invalid version '{version}' in {source}, ignoring");
+    None
 }
 
 /// Read package.json contents.
@@ -842,5 +877,208 @@ mod tests {
         assert_eq!(VersionSource::EnginesNode.to_string(), "engines.node");
         assert_eq!(VersionSource::DevEnginesRuntime.to_string(), "devEngines.runtime");
         assert_eq!(VersionSource::None.to_string(), "none");
+    }
+
+    // ==========================================
+    // Invalid version validation tests
+    // ==========================================
+
+    #[tokio::test]
+    async fn test_invalid_node_version_file_is_ignored() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version with invalid version
+        tokio::fs::write(temp_path.join(".node-version"), "invalid\n").await.unwrap();
+
+        // Create package.json without any version
+        let package_json = r#"{"name": "test-project"}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        // Should fall through to fetch latest LTS since .node-version is invalid
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+
+        // Should have a valid version (latest LTS)
+        let version = runtime.version();
+        let parsed = node_semver::Version::parse(version).unwrap();
+        assert!(parsed.major >= 20);
+    }
+
+    #[tokio::test]
+    async fn test_invalid_engines_node_is_ignored() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create package.json with invalid engines.node
+        let package_json = r#"{"engines":{"node":"invalid"}}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        // Should fall through to fetch latest LTS since engines.node is invalid
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+
+        // Should have a valid version (latest LTS)
+        let version = runtime.version();
+        let parsed = node_semver::Version::parse(version).unwrap();
+        assert!(parsed.major >= 20);
+    }
+
+    #[tokio::test]
+    async fn test_invalid_dev_engines_runtime_is_ignored() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create package.json with invalid devEngines.runtime version
+        let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"invalid"}}}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        // Should fall through to fetch latest LTS since devEngines.runtime is invalid
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+
+        // Should have a valid version (latest LTS)
+        let version = runtime.version();
+        let parsed = node_semver::Version::parse(version).unwrap();
+        assert!(parsed.major >= 20);
+    }
+
+    #[tokio::test]
+    async fn test_invalid_node_version_file_falls_through_to_valid_engines() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version with invalid version
+        tokio::fs::write(temp_path.join(".node-version"), "invalid\n").await.unwrap();
+
+        // Create package.json with valid engines.node
+        let package_json = r#"{"engines":{"node":"^20.18.0"}}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        // Should use engines.node since .node-version is invalid
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+        let version = runtime.version();
+        let parsed = node_semver::Version::parse(version).unwrap();
+        assert_eq!(parsed.major, 20);
+    }
+
+    #[tokio::test]
+    async fn test_invalid_engines_falls_through_to_valid_dev_engines() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create package.json with invalid engines.node but valid devEngines.runtime
+        let package_json = r#"{
+  "engines": {"node": "invalid"},
+  "devEngines": {"runtime": {"name": "node", "version": "^20.18.0"}}
+}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        // Should use devEngines.runtime since engines.node is invalid
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+        let version = runtime.version();
+        let parsed = node_semver::Version::parse(version).unwrap();
+        assert_eq!(parsed.major, 20);
+    }
+
+    #[test]
+    fn test_normalize_version_exact() {
+        let version = Str::from("20.18.0");
+        assert_eq!(normalize_version(&version, "test"), Some(version.clone()));
+    }
+
+    #[test]
+    fn test_normalize_version_with_v_prefix() {
+        let version = Str::from("v20.18.0");
+        assert_eq!(normalize_version(&version, "test"), Some(version.clone()));
+    }
+
+    #[test]
+    fn test_normalize_version_range() {
+        let version = Str::from("^20.18.0");
+        assert_eq!(normalize_version(&version, "test"), Some(version.clone()));
+    }
+
+    #[test]
+    fn test_normalize_version_partial() {
+        // Partial versions like "20" or "20.18" should be valid as ranges
+        let version = Str::from("20");
+        assert_eq!(normalize_version(&version, "test"), Some(version.clone()));
+
+        let version = Str::from("20.18");
+        assert_eq!(normalize_version(&version, "test"), Some(version.clone()));
+    }
+
+    #[test]
+    fn test_normalize_version_invalid() {
+        let version = Str::from("invalid");
+        assert_eq!(normalize_version(&version, "test"), None);
+
+        let version = Str::from("not-a-version");
+        assert_eq!(normalize_version(&version, "test"), None);
+    }
+
+    #[test]
+    fn test_normalize_version_real_world_ranges() {
+        // Test various real-world version range formats
+        let valid_ranges = [
+            ">=18",
+            ">=18 <21",
+            "^18.18.0",
+            "~20.11.1",
+            "18.x",
+            "20.*",
+            "18 || 20 || >=22",
+            ">=16 <=20",
+            ">=20.0.0-rc.0",
+            "*",
+        ];
+
+        for range in valid_ranges {
+            let version = Str::from(range);
+            assert_eq!(
+                normalize_version(&version, "test"),
+                Some(version.clone()),
+                "Expected '{range}' to be valid"
+            );
+        }
+    }
+
+    #[test]
+    fn test_normalize_version_with_negation() {
+        // node-semver crate supports negation syntax
+        let version = Str::from(">=18 !=19.0.0 <21");
+        assert_eq!(
+            normalize_version(&version, "test"),
+            Some(version.clone()),
+            "Expected '>=18 !=19.0.0 <21' to be valid"
+        );
+    }
+
+    #[test]
+    fn test_normalize_version_with_whitespace() {
+        // Versions with leading/trailing whitespace are trimmed
+        let version = Str::from("   20  ");
+        assert_eq!(
+            normalize_version(&version, "test"),
+            Some(Str::from("20")),
+            "Expected '   20  ' to be trimmed to '20'"
+        );
+
+        let version = Str::from("  v20.2.0   ");
+        assert_eq!(
+            normalize_version(&version, "test"),
+            Some(Str::from("v20.2.0")),
+            "Expected '  v20.2.0   ' to be trimmed to 'v20.2.0'"
+        );
+    }
+
+    #[test]
+    fn test_normalize_version_empty_or_whitespace_only() {
+        let version = Str::from("");
+        assert_eq!(normalize_version(&version, "test"), None);
+
+        let version = Str::from("   ");
+        assert_eq!(normalize_version(&version, "test"), None);
     }
 }
