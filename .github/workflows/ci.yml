@@ -199,6 +199,13 @@ jobs:
           vp --version
           vp -h
 
+      - name: Create vp.cmd shim file for Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          # printf '@echo off\n"%%~dp0vp.exe" %%*\n' > packages/global/bin/vp.cmd
+          ls -al packages/global/bin
+          VITE_LOG=trace ./packages/global/bin/vp.cmd -V
+
       - name: Run CLI fmt
         run: vp fmt --check
 
@@ -207,15 +214,6 @@ jobs:
 
       - name: Install Playwright browsers
         run: pnpx playwright install chromium
-
-      - name: Create vp.cmd shim file for Windows
-        if: ${{ matrix.os == 'windows-latest' }}
-        run: |
-          printf '@echo off\n"%%~dp0vp.exe" %%*\n' > packages/global/bin/vp.cmd
-          ls -al packages/global/bin
-          VITE_LOG=trace ./packages/global/bin/vp.cmd -V
-          RUST_BACKTRACE=1 VITE_LOG=trace pnpm -F ./packages/global snap-test cli-helper-message
-          git diff --exit-code
 
       - name: Run CLI snapshot tests
         run: |

@@ -7041,7 +7041,6 @@ name = "vite_global_cli"
 version = "0.0.0"
 dependencies = [
  "clap",
- "dunce",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
