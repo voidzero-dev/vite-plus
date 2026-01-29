@@ -2,6 +2,10 @@
 resolver = "3"
 members = ["bench", "crates/*", "packages/cli/binding", "packages/global/binding"]
 
+# Ignore vite_js_runtime - new crate pending integration with vite_install
+[workspace.metadata.cargo-shear]
+ignored = ["vite_js_runtime"]
+
 [workspace.package]
 authors = ["Vite+ Authors"]
 edition = "2024"
@@ -115,6 +119,7 @@ rusqlite = { version = "0.37.0", features = ["bundled"] }
 rustc-hash = "2.1.1"
 schemars = "1.0.0"
 self_cell = "1.2.0"
+node-semver = "2.2.0"
 semver = "1.0.26"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
@@ -149,9 +154,11 @@ uuid = "1.17.0"
 vfs = "0.12.1"
 vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
+vite_js_runtime = { path = "crates/vite_js_runtime" }
 vite_glob = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "d1824f23d28fdac7024c80c25f8e84b24b4f7704" }
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
+vite_shared = { path = "crates/vite_shared" }
 vite_path = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "d1824f23d28fdac7024c80c25f8e84b24b4f7704" }
 vite_str = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "d1824f23d28fdac7024c80c25f8e84b24b4f7704" }
 vite_task = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "d1824f23d28fdac7024c80c25f8e84b24b4f7704" }
@@ -160,6 +167,7 @@ walkdir = "2.5.0"
 wax = "0.6.0"
 which = "8.0.0"
 xxhash-rust = "0.8.15"
+zip = "7.2"
 
 # oxc crates with the same version
 oxc = { version = "0.111.0", features = [

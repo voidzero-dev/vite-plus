@@ -1,5 +1,5 @@
 [package]
-name = "vite_install"
+name = "vite_js_runtime"
 version = "0.0.0"
 authors.workspace = true
 edition.workspace = true
@@ -8,41 +8,33 @@ publish = false
 rust-version.workspace = true
 
 [dependencies]
+async-trait = { workspace = true }
 backon = { workspace = true }
-crossterm = { workspace = true }
 flate2 = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
-indoc = { workspace = true }
-pathdiff = { workspace = true }
-semver = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-# use `preserve_order` feature to preserve the order of the fields in `package.json`
+node-semver = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true, features = ["preserve_order"] }
-sha1 = { workspace = true }
 sha2 = { workspace = true }
 tar = { workspace = true }
 tempfile = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
-vite_command = { workspace = true }
-vite_error = { workspace = true }
-vite_glob = { workspace = true }
 vite_path = { workspace = true }
 vite_shared = { workspace = true }
 vite_str = { workspace = true }
-vite_workspace = { workspace = true }
+zip = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-reqwest = { workspace = true, features = ["stream", "native-tls-vendored", "json"] }
+reqwest = { workspace = true, features = ["stream", "native-tls-vendored"] }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-reqwest = { workspace = true, features = ["stream", "rustls-tls", "json"] }
+reqwest = { workspace = true, features = ["stream", "rustls-tls"] }
 
 [dev-dependencies]
-httpmock = { workspace = true }
 tempfile = { workspace = true }
-test-log = { workspace = true }
 
 [lints]
 workspace = true

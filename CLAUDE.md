@@ -68,6 +68,16 @@ vite dev                             # runs dev script from package.json
   - Only convert to std paths when interfacing with std library functions, and this should be implicit in most cases thanks to `AsRef<Path>` implementations
   - Add necessary methods in `vite_path` instead of falling back to std path types
 
+- **Converting from std paths** (e.g., `TempDir::path()`):
+
+  ```rust
+  let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+  ```
+
+- **Function signatures**: Prefer `&AbsolutePath` over `&std::path::Path`
+
+- **Passing to std functions**: `AbsolutePath` implements `AsRef<Path>`, use `.as_path()` when explicit `&Path` is required
+
 ## Git Workflow
 
 - Run `vite fmt` before committing to format code
