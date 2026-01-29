@@ -115,7 +115,7 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     let bin_dir_relative_path = provider.bin_dir_relative_path(platform);
 
     // Cache path: $CACHE_DIR/vite-plus/js_runtime/{runtime}/{version}/
-    let install_dir = cache_dir.join(vite_str::format!("{}/{version}", provider.name()));
+    let install_dir = cache_dir.join(provider.name()).join(version);
 
     // Check if already cached
     let binary_path = install_dir.join(&binary_relative_path);
@@ -446,6 +446,41 @@ mod tests {
         assert_eq!(JsRuntimeType::Node.to_string(), "node");
     }
 
+    /// Test that install_dir path is constructed correctly without embedded forward slashes.
+    /// This ensures Windows compatibility by using separate join() calls.
+    #[test]
+    fn test_install_dir_path_construction() {
+        let cache_dir = AbsolutePathBuf::new(std::path::PathBuf::from(if cfg!(windows) {
+            "C:\\Users\\test\\.cache\\vite-plus\\js_runtime"
+        } else {
+            "/home/test/.cache/vite-plus/js_runtime"
+        }))
+        .unwrap();
+
+        let provider_name = "node";
+        let version = "20.18.0";
+
+        // This is how install_dir is constructed in download_runtime_with_provider
+        let install_dir = cache_dir.join(provider_name).join(version);
+
+        // The path should use native separators, not embedded forward slashes
+        let path_str = install_dir.as_path().to_string_lossy();
+        if cfg!(windows) {
+            // On Windows, we should have backslashes, not forward slashes
+            assert!(
+                !path_str.contains("node/"),
+                "Path should not contain 'node/' on Windows: {path_str}"
+            );
+            assert!(
+                path_str.contains("node\\"),
+                "Path should contain 'node\\' on Windows: {path_str}"
+            );
+        } else {
+            // On Unix, forward slashes are expected
+            assert!(path_str.contains("node/"), "Path should contain 'node/' on Unix: {path_str}");
+        }
+    }
+
     #[tokio::test]
     async fn test_download_runtime_for_project_with_dev_engines() {
         let temp_dir = TempDir::new().unwrap();
@@ -705,7 +740,7 @@ mod tests {
 
         // Clear any existing cache for this version
         let cache_dir = crate::cache::get_cache_dir().unwrap();
-        let install_dir = cache_dir.join(vite_str::format!("node/{version}"));
+        let install_dir = cache_dir.join("node").join(version);
         if tokio::fs::try_exists(&install_dir).await.unwrap_or(false) {
             tokio::fs::remove_dir_all(&install_dir).await.unwrap();
         }

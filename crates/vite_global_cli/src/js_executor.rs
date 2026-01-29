@@ -184,7 +184,8 @@ impl JsExecutor {
         let bin_prefix = runtime.get_bin_prefix();
 
         tracing::debug!(
-            "Executing CLI script: {:?} {} {:?} in {:?}",
+            "Executing CLI script: {:?} {:?} {:?} {:?} in {:?}",
+            binary_path,
             script_path,
             command,
             args,
