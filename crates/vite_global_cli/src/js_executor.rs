@@ -85,6 +85,7 @@ impl JsExecutor {
     ) -> Command {
         let mut cmd = Command::new(runtime_binary.as_path());
         if let Ok(bin_path) = Self::get_bin_path() {
+            tracing::debug!("Set VITE_PLUS_CLI_BIN to {:?}", bin_path);
             cmd.env("VITE_PLUS_CLI_BIN", bin_path.as_path());
         }
 
@@ -97,6 +98,7 @@ impl JsExecutor {
             let mut new_paths = vec![runtime_bin_path];
             new_paths.extend(paths);
             if let Ok(new_path) = std::env::join_paths(new_paths) {
+                tracing::debug!("Set PATH to {:?}", new_path);
                 cmd.env("PATH", new_path);
             }
         }

@@ -853,34 +853,7 @@ Options:
     );
 }
 
-pub fn init_tracing() {
-    use std::sync::OnceLock;
-
-    use tracing_subscriber::{
-        filter::{LevelFilter, Targets},
-        prelude::__tracing_subscriber_SubscriberExt,
-        util::SubscriberInitExt,
-    };
-
-    static TRACING: OnceLock<()> = OnceLock::new();
-    TRACING.get_or_init(|| {
-        tracing_subscriber::registry()
-            .with(
-                std::env::var("VITE_LOG")
-                    .map_or_else(
-                        |_| Targets::new(),
-                        |env_var| {
-                            use std::str::FromStr;
-                            Targets::from_str(&env_var).unwrap_or_default()
-                        },
-                    )
-                    // disable brush-parser tracing
-                    .with_targets([("tokenize", LevelFilter::OFF), ("parse", LevelFilter::OFF)]),
-            )
-            .with(tracing_subscriber::fmt::layer())
-            .init();
-    });
-}
+pub use vite_shared::init_tracing;
 
 #[cfg(test)]
 mod tests {

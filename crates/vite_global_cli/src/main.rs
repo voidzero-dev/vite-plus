@@ -14,14 +14,13 @@ mod js_executor;
 
 use std::process::ExitCode;
 
-use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 use vite_path::AbsolutePathBuf;
 
 use crate::cli::{parse_args, run_command};
 
 fn main() -> ExitCode {
     // Initialize tracing
-    tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
+    vite_shared::init_tracing();
 
     // Get current working directory
     let cwd = match std::env::current_dir() {
