@@ -60,7 +60,9 @@ impl JsExecutor {
         // JS scripts are at ../dist relative to bin/
         // e.g., packages/global/bin/vp -> packages/global/dist/
         let scripts_dir = exe_dir.join("..").join("dist");
-        let scripts_dir = scripts_dir.canonicalize().map_err(|_| Error::JsScriptsDirNotFound)?;
+        // Use dunce::canonicalize to avoid \\?\ prefix on Windows
+        let scripts_dir =
+            dunce::canonicalize(&scripts_dir).map_err(|_| Error::JsScriptsDirNotFound)?;
 
         AbsolutePathBuf::new(scripts_dir).ok_or(Error::JsScriptsDirNotFound)
     }
@@ -259,5 +261,54 @@ mod tests {
 
         let executor = JsExecutor::new(Some(scripts_dir.clone()));
         assert_eq!(executor.get_scripts_dir().unwrap(), scripts_dir);
+    }
+
+    #[test]
+    fn test_create_js_command_uses_direct_binary() {
+        use std::ffi::OsStr;
+
+        let (runtime_binary, runtime_bin_prefix, expected_program) = if cfg!(windows) {
+            (
+                AbsolutePathBuf::new("C:\\node\\node.exe".into()).unwrap(),
+                AbsolutePathBuf::new("C:\\node".into()).unwrap(),
+                "C:\\node\\node.exe",
+            )
+        } else {
+            (
+                AbsolutePathBuf::new("/usr/local/bin/node".into()).unwrap(),
+                AbsolutePathBuf::new("/usr/local/bin".into()).unwrap(),
+                "/usr/local/bin/node",
+            )
+        };
+
+        let cmd = JsExecutor::create_js_command(&runtime_binary, &runtime_bin_prefix);
+
+        // The command should use the node binary directly
+        assert_eq!(cmd.as_std().get_program(), OsStr::new(expected_program));
+    }
+
+    #[tokio::test]
+    async fn test_execute_cli_script_prints_node_version() {
+        use std::io::Write;
+
+        use tempfile::TempDir;
+
+        // Create a temporary directory for the scripts
+        let temp_dir = TempDir::new().unwrap();
+        let scripts_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create a simple JS script that prints process.version
+        let script_path = temp_dir.path().join("test-version.js");
+        let mut file = std::fs::File::create(&script_path).unwrap();
+        writeln!(file, "console.log(process.version);").unwrap();
+
+        // Create executor with the temp scripts directory
+        let mut executor = JsExecutor::new(Some(scripts_dir.clone()));
+
+        // Execute the script
+        let status =
+            executor.execute_cli_script("test-version.js", "", &[], &scripts_dir).await.unwrap();
+
+        assert!(status.success(), "Script should execute successfully");
     }
 }
