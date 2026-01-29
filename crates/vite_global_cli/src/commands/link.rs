@@ -3,6 +3,7 @@ use std::process::ExitStatus;
 use vite_install::{commands::link::LinkCommandOptions, package_manager::PackageManager};
 use vite_path::AbsolutePathBuf;
 
+use super::prepend_js_runtime_to_path_env;
 use crate::error::Error;
 
 /// Link command for local package development.
@@ -23,6 +24,8 @@ impl LinkCommand {
         package: Option<&str>,
         pass_through_args: Option<&[String]>,
     ) -> Result<ExitStatus, Error> {
+        prepend_js_runtime_to_path_env(&self.cwd).await?;
+
         // Detect package manager
         let package_manager = PackageManager::builder(&self.cwd).build_with_default().await?;
 

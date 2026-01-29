@@ -1,6 +1,7 @@
 {
   "env": {
-    "VITE_DISABLE_AUTO_INSTALL": "1"
+    "VITE_DISABLE_AUTO_INSTALL": "1",
+    "NODE_OPTIONS": "--no-deprecation"
   },
   "commands": [
     "vp install # should install packages first",

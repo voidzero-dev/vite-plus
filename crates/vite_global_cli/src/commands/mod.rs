@@ -23,6 +23,48 @@
 //! Category C - Local CLI Delegation:
 //! - `delegate`: Local CLI delegation
 
+use vite_path::AbsolutePath;
+
+use crate::{error::Error, js_executor::JsExecutor};
+
+/// Ensure the JS runtime is downloaded and prepend its bin directory to PATH.
+/// This should be called before executing any package manager command.
+///
+/// If `project_path` contains a package.json, uses the project's runtime
+/// (based on devEngines.runtime). Otherwise, falls back to the CLI's runtime.
+pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Result<(), Error> {
+    let mut executor = JsExecutor::new(None);
+
+    // Use project runtime if package.json exists, otherwise use CLI runtime
+    let package_json_path = project_path.join("package.json");
+    let runtime = if package_json_path.as_path().exists() {
+        executor.ensure_project_runtime(project_path).await?
+    } else {
+        executor.ensure_cli_runtime().await?
+    };
+
+    let node_bin_path = runtime.get_bin_prefix().as_path().to_path_buf();
+
+    // Check if node bin path already exists in PATH to avoid duplicates
+    let current_path = std::env::var_os("PATH").unwrap_or_default();
+    let paths: Vec<_> = std::env::split_paths(&current_path).collect();
+
+    if paths.iter().any(|p| p == &node_bin_path) {
+        return Ok(());
+    }
+
+    // Prepend node bin to PATH
+    let mut new_paths = vec![node_bin_path];
+    new_paths.extend(paths);
+    let new_path = std::env::join_paths(new_paths).expect("Failed to join paths");
+    // SAFETY: We're modifying PATH at the start of command execution before any
+    // parallel operations. This is safe because package manager commands run
+    // sequentially and child processes inherit the modified environment.
+    unsafe { std::env::set_var("PATH", new_path) };
+
+    Ok(())
+}
+
 // Category A: Package manager commands
 pub mod add;
 pub mod dedupe;

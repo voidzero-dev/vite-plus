@@ -1,7 +1,8 @@
 {
   "ignoredPlatforms": ["win32"],
   "env": {
-    "VITE_DISABLE_AUTO_INSTALL": "1"
+    "VITE_DISABLE_AUTO_INSTALL": "1",
+    "NODE_OPTIONS": "--no-deprecation"
   },
   "commands": [
     "vp add --help # should show help",

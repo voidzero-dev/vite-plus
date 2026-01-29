@@ -19,7 +19,8 @@ async function migrateProject(project: string) {
   const directory = 'directory' in repoConfig ? repoConfig.directory : undefined;
   const cwd = directory ? join(repoRoot, directory) : repoRoot;
   // run vp migrate
-  execSync('vp migrate --no-agent', {
+  const cli = process.env.VITE_PLUS_CLI_BIN ?? (process.env.CI ? 'vp' : 'vp-dev');
+  execSync(`${cli} migrate --no-agent --no-interactive`, {
     cwd,
     stdio: 'inherit',
     env: {

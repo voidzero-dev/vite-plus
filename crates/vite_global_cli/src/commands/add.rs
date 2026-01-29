@@ -6,6 +6,7 @@ use vite_install::{
 };
 use vite_path::AbsolutePathBuf;
 
+use super::prepend_js_runtime_to_path_env;
 use crate::error::Error;
 
 /// Add command for adding packages to dependencies.
@@ -34,6 +35,8 @@ impl AddCommand {
         allow_build: Option<&str>,
         pass_through_args: Option<&[String]>,
     ) -> Result<ExitStatus, Error> {
+        prepend_js_runtime_to_path_env(&self.cwd).await?;
+
         let add_command_options = AddCommandOptions {
             packages,
             save_dependency_type,

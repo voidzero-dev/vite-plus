@@ -1,8 +1,7 @@
 //! JavaScript execution via managed Node.js runtime.
 //!
 //! This module handles downloading and caching Node.js via `vite_js_runtime`,
-//! and executing JavaScript scripts or package manager commands using the
-//! managed runtime.
+//! and executing JavaScript scripts using the managed runtime.
 
 use std::process::ExitStatus;
 
@@ -75,14 +74,33 @@ impl JsExecutor {
         AbsolutePathBuf::new(exe_path).ok_or(Error::CliBinaryNotFound)
     }
 
-    /// Create a Node.js command with common environment variables set.
+    /// Create a JS runtime command with common environment variables set.
     ///
-    /// Sets `VITE_PLUS_CLI_BIN` so JS scripts can invoke vp commands.
-    fn create_node_command(node_binary: &AbsolutePath) -> Command {
-        let mut cmd = Command::new(node_binary.as_path());
+    /// Sets up:
+    /// - `VITE_PLUS_CLI_BIN`: So JS scripts can invoke vp commands
+    /// - `PATH`: Prepends the runtime bin directory so child processes can find the JS runtime
+    fn create_js_command(
+        runtime_binary: &AbsolutePath,
+        runtime_bin_prefix: &AbsolutePath,
+    ) -> Command {
+        let mut cmd = Command::new(runtime_binary.as_path());
         if let Ok(bin_path) = Self::get_bin_path() {
             cmd.env("VITE_PLUS_CLI_BIN", bin_path.as_path());
         }
+
+        // Prepend runtime bin to PATH so child processes can find the JS runtime
+        let runtime_bin_path = runtime_bin_prefix.as_path().to_path_buf();
+        let current_path = std::env::var_os("PATH").unwrap_or_default();
+        let paths: Vec<_> = std::env::split_paths(&current_path).collect();
+
+        if !paths.iter().any(|p| p == &runtime_bin_path) {
+            let mut new_paths = vec![runtime_bin_path];
+            new_paths.extend(paths);
+            if let Ok(new_path) = std::env::join_paths(new_paths) {
+                cmd.env("PATH", new_path);
+            }
+        }
+
         cmd
     }
 
@@ -161,6 +179,7 @@ impl JsExecutor {
 
         let runtime = self.ensure_cli_runtime().await?;
         let binary_path = runtime.get_binary_path();
+        let bin_prefix = runtime.get_bin_prefix();
 
         tracing::debug!(
             "Executing CLI script: {:?} {} {:?} in {:?}",
@@ -170,31 +189,8 @@ impl JsExecutor {
             cwd
         );
 
-        let mut cmd = Self::create_node_command(&binary_path);
+        let mut cmd = Self::create_js_command(&binary_path, &bin_prefix);
         cmd.arg(script_path.as_path()).arg(command).args(args).current_dir(cwd.as_path());
-
-        let status = cmd.status().await?;
-        Ok(status)
-    }
-
-    /// Execute a package manager command (Category A commands).
-    ///
-    /// # Arguments
-    /// * `pm_binary` - Path to the package manager binary
-    /// * `args` - Arguments for the package manager
-    #[allow(dead_code)] // Will be used when PM commands use managed Node.js directly
-    pub async fn execute_pm_command(
-        &mut self,
-        pm_binary: &AbsolutePath,
-        args: &[String],
-    ) -> Result<ExitStatus, Error> {
-        let runtime = self.ensure_cli_runtime().await?;
-        let node_binary = runtime.get_binary_path();
-
-        tracing::debug!("Executing PM command: {:?} {:?}", pm_binary, args);
-
-        let mut cmd = Self::create_node_command(&node_binary);
-        cmd.arg(pm_binary.as_path()).args(args);
 
         let status = cmd.status().await?;
         Ok(status)
@@ -220,6 +216,7 @@ impl JsExecutor {
         // Use project's runtime based on its devEngines.runtime configuration
         let runtime = self.ensure_project_runtime(project_path).await?;
         let node_binary = runtime.get_binary_path();
+        let bin_prefix = runtime.get_bin_prefix();
 
         // Get the JS entry point (dist/index.js)
         let scripts_dir = self.get_scripts_dir()?;
@@ -229,7 +226,7 @@ impl JsExecutor {
 
         // Execute dist/index.js with the command and args
         // The JS layer handles detecting/installing local vite-plus
-        let mut cmd = Self::create_node_command(&node_binary);
+        let mut cmd = Self::create_js_command(&node_binary, &bin_prefix);
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
 
         let status = cmd.status().await?;

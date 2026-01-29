@@ -1,0 +1,8 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp dlx -s print-current-version # should print Node.js version 22.11.0 from devEngines.runtime"
+  ]
+}

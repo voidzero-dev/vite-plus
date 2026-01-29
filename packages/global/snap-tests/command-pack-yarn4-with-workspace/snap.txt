@@ -10,6 +10,7 @@
 ➤ YN0000: · Done with warnings in <variable>ms <variable>ms
 
 > vp pm pack # should pack current workspace root
+➤ YN0000: .node-version
 ➤ YN0000: output.log
 ➤ YN0000: package.json
 ➤ YN0000: snap.txt
@@ -18,6 +19,7 @@
 ➤ YN0000: Done in <variable>ms <variable>ms
 
 > vp pm pack --recursive # should pack all packages in workspace (uses workspaces foreach --all pack)
+➤ YN0000: .node-version
 ➤ YN0000: output.log
 ➤ YN0000: package.json
 ➤ YN0000: snap.txt
@@ -48,6 +50,7 @@ Done in <variable>ms <variable>ms
 Done in <variable>ms <variable>ms
 
 > vp pm pack --out ./dist/package.tgz # should pack with output file
+➤ YN0000: .node-version
 ➤ YN0000: output.log
 ➤ YN0000: package.json
 ➤ YN0000: snap.txt
@@ -57,6 +60,7 @@ Done in <variable>ms <variable>ms
 
 > vp pm pack --json # should pack with json output
 {"base":"<cwd>"}
+{"location":".node-version"}
 {"location":"dist/package.tgz"}
 {"location":"output.log"}
 {"location":"package.json"}
