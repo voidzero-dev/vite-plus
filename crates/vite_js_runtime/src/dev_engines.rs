@@ -1,13 +1,9 @@
-//! Package.json devEngines.runtime parsing and updating.
+//! Package.json devEngines.runtime and engines.node parsing.
 //!
-//! This module provides structs for parsing the `devEngines.runtime` field from package.json,
-//! which can be either a single runtime object or an array of runtime objects.
-//! It also provides functionality to update the runtime version in package.json.
+//! This module provides structs for parsing the `devEngines.runtime` and `engines.node`
+//! fields from package.json. It also handles `.node-version` file reading and writing.
 
-use std::io::Write;
-
-use serde::{Deserialize, Serialize};
-use serde_json::ser::{Formatter, Serializer};
+use serde::Deserialize;
 use vite_path::AbsolutePath;
 use vite_str::Str;
 
@@ -60,266 +56,80 @@ pub struct DevEngines {
     pub runtime: Option<RuntimeEngineConfig>,
 }
 
-/// Partial package.json structure for reading devEngines.
+/// The engines section of package.json.
+#[derive(Deserialize, Default, Debug)]
+pub struct Engines {
+    /// Node.js version requirement (e.g., ">=20.0.0")
+    #[serde(default)]
+    pub node: Option<Str>,
+}
+
+/// Partial package.json structure for reading devEngines and engines.
 #[derive(Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PackageJson {
     /// The devEngines configuration
     #[serde(default)]
     pub dev_engines: Option<DevEngines>,
+    /// The engines configuration
+    #[serde(default)]
+    pub engines: Option<Engines>,
 }
 
-/// Detect indentation from JSON content (spaces or tabs, and count).
-/// Returns (indent_char, indent_size) where indent_char is ' ' or '\t'.
-fn detect_indentation(content: &str) -> (char, usize) {
-    for line in content.lines().skip(1) {
-        // Skip first line (usually just '{')
-        let trimmed = line.trim_start();
-        if !trimmed.is_empty() && !trimmed.starts_with('}') && !trimmed.starts_with(']') {
-            let indent_chars: String = line.chars().take_while(|c| c.is_whitespace()).collect();
-            if !indent_chars.is_empty() {
-                let first_char = indent_chars.chars().next().unwrap();
-                return (first_char, indent_chars.len());
-            }
-        }
-    }
-    (' ', 2) // Default: 2 spaces
-}
-
-/// Custom JSON formatter that preserves the original indentation style.
-struct CustomIndentFormatter {
-    indent: Vec<u8>,
-    current_indent: usize,
-}
-
-impl CustomIndentFormatter {
-    fn new(indent_char: char, indent_size: usize) -> Self {
-        let indent = std::iter::repeat(indent_char as u8).take(indent_size).collect();
-        Self { indent, current_indent: 0 }
-    }
-}
-
-impl Formatter for CustomIndentFormatter {
-    fn begin_array<W: ?Sized + Write>(&mut self, writer: &mut W) -> std::io::Result<()> {
-        self.current_indent += 1;
-        writer.write_all(b"[")
-    }
-
-    fn end_array<W: ?Sized + Write>(&mut self, writer: &mut W) -> std::io::Result<()> {
-        self.current_indent -= 1;
-        writer.write_all(b"\n")?;
-        write_indent(writer, &self.indent, self.current_indent)?;
-        writer.write_all(b"]")
-    }
-
-    fn begin_array_value<W: ?Sized + Write>(
-        &mut self,
-        writer: &mut W,
-        first: bool,
-    ) -> std::io::Result<()> {
-        if first {
-            writer.write_all(b"\n")?;
-        } else {
-            writer.write_all(b",\n")?;
-        }
-        write_indent(writer, &self.indent, self.current_indent)
-    }
-
-    fn end_array_value<W: ?Sized + Write>(&mut self, _writer: &mut W) -> std::io::Result<()> {
-        Ok(())
-    }
-
-    fn begin_object<W: ?Sized + Write>(&mut self, writer: &mut W) -> std::io::Result<()> {
-        self.current_indent += 1;
-        writer.write_all(b"{")
-    }
-
-    fn end_object<W: ?Sized + Write>(&mut self, writer: &mut W) -> std::io::Result<()> {
-        self.current_indent -= 1;
-        writer.write_all(b"\n")?;
-        write_indent(writer, &self.indent, self.current_indent)?;
-        writer.write_all(b"}")
-    }
-
-    fn begin_object_key<W: ?Sized + Write>(
-        &mut self,
-        writer: &mut W,
-        first: bool,
-    ) -> std::io::Result<()> {
-        if first {
-            writer.write_all(b"\n")?;
-        } else {
-            writer.write_all(b",\n")?;
-        }
-        write_indent(writer, &self.indent, self.current_indent)
-    }
-
-    fn end_object_key<W: ?Sized + Write>(&mut self, _writer: &mut W) -> std::io::Result<()> {
-        Ok(())
-    }
-
-    fn begin_object_value<W: ?Sized + Write>(&mut self, writer: &mut W) -> std::io::Result<()> {
-        writer.write_all(b": ")
-    }
-
-    fn end_object_value<W: ?Sized + Write>(&mut self, _writer: &mut W) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
-fn write_indent<W: ?Sized + Write>(
-    writer: &mut W,
-    indent: &[u8],
-    count: usize,
-) -> std::io::Result<()> {
-    for _ in 0..count {
-        writer.write_all(indent)?;
-    }
-    Ok(())
-}
-
-/// Serialize JSON value with custom indentation.
-fn serialize_with_indent(
-    value: &serde_json::Value,
-    indent_char: char,
-    indent_size: usize,
-) -> String {
-    let mut buf = Vec::new();
-    let formatter = CustomIndentFormatter::new(indent_char, indent_size);
-    let mut serializer = Serializer::with_formatter(&mut buf, formatter);
-    value.serialize(&mut serializer).unwrap();
-    String::from_utf8(buf).unwrap()
-}
-
-/// Update or create the devEngines.runtime field with the given runtime name and version.
-fn update_or_create_runtime(
-    package_json: &mut serde_json::Value,
-    runtime_name: &str,
-    version: &str,
-) {
-    let obj = package_json.as_object_mut().unwrap();
-
-    // Ensure devEngines exists
-    if !obj.contains_key("devEngines") {
-        obj.insert("devEngines".to_string(), serde_json::json!({}));
-    }
-
-    let dev_engines = obj.get_mut("devEngines").unwrap().as_object_mut().unwrap();
-
-    // Check if runtime exists
-    if let Some(runtime) = dev_engines.get_mut("runtime") {
-        match runtime {
-            serde_json::Value::Array(arr) => {
-                // Find and update the matching runtime entry
-                for entry in arr.iter_mut() {
-                    if let Some(name) = entry.get("name").and_then(|n| n.as_str()) {
-                        if name == runtime_name {
-                            entry.as_object_mut().unwrap().insert(
-                                "version".to_string(),
-                                serde_json::Value::String(version.to_string()),
-                            );
-                            return;
-                        }
-                    }
-                }
-                // If not found in array, add a new entry
-                arr.push(serde_json::json!({
-                    "name": runtime_name,
-                    "version": version
-                }));
-            }
-            serde_json::Value::Object(obj) => {
-                // Single object format - check if name matches
-                let name_matches =
-                    obj.get("name").and_then(|n| n.as_str()).is_some_and(|n| n == runtime_name);
-                let name_missing = !obj.contains_key("name");
-
-                if name_matches || name_missing {
-                    // Name matches or no name set - update in place
-                    obj.insert(
-                        "version".to_string(),
-                        serde_json::Value::String(version.to_string()),
-                    );
-                    if name_missing {
-                        obj.insert(
-                            "name".to_string(),
-                            serde_json::Value::String(runtime_name.to_string()),
-                        );
-                    }
-                } else {
-                    // Different runtime - convert to array format
-                    let existing = runtime.clone();
-                    *runtime = serde_json::json!([
-                        existing,
-                        {
-                            "name": runtime_name,
-                            "version": version
-                        }
-                    ]);
-                }
-            }
-            _ => {
-                // Invalid format, replace with proper object
-                *runtime = serde_json::json!({
-                    "name": runtime_name,
-                    "version": version
-                });
-            }
-        }
-    } else {
-        // No runtime field, create it as a single object
-        dev_engines.insert(
-            "runtime".to_string(),
-            serde_json::json!({
-                "name": runtime_name,
-                "version": version
-            }),
-        );
-    }
-}
-
-/// Update devEngines.runtime in package.json with the resolved version.
+/// Parse the content of a `.node-version` file.
 ///
-/// This function reads the package.json, detects the original indentation style,
-/// updates or creates the devEngines.runtime field, and writes back with preserved formatting.
+/// # Supported Formats
+///
+/// - Three-part version: `20.5.0`
+/// - With `v` prefix: `v20.5.0`
+/// - Two-part version: `20.5` (treated as `^20.5.0` for resolution)
+/// - Single-part version: `20` (treated as `^20.0.0` for resolution)
+///
+/// # Returns
+///
+/// The version string with any leading `v` prefix stripped.
+/// Returns `None` if the content is empty or contains only whitespace.
+#[must_use]
+pub fn parse_node_version_content(content: &str) -> Option<Str> {
+    let version = content.lines().next()?.trim();
+    if version.is_empty() {
+        return None;
+    }
+    // Strip optional 'v' prefix
+    let version = version.strip_prefix('v').unwrap_or(version);
+    Some(version.into())
+}
+
+/// Read and parse a `.node-version` file from the project root.
 ///
 /// # Arguments
-/// * `package_json_path` - Path to the package.json file
-/// * `runtime_name` - The runtime name (e.g., "node")
-/// * `version` - The resolved version string (e.g., "20.18.0")
+/// * `project_path` - The path to the project directory
+///
+/// # Returns
+/// The version string if the file exists and contains a valid version.
+pub async fn read_node_version_file(project_path: &AbsolutePath) -> Option<Str> {
+    let path = project_path.join(".node-version");
+    let content = tokio::fs::read_to_string(&path).await.ok()?;
+    parse_node_version_content(&content)
+}
+
+/// Write a version to the `.node-version` file.
+///
+/// Creates the file if it doesn't exist, overwrites if it does.
+/// Uses three-part version without `v` prefix and Unix line ending.
+///
+/// # Arguments
+/// * `project_path` - The path to the project directory
+/// * `version` - The version string (e.g., "22.13.1")
 ///
 /// # Errors
-/// Returns an error if the file cannot be read, parsed, or written.
-pub async fn update_runtime_version(
-    package_json_path: &AbsolutePath,
-    runtime_name: &str,
+/// Returns an error if the file cannot be written.
+pub async fn write_node_version_file(
+    project_path: &AbsolutePath,
     version: &str,
 ) -> Result<(), Error> {
-    // 1. Read original content
-    let content = tokio::fs::read_to_string(package_json_path).await?;
-
-    // 2. Detect original indentation
-    let (indent_char, indent_size) = detect_indentation(&content);
-
-    // 3. Parse JSON (preserve_order feature maintains key order)
-    let mut package_json: serde_json::Value = serde_json::from_str(&content)?;
-
-    // 4. Update devEngines.runtime with version
-    update_or_create_runtime(&mut package_json, runtime_name, version);
-
-    // 5. Serialize with original indentation
-    let mut new_content = serialize_with_indent(&package_json, indent_char, indent_size);
-
-    // 6. Preserve trailing newline if original had one
-    if content.ends_with('\n') && !new_content.ends_with('\n') {
-        new_content.push('\n');
-    }
-
-    // 7. Write back (only if changed)
-    if new_content != content {
-        tokio::fs::write(package_json_path, new_content).await?;
-    }
-
+    let path = project_path.join(".node-version");
+    tokio::fs::write(&path, format!("{version}\n")).await?;
     Ok(())
 }
 
@@ -423,315 +233,102 @@ mod tests {
     }
 
     #[test]
-    fn test_detect_indentation_2_spaces() {
-        let content = r#"{
-  "name": "test"
-}"#;
-        let (indent_char, indent_size) = detect_indentation(content);
-        assert_eq!(indent_char, ' ');
-        assert_eq!(indent_size, 2);
+    fn test_parse_node_version_content_three_part() {
+        assert_eq!(parse_node_version_content("20.5.0\n"), Some("20.5.0".into()));
+        assert_eq!(parse_node_version_content("20.5.0"), Some("20.5.0".into()));
+        assert_eq!(parse_node_version_content("22.13.1\n"), Some("22.13.1".into()));
     }
 
     #[test]
-    fn test_detect_indentation_4_spaces() {
-        let content = r#"{
-    "name": "test"
-}"#;
-        let (indent_char, indent_size) = detect_indentation(content);
-        assert_eq!(indent_char, ' ');
-        assert_eq!(indent_size, 4);
+    fn test_parse_node_version_content_with_v_prefix() {
+        assert_eq!(parse_node_version_content("v20.5.0\n"), Some("20.5.0".into()));
+        assert_eq!(parse_node_version_content("v20.5.0"), Some("20.5.0".into()));
+        assert_eq!(parse_node_version_content("v22.13.1\n"), Some("22.13.1".into()));
     }
 
     #[test]
-    fn test_detect_indentation_tabs() {
-        let content = "{\n\t\"name\": \"test\"\n}";
-        let (indent_char, indent_size) = detect_indentation(content);
-        assert_eq!(indent_char, '\t');
-        assert_eq!(indent_size, 1);
+    fn test_parse_node_version_content_two_part() {
+        assert_eq!(parse_node_version_content("20.5\n"), Some("20.5".into()));
+        assert_eq!(parse_node_version_content("v20.5\n"), Some("20.5".into()));
     }
 
     #[test]
-    fn test_detect_indentation_default() {
-        let content = r#"{"name": "test"}"#;
-        let (indent_char, indent_size) = detect_indentation(content);
-        // Default is 2 spaces
-        assert_eq!(indent_char, ' ');
-        assert_eq!(indent_size, 2);
+    fn test_parse_node_version_content_single_part() {
+        assert_eq!(parse_node_version_content("20\n"), Some("20".into()));
+        assert_eq!(parse_node_version_content("v20\n"), Some("20".into()));
     }
 
     #[test]
-    fn test_update_or_create_runtime_no_dev_engines() {
-        let mut json: serde_json::Value = serde_json::json!({
-            "name": "test-project"
-        });
-
-        update_or_create_runtime(&mut json, "node", "20.18.0");
-
-        assert_eq!(json["devEngines"]["runtime"]["name"].as_str().unwrap(), "node");
-        assert_eq!(json["devEngines"]["runtime"]["version"].as_str().unwrap(), "20.18.0");
+    fn test_parse_node_version_content_with_whitespace() {
+        assert_eq!(parse_node_version_content("  20.5.0  \n"), Some("20.5.0".into()));
+        assert_eq!(parse_node_version_content("\t20.5.0\t\n"), Some("20.5.0".into()));
     }
 
     #[test]
-    fn test_update_or_create_runtime_empty_dev_engines() {
-        let mut json: serde_json::Value = serde_json::json!({
-            "name": "test-project",
-            "devEngines": {}
-        });
-
-        update_or_create_runtime(&mut json, "node", "20.18.0");
-
-        assert_eq!(json["devEngines"]["runtime"]["name"].as_str().unwrap(), "node");
-        assert_eq!(json["devEngines"]["runtime"]["version"].as_str().unwrap(), "20.18.0");
-    }
-
-    #[test]
-    fn test_update_or_create_runtime_single_object_without_version() {
-        let mut json: serde_json::Value = serde_json::json!({
-            "name": "test-project",
-            "devEngines": {
-                "runtime": {
-                    "name": "node"
-                }
-            }
-        });
-
-        update_or_create_runtime(&mut json, "node", "20.18.0");
-
-        assert_eq!(json["devEngines"]["runtime"]["name"].as_str().unwrap(), "node");
-        assert_eq!(json["devEngines"]["runtime"]["version"].as_str().unwrap(), "20.18.0");
-    }
-
-    #[test]
-    fn test_update_or_create_runtime_array_format() {
-        let mut json: serde_json::Value = serde_json::json!({
-            "name": "test-project",
-            "devEngines": {
-                "runtime": [
-                    {"name": "deno", "version": "^2.0.0"},
-                    {"name": "node"}
-                ]
-            }
-        });
-
-        update_or_create_runtime(&mut json, "node", "20.18.0");
-
-        let runtimes = json["devEngines"]["runtime"].as_array().unwrap();
-        assert_eq!(runtimes.len(), 2);
-
-        // Node should be updated
-        let node = &runtimes[1];
-        assert_eq!(node["name"].as_str().unwrap(), "node");
-        assert_eq!(node["version"].as_str().unwrap(), "20.18.0");
-
-        // Deno should be unchanged
-        let deno = &runtimes[0];
-        assert_eq!(deno["name"].as_str().unwrap(), "deno");
-        assert_eq!(deno["version"].as_str().unwrap(), "^2.0.0");
-    }
-
-    #[test]
-    fn test_update_or_create_runtime_different_runtime_converts_to_array() {
-        // When updating with a different runtime name, should convert to array format
-        // to preserve both runtimes instead of corrupting the existing one
-        let mut json: serde_json::Value = serde_json::json!({
-            "name": "test-project",
-            "devEngines": {
-                "runtime": {
-                    "name": "deno",
-                    "version": "^2.0.0"
-                }
-            }
-        });
-
-        update_or_create_runtime(&mut json, "node", "20.18.0");
-
-        // Should be converted to array format
-        let runtimes = json["devEngines"]["runtime"].as_array().unwrap();
-        assert_eq!(runtimes.len(), 2);
-
-        // Deno should be preserved at index 0
-        let deno = &runtimes[0];
-        assert_eq!(deno["name"].as_str().unwrap(), "deno");
-        assert_eq!(deno["version"].as_str().unwrap(), "^2.0.0");
-
-        // Node should be added at index 1
-        let node = &runtimes[1];
-        assert_eq!(node["name"].as_str().unwrap(), "node");
-        assert_eq!(node["version"].as_str().unwrap(), "20.18.0");
-    }
-
-    #[test]
-    fn test_serialize_with_indent_2_spaces() {
-        let json: serde_json::Value = serde_json::json!({
-            "name": "test"
-        });
-
-        let output = serialize_with_indent(&json, ' ', 2);
-        let expected = r#"{
-  "name": "test"
-}"#;
-        assert_eq!(output, expected);
-    }
-
-    #[test]
-    fn test_serialize_with_indent_4_spaces() {
-        let json: serde_json::Value = serde_json::json!({
-            "name": "test"
-        });
-
-        let output = serialize_with_indent(&json, ' ', 4);
-        let expected = r#"{
-    "name": "test"
-}"#;
-        assert_eq!(output, expected);
-    }
-
-    #[test]
-    fn test_serialize_with_tabs() {
-        let json: serde_json::Value = serde_json::json!({
-            "name": "test"
-        });
-
-        let output = serialize_with_indent(&json, '\t', 1);
-        let expected = "{\n\t\"name\": \"test\"\n}";
-        assert_eq!(output, expected);
+    fn test_parse_node_version_content_empty() {
+        assert!(parse_node_version_content("").is_none());
+        assert!(parse_node_version_content("\n").is_none());
+        assert!(parse_node_version_content("   \n").is_none());
     }
 
     #[tokio::test]
-    async fn test_update_runtime_version_creates_dev_engines() {
+    async fn test_read_node_version_file() {
         use tempfile::TempDir;
         use vite_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_json_path = temp_path.join("package.json");
 
-        // Create package.json without devEngines
-        let original = r#"{
-  "name": "test-project"
-}
-"#;
-        tokio::fs::write(&package_json_path, original).await.unwrap();
+        // File doesn't exist
+        assert!(read_node_version_file(&temp_path).await.is_none());
 
-        update_runtime_version(&package_json_path, "node", "20.18.0").await.unwrap();
-
-        let content = tokio::fs::read_to_string(&package_json_path).await.unwrap();
-        let expected = r#"{
-  "name": "test-project",
-  "devEngines": {
-    "runtime": {
-      "name": "node",
-      "version": "20.18.0"
-    }
-  }
-}
-"#;
-        assert_eq!(content, expected);
+        // Create .node-version file
+        tokio::fs::write(temp_path.join(".node-version"), "22.13.1\n").await.unwrap();
+        assert_eq!(read_node_version_file(&temp_path).await, Some("22.13.1".into()));
     }
 
     #[tokio::test]
-    async fn test_update_runtime_version_preserves_4_space_indent() {
+    async fn test_write_node_version_file() {
         use tempfile::TempDir;
         use vite_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_json_path = temp_path.join("package.json");
 
-        // Create package.json with 4-space indentation
-        let original = r#"{
-    "name": "test-project",
-    "devEngines": {
-        "runtime": {
-            "name": "node"
-        }
-    }
-}
-"#;
-        tokio::fs::write(&package_json_path, original).await.unwrap();
+        write_node_version_file(&temp_path, "22.13.1").await.unwrap();
 
-        update_runtime_version(&package_json_path, "node", "20.18.0").await.unwrap();
+        let content = tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
+        assert_eq!(content, "22.13.1\n");
 
-        let content = tokio::fs::read_to_string(&package_json_path).await.unwrap();
-        let expected = r#"{
-    "name": "test-project",
-    "devEngines": {
-        "runtime": {
-            "name": "node",
-            "version": "20.18.0"
-        }
-    }
-}
-"#;
-        assert_eq!(content, expected);
+        // Verify it can be read back
+        assert_eq!(read_node_version_file(&temp_path).await, Some("22.13.1".into()));
     }
 
-    #[tokio::test]
-    async fn test_update_runtime_version_preserves_tab_indent() {
-        use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
-
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_json_path = temp_path.join("package.json");
-
-        // Create package.json with tab indentation
-        let original = "{\n\t\"name\": \"test-project\"\n}\n";
-        tokio::fs::write(&package_json_path, original).await.unwrap();
-
-        update_runtime_version(&package_json_path, "node", "20.18.0").await.unwrap();
-
-        let content = tokio::fs::read_to_string(&package_json_path).await.unwrap();
-        let expected = "{\n\t\"name\": \"test-project\",\n\t\"devEngines\": {\n\t\t\"runtime\": {\n\t\t\t\"name\": \"node\",\n\t\t\t\"version\": \"20.18.0\"\n\t\t}\n\t}\n}\n";
-        assert_eq!(content, expected);
+    #[test]
+    fn test_parse_engines_node() {
+        let json = r#"{"engines":{"node":">=20.0.0"}}"#;
+        let pkg: PackageJson = serde_json::from_str(json).unwrap();
+        assert_eq!(pkg.engines.unwrap().node, Some(">=20.0.0".into()));
     }
 
-    #[tokio::test]
-    async fn test_update_runtime_version_updates_array_format() {
-        use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
+    #[test]
+    fn test_parse_engines_node_empty() {
+        let json = r#"{"engines":{}}"#;
+        let pkg: PackageJson = serde_json::from_str(json).unwrap();
+        assert!(pkg.engines.unwrap().node.is_none());
+    }
 
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_json_path = temp_path.join("package.json");
-
-        // Create package.json with array runtime format
-        let original = r#"{
-  "name": "test-project",
-  "devEngines": {
-    "runtime": [
-      {
-        "name": "deno",
-        "version": "^2.0.0"
-      },
-      {
-        "name": "node"
-      }
-    ]
-  }
-}
-"#;
-        tokio::fs::write(&package_json_path, original).await.unwrap();
-
-        update_runtime_version(&package_json_path, "node", "20.18.0").await.unwrap();
-
-        let content = tokio::fs::read_to_string(&package_json_path).await.unwrap();
-        let expected = r#"{
-  "name": "test-project",
-  "devEngines": {
-    "runtime": [
-      {
-        "name": "deno",
-        "version": "^2.0.0"
-      },
-      {
-        "name": "node",
-        "version": "20.18.0"
-      }
-    ]
-  }
-}
-"#;
-        assert_eq!(content, expected);
+    #[test]
+    fn test_parse_both_engines_and_dev_engines() {
+        let json = r#"{
+            "engines": {"node": ">=20.0.0"},
+            "devEngines": {"runtime": {"name": "node", "version": "^24.4.0"}}
+        }"#;
+        let pkg: PackageJson = serde_json::from_str(json).unwrap();
+        assert_eq!(pkg.engines.unwrap().node, Some(">=20.0.0".into()));
+        let dev_engines = pkg.dev_engines.unwrap();
+        let runtime = dev_engines.runtime.unwrap();
+        let node = runtime.find_by_name("node").unwrap();
+        assert_eq!(node.version, "^24.4.0");
     }
 }

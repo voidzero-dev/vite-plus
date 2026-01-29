@@ -20,7 +20,7 @@ The PackageManager implementation in `vite_install` successfully handles automat
 
 ## Non-Goals (Initial Version)
 
-- ~~Configuration auto-detection (no reading from package.json, .nvmrc, etc.)~~ **Now supported via `devEngines.runtime`**
+- ~~Configuration auto-detection (no reading from package.json, .nvmrc, etc.)~~ **Now supported via `.node-version`, `engines.node`, and `devEngines.runtime`**
 - Managing multiple runtime versions simultaneously
 - Providing a version manager CLI (like nvm/fnm)
 - Supporting custom/unofficial Node.js builds
@@ -154,20 +154,13 @@ pub async fn download_runtime(
     version: &str,           // Exact version (e.g., "22.13.1")
 ) -> Result<JsRuntime, Error>;
 
-/// Download runtime based on project's devEngines.runtime configuration
-/// Reads package.json, resolves semver ranges, downloads the matching version
-/// If no version was specified, writes the resolved version back to package.json
+/// Download runtime based on project's version configuration
+/// Reads from .node-version, engines.node, or devEngines.runtime (in priority order)
+/// Resolves semver ranges, downloads the matching version
+/// Writes resolved version to .node-version for future use
 pub async fn download_runtime_for_project(
     project_path: &AbsolutePath,
 ) -> Result<JsRuntime, Error>;
-
-/// Update devEngines.runtime in package.json with the resolved version
-/// Preserves original formatting (indentation, key order, trailing newline)
-pub async fn update_runtime_version(
-    package_json_path: &AbsolutePath,
-    runtime_name: &str,
-    version: &str,
-) -> Result<(), Error>;
 
 impl JsRuntime {
     /// Get the path to the runtime binary (e.g., node, bun)
@@ -207,7 +200,7 @@ println!("Node.js installed at: {}", runtime.get_binary_path());
 println!("Version: {}", runtime.version()); // "22.13.1"
 ```
 
-**Project-based download (reads devEngines.runtime from package.json):**
+**Project-based download (reads from .node-version, engines.node, or devEngines.runtime):**
 
 ```rust
 use vite_js_runtime::download_runtime_for_project;
@@ -215,7 +208,8 @@ use vite_path::AbsolutePathBuf;
 
 let project_path = AbsolutePathBuf::new("/path/to/project".into()).unwrap();
 let runtime = download_runtime_for_project(&project_path).await?;
-// Version is resolved from devEngines.runtime or uses latest
+// Version is resolved from .node-version > engines.node > devEngines.runtime
+// Resolved version is saved to .node-version for future use
 ```
 
 ## Cache Directory Structure
@@ -269,11 +263,53 @@ Cache structure:
 | Windows | x64          | `win-x64`       |
 | Windows | ARM64        | `win-arm64`     |
 
-## Project Configuration (devEngines.runtime)
+## Version Source Priority
 
-The `download_runtime_for_project` function reads the `devEngines.runtime` field from the project's package.json. This follows the [npm devEngines RFC](https://github.com/npm/rfcs/blob/main/accepted/0048-devEngines.md).
+The `download_runtime_for_project` function reads Node.js version from multiple sources with the following priority:
 
-### Single Runtime
+| Priority    | Source               | File            | Example                               | Used By                       |
+| ----------- | -------------------- | --------------- | ------------------------------------- | ----------------------------- |
+| 1 (highest) | `.node-version`      | `.node-version` | `22.13.1`                             | fnm, nvm, Netlify, Cloudflare |
+| 2           | `engines.node`       | `package.json`  | `">=20.0.0"`                          | Vercel, npm                   |
+| 3 (lowest)  | `devEngines.runtime` | `package.json`  | `{"name":"node","version":"^24.4.0"}` | npm RFC                       |
+
+### `.node-version` File Format
+
+Reference: https://github.com/shadowspawn/node-version-usage
+
+**Supported Formats:**
+
+| Format              | Example   | Support Level                    |
+| ------------------- | --------- | -------------------------------- |
+| Three-part version  | `20.5.0`  | Universal                        |
+| With `v` prefix     | `v20.5.0` | Universal                        |
+| Two-part version    | `20.5`    | Supported (treated as `^20.5.0`) |
+| Single-part version | `20`      | Supported (treated as `^20.0.0`) |
+
+**Format Rules:**
+
+1. Single line with Unix line ending (`\n`)
+2. Trim whitespace from both ends
+3. Optional `v` prefix - normalized by stripping
+4. No comments - entire line is the version
+
+### `engines.node` Format
+
+Standard npm `engines` field in package.json:
+
+```json
+{
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
+```
+
+### `devEngines.runtime` Format
+
+Following the [npm devEngines RFC](https://github.com/npm/rfcs/blob/main/accepted/0048-devEngines.md):
+
+**Single Runtime:**
 
 ```json
 {
@@ -287,7 +323,7 @@ The `download_runtime_for_project` function reads the `devEngines.runtime` field
 }
 ```
 
-### Multiple Runtimes (Array)
+**Multiple Runtimes (Array):**
 
 ```json
 {
@@ -319,11 +355,12 @@ The version resolution is optimized to minimize network requests:
 | Exact (`20.18.0`)  | -           | **No**          | Use exact version directly |
 | Range (`^20.18.0`) | Match found | **No**          | Use cached version         |
 | Range (`^20.18.0`) | No match    | **Yes**         | Resolve from network       |
-| Empty/None         | -           | **Yes**         | Get latest LTS version     |
+| Empty/None         | Match found | **No**          | Use latest cached version  |
+| Empty/None         | No match    | **Yes**         | Get latest LTS version     |
 
 **Exact versions** (e.g., `20.18.0`, `v20.18.0`) are detected using `node_semver::Version::parse()` and used directly without network validation. The `v` prefix is normalized (stripped) since download URLs already add it.
 
-**Partial versions** like `20` or `20.18` are treated as ranges, not exact versions.
+**Partial versions** like `20` or `20.18` are treated as ranges by the `node-semver` crate.
 
 **Semver ranges** (e.g., `^24.4.0`) trigger version resolution:
 
@@ -334,59 +371,71 @@ The version resolution is optimized to minimize network requests:
 5. Use `node-semver` crate for npm-compatible range matching
 6. Return the highest version that satisfies the range
 
+### Mismatch Detection
+
+When the resolved version from the highest priority source does NOT satisfy constraints from lower priority sources, a warning is emitted.
+
+| .node-version | engines.node | devEngines | Resolved             | Warning?                         |
+| ------------- | ------------ | ---------- | -------------------- | -------------------------------- |
+| `22.13.1`     | `>=20.0.0`   | -          | `22.13.1`            | No (22.13.1 satisfies >=20)      |
+| `22.13.1`     | `>=24.0.0`   | -          | `22.13.1`            | **Yes** (22.13.1 < 24)           |
+| -             | `>=20.0.0`   | `^24.4.0`  | latest matching >=20 | No (if resolved >= 24)           |
+| `20.18.0`     | -            | `^24.4.0`  | `20.18.0`            | **Yes** (20 doesn't satisfy ^24) |
+
 ### Fallback Behavior
 
-- If no `devEngines.runtime` is configured, downloads the latest Node.js version
-- If `name` is not `"node"`, the runtime is skipped
-- If `version` is empty, downloads the latest Node.js version
+When no version source exists:
+
+1. Check local cache for installed Node.js versions
+2. Use the **latest installed version** (if any exist)
+3. If no cached versions exist, fetch and use latest LTS from network
+4. Write the used version to `.node-version`
+5. Print: `Using Node {version} - saved version to .node-version`
+
+This optimizes for:
+
+- Avoiding unnecessary network requests
+- Using what the user already has installed
+- Establishing `.node-version` as the version source going forward
 
 ### Version Write-Back
 
-When `download_runtime_for_project` resolves a version (i.e., no version was specified), it writes the resolved version back to `package.json`. This ensures subsequent executions can skip version resolution and use the cached exact version directly.
+When `download_runtime_for_project` resolves a version, it writes the resolved version to `.node-version` (not `package.json`). This ensures subsequent executions can skip version resolution and use the cached exact version directly.
 
 **Write-back occurs when:**
 
-- `devEngines.runtime` doesn't exist (creates the entire structure)
-- `devEngines.runtime` exists but has no `version` field
-- `devEngines.runtime` is an array and the matching entry has no `version` field
+| Read From                       | Write To               | Message                                                 |
+| ------------------------------- | ---------------------- | ------------------------------------------------------- |
+| `.node-version` (exact)         | No write               | -                                                       |
+| `.node-version` (range/partial) | Update `.node-version` | -                                                       |
+| `engines.node`                  | Create `.node-version` | "Using Node {version} - saved version to .node-version" |
+| `devEngines.runtime`            | Create `.node-version` | "Using Node {version} - saved version to .node-version" |
+| No source                       | Create `.node-version` | "Using Node {version} - saved version to .node-version" |
 
-**Write-back does NOT occur when:**
+**Key behaviors:**
 
-- A version range is already specified (e.g., `^20.18.0`)
-- An exact version is already specified (e.g., `20.18.0`)
+1. Always write to `.node-version` (recommended single source of truth)
+2. Use three-part version without `v` prefix with Unix line ending
+3. Print informational message when saving version
 
-**Example: Before download (no version specified)**
+**Example: Before download (no version source)**
 
-```json
-{
-  "name": "my-project",
-  "devEngines": {
-    "runtime": {
-      "name": "node"
-    }
-  }
-}
+Project structure:
+
+```
+my-project/
+└── package.json
 ```
 
-**After download (version written back)**
+**After download (.node-version created)**
 
-```json
-{
-  "name": "my-project",
-  "devEngines": {
-    "runtime": {
-      "name": "node",
-      "version": "24.5.0"
-    }
-  }
-}
+Project structure:
+
 ```
-
-**Formatting preservation:**
-
-- Original indentation style is preserved (2 spaces, 4 spaces, or tabs)
-- Key order is preserved using `serde_json` with `preserve_order` feature
-- Trailing newline is preserved if present in original
+my-project/
+├── .node-version   # Contains: 24.5.0
+└── package.json
+```
 
 ## Download Sources
 
@@ -657,13 +706,20 @@ pub enum Error {
 9. ✅ Support semver ranges (^, ~, etc.) with version resolution
 10. ✅ Version index caching with 1-hour TTL
 11. ✅ Support both single runtime and array of runtimes in devEngines
-12. ✅ Write resolved version back to package.json (with formatting preservation)
+12. ✅ Write resolved version to `.node-version` file
 13. ✅ Optimized version resolution (skip network for exact versions, check local cache for ranges)
+14. ✅ Multi-source version reading with priority: `.node-version` > `engines.node` > `devEngines.runtime`
+15. ✅ Support `.node-version` file format (with/without v prefix, partial versions)
+16. ✅ Support `engines.node` from package.json
+17. ✅ Warn when resolved version conflicts with lower-priority source constraints
+18. ✅ Use latest cached version when no source specified (avoid network request)
 
 ## References
 
 - [Node.js Releases](https://nodejs.org/en/download/releases/)
 - [Node.js Distribution Index](https://nodejs.org/dist/index.json)
+- [.node-version file usage](https://github.com/shadowspawn/node-version-usage)
+- [npm devEngines RFC](https://github.com/npm/rfcs/blob/main/accepted/0048-devEngines.md)
 - [Corepack (Node.js Package Manager Manager)](https://nodejs.org/api/corepack.html)
 - [fnm (Fast Node Manager)](https://github.com/Schniz/fnm)
 - [volta (JavaScript Tool Manager)](https://volta.sh/)
