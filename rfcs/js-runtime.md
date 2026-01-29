@@ -346,6 +346,24 @@ Following the [npm devEngines RFC](https://github.com/npm/rfcs/blob/main/accepte
 
 **Note:** Currently only the `"node"` runtime is supported. Other runtimes are ignored.
 
+### Version Validation
+
+Before using a version string from any source, it is normalized and validated:
+
+1. **Trim whitespace**: Leading and trailing whitespace is removed
+2. **Validate as semver**: The version must be either:
+   - An exact version (e.g., `20.18.0`, `v20.18.0`)
+   - A valid semver range (e.g., `^20.0.0`, `>=18 <21`, `20.x`, `*`)
+3. **Invalid versions are ignored**: If validation fails, a warning is printed and the source is skipped
+
+**Example warning:**
+
+```
+warning: invalid version 'latest' in .node-version, ignoring
+```
+
+This allows fallthrough to lower-priority sources when a higher-priority source contains an invalid version.
+
 ### Version Resolution
 
 The version resolution is optimized to minimize network requests:
@@ -400,21 +418,20 @@ This optimizes for:
 
 ### Version Write-Back
 
-When `download_runtime_for_project` resolves a version, it writes the resolved version to `.node-version` (not `package.json`). This ensures subsequent executions can skip version resolution and use the cached exact version directly.
+When `download_runtime_for_project` resolves a version and **no version source exists**, it writes the resolved version to `.node-version`. This establishes a version source for future use.
 
-**Write-back occurs when:**
+**Write-back only occurs when no version source exists:**
 
-| Read From                       | Write To               | Message                                                 |
-| ------------------------------- | ---------------------- | ------------------------------------------------------- |
-| `.node-version` (exact)         | No write               | -                                                       |
-| `.node-version` (range/partial) | Update `.node-version` | -                                                       |
-| `engines.node`                  | Create `.node-version` | "Using Node {version} - saved version to .node-version" |
-| `devEngines.runtime`            | Create `.node-version` | "Using Node {version} - saved version to .node-version" |
-| No source                       | Create `.node-version` | "Using Node {version} - saved version to .node-version" |
+| Read From            | Write To               | Message                                                 |
+| -------------------- | ---------------------- | ------------------------------------------------------- |
+| `.node-version`      | No write               | -                                                       |
+| `engines.node`       | No write               | -                                                       |
+| `devEngines.runtime` | No write               | -                                                       |
+| No source            | Create `.node-version` | "Using Node {version} - saved version to .node-version" |
 
 **Key behaviors:**
 
-1. Always write to `.node-version` (recommended single source of truth)
+1. Only write when no version source exists (respects user's explicit version requirements)
 2. Use three-part version without `v` prefix with Unix line ending
 3. Print informational message when saving version
 
@@ -713,6 +730,7 @@ pub enum Error {
 16. ✅ Support `engines.node` from package.json
 17. ✅ Warn when resolved version conflicts with lower-priority source constraints
 18. ✅ Use latest cached version when no source specified (avoid network request)
+19. ✅ Invalid version strings are ignored with warning, falling through to lower-priority sources
 
 ## References
 
