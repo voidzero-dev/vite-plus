@@ -20,13 +20,21 @@ Vite+ is built to scale with your codebase while reducing your devtools to a sin
 
 ## Getting Started
 
-Vite+ requires Node.js 22+. Install `vite-plus-cli` globally as `vite`:
+Install Vite+ globally as `vp`:
+
+For Linux or macOS:
 
 ```bash
-npm install -g vite-plus-cli
+curl -fsSL https://viteplus.dev/install.sh | bash
 ```
 
-`vite` handles the full development lifecycle such as package management, development servers, linting, formatting, testing and building for production.
+For Windows:
+
+```bash
+irm https://viteplus.dev/install.ps1 | iex
+```
+
+`vp` handles the full development lifecycle such as package management, development servers, linting, formatting, testing and building for production.
 
 ### Vite+ Commands
 

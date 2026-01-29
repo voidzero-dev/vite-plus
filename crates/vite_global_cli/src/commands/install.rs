@@ -3,6 +3,7 @@ use std::process::ExitStatus;
 use vite_install::{PackageManager, commands::install::InstallCommandOptions};
 use vite_path::AbsolutePathBuf;
 
+use super::prepend_js_runtime_to_path_env;
 use crate::error::Error;
 
 /// Install command.
@@ -16,6 +17,8 @@ impl InstallCommand {
     }
 
     pub async fn execute(self, options: &InstallCommandOptions<'_>) -> Result<ExitStatus, Error> {
+        prepend_js_runtime_to_path_env(&self.cwd).await?;
+
         let package_manager = PackageManager::builder(&self.cwd).build_with_default().await?;
 
         Ok(package_manager.run_install_command(options, &self.cwd).await?)
@@ -60,6 +63,7 @@ mod tests {
         assert!(command.execute(&InstallCommandOptions::default()).await.is_ok());
     }
 
+    #[ignore = "requires JS scripts directory and Node.js runtime, should be run manually with proper environment"]
     #[tokio::test]
     #[cfg(not(windows))] // FIXME
     async fn test_install_command_with_package_json_with_package_manager() {

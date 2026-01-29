@@ -11,6 +11,11 @@
     "filename": "command-pack-npm10-1.0.0.tgz",
     "files": [
       {
+        "path": ".node-version",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
         "path": "output.log",
         "size": <variable>,
         "mode": 420
@@ -31,7 +36,7 @@
         "mode": 420
       }
     ],
-    "entryCount": 4,
+    "entryCount": 5,
     "bundled": []
   }
 ]
@@ -49,6 +54,11 @@
     "filename": "command-pack-npm10-1.0.0.tgz",
     "files": [
       {
+        "path": ".node-version",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
         "path": "command-pack-npm10-1.0.0.tgz",
         "size": <variable>,
         "mode": 420
@@ -74,7 +84,7 @@
         "mode": 420
       }
     ],
-    "entryCount": 5,
+    "entryCount": 6,
     "bundled": []
   }
 ]
@@ -92,6 +102,11 @@
     "filename": "command-pack-npm10-1.0.0.tgz",
     "files": [
       {
+        "path": ".node-version",
+        "size": <variable>,
+        "mode": 420
+      },
+      {
         "path": "command-pack-npm10-1.0.0.tgz",
         "size": <variable>,
         "mode": 420
@@ -117,7 +132,7 @@
         "mode": 420
       }
     ],
-    "entryCount": 5,
+    "entryCount": 6,
     "bundled": []
   }
 ]

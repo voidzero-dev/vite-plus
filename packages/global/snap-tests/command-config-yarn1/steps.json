@@ -1,6 +1,7 @@
 {
   "env": {
-    "VITE_DISABLE_AUTO_INSTALL": "1"
+    "VITE_DISABLE_AUTO_INSTALL": "1",
+    "NODE_OPTIONS": "--no-deprecation"
   },
   "commands": [
     "vp pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope (shows warning for yarn@1)",

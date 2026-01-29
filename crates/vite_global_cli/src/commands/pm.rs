@@ -16,6 +16,7 @@ use vite_install::{
 };
 use vite_path::AbsolutePathBuf;
 
+use super::prepend_js_runtime_to_path_env;
 use crate::{
     cli::{ConfigCommands, OwnerCommands, PmCommands},
     error::Error,
@@ -29,6 +30,8 @@ pub async fn execute_info(
     json: bool,
     pass_through_args: Option<&[String]>,
 ) -> Result<ExitStatus, Error> {
+    prepend_js_runtime_to_path_env(&cwd).await?;
+
     let package_manager = PackageManager::builder(&cwd).build_with_default().await?;
 
     let options = ViewCommandOptions { package, field, json, pass_through_args };
@@ -41,6 +44,8 @@ pub async fn execute_pm_subcommand(
     cwd: AbsolutePathBuf,
     command: PmCommands,
 ) -> Result<ExitStatus, Error> {
+    prepend_js_runtime_to_path_env(&cwd).await?;
+
     let package_manager = PackageManager::builder(&cwd).build_with_default().await?;
 
     match command {

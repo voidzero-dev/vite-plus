@@ -859,6 +859,7 @@ The installer supports multiple versions with symlinks, allowing version switchi
 ```
 
 **Key features:**
+
 - PATH points to `~/.vite-plus/current/bin` (stable location)
 - Installing a new version updates the `current` symlink
 - Old versions are automatically cleaned up (keeps max 5 versions)
