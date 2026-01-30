@@ -199,12 +199,14 @@ jobs:
           vp --version
           vp -h
 
-      - name: Create vp.cmd shim file for Windows
+      - name: Check CLI JS execution on Windows rust binary
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
-          # printf '@echo off\n"%%~dp0vp.exe" %%*\n' > packages/global/bin/vp.cmd
           ls -al packages/global/bin
-          VITE_LOG=trace ./packages/global/bin/vp.cmd -V
+          VITE_LOG=trace ./packages/global/bin/vp.exe -V
+          VITE_LOG=trace ./packages/global/bin/vp.exe info vite-plus
+          VITE_LOG=trace pnpm -F ./packages/global snap-test command-cache-pnpm10
+          git diff --exit-code
 
       - name: Run CLI fmt
         run: vp fmt --check
