@@ -27,6 +27,8 @@ pub async fn write_shims(
         use std::os::unix::fs::PermissionsExt;
         tokio::fs::set_permissions(to_bin, std::fs::Permissions::from_mode(0o755)).await?;
     }
+
+    tracing::debug!("write_shims: {:?} -> {:?}", to_bin, relative_file);
     Ok(())
 }
 

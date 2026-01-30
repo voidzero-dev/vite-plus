@@ -227,8 +227,13 @@ jobs:
               fi
             fi
           done
-          # Show what we have
-          find target -name "vp*" -type f 2>/dev/null || true
+          # Show what we have (fail if no binaries found)
+          vp_files=$(find target -name "vp*" -type f)
+          if [ -z "$vp_files" ]; then
+            echo "Error: No vp binaries found in target directory"
+            exit 1
+          fi
+          echo "$vp_files"
 
       - name: Set npm packages version
         run: |
