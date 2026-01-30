@@ -98,8 +98,17 @@ runs:
         pnpm vite build -h
         pnpm vite fmt -h
 
-    - name: Build Rust CLI binary
-      if: steps.cache-restore.outputs.cache-hit != 'true'
+    - name: Build Rust CLI binary (aarch64-linux)
+      if: steps.cache-restore.outputs.cache-hit != 'true' && inputs.target == 'aarch64-unknown-linux-gnu'
+      shell: bash
+      run: |
+        # Install aarch64 cross-compilation toolchain
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu
+        cargo build --release --target ${{ inputs.target }} -p vite_global_cli
+
+    - name: Build Rust CLI binary (other targets)
+      if: steps.cache-restore.outputs.cache-hit != 'true' && inputs.target != 'aarch64-unknown-linux-gnu'
       shell: bash
       run: cargo build --release --target ${{ inputs.target }} -p vite_global_cli
 
