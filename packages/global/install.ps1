@@ -210,7 +210,6 @@ function Main {
     $binaryName = "vp.exe"
 
     # Create directories
-    Write-Info "Creating directories..."
     New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
     New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 
