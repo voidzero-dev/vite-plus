@@ -42,6 +42,26 @@ error() {
   exit 1
 }
 
+# Detect libc type on Linux (gnu or musl)
+detect_libc() {
+  # Check for musl dynamic linker (most reliable method)
+  if [ -e /lib/ld-musl-x86_64.so.1 ] || [ -e /lib/ld-musl-aarch64.so.1 ]; then
+    echo "musl"
+    return
+  fi
+
+  # Check if ldd exists and is musl-based
+  if command -v ldd &> /dev/null; then
+    if ldd --version 2>&1 | grep -qi musl; then
+      echo "musl"
+      return
+    fi
+  fi
+
+  # Default to gnu (glibc)
+  echo "gnu"
+}
+
 # Detect platform
 detect_platform() {
   local os arch
@@ -62,7 +82,14 @@ detect_platform() {
     *) error "Unsupported architecture: $arch" ;;
   esac
 
-  echo "${os}-${arch}"
+  # For Linux, append libc type to distinguish gnu vs musl
+  if [ "$os" = "linux" ]; then
+    local libc
+    libc=$(detect_libc)
+    echo "${os}-${arch}-${libc}"
+  else
+    echo "${os}-${arch}"
+  fi
 }
 
 # Check for required commands
@@ -82,14 +109,59 @@ check_requirements() {
   fi
 }
 
-# Get the latest version from npm registry
-get_latest_version() {
-  local version
-  version=$(curl -s "${NPM_REGISTRY}/vite-plus-cli/latest" | grep -o '"version":"[^"]*"' | cut -d'"' -f4)
+# Fetch package metadata from npm registry (cached for reuse)
+# Uses VITE_PLUS_VERSION to fetch the correct version's metadata
+PACKAGE_METADATA=""
+fetch_package_metadata() {
+  if [ -z "$PACKAGE_METADATA" ]; then
+    local version_path
+    if [ "$VITE_PLUS_VERSION" = "latest" ]; then
+      version_path="latest"
+    else
+      version_path="$VITE_PLUS_VERSION"
+    fi
+    PACKAGE_METADATA=$(curl -s "${NPM_REGISTRY}/vite-plus-cli/${version_path}")
+    if [ -z "$PACKAGE_METADATA" ]; then
+      error "Failed to fetch package metadata from npm registry"
+    fi
+  fi
+  echo "$PACKAGE_METADATA"
+}
+
+# Get the version from package metadata
+get_version_from_metadata() {
+  local metadata version
+  metadata=$(fetch_package_metadata)
+  version=$(echo "$metadata" | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
   if [ -z "$version" ]; then
-    error "Failed to fetch latest version from npm registry"
+    error "Failed to extract version from package metadata"
   fi
   echo "$version"
+}
+
+# Get package suffix for platform from optionalDependencies
+# Platform format: darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64, etc.
+# Package format: @voidzero-dev/vite-plus-cli-darwin-arm64, @voidzero-dev/vite-plus-cli-linux-x64-gnu, etc.
+get_package_suffix() {
+  local platform="$1"
+  local metadata matching_package package_suffix
+
+  metadata=$(fetch_package_metadata)
+
+  # Extract optionalDependencies keys that match the platform
+  # Look for packages like @voidzero-dev/vite-plus-cli-{platform}[-suffix]
+  matching_package=$(echo "$metadata" | grep -o "\"@voidzero-dev/vite-plus-cli-${platform}[^\"]*\"" | head -1 | tr -d '"')
+
+  if [ -z "$matching_package" ]; then
+    # List available platforms for helpful error message
+    local available_platforms
+    available_platforms=$(echo "$metadata" | grep -o '"@voidzero-dev/vite-plus-cli-[^"]*"' | sed 's/"@voidzero-dev\/vite-plus-cli-//g' | tr -d '"' | tr '\n' ', ' | sed 's/,$//')
+    error "Unsupported platform: $platform. Available platforms: $available_platforms"
+  fi
+
+  # Extract suffix by removing the package prefix
+  package_suffix="${matching_package#@voidzero-dev/vite-plus-cli-}"
+  echo "$package_suffix"
 }
 
 # Download and extract file
@@ -184,11 +256,9 @@ main() {
   platform=$(detect_platform)
   info "Detected platform: $platform"
 
-  # Get version
-  if [ "$VITE_PLUS_VERSION" = "latest" ]; then
-    info "Fetching latest version..."
-    VITE_PLUS_VERSION=$(get_latest_version)
-  fi
+  # Fetch package metadata and resolve version
+  info "Fetching package metadata..."
+  VITE_PLUS_VERSION=$(get_version_from_metadata)
   info "Installing vite-plus-cli v${VITE_PLUS_VERSION}"
 
   # Set up version-specific directories
@@ -197,23 +267,9 @@ main() {
   DIST_DIR="$VERSION_DIR/dist"
   CURRENT_LINK="$INSTALL_DIR/current"
 
-  # Platform package name mapping (follows napi-rs convention)
+  # Get package suffix from optionalDependencies (dynamic lookup)
   local package_suffix
-  case "$platform" in
-    darwin-arm64) package_suffix="darwin-arm64" ;;
-    darwin-x64)
-      warn "darwin-x64 is not currently supported. Only Apple Silicon (darwin-arm64) is supported."
-      error "Unsupported platform: $platform"
-      ;;
-    linux-arm64) package_suffix="linux-arm64-gnu" ;;
-    linux-x64) package_suffix="linux-x64-gnu" ;;
-    win32-arm64)
-      warn "win32-arm64 is not currently supported. Only win32-x64 is supported."
-      error "Unsupported platform: $platform"
-      ;;
-    win32-x64) package_suffix="win32-x64-msvc" ;;
-    *) error "Unsupported platform: $platform" ;;
-  esac
+  package_suffix=$(get_package_suffix "$platform")
 
   local package_name="@voidzero-dev/vite-plus-cli-${package_suffix}"
   local binary_name="vp"
