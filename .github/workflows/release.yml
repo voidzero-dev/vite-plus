@@ -209,18 +209,31 @@ jobs:
       - name: Download Rust CLI binaries
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          path: .
+          path: rust-cli-artifacts
           pattern: vite-global-cli-*
-          merge-multiple: true
 
-      - name: Verify Rust CLI binaries
+      - name: Move Rust CLI binaries to target directories
         run: |
+          # Move each artifact's binary to the correct target directory
+          for artifact_dir in rust-cli-artifacts/vite-global-cli-*/; do
+            if [ -d "$artifact_dir" ]; then
+              # Extract target name from directory (e.g., vite-global-cli-x86_64-unknown-linux-gnu -> x86_64-unknown-linux-gnu)
+              dir_name=$(basename "$artifact_dir")
+              target_name=${dir_name#vite-global-cli-}
+              # Create target directory and copy binary
+              mkdir -p "target/${target_name}/release"
+              cp -r "$artifact_dir"* "target/${target_name}/release/"
+            fi
+          done
           # Show what we have (fail if no binaries found)
-          vp_files=$(find target -name "vp*" -type f)
+          vp_files=$(find target -name "vp*" -type f 2>/dev/null || echo "")
           if [ -z "$vp_files" ]; then
             echo "Error: No vp binaries found in target directory"
+            echo "Artifact contents:"
+            find rust-cli-artifacts -type f || true
             exit 1
           fi
+          echo "Found binaries:"
           echo "$vp_files"
 
       - name: Set npm packages version
@@ -291,6 +304,8 @@ jobs:
         with:
           body_path: ./RELEASE_BODY.md
           draft: false
+          make_latest: ${{ inputs.npm_tag == 'latest' }}
+          prerelease: ${{ inputs.npm_tag != 'latest' }}
           name: vite-plus v${{ env.VERSION }}
           tag_name: v${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
