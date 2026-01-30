@@ -190,14 +190,18 @@ download_and_extract() {
   local strip_components="$3"
   local filter="$4"
 
-  info "Downloading from $url"
+  # Download to temp file first to show progress bar, then extract
+  local temp_file
+  temp_file=$(mktemp)
+  curl -L --progress-bar "$url" -o "$temp_file"
 
   if [ -n "$filter" ]; then
-    curl -sL "$url" | tar xz -C "$dest_dir" --strip-components="$strip_components" "$filter" 2>/dev/null || \
-    curl -sL "$url" | tar xz -C "$dest_dir" --strip-components="$strip_components"
+    tar xzf "$temp_file" -C "$dest_dir" --strip-components="$strip_components" "$filter" 2>/dev/null || \
+    tar xzf "$temp_file" -C "$dest_dir" --strip-components="$strip_components"
   else
-    curl -sL "$url" | tar xz -C "$dest_dir" --strip-components="$strip_components"
+    tar xzf "$temp_file" -C "$dest_dir" --strip-components="$strip_components"
   fi
+  rm -f "$temp_file"
 }
 
 # Add to shell profile
