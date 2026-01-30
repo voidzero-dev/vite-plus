@@ -40,22 +40,14 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
+    // Resolve the command path using which crate
+    // If PATH is provided in envs, use which_in to search in custom paths
+    // Otherwise, use which to search in system PATH
+    let paths = envs.get("PATH");
     let cwd = cwd.as_ref();
-
-    // On Windows, skip which::which_in and let the OS resolve the binary path.
-    // Windows handles PATH resolution and executable extensions (.exe, .cmd, etc.) automatically.
-    #[cfg(windows)]
-    let mut cmd = Command::new(bin_name);
-
-    // On Unix, resolve the command path using which crate.
-    // If PATH is provided in envs, use which_in to search in custom paths.
-    #[cfg(not(windows))]
-    let mut cmd = {
-        let paths = envs.get("PATH");
-        let bin_path = which::which_in(bin_name, paths, cwd)
-            .map_err(|_| Error::CannotFindBinaryPath(bin_name.into()))?;
-        Command::new(bin_path)
-    };
+    let bin_path = which::which_in(bin_name, paths, cwd)
+        .map_err(|_| Error::CannotFindBinaryPath(bin_name.into()))?;
+    let mut cmd = Command::new(bin_path);
     cmd.args(args)
         .envs(envs)
         .current_dir(cwd)

@@ -167,6 +167,7 @@ const DEFAULT_PASSTHROUGH_ENVS = [
   'USERPROFILE',
   'HOMEDRIVE',
   'HOMEPATH',
+  'PATHEXT', // .EXE;.BAT;...
   // IDE specific (exact matches)
   'ELECTRON_RUN_AS_NODE',
   'JB_INTERPRETER',
