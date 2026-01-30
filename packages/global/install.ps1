@@ -63,7 +63,28 @@ function Get-PackageMetadata {
         try {
             $script:PackageMetadata = Invoke-RestMethod $metadataUrl
         } catch {
+            # Try to extract npm error message from response
+            $errorMsg = $_.ErrorDetails.Message
+            if ($errorMsg) {
+                try {
+                    $errorJson = $errorMsg | ConvertFrom-Json
+                    if ($errorJson.error) {
+                        Write-Error-Exit "Failed to fetch version '${versionPath}': $($errorJson.error)"
+                    }
+                } catch {
+                    # JSON parsing failed, fall through to generic error
+                }
+            }
             Write-Error-Exit "Failed to fetch package metadata from: $metadataUrl`nError: $_"
+        }
+        # Check for error in successful response
+        # npm can return {"error":"..."} object or a plain string like "version not found: test"
+        if ($script:PackageMetadata -is [string]) {
+            # Plain string response means error
+            Write-Error-Exit "Failed to fetch version '${versionPath}': $script:PackageMetadata"
+        }
+        if ($script:PackageMetadata.error) {
+            Write-Error-Exit "Failed to fetch version '${versionPath}': $($script:PackageMetadata.error)"
         }
     }
     return $script:PackageMetadata
