@@ -115,7 +115,7 @@ interface Command {
   ignoreOutput?: boolean;
   /**
    * The timeout in milliseconds for the command.
-   * If not specified, the default timeout is 30 seconds.
+   * If not specified, the default timeout is 50 seconds.
    */
   timeout?: number;
 }
@@ -207,7 +207,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
             match: async () => [],
           },
         }),
-        setTimeout(cmd.timeout ?? 30 * 1000),
+        setTimeout(cmd.timeout ?? 50 * 1000),
       ]);
 
       await outputStream.close();

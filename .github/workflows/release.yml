@@ -106,8 +106,8 @@ jobs:
         with:
           name: vite-global-cli-${{ matrix.settings.target }}
           path: |
-            ./packages/global/bin/vp
-            ./packages/global/bin/vp.exe
+            ./target/${{ matrix.settings.target }}/release/vp
+            ./target/${{ matrix.settings.target }}/release/vp.exe
           if-no-files-found: error
 
       - name: Remove .node files before upload dist
@@ -209,24 +209,12 @@ jobs:
       - name: Download Rust CLI binaries
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          path: target
+          path: .
           pattern: vite-global-cli-*
+          merge-multiple: true
 
-      - name: Reorganize Rust CLI binaries for publish script
+      - name: Verify Rust CLI binaries
         run: |
-          # Move binaries to expected locations: target/{target}/release/vp
-          for dir in target/vite-global-cli-*; do
-            if [ -d "$dir" ]; then
-              target_name=$(basename "$dir" | sed 's/vite-global-cli-//')
-              mkdir -p "target/${target_name}/release"
-              if [ -f "$dir/vp" ]; then
-                mv "$dir/vp" "target/${target_name}/release/"
-              fi
-              if [ -f "$dir/vp.exe" ]; then
-                mv "$dir/vp.exe" "target/${target_name}/release/"
-              fi
-            fi
-          done
           # Show what we have (fail if no binaries found)
           vp_files=$(find target -name "vp*" -type f)
           if [ -z "$vp_files" ]; then
@@ -263,6 +251,13 @@ jobs:
 
       - name: Create release body
         run: |
+          if [[ "${{ inputs.npm_tag }}" == "latest" ]]; then
+            INSTALL_BASH="curl -fsSL https://viteplus.dev/install.sh | bash"
+            INSTALL_PS1="irm https://viteplus.dev/install.ps1 | iex"
+          else
+            INSTALL_BASH="curl -fsSL https://viteplus.dev/install.sh | VERSION=${{ env.VERSION }} bash"
+            INSTALL_PS1="\\\$env:VERSION=\\\"${{ env.VERSION }}\\\"; irm https://viteplus.dev/install.ps1 | iex"
+          fi
           cat > ./RELEASE_BODY.md <<EOF
           ## vite-plus v${{ env.VERSION }}
 
@@ -277,8 +272,14 @@ jobs:
 
           ### Installation
 
+          **macOS/Linux:**
           \`\`\`bash
-          npm install -g vite-plus-cli@${{ env.VERSION }}
+          ${INSTALL_BASH}
+          \`\`\`
+
+          **Windows:**
+          \`\`\`powershell
+          ${INSTALL_PS1}
           \`\`\`
 
           View the full commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}

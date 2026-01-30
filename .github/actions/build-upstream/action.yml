@@ -40,8 +40,8 @@ runs:
           packages/global/binding/*.node
           packages/global/binding/index.js
           packages/global/binding/index.d.ts
-          packages/global/bin/vp
-          packages/global/bin/vp.exe
+          target/${{ inputs.target }}/release/vp
+          target/${{ inputs.target }}/release/vp.exe
         key: ${{ steps.cache-key.outputs.key }}
 
     # Build upstream TypeScript packages first (don't depend on native bindings)
@@ -101,15 +101,7 @@ runs:
     - name: Build Rust CLI binary
       if: steps.cache-restore.outputs.cache-hit != 'true'
       shell: bash
-      run: |
-        cargo build --release --target ${{ inputs.target }} -p vite_global_cli
-        # Copy binary to packages/global/bin/
-        mkdir -p packages/global/bin
-        if [[ "${{ inputs.target }}" == *"windows"* ]]; then
-          cp target/${{ inputs.target }}/release/vp.exe packages/global/bin/vp.exe
-        else
-          cp target/${{ inputs.target }}/release/vp packages/global/bin/vp
-        fi
+      run: cargo build --release --target ${{ inputs.target }} -p vite_global_cli
 
     - name: Save NAPI binding cache
       if: steps.cache-restore.outputs.cache-hit != 'true'
@@ -124,6 +116,23 @@ runs:
           packages/global/binding/*.node
           packages/global/binding/index.js
           packages/global/binding/index.d.ts
-          packages/global/bin/vp
-          packages/global/bin/vp.exe
+          target/${{ inputs.target }}/release/vp
+          target/${{ inputs.target }}/release/vp.exe
         key: ${{ steps.cache-key.outputs.key }}
+
+    # Copy Rust CLI binary to packages/global/bin/ (runs on both cache hit and miss)
+    - name: Copy Rust CLI binary
+      shell: bash
+      run: |
+        if [[ "${{ inputs.target }}" == *"windows"* ]]; then
+          cp target/${{ inputs.target }}/release/vp.exe packages/global/bin/vp.exe
+        else
+          cp target/${{ inputs.target }}/release/vp packages/global/bin/vp
+        fi
+
+    # Build vite-plus TypeScript after native bindings are ready
+    - name: Build vite-plus TypeScript packages
+      shell: bash
+      run: |
+        pnpm --filter=vite-plus build-ts
+        pnpm --filter=vite-plus-cli build-ts

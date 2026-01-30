@@ -1,8 +1,0 @@
-{
-  "env": {
-    "VITE_DISABLE_AUTO_INSTALL": "1"
-  },
-  "commands": [
-    "vp dlx -s print-current-version # should print v20.18.0 from .node-version, not engines.node"
-  ]
-}

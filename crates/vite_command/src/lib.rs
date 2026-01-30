@@ -48,6 +48,7 @@ where
     let bin_path = which::which_in(bin_name, paths, cwd)
         .map_err(|_| Error::CannotFindBinaryPath(bin_name.into()))?;
     let mut cmd = Command::new(bin_path);
+
     cmd.args(args)
         .envs(envs)
         .current_dir(cwd)

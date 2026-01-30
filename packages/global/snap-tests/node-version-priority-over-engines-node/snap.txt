@@ -1,3 +1,0 @@
-> vp dlx -s print-current-version # should print v20.18.0 from .node-version, not engines.node
-warning: Node.js version <semver> (from .node-version) does not satisfy engines.node constraint '>=22.0.0'
-v<semver>

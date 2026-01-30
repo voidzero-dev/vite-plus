@@ -63,9 +63,7 @@ mod tests {
         assert!(command.execute(&InstallCommandOptions::default()).await.is_ok());
     }
 
-    #[ignore = "requires JS scripts directory and Node.js runtime, should be run manually with proper environment"]
     #[tokio::test]
-    #[cfg(not(windows))] // FIXME
     async fn test_install_command_with_package_json_with_package_manager() {
         let temp_dir = TempDir::new().unwrap();
         let workspace_root = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
