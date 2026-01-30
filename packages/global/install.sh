@@ -301,7 +301,6 @@ main() {
   fi
 
   # Create directories
-  info "Creating directories..."
   mkdir -p "$BIN_DIR" "$DIST_DIR"
 
   # Download and extract native binary and .node files from platform package
