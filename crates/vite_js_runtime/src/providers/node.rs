@@ -206,7 +206,9 @@ impl NodeProvider {
                 match self.fetch_with_etag(etag, cache, &cache_path).await {
                     Ok(versions) => return Ok(versions),
                     Err(e) => {
-                        tracing::warn!("Conditional request failed: {e}, doing full fetch");
+                        // Network error with ETag request - return cached version
+                        tracing::warn!("Conditional request failed: {e}, using expired cache");
+                        return Ok(cache.versions.clone());
                     }
                 }
             } else {
