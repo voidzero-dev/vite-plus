@@ -138,11 +138,10 @@ function Download-AndExtract {
         [string]$Filter
     )
 
-    Write-Info "Downloading from $Url"
-
     $tempFile = New-TemporaryFile
     try {
-        Invoke-WebRequest -Uri $Url -OutFile $tempFile -UseBasicParsing
+        # Progress bar is shown by default with Invoke-WebRequest
+        Invoke-WebRequest -Uri $Url -OutFile $tempFile
 
         # Create temp extraction directory
         $tempExtract = Join-Path $env:TEMP "vite-install-$(Get-Random)"
@@ -221,7 +220,8 @@ function Main {
 
     $platformTempFile = New-TemporaryFile
     try {
-        Invoke-WebRequest -Uri $platformUrl -OutFile $platformTempFile -UseBasicParsing
+        # Progress bar is shown by default with Invoke-WebRequest
+        Invoke-WebRequest -Uri $platformUrl -OutFile $platformTempFile
 
         # Create temp extraction directory
         $platformTempExtract = Join-Path $env:TEMP "vite-platform-$(Get-Random)"
@@ -257,7 +257,8 @@ function Main {
 
     $mainTempFile = New-TemporaryFile
     try {
-        Invoke-WebRequest -Uri $mainUrl -OutFile $mainTempFile -UseBasicParsing
+        # Progress bar is shown by default with Invoke-WebRequest
+        Invoke-WebRequest -Uri $mainUrl -OutFile $mainTempFile
 
         # Create temp extraction directory
         $mainTempExtract = Join-Path $env:TEMP "vite-main-$(Get-Random)"
