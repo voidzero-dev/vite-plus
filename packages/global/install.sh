@@ -125,44 +125,62 @@ fetch_package_metadata() {
     if [ -z "$PACKAGE_METADATA" ]; then
       error "Failed to fetch package metadata from: $metadata_url"
     fi
+    # Check for npm registry error response
+    # npm can return either {"error":"..."} or a plain JSON string like "version not found: test"
+    if echo "$PACKAGE_METADATA" | grep -q '"error"'; then
+      local error_msg
+      error_msg=$(echo "$PACKAGE_METADATA" | grep -o '"error":"[^"]*"' | cut -d'"' -f4)
+      error "Failed to fetch version '${version_path}': ${error_msg:-unknown error}"
+    fi
+    # Check if response is a plain error string (not a valid package object)
+    # Use '"version":' to match JSON property, not just the word "version"
+    if ! echo "$PACKAGE_METADATA" | grep -q '"version":'; then
+      # Remove surrounding quotes from the error message if present
+      local error_msg
+      error_msg=$(echo "$PACKAGE_METADATA" | sed 's/^"//;s/"$//')
+      error "Failed to fetch version '${version_path}': ${error_msg:-unknown error}"
+    fi
   fi
-  echo "$PACKAGE_METADATA"
+  # PACKAGE_METADATA is set as a global variable, no need to echo
 }
 
 # Get the version from package metadata
+# Sets RESOLVED_VERSION global variable
 get_version_from_metadata() {
-  local metadata version
-  metadata=$(fetch_package_metadata)
-  version=$(echo "$metadata" | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
-  if [ -z "$version" ]; then
+  # Call fetch_package_metadata to populate PACKAGE_METADATA global
+  # Don't use command substitution as it would swallow the exit from error()
+  fetch_package_metadata
+  RESOLVED_VERSION=$(echo "$PACKAGE_METADATA" | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
+  if [ -z "$RESOLVED_VERSION" ]; then
     error "Failed to extract version from package metadata"
   fi
-  echo "$version"
 }
 
 # Get package suffix for platform from optionalDependencies
+# Sets PACKAGE_SUFFIX global variable
 # Platform format: darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64, etc.
 # Package format: @voidzero-dev/vite-plus-cli-darwin-arm64, @voidzero-dev/vite-plus-cli-linux-x64-gnu, etc.
 get_package_suffix() {
   local platform="$1"
-  local metadata matching_package package_suffix
+  local matching_package
 
-  metadata=$(fetch_package_metadata)
+  # Call fetch_package_metadata to populate PACKAGE_METADATA global
+  # Don't use command substitution as it would swallow the exit from error()
+  fetch_package_metadata
 
   # Extract optionalDependencies keys that match the platform
   # Look for packages like @voidzero-dev/vite-plus-cli-{platform}[-suffix]
-  matching_package=$(echo "$metadata" | grep -o "\"@voidzero-dev/vite-plus-cli-${platform}[^\"]*\"" | head -1 | tr -d '"')
+  matching_package=$(echo "$PACKAGE_METADATA" | grep -o "\"@voidzero-dev/vite-plus-cli-${platform}[^\"]*\"" | head -1 | tr -d '"')
 
   if [ -z "$matching_package" ]; then
     # List available platforms for helpful error message
     local available_platforms
-    available_platforms=$(echo "$metadata" | grep -o '"@voidzero-dev/vite-plus-cli-[^"]*"' | sed 's/"@voidzero-dev\/vite-plus-cli-//g' | tr -d '"' | tr '\n' ', ' | sed 's/,$//')
+    available_platforms=$(echo "$PACKAGE_METADATA" | grep -o '"@voidzero-dev/vite-plus-cli-[^"]*"' | sed 's/"@voidzero-dev\/vite-plus-cli-//g' | tr -d '"' | tr '\n' ', ' | sed 's/,$//')
     error "Unsupported platform: $platform. Available platforms: $available_platforms"
   fi
 
   # Extract suffix by removing the package prefix
-  package_suffix="${matching_package#@voidzero-dev/vite-plus-cli-}"
-  echo "$package_suffix"
+  PACKAGE_SUFFIX="${matching_package#@voidzero-dev/vite-plus-cli-}"
 }
 
 # Download and extract file
@@ -259,7 +277,8 @@ main() {
 
   # Fetch package metadata and resolve version
   info "Fetching package metadata..."
-  VITE_PLUS_VERSION=$(get_version_from_metadata)
+  get_version_from_metadata
+  VITE_PLUS_VERSION="$RESOLVED_VERSION"
   info "Installing vite-plus-cli v${VITE_PLUS_VERSION}"
 
   # Set up version-specific directories
@@ -269,10 +288,9 @@ main() {
   CURRENT_LINK="$INSTALL_DIR/current"
 
   # Get package suffix from optionalDependencies (dynamic lookup)
-  local package_suffix
-  package_suffix=$(get_package_suffix "$platform")
+  get_package_suffix "$platform"
 
-  local package_name="@voidzero-dev/vite-plus-cli-${package_suffix}"
+  local package_name="@voidzero-dev/vite-plus-cli-${PACKAGE_SUFFIX}"
   local binary_name="vp"
   if [[ "$platform" == win32* ]]; then
     binary_name="vp.exe"
@@ -283,7 +301,7 @@ main() {
   mkdir -p "$BIN_DIR" "$DIST_DIR"
 
   # Download and extract native binary and .node files from platform package
-  local platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${package_suffix}-${VITE_PLUS_VERSION}.tgz"
+  local platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${PACKAGE_SUFFIX}-${VITE_PLUS_VERSION}.tgz"
   info "Downloading platform package..."
 
   # Create temp directory for extraction
