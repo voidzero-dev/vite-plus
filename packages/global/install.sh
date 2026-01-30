@@ -114,15 +114,16 @@ check_requirements() {
 PACKAGE_METADATA=""
 fetch_package_metadata() {
   if [ -z "$PACKAGE_METADATA" ]; then
-    local version_path
+    local version_path metadata_url
     if [ "$VITE_PLUS_VERSION" = "latest" ]; then
       version_path="latest"
     else
       version_path="$VITE_PLUS_VERSION"
     fi
-    PACKAGE_METADATA=$(curl -s "${NPM_REGISTRY}/vite-plus-cli/${version_path}")
+    metadata_url="${NPM_REGISTRY}/vite-plus-cli/${version_path}"
+    PACKAGE_METADATA=$(curl -s "$metadata_url")
     if [ -z "$PACKAGE_METADATA" ]; then
-      error "Failed to fetch package metadata from npm registry"
+      error "Failed to fetch package metadata from: $metadata_url"
     fi
   fi
   echo "$PACKAGE_METADATA"

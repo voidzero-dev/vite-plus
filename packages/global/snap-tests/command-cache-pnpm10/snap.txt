@@ -10,8 +10,5 @@ Arguments:
 Options:
   -h, --help  Print help
 
-> vp pm cache dir
-<homedir>/Library/pnpm/store/v10
-
 > vp pm cache dir > /dev/null # should show cache directory (uses pnpm store path)
 > vp pm cache path > /dev/null # should show cache path (alias for dir, uses pnpm store path)

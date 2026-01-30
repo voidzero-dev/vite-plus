@@ -58,11 +58,12 @@ $script:PackageMetadata = $null
 
 function Get-PackageMetadata {
     if ($null -eq $script:PackageMetadata) {
+        $versionPath = if ($ViteVersion -eq "latest") { "latest" } else { $ViteVersion }
+        $metadataUrl = "$NpmRegistry/vite-plus-cli/$versionPath"
         try {
-            $versionPath = if ($ViteVersion -eq "latest") { "latest" } else { $ViteVersion }
-            $script:PackageMetadata = Invoke-RestMethod "$NpmRegistry/vite-plus-cli/$versionPath"
+            $script:PackageMetadata = Invoke-RestMethod $metadataUrl
         } catch {
-            Write-Error-Exit "Failed to fetch package metadata from npm registry: $_"
+            Write-Error-Exit "Failed to fetch package metadata from: $metadataUrl`nError: $_"
         }
     }
     return $script:PackageMetadata
