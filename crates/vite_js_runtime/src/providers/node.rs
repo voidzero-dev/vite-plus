@@ -206,7 +206,7 @@ impl NodeProvider {
                 match self.fetch_with_etag(etag, cache, &cache_path).await {
                     Ok(versions) => return Ok(versions),
                     Err(e) => {
-                        tracing::debug!("Conditional request failed: {e}, doing full fetch");
+                        tracing::warn!("Conditional request failed: {e}, doing full fetch");
                     }
                 }
             } else {
