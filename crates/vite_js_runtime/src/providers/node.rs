@@ -186,46 +186,39 @@ impl NodeProvider {
         let cache_path = cache_dir.join("node/index_cache.json");
 
         // Try to load from cache
-        let cached = load_cache(&cache_path).await;
+        let Some(cache) = load_cache(&cache_path).await else {
+            // No cache - must fetch
+            return self.fetch_and_cache(&cache_path).await;
+        };
 
-        if let Some(ref cache) = cached {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
-            // If cache is still fresh, use it
-            if now < cache.expires_at {
-                tracing::debug!(
-                    "Using cached version index (expires in {}s)",
-                    cache.expires_at - now
-                );
-                return Ok(cache.versions.clone());
-            }
+        // If cache is still fresh, use it
+        if now < cache.expires_at {
+            tracing::debug!("Using cached version index (expires in {}s)", cache.expires_at - now);
+            return Ok(cache.versions);
+        }
 
-            // Cache expired - try conditional request with ETag if available
-            if let Some(etag) = &cache.etag {
-                tracing::debug!("Cache expired, trying conditional request with ETag");
-                match self.fetch_with_etag(etag, cache, &cache_path).await {
-                    Ok(versions) => return Ok(versions),
-                    Err(e) => {
-                        // Network error with ETag request - return cached version
-                        tracing::warn!("Conditional request failed: {e}, using expired cache");
-                        return Ok(cache.versions.clone());
-                    }
+        // Cache expired - try conditional request with ETag if available
+        if let Some(ref etag) = cache.etag {
+            tracing::debug!("Cache expired, trying conditional request with ETag");
+            match self.fetch_with_etag(etag, &cache, &cache_path).await {
+                Ok(versions) => return Ok(versions),
+                Err(e) => {
+                    // Network error with ETag request - return cached version
+                    tracing::warn!("Conditional request failed: {e}, using expired cache");
+                    return Ok(cache.versions);
                 }
-            } else {
-                tracing::debug!("Cache expired, no ETag available for conditional request");
             }
         }
 
-        // Full fetch - if it fails and we have a cached version, use it
+        // No ETag - try full fetch, fallback to cache
+        tracing::debug!("Cache expired, no ETag available for conditional request");
         match self.fetch_and_cache(&cache_path).await {
             Ok(versions) => Ok(versions),
             Err(e) => {
-                if let Some(cache) = cached {
-                    tracing::warn!("Failed to fetch version index: {e}, using expired cache");
-                    Ok(cache.versions)
-                } else {
-                    Err(e)
-                }
+                tracing::warn!("Failed to fetch version index: {e}, using expired cache");
+                Ok(cache.versions)
             }
         }
     }
