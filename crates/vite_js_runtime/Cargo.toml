@@ -12,6 +12,7 @@ async-trait = { workspace = true }
 backon = { workspace = true }
 flate2 = { workspace = true }
 futures-util = { workspace = true }
+indicatif = { workspace = true }
 hex = { workspace = true }
 node-semver = { workspace = true }
 serde = { workspace = true }

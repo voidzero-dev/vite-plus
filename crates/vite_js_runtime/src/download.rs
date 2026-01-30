@@ -3,10 +3,11 @@
 //! This module provides platform-agnostic utilities for downloading,
 //! verifying, and extracting runtime archives.
 
-use std::{fs::File, time::Duration};
+use std::{fs::File, io::IsTerminal, time::Duration};
 
 use backon::{ExponentialBuilder, Retryable};
 use futures_util::StreamExt;
+use indicatif::{ProgressBar, ProgressStyle};
 use sha2::{Digest, Sha256};
 use tokio::{fs, io::AsyncWriteExt};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
@@ -27,7 +28,7 @@ pub struct CachedFetchResponse {
     pub not_modified: bool,
 }
 
-/// Download a file with retry logic
+/// Download a file with retry logic and progress bar
 pub async fn download_file(url: &str, target_path: &AbsolutePath) -> Result<(), Error> {
     tracing::debug!("Downloading {url} to {target_path:?}");
 
@@ -41,16 +42,70 @@ pub async fn download_file(url: &str, target_path: &AbsolutePath) -> Result<(), 
         .await
         .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
 
-    // Stream to file
+    // Get Content-Length for progress bar
+    let total_size = response.content_length();
+
+    // Extract filename for display
+    let filename = target_path
+        .as_path()
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "file".to_string());
+
+    // Create progress bar (only in TTY and not in CI)
+    let is_ci = std::env::var("CI").is_ok();
+    let progress = if std::io::stderr().is_terminal() && !is_ci {
+        let pb = match total_size {
+            Some(size) => {
+                let pb = ProgressBar::new(size);
+                pb.set_style(
+                    ProgressStyle::default_bar()
+                        .template(
+                            "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] \
+                             {bytes}/{total_bytes} ({bytes_per_sec}, {eta})",
+                        )
+                        .expect("valid progress bar template")
+                        .progress_chars("#>-"),
+                );
+                pb
+            }
+            None => {
+                let pb = ProgressBar::new_spinner();
+                pb.set_style(
+                    ProgressStyle::default_spinner()
+                        .template(
+                            "{spinner:.green} [{elapsed_precise}] {bytes} ({bytes_per_sec}) {msg}",
+                        )
+                        .expect("valid spinner template"),
+                );
+                pb.enable_steady_tick(Duration::from_millis(100));
+                pb
+            }
+        };
+        pb.set_message(format!("Downloading {filename}"));
+        Some(pb)
+    } else {
+        None
+    };
+
+    // Stream to file with progress updates
     let mut file = fs::File::create(target_path).await?;
     let mut stream = response.bytes_stream();
 
     while let Some(chunk_result) = stream.next().await {
         let chunk = chunk_result?;
+        if let Some(ref pb) = progress {
+            pb.inc(chunk.len() as u64);
+        }
         file.write_all(&chunk).await?;
     }
 
     file.flush().await?;
+
+    if let Some(pb) = progress {
+        pb.finish_with_message(format!("Downloaded {filename}"));
+    }
+
     tracing::debug!("Download completed: {target_path:?}");
 
     Ok(())
