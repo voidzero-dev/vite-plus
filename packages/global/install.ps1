@@ -53,13 +53,60 @@ function Get-Architecture {
     }
 }
 
-function Get-LatestVersion {
-    try {
-        $response = Invoke-RestMethod "$NpmRegistry/vite-plus-cli/latest"
-        return $response.version
-    } catch {
-        Write-Error-Exit "Failed to fetch latest version from npm registry: $_"
+# Cached package metadata
+$script:PackageMetadata = $null
+
+function Get-PackageMetadata {
+    if ($null -eq $script:PackageMetadata) {
+        try {
+            $versionPath = if ($ViteVersion -eq "latest") { "latest" } else { $ViteVersion }
+            $script:PackageMetadata = Invoke-RestMethod "$NpmRegistry/vite-plus-cli/$versionPath"
+        } catch {
+            Write-Error-Exit "Failed to fetch package metadata from npm registry: $_"
+        }
     }
+    return $script:PackageMetadata
+}
+
+function Get-VersionFromMetadata {
+    $metadata = Get-PackageMetadata
+    if (-not $metadata.version) {
+        Write-Error-Exit "Failed to extract version from package metadata"
+    }
+    return $metadata.version
+}
+
+function Get-PackageSuffix {
+    param([string]$Platform)
+
+    $metadata = Get-PackageMetadata
+    $optionalDeps = $metadata.optionalDependencies
+
+    if ($null -eq $optionalDeps) {
+        Write-Error-Exit "No optionalDependencies found in package metadata"
+    }
+
+    # Find matching package for platform
+    $prefix = "@voidzero-dev/vite-plus-cli-"
+    $matchingPackage = $null
+
+    foreach ($dep in $optionalDeps.PSObject.Properties.Name) {
+        if ($dep.StartsWith("$prefix$Platform")) {
+            $matchingPackage = $dep
+            break
+        }
+    }
+
+    if ($null -eq $matchingPackage) {
+        # List available platforms for helpful error message
+        $availablePlatforms = $optionalDeps.PSObject.Properties.Name |
+            ForEach-Object { $_.Replace($prefix, "") } |
+            Join-String -Separator ", "
+        Write-Error-Exit "Unsupported platform: $Platform. Available platforms: $availablePlatforms"
+    }
+
+    # Extract suffix by removing the package prefix
+    return $matchingPackage.Replace($prefix, "")
 }
 
 function Download-AndExtract {
@@ -122,13 +169,12 @@ function Main {
     Write-Host ""
 
     $arch = Get-Architecture
-    Write-Info "Detected architecture: win32-$arch"
+    $platform = "win32-$arch"
+    Write-Info "Detected platform: $platform"
 
-    # Get version
-    if ($ViteVersion -eq "latest") {
-        Write-Info "Fetching latest version..."
-        $ViteVersion = Get-LatestVersion
-    }
+    # Fetch package metadata and resolve version
+    Write-Info "Fetching package metadata..."
+    $ViteVersion = Get-VersionFromMetadata
     Write-Info "Installing vite-plus-cli v$ViteVersion"
 
     # Set up version-specific directories
@@ -137,11 +183,8 @@ function Main {
     $DistDir = "$VersionDir\dist"
     $CurrentLink = "$InstallDir\current"
 
-    # Package name (follows napi-rs convention)
-    if ($arch -eq "arm64") {
-        Write-Error-Exit "win32-arm64 is not currently supported. Only win32-x64 is supported."
-    }
-    $packageSuffix = "win32-$arch-msvc"
+    # Get package suffix from optionalDependencies (dynamic lookup)
+    $packageSuffix = Get-PackageSuffix -Platform $platform
     $packageName = "@voidzero-dev/vite-plus-cli-$packageSuffix"
     $binaryName = "vp.exe"
 
