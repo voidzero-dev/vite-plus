@@ -255,8 +255,8 @@ jobs:
             INSTALL_BASH="curl -fsSL https://viteplus.dev/install.sh | bash"
             INSTALL_PS1="irm https://viteplus.dev/install.ps1 | iex"
           else
-            INSTALL_BASH="curl -fsSL https://viteplus.dev/install.sh | VERSION=${{ env.VERSION }} bash"
-            INSTALL_PS1="\\\$env:VERSION=\\\"${{ env.VERSION }}\\\"; irm https://viteplus.dev/install.ps1 | iex"
+            INSTALL_BASH="curl -fsSL https://viteplus.dev/install.sh | VITE_PLUS_VERSION=${{ env.VERSION }} bash"
+            INSTALL_PS1="\\\$env:VITE_PLUS_VERSION=\\\"${{ env.VERSION }}\\\"; irm https://viteplus.dev/install.ps1 | iex"
           fi
           cat > ./RELEASE_BODY.md <<EOF
           ## vite-plus v${{ env.VERSION }}

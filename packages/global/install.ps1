@@ -186,7 +186,7 @@ function Cleanup-OldVersions {
 
 function Main {
     Write-Host ""
-    Write-Host "  Vite+ CLI Installer"
+    Write-Host "  VITE+(⚡︎) Installer"
     Write-Host ""
 
     $arch = Get-Architecture

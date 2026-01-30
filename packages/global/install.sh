@@ -270,7 +270,7 @@ cleanup_old_versions() {
 
 main() {
   echo ""
-  echo "  Vite+ CLI Installer"
+  echo "  VITE+(⚡︎) Installer"
   echo ""
 
   check_requirements
