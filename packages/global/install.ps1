@@ -171,10 +171,6 @@ function Main {
             Copy-Item -Path $binarySource -Destination $BinDir -Force
         }
 
-        # Create vp.cmd wrapper so users can run 'vp' without .exe extension
-        $cmdContent = "@echo off`r`n`"%~dp0vp.exe`" %*`r`n"
-        Set-Content -Path "$BinDir\vp.cmd" -Value $cmdContent -NoNewline
-
         # Copy .node files to DistDir (delete existing first to avoid system cache issues)
         $nodeFilesPath = Join-Path $platformTempExtract "package"
         Get-ChildItem -Path $nodeFilesPath -Filter "*.node" -ErrorAction SilentlyContinue | ForEach-Object {

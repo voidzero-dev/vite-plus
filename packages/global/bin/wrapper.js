@@ -5,6 +5,9 @@ import { accessSync, chmodSync, constants, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { debuglog } from 'node:util';
+
+const debug = debuglog('vite-plus/global/bin/wrapper');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -81,15 +84,17 @@ if (binaryPath) {
   // Rust binary mode: execute the native binary
   // Set VITE_GLOBAL_CLI_JS_SCRIPTS_DIR to point to the dist/ directory
   const jsScriptsDir = join(__dirname, '..', 'dist');
+  const env = {
+    ...process.env,
+    VITE_GLOBAL_CLI_JS_SCRIPTS_DIR: jsScriptsDir,
+  };
+  const args = process.argv.slice(2);
+  debug('execFileSync binaryPath: %o', binaryPath);
+  debug('execFileSync args: %o', args);
+  debug('execFileSync env: %o', env);
 
   try {
-    execFileSync(binaryPath, process.argv.slice(2), {
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        VITE_GLOBAL_CLI_JS_SCRIPTS_DIR: jsScriptsDir,
-      },
-    });
+    execFileSync(binaryPath, args, { stdio: 'inherit', env });
   } catch (error) {
     // execFileSync throws on non-zero exit codes, propagate the exit code
     process.exit(error.status ?? 1);
