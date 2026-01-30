@@ -111,7 +111,6 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     let cache_dir = crate::cache::get_cache_dir()?;
 
     // Get paths from provider
-    let platform_str = provider.platform_string(platform);
     let binary_relative_path = provider.binary_relative_path(platform);
     let bin_dir_relative_path = provider.bin_dir_relative_path(platform);
 
@@ -139,7 +138,8 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
         tokio::fs::remove_dir_all(&install_dir).await?;
     }
 
-    tracing::info!("Downloading {} {version} for {platform_str}...", provider.name());
+    let download_message = format!("Downloading {} v{version}...", provider.name());
+    tracing::info!("{download_message}");
 
     // Get download info from provider
     let download_info = provider.get_download_info(version, platform);
@@ -159,7 +159,7 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
                 provider.parse_shasums(&shasums_content, &download_info.archive_filename)?;
 
             // Download archive
-            download_file(&download_info.archive_url, &archive_path).await?;
+            download_file(&download_info.archive_url, &archive_path, &download_message).await?;
 
             // Verify hash
             verify_file_hash(&archive_path, &expected_hash, &download_info.archive_filename)
@@ -167,7 +167,7 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
         }
         HashVerification::None => {
             // Download archive without verification
-            download_file(&download_info.archive_url, &archive_path).await?;
+            download_file(&download_info.archive_url, &archive_path, &download_message).await?;
         }
     }
 

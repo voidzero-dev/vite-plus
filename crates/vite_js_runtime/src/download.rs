@@ -29,7 +29,14 @@ pub struct CachedFetchResponse {
 }
 
 /// Download a file with retry logic and progress bar
-pub async fn download_file(url: &str, target_path: &AbsolutePath) -> Result<(), Error> {
+///
+/// The `message` parameter is displayed to the user to indicate what is being downloaded
+/// (e.g., "Downloading Node.js v22.13.1").
+pub async fn download_file(
+    url: &str,
+    target_path: &AbsolutePath,
+    message: &str,
+) -> Result<(), Error> {
     tracing::debug!("Downloading {url} to {target_path:?}");
 
     let response = (|| async { reqwest::get(url).await?.error_for_status() })
@@ -45,13 +52,6 @@ pub async fn download_file(url: &str, target_path: &AbsolutePath) -> Result<(), 
     // Get Content-Length for progress bar
     let total_size = response.content_length();
 
-    // Extract filename for display
-    let filename = target_path
-        .as_path()
-        .file_name()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "file".to_string());
-
     // Create progress bar (only in TTY and not in CI)
     let is_ci = std::env::var("CI").is_ok();
     let progress = if std::io::stderr().is_terminal() && !is_ci {
@@ -61,7 +61,7 @@ pub async fn download_file(url: &str, target_path: &AbsolutePath) -> Result<(), 
                 pb.set_style(
                     ProgressStyle::default_bar()
                         .template(
-                            "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] \
+                            "{msg}\n{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] \
                              {bytes}/{total_bytes} ({bytes_per_sec}, {eta})",
                         )
                         .expect("valid progress bar template")
@@ -74,7 +74,7 @@ pub async fn download_file(url: &str, target_path: &AbsolutePath) -> Result<(), 
                 pb.set_style(
                     ProgressStyle::default_spinner()
                         .template(
-                            "{spinner:.green} [{elapsed_precise}] {bytes} ({bytes_per_sec}) {msg}",
+                            "{msg}\n{spinner:.green} [{elapsed_precise}] {bytes} ({bytes_per_sec})",
                         )
                         .expect("valid spinner template"),
                 );
@@ -82,7 +82,7 @@ pub async fn download_file(url: &str, target_path: &AbsolutePath) -> Result<(), 
                 pb
             }
         };
-        pb.set_message(format!("Downloading {filename}"));
+        pb.set_message(message.to_string());
         Some(pb)
     } else {
         None
@@ -103,7 +103,7 @@ pub async fn download_file(url: &str, target_path: &AbsolutePath) -> Result<(), 
     file.flush().await?;
 
     if let Some(pb) = progress {
-        pb.finish_with_message(format!("Downloaded {filename}"));
+        pb.finish_and_clear();
     }
 
     tracing::debug!("Download completed: {target_path:?}");
