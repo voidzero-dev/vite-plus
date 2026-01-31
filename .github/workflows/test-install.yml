@@ -57,6 +57,28 @@ jobs:
           vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
           cd hello && vp run build
 
+      - name: Verify shims setup
+        run: |
+          # Verify shims directory was created by vp env --setup
+          SHIMS_PATH="$HOME/.vite-plus/shims"
+          if [ ! -d "$SHIMS_PATH" ]; then
+            echo "Error: Shims directory not found: $SHIMS_PATH"
+            exit 1
+          fi
+
+          # Verify shim executables exist
+          for shim in node npm npx; do
+            if [ ! -f "$SHIMS_PATH/$shim" ]; then
+              echo "Error: Shim not found: $SHIMS_PATH/$shim"
+              exit 1
+            fi
+            echo "Found shim: $SHIMS_PATH/$shim"
+          done
+
+          # Verify vp env --doctor works
+          export PATH="$HOME/.vite-plus/current/bin:$PATH"
+          vp env --doctor
+
   test-install-sh-arm64:
     name: Test install.sh (Linux ARM64 glibc via QEMU)
     runs-on: ubuntu-latest
@@ -82,6 +104,22 @@ jobs:
               vp --version
               vp --help
               vp dlx print-current-version
+
+              # Verify shims setup
+              SHIMS_PATH=\"\$HOME/.vite-plus/shims\"
+              if [ ! -d \"\$SHIMS_PATH\" ]; then
+                echo \"Error: Shims directory not found: \$SHIMS_PATH\"
+                exit 1
+              fi
+              for shim in node npm npx; do
+                if [ ! -f \"\$SHIMS_PATH/\$shim\" ]; then
+                  echo \"Error: Shim not found: \$SHIMS_PATH/\$shim\"
+                  exit 1
+                fi
+                echo \"Found shim: \$SHIMS_PATH/\$shim\"
+              done
+              vp env --doctor
+
               export VITE_LOG=trace
               # FIXME: qemu: uncaught target signal 11 (Segmentation fault) - core dumped
               # vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
@@ -115,3 +153,28 @@ jobs:
           # test new command
           vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
           cd hello && vp run build
+
+      - name: Verify shims setup
+        shell: pwsh
+        run: |
+          # Verify shims directory was created by vp env --setup
+          $shimsPath = "$env:USERPROFILE\.vite-plus\shims"
+          if (-not (Test-Path $shimsPath)) {
+            Write-Error "Shims directory not found: $shimsPath"
+            exit 1
+          }
+
+          # Verify shim executables exist
+          $expectedShims = @("node.exe", "npm.cmd", "npx.cmd")
+          foreach ($shim in $expectedShims) {
+            $shimFile = Join-Path $shimsPath $shim
+            if (-not (Test-Path $shimFile)) {
+              Write-Error "Shim not found: $shimFile"
+              exit 1
+            }
+            Write-Host "Found shim: $shimFile"
+          }
+
+          # Verify vp env --doctor works
+          $env:Path = "$env:USERPROFILE\.vite-plus\current\bin;$env:Path"
+          vp env --doctor

@@ -335,7 +335,9 @@ function Main {
         $shimsNeedsPathUpdate = $false
     }
 
-    if ($shimsNeedsPathUpdate -and (Test-Path $shimsPath)) {
+    # Only prompt in interactive mode (not CI)
+    $isInteractive = [Environment]::UserInteractive -and -not $env:CI
+    if ($shimsNeedsPathUpdate -and (Test-Path $shimsPath) -and $isInteractive) {
         # Prompt user for shims PATH configuration
         Write-Host ""
         Write-Host "Node.js shims created in $shimsPath"
