@@ -30,7 +30,7 @@ Package Manager Commands:
   why        Show why a package is installed
 
 Options:
-  -V, --version  Print version (delegates to JS for full version info)
+  -V, --version  Print version
   -h, --help     Print help
 
 > vp -V # show version

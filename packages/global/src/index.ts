@@ -1,6 +1,14 @@
 // Parse command line arguments to intercept 'new', 'migrate', and '--version' commands
 // All other commands are delegated to the local CLI
-const command = process.argv[2];
+let args = process.argv.slice(2);
+
+// Transform `vp help [command]` into `vp [command] --help`
+if (args[0] === 'help' && args[1]) {
+  args = [args[1], '--help', ...args.slice(2)];
+  process.argv = process.argv.slice(0, 2).concat(args);
+}
+
+const command = args[0];
 
 if (command === 'new') {
   import('./new/bin.js');

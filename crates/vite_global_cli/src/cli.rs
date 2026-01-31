@@ -30,7 +30,7 @@ use crate::{
 )]
 #[command(disable_help_subcommand = true, disable_version_flag = true)]
 pub struct Args {
-    /// Print version (delegates to JS for full version info)
+    /// Print version
     #[arg(short = 'V', long = "version")]
     pub version: bool,
 
@@ -501,33 +501,16 @@ pub enum Commands {
     // Category B: JS Script Commands
     // These commands are implemented in JavaScript and executed via managed Node.js
     // =========================================================================
-    /// Create a new project from a template
-    ///
-    /// Use any builtin, local or remote template with Vite+.
-    ///
-    /// Templates:
-    ///   - Builtin: vite:monorepo, vite:application, vite:library, vite:generator
-    ///   - Remote: create-vite, @tanstack/create-start, create-next-app, etc.
-    ///   - GitHub: github:user/repo, https://github.com/user/template-repo
-    ///   - Local: @company/generator-*, ./tools/create-ui-component
-    ///
-    /// Examples:
-    ///   vp new                              # Interactive mode
-    ///   vp new vite:monorepo                # Create monorepo
-    ///   vp new create-vite                  # Use create-vite template
-    ///   vp new create-vite -- --template react-ts  # Pass options to template
-    #[command(
-        after_help = "Run 'vp new --list' to see available templates.\nArguments after -- are passed directly to the template."
-    )]
+    /// Create a new project from a template (delegates to JS)
+    #[command(disable_help_flag = true)]
     New {
-        /// All arguments (template, options, and template args after --)
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
 
-    /// Migrate an existing project to Vite+
+    /// Migrate an existing project to Vite+ (delegates to JS)
+    #[command(disable_help_flag = true)]
     Migrate {
-        /// All arguments for the migration command
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
@@ -1297,9 +1280,8 @@ fn apply_custom_help(cmd: clap::Command) -> clap::Command {
     cmd.after_help(after_help).help_template(help_template)
 }
 
-/// Parse CLI arguments with custom help formatting.
-pub fn parse_args() -> Args {
-    // We need to parse with the custom help template to ensure -h shows the right format
+/// Parse CLI arguments from a custom args iterator with custom help formatting.
+pub fn parse_args_from(args: impl IntoIterator<Item = String>) -> Args {
     let cmd = apply_custom_help(Args::command());
-    Args::from_arg_matches(&cmd.get_matches()).expect("Failed to parse CLI arguments")
+    Args::from_arg_matches(&cmd.get_matches_from(args)).expect("Failed to parse CLI arguments")
 }
