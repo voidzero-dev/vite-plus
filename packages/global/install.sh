@@ -42,6 +42,88 @@ error() {
   exit 1
 }
 
+# Print user-friendly error message for curl failures
+# Arguments: exit_code url
+print_curl_error() {
+  local exit_code="$1"
+  local url="$2"
+
+  # Map curl exit codes to user-friendly messages
+  local error_desc
+  case $exit_code in
+    6)
+      error_desc="DNS resolution failed - could not resolve hostname"
+      ;;
+    7)
+      error_desc="Connection refused - the server may be down or unreachable"
+      ;;
+    28)
+      error_desc="Connection timed out"
+      ;;
+    35)
+      error_desc="SSL/TLS connection error"
+      ;;
+    60)
+      error_desc="SSL certificate verification failed"
+      ;;
+    *)
+      error_desc="Network error"
+      ;;
+  esac
+
+  echo ""
+  echo -e "${RED}error${NC}: ${error_desc} (curl exit code ${exit_code})"
+  echo ""
+  echo "  This may be caused by:"
+  echo "    - Network connectivity issues"
+  echo "    - Firewall or proxy blocking the connection"
+  echo "    - DNS configuration problems"
+  if [ $exit_code -eq 35 ] || [ $exit_code -eq 60 ]; then
+    echo "    - Outdated SSL/TLS libraries"
+  fi
+  echo ""
+  if [ -n "$url" ]; then
+    echo "  Failed URL: $url"
+    echo ""
+    echo "  To debug, run:"
+    echo "    curl -v \"$url\""
+    echo ""
+  fi
+  exit 1
+}
+
+# Wrapper for curl with user-friendly error messages
+# Arguments: same as curl
+# Returns: exits with error message on failure, otherwise returns curl output
+curl_with_error_handling() {
+  local url=""
+  local args=()
+
+  # Parse arguments to find the URL (for error messages)
+  for arg in "$@"; do
+    case "$arg" in
+      http://*|https://*)
+        url="$arg"
+        ;;
+    esac
+    args+=("$arg")
+  done
+
+  # Run curl and capture exit code
+  set +e
+  local output exit_code
+  output=$(curl "${args[@]}" 2>&1)
+  exit_code=$?
+  set -e
+
+  if [ $exit_code -eq 0 ]; then
+    echo "$output"
+    return 0
+  fi
+
+  print_curl_error "$exit_code" "$url"
+}
+
 # Detect libc type on Linux (gnu or musl)
 detect_libc() {
   # Check for musl dynamic linker (most reliable method)
@@ -121,7 +203,7 @@ fetch_package_metadata() {
       version_path="$VITE_PLUS_VERSION"
     fi
     metadata_url="${NPM_REGISTRY}/vite-plus-cli/${version_path}"
-    PACKAGE_METADATA=$(curl -s "$metadata_url")
+    PACKAGE_METADATA=$(curl_with_error_handling -s "$metadata_url")
     if [ -z "$PACKAGE_METADATA" ]; then
       error "Failed to fetch package metadata from: $metadata_url"
     fi
@@ -193,7 +275,17 @@ download_and_extract() {
   # Download to temp file first to show progress bar, then extract
   local temp_file
   temp_file=$(mktemp)
+
+  # Run curl and capture exit code for error handling
+  set +e
   curl -L --progress-bar "$url" -o "$temp_file"
+  local exit_code=$?
+  set -e
+
+  if [ $exit_code -ne 0 ]; then
+    rm -f "$temp_file"
+    print_curl_error "$exit_code" "$url"
+  fi
 
   if [ -n "$filter" ]; then
     tar xzf "$temp_file" -C "$dest_dir" --strip-components="$strip_components" "$filter" 2>/dev/null || \
