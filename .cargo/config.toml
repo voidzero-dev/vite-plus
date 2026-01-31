@@ -8,10 +8,6 @@ rustflags = ["--cfg", "tokio_unstable"] # also update .github/workflows/ci.yml
 [target.'cfg(target_os = "linux")']
 rustflags = ["--cfg", "tokio_unstable", "-C", "link-args=-Wl,--warn-unresolved-symbols"]
 
-# Required for aarch64-linux-gnu-gcc linker on Ubuntu x86_64
-[target.aarch64-unknown-linux-gnu]
-linker = "aarch64-linux-gnu-gcc"
-
 [unstable]
 bindeps = true
 

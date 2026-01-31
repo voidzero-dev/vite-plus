@@ -300,7 +300,7 @@
     "oxlint-tsgolint": "catalog:"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^3.4.1",
+    "@napi-rs/cli": "catalog:",
     "@oxc-node/core": "^0.0.32",
     "@voidzero-dev/vite-plus-tools": "workspace:",
     "rolldown": "workspace:*",

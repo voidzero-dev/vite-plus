@@ -43,13 +43,19 @@ jobs:
         run: bash packages/global/install.sh
 
       - name: Verify installation
+        working-directory: ${{ runner.temp }}
         run: |
           # Source shell config to get PATH updated
-          source ~/.zshrc 2>/dev/null || source ~/.bashrc 2>/dev/null || true
-          # Also check if symlink was created in ~/.local/bin
-          export PATH="$HOME/.local/bin:$HOME/.vite-plus/current/bin:$PATH"
+          if [ -f ~/.zshrc ]; then
+            source ~/.zshrc
+          elif [ -f ~/.bashrc ]; then
+            source ~/.bashrc
+          fi
           vp --version
           vp --help
+          # test new command
+          vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          cd hello && vp run build
 
   test-install-sh-arm64:
     name: Test install.sh (Linux ARM64 glibc via QEMU)
@@ -75,6 +81,11 @@ jobs:
               export PATH=\"\$HOME/.local/bin:\$HOME/.vite-plus/current/bin:\$PATH\"
               vp --version
               vp --help
+              vp dlx print-current-version
+              export VITE_LOG=trace
+              # FIXME: qemu: uncaught target signal 11 (Segmentation fault) - core dumped
+              # vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+              # cd hello && vp run build
             "
 
   test-install-ps1:
@@ -94,8 +105,13 @@ jobs:
 
       - name: Verify installation
         shell: pwsh
+        working-directory: ${{ runner.temp }}
         run: |
           # Refresh PATH from environment
           $env:Path = "$env:USERPROFILE\.vite-plus\current\bin;$env:Path"
           vp --version
           vp --help
+          # $env:VITE_LOG = "trace"
+          # test new command
+          vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          cd hello && vp run build
