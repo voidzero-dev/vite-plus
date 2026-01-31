@@ -16,7 +16,29 @@ use std::process::ExitCode;
 
 use vite_path::AbsolutePathBuf;
 
-use crate::cli::{parse_args, run_command};
+use crate::cli::{parse_args_from, run_command};
+
+/// Normalize help arguments: transform `help [command]` into `[command] --help`
+fn normalize_help_args() -> Vec<String> {
+    let args: Vec<String> = std::env::args().collect();
+
+    // Skip the binary name (args[0])
+    match args.get(1).map(String::as_str) {
+        // `vp help` alone -> show main help
+        Some("help") if args.len() == 2 => vec![args[0].clone(), "--help".to_string()],
+        // `vp help [command] [args...]` -> `vp [command] --help [args...]`
+        Some("help") if args.len() > 2 => {
+            let mut normalized = Vec::with_capacity(args.len());
+            normalized.push(args[0].clone()); // binary name
+            normalized.push(args[2].clone()); // command
+            normalized.push("--help".to_string());
+            normalized.extend(args[3..].iter().cloned()); // remaining args
+            normalized
+        }
+        // No transformation needed
+        _ => args,
+    }
+}
 
 fn main() -> ExitCode {
     // Initialize tracing
@@ -38,8 +60,11 @@ fn main() -> ExitCode {
         }
     };
 
+    // Normalize help arguments: transform `help [command]` into `[command] --help`
+    let normalized_args = normalize_help_args();
+
     // Parse CLI arguments (using custom help formatting)
-    let args = parse_args();
+    let args = parse_args_from(normalized_args);
 
     // Run the async runtime
     let runtime = tokio::runtime::Builder::new_multi_thread()
