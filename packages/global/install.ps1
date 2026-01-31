@@ -6,13 +6,13 @@
 #
 # Environment variables:
 #   VITE_PLUS_VERSION - Version to install (default: latest)
-#   VITE_PLUS_INSTALL_DIR - Installation directory (default: $env:USERPROFILE\.vite-plus)
+#   VITE_PLUS_HOME - Installation directory (default: $env:USERPROFILE\.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 
 $ErrorActionPreference = "Stop"
 
 $ViteVersion = if ($env:VITE_PLUS_VERSION) { $env:VITE_PLUS_VERSION } else { "latest" }
-$InstallDir = if ($env:VITE_PLUS_INSTALL_DIR) { $env:VITE_PLUS_INSTALL_DIR } else { "$env:USERPROFILE\.vite-plus" }
+$InstallDir = if ($env:VITE_PLUS_HOME) { $env:VITE_PLUS_HOME } else { "$env:USERPROFILE\.vite-plus" }
 # npm registry URL (strip trailing slash if present)
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
 

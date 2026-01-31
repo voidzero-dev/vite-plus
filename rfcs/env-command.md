@@ -21,6 +21,7 @@ This RFC proposes adding a `vp env` command that provides system-wide, IDE-safe 
 ### Proposed Solution
 
 A shim-based approach where:
+
 - `VITE_PLUS_HOME/shims/` directory is added to PATH (system-level for IDE reliability)
 - Shims (`node`, `npm`, `npx`) are hardlinks/copies of the `vp` binary
 - The binary detects invocation via `argv[0]` and dispatches accordingly
@@ -110,7 +111,7 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 {
   // Default Node.js version when no project version file is found
   // Set via: vp env default <version>
-  "defaultNodeVersion": "20.18.0"
+  "defaultNodeVersion": "20.18.0",
 
   // Alternatively, use aliases:
   // "defaultNodeVersion": "lts"     // Always use latest LTS
@@ -119,6 +120,7 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 ```
 
 **Note**: Node.js binaries continue to use existing cache location:
+
 - Linux: `~/.cache/vite-plus/js_runtime/node/{version}/`
 - macOS: `~/Library/Caches/vite-plus/js_runtime/node/{version}/`
 - Windows: `%LOCALAPPDATA%\vite-plus\js_runtime\node\{version}\`
@@ -410,6 +412,7 @@ impl ResolveCache {
 **Decision**: Use a single `vp` binary that detects shim mode from `argv[0]`.
 
 **Rationale**:
+
 - Simplifies upgrades (update one binary, refresh shims)
 - Reduces disk usage vs separate binaries
 - Consistent behavior across all tools
@@ -420,6 +423,7 @@ impl ResolveCache {
 **Decision**: Use hardlinks for shims on Unix, with fallback to copy.
 
 **Rationale**:
+
 - Hardlinks work across more filesystem types than symlinks
 - Symlinks can cause argv[0] to resolve to the target name
 - Hardlinks preserve the intended argv[0] value
@@ -430,6 +434,7 @@ impl ResolveCache {
 **Decision**: Use `.cmd` wrapper scripts for npm/npx on Windows with `VITE_PLUS_SHIM_TOOL` environment variable.
 
 **Rationale**:
+
 - Windows PATH resolution prefers `.cmd` over `.exe` for extensionless commands
 - npm is typically invoked as `npm` not `npm.exe`
 - `.cmd` wrappers set `VITE_PLUS_SHIM_TOOL` env var and forward to `vp.exe`
@@ -440,6 +445,7 @@ impl ResolveCache {
 **Decision**: Use `execve` (process replacement) on Unix, `spawn` on Windows.
 
 **Rationale**:
+
 - `execve` preserves PID, signals, and process hierarchy on Unix
 - Windows doesn't support `execve`-style process replacement
 - `spawn` on Windows with proper exit code propagation is standard practice
@@ -449,6 +455,7 @@ impl ResolveCache {
 **Decision**: Keep VITE_PLUS_HOME (shims, config) separate from cache (Node binaries).
 
 **Rationale**:
+
 - Cache uses XDG/platform-standard locations (already implemented)
 - VITE_PLUS_HOME needs to be user-accessible for PATH configuration
 - Allows clearing cache without breaking shim setup
@@ -458,6 +465,7 @@ impl ResolveCache {
 **Decision**: Invalidate resolution cache when version file mtime changes.
 
 **Rationale**:
+
 - Fast O(1) validation (stat call)
 - No need to re-parse files on every invocation
 - Content changes trigger mtime updates
@@ -479,6 +487,7 @@ v22.13.0  # Falls back to latest LTS
 ```
 
 The resolution order is:
+
 1. `.node-version` in current or parent directories
 2. `package.json#engines.node` in current or parent directories
 3. `package.json#devEngines.runtime` in current or parent directories
@@ -532,10 +541,12 @@ Recommended Fix:
 ### First-Time Setup via Install Script
 
 **Note on Directory Structure:**
+
 - CLI binary: `~/.vite-plus/current/bin/vp` (existing)
 - Shims directory: `~/.vite-plus/shims/` (new, for node/npm/npx intercept)
 
 The global CLI installation script (`packages/global/install.sh`) will be updated to:
+
 1. Install the `vp` binary (existing behavior)
 2. Run `vp env --setup` to create shims (new)
 3. Prompt user: "Would you like to add vite-plus node shims to your PATH? (y/n)" (new)
@@ -666,12 +677,12 @@ $ vp env --current --json
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `VITE_PLUS_HOME` | Base directory for shims and config | `~/.vite-plus` |
-| `VITE_PLUS_LOG` | Log level: debug, info, warn, error | `warn` |
-| `VITE_PLUS_DEBUG_SHIM` | Enable extra shim diagnostics | unset |
-| `VITE_PLUS_BYPASS` | Bypass shim and use system node | unset |
+| Variable               | Description                         | Default        |
+| ---------------------- | ----------------------------------- | -------------- |
+| `VITE_PLUS_HOME`       | Base directory for shims and config | `~/.vite-plus` |
+| `VITE_PLUS_LOG`        | Log level: debug, info, warn, error | `warn`         |
+| `VITE_PLUS_DEBUG_SHIM` | Enable extra shim diagnostics       | unset          |
+| `VITE_PLUS_BYPASS`     | Bypass shim and use system node     | unset          |
 
 ## Windows-Specific Considerations
 
@@ -697,6 +708,7 @@ exit /b %ERRORLEVEL%
 The `.cmd` wrapper sets `VITE_PLUS_SHIM_TOOL` environment variable before calling `node.exe` (which is a copy of `vp.exe`). The Rust binary checks this env var first before falling back to argv[0] detection.
 
 **Benefits of this approach**:
+
 - Single `vp.exe` binary to update (copied as `node.exe`)
 - `.cmd` wrappers are trivial text files
 - Clear separation of concerns: `.cmd` sets context, binary does the work
@@ -817,6 +829,7 @@ env-doctor/
 ## Implementation Plan
 
 ### Phase 1: Core Infrastructure (P0)
+
 1. Add `vp env` command structure to CLI
 2. Implement argv[0] detection in main.rs (also check `VITE_PLUS_SHIM_TOOL` env var for Windows)
 3. Implement shim dispatch logic for `node`
@@ -826,12 +839,14 @@ env-doctor/
 7. Implement `vp env default [version]` to set/show global default Node.js version
 
 ### Phase 2: Full Tool Support (P1)
+
 1. Add shims for `npm`, `npx`
 2. Implement `vp env --which`
 3. Implement `vp env --current --json`
 4. Enhanced doctor with conflict detection
 
 ### Phase 3: Polish (P2)
+
 1. Implement `vp env --print` for session-only env
 2. Add VITE_PLUS_BYPASS escape hatch
 3. Improve error messages
