@@ -4,9 +4,6 @@ inputs:
   target:
     description: 'The target platform'
     required: true
-  print-after-build:
-    description: 'Print the output after the build'
-    required: false
 
 runs:
   using: 'composite'
@@ -58,7 +55,7 @@ runs:
 
     # NAPI builds - only run on cache miss (slow, especially on Windows)
     # Must run before vite-plus/vite-plus-cli TypeScript builds which depend on the bindings
-    - name: Build NAPI bindings
+    - name: Build NAPI bindings (x86_64-linux)
       shell: bash
       if: steps.cache-restore.outputs.cache-hit != 'true' && inputs.target == 'x86_64-unknown-linux-gnu'
       run: |
@@ -68,17 +65,18 @@ runs:
         TARGET_CC: clang
         DEBUG: napi:*
 
-    - name: Build NAPI bindings
+    - name: Build NAPI bindings (aarch64-linux)
       shell: bash
       if: steps.cache-restore.outputs.cache-hit != 'true' && inputs.target == 'aarch64-unknown-linux-gnu'
       run: |
-        TARGET_CFLAGS="-D_BSD_SOURCE" pnpm --filter=vite-plus build-native --target ${{ inputs.target }} --use-napi-cross
-        TARGET_CFLAGS="-D_BSD_SOURCE" pnpm --filter=vite-plus-cli build-native --target ${{ inputs.target }} --use-napi-cross
+        pnpm --filter=vite-plus build-native --target ${{ inputs.target }} --use-napi-cross
+        pnpm --filter=vite-plus-cli build-native --target ${{ inputs.target }} --use-napi-cross
       env:
         TARGET_CC: clang
+        TARGET_CFLAGS: '-D_BSD_SOURCE'
         DEBUG: napi:*
 
-    - name: Build NAPI bindings
+    - name: Build NAPI bindings (non-Linux targets)
       shell: bash
       if: steps.cache-restore.outputs.cache-hit != 'true' && !contains(inputs.target, 'linux')
       run: |
@@ -86,17 +84,6 @@ runs:
         pnpm --filter=vite-plus-cli build-native --target ${{ inputs.target }}
       env:
         DEBUG: napi:*
-
-    - name: Print output after build
-      shell: bash
-      if: inputs.print-after-build == 'true'
-      run: |
-        pnpm vite -h
-        pnpm vite run -h
-        pnpm vite lint -h
-        pnpm vite test -h
-        pnpm vite build -h
-        pnpm vite fmt -h
 
     - name: Build Rust CLI binary (x86_64-linux)
       if: steps.cache-restore.outputs.cache-hit != 'true' && inputs.target == 'x86_64-unknown-linux-gnu'
@@ -106,6 +93,7 @@ runs:
       env:
         TARGET_CC: clang
         DEBUG: napi:*
+
     - name: Build Rust CLI binary (aarch64-linux)
       if: steps.cache-restore.outputs.cache-hit != 'true' && inputs.target == 'aarch64-unknown-linux-gnu'
       shell: bash
@@ -115,6 +103,7 @@ runs:
         TARGET_CC: clang
         TARGET_CFLAGS: '-D_BSD_SOURCE'
         DEBUG: napi:*
+
     - name: Build Rust CLI binary (non-Linux targets)
       if: steps.cache-restore.outputs.cache-hit != 'true' && !contains(inputs.target, 'linux')
       shell: bash
@@ -153,3 +142,14 @@ runs:
       run: |
         pnpm --filter=vite-plus build-ts
         pnpm --filter=vite-plus-cli build-ts
+
+    - name: Print output after build
+      shell: bash
+      if: inputs.print-after-build == 'true'
+      run: |
+        pnpm vite -h
+        pnpm vite run -h
+        pnpm vite lint -h
+        pnpm vite test -h
+        pnpm vite build -h
+        pnpm vite fmt -h
