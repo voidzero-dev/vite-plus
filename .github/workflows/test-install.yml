@@ -1,0 +1,101 @@
+name: Test Install Scripts
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'packages/global/install.sh'
+      - 'packages/global/install.ps1'
+      - '.github/workflows/test-install.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test-install-sh:
+    name: Test install.sh (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux x64 glibc
+          - os: macos-15-intel
+            name: macOS x64
+          - os: namespace-profile-mac-default
+            name: macOS ARM64
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Run install.sh
+        env:
+          VITE_PLUS_VERSION: test
+        run: bash packages/global/install.sh
+
+      - name: Verify installation
+        run: |
+          # Source shell config to get PATH updated
+          source ~/.zshrc 2>/dev/null || source ~/.bashrc 2>/dev/null || true
+          # Also check if symlink was created in ~/.local/bin
+          export PATH="$HOME/.local/bin:$HOME/.vite-plus/current/bin:$PATH"
+          vp --version
+          vp --help
+
+  test-install-sh-arm64:
+    name: Test install.sh (Linux ARM64 glibc via QEMU)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+        with:
+          platforms: arm64
+
+      - name: Run install.sh in ARM64 container
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v "${{ github.workspace }}:/workspace" \
+            -e VITE_PLUS_VERSION=test \
+            ubuntu:24.04 bash -c "
+              apt-get update && apt-get install -y curl ca-certificates
+              bash /workspace/packages/global/install.sh
+              export PATH=\"\$HOME/.local/bin:\$HOME/.vite-plus/current/bin:\$PATH\"
+              vp --version
+              vp --help
+            "
+
+  test-install-ps1:
+    name: Test install.ps1 (Windows x64)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Run install.ps1
+        shell: pwsh
+        env:
+          VITE_PLUS_VERSION: test
+        run: |
+          & ./packages/global/install.ps1
+
+      - name: Verify installation
+        shell: pwsh
+        run: |
+          # Refresh PATH from environment
+          $env:Path = "$env:USERPROFILE\.vite-plus\current\bin;$env:Path"
+          vp --version
+          vp --help

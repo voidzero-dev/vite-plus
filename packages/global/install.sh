@@ -265,20 +265,20 @@ get_package_suffix() {
   PACKAGE_SUFFIX="${matching_package#@voidzero-dev/vite-plus-cli-}"
 }
 
-# Download and extract file
+# Download and extract file (silent mode - no progress bar)
 download_and_extract() {
   local url="$1"
   local dest_dir="$2"
   local strip_components="$3"
   local filter="$4"
 
-  # Download to temp file first to show progress bar, then extract
+  # Download to temp file (silent mode)
   local temp_file
   temp_file=$(mktemp)
 
   # Run curl and capture exit code for error handling
   set +e
-  curl -L --progress-bar "$url" -o "$temp_file"
+  curl -sL "$url" -o "$temp_file"
   local exit_code=$?
   set -e
 
@@ -354,29 +354,90 @@ cleanup_old_versions() {
     done | sort -n | head -n $((count - max_versions)) | cut -d' ' -f2-)
   fi
 
-  # Delete oldest versions
+  # Delete oldest versions (silently)
   for old_version in $sorted_versions; do
-    info "Removing old version: $(basename "$old_version")"
     rm -rf "$old_version"
   done
 }
 
+# Setup PATH - try ~/.local/bin symlink first, fallback to shell profile
+# Returns via global variables:
+#   SYMLINK_CREATED - "true" if symlink was created, "false" otherwise
+#   SHELL_CONFIG_UPDATED - shell config file name if updated, empty otherwise
+#   PATH_ALREADY_CONFIGURED - "true" if PATH was already set up
+setup_path() {
+  local local_bin="$HOME/.local/bin"
+  local path_to_add="$INSTALL_DIR/current/bin"
+
+  SYMLINK_CREATED="false"
+  SHELL_CONFIG_UPDATED=""
+  PATH_ALREADY_CONFIGURED="false"
+
+  # Check if ~/.local/bin is in PATH
+  if echo "$PATH" | tr ':' '\n' | grep -qx "$local_bin"; then
+    # Create ~/.local/bin if it doesn't exist
+    mkdir -p "$local_bin"
+    # Create symlink (force overwrite if exists)
+    ln -sf "$INSTALL_DIR/current/bin/vp" "$local_bin/vp"
+    SYMLINK_CREATED="true"
+    return 0
+  fi
+
+  # Fall back to adding to shell profile
+  local path_result=1  # 0=added, 1=failed, 2=already exists
+
+  case "$SHELL" in
+    */zsh)
+      add_to_path "$HOME/.zshrc"
+      path_result=$?
+      [ $path_result -ne 1 ] && SHELL_CONFIG_UPDATED=".zshrc"
+      ;;
+    */bash)
+      add_to_path "$HOME/.bashrc"
+      path_result=$?
+      if [ $path_result -ne 1 ]; then
+        SHELL_CONFIG_UPDATED=".bashrc"
+      else
+        add_to_path "$HOME/.bash_profile"
+        path_result=$?
+        [ $path_result -ne 1 ] && SHELL_CONFIG_UPDATED=".bash_profile"
+      fi
+      ;;
+    */fish)
+      local fish_config="$HOME/.config/fish/config.fish"
+      if [ -f "$fish_config" ]; then
+        if grep -q "$path_to_add" "$fish_config" 2>/dev/null; then
+          path_result=2
+          SHELL_CONFIG_UPDATED="config.fish"
+        else
+          echo "" >> "$fish_config"
+          echo "# Added by vite-plus installer" >> "$fish_config"
+          echo "set -gx PATH $path_to_add \$PATH" >> "$fish_config"
+          path_result=0
+          SHELL_CONFIG_UPDATED="config.fish"
+        fi
+      fi
+      ;;
+  esac
+
+  if [ $path_result -eq 2 ]; then
+    PATH_ALREADY_CONFIGURED="true"
+  fi
+}
+
 main() {
   echo ""
-  echo "  VITE+(⚡︎) Installer"
+  echo "Setting up VITE+(⚡︎)..."
   echo ""
 
   check_requirements
 
   local platform
   platform=$(detect_platform)
-  info "Detected platform: $platform"
 
   # Fetch package metadata and resolve version
-  info "Fetching package metadata..."
   get_version_from_metadata
   VITE_PLUS_VERSION="$RESOLVED_VERSION"
-  info "Installing vite-plus-cli v${VITE_PLUS_VERSION}"
 
   # Set up version-specific directories
   VERSION_DIR="$INSTALL_DIR/$VITE_PLUS_VERSION"
@@ -398,7 +459,6 @@ main() {
 
   # Download and extract native binary and .node files from platform package
   local platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${PACKAGE_SUFFIX}-${VITE_PLUS_VERSION}.tgz"
-  info "Downloading platform package..."
 
   # Create temp directory for extraction
   local platform_temp_dir
@@ -418,7 +478,6 @@ main() {
 
   # Download and extract JS bundle from main package
   local main_url="${NPM_REGISTRY}/vite-plus-cli/-/vite-plus-cli-${VITE_PLUS_VERSION}.tgz"
-  info "Downloading JS scripts..."
 
   # Create temp directory for extraction
   local temp_dir
@@ -456,7 +515,6 @@ main() {
   ' "$pkg_file" > "$pkg_file.tmp" && mv "$pkg_file.tmp" "$pkg_file"
 
   # Install production dependencies
-  info "Installing dependencies..."
   (cd "$VERSION_DIR" && CI=true "$BIN_DIR/vp" install --silent)
 
   # Create/update current symlink (use relative path for portability)
@@ -465,70 +523,35 @@ main() {
   # Cleanup old versions
   cleanup_old_versions
 
-  success "Vite+ CLI installed to $VERSION_DIR"
+  # Setup PATH (sets SYMLINK_CREATED, SHELL_CONFIG_UPDATED, PATH_ALREADY_CONFIGURED)
+  setup_path
 
-  # Update PATH
-  echo ""
-  local path_result=1  # 0=added, 1=failed, 2=already exists
-  local shell_config=""
-
-  case "$SHELL" in
-    */zsh)
-      add_to_path "$HOME/.zshrc"
-      path_result=$?
-      [ $path_result -ne 1 ] && shell_config=".zshrc"
-      ;;
-    */bash)
-      add_to_path "$HOME/.bashrc"
-      path_result=$?
-      if [ $path_result -ne 1 ]; then
-        shell_config=".bashrc"
-      else
-        add_to_path "$HOME/.bash_profile"
-        path_result=$?
-        [ $path_result -ne 1 ] && shell_config=".bash_profile"
-      fi
-      ;;
-    */fish)
-      local fish_config="$HOME/.config/fish/config.fish"
-      local path_to_add="$INSTALL_DIR/current/bin"
-      if [ -f "$fish_config" ]; then
-        if grep -q "$path_to_add" "$fish_config" 2>/dev/null; then
-          path_result=2
-          shell_config="config.fish"
-        else
-          echo "" >> "$fish_config"
-          echo "# Added by vite-plus installer" >> "$fish_config"
-          echo "set -gx PATH $path_to_add \$PATH" >> "$fish_config"
-          path_result=0
-          shell_config="config.fish"
-        fi
-      fi
-      ;;
-  esac
-
-  if [ $path_result -eq 0 ]; then
-    success "PATH updated in ~/$shell_config"
-    echo ""
-    echo "  To start using vp, run:"
-    echo ""
-    echo "    source ~/$shell_config"
-    echo ""
-    echo "  Or restart your terminal."
-  elif [ $path_result -eq 2 ]; then
-    info "PATH already configured in ~/$shell_config"
+  # Determine display location based on how PATH was configured
+  local display_location
+  if [ "$SYMLINK_CREATED" = "true" ]; then
+    display_location="~/.local/bin/vp"
   else
-    warn "Could not automatically update PATH"
-    echo ""
-    echo "  Please add the following to your shell profile:"
-    echo ""
-    echo "    export PATH=\"$INSTALL_DIR/current/bin:\$PATH\""
+    # Use ~ shorthand if install dir is under HOME, otherwise show full path
+    local display_dir="${INSTALL_DIR/#$HOME/~}"
+    display_location="${display_dir}/current/bin"
   fi
 
+  # Print success message
   echo ""
-  echo "  Then run:"
+  echo -e "${GREEN}✔${NC} VITE+(⚡︎) successfully installed!"
   echo ""
-  echo "    vp --version"
+  echo "  Version: ${VITE_PLUS_VERSION}"
+  echo ""
+  echo "  Location: ${display_location}"
+  echo ""
+  echo "  Next: Run vp --help to get started"
+
+  # Show note if shell config was updated (not symlink, not already configured)
+  if [ "$SYMLINK_CREATED" = "false" ] && [ -n "$SHELL_CONFIG_UPDATED" ] && [ "$PATH_ALREADY_CONFIGURED" = "false" ]; then
+    echo ""
+    echo "  Note: Run \`source ~/$SHELL_CONFIG_UPDATED\` or restart your terminal."
+  fi
+
   echo ""
 }
 

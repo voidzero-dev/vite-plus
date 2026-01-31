@@ -140,7 +140,8 @@ function Download-AndExtract {
 
     $tempFile = New-TemporaryFile
     try {
-        # Progress bar is shown by default with Invoke-WebRequest
+        # Suppress progress bar for cleaner output
+        $ProgressPreference = 'SilentlyContinue'
         Invoke-WebRequest -Uri $Url -OutFile $tempFile
 
         # Create temp extraction directory
@@ -179,24 +180,24 @@ function Cleanup-OldVersions {
         Select-Object -First ($versions.Count - $maxVersions)
 
     foreach ($old in $toDelete) {
-        Write-Info "Removing old version: $($old.Name)"
+        # Remove silently
         Remove-Item -Path $old.FullName -Recurse -Force
     }
 }
 
 function Main {
     Write-Host ""
-    Write-Host "  VITE+(⚡︎) Installer"
+    Write-Host "Setting up VITE+(⚡︎)..."
     Write-Host ""
+
+    # Suppress progress bars for cleaner output
+    $ProgressPreference = 'SilentlyContinue'
 
     $arch = Get-Architecture
     $platform = "win32-$arch"
-    Write-Info "Detected platform: $platform"
 
     # Fetch package metadata and resolve version
-    Write-Info "Fetching package metadata..."
     $ViteVersion = Get-VersionFromMetadata
-    Write-Info "Installing vite-plus-cli v$ViteVersion"
 
     # Set up version-specific directories
     $VersionDir = "$InstallDir\$ViteVersion"
@@ -215,11 +216,9 @@ function Main {
 
     # Download and extract native binary and .node files from platform package
     $platformUrl = "$NpmRegistry/$packageName/-/vite-plus-cli-$packageSuffix-$ViteVersion.tgz"
-    Write-Info "Downloading platform package..."
 
     $platformTempFile = New-TemporaryFile
     try {
-        # Progress bar is shown by default with Invoke-WebRequest
         Invoke-WebRequest -Uri $platformUrl -OutFile $platformTempFile
 
         # Create temp extraction directory
@@ -252,11 +251,9 @@ function Main {
 
     # Download and extract JS bundle
     $mainUrl = "$NpmRegistry/vite-plus-cli/-/vite-plus-cli-$ViteVersion.tgz"
-    Write-Info "Downloading JS scripts..."
 
     $mainTempFile = New-TemporaryFile
     try {
-        # Progress bar is shown by default with Invoke-WebRequest
         Invoke-WebRequest -Uri $mainUrl -OutFile $mainTempFile
 
         # Create temp extraction directory
@@ -289,7 +286,6 @@ function Main {
     $pkg | ConvertTo-Json -Depth 10 | Set-Content $pkgFile
 
     # Install production dependencies
-    Write-Info "Installing dependencies..."
     Push-Location $VersionDir
     try {
         $env:CI = "true"
@@ -310,10 +306,7 @@ function Main {
     # Cleanup old versions
     Cleanup-OldVersions -InstallDir $InstallDir
 
-    Write-Success "Vite+ CLI installed to $VersionDir"
-
     # Update PATH
-    Write-Host ""
     $pathToAdd = "$InstallDir\current\bin"
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 
@@ -327,19 +320,28 @@ function Main {
         $newPath = "$pathToAdd;$userPath"
         [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
         $env:Path = "$pathToAdd;$env:Path"
-        Write-Success "PATH has been updated"
-        Write-Host ""
-        Write-Host "  Restart your terminal to use vp, or run:"
-        Write-Host ""
-        Write-Host "    `$env:Path = `"$pathToAdd;`$env:Path`""
-    } else {
-        Write-Info "PATH already contains $pathToAdd"
     }
 
+    # Print success message
     Write-Host ""
-    Write-Host "  Then run:"
+    Write-Host "✔ " -ForegroundColor Green -NoNewline
+    Write-Host "VITE+(⚡︎) successfully installed!"
     Write-Host ""
-    Write-Host "    vp --version"
+    Write-Host "  Version: $ViteVersion"
+    Write-Host ""
+    # Use ~ shorthand if install dir is under USERPROFILE, otherwise show full path
+    $displayDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'
+    Write-Host "  Location: $displayDir\current\bin"
+    Write-Host ""
+    Write-Host "  Next: Run vp --help to get started"
+
+    # Show note if PATH was updated
+    if ($needsPathUpdate) {
+        Write-Host ""
+        Write-Host "  Note: Restart your terminal or run:"
+        Write-Host "        `$env:Path = `"$pathToAdd;`$env:Path`""
+    }
+
     Write-Host ""
 }
 
