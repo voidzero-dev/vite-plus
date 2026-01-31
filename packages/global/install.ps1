@@ -294,6 +294,9 @@ function Main {
         Pop-Location
     }
 
+    # Setup shims for node version management
+    & "$BinDir\vp.exe" env --setup 2>$null | Out-Null
+
     # Create/update current junction (symlink)
     if (Test-Path $CurrentLink) {
         # Remove existing junction
@@ -322,6 +325,33 @@ function Main {
         $env:Path = "$pathToAdd;$env:Path"
     }
 
+    # Setup shims PATH
+    $shimsPath = "$InstallDir\shims"
+    $shimsNeedsPathUpdate = $true
+    $shimsPathAdded = $false
+    # Refresh userPath after potential update above
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($userPath -like "*$shimsPath*") {
+        $shimsNeedsPathUpdate = $false
+    }
+
+    if ($shimsNeedsPathUpdate -and (Test-Path $shimsPath)) {
+        # Prompt user for shims PATH configuration
+        Write-Host ""
+        Write-Host "Node.js shims created in $shimsPath"
+        Write-Host "Adding shims to PATH enables automatic Node.js version switching."
+        Write-Host ""
+        $addShims = Read-Host "Would you like to add shims to your PATH? (y/n)"
+        if ($addShims -eq 'y' -or $addShims -eq 'Y') {
+            # Shims path must come BEFORE bin path for proper interception
+            $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
+            $newPath = "$shimsPath;$currentPath"
+            [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+            $env:Path = "$shimsPath;$env:Path"
+            $shimsPathAdded = $true
+        }
+    }
+
     # Print success message
     Write-Host ""
     Write-Host "✔ " -ForegroundColor Green -NoNewline
@@ -332,14 +362,21 @@ function Main {
     # Use ~ shorthand if install dir is under USERPROFILE, otherwise show full path
     $displayDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'
     Write-Host "  Location: $displayDir\current\bin"
+
+    # Show shims setup result
+    if ($shimsPathAdded) {
+        Write-Host "  " -NoNewline
+        Write-Host "✓" -ForegroundColor Green -NoNewline
+        Write-Host " Created shims (node, npm, npx) in $displayDir\shims"
+    }
+
     Write-Host ""
     Write-Host "  Next: Run vp --help to get started"
 
-    # Show note if PATH was updated
-    if ($needsPathUpdate) {
+    # Show note if PATH was updated or shims were added
+    if ($needsPathUpdate -or $shimsPathAdded) {
         Write-Host ""
-        Write-Host "  Note: Restart your terminal or run:"
-        Write-Host "        `$env:Path = `"$pathToAdd;`$env:Path`""
+        Write-Host "  Note: Restart your terminal and IDE for changes to take effect."
     }
 
     Write-Host ""
