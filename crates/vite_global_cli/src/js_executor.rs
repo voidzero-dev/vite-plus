@@ -57,6 +57,11 @@ impl JsExecutor {
         // JS scripts are at ../dist relative to bin/
         // e.g., packages/global/bin/vp -> packages/global/dist/
         let exe_path = std::env::current_exe().map_err(|_| Error::JsScriptsDirNotFound)?;
+        // Resolve symlinks to get the real binary path (Unix only)
+        // This is important when vp is symlinked from ~/.local/bin/vp
+        // Skip on Windows to avoid path resolution issues
+        #[cfg(unix)]
+        let exe_path = std::fs::canonicalize(&exe_path).map_err(|_| Error::JsScriptsDirNotFound)?;
         let bin_dir = exe_path.parent().ok_or(Error::JsScriptsDirNotFound)?;
         let package_dir = bin_dir.parent().ok_or(Error::JsScriptsDirNotFound)?;
         let scripts_dir = package_dir.join("dist");
