@@ -7,13 +7,13 @@
 #
 # Environment variables:
 #   VITE_PLUS_VERSION - Version to install (default: latest)
-#   VITE_PLUS_INSTALL_DIR - Installation directory (default: ~/.vite-plus)
+#   VITE_PLUS_HOME - Installation directory (default: ~/.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 
 set -e
 
 VITE_PLUS_VERSION="${VITE_PLUS_VERSION:-latest}"
-INSTALL_DIR="${VITE_PLUS_INSTALL_DIR:-$HOME/.vite-plus}"
+INSTALL_DIR="${VITE_PLUS_HOME:-$HOME/.vite-plus}"
 # npm registry URL (strip trailing slash if present)
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
 NPM_REGISTRY="${NPM_REGISTRY%/}"
