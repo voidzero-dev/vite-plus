@@ -98,17 +98,25 @@ runs:
         pnpm vite build -h
         pnpm vite fmt -h
 
+    - name: Build Rust CLI binary (x86_64-linux)
+      if: steps.cache-restore.outputs.cache-hit != 'true' && inputs.target == 'x86_64-unknown-linux-gnu'
+      shell: bash
+      run: |
+        pnpm exec napi build --use-napi-cross --target ${{ inputs.target }} --release -p vite_global_cli
+      env:
+        TARGET_CC: clang
+        DEBUG: napi:*
     - name: Build Rust CLI binary (aarch64-linux)
       if: steps.cache-restore.outputs.cache-hit != 'true' && inputs.target == 'aarch64-unknown-linux-gnu'
       shell: bash
       run: |
-        # Install aarch64 cross-compilation toolchain
-        sudo apt-get update
-        sudo apt-get install -y gcc-aarch64-linux-gnu
-        cargo build --release --target ${{ inputs.target }} -p vite_global_cli
-
-    - name: Build Rust CLI binary (other targets)
-      if: steps.cache-restore.outputs.cache-hit != 'true' && inputs.target != 'aarch64-unknown-linux-gnu'
+        pnpm exec napi build --use-napi-cross --target ${{ inputs.target }} --release -p vite_global_cli
+      env:
+        TARGET_CC: clang
+        TARGET_CFLAGS: '-D_BSD_SOURCE'
+        DEBUG: napi:*
+    - name: Build Rust CLI binary (non-Linux targets)
+      if: steps.cache-restore.outputs.cache-hit != 'true' && !contains(inputs.target, 'linux')
       shell: bash
       run: cargo build --release --target ${{ inputs.target }} -p vite_global_cli
 
