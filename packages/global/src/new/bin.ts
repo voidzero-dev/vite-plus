@@ -436,7 +436,7 @@ Use \`vp new --list\` to list all available templates, or run \`vp new --help\` 
     prompts.outro(`✔ Created ${accent(projectDir)}!`);
     log(`${styleText('bold', 'Next steps:')}`);
     log(`  ${accent(`cd ${projectDir}`)}`);
-    log(`  ${accent(`vite dev ${InitialMonorepoAppDir}`)}`);
+    log(`  ${accent(`vp dev ${InitialMonorepoAppDir}`)}`);
     return;
   }
   // #endregion
@@ -532,7 +532,7 @@ Use \`vp new --list\` to list all available templates, or run \`vp new --help\` 
           }
 
           if (selectedDeps.length > 0) {
-            // FIXME: should use `vite add` command instead
+            // FIXME: should use `vp add` command instead
             updatePackageJsonWithDeps(
               workspaceInfo.rootDir,
               projectDir,
@@ -560,10 +560,10 @@ Use \`vp new --list\` to list all available templates, or run \`vp new --help\` 
 function showNextSteps(projectDir: string, isMonorepo: boolean) {
   log(`${styleText('bold', 'Next steps:')}`);
   if (isMonorepo) {
-    log(`  ${accent(`vite dev ${projectDir}`)}`);
+    log(`  ${accent(`vp dev ${projectDir}`)}`);
   } else {
     log(`  ${accent(`cd ${projectDir}`)}`);
-    log(`  ${accent('vite dev')}`);
+    log(`  ${accent('vp dev')}`);
   }
   log('');
 }
