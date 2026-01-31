@@ -297,6 +297,7 @@ download_and_extract() {
 }
 
 # Add to shell profile
+# Returns: 0 = path added, 1 = file not found, 2 = path already exists
 add_to_path() {
   local shell_config="$1"
   local path_to_add="$INSTALL_DIR/current/bin"
@@ -305,7 +306,7 @@ add_to_path() {
   if [ -f "$shell_config" ]; then
     # Check if already has the current/bin path
     if grep -q "$path_to_add" "$shell_config" 2>/dev/null; then
-      return 1
+      return 2
     fi
     echo "" >> "$shell_config"
     echo "# Added by vite-plus installer" >> "$shell_config"
@@ -445,23 +446,24 @@ main() {
 
   # Update PATH
   echo ""
-  local path_added=false
+  local path_result=1  # 0=added, 1=failed, 2=already exists
   local shell_config=""
 
   case "$SHELL" in
     */zsh)
-      if add_to_path "$HOME/.zshrc"; then
-        path_added=true
-        shell_config=".zshrc"
-      fi
+      add_to_path "$HOME/.zshrc"
+      path_result=$?
+      [ $path_result -ne 1 ] && shell_config=".zshrc"
       ;;
     */bash)
-      if add_to_path "$HOME/.bashrc"; then
-        path_added=true
+      add_to_path "$HOME/.bashrc"
+      path_result=$?
+      if [ $path_result -ne 1 ]; then
         shell_config=".bashrc"
-      elif add_to_path "$HOME/.bash_profile"; then
-        path_added=true
-        shell_config=".bash_profile"
+      else
+        add_to_path "$HOME/.bash_profile"
+        path_result=$?
+        [ $path_result -ne 1 ] && shell_config=".bash_profile"
       fi
       ;;
     */fish)
@@ -469,19 +471,20 @@ main() {
       local path_to_add="$INSTALL_DIR/current/bin"
       if [ -f "$fish_config" ]; then
         if grep -q "$path_to_add" "$fish_config" 2>/dev/null; then
-          : # Already has current/bin path
+          path_result=2
+          shell_config="config.fish"
         else
           echo "" >> "$fish_config"
           echo "# Added by vite-plus installer" >> "$fish_config"
           echo "set -gx PATH $path_to_add \$PATH" >> "$fish_config"
-          path_added=true
+          path_result=0
           shell_config="config.fish"
         fi
       fi
       ;;
   esac
 
-  if [ "$path_added" = true ]; then
+  if [ $path_result -eq 0 ]; then
     success "PATH updated in ~/$shell_config"
     echo ""
     echo "  To start using vp, run:"
@@ -489,7 +492,7 @@ main() {
     echo "    source ~/$shell_config"
     echo ""
     echo "  Or restart your terminal."
-  elif [ -n "$shell_config" ]; then
+  elif [ $path_result -eq 2 ]; then
     info "PATH already configured in ~/$shell_config"
   else
     warn "Could not automatically update PATH"
