@@ -353,8 +353,8 @@ setup_shims_path() {
     return 0
   fi
 
-  # Prompt user (only in interactive mode)
-  if [ -t 0 ]; then
+  # Prompt user (only in interactive mode, not CI)
+  if [ -t 0 ] && [ -z "$CI" ]; then
     echo ""
     echo "Would you like to add vite-plus node shims to your PATH? (y/n)"
     echo "This allows 'node', 'npm', 'npx' to be managed by vite-plus."
