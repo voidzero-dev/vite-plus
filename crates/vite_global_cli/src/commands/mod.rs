@@ -84,6 +84,9 @@ pub mod migrate;
 pub mod new;
 pub mod version;
 
+// Category D: Environment Management
+pub mod env;
+
 // Category C: Local CLI Delegation
 pub mod delegate;
 

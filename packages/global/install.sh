@@ -316,6 +316,91 @@ add_to_path() {
   return 1
 }
 
+# Add shims to shell profile
+# Returns: 0 = path added, 1 = file not found, 2 = path already exists
+add_shims_to_path() {
+  local shell_config="$1"
+  local shims_path="$INSTALL_DIR/shims"
+  local path_line="export PATH=\"$shims_path:\$PATH\""
+
+  if [ -f "$shell_config" ]; then
+    # Check if already has the shims path
+    if grep -q "$shims_path" "$shell_config" 2>/dev/null; then
+      return 2
+    fi
+    echo "" >> "$shell_config"
+    echo "# Vite-plus Node.js shims" >> "$shell_config"
+    echo "$path_line" >> "$shell_config"
+    return 0
+  fi
+  return 1
+}
+
+# Setup shims PATH - prompts user for confirmation
+# Sets SHIMS_PATH_ADDED global variable
+setup_shims_path() {
+  local shims_path="$INSTALL_DIR/shims"
+  SHIMS_PATH_ADDED="false"
+
+  # Check if shims directory exists
+  if [ ! -d "$shims_path" ]; then
+    return 0
+  fi
+
+  # Check if already in PATH
+  if echo "$PATH" | tr ':' '\n' | grep -qx "$shims_path"; then
+    SHIMS_PATH_ADDED="already"
+    return 0
+  fi
+
+  # Prompt user (only in interactive mode)
+  if [ -t 0 ]; then
+    echo ""
+    echo "Would you like to add vite-plus node shims to your PATH? (y/n)"
+    echo "This allows 'node', 'npm', 'npx' to be managed by vite-plus."
+    read -r add_shims < /dev/tty
+
+    if [ "$add_shims" = "y" ] || [ "$add_shims" = "Y" ]; then
+      local path_result=1
+
+      case "$SHELL" in
+        */zsh)
+          add_shims_to_path "$HOME/.zshrc"
+          path_result=$?
+          ;;
+        */bash)
+          add_shims_to_path "$HOME/.bashrc"
+          path_result=$?
+          if [ $path_result -eq 1 ]; then
+            add_shims_to_path "$HOME/.bash_profile"
+            path_result=$?
+          fi
+          ;;
+        */fish)
+          local fish_config="$HOME/.config/fish/config.fish"
+          if [ -f "$fish_config" ]; then
+            if grep -q "$shims_path" "$fish_config" 2>/dev/null; then
+              path_result=2
+            else
+              echo "" >> "$fish_config"
+              echo "# Vite-plus Node.js shims" >> "$fish_config"
+              echo "set -gx PATH $shims_path \$PATH" >> "$fish_config"
+              path_result=0
+            fi
+          fi
+          ;;
+      esac
+
+      if [ $path_result -eq 0 ]; then
+        SHIMS_PATH_ADDED="true"
+        echo -e "  ${GREEN}✓${NC} Added shims to PATH"
+      elif [ $path_result -eq 2 ]; then
+        SHIMS_PATH_ADDED="already"
+      fi
+    fi
+  fi
+}
+
 # Cleanup old versions, keeping only the most recent ones
 cleanup_old_versions() {
   local max_versions=5
@@ -526,6 +611,12 @@ main() {
   # Setup PATH (sets SYMLINK_CREATED, SHELL_CONFIG_UPDATED, PATH_ALREADY_CONFIGURED)
   setup_path
 
+  # Setup shims for node version management
+  "$BIN_DIR/vp" env --setup > /dev/null 2>&1 || true
+
+  # Ask user if they want to add shims to PATH
+  setup_shims_path
+
   # Determine display location based on how PATH was configured
   local display_location
   if [ "$SYMLINK_CREATED" = "true" ]; then
@@ -543,6 +634,13 @@ main() {
   echo "  Version: ${VITE_PLUS_VERSION}"
   echo ""
   echo "  Location: ${display_location}"
+
+  # Show shims status
+  if [ -d "$INSTALL_DIR/shims" ]; then
+    echo ""
+    echo -e "  ${GREEN}✓${NC} Created shims (node, npm, npx) in ~/.vite-plus/shims"
+  fi
+
   echo ""
   echo "  Next: Run vp --help to get started"
 
@@ -550,6 +648,12 @@ main() {
   if [ "$SYMLINK_CREATED" = "false" ] && [ -n "$SHELL_CONFIG_UPDATED" ] && [ "$PATH_ALREADY_CONFIGURED" = "false" ]; then
     echo ""
     echo "  Note: Run \`source ~/$SHELL_CONFIG_UPDATED\` or restart your terminal."
+  fi
+
+  # Show note about shims if added
+  if [ "$SHIMS_PATH_ADDED" = "true" ]; then
+    echo ""
+    echo "  Restart your terminal and IDE, then run 'vp env --doctor' to verify."
   fi
 
   echo ""

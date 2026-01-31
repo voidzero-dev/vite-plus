@@ -11,6 +11,7 @@ mod cli;
 mod commands;
 mod error;
 mod js_executor;
+mod shim;
 
 use std::process::ExitCode;
 
@@ -44,7 +45,17 @@ fn main() -> ExitCode {
     // Initialize tracing
     vite_shared::init_tracing();
 
-    // Get current working directory
+    // Check for shim mode (invoked as node, npm, or npx)
+    let args: Vec<String> = std::env::args().collect();
+    let argv0 = args.first().map(|s| s.as_str()).unwrap_or("vp");
+
+    if let Some(tool) = shim::detect_shim_tool(argv0) {
+        // Shim mode - dispatch to the appropriate tool
+        let exit_code = shim::dispatch(&tool, &args[1..]);
+        return ExitCode::from(exit_code as u8);
+    }
+
+    // Normal CLI mode - get current working directory
     let cwd = match std::env::current_dir() {
         Ok(path) => {
             if let Some(abs_path) = AbsolutePathBuf::new(path) {
