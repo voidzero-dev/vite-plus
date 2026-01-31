@@ -69,7 +69,7 @@ jobs:
           docker run --rm --platform linux/arm64 \
             -v "${{ github.workspace }}:/workspace" \
             -e VITE_PLUS_VERSION=test \
-            ubuntu:24.04 bash -c "
+            ubuntu:20.04 bash -c "
               apt-get update && apt-get install -y curl ca-certificates
               bash /workspace/packages/global/install.sh
               export PATH=\"\$HOME/.local/bin:\$HOME/.vite-plus/current/bin:\$PATH\"
