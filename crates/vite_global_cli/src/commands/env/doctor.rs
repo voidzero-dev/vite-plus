@@ -1,0 +1,320 @@
+//! Doctor command implementation for environment diagnostics.
+
+use std::process::ExitStatus;
+
+use vite_path::AbsolutePathBuf;
+
+use super::config::{get_shims_dir, get_vite_plus_home, resolve_version};
+use crate::error::Error;
+
+/// Known version managers that might conflict
+const KNOWN_VERSION_MANAGERS: &[(&str, &str)] = &[
+    ("nvm", "NVM_DIR"),
+    ("fnm", "FNM_DIR"),
+    ("volta", "VOLTA_HOME"),
+    ("asdf", "ASDF_DIR"),
+    ("mise", "MISE_DIR"),
+    ("n", "N_PREFIX"),
+];
+
+/// Tools that should have shims
+const SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
+
+/// Execute the doctor command.
+pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
+    println!();
+    println!("VP Environment Doctor");
+    println!("=====================");
+    println!();
+
+    let mut has_errors = false;
+
+    // Check VITE_PLUS_HOME
+    has_errors |= !check_vite_plus_home().await;
+
+    // Check shims directory
+    has_errors |= !check_shims_dir().await;
+
+    // Check PATH
+    has_errors |= !check_path().await;
+
+    // Check current directory version resolution
+    check_current_resolution(&cwd).await;
+
+    // Check for conflicts
+    check_conflicts();
+
+    println!();
+    if has_errors {
+        println!("Some issues were found. Please address them for optimal operation.");
+    } else {
+        println!("No issues detected.");
+    }
+
+    Ok(ExitStatus::default())
+}
+
+/// Check VITE_PLUS_HOME directory.
+async fn check_vite_plus_home() -> bool {
+    let home = match get_vite_plus_home() {
+        Ok(h) => h,
+        Err(e) => {
+            println!("VITE_PLUS_HOME: <error>");
+            println!("  \u{2717} {e}");
+            return false;
+        }
+    };
+
+    println!("VITE_PLUS_HOME: {}", home.as_path().display());
+
+    if tokio::fs::try_exists(&home).await.unwrap_or(false) {
+        println!("  \u{2713} Directory exists");
+        true
+    } else {
+        println!("  \u{2717} Directory does not exist");
+        println!("  Run 'vp env --setup' to create it.");
+        false
+    }
+}
+
+/// Check shims directory and shim files.
+async fn check_shims_dir() -> bool {
+    let shims_dir = match get_shims_dir() {
+        Ok(d) => d,
+        Err(_) => return false,
+    };
+
+    if !tokio::fs::try_exists(&shims_dir).await.unwrap_or(false) {
+        println!("  \u{2717} Shims directory does not exist");
+        println!("  Run 'vp env --setup' to create shims.");
+        return false;
+    }
+
+    println!("  \u{2713} Shims directory exists");
+
+    let mut all_present = true;
+    let mut missing = Vec::new();
+
+    for tool in SHIM_TOOLS {
+        let shim_path = shims_dir.join(shim_filename(tool));
+        if tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
+            // Shim exists
+        } else {
+            all_present = false;
+            missing.push(*tool);
+        }
+    }
+
+    if all_present {
+        println!("  \u{2713} All shims present (node, npm, npx)");
+        true
+    } else {
+        println!("  \u{2717} Missing shims: {}", missing.join(", "));
+        println!("  Run 'vp env --setup' to create missing shims.");
+        false
+    }
+}
+
+/// Get the filename for a shim (platform-specific).
+fn shim_filename(tool: &str) -> String {
+    #[cfg(windows)]
+    {
+        if tool == "node" { format!("{tool}.exe") } else { format!("{tool}.cmd") }
+    }
+
+    #[cfg(not(windows))]
+    {
+        tool.to_string()
+    }
+}
+
+/// Check PATH configuration.
+async fn check_path() -> bool {
+    println!();
+    println!("PATH Analysis:");
+
+    let shims_dir = match get_shims_dir() {
+        Ok(d) => d,
+        Err(_) => return false,
+    };
+
+    let path_var = std::env::var_os("PATH").unwrap_or_default();
+    let paths: Vec<_> = std::env::split_paths(&path_var).collect();
+
+    // Check if shims directory is in PATH
+    let shims_path = shims_dir.as_path();
+    let shims_position = paths.iter().position(|p| p == shims_path);
+
+    match shims_position {
+        Some(0) => {
+            println!("  \u{2713} VP shims first in PATH");
+        }
+        Some(pos) => {
+            println!("  \u{26A0} VP shims in PATH at position {pos}");
+            println!("  For best results, shims should be first in PATH.");
+        }
+        None => {
+            println!("  \u{2717} VP shims not in PATH");
+            println!();
+            print_path_fix(&shims_dir);
+            return false;
+        }
+    }
+
+    // Show which node would be executed
+    if let Some(node_path) = find_in_path("node") {
+        let expected_node = shims_dir.join(shim_filename("node"));
+        if node_path == expected_node.as_path() {
+            println!();
+            println!("  node \u{2192} {} (vp shim)", node_path.display());
+        } else {
+            println!();
+            println!("  Found 'node' at: {} (not vp shim)", node_path.display());
+            println!("  Expected: {}", expected_node.as_path().display());
+        }
+    } else {
+        println!();
+        println!("  No 'node' found in PATH");
+    }
+
+    true
+}
+
+/// Find an executable in PATH.
+fn find_in_path(name: &str) -> Option<std::path::PathBuf> {
+    let path_var = std::env::var_os("PATH")?;
+    let paths = std::env::split_paths(&path_var);
+
+    #[cfg(windows)]
+    let extensions = vec!["exe", "cmd", "bat"];
+
+    for path in paths {
+        #[cfg(not(windows))]
+        {
+            let candidate = path.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+
+        #[cfg(windows)]
+        {
+            for ext in &extensions {
+                let candidate = path.join(format!("{name}.{ext}"));
+                if candidate.is_file() {
+                    return Some(candidate);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Print PATH fix instructions.
+fn print_path_fix(shims_dir: &vite_path::AbsolutePath) {
+    let shims_path = shims_dir.as_path().display();
+
+    println!("Recommended Fix:");
+
+    // Detect shell
+    let shell = std::env::var("SHELL").unwrap_or_default();
+    if shell.ends_with("zsh") {
+        println!("  Add to ~/.zshrc:");
+    } else if shell.ends_with("bash") {
+        println!("  Add to ~/.bashrc:");
+    } else if shell.ends_with("fish") {
+        println!("  Add to ~/.config/fish/config.fish:");
+        println!("    set -gx PATH \"{shims_path}\" $PATH");
+        println!();
+        println!("  Then restart your terminal and IDE.");
+        return;
+    } else {
+        println!("  Add to your shell profile:");
+    }
+
+    println!("    export PATH=\"{shims_path}:$PATH\"");
+    println!();
+    println!("  Then restart your terminal and IDE.");
+}
+
+/// Check current directory version resolution.
+async fn check_current_resolution(cwd: &AbsolutePathBuf) {
+    println!();
+    println!("Current Directory: {}", cwd.as_path().display());
+
+    match resolve_version(cwd).await {
+        Ok(resolution) => {
+            println!("  Version Source: {}", resolution.source);
+            if let Some(path) = &resolution.source_path {
+                println!("  Source Path: {}", path.as_path().display());
+            }
+            println!("  Resolved Version: {}", resolution.version);
+
+            // Check if Node.js is installed
+            let cache_dir = match vite_shared::get_cache_dir() {
+                Ok(d) => d.join("js_runtime").join("node").join(&resolution.version),
+                Err(_) => return,
+            };
+
+            #[cfg(windows)]
+            let binary_path = cache_dir.join("node.exe");
+            #[cfg(not(windows))]
+            let binary_path = cache_dir.join("bin").join("node");
+
+            if tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
+                println!("  Node Path: {}", binary_path.as_path().display());
+                println!("  \u{2713} Node binary exists");
+            } else {
+                println!("  \u{26A0} Node {version} not installed", version = resolution.version);
+                println!("  It will be downloaded on first use.");
+            }
+        }
+        Err(e) => {
+            println!("  \u{2717} Failed to resolve version: {e}");
+        }
+    }
+}
+
+/// Check for conflicts with other version managers.
+fn check_conflicts() {
+    println!();
+
+    let mut conflicts = Vec::new();
+
+    for (name, env_var) in KNOWN_VERSION_MANAGERS {
+        if std::env::var(env_var).is_ok() {
+            conflicts.push(*name);
+        }
+    }
+
+    // Also check for common shims in PATH
+    if let Some(node_path) = find_in_path("node") {
+        let path_str = node_path.to_string_lossy();
+        if path_str.contains(".nvm") {
+            if !conflicts.contains(&"nvm") {
+                conflicts.push("nvm");
+            }
+        } else if path_str.contains(".fnm") {
+            if !conflicts.contains(&"fnm") {
+                conflicts.push("fnm");
+            }
+        } else if path_str.contains(".volta") {
+            if !conflicts.contains(&"volta") {
+                conflicts.push("volta");
+            }
+        }
+    }
+
+    if conflicts.is_empty() {
+        println!("No conflicts detected.");
+    } else {
+        println!("Potential Conflicts Detected:");
+        for manager in &conflicts {
+            println!("  \u{26A0} {manager} is installed");
+        }
+        println!();
+        println!("  Consider removing other version managers from your PATH");
+        println!("  to avoid version conflicts.");
+    }
+}

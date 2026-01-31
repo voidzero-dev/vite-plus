@@ -34,6 +34,12 @@ pub enum Error {
     #[error("Install error: {0}")]
     Install(#[from] vite_error::Error),
 
+    #[error("Configuration error: {0}")]
+    ConfigError(Str),
+
+    #[error("JSON error: {0}")]
+    JsonError(#[from] serde_json::Error),
+
     #[error("{0}")]
     Other(Str),
 }

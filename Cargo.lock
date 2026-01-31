@@ -7042,6 +7042,9 @@ name = "vite_global_cli"
 version = "0.0.0"
 dependencies = [
  "clap",
+ "directories",
+ "serde",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",

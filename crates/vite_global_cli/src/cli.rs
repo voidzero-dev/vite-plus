@@ -573,6 +573,56 @@ pub enum Commands {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+
+    /// Manage Node.js environment and shims
+    Env(EnvArgs),
+}
+
+/// Arguments for the `env` command
+#[derive(clap::Args, Debug)]
+pub struct EnvArgs {
+    /// Create or update shims in VITE_PLUS_HOME/shims
+    #[arg(long)]
+    pub setup: bool,
+
+    /// Force refresh shims even if they exist
+    #[arg(long, requires = "setup")]
+    pub refresh: bool,
+
+    /// Run diagnostics and show environment status
+    #[arg(long)]
+    pub doctor: bool,
+
+    /// Show path to the tool that would be executed
+    #[arg(long, value_name = "TOOL")]
+    pub which: Option<String>,
+
+    /// Show current environment information
+    #[arg(long)]
+    pub current: bool,
+
+    /// Output in JSON format
+    #[arg(long, requires = "current")]
+    pub json: bool,
+
+    /// Print shell snippet to set environment for current session
+    #[arg(long)]
+    pub print: bool,
+
+    /// Subcommand (e.g., 'default')
+    #[command(subcommand)]
+    pub command: Option<EnvSubcommands>,
+}
+
+/// Subcommands for the `env` command
+#[derive(clap::Subcommand, Debug)]
+pub enum EnvSubcommands {
+    /// Set or show the global default Node.js version
+    Default {
+        /// Version to set as default (e.g., "20.18.0", "lts", "latest")
+        /// If not provided, shows the current default
+        version: Option<String>,
+    },
 }
 
 /// Package manager subcommands
@@ -1225,6 +1275,8 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
         Commands::Preview { args } => commands::delegate::execute(cwd, "preview", &args).await,
 
         Commands::Cache { args } => commands::delegate::execute(cwd, "cache", &args).await,
+
+        Commands::Env(args) => commands::env::execute(cwd, args).await,
     }
 }
 
