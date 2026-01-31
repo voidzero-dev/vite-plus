@@ -266,21 +266,36 @@ function Main {
         # Extract the package
         tar -xzf $mainTempFile -C $mainTempExtract
 
-        # Copy dist contents to DistDir
-        $distSource = Join-Path $mainTempExtract "package" "dist" "*"
-        if (Test-Path $distSource) {
-            Copy-Item -Path $distSource -Destination $DistDir -Recurse -Force
-        }
-
-        # Copy package.json to VersionDir for devEngines.runtime configuration
-        $packageJsonSource = Join-Path $mainTempExtract "package" "package.json"
-        if (Test-Path $packageJsonSource) {
-            Copy-Item -Path $packageJsonSource -Destination $VersionDir -Force
+        # Copy directories and files to VersionDir
+        $itemsToCopy = @("dist", "templates", "rules", "AGENTS.md", "package.json")
+        foreach ($item in $itemsToCopy) {
+            $itemSource = Join-Path $mainTempExtract "package" $item
+            if (Test-Path $itemSource) {
+                Copy-Item -Path $itemSource -Destination $VersionDir -Recurse -Force
+            }
         }
 
         Remove-Item -Recurse -Force $mainTempExtract
     } finally {
         Remove-Item $mainTempFile -ErrorAction SilentlyContinue
+    }
+
+    # Remove devDependencies and optionalDependencies from package.json
+    # (temporary solution until deps are fully bundled)
+    $pkgFile = Join-Path $VersionDir "package.json"
+    $pkg = Get-Content $pkgFile -Raw | ConvertFrom-Json
+    $pkg.PSObject.Properties.Remove("devDependencies")
+    $pkg.PSObject.Properties.Remove("optionalDependencies")
+    $pkg | ConvertTo-Json -Depth 10 | Set-Content $pkgFile
+
+    # Install production dependencies
+    Write-Info "Installing dependencies..."
+    Push-Location $VersionDir
+    try {
+        $env:CI = "true"
+        & "$BinDir\vp.exe" install --silent
+    } finally {
+        Pop-Location
     }
 
     # Create/update current junction (symlink)

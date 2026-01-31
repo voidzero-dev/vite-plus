@@ -425,16 +425,39 @@ main() {
   temp_dir=$(mktemp -d)
   download_and_extract "$main_url" "$temp_dir" 1
 
-  # Copy dist contents to DIST_DIR
-  if [ -d "$temp_dir/dist" ]; then
-    cp -r "$temp_dir/dist/"* "$DIST_DIR/"
-  fi
-
-  # Copy package.json to VERSION_DIR for devEngines.runtime configuration
-  if [ -f "$temp_dir/package.json" ]; then
-    cp "$temp_dir/package.json" "$VERSION_DIR/"
-  fi
+  # Copy directories and files to VERSION_DIR
+  local items_to_copy=("dist" "templates" "rules" "AGENTS.md" "package.json")
+  for item in "${items_to_copy[@]}"; do
+    if [ -e "$temp_dir/$item" ]; then
+      cp -r "$temp_dir/$item" "$VERSION_DIR/"
+    fi
+  done
   rm -rf "$temp_dir"
+
+  # Remove devDependencies and optionalDependencies from package.json
+  # (temporary solution until deps are fully bundled)
+  local pkg_file="$VERSION_DIR/package.json"
+  awk '
+    /"(devDependencies|optionalDependencies)"[[:space:]]*:[[:space:]]*\{/ {
+      skip = 1
+      depth = 1
+      next
+    }
+    skip {
+      for (i = 1; i <= length($0); i++) {
+        c = substr($0, i, 1)
+        if (c == "{") depth++
+        else if (c == "}") depth--
+      }
+      if (depth <= 0) skip = 0
+      next
+    }
+    { print }
+  ' "$pkg_file" > "$pkg_file.tmp" && mv "$pkg_file.tmp" "$pkg_file"
+
+  # Install production dependencies
+  info "Installing dependencies..."
+  (cd "$VERSION_DIR" && CI=true "$BIN_DIR/vp" install --silent)
 
   # Create/update current symlink (use relative path for portability)
   ln -sfn "$VITE_PLUS_VERSION" "$CURRENT_LINK"
