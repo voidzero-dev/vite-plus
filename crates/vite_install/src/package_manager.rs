@@ -708,13 +708,13 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
 fn prompt_package_manager_selection() -> Result<PackageManagerType, Error> {
     // In CI environment, automatically use pnpm without prompting
     if is_ci_environment() {
-        println!("CI environment detected. Using default package manager: pnpm");
+        tracing::info!("CI environment detected. Using default package manager: pnpm");
         return Ok(PackageManagerType::Pnpm);
     }
 
     // Check if stdin is a TTY (terminal) - if not, use default
     if !io::stdin().is_terminal() {
-        println!("Non-interactive environment detected. Using default package manager: pnpm");
+        tracing::info!("Non-interactive environment detected. Using default package manager: pnpm");
         return Ok(PackageManagerType::Pnpm);
     }
 
