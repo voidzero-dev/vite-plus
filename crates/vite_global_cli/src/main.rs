@@ -41,7 +41,8 @@ fn normalize_help_args() -> Vec<String> {
     }
 }
 
-fn main() -> ExitCode {
+#[tokio::main]
+async fn main() -> ExitCode {
     // Initialize tracing
     vite_shared::init_tracing();
 
@@ -51,7 +52,7 @@ fn main() -> ExitCode {
 
     if let Some(tool) = shim::detect_shim_tool(argv0) {
         // Shim mode - dispatch to the appropriate tool
-        let exit_code = shim::dispatch(&tool, &args[1..]);
+        let exit_code = shim::dispatch(&tool, &args[1..]).await;
         return ExitCode::from(exit_code as u8);
     }
 
@@ -77,13 +78,7 @@ fn main() -> ExitCode {
     // Parse CLI arguments (using custom help formatting)
     let args = parse_args_from(normalized_args);
 
-    // Run the async runtime
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("Failed to create Tokio runtime");
-
-    match runtime.block_on(run_command(cwd, args)) {
+    match run_command(cwd, args).await {
         Ok(exit_status) => {
             if exit_status.success() {
                 ExitCode::SUCCESS

@@ -18,14 +18,14 @@ use crate::commands::env::config::{self, ShimMode};
 ///
 /// Called when the binary is invoked as node, npm, or npx.
 /// Returns an exit code to be used with std::process::exit.
-pub fn dispatch(tool: &str, args: &[String]) -> i32 {
+pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     // Check bypass mode (explicit environment variable)
     if std::env::var("VITE_PLUS_BYPASS").is_ok() {
         return bypass_to_system(tool, args);
     }
 
     // Check shim mode from config
-    let shim_mode = load_shim_mode();
+    let shim_mode = load_shim_mode().await;
     if shim_mode == ShimMode::SystemFirst {
         // In system-first mode, try to find system tool first
         if let Some(system_path) = find_system_tool(tool) {
@@ -50,7 +50,7 @@ pub fn dispatch(tool: &str, args: &[String]) -> i32 {
     };
 
     // Resolve version (with caching)
-    let resolution = match resolve_with_cache(&cwd) {
+    let resolution = match resolve_with_cache(&cwd).await {
         Ok(r) => r,
         Err(e) => {
             eprintln!("vp: Failed to resolve Node version: {e}");
@@ -60,7 +60,7 @@ pub fn dispatch(tool: &str, args: &[String]) -> i32 {
     };
 
     // Ensure Node.js is installed
-    if let Err(e) = ensure_installed(&resolution.version) {
+    if let Err(e) = ensure_installed(&resolution.version).await {
         eprintln!("vp: Failed to install Node {}: {e}", resolution.version);
         return 1;
     }
@@ -105,7 +105,7 @@ fn bypass_to_system(tool: &str, args: &[String]) -> i32 {
 }
 
 /// Resolve version with caching.
-fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, String> {
+async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, String> {
     // Load cache
     let cache_path = cache::get_cache_path();
     let mut cache = cache_path.as_ref().map(|p| ResolveCache::load(p)).unwrap_or_default();
@@ -122,8 +122,7 @@ fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, String
     }
 
     // Cache miss - resolve version
-    // We need to use a sync runtime since we're called from main before tokio is initialized
-    let resolution = resolve_version_sync(cwd)?;
+    let resolution = config::resolve_version(cwd).await.map_err(|e| format!("{e}"))?;
 
     // Create cache entry
     let mtime = resolution.source_path.as_ref().and_then(|p| cache::get_file_mtime(p)).unwrap_or(0);
@@ -152,20 +151,8 @@ fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, String
     Ok(entry)
 }
 
-/// Synchronous version resolution.
-///
-/// Creates a tokio runtime to run the async resolution.
-fn resolve_version_sync(cwd: &AbsolutePathBuf) -> Result<config::VersionResolution, String> {
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
-
-    rt.block_on(config::resolve_version(cwd)).map_err(|e| format!("{e}"))
-}
-
 /// Ensure Node.js is installed.
-fn ensure_installed(version: &str) -> Result<(), String> {
+async fn ensure_installed(version: &str) -> Result<(), String> {
     let cache_dir = vite_shared::get_cache_dir()
         .map_err(|e| format!("Failed to get cache dir: {e}"))?
         .join("js_runtime")
@@ -182,18 +169,11 @@ fn ensure_installed(version: &str) -> Result<(), String> {
         return Ok(());
     }
 
-    // Need to download - create a runtime for async operations
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
-
-    rt.block_on(async {
-        vite_js_runtime::download_runtime(vite_js_runtime::JsRuntimeType::Node, version)
-            .await
-            .map_err(|e| format!("{e}"))?;
-        Ok(())
-    })
+    // Download the runtime
+    vite_js_runtime::download_runtime(vite_js_runtime::JsRuntimeType::Node, version)
+        .await
+        .map_err(|e| format!("{e}"))?;
+    Ok(())
 }
 
 /// Locate a tool binary within the Node.js installation.
@@ -222,11 +202,11 @@ fn locate_tool(version: &str, tool: &str) -> Result<AbsolutePathBuf, String> {
     Ok(tool_path)
 }
 
-/// Load shim mode from config synchronously.
+/// Load shim mode from config.
 ///
 /// Returns the default (Managed) if config cannot be read.
-fn load_shim_mode() -> ShimMode {
-    config::load_config_sync().map(|c| c.shim_mode).unwrap_or_default()
+async fn load_shim_mode() -> ShimMode {
+    config::load_config().await.map(|c| c.shim_mode).unwrap_or_default()
 }
 
 /// Find a system tool in PATH, skipping the vite-plus shims directory.
