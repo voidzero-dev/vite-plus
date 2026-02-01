@@ -198,8 +198,6 @@ pub enum VersionSource {
     EnginesNode,
     /// Version from `devEngines.runtime` in package.json (lowest priority)
     DevEnginesRuntime,
-    /// No version source specified, will use latest installed or LTS
-    None,
 }
 
 impl std::fmt::Display for VersionSource {
@@ -208,9 +206,113 @@ impl std::fmt::Display for VersionSource {
             Self::NodeVersionFile => write!(f, ".node-version"),
             Self::EnginesNode => write!(f, "engines.node"),
             Self::DevEnginesRuntime => write!(f, "devEngines.runtime"),
-            Self::None => write!(f, "none"),
         }
     }
+}
+
+/// Resolved version information with source tracking.
+#[derive(Debug, Clone)]
+pub struct VersionResolution {
+    /// The resolved version string (e.g., "20.18.0" or "^20.18.0")
+    pub version: Str,
+    /// The source type of the version
+    pub source: VersionSource,
+    /// Path to the source file (e.g., .node-version or package.json)
+    pub source_path: Option<AbsolutePathBuf>,
+    /// Project root directory (the directory containing the version source)
+    pub project_root: Option<AbsolutePathBuf>,
+}
+
+/// Resolve Node.js version from project configuration.
+///
+/// At each directory level, searches for version in the following priority order:
+/// 1. `.node-version` file
+/// 2. `package.json#engines.node`
+/// 3. `package.json#devEngines.runtime[name="node"]`
+///
+/// If `walk_up` is true, walks up the directory tree checking each level until
+/// a version is found or the root is reached.
+///
+/// # Arguments
+/// * `start_dir` - The directory to start searching from
+/// * `walk_up` - Whether to walk up the directory tree
+///
+/// # Returns
+/// `Some(VersionResolution)` if a version source is found, `None` otherwise.
+///
+/// # Errors
+/// Returns an error if file reading fails.
+pub async fn resolve_node_version(
+    start_dir: &AbsolutePath,
+    walk_up: bool,
+) -> Result<Option<VersionResolution>, Error> {
+    let mut current = start_dir.to_owned();
+
+    loop {
+        // At each directory level, check both .node-version and package.json
+        // before moving to parent directory
+
+        // 1. Check .node-version file
+        if let Some(version) = read_node_version_file(&current).await {
+            let node_version_path = current.join(".node-version");
+            return Ok(Some(VersionResolution {
+                version,
+                source: VersionSource::NodeVersionFile,
+                source_path: Some(node_version_path),
+                project_root: Some(current.to_absolute_path_buf()),
+            }));
+        }
+
+        // 2-3. Check package.json (engines.node and devEngines.runtime)
+        let package_json_path = current.join("package.json");
+        if tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
+            let content = tokio::fs::read_to_string(&package_json_path).await?;
+            if let Ok(pkg) = serde_json::from_str::<PackageJson>(&content) {
+                // Check engines.node first
+                if let Some(engines) = &pkg.engines {
+                    if let Some(node) = &engines.node {
+                        if !node.is_empty() {
+                            return Ok(Some(VersionResolution {
+                                version: node.clone(),
+                                source: VersionSource::EnginesNode,
+                                source_path: Some(package_json_path),
+                                project_root: Some(current.to_absolute_path_buf()),
+                            }));
+                        }
+                    }
+                }
+
+                // Check devEngines.runtime
+                if let Some(dev_engines) = &pkg.dev_engines {
+                    if let Some(runtime) = &dev_engines.runtime {
+                        if let Some(node_rt) = runtime.find_by_name("node") {
+                            if !node_rt.version.is_empty() {
+                                return Ok(Some(VersionResolution {
+                                    version: node_rt.version.clone(),
+                                    source: VersionSource::DevEnginesRuntime,
+                                    source_path: Some(package_json_path),
+                                    project_root: Some(current.to_absolute_path_buf()),
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Move to parent directory if walk_up is enabled
+        if !walk_up {
+            break;
+        }
+
+        match current.parent() {
+            Some(parent) => current = parent.to_owned(),
+            None => break,
+        }
+    }
+
+    // No version source found
+    Ok(None)
 }
 
 /// Download runtime based on project's version configuration.
@@ -238,15 +340,19 @@ impl std::fmt::Display for VersionSource {
 /// # Note
 /// Currently only supports Node.js runtime.
 pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result<JsRuntime, Error> {
-    let package_json_path = project_path.join("package.json");
-    let pkg = read_package_json(&package_json_path).await?;
     let provider = NodeProvider::new();
     let cache_dir = crate::cache::get_cache_dir()?;
 
-    // 1. Read all version sources (with validation)
-    let node_version_file = read_node_version_file(project_path)
-        .await
-        .and_then(|v| normalize_version(&v, ".node-version"));
+    // Use resolve_node_version to find the version (no directory walking for project downloads)
+    let resolution = resolve_node_version(project_path, false).await?;
+
+    // Validate the version from the resolved source
+    let version_req =
+        resolution.as_ref().and_then(|r| normalize_version(&r.version, &r.source.to_string()));
+
+    // For compatibility checking, we need to read all sources
+    let package_json_path = project_path.join("package.json");
+    let pkg = read_package_json(&package_json_path).await?;
 
     let engines_node = pkg
         .as_ref()
@@ -263,37 +369,31 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
         .filter(|v| !v.is_empty())
         .and_then(|v| normalize_version(&v, "devEngines.runtime"));
 
-    tracing::debug!(
-        "Version sources - .node-version: {:?}, engines.node: {:?}, devEngines.runtime: {:?}",
-        node_version_file,
-        engines_node,
-        dev_engines_runtime
-    );
-
-    // 2. Select version from highest priority source that exists
-    let (version_req, source) = if let Some(ref v) = node_version_file {
-        (v.clone(), VersionSource::NodeVersionFile)
+    // Determine the actual version requirement to use
+    let (version_req, source) = if let Some(ref v) = version_req {
+        (v.clone(), resolution.as_ref().map(|r| r.source))
     } else if let Some(ref v) = engines_node {
-        (v.clone(), VersionSource::EnginesNode)
+        // Fall through if primary source was invalid
+        (v.clone(), Some(VersionSource::EnginesNode))
     } else if let Some(ref v) = dev_engines_runtime {
-        (v.clone(), VersionSource::DevEnginesRuntime)
+        (v.clone(), Some(VersionSource::DevEnginesRuntime))
     } else {
-        (Str::default(), VersionSource::None)
+        (Str::default(), None)
     };
 
-    tracing::debug!("Selected version source: {source}, version_req: {version_req:?}");
+    tracing::debug!("Selected version source: {source:?}, version_req: {version_req:?}");
 
-    // 3. Resolve version (if range/partial → exact)
+    // Resolve version (if range/partial → exact)
     let (version, should_write_back) =
         resolve_version_for_project(&version_req, source, &provider, &cache_dir).await?;
 
-    // 4. Check compatibility with lower priority sources
+    // Check compatibility with lower priority sources
     check_version_compatibility(&version, source, &engines_node, &dev_engines_runtime);
 
     tracing::info!("Resolved Node.js version: {version}");
     let runtime = download_runtime(JsRuntimeType::Node, &version).await?;
 
-    // 5. Write resolved version to .node-version (if resolution occurred)
+    // Write resolved version to .node-version (if resolution occurred)
     if should_write_back {
         if let Err(e) = write_node_version_file(project_path, &version).await {
             tracing::warn!("Failed to write .node-version: {e}");
@@ -310,7 +410,7 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
 /// Returns (resolved_version, should_write_back).
 async fn resolve_version_for_project(
     version_req: &str,
-    _source: VersionSource,
+    _source: Option<VersionSource>,
     provider: &NodeProvider,
     cache_dir: &AbsolutePath,
 ) -> Result<(Str, bool), Error> {
@@ -348,7 +448,7 @@ async fn resolve_version_for_project(
 /// Emit warnings if incompatible.
 fn check_version_compatibility(
     resolved_version: &str,
-    source: VersionSource,
+    source: Option<VersionSource>,
     engines_node: &Option<Str>,
     dev_engines_runtime: &Option<Str>,
 ) {
@@ -358,14 +458,14 @@ fn check_version_compatibility(
     };
 
     // Check engines.node if it's a lower priority source
-    if source != VersionSource::EnginesNode {
+    if source != Some(VersionSource::EnginesNode) {
         if let Some(req) = engines_node {
             check_constraint(&parsed, req, "engines.node", resolved_version, source);
         }
     }
 
     // Check devEngines.runtime if it's a lower priority source
-    if source != VersionSource::DevEnginesRuntime {
+    if source != Some(VersionSource::DevEnginesRuntime) {
         if let Some(req) = dev_engines_runtime {
             check_constraint(&parsed, req, "devEngines.runtime", resolved_version, source);
         }
@@ -378,14 +478,15 @@ fn check_constraint(
     constraint: &str,
     constraint_source: &str,
     resolved_version: &str,
-    source: VersionSource,
+    source: Option<VersionSource>,
 ) {
     match Range::parse(constraint) {
         Ok(range) => {
             if !range.satisfies(version) {
+                let source_str = source.map_or("none".to_string(), |s| s.to_string());
                 println!(
-                    "warning: Node.js version {resolved_version} (from {source}) does not satisfy \
-                     {constraint_source} constraint '{constraint}'"
+                    "warning: Node.js version {resolved_version} (from {source_str}) does not \
+                     satisfy {constraint_source} constraint '{constraint}'"
                 );
             }
         }
@@ -911,7 +1012,6 @@ mod tests {
         assert_eq!(VersionSource::NodeVersionFile.to_string(), ".node-version");
         assert_eq!(VersionSource::EnginesNode.to_string(), "engines.node");
         assert_eq!(VersionSource::DevEnginesRuntime.to_string(), "devEngines.runtime");
-        assert_eq!(VersionSource::None.to_string(), "none");
     }
 
     // ==========================================
@@ -1115,5 +1215,136 @@ mod tests {
 
         let version = Str::from("   ");
         assert_eq!(normalize_version(&version, "test"), None);
+    }
+
+    // ==========================================
+    // resolve_node_version tests
+    // ==========================================
+
+    #[tokio::test]
+    async fn test_resolve_node_version_no_walk_up() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version file
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, "20.18.0");
+        assert_eq!(resolution.source, VersionSource::NodeVersionFile);
+        assert!(resolution.source_path.is_some());
+        assert!(resolution.project_root.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_node_version_with_walk_up() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version in parent
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+
+        // Create subdirectory
+        let subdir = temp_path.join("subdir");
+        tokio::fs::create_dir(&subdir).await.unwrap();
+
+        // With walk_up=true, should find version in parent
+        let resolution = resolve_node_version(&subdir, true).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, "20.18.0");
+        assert_eq!(resolution.source, VersionSource::NodeVersionFile);
+
+        // With walk_up=false, should not find version
+        let resolution = resolve_node_version(&subdir, false).await.unwrap();
+        assert!(resolution.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_node_version_engines_node() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create package.json with engines.node
+        let package_json = r#"{"engines":{"node":"20.18.0"}}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, "20.18.0");
+        assert_eq!(resolution.source, VersionSource::EnginesNode);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_node_version_dev_engines() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create package.json with devEngines.runtime
+        let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"20.18.0"}}}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, "20.18.0");
+        assert_eq!(resolution.source, VersionSource::DevEnginesRuntime);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_node_version_priority() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create both .node-version and package.json with different versions
+        tokio::fs::write(temp_path.join(".node-version"), "22.0.0\n").await.unwrap();
+        let package_json = r#"{"engines":{"node":"20.18.0"}}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
+        // .node-version should take priority
+        assert_eq!(&*resolution.version, "22.0.0");
+        assert_eq!(resolution.source, VersionSource::NodeVersionFile);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_node_version_none_when_no_sources() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // No version sources at all
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap();
+        assert!(resolution.is_none());
+    }
+
+    /// Test that package.json in child directory takes priority over .node-version in parent.
+    ///
+    /// Directory structure:
+    /// ```
+    /// parent/
+    ///   .node-version (22.0.0)
+    ///   child/
+    ///     package.json (engines.node: "20.18.0")
+    /// ```
+    ///
+    /// When resolving from `child/` with walk_up=true, it should find `package.json` in child
+    /// (20.18.0) instead of `.node-version` in parent (22.0.0).
+    #[tokio::test]
+    async fn test_resolve_node_version_child_package_json_over_parent_node_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let parent_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version in parent
+        tokio::fs::write(parent_path.join(".node-version"), "22.0.0\n").await.unwrap();
+
+        // Create child directory with package.json
+        let child_path = parent_path.join("child");
+        tokio::fs::create_dir(&child_path).await.unwrap();
+        let package_json = r#"{"engines":{"node":"20.18.0"}}"#;
+        tokio::fs::write(child_path.join("package.json"), package_json).await.unwrap();
+
+        // When resolving from child with walk_up=true, should find package.json in child
+        // NOT the .node-version in parent
+        let resolution = resolve_node_version(&child_path, true).await.unwrap().unwrap();
+        assert_eq!(
+            &*resolution.version, "20.18.0",
+            "Should use child's package.json (20.18.0), not parent's .node-version (22.0.0)"
+        );
+        assert_eq!(resolution.source, VersionSource::EnginesNode);
     }
 }

@@ -9,8 +9,11 @@ rust-version.workspace = true
 
 [dependencies]
 directories = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 tracing-subscriber = { workspace = true }
 vite_path = { workspace = true }
+vite_str = { workspace = true }
 
 [lints]
 workspace = true
