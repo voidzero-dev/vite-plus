@@ -7,6 +7,8 @@ pub mod config;
 mod current;
 mod default;
 mod doctor;
+mod off;
+mod on;
 mod setup;
 mod which;
 
@@ -22,6 +24,8 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
     if let Some(subcommand) = args.command {
         return match subcommand {
             crate::cli::EnvSubcommands::Default { version } => default::execute(cwd, version).await,
+            crate::cli::EnvSubcommands::On => on::execute().await,
+            crate::cli::EnvSubcommands::Off => off::execute().await,
         };
     }
 
@@ -51,6 +55,8 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
     println!();
     println!("Commands:");
     println!("  default [VERSION]  Set or show the global default Node.js version");
+    println!("  on                 Enable managed mode (shims always use vite-plus Node.js)");
+    println!("  off                Enable system-first mode (shims prefer system Node.js)");
     println!();
     println!("Options:");
     println!("  --setup            Create or update shims in ~/.vite-plus/shims");
@@ -65,6 +71,8 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
     println!("  vp env --setup                # Create shims for node, npm, npx");
     println!("  vp env --doctor               # Check environment configuration");
     println!("  vp env default 20.18.0        # Set default Node.js version");
+    println!("  vp env on                     # Use vite-plus managed Node.js");
+    println!("  vp env off                    # Prefer system Node.js");
     println!("  vp env --which node           # Show which node binary will be used");
 
     Ok(ExitStatus::default())

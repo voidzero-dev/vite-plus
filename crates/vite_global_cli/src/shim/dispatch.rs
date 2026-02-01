@@ -12,16 +12,26 @@ use super::{
     cache::{self, ResolveCache, ResolveCacheEntry},
     exec,
 };
-use crate::commands::env::config;
+use crate::commands::env::config::{self, ShimMode};
 
 /// Main shim dispatch entry point.
 ///
 /// Called when the binary is invoked as node, npm, or npx.
 /// Returns an exit code to be used with std::process::exit.
 pub fn dispatch(tool: &str, args: &[String]) -> i32 {
-    // Check bypass mode
+    // Check bypass mode (explicit environment variable)
     if std::env::var("VITE_PLUS_BYPASS").is_ok() {
         return bypass_to_system(tool, args);
+    }
+
+    // Check shim mode from config
+    let shim_mode = load_shim_mode();
+    if shim_mode == ShimMode::SystemFirst {
+        // In system-first mode, try to find system tool first
+        if let Some(system_path) = find_system_tool(tool) {
+            return exec::exec_tool(&system_path, args);
+        }
+        // Fall through to managed if system not found
     }
 
     // Get current working directory
@@ -85,43 +95,13 @@ pub fn dispatch(tool: &str, args: &[String]) -> i32 {
 
 /// Bypass shim and use system tool.
 fn bypass_to_system(tool: &str, args: &[String]) -> i32 {
-    // Find the tool in PATH, skipping our shims directory
-    let shims_dir = config::get_shims_dir().ok();
-
-    let path_var = std::env::var_os("PATH").unwrap_or_default();
-    let paths = std::env::split_paths(&path_var);
-
-    for path in paths {
-        // Skip our shims directory
-        if let Some(ref shims) = shims_dir {
-            if path == shims.as_path().to_path_buf() {
-                continue;
-            }
-        }
-
-        #[cfg(windows)]
-        let candidates = vec![
-            path.join(format!("{tool}.exe")),
-            path.join(format!("{tool}.cmd")),
-            path.join(format!("{tool}.bat")),
-        ];
-
-        #[cfg(not(windows))]
-        let candidates = vec![path.join(tool)];
-
-        for candidate in candidates {
-            if candidate.is_file() {
-                let abs_path = match AbsolutePathBuf::new(candidate.clone()) {
-                    Some(p) => p,
-                    None => continue,
-                };
-                return exec::exec_tool(&abs_path, args);
-            }
+    match find_system_tool(tool) {
+        Some(system_path) => exec::exec_tool(&system_path, args),
+        None => {
+            eprintln!("vp: VITE_PLUS_BYPASS is set but no system '{tool}' found in PATH");
+            1
         }
     }
-
-    eprintln!("vp: VITE_PLUS_BYPASS is set but no system '{tool}' found in PATH");
-    1
 }
 
 /// Resolve version with caching.
@@ -240,4 +220,31 @@ fn locate_tool(version: &str, tool: &str) -> Result<AbsolutePathBuf, String> {
     }
 
     Ok(tool_path)
+}
+
+/// Load shim mode from config synchronously.
+///
+/// Returns the default (Managed) if config cannot be read.
+fn load_shim_mode() -> ShimMode {
+    config::load_config_sync().map(|c| c.shim_mode).unwrap_or_default()
+}
+
+/// Find a system tool in PATH, skipping the vite-plus shims directory.
+///
+/// Returns the absolute path to the tool if found, None otherwise.
+fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
+    let shims_dir = config::get_shims_dir().ok();
+    let path_var = std::env::var_os("PATH")?;
+
+    // Filter PATH to exclude shims directory, then search
+    let filtered_paths: Vec<_> = std::env::split_paths(&path_var)
+        .filter(|p| if let Some(ref shims) = shims_dir { p != shims.as_path() } else { true })
+        .collect();
+
+    let filtered_path = std::env::join_paths(filtered_paths).ok()?;
+
+    // Use which::which_in with filtered PATH - stops at first match
+    let cwd = std::env::current_dir().ok()?;
+    let path = which::which_in(tool, Some(filtered_path), cwd).ok()?;
+    AbsolutePathBuf::new(path)
 }
