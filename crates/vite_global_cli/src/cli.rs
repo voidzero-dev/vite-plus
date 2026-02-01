@@ -623,6 +623,12 @@ pub enum EnvSubcommands {
         /// If not provided, shows the current default
         version: Option<String>,
     },
+
+    /// Enable managed mode - shims always use vite-plus managed Node.js
+    On,
+
+    /// Enable system-first mode - shims prefer system Node.js, fallback to managed
+    Off,
 }
 
 /// Package manager subcommands

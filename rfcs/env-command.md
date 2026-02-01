@@ -45,6 +45,10 @@ vp env default latest     # Use latest version (not recommended for stability)
 
 # Show current default version
 vp env default
+
+# Control shim mode
+vp env on             # Enable managed mode (shims always use vite-plus Node.js)
+vp env off            # Enable system-first mode (shims prefer system Node.js)
 ```
 
 ### Diagnostic Commands
@@ -116,6 +120,12 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
   // Alternatively, use aliases:
   // "defaultNodeVersion": "lts"     // Always use latest LTS
   // "defaultNodeVersion": "latest"  // Always use latest (not recommended)
+
+  // Shim mode: controls how shims resolve tools
+  // Set via: vp env on (managed) or vp env off (system_first)
+  // - "managed" (default): Shims always use vite-plus managed Node.js
+  // - "system_first": Shims prefer system Node.js, fallback to managed if not found
+  "shimMode": "managed",
 }
 ```
 
@@ -142,268 +152,27 @@ crates/vite_global_cli/
 │   └── commands/
 │       └── env/
 │           ├── mod.rs                # Env command module
+│           ├── config.rs             # Configuration and version resolution
 │           ├── setup.rs              # --setup implementation
 │           ├── doctor.rs             # --doctor implementation
 │           ├── which.rs              # --which implementation
-│           └── current.rs            # --current implementation
+│           ├── current.rs            # --current implementation
+│           ├── default.rs            # default subcommand implementation
+│           ├── on.rs                 # on subcommand implementation
+│           └── off.rs                # off subcommand implementation
 ```
 
-### Command Definition
+### Shim Dispatch Flow
 
-```rust
-// crates/vite_global_cli/src/cli.rs
-
-#[derive(Subcommand, Debug)]
-pub enum Commands {
-    // ... existing commands ...
-
-    /// Manage Node.js environment and shims
-    Env(EnvArgs),
-}
-
-#[derive(Args, Debug)]
-pub struct EnvArgs {
-    /// Create or update shims in VITE_PLUS_HOME/shims
-    #[arg(long)]
-    pub setup: bool,
-
-    /// Force refresh shims even if they exist
-    #[arg(long, requires = "setup")]
-    pub refresh: bool,
-
-    /// Run diagnostics and show environment status
-    #[arg(long)]
-    pub doctor: bool,
-
-    /// Show path to the tool that would be executed
-    #[arg(long, value_name = "TOOL")]
-    pub which: Option<String>,
-
-    /// Show current environment information
-    #[arg(long)]
-    pub current: bool,
-
-    /// Output in JSON format
-    #[arg(long, requires = "current")]
-    pub json: bool,
-
-    /// Print shell snippet to set environment for current session
-    #[arg(long)]
-    pub print: bool,
-
-    /// Set or show the global default Node.js version
-    /// Usage: vp env default [VERSION]
-    /// Examples:
-    ///   vp env default           # Show current default
-    ///   vp env default 20.18.0   # Set specific version
-    ///   vp env default lts       # Set to latest LTS
-    ///   vp env default latest    # Set to latest version
-    #[arg(long, value_name = "VERSION")]
-    pub default: Option<Option<String>>,
-}
-```
-
-### Shim Detection in main.rs
-
-```rust
-// crates/vite_global_cli/src/main.rs
-
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    let argv0 = args.first().map(|s| s.as_str()).unwrap_or("vp");
-
-    // Check VITE_PLUS_SHIM_TOOL first (set by Windows .cmd wrappers)
-    // Then fall back to argv[0] detection
-    let tool = std::env::var("VITE_PLUS_SHIM_TOOL")
-        .ok()
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| extract_tool_name(argv0));
-
-    match tool.as_str() {
-        "node" | "npm" | "npx" => {
-            // Shim mode
-            let exit_code = shim::dispatch(&tool, &args[1..]);
-            std::process::exit(exit_code);
-        }
-        _ => {
-            // Normal CLI mode
-            run_cli();
-        }
-    }
-}
-
-fn extract_tool_name(argv0: &str) -> String {
-    let path = std::path::Path::new(argv0);
-    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
-
-    // Handle Windows: strip .exe, .cmd extensions
-    stem.trim_end_matches(".exe")
-        .trim_end_matches(".cmd")
-        .to_lowercase()
-}
-```
-
-### Shim Dispatch Logic
-
-```rust
-// crates/vite_global_cli/src/shim/dispatch.rs
-
-pub fn dispatch(tool: &str, args: &[String]) -> i32 {
-    let cwd = std::env::current_dir().expect("Failed to get current directory");
-    let cwd = AbsolutePathBuf::new(cwd).expect("Invalid current directory");
-
-    // 1. Check bypass mode
-    if std::env::var("VITE_PLUS_BYPASS").is_ok() {
-        return bypass_to_system(tool, args);
-    }
-
-    // 2. Resolve version (with caching)
-    let resolution = match resolve_with_cache(&cwd) {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("vp: Failed to resolve Node version: {}", e);
-            eprintln!("vp: Run 'vp env --doctor' for diagnostics");
-            return 1;
-        }
-    };
-
-    // 3. Ensure Node.js is installed
-    if let Err(e) = ensure_installed(&resolution.version) {
-        eprintln!("vp: Failed to install Node {}: {}", resolution.version, e);
-        return 1;
-    }
-
-    // 4. Locate tool binary
-    let tool_path = match locate_tool(&resolution.version, tool) {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("vp: Tool '{}' not found: {}", tool, e);
-            return 1;
-        }
-    };
-
-    // 5. Prepare environment for recursive invocations
-    // Prepend real node bin dir to PATH so child processes (e.g., npm running node)
-    // use the correct version without going through shims again
-    let node_bin_dir = tool_path.parent().expect("Tool has no parent directory");
-    prepend_path_env(node_bin_dir);
-
-    // Optional: set diagnostic env vars
-    if std::env::var("VITE_PLUS_DEBUG_SHIM").is_ok() {
-        std::env::set_var("VITE_PLUS_ACTIVE_NODE", &resolution.version);
-        std::env::set_var("VITE_PLUS_RESOLVE_SOURCE", &resolution.source);
-    }
-
-    // 6. Execute - child processes will see real node in PATH
-    exec::exec_tool(&tool_path, args)
-}
-```
-
-### Platform-Specific Execution
-
-```rust
-// crates/vite_global_cli/src/shim/exec.rs
-
-#[cfg(unix)]
-pub fn exec_tool(path: &AbsolutePath, args: &[String]) -> i32 {
-    use std::os::unix::process::CommandExt;
-
-    let mut cmd = std::process::Command::new(path.as_path());
-    cmd.args(args);
-
-    // Use exec to replace process (preserves PID, signals)
-    let err = cmd.exec();
-    eprintln!("vp: Failed to exec {}: {}", path, err);
-    1
-}
-
-#[cfg(windows)]
-pub fn exec_tool(path: &AbsolutePath, args: &[String]) -> i32 {
-    use std::process::Command;
-
-    let status = Command::new(path.as_path())
-        .args(args)
-        .status()
-        .expect("Failed to execute tool");
-
-    status.code().unwrap_or(1)
-}
-```
-
-### Resolution Cache
-
-```rust
-// crates/vite_global_cli/src/shim/cache.rs
-
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize)]
-pub struct ResolveCacheEntry {
-    pub version: String,
-    pub source: String,
-    pub project_root: String,
-    pub resolved_at: u64,
-    pub version_file_mtime: u64,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ResolveCache {
-    /// Cache format version for upgrade compatibility
-    version: u32,
-    entries: HashMap<String, ResolveCacheEntry>, // key = cwd
-    #[serde(skip)]
-    max_entries: usize,
-}
-
-impl Default for ResolveCache {
-    fn default() -> Self {
-        Self {
-            version: 1,
-            entries: HashMap::new(),
-            max_entries: Self::DEFAULT_MAX_ENTRIES,
-        }
-    }
-}
-
-impl ResolveCache {
-    const DEFAULT_MAX_ENTRIES: usize = 4096;
-
-    pub fn get(&self, cwd: &AbsolutePath) -> Option<&ResolveCacheEntry> {
-        let key = cwd.to_string();
-        let entry = self.entries.get(&key)?;
-
-        // Validate mtime of version source file
-        if !self.is_entry_valid(entry) {
-            return None;
-        }
-
-        Some(entry)
-    }
-
-    pub fn insert(&mut self, cwd: &AbsolutePath, entry: ResolveCacheEntry) {
-        // LRU eviction if needed
-        if self.entries.len() >= self.max_entries {
-            self.evict_oldest();
-        }
-        self.entries.insert(cwd.to_string(), entry);
-    }
-
-    fn is_entry_valid(&self, entry: &ResolveCacheEntry) -> bool {
-        // Check if source file mtime has changed
-        let source_path = std::path::Path::new(&entry.source);
-        if let Ok(metadata) = std::fs::metadata(source_path) {
-            if let Ok(mtime) = metadata.modified() {
-                let mtime_secs = mtime.duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0);
-                return mtime_secs == entry.version_file_mtime;
-            }
-        }
-        false
-    }
-}
-```
+1. Check `VITE_PLUS_BYPASS` environment variable → bypass to system tool
+2. Check shim mode from config:
+   - If `system_first`: try system tool first, fallback to managed
+   - If `managed`: use vite-plus managed Node.js
+3. Resolve version (with mtime-based caching)
+4. Ensure Node.js is installed (download if needed)
+5. Locate tool binary in the installed Node.js
+6. Prepend real node bin dir to PATH for child processes
+7. Execute the tool (Unix: `execve`, Windows: spawn)
 
 ## Design Decisions
 
@@ -612,6 +381,13 @@ VITE_PLUS_HOME: /Users/user/.vite-plus
   ✓ Shims directory exists
   ✓ All shims present (node, npm, npx)
 
+Shim Mode:
+  Mode: managed
+  ✓ Shims always use vite-plus managed Node.js
+
+  Run 'vp env on' to always use managed Node.js
+  Run 'vp env off' to prefer system Node.js
+
 PATH Analysis:
   ✓ VP shims first in PATH
 
@@ -624,6 +400,24 @@ Current Directory: /Users/user/projects/my-app
   ✓ Node binary exists
 
 No conflicts detected.
+```
+
+**Doctor Output with System-First Mode:**
+
+```bash
+$ vp env --doctor
+
+...
+
+Shim Mode:
+  Mode: system-first
+  ✓ Shims prefer system Node.js, fallback to managed
+  System Node.js: /usr/local/bin/node
+
+  Run 'vp env on' to always use managed Node.js
+  Run 'vp env off' to prefer system Node.js
+
+...
 ```
 
 ### Default Version Command
@@ -647,6 +441,42 @@ $ vp env default
 No default version configured. Using latest LTS (22.13.0).
   Run 'vp env default <version>' to set a default.
 ```
+
+### Shim Mode Commands
+
+The shim mode controls how shims resolve tools:
+
+| Mode                | Description                                                   |
+| ------------------- | ------------------------------------------------------------- |
+| `managed` (default) | Shims always use vite-plus managed Node.js                    |
+| `system_first`      | Shims prefer system Node.js, fallback to managed if not found |
+
+```bash
+# Enable managed mode (always use vite-plus Node.js)
+$ vp env on
+✓ Shim mode set to managed.
+
+Shims will now always use vite-plus managed Node.js.
+Run 'vp env off' to prefer system Node.js instead.
+
+# Enable system-first mode (prefer system Node.js)
+$ vp env off
+✓ Shim mode set to system-first.
+
+Shims will now prefer system Node.js, falling back to managed if not found.
+Run 'vp env on' to always use vite-plus managed Node.js.
+
+# If already in the requested mode
+$ vp env on
+Shim mode is already set to managed.
+Shims will always use vite-plus managed Node.js.
+```
+
+**Use cases for system-first mode (`vp env off`)**:
+
+- When you have a system Node.js that you want to use by default
+- When working on projects that don't need vite-plus version management
+- When debugging version-related issues by comparing system vs managed Node.js
 
 ### Which Command
 
@@ -715,86 +545,27 @@ The `.cmd` wrapper sets `VITE_PLUS_SHIM_TOOL` environment variable before callin
 
 ### Windows Installation (install.ps1)
 
-```powershell
-# packages/global/install.ps1
+The Windows installer (`install.ps1`) follows the same flow:
 
-Write-Host "Installing vite-plus..."
-
-# Download and install vp.exe
-# ... download logic ...
-
-# Create shims
-& "$env:USERPROFILE\.vite-plus\bin\vp.exe" env --setup
-
-# Prompt for PATH configuration
-$addPath = Read-Host "Would you like to add vite-plus shims to your PATH? (y/n)"
-if ($addPath -eq 'y') {
-    $shimPath = "$env:USERPROFILE\.vite-plus\shims"
-    $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
-
-    if ($currentPath -notlike "*$shimPath*") {
-        [Environment]::SetEnvironmentVariable("Path", "$shimPath;$currentPath", "User")
-        Write-Host "Added to User PATH. Restart your terminal and IDE."
-    } else {
-        Write-Host "Already in PATH, skipping."
-    }
-}
-```
+1. Download and install `vp.exe`
+2. Run `vp env --setup` to create shims
+3. Prompt user to add shims to User PATH
+4. Update PATH via `[Environment]::SetEnvironmentVariable`
 
 ## Testing Strategy
 
 ### Unit Tests
 
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_extract_tool_name() {
-        assert_eq!(extract_tool_name("node"), "node");
-        assert_eq!(extract_tool_name("/usr/bin/node"), "node");
-        assert_eq!(extract_tool_name("C:\\shims\\node.exe"), "node");
-        assert_eq!(extract_tool_name("npm.cmd"), "npm");
-        assert_eq!(extract_tool_name("/path/to/vp"), "vp");
-    }
-
-    #[test]
-    fn test_cache_invalidation() {
-        // Test mtime-based cache invalidation
-    }
-
-    #[test]
-    fn test_path_prepend() {
-        // Test PATH environment variable manipulation
-    }
-}
-```
+- Tool name extraction from argv[0]
+- Cache invalidation based on mtime
+- PATH manipulation
+- Shim mode loading
 
 ### Integration Tests
 
-```rust
-#[tokio::test]
-async fn test_shim_dispatch_node() {
-    // Setup: Create test project with .node-version
-    // Run: Invoke shim as 'node -v'
-    // Verify: Output matches resolved version
-}
-
-#[tokio::test]
-async fn test_shim_concurrent_install() {
-    // Setup: Create scenario requiring Node download
-    // Run: Invoke 10 concurrent 'node -v' commands
-    // Verify: All succeed, only one download occurs
-}
-
-#[tokio::test]
-async fn test_doctor_detects_path_issues() {
-    // Setup: Environment without shims in PATH
-    // Run: vp env --doctor
-    // Verify: Correct diagnostic output
-}
-```
+- Shim dispatch with version resolution
+- Concurrent installation handling
+- Doctor diagnostic output
 
 ### Snap Tests
 
@@ -837,6 +608,7 @@ env-doctor/
 5. Implement `vp env --doctor` basic diagnostics
 6. Add resolution cache (persists across upgrades with version field)
 7. Implement `vp env default [version]` to set/show global default Node.js version
+8. Implement `vp env on` and `vp env off` for shim mode control
 
 ### Phase 2: Full Tool Support (P1)
 
@@ -885,4 +657,5 @@ The `vp env` command provides:
 - ✅ Zero daily friction (automatic version switching)
 - ✅ Cross-platform support (Windows, macOS, Linux)
 - ✅ Comprehensive diagnostics (`--doctor`)
+- ✅ Flexible shim mode control (`on`/`off` for managed vs system-first)
 - ✅ Leverages existing version resolution and installation infrastructure

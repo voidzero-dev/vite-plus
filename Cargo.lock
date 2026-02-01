@@ -7055,6 +7055,7 @@ dependencies = [
  "vite_shared",
  "vite_str",
  "vite_workspace",
+ "which",
 ]
 
 [[package]]
