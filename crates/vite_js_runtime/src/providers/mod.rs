@@ -5,4 +5,4 @@
 
 mod node;
 
-pub use node::NodeProvider;
+pub use node::{LtsInfo, NodeProvider, NodeVersionEntry};

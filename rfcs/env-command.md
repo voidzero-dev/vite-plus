@@ -69,6 +69,35 @@ vp env --current --json
 vp env --print
 ```
 
+### Version Management Commands
+
+```bash
+# Pin a specific version in current directory (creates .node-version)
+vp env pin 20.18.0
+
+# Pin using version aliases (resolved to exact version)
+vp env pin lts        # Resolves and pins current LTS (e.g., 22.13.0)
+vp env pin latest     # Resolves and pins latest version
+
+# Pin using semver ranges
+vp env pin "^20.0.0"
+
+# Show current pinned version
+vp env pin
+
+# Remove pin (delete .node-version file)
+vp env pin --unpin
+vp env unpin          # Alternative syntax
+
+# Skip pre-downloading the pinned version
+vp env pin 20.18.0 --no-install
+
+# List available Node.js versions
+vp env list
+vp env list --lts     # Show only LTS versions
+vp env list 20        # Show versions matching pattern
+```
+
 ### Daily Usage (After Setup)
 
 ```bash
@@ -247,7 +276,10 @@ crates/vite_global_cli/
 │           ├── current.rs            # --current implementation
 │           ├── default.rs            # default subcommand implementation
 │           ├── on.rs                 # on subcommand implementation
-│           └── off.rs                # off subcommand implementation
+│           ├── off.rs                # off subcommand implementation
+│           ├── pin.rs                # pin subcommand implementation
+│           ├── unpin.rs              # unpin subcommand implementation
+│           └── list.rs               # list subcommand implementation
 ```
 
 ### Shim Dispatch Flow
@@ -576,6 +608,194 @@ $ vp env which npm
 /Users/user/.cache/vite-plus/js_runtime/node/20.18.0/bin/npm
 ```
 
+## Pin Command
+
+The `vp env pin` command provides per-directory Node.js version pinning by managing `.node-version` files.
+
+### Behavior
+
+**Pinning a Version:**
+
+```bash
+$ vp env pin 20.18.0
+✓ Pinned Node.js version to 20.18.0
+  Created .node-version in /Users/user/projects/my-app
+✓ Node.js 20.18.0 installed
+```
+
+**Pinning with Aliases:**
+
+Aliases (`lts`, `latest`) are resolved to exact versions at pin time for reproducibility:
+
+```bash
+$ vp env pin lts
+✓ Pinned Node.js version to 22.13.0 (resolved from lts)
+  Created .node-version in /Users/user/projects/my-app
+✓ Node.js 22.13.0 installed
+```
+
+**Showing Current Pin:**
+
+```bash
+$ vp env pin
+Pinned version: 20.18.0
+  Source: /Users/user/projects/my-app/.node-version
+
+# If no .node-version in current directory but found in parent
+$ vp env pin
+No version pinned in current directory.
+  Inherited: 22.13.0 from /Users/user/projects/.node-version
+
+# If no .node-version anywhere
+$ vp env pin
+No version pinned.
+  Using default: 20.18.0 (from ~/.vite-plus/config.json)
+```
+
+**Removing a Pin:**
+
+```bash
+$ vp env pin --unpin
+✓ Removed .node-version from /Users/user/projects/my-app
+
+# Alternative syntax
+$ vp env unpin
+✓ Removed .node-version from /Users/user/projects/my-app
+```
+
+### Version Format Support
+
+| Input | Written to File | Behavior |
+|-------|-----------------|----------|
+| `20.18.0` | `20.18.0` | Exact version |
+| `20.18` | `20.18` | Latest 20.18.x at runtime |
+| `20` | `20` | Latest 20.x.x at runtime |
+| `lts` | `22.13.0` | Resolved at pin time |
+| `latest` | `24.0.0` | Resolved at pin time |
+| `^20.0.0` | `^20.0.0` | Semver range resolved at runtime |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--unpin` | Remove the `.node-version` file |
+| `--no-install` | Skip pre-downloading the pinned version |
+| `--force` | Overwrite existing `.node-version` without confirmation |
+
+### Pre-download Behavior
+
+By default, `vp env pin` downloads the Node.js version immediately after pinning. Use `--no-install` to skip:
+
+```bash
+$ vp env pin 20.18.0 --no-install
+✓ Pinned Node.js version to 20.18.0
+  Created .node-version in /Users/user/projects/my-app
+  Note: Version will be downloaded on first use.
+```
+
+### Overwrite Confirmation
+
+When a `.node-version` file already exists:
+
+```bash
+$ vp env pin 22.13.0
+.node-version already exists with version 20.18.0
+Overwrite with 22.13.0? (y/n): y
+✓ Pinned Node.js version to 22.13.0
+```
+
+Use `--force` to skip confirmation:
+
+```bash
+$ vp env pin 22.13.0 --force
+✓ Pinned Node.js version to 22.13.0
+```
+
+### Error Handling
+
+```bash
+# Invalid version format
+$ vp env pin invalid
+Error: Invalid Node.js version: invalid
+  Use exact version (20.18.0), partial version (20), or semver range (^20.0.0)
+
+# Version doesn't exist
+$ vp env pin 99.0.0
+Error: Node.js version 99.0.0 does not exist
+  Run 'vp env list' to see available versions
+
+# Network error during alias resolution
+$ vp env pin lts
+Error: Failed to resolve 'lts': Network error
+  Check your network connection and try again
+```
+
+## List Command
+
+The `vp env list` command displays available Node.js versions.
+
+### Usage
+
+```bash
+# List recent versions (default: last 10 major versions)
+$ vp env list
+Available Node.js versions:
+
+  LTS Versions:
+    22.13.0 (Jod)      ← Latest LTS
+    20.18.0 (Iron)
+    18.20.0 (Hydrogen)
+
+  Current:
+    24.0.0             ← Latest
+
+  Use 'vp env pin <version>' to pin a version.
+  Use 'vp env list --all' to see all versions.
+
+# List only LTS versions
+$ vp env list --lts
+LTS Node.js versions:
+  22.13.0 (Jod)        ← Latest LTS
+  22.12.0 (Jod)
+  22.11.0 (Jod)
+  ...
+  20.18.0 (Iron)
+  ...
+
+# Filter by major version
+$ vp env list 20
+Node.js 20.x versions:
+  20.18.0 (Iron LTS)
+  20.17.0
+  20.16.0
+  ...
+
+# Show all versions
+$ vp env list --all
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--lts` | Show only LTS versions |
+| `--all` | Show all versions (not just recent) |
+| `--json` | Output as JSON |
+
+### JSON Output
+
+```bash
+$ vp env list --json
+{
+  "versions": [
+    {"version": "24.0.0", "lts": false, "latest": true},
+    {"version": "22.13.0", "lts": "Jod", "latest_lts": true},
+    {"version": "22.12.0", "lts": "Jod", "latest_lts": false},
+    ...
+  ]
+}
+```
+
 ### Current Command (JSON)
 
 ```bash
@@ -697,6 +917,9 @@ env-doctor/
 6. Add resolution cache (persists across upgrades with version field)
 7. Implement `vp env default [version]` to set/show global default Node.js version
 8. Implement `vp env on` and `vp env off` for shim mode control
+9. Implement `vp env pin [version]` for per-directory version pinning
+10. Implement `vp env unpin` as alias for `pin --unpin`
+11. Implement `vp env list` to show available versions
 
 ### Phase 2: Full Tool Support (P1)
 
@@ -721,8 +944,7 @@ This is a new feature with no impact on existing functionality. The `vp` binary 
 
 1. **Multiple Runtime Support**: Extend shim architecture for other runtimes (Bun, Deno)
 2. **SQLite Cache**: Replace JSON cache with SQLite for better performance at scale
-3. **Version Pinning**: Allow per-directory version overrides via `vp env pin 20.18.0`
-4. **Shell Integration**: Provide shell hooks for prompt version display
+3. **Shell Integration**: Provide shell hooks for prompt version display
 
 ## Design Decisions Summary
 
@@ -744,6 +966,8 @@ The `vp env` command provides:
 - ✅ IDE-safe operation (works with GUI-launched apps)
 - ✅ Zero daily friction (automatic version switching)
 - ✅ Cross-platform support (Windows, macOS, Linux)
-- ✅ Comprehensive diagnostics (`--doctor`)
+- ✅ Comprehensive diagnostics (`doctor`)
 - ✅ Flexible shim mode control (`on`/`off` for managed vs system-first)
+- ✅ Easy version pinning per project (`pin`/`unpin`)
+- ✅ Version discovery with `list` command
 - ✅ Leverages existing version resolution and installation infrastructure

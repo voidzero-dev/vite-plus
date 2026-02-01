@@ -629,6 +629,46 @@ pub enum EnvSubcommands {
         /// Tool name (node, npm, or npx)
         tool: String,
     },
+
+    /// Pin a Node.js version in the current directory (creates .node-version)
+    Pin {
+        /// Version to pin (e.g., "20.18.0", "lts", "latest", "^20.0.0")
+        /// If not provided, shows the current pinned version
+        version: Option<String>,
+
+        /// Remove the .node-version file from current directory
+        #[arg(long)]
+        unpin: bool,
+
+        /// Skip pre-downloading the pinned version
+        #[arg(long)]
+        no_install: bool,
+
+        /// Overwrite existing .node-version without confirmation
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Remove the .node-version file from current directory (alias for `pin --unpin`)
+    Unpin,
+
+    /// List available Node.js versions
+    List {
+        /// Filter versions by pattern (e.g., "20" for 20.x versions)
+        pattern: Option<String>,
+
+        /// Show only LTS versions
+        #[arg(long)]
+        lts: bool,
+
+        /// Show all versions (not just recent)
+        #[arg(long)]
+        all: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 /// Package manager subcommands

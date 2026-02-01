@@ -7,9 +7,12 @@ pub mod config;
 mod current;
 mod default;
 mod doctor;
+mod list;
 mod off;
 mod on;
+mod pin;
 mod setup;
+mod unpin;
 mod which;
 
 use std::process::ExitStatus;
@@ -29,6 +32,13 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
             crate::cli::EnvSubcommands::Setup { refresh } => setup::execute(refresh).await,
             crate::cli::EnvSubcommands::Doctor => doctor::execute(cwd).await,
             crate::cli::EnvSubcommands::Which { tool } => which::execute(cwd, &tool).await,
+            crate::cli::EnvSubcommands::Pin { version, unpin, no_install, force } => {
+                pin::execute(cwd, version, unpin, no_install, force).await
+            }
+            crate::cli::EnvSubcommands::Unpin => unpin::execute(cwd).await,
+            crate::cli::EnvSubcommands::List { pattern, lts, all, json } => {
+                list::execute(pattern, lts, all, json).await
+            }
         };
     }
 
@@ -51,6 +61,9 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
     println!("  setup              Create or update shims in ~/.vite-plus/shims");
     println!("  doctor             Run diagnostics and show environment status");
     println!("  which <TOOL>       Show path to the tool that would be executed");
+    println!("  pin [VERSION]      Pin a Node.js version in current directory");
+    println!("  unpin              Remove the .node-version file from current directory");
+    println!("  list [PATTERN]     List available Node.js versions");
     println!();
     println!("Options:");
     println!("  --current          Show current environment information");
@@ -65,6 +78,12 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
     println!("  vp env on                     # Use vite-plus managed Node.js");
     println!("  vp env off                    # Prefer system Node.js");
     println!("  vp env which node             # Show which node binary will be used");
+    println!("  vp env pin 20.18.0            # Pin Node.js version in current directory");
+    println!("  vp env pin lts                # Pin to latest LTS version");
+    println!("  vp env unpin                  # Remove pinned version");
+    println!("  vp env list                   # List available Node.js versions");
+    println!("  vp env list --lts             # List only LTS versions");
+    println!("  vp env list 20                # List Node.js 20.x versions");
 
     Ok(ExitStatus::default())
 }
