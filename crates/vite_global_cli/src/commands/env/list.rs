@@ -330,4 +330,46 @@ mod tests {
         assert!(limited.iter().any(|v| v.version.starts_with("v24.")));
         assert!(limited.iter().any(|v| v.version.starts_with("v23.")));
     }
+
+    #[test]
+    fn test_filter_versions_show_all_returns_all_versions() {
+        // Create versions spanning many major versions (more than DEFAULT_MAJOR_VERSIONS)
+        let versions = vec![
+            make_version("v25.0.0", None),
+            make_version("v24.0.0", None),
+            make_version("v23.0.0", None),
+            make_version("v22.13.0", Some("Jod")),
+            make_version("v21.0.0", None),
+            make_version("v20.18.0", Some("Iron")),
+            make_version("v19.0.0", None),
+            make_version("v18.20.0", Some("Hydrogen")),
+            make_version("v17.0.0", None),
+            make_version("v16.20.0", Some("Gallium")),
+            make_version("v15.0.0", None),
+            make_version("v14.0.0", None),
+        ];
+
+        // Without show_all, should be limited to DEFAULT_MAJOR_VERSIONS (10)
+        let filtered_limited = filter_versions(&versions, None, false, false);
+        assert_eq!(filtered_limited.len(), 10);
+
+        // With show_all=true, should return all versions
+        let filtered_all = filter_versions(&versions, None, false, true);
+        assert_eq!(filtered_all.len(), 12);
+    }
+
+    #[test]
+    fn test_filter_versions_show_all_with_lts_filter() {
+        let versions = vec![
+            make_version("v25.0.0", None),
+            make_version("v22.13.0", Some("Jod")),
+            make_version("v20.18.0", Some("Iron")),
+            make_version("v18.20.0", Some("Hydrogen")),
+        ];
+
+        // With lts_only and show_all, should return all LTS versions
+        let filtered = filter_versions(&versions, None, true, true);
+        assert_eq!(filtered.len(), 3);
+        assert!(filtered.iter().all(|v| v.is_lts()));
+    }
 }

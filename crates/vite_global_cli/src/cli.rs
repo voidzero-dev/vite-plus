@@ -574,7 +574,7 @@ pub enum Commands {
         args: Vec<String>,
     },
 
-    /// Manage Node.js environment and shims
+    /// Manage Node.js versions
     Env(EnvArgs),
 }
 
@@ -1353,7 +1353,7 @@ fn apply_custom_help(cmd: clap::Command) -> clap::Command {
   {bold}cache{reset}      Manage the task cache
   {bold}new{reset}        Generate a new project
   {bold}run{reset}        Run tasks
-  {bold}env{reset}        Manage Node.js environment and shims
+  {bold}env{reset}        Manage Node.js versions
 
 {bold_underline}Package Manager Commands:{reset}
   {bold}install{reset}    Install all dependencies, or add packages if package names are provided
