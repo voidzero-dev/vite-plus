@@ -8,6 +8,8 @@
 #   VITE_PLUS_VERSION - Version to install (default: latest)
 #   VITE_PLUS_HOME - Installation directory (default: $env:USERPROFILE\.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
+#   VITE_PLUS_LOCAL_BINARY - Path to locally built binary (for development/testing)
+#   VITE_PLUS_LOCAL_PACKAGE - Path to local vite-plus-cli package dir (for development/testing)
 
 $ErrorActionPreference = "Stop"
 
@@ -15,6 +17,9 @@ $ViteVersion = if ($env:VITE_PLUS_VERSION) { $env:VITE_PLUS_VERSION } else { "la
 $InstallDir = if ($env:VITE_PLUS_HOME) { $env:VITE_PLUS_HOME } else { "$env:USERPROFILE\.vite-plus" }
 # npm registry URL (strip trailing slash if present)
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
+# Local paths for development/testing
+$LocalBinary = $env:VITE_PLUS_LOCAL_BINARY
+$LocalPackage = $env:VITE_PLUS_LOCAL_PACKAGE
 
 function Write-Info {
     param([string]$Message)
@@ -185,6 +190,58 @@ function Cleanup-OldVersions {
     }
 }
 
+# Setup shims PATH - auto-enables if no node detected, otherwise prompts user
+# Returns: "true" = path added, "false" = not added, "already" = already configured
+function Setup-ShimsPath {
+    param([string]$BinDir)
+
+    $shimsPath = "$InstallDir\shims"
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+
+    # Check if already in PATH
+    if ($userPath -like "*$shimsPath*") {
+        # Refresh shims if already configured
+        & "$BinDir\vp.exe" env setup --refresh | Out-Null
+        return "already"
+    }
+
+    # Check if node is available on the system
+    $nodeAvailable = $null -ne (Get-Command node -ErrorAction SilentlyContinue)
+
+    # Auto-enable shims if node is not available (no prompt needed)
+    if (-not $nodeAvailable) {
+        & "$BinDir\vp.exe" env setup --refresh | Out-Null
+
+        # Add shims to PATH (shims path must come BEFORE bin path for proper interception)
+        $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        $newPath = "$shimsPath;$currentPath"
+        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+        $env:Path = "$shimsPath;$env:Path"
+        return "true"
+    }
+
+    # Prompt user (only in interactive mode, not CI)
+    $isInteractive = [Environment]::UserInteractive -and -not $env:CI
+    if ($isInteractive) {
+        Write-Host ""
+        Write-Host "Would you want Vite+ to manage Node.js versions?"
+        $addShims = Read-Host "Press Enter to accept (Y/n)"
+
+        if ($addShims -eq '' -or $addShims -eq 'y' -or $addShims -eq 'Y') {
+            & "$BinDir\vp.exe" env setup --refresh | Out-Null
+
+            # Add shims to PATH
+            $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
+            $newPath = "$shimsPath;$currentPath"
+            [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+            $env:Path = "$shimsPath;$env:Path"
+            return "true"
+        }
+    }
+
+    return "false"
+}
+
 function Main {
     Write-Host ""
     Write-Host "Setting up VITE+(⚡︎)..."
@@ -196,8 +253,23 @@ function Main {
     $arch = Get-Architecture
     $platform = "win32-$arch"
 
-    # Fetch package metadata and resolve version
-    $ViteVersion = Get-VersionFromMetadata
+    # Local development mode: skip npm entirely
+    if ($LocalBinary -and $LocalPackage) {
+        # Validate local paths
+        if (-not (Test-Path $LocalBinary)) {
+            Write-Error-Exit "Local binary not found: $LocalBinary"
+        }
+        if (-not (Test-Path $LocalPackage)) {
+            Write-Error-Exit "Local package directory not found: $LocalPackage"
+        }
+        # Use version as-is (default to "local-dev")
+        if ($ViteVersion -eq "latest") {
+            $ViteVersion = "local-dev"
+        }
+    } else {
+        # Fetch package metadata and resolve version from npm
+        $ViteVersion = Get-VersionFromMetadata
+    }
 
     # Set up version-specific directories
     $VersionDir = "$InstallDir\$ViteVersion"
@@ -205,9 +277,6 @@ function Main {
     $DistDir = "$VersionDir\dist"
     $CurrentLink = "$InstallDir\current"
 
-    # Get package suffix from optionalDependencies (dynamic lookup)
-    $packageSuffix = Get-PackageSuffix -Platform $platform
-    $packageName = "@voidzero-dev/vite-plus-cli-$packageSuffix"
     $binaryName = "vp.exe"
 
     # Create directories
@@ -215,87 +284,109 @@ function Main {
     New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 
     # Download and extract native binary and .node files from platform package
-    $platformUrl = "$NpmRegistry/$packageName/-/vite-plus-cli-$packageSuffix-$ViteVersion.tgz"
+    if ($LocalBinary) {
+        # Use local binary for development/testing
+        Write-Info "Using local binary: $LocalBinary"
+        Copy-Item -Path $LocalBinary -Destination "$BinDir\$binaryName" -Force
+        # Note: .node files won't be available when using local binary
+    } else {
+        # Get package suffix from optionalDependencies (dynamic lookup)
+        $packageSuffix = Get-PackageSuffix -Platform $platform
+        $packageName = "@voidzero-dev/vite-plus-cli-$packageSuffix"
+        $platformUrl = "$NpmRegistry/$packageName/-/vite-plus-cli-$packageSuffix-$ViteVersion.tgz"
 
-    $platformTempFile = New-TemporaryFile
-    try {
-        Invoke-WebRequest -Uri $platformUrl -OutFile $platformTempFile
+        $platformTempFile = New-TemporaryFile
+        try {
+            Invoke-WebRequest -Uri $platformUrl -OutFile $platformTempFile
 
-        # Create temp extraction directory
-        $platformTempExtract = Join-Path $env:TEMP "vite-platform-$(Get-Random)"
-        New-Item -ItemType Directory -Force -Path $platformTempExtract | Out-Null
+            # Create temp extraction directory
+            $platformTempExtract = Join-Path $env:TEMP "vite-platform-$(Get-Random)"
+            New-Item -ItemType Directory -Force -Path $platformTempExtract | Out-Null
 
-        # Extract the package
-        tar -xzf $platformTempFile -C $platformTempExtract
+            # Extract the package
+            tar -xzf $platformTempFile -C $platformTempExtract
 
-        # Copy binary to BinDir
-        $binarySource = Join-Path $platformTempExtract "package" $binaryName
-        if (Test-Path $binarySource) {
-            Copy-Item -Path $binarySource -Destination $BinDir -Force
-        }
-
-        # Copy .node files to DistDir (delete existing first to avoid system cache issues)
-        $nodeFilesPath = Join-Path $platformTempExtract "package"
-        Get-ChildItem -Path $nodeFilesPath -Filter "*.node" -ErrorAction SilentlyContinue | ForEach-Object {
-            $destFile = Join-Path $DistDir $_.Name
-            if (Test-Path $destFile) {
-                Remove-Item -Path $destFile -Force
+            # Copy binary to BinDir
+            $binarySource = Join-Path $platformTempExtract "package" $binaryName
+            if (Test-Path $binarySource) {
+                Copy-Item -Path $binarySource -Destination $BinDir -Force
             }
-            Copy-Item -Path $_.FullName -Destination $DistDir -Force
-        }
 
-        Remove-Item -Recurse -Force $platformTempExtract
-    } finally {
-        Remove-Item $platformTempFile -ErrorAction SilentlyContinue
+            # Copy .node files to DistDir (delete existing first to avoid system cache issues)
+            $nodeFilesPath = Join-Path $platformTempExtract "package"
+            Get-ChildItem -Path $nodeFilesPath -Filter "*.node" -ErrorAction SilentlyContinue | ForEach-Object {
+                $destFile = Join-Path $DistDir $_.Name
+                if (Test-Path $destFile) {
+                    Remove-Item -Path $destFile -Force
+                }
+                Copy-Item -Path $_.FullName -Destination $DistDir -Force
+            }
+
+            Remove-Item -Recurse -Force $platformTempExtract
+        } finally {
+            Remove-Item $platformTempFile -ErrorAction SilentlyContinue
+        }
     }
 
-    # Download and extract JS bundle
-    $mainUrl = "$NpmRegistry/vite-plus-cli/-/vite-plus-cli-$ViteVersion.tgz"
-
-    $mainTempFile = New-TemporaryFile
-    try {
-        Invoke-WebRequest -Uri $mainUrl -OutFile $mainTempFile
-
-        # Create temp extraction directory
-        $mainTempExtract = Join-Path $env:TEMP "vite-main-$(Get-Random)"
-        New-Item -ItemType Directory -Force -Path $mainTempExtract | Out-Null
-
-        # Extract the package
-        tar -xzf $mainTempFile -C $mainTempExtract
-
-        # Copy directories and files to VersionDir
-        $itemsToCopy = @("dist", "templates", "rules", "AGENTS.md", "package.json")
+    # Copy JS bundle and assets from local package or download from npm
+    $itemsToCopy = @("dist", "templates", "rules", "AGENTS.md", "package.json")
+    if ($LocalPackage) {
+        # Use local package for development/testing
+        Write-Info "Using local package: $LocalPackage"
         foreach ($item in $itemsToCopy) {
-            $itemSource = Join-Path $mainTempExtract "package" $item
+            $itemSource = Join-Path $LocalPackage $item
             if (Test-Path $itemSource) {
                 Copy-Item -Path $itemSource -Destination $VersionDir -Recurse -Force
             }
         }
+    } else {
+        # Download and extract JS bundle from npm
+        $mainUrl = "$NpmRegistry/vite-plus-cli/-/vite-plus-cli-$ViteVersion.tgz"
 
-        Remove-Item -Recurse -Force $mainTempExtract
-    } finally {
-        Remove-Item $mainTempFile -ErrorAction SilentlyContinue
+        $mainTempFile = New-TemporaryFile
+        try {
+            Invoke-WebRequest -Uri $mainUrl -OutFile $mainTempFile
+
+            # Create temp extraction directory
+            $mainTempExtract = Join-Path $env:TEMP "vite-main-$(Get-Random)"
+            New-Item -ItemType Directory -Force -Path $mainTempExtract | Out-Null
+
+            # Extract the package
+            tar -xzf $mainTempFile -C $mainTempExtract
+
+            # Copy directories and files to VersionDir
+            foreach ($item in $itemsToCopy) {
+                $itemSource = Join-Path $mainTempExtract "package" $item
+                if (Test-Path $itemSource) {
+                    Copy-Item -Path $itemSource -Destination $VersionDir -Recurse -Force
+                }
+            }
+
+            Remove-Item -Recurse -Force $mainTempExtract
+        } finally {
+            Remove-Item $mainTempFile -ErrorAction SilentlyContinue
+        }
     }
 
-    # Remove devDependencies and optionalDependencies from package.json
-    # (temporary solution until deps are fully bundled)
-    $pkgFile = Join-Path $VersionDir "package.json"
-    $pkg = Get-Content $pkgFile -Raw | ConvertFrom-Json
-    $pkg.PSObject.Properties.Remove("devDependencies")
-    $pkg.PSObject.Properties.Remove("optionalDependencies")
-    $pkg | ConvertTo-Json -Depth 10 | Set-Content $pkgFile
+    # Skip dependency installation for local package (deps already bundled or available)
+    if (-not $LocalPackage) {
+        # Remove devDependencies and optionalDependencies from package.json
+        # (temporary solution until deps are fully bundled)
+        $pkgFile = Join-Path $VersionDir "package.json"
+        $pkg = Get-Content $pkgFile -Raw | ConvertFrom-Json
+        $pkg.PSObject.Properties.Remove("devDependencies")
+        $pkg.PSObject.Properties.Remove("optionalDependencies")
+        $pkg | ConvertTo-Json -Depth 10 | Set-Content $pkgFile
 
-    # Install production dependencies
-    Push-Location $VersionDir
-    try {
-        $env:CI = "true"
-        & "$BinDir\vp.exe" install --silent
-    } finally {
-        Pop-Location
+        # Install production dependencies
+        Push-Location $VersionDir
+        try {
+            $env:CI = "true"
+            & "$BinDir\vp.exe" install --silent
+        } finally {
+            Pop-Location
+        }
     }
-
-    # Setup shims for node version management
-    & "$BinDir\vp.exe" env setup 2>$null | Out-Null
 
     # Create/update current junction (symlink)
     if (Test-Path $CurrentLink) {
@@ -325,34 +416,11 @@ function Main {
         $env:Path = "$pathToAdd;$env:Path"
     }
 
-    # Setup shims PATH
-    $shimsPath = "$InstallDir\shims"
-    $shimsNeedsPathUpdate = $true
-    $shimsPathAdded = $false
-    # Refresh userPath after potential update above
-    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    if ($userPath -like "*$shimsPath*") {
-        $shimsNeedsPathUpdate = $false
-    }
+    # Ask user if they want shims and set them up
+    $shimsResult = Setup-ShimsPath -BinDir $BinDir
 
-    # Only prompt in interactive mode (not CI)
-    $isInteractive = [Environment]::UserInteractive -and -not $env:CI
-    if ($shimsNeedsPathUpdate -and (Test-Path $shimsPath) -and $isInteractive) {
-        # Prompt user for shims PATH configuration
-        Write-Host ""
-        Write-Host "Node.js shims created in $shimsPath"
-        Write-Host "Adding shims to PATH enables automatic Node.js version switching."
-        Write-Host ""
-        $addShims = Read-Host "Would you like to add shims to your PATH? (y/n)"
-        if ($addShims -eq 'y' -or $addShims -eq 'Y') {
-            # Shims path must come BEFORE bin path for proper interception
-            $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
-            $newPath = "$shimsPath;$currentPath"
-            [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-            $env:Path = "$shimsPath;$env:Path"
-            $shimsPathAdded = $true
-        }
-    }
+    # Use ~ shorthand if install dir is under USERPROFILE, otherwise show full path
+    $displayDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'
 
     # Print success message
     Write-Host ""
@@ -361,22 +429,23 @@ function Main {
     Write-Host ""
     Write-Host "  Version: $ViteVersion"
     Write-Host ""
-    # Use ~ shorthand if install dir is under USERPROFILE, otherwise show full path
-    $displayDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'
     Write-Host "  Location: $displayDir\current\bin"
 
-    # Show shims setup result
-    if ($shimsPathAdded) {
-        Write-Host "  " -NoNewline
-        Write-Host "✓" -ForegroundColor Green -NoNewline
-        Write-Host " Created shims (node, npm, npx) in $displayDir\shims"
+    # Show Node.js manager status
+    if ($shimsResult -eq "true" -or $shimsResult -eq "already") {
+        Write-Host ""
+        Write-Host "  Node.js manager: on"
+        # Show note about shims if added
+        if ($shimsResult -eq "true") {
+            Write-Host "  Restart your terminal and IDE, then run 'vp env doctor' to verify."
+        }
     }
 
     Write-Host ""
-    Write-Host "  Next: Run vp --help to get started"
+    Write-Host "  Next: Run 'vp help' to get started"
 
-    # Show note if PATH was updated or shims were added
-    if ($needsPathUpdate -or $shimsPathAdded) {
+    # Show note if PATH was updated (but shims were not added - that has its own message)
+    if ($needsPathUpdate -and $shimsResult -ne "true") {
         Write-Host ""
         Write-Host "  Note: Restart your terminal and IDE for changes to take effect."
     }

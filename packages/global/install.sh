@@ -702,7 +702,7 @@ main() {
 
   if [ "$SHIMS_PATH_ADDED" = "true" ] || [ "$SHIMS_PATH_ADDED" = "already" ]; then
     echo ""
-    echo "  Node.js Manager: on"
+    echo "  Node.js manager: on"
     # Show note about shims if added
     if [ "$SHIMS_PATH_ADDED" = "true" ]; then
       echo "  Restart your terminal and IDE, then run 'vp env doctor' to verify."
