@@ -1,6 +1,6 @@
-import type { UserConfig } from 'vite-plus';
+import { defineConfig } from 'vite-plus';
 
-export default <UserConfig>{
+export default defineConfig({
   lint: {
     rules: {
       'no-console': ['error', { allow: ['error'] }],
@@ -85,4 +85,4 @@ export default <UserConfig>{
       ].join(' && '),
     },
   },
-};
+});
