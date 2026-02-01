@@ -48,7 +48,7 @@ pub async fn execute(
     if json_output {
         print_json(&filtered, &versions)?;
     } else {
-        print_human(&filtered, pattern.as_deref(), lts_only);
+        print_human(&filtered, pattern.as_deref(), lts_only, show_all);
     }
 
     Ok(ExitStatus::default())
@@ -147,7 +147,12 @@ fn print_json(
 }
 
 /// Print versions in human-readable format.
-fn print_human(versions: &[&NodeVersionEntry], pattern: Option<&str>, lts_only: bool) {
+fn print_human(
+    versions: &[&NodeVersionEntry],
+    pattern: Option<&str>,
+    lts_only: bool,
+    show_all: bool,
+) {
     if versions.is_empty() {
         if let Some(pattern) = pattern {
             println!("No Node.js versions matching '{pattern}' found.");
@@ -164,6 +169,8 @@ fn print_human(versions: &[&NodeVersionEntry], pattern: Option<&str>, lts_only: 
         println!("Node.js {pattern}.x versions:");
     } else if lts_only {
         println!("LTS Node.js versions:");
+    } else if show_all {
+        println!("All Node.js versions:");
     } else {
         println!("Available Node.js versions:");
     }
@@ -173,9 +180,8 @@ fn print_human(versions: &[&NodeVersionEntry], pattern: Option<&str>, lts_only: 
     let latest_version = versions.first().map(|v| &v.version);
     let latest_lts_version = versions.iter().find(|v| v.is_lts()).map(|v| &v.version);
 
-    // Group by major version for better display
-    if lts_only || pattern.is_some() {
-        // Simple list for filtered views
+    // Use simple list for filtered views or when --all is specified
+    if lts_only || pattern.is_some() || show_all {
         for version in versions {
             print_version_line(version, latest_version, latest_lts_version);
         }
@@ -186,7 +192,7 @@ fn print_human(versions: &[&NodeVersionEntry], pattern: Option<&str>, lts_only: 
 
     println!();
     println!("Use 'vp env pin <version>' to pin a version.");
-    if pattern.is_none() && !lts_only {
+    if pattern.is_none() && !lts_only && !show_all {
         println!("Use 'vp env list --all' to see all versions.");
     }
 }
