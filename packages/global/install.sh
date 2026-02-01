@@ -9,6 +9,7 @@
 #   VITE_PLUS_VERSION - Version to install (default: latest)
 #   VITE_PLUS_HOME - Installation directory (default: ~/.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
+#   VITE_PLUS_LOCAL_BINARY - Path to locally built binary (for development/testing)
 
 set -e
 
@@ -17,6 +18,8 @@ INSTALL_DIR="${VITE_PLUS_HOME:-$HOME/.vite-plus}"
 # npm registry URL (strip trailing slash if present)
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
 NPM_REGISTRY="${NPM_REGISTRY%/}"
+# Local binary path for development/testing
+LOCAL_BINARY="${VITE_PLUS_LOCAL_BINARY:-}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -543,23 +546,34 @@ main() {
   mkdir -p "$BIN_DIR" "$DIST_DIR"
 
   # Download and extract native binary and .node files from platform package
-  local platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${PACKAGE_SUFFIX}-${VITE_PLUS_VERSION}.tgz"
+  if [ -n "$LOCAL_BINARY" ]; then
+    # Use local binary for development/testing
+    if [ ! -f "$LOCAL_BINARY" ]; then
+      error "Local binary not found: $LOCAL_BINARY"
+    fi
+    info "Using local binary: $LOCAL_BINARY"
+    cp "$LOCAL_BINARY" "$BIN_DIR/$binary_name"
+    chmod +x "$BIN_DIR/$binary_name"
+    # Note: .node files won't be available when using local binary
+  else
+    local platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${PACKAGE_SUFFIX}-${VITE_PLUS_VERSION}.tgz"
 
-  # Create temp directory for extraction
-  local platform_temp_dir
-  platform_temp_dir=$(mktemp -d)
-  download_and_extract "$platform_url" "$platform_temp_dir" 1
+    # Create temp directory for extraction
+    local platform_temp_dir
+    platform_temp_dir=$(mktemp -d)
+    download_and_extract "$platform_url" "$platform_temp_dir" 1
 
-  # Copy binary to BIN_DIR
-  cp "$platform_temp_dir/$binary_name" "$BIN_DIR/"
-  chmod +x "$BIN_DIR/$binary_name"
+    # Copy binary to BIN_DIR
+    cp "$platform_temp_dir/$binary_name" "$BIN_DIR/"
+    chmod +x "$BIN_DIR/$binary_name"
 
-  # Copy .node files to DIST_DIR (delete existing first to avoid system cache issues)
-  for node_file in "$platform_temp_dir"/*.node; do
-    rm -f "$DIST_DIR/$(basename "$node_file")"
-    cp "$node_file" "$DIST_DIR/"
-  done
-  rm -rf "$platform_temp_dir"
+    # Copy .node files to DIST_DIR (delete existing first to avoid system cache issues)
+    for node_file in "$platform_temp_dir"/*.node; do
+      rm -f "$DIST_DIR/$(basename "$node_file")"
+      cp "$node_file" "$DIST_DIR/"
+    done
+    rm -rf "$platform_temp_dir"
+  fi
 
   # Download and extract JS bundle from main package
   local main_url="${NPM_REGISTRY}/vite-plus-cli/-/vite-plus-cli-${VITE_PLUS_VERSION}.tgz"

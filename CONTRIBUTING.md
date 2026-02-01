@@ -59,6 +59,23 @@ pnpm tool sync-remote
 just build
 ```
 
+## Testing install.sh locally
+
+To test the install script with a locally built binary instead of downloading from npm:
+
+```bash
+# Build the vp binary
+cargo build --release -p vite_global_cli
+
+# Run install.sh with the local binary
+VITE_PLUS_LOCAL_BINARY=./target/release/vp bash ./packages/global/install.sh
+
+# Verify the installation
+~/.vite-plus/current/bin/vp --version
+```
+
+This is useful when making changes to `install.sh` and want to verify it works correctly before publishing.
+
 ## macOS Performance Tip
 
 If you are using macOS, add your terminal app (Ghostty, iTerm2, Terminal, …) to the approved "Developer Tools" apps in the Privacy panel of System Settings and restart your terminal app. Your Rust builds will be about ~30% faster.
