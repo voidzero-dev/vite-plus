@@ -601,6 +601,9 @@ pub struct EnvArgs {
 /// Subcommands for the `env` command
 #[derive(clap::Subcommand, Debug)]
 pub enum EnvSubcommands {
+    /// Show help information
+    Help,
+
     /// Set or show the global default Node.js version
     Default {
         /// Version to set as default (e.g., "20.18.0", "lts", "latest")

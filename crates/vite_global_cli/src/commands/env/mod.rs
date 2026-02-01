@@ -26,6 +26,10 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
     // Handle subcommands first
     if let Some(subcommand) = args.command {
         return match subcommand {
+            crate::cli::EnvSubcommands::Help => {
+                print_help();
+                Ok(ExitStatus::default())
+            }
             crate::cli::EnvSubcommands::Default { version } => default::execute(cwd, version).await,
             crate::cli::EnvSubcommands::On => on::execute().await,
             crate::cli::EnvSubcommands::Off => off::execute().await,
@@ -52,6 +56,12 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
     }
 
     // No flags provided - show help
+    print_help();
+    Ok(ExitStatus::default())
+}
+
+/// Print help information for the env command.
+fn print_help() {
     println!("Usage: vp env [OPTIONS] [COMMAND]");
     println!();
     println!("Commands:");
@@ -84,8 +94,6 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
     println!("  vp env list                   # List available Node.js versions");
     println!("  vp env list --lts             # List only LTS versions");
     println!("  vp env list 20                # List Node.js 20.x versions");
-
-    Ok(ExitStatus::default())
 }
 
 /// Print shell snippet for setting environment (--print flag)
