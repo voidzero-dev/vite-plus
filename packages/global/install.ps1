@@ -295,7 +295,7 @@ function Main {
     }
 
     # Setup shims for node version management
-    & "$BinDir\vp.exe" env --setup 2>$null | Out-Null
+    & "$BinDir\vp.exe" env setup 2>$null | Out-Null
 
     # Create/update current junction (symlink)
     if (Test-Path $CurrentLink) {

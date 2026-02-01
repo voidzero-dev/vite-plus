@@ -26,22 +26,13 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
             crate::cli::EnvSubcommands::Default { version } => default::execute(cwd, version).await,
             crate::cli::EnvSubcommands::On => on::execute().await,
             crate::cli::EnvSubcommands::Off => off::execute().await,
+            crate::cli::EnvSubcommands::Setup { refresh } => setup::execute(refresh).await,
+            crate::cli::EnvSubcommands::Doctor => doctor::execute(cwd).await,
+            crate::cli::EnvSubcommands::Which { tool } => which::execute(cwd, &tool).await,
         };
     }
 
     // Handle flags
-    if args.setup {
-        return setup::execute(args.refresh).await;
-    }
-
-    if args.doctor {
-        return doctor::execute(cwd).await;
-    }
-
-    if let Some(tool) = args.which {
-        return which::execute(cwd, &tool).await;
-    }
-
     if args.current {
         return current::execute(cwd, args.json).await;
     }
@@ -57,23 +48,23 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
     println!("  default [VERSION]  Set or show the global default Node.js version");
     println!("  on                 Enable managed mode (shims always use vite-plus Node.js)");
     println!("  off                Enable system-first mode (shims prefer system Node.js)");
+    println!("  setup              Create or update shims in ~/.vite-plus/shims");
+    println!("  doctor             Run diagnostics and show environment status");
+    println!("  which <TOOL>       Show path to the tool that would be executed");
     println!();
     println!("Options:");
-    println!("  --setup            Create or update shims in ~/.vite-plus/shims");
-    println!("  --refresh          Force refresh shims (requires --setup)");
-    println!("  --doctor           Run diagnostics and show environment status");
-    println!("  --which <TOOL>     Show path to the tool that would be executed");
     println!("  --current          Show current environment information");
     println!("  --json             Output in JSON format (requires --current)");
     println!("  --print            Print shell snippet to set environment");
     println!();
     println!("Examples:");
-    println!("  vp env --setup                # Create shims for node, npm, npx");
-    println!("  vp env --doctor               # Check environment configuration");
+    println!("  vp env setup                  # Create shims for node, npm, npx");
+    println!("  vp env setup --refresh        # Force refresh shims");
+    println!("  vp env doctor                 # Check environment configuration");
     println!("  vp env default 20.18.0        # Set default Node.js version");
     println!("  vp env on                     # Use vite-plus managed Node.js");
     println!("  vp env off                    # Prefer system Node.js");
-    println!("  vp env --which node           # Show which node binary will be used");
+    println!("  vp env which node             # Show which node binary will be used");
 
     Ok(ExitStatus::default())
 }

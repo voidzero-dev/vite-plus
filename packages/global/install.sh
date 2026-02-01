@@ -612,7 +612,7 @@ main() {
   setup_path
 
   # Setup shims for node version management
-  "$BIN_DIR/vp" env --setup > /dev/null 2>&1 || true
+  "$BIN_DIR/vp" env setup > /dev/null 2>&1 || true
 
   # Ask user if they want to add shims to PATH
   setup_shims_path
@@ -653,7 +653,7 @@ main() {
   # Show note about shims if added
   if [ "$SHIMS_PATH_ADDED" = "true" ]; then
     echo ""
-    echo "  Restart your terminal and IDE, then run 'vp env --doctor' to verify."
+    echo "  Restart your terminal and IDE, then run 'vp env doctor' to verify."
   fi
 
   echo ""

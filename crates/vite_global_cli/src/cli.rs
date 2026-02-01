@@ -581,22 +581,6 @@ pub enum Commands {
 /// Arguments for the `env` command
 #[derive(clap::Args, Debug)]
 pub struct EnvArgs {
-    /// Create or update shims in VITE_PLUS_HOME/shims
-    #[arg(long)]
-    pub setup: bool,
-
-    /// Force refresh shims even if they exist
-    #[arg(long, requires = "setup")]
-    pub refresh: bool,
-
-    /// Run diagnostics and show environment status
-    #[arg(long)]
-    pub doctor: bool,
-
-    /// Show path to the tool that would be executed
-    #[arg(long, value_name = "TOOL")]
-    pub which: Option<String>,
-
     /// Show current environment information
     #[arg(long)]
     pub current: bool,
@@ -609,7 +593,7 @@ pub struct EnvArgs {
     #[arg(long)]
     pub print: bool,
 
-    /// Subcommand (e.g., 'default')
+    /// Subcommand (e.g., 'default', 'setup', 'doctor', 'which')
     #[command(subcommand)]
     pub command: Option<EnvSubcommands>,
 }
@@ -629,6 +613,22 @@ pub enum EnvSubcommands {
 
     /// Enable system-first mode - shims prefer system Node.js, fallback to managed
     Off,
+
+    /// Create or update shims in VITE_PLUS_HOME/shims
+    Setup {
+        /// Force refresh shims even if they exist
+        #[arg(long)]
+        refresh: bool,
+    },
+
+    /// Run diagnostics and show environment status
+    Doctor,
+
+    /// Show path to the tool that would be executed
+    Which {
+        /// Tool name (node, npm, or npx)
+        tool: String,
+    },
 }
 
 /// Package manager subcommands

@@ -33,10 +33,10 @@ A shim-based approach where:
 
 ```bash
 # Initial setup - creates shims and shows PATH configuration instructions
-vp env --setup
+vp env setup
 
 # Force refresh shims (after vp binary upgrade)
-vp env --setup --refresh
+vp env setup --refresh
 
 # Set the global default Node.js version (used when no project version file exists)
 vp env default 20.18.0
@@ -55,11 +55,11 @@ vp env off            # Enable system-first mode (shims prefer system Node.js)
 
 ```bash
 # Comprehensive system diagnostics
-vp env --doctor
+vp env doctor
 
 # Show which node binary would be executed in current directory
-vp env --which node
-vp env --which npm
+vp env which node
+vp env which npm
 
 # Output current environment info as JSON
 vp env --current --json
@@ -153,9 +153,9 @@ crates/vite_global_cli/
 │       └── env/
 │           ├── mod.rs                # Env command module
 │           ├── config.rs             # Configuration and version resolution
-│           ├── setup.rs              # --setup implementation
-│           ├── doctor.rs             # --doctor implementation
-│           ├── which.rs              # --which implementation
+│           ├── setup.rs              # setup subcommand implementation
+│           ├── doctor.rs             # doctor subcommand implementation
+│           ├── which.rs              # which subcommand implementation
 │           ├── current.rs            # --current implementation
 │           ├── default.rs            # default subcommand implementation
 │           ├── on.rs                 # on subcommand implementation
@@ -283,7 +283,7 @@ vp: npx is available in Node 5.2.0+
 ### PATH Misconfiguration
 
 ```bash
-$ vp env --doctor
+$ vp env doctor
 
 VP Environment Doctor
 =====================
@@ -371,7 +371,7 @@ Restart your terminal and IDE, then run 'vp env --doctor' to verify.
 ### Doctor Output (Healthy)
 
 ```bash
-$ vp env --doctor
+$ vp env doctor
 
 VP Environment Doctor
 =====================
@@ -481,10 +481,10 @@ Shims will always use vite-plus managed Node.js.
 ### Which Command
 
 ```bash
-$ vp env --which node
+$ vp env which node
 /Users/user/.cache/vite-plus/js_runtime/node/20.18.0/bin/node
 
-$ vp env --which npm
+$ vp env which npm
 /Users/user/.cache/vite-plus/js_runtime/node/20.18.0/bin/npm
 ```
 
@@ -574,13 +574,13 @@ Add snap tests in `packages/global/snap-tests/`:
 ```
 env-setup/
 ├── package.json
-├── steps.json      # [{"command": "vp env --setup"}]
+├── steps.json      # [{"command": "vp env setup"}]
 └── snap.txt
 
 env-doctor/
 ├── package.json
 ├── .node-version   # "20.18.0"
-├── steps.json      # [{"command": "vp env --doctor"}]
+├── steps.json      # [{"command": "vp env doctor"}]
 └── snap.txt
 ```
 
@@ -604,8 +604,8 @@ env-doctor/
 1. Add `vp env` command structure to CLI
 2. Implement argv[0] detection in main.rs (also check `VITE_PLUS_SHIM_TOOL` env var for Windows)
 3. Implement shim dispatch logic for `node`
-4. Implement `vp env --setup` (Unix hardlinks, Windows .exe copy + .cmd wrappers)
-5. Implement `vp env --doctor` basic diagnostics
+4. Implement `vp env setup` (Unix hardlinks, Windows .exe copy + .cmd wrappers)
+5. Implement `vp env doctor` basic diagnostics
 6. Add resolution cache (persists across upgrades with version field)
 7. Implement `vp env default [version]` to set/show global default Node.js version
 8. Implement `vp env on` and `vp env off` for shim mode control
@@ -613,7 +613,7 @@ env-doctor/
 ### Phase 2: Full Tool Support (P1)
 
 1. Add shims for `npm`, `npx`
-2. Implement `vp env --which`
+2. Implement `vp env which`
 3. Implement `vp env --current --json`
 4. Enhanced doctor with conflict detection
 
