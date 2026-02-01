@@ -369,19 +369,17 @@ setup_shims_path() {
       # Create shims
       "$bin_dir/vp" env setup --refresh > /dev/null 2>&1 || true
 
-      local path_result=1
+      local path_result=0
 
       case "$SHELL" in
         */zsh)
-          add_shims_to_path "$HOME/.zshrc"
-          path_result=$?
+          add_shims_to_path "$HOME/.zshrc" || path_result=$?
           ;;
         */bash)
-          add_shims_to_path "$HOME/.bashrc"
-          path_result=$?
+          add_shims_to_path "$HOME/.bashrc" || path_result=$?
           if [ $path_result -eq 1 ]; then
-            add_shims_to_path "$HOME/.bash_profile"
-            path_result=$?
+            path_result=0
+            add_shims_to_path "$HOME/.bash_profile" || path_result=$?
           fi
           ;;
         */fish)
@@ -401,7 +399,6 @@ setup_shims_path() {
 
       if [ $path_result -eq 0 ]; then
         SHIMS_PATH_ADDED="true"
-        # echo -e "  ${GREEN}✓${NC} Added shims (node, npm, npx) to PATH"
       elif [ $path_result -eq 2 ]; then
         SHIMS_PATH_ADDED="already"
       fi
@@ -477,22 +474,20 @@ setup_path() {
   fi
 
   # Fall back to adding to shell profile
-  local path_result=1  # 0=added, 1=failed, 2=already exists
+  local path_result=0  # 0=added, 1=failed, 2=already exists
 
   case "$SHELL" in
     */zsh)
-      add_to_path "$HOME/.zshrc"
-      path_result=$?
+      add_to_path "$HOME/.zshrc" || path_result=$?
       [ $path_result -ne 1 ] && SHELL_CONFIG_UPDATED=".zshrc"
       ;;
     */bash)
-      add_to_path "$HOME/.bashrc"
-      path_result=$?
+      add_to_path "$HOME/.bashrc" || path_result=$?
       if [ $path_result -ne 1 ]; then
         SHELL_CONFIG_UPDATED=".bashrc"
       else
-        add_to_path "$HOME/.bash_profile"
-        path_result=$?
+        path_result=0
+        add_to_path "$HOME/.bash_profile" || path_result=$?
         [ $path_result -ne 1 ] && SHELL_CONFIG_UPDATED=".bash_profile"
       fi
       ;;
