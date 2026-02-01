@@ -1,11 +1,11 @@
 //! Shared utilities for vite-plus crates
 
-mod cache;
+mod home;
 mod package_json;
 mod path_env;
 mod tracing;
 
-pub use cache::get_cache_dir;
+pub use home::get_vite_plus_home;
 pub use package_json::{DevEngines, Engines, PackageJson, RuntimeEngine, RuntimeEngineConfig};
 pub use path_env::{
     PrependOptions, PrependResult, format_path_prepended, format_path_with_prepend,

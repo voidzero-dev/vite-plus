@@ -153,16 +153,16 @@ async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, 
 
 /// Ensure Node.js is installed.
 async fn ensure_installed(version: &str) -> Result<(), String> {
-    let cache_dir = vite_shared::get_cache_dir()
-        .map_err(|e| format!("Failed to get cache dir: {e}"))?
+    let home_dir = vite_shared::get_vite_plus_home()
+        .map_err(|e| format!("Failed to get vite-plus home dir: {e}"))?
         .join("js_runtime")
         .join("node")
         .join(version);
 
     #[cfg(windows)]
-    let binary_path = cache_dir.join("node.exe");
+    let binary_path = home_dir.join("node.exe");
     #[cfg(not(windows))]
-    let binary_path = cache_dir.join("bin").join("node");
+    let binary_path = home_dir.join("bin").join("node");
 
     // Check if already installed
     if binary_path.as_path().exists() {
@@ -178,22 +178,22 @@ async fn ensure_installed(version: &str) -> Result<(), String> {
 
 /// Locate a tool binary within the Node.js installation.
 fn locate_tool(version: &str, tool: &str) -> Result<AbsolutePathBuf, String> {
-    let cache_dir = vite_shared::get_cache_dir()
-        .map_err(|e| format!("Failed to get cache dir: {e}"))?
+    let home_dir = vite_shared::get_vite_plus_home()
+        .map_err(|e| format!("Failed to get vite-plus home dir: {e}"))?
         .join("js_runtime")
         .join("node")
         .join(version);
 
     #[cfg(windows)]
     let tool_path = if tool == "node" {
-        cache_dir.join("node.exe")
+        home_dir.join("node.exe")
     } else {
         // npm and npx are .cmd scripts on Windows
-        cache_dir.join(format!("{tool}.cmd"))
+        home_dir.join(format!("{tool}.cmd"))
     };
 
     #[cfg(not(windows))]
-    let tool_path = cache_dir.join("bin").join(tool);
+    let tool_path = home_dir.join("bin").join(tool);
 
     if !tool_path.as_path().exists() {
         return Err(format!("Tool '{}' not found at {}", tool, tool_path.as_path().display()));

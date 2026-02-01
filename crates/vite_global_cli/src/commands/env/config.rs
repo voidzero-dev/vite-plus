@@ -5,16 +5,11 @@
 //! - Version resolution with priority order
 //! - Config file management
 
-use std::path::PathBuf;
-
 use serde::{Deserialize, Serialize};
-use vite_js_runtime::{NodeProvider, VersionSource, resolve_node_version};
+use vite_js_runtime::{NodeProvider, resolve_node_version};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::error::Error;
-
-/// Default VITE_PLUS_HOME directory name
-const VITE_PLUS_HOME_DIR: &str = ".vite-plus";
 
 /// Config file name
 const CONFIG_FILE: &str = "config.json";
@@ -64,16 +59,7 @@ pub struct VersionResolution {
 ///
 /// Uses `VITE_PLUS_HOME` environment variable if set, otherwise defaults to `~/.vite-plus`.
 pub fn get_vite_plus_home() -> Result<AbsolutePathBuf, Error> {
-    if let Ok(home) = std::env::var("VITE_PLUS_HOME") {
-        return AbsolutePathBuf::new(PathBuf::from(home))
-            .ok_or_else(|| Error::ConfigError("Invalid VITE_PLUS_HOME path".into()));
-    }
-
-    let base_dirs = directories::BaseDirs::new()
-        .ok_or_else(|| Error::ConfigError("Cannot find home directory".into()))?;
-    let home = base_dirs.home_dir();
-    AbsolutePathBuf::new(home.join(VITE_PLUS_HOME_DIR))
-        .ok_or_else(|| Error::ConfigError("Invalid home directory path".into()))
+    Ok(vite_shared::get_vite_plus_home()?)
 }
 
 /// Get the shims directory path.
@@ -191,6 +177,7 @@ async fn resolve_version_alias(version: &str, provider: &NodeProvider) -> Result
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
+    use vite_js_runtime::VersionSource;
     use vite_path::AbsolutePathBuf;
 
     use super::*;

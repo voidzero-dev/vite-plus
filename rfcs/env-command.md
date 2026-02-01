@@ -129,7 +129,7 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 │                 ▼                                                           │
 │  ┌──────────────────────────────┐                                           │
 │  │  execve() real node binary   │                                           │
-│  │  ~/.cache/vite-plus/.../node │                                           │
+│  │  ~/.vite-plus/.../node       │                                           │
 │  └──────────────────────────────┘                                           │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -146,8 +146,7 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 │  ├── config.json                      User settings (default version, etc.) │
 │  └── current/bin/vp                   The vp CLI binary                     │
 │                                                                             │
-│  ~/.cache/vite-plus/                  (Platform cache dir)                  │
-│  └── js_runtime/node/                                                       │
+│  $VITE_PLUS_HOME/js_runtime/node/     (Node.js installations)               │
 │      ├── 20.18.0/bin/node             Installed Node.js versions            │
 │      ├── 22.13.0/bin/node                                                   │
 │      └── ...                                                                │
@@ -219,11 +218,10 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 }
 ```
 
-**Note**: Node.js binaries continue to use existing cache location:
+**Note**: Node.js binaries are stored in VITE_PLUS_HOME:
 
-- Linux: `~/.cache/vite-plus/js_runtime/node/{version}/`
-- macOS: `~/Library/Caches/vite-plus/js_runtime/node/{version}/`
-- Windows: `%LOCALAPPDATA%\vite-plus\js_runtime\node\{version}\`
+- Linux/macOS: `~/.vite-plus/js_runtime/node/{version}/`
+- Windows: `%USERPROFILE%\.vite-plus\js_runtime\node\{version}\`
 
 ## Implementation Architecture
 

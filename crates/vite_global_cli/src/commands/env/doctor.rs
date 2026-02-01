@@ -282,15 +282,15 @@ async fn check_current_resolution(cwd: &AbsolutePathBuf) {
             println!("  Resolved Version: {}", resolution.version);
 
             // Check if Node.js is installed
-            let cache_dir = match vite_shared::get_cache_dir() {
+            let home_dir = match vite_shared::get_vite_plus_home() {
                 Ok(d) => d.join("js_runtime").join("node").join(&resolution.version),
                 Err(_) => return,
             };
 
             #[cfg(windows)]
-            let binary_path = cache_dir.join("node.exe");
+            let binary_path = home_dir.join("node.exe");
             #[cfg(not(windows))]
-            let binary_path = cache_dir.join("bin").join("node");
+            let binary_path = home_dir.join("bin").join("node");
 
             if tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
                 println!("  Node Path: {}", binary_path.as_path().display());

@@ -236,7 +236,7 @@ Only these commands can run without any Node.js:
 │  1. Read package.json from provided path                                    │
 │  2. Extract devEngines.runtime.version                                      │
 │  3. Resolve semver range if needed                                          │
-│  4. Check cache (~/.cache/vite/js_runtime/node/{version}/)                  │
+│  4. Check cache (~/.vite-plus/js_runtime/node/{version}/)                   │
 │  5. Download Node.js if not cached                                          │
 │  6. Return JsRuntime with binary path                                       │
 │                                                                             │
@@ -499,8 +499,8 @@ thiserror = "1"
 
 The global CLI will use the same configuration locations as the current CLI:
 
-- **Cache directory**: `~/.cache/vite/` (via `vite_shared::cache_dir`)
-- **Node.js runtime**: `~/.cache/vite/js_runtime/node/{version}/`
+- **Home directory**: `~/.vite-plus/` (via `vite_shared::get_vite_plus_home`)
+- **Node.js runtime**: `~/.vite-plus/js_runtime/node/{version}/`
 - **Package manager**: Auto-detected from lockfile or package.json
 
 ### JS Runtime Version Management

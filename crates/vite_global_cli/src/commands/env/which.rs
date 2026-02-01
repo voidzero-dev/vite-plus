@@ -25,18 +25,20 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     let resolution = resolve_version(&cwd).await?;
 
     // Get the tool path
-    let cache_dir =
-        vite_shared::get_cache_dir()?.join("js_runtime").join("node").join(&resolution.version);
+    let home_dir = vite_shared::get_vite_plus_home()?
+        .join("js_runtime")
+        .join("node")
+        .join(&resolution.version);
 
     #[cfg(windows)]
     let tool_path = if tool == "node" {
-        cache_dir.join("node.exe")
+        home_dir.join("node.exe")
     } else {
-        cache_dir.join(format!("{tool}.cmd"))
+        home_dir.join(format!("{tool}.cmd"))
     };
 
     #[cfg(not(windows))]
-    let tool_path = cache_dir.join("bin").join(tool);
+    let tool_path = home_dir.join("bin").join(tool);
 
     // Check if the tool exists
     if !tokio::fs::try_exists(&tool_path).await.unwrap_or(false) {

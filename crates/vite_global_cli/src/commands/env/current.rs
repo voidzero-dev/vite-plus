@@ -32,20 +32,22 @@ struct ToolPaths {
 pub async fn execute(cwd: AbsolutePathBuf, json: bool) -> Result<ExitStatus, Error> {
     let resolution = resolve_version(&cwd).await?;
 
-    // Get the cache directory for this version
-    let cache_dir =
-        vite_shared::get_cache_dir()?.join("js_runtime").join("node").join(&resolution.version);
+    // Get the home directory for this version
+    let home_dir = vite_shared::get_vite_plus_home()?
+        .join("js_runtime")
+        .join("node")
+        .join(&resolution.version);
 
     #[cfg(windows)]
     let (node_path, npm_path, npx_path) =
-        { (cache_dir.join("node.exe"), cache_dir.join("npm.cmd"), cache_dir.join("npx.cmd")) };
+        { (home_dir.join("node.exe"), home_dir.join("npm.cmd"), home_dir.join("npx.cmd")) };
 
     #[cfg(not(windows))]
     let (node_path, npm_path, npx_path) = {
         (
-            cache_dir.join("bin").join("node"),
-            cache_dir.join("bin").join("npm"),
-            cache_dir.join("bin").join("npx"),
+            home_dir.join("bin").join("node"),
+            home_dir.join("bin").join("npm"),
+            home_dir.join("bin").join("npx"),
         )
     };
 

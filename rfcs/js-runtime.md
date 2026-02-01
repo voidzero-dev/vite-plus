@@ -217,21 +217,21 @@ let runtime = download_runtime_for_project(&project_path).await?;
 Following the PackageManager pattern:
 
 ```
-$CACHE_DIR/vite/js_runtime/{runtime}/{version}/
+$VITE_PLUS_HOME/js_runtime/{runtime}/{version}/
 ```
 
 Examples:
 
-- Linux x64: `~/.cache/vite/js_runtime/node/22.13.1/`
-- macOS ARM: `~/Library/Caches/vite/js_runtime/node/22.13.1/`
-- Windows x64: `%LOCALAPPDATA%\vite\js_runtime\node\22.13.1\`
+- Linux x64: `~/.vite-plus/js_runtime/node/22.13.1/`
+- macOS ARM: `~/.vite-plus/js_runtime/node/22.13.1/`
+- Windows x64: `%USERPROFILE%\.vite-plus\js_runtime\node\22.13.1\`
 
 ### Version Index Cache
 
 The Node.js version index is cached locally to avoid repeated network requests:
 
 ```
-$CACHE_DIR/vite/js_runtime/node/index_cache.json
+$VITE_PLUS_HOME/js_runtime/node/index_cache.json
 ```
 
 Cache structure:
