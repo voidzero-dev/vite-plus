@@ -4,7 +4,7 @@ use std::process::ExitStatus;
 
 use vite_path::AbsolutePathBuf;
 
-use super::config::{get_shims_dir, get_vite_plus_home, resolve_version};
+use super::config::{ShimMode, get_shims_dir, get_vite_plus_home, load_config, resolve_version};
 use crate::error::Error;
 
 /// Known version managers that might conflict
@@ -34,6 +34,9 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
     // Check shims directory
     has_errors |= !check_shims_dir().await;
+
+    // Check shim mode
+    check_shim_mode().await;
 
     // Check PATH
     has_errors |= !check_path().await;
@@ -128,6 +131,59 @@ fn shim_filename(tool: &str) -> String {
     }
 }
 
+/// Check and display shim mode.
+async fn check_shim_mode() {
+    println!();
+    println!("Shim Mode:");
+
+    let config = match load_config().await {
+        Ok(c) => c,
+        Err(e) => {
+            println!("  \u{26A0} Failed to load config: {e}");
+            return;
+        }
+    };
+
+    match config.shim_mode {
+        ShimMode::Managed => {
+            println!("  Mode: managed");
+            println!("  \u{2713} Shims always use vite-plus managed Node.js");
+        }
+        ShimMode::SystemFirst => {
+            println!("  Mode: system-first");
+            println!("  \u{2713} Shims prefer system Node.js, fallback to managed");
+
+            // Check if system Node.js is available
+            if let Some(system_node) = find_system_node() {
+                println!("  System Node.js: {}", system_node.display());
+            } else {
+                println!("  \u{26A0} No system Node.js found (will use managed)");
+            }
+        }
+    }
+
+    println!();
+    println!("  Run 'vp env on' to always use managed Node.js");
+    println!("  Run 'vp env off' to prefer system Node.js");
+}
+
+/// Find system Node.js, skipping vite-plus shims.
+fn find_system_node() -> Option<std::path::PathBuf> {
+    let shims_dir = get_shims_dir().ok();
+    let path_var = std::env::var_os("PATH")?;
+
+    // Filter PATH to exclude shims directory, then search
+    let filtered_paths: Vec<_> = std::env::split_paths(&path_var)
+        .filter(|p| if let Some(ref shims) = shims_dir { p != shims.as_path() } else { true })
+        .collect();
+
+    let filtered_path = std::env::join_paths(filtered_paths).ok()?;
+
+    // Use which::which_in with filtered PATH - stops at first match
+    let cwd = std::env::current_dir().ok()?;
+    which::which_in("node", Some(filtered_path), cwd).ok()
+}
+
 /// Check PATH configuration.
 async fn check_path() -> bool {
     println!();
@@ -182,33 +238,7 @@ async fn check_path() -> bool {
 
 /// Find an executable in PATH.
 fn find_in_path(name: &str) -> Option<std::path::PathBuf> {
-    let path_var = std::env::var_os("PATH")?;
-    let paths = std::env::split_paths(&path_var);
-
-    #[cfg(windows)]
-    let extensions = vec!["exe", "cmd", "bat"];
-
-    for path in paths {
-        #[cfg(not(windows))]
-        {
-            let candidate = path.join(name);
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-        }
-
-        #[cfg(windows)]
-        {
-            for ext in &extensions {
-                let candidate = path.join(format!("{name}.{ext}"));
-                if candidate.is_file() {
-                    return Some(candidate);
-                }
-            }
-        }
-    }
-
-    None
+    which::which(name).ok()
 }
 
 /// Print PATH fix instructions.
