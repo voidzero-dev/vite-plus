@@ -18,6 +18,17 @@ const VITE_PLUS_HOME_DIR: &str = ".vite-plus";
 /// Config file name
 const CONFIG_FILE: &str = "config.json";
 
+/// Shim mode determines how shims resolve tools.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ShimMode {
+    /// Shims always use vite-plus managed Node.js
+    #[default]
+    Managed,
+    /// Shims prefer system Node.js, fallback to managed if not found
+    SystemFirst,
+}
+
 /// User configuration stored in VITE_PLUS_HOME/config.json
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -25,6 +36,14 @@ pub struct Config {
     /// Default Node.js version when no project version file is found
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_node_version: Option<String>,
+    /// Shim mode for tool resolution
+    #[serde(default, skip_serializing_if = "is_default_shim_mode")]
+    pub shim_mode: ShimMode,
+}
+
+/// Check if shim mode is the default (for skip_serializing_if)
+fn is_default_shim_mode(mode: &ShimMode) -> bool {
+    *mode == ShimMode::Managed
 }
 
 /// Version resolution result
@@ -75,6 +94,21 @@ pub async fn load_config() -> Result<Config, Error> {
     }
 
     let content = tokio::fs::read_to_string(&config_path).await?;
+    let config: Config = serde_json::from_str(&content)?;
+    Ok(config)
+}
+
+/// Load configuration from disk synchronously.
+///
+/// This is used by the shim dispatch code which runs before the async runtime.
+pub fn load_config_sync() -> Result<Config, Error> {
+    let config_path = get_config_path()?;
+
+    if !config_path.as_path().exists() {
+        return Ok(Config::default());
+    }
+
+    let content = std::fs::read_to_string(config_path.as_path())?;
     let config: Config = serde_json::from_str(&content)?;
     Ok(config)
 }
