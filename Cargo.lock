@@ -7157,8 +7157,11 @@ name = "vite_shared"
 version = "0.0.0"
 dependencies = [
  "directories",
+ "serde",
+ "serde_json",
  "tracing-subscriber",
  "vite_path",
+ "vite_str",
 ]
 
 [[package]]
