@@ -98,21 +98,6 @@ pub async fn load_config() -> Result<Config, Error> {
     Ok(config)
 }
 
-/// Load configuration from disk synchronously.
-///
-/// This is used by the shim dispatch code which runs before the async runtime.
-pub fn load_config_sync() -> Result<Config, Error> {
-    let config_path = get_config_path()?;
-
-    if !config_path.as_path().exists() {
-        return Ok(Config::default());
-    }
-
-    let content = std::fs::read_to_string(config_path.as_path())?;
-    let config: Config = serde_json::from_str(&content)?;
-    Ok(config)
-}
-
 /// Save configuration to disk.
 pub async fn save_config(config: &Config) -> Result<(), Error> {
     let config_path = get_config_path()?;
