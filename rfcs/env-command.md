@@ -243,7 +243,7 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
   // Set via: vp env on (managed) or vp env off (system_first)
   // - "managed" (default): Shims always use vite-plus managed Node.js
   // - "system_first": Shims prefer system Node.js, fallback to managed if not found
-  "shimMode": "managed",
+  "shimMode": "managed"
 }
 ```
 
@@ -665,22 +665,22 @@ $ vp env unpin
 
 ### Version Format Support
 
-| Input | Written to File | Behavior |
-|-------|-----------------|----------|
-| `20.18.0` | `20.18.0` | Exact version |
-| `20.18` | `20.18` | Latest 20.18.x at runtime |
-| `20` | `20` | Latest 20.x.x at runtime |
-| `lts` | `22.13.0` | Resolved at pin time |
-| `latest` | `24.0.0` | Resolved at pin time |
-| `^20.0.0` | `^20.0.0` | Semver range resolved at runtime |
+| Input     | Written to File | Behavior                         |
+| --------- | --------------- | -------------------------------- |
+| `20.18.0` | `20.18.0`       | Exact version                    |
+| `20.18`   | `20.18`         | Latest 20.18.x at runtime        |
+| `20`      | `20`            | Latest 20.x.x at runtime         |
+| `lts`     | `22.13.0`       | Resolved at pin time             |
+| `latest`  | `24.0.0`        | Resolved at pin time             |
+| `^20.0.0` | `^20.0.0`       | Semver range resolved at runtime |
 
 ### Flags
 
-| Flag | Description |
-|------|-------------|
-| `--unpin` | Remove the `.node-version` file |
-| `--no-install` | Skip pre-downloading the pinned version |
-| `--force` | Overwrite existing `.node-version` without confirmation |
+| Flag           | Description                                             |
+| -------------- | ------------------------------------------------------- |
+| `--unpin`      | Remove the `.node-version` file                         |
+| `--no-install` | Skip pre-downloading the pinned version                 |
+| `--force`      | Overwrite existing `.node-version` without confirmation |
 
 ### Pre-download Behavior
 
@@ -776,11 +776,11 @@ $ vp env list --all
 
 ### Flags
 
-| Flag | Description |
-|------|-------------|
-| `--lts` | Show only LTS versions |
-| `--all` | Show all versions (not just recent) |
-| `--json` | Output as JSON |
+| Flag     | Description                         |
+| -------- | ----------------------------------- |
+| `--lts`  | Show only LTS versions              |
+| `--all`  | Show all versions (not just recent) |
+| `--json` | Output as JSON                      |
 
 ### JSON Output
 
