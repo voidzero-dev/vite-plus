@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use tokio::fs::write;
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_shared::{PrependOptions, prepend_to_path_env};
 use vite_str::Str;
 use vite_task::{
     CLIArgs, LabeledReporter, Session, SessionCallbacks, TaskSynthesizer,
@@ -748,9 +749,9 @@ pub async fn main(
             // Only update PATH if there's an explicit packageManager field in package.json.
             // Use build() instead of build_with_default() to avoid prompting or using defaults.
             if let Ok(pm) = vite_install::PackageManager::builder(&cwd).build().await {
-                let new_path = vite_install::format_path_env(&pm.get_bin_prefix());
-                // SAFETY: Single-threaded context before session init
-                unsafe { env::set_var("PATH", new_path) };
+                let bin_prefix = pm.get_bin_prefix();
+                // Prepend package manager bin to PATH (skips if already first)
+                prepend_to_path_env(&bin_prefix, PrependOptions::default());
             }
 
             // Create single Session (captures updated PATH)

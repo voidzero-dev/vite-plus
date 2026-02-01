@@ -542,11 +542,7 @@ async fn set_package_manager_field(
     Ok(())
 }
 
-pub fn format_path_env(bin_prefix: impl AsRef<Path>) -> String {
-    let mut paths = env::split_paths(&env::var_os("PATH").unwrap_or_default()).collect::<Vec<_>>();
-    paths.insert(0, bin_prefix.as_ref().to_path_buf());
-    env::join_paths(paths).unwrap().to_string_lossy().to_string()
-}
+pub(crate) use vite_shared::format_path_prepended as format_path_env;
 
 /// Common CI environment variables
 const CI_ENV_VARS: &[&str] = &[

@@ -24,6 +24,7 @@
 //! - `delegate`: Local CLI delegation
 
 use vite_path::AbsolutePath;
+use vite_shared::{PrependOptions, prepend_to_path_env};
 
 use crate::{error::Error, js_executor::JsExecutor};
 
@@ -43,25 +44,12 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
         executor.ensure_cli_runtime().await?
     };
 
-    let node_bin_path = runtime.get_bin_prefix().as_path().to_path_buf();
-
-    // Check if node bin path already exists in PATH to avoid duplicates
-    let current_path = std::env::var_os("PATH").unwrap_or_default();
-    let paths: Vec<_> = std::env::split_paths(&current_path).collect();
-
-    if paths.iter().any(|p| p == &node_bin_path) {
-        return Ok(());
+    let node_bin_prefix = runtime.get_bin_prefix();
+    // Use dedupe_anywhere=true to check if node bin already exists anywhere in PATH
+    let options = PrependOptions { dedupe_anywhere: true };
+    if prepend_to_path_env(&node_bin_prefix, options) {
+        tracing::debug!("Set PATH to include {:?}", node_bin_prefix);
     }
-
-    // Prepend node bin to PATH
-    let mut new_paths = vec![node_bin_path];
-    new_paths.extend(paths);
-    let new_path = std::env::join_paths(new_paths).expect("Failed to join paths");
-    tracing::debug!("Set PATH to {:?}", new_path);
-    // SAFETY: We're modifying PATH at the start of command execution before any
-    // parallel operations. This is safe because package manager commands run
-    // sequentially and child processes inherit the modified environment.
-    unsafe { std::env::set_var("PATH", new_path) };
 
     Ok(())
 }

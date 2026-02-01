@@ -6,6 +6,7 @@
 //! 3. Tool execution
 
 use vite_path::AbsolutePathBuf;
+use vite_shared::{PrependOptions, prepend_to_path_env};
 
 use super::{
     cache::{self, ResolveCache, ResolveCacheEntry},
@@ -66,7 +67,8 @@ pub fn dispatch(tool: &str, args: &[String]) -> i32 {
     // Prepare environment for recursive invocations
     // Prepend real node bin dir to PATH so child processes use the correct version
     let node_bin_dir = tool_path.parent().expect("Tool has no parent directory");
-    prepend_path_env(node_bin_dir);
+    // Use dedupe_anywhere=false to only check if it's first in PATH (original behavior)
+    prepend_to_path_env(node_bin_dir, PrependOptions::default());
 
     // Optional debug env vars
     if std::env::var("VITE_PLUS_DEBUG_SHIM").is_ok() {
@@ -238,26 +240,4 @@ fn locate_tool(version: &str, tool: &str) -> Result<AbsolutePathBuf, String> {
     }
 
     Ok(tool_path)
-}
-
-/// Prepend a directory to the PATH environment variable.
-fn prepend_path_env(dir: &vite_path::AbsolutePath) {
-    let current_path = std::env::var_os("PATH").unwrap_or_default();
-    let paths: Vec<_> = std::env::split_paths(&current_path).collect();
-
-    // Check if already first in PATH
-    if let Some(first) = paths.first() {
-        if first == dir.as_path() {
-            return;
-        }
-    }
-
-    // Prepend
-    let mut new_paths = vec![dir.as_path().to_path_buf()];
-    new_paths.extend(paths);
-
-    if let Ok(new_path) = std::env::join_paths(new_paths) {
-        // SAFETY: We're modifying PATH before exec, which is safe
-        unsafe { std::env::set_var("PATH", new_path) };
-    }
 }
