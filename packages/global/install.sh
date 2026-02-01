@@ -359,11 +359,12 @@ setup_shims_path() {
   # Prompt user (only in interactive mode, not CI)
   if [ -t 0 ] && [ -z "$CI" ]; then
     echo ""
-    echo "Would you like to add vite-plus node shims to your PATH? (y/n)"
-    echo "This allows 'node', 'npm', 'npx' to be managed by vite-plus."
+    echo "Would you like Vite+ to manage Node.js versions?"
+    echo "This adds 'node', 'npm', and 'npx' shims to your PATH."
+    echo -n "Press Enter to accept (Y/n): "
     read -r add_shims < /dev/tty
 
-    if [ "$add_shims" = "y" ] || [ "$add_shims" = "Y" ]; then
+    if [ -z "$add_shims" ] || [ "$add_shims" = "y" ] || [ "$add_shims" = "Y" ]; then
       local path_result=1
 
       case "$SHELL" in
