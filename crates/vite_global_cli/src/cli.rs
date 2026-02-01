@@ -1353,6 +1353,7 @@ fn apply_custom_help(cmd: clap::Command) -> clap::Command {
   {bold}cache{reset}      Manage the task cache
   {bold}new{reset}        Generate a new project
   {bold}run{reset}        Run tasks
+  {bold}env{reset}        Manage Node.js environment and shims
 
 {bold_underline}Package Manager Commands:{reset}
   {bold}install{reset}    Install all dependencies, or add packages if package names are provided
