@@ -427,7 +427,7 @@ Setting up VITE+(⚡)...
 Would you like to add vite-plus node shims to your PATH? (y/n): y
   ✓ Added to ~/.zshrc
 
-Restart your terminal and IDE, then run 'vp env --doctor' to verify.
+Restart your terminal and IDE, then run 'vp env doctor' to verify.
 ```
 
 **Important**: The shims PATH (`~/.vite-plus/shims`) must be **before** the CLI bin PATH (`~/.vite-plus/current/bin`) if both are configured, so that `node` resolves to the shim first.
@@ -437,7 +437,7 @@ Restart your terminal and IDE, then run 'vp env --doctor' to verify.
 If user declines or needs to reconfigure:
 
 ```bash
-$ vp env --setup
+$ vp env setup
 
 Setting up vite-plus environment...
 
@@ -455,7 +455,7 @@ For IDE support (VS Code, Cursor), ensure shims are in system PATH:
   - Linux: Add to ~/.profile for display manager integration
   - Windows: System Properties → Environment Variables → Path
 
-Restart your terminal and IDE, then run 'vp env --doctor' to verify.
+Restart your terminal and IDE, then run 'vp env doctor' to verify.
 ```
 
 ### Doctor Output (Healthy)
@@ -495,7 +495,7 @@ No conflicts detected.
 **Doctor Output with System-First Mode:**
 
 ```bash
-$ vp env --doctor
+$ vp env doctor
 
 ...
 

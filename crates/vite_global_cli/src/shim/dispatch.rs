@@ -54,7 +54,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         Ok(r) => r,
         Err(e) => {
             eprintln!("vp: Failed to resolve Node version: {e}");
-            eprintln!("vp: Run 'vp env --doctor' for diagnostics");
+            eprintln!("vp: Run 'vp env doctor' for diagnostics");
             return 1;
         }
     };

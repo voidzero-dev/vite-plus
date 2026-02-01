@@ -75,9 +75,9 @@ jobs:
             echo "Found shim: $SHIMS_PATH/$shim"
           done
 
-          # Verify vp env --doctor works
+          # Verify vp env doctor works
           export PATH="$HOME/.vite-plus/current/bin:$PATH"
-          vp env --doctor
+          vp env doctor
 
   test-install-sh-arm64:
     name: Test install.sh (Linux ARM64 glibc via QEMU)
@@ -118,7 +118,7 @@ jobs:
                 fi
                 echo \"Found shim: \$SHIMS_PATH/\$shim\"
               done
-              vp env --doctor
+              vp env doctor
 
               export VITE_LOG=trace
               # FIXME: qemu: uncaught target signal 11 (Segmentation fault) - core dumped
@@ -175,6 +175,6 @@ jobs:
             Write-Host "Found shim: $shimFile"
           }
 
-          # Verify vp env --doctor works
+          # Verify vp env doctor works
           $env:Path = "$env:USERPROFILE\.vite-plus\current\bin;$env:Path"
-          vp env --doctor
+          vp env doctor

@@ -65,13 +65,25 @@ To test the install script with a locally built binary instead of downloading fr
 
 ```bash
 # Build the vp binary
-cargo build --release -p vite_global_cli
+pnpm bootstrap-cli
 
 # Run install.sh with the local binary
 VITE_PLUS_LOCAL_BINARY=./target/release/vp bash ./packages/global/install.sh
 
 # Verify the installation
 ~/.vite-plus/current/bin/vp --version
+```
+
+For fully offline testing (skip all npm downloads):
+
+```bash
+# Build the vp binary and JS bundle
+pnpm bootstrap-cli
+
+# Run install.sh with local binary and package
+VITE_PLUS_LOCAL_BINARY=./target/release/vp \
+VITE_PLUS_LOCAL_PACKAGE=./packages/global \
+bash ./packages/global/install.sh
 ```
 
 This is useful when making changes to `install.sh` and want to verify it works correctly before publishing.

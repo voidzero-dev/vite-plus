@@ -10,6 +10,7 @@
 #   VITE_PLUS_HOME - Installation directory (default: ~/.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VITE_PLUS_LOCAL_BINARY - Path to locally built binary (for development/testing)
+#   VITE_PLUS_LOCAL_PACKAGE - Path to local vite-plus-cli package dir (for development/testing)
 
 set -e
 
@@ -18,8 +19,9 @@ INSTALL_DIR="${VITE_PLUS_HOME:-$HOME/.vite-plus}"
 # npm registry URL (strip trailing slash if present)
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
 NPM_REGISTRY="${NPM_REGISTRY%/}"
-# Local binary path for development/testing
+# Local paths for development/testing
 LOCAL_BINARY="${VITE_PLUS_LOCAL_BINARY:-}"
+LOCAL_PACKAGE="${VITE_PLUS_LOCAL_PACKAGE:-}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -339,19 +341,18 @@ add_shims_to_path() {
   return 1
 }
 
-# Setup shims PATH - prompts user for confirmation
+# Setup shims PATH - prompts user for confirmation and creates shims
 # Sets SHIMS_PATH_ADDED global variable
+# Arguments: bin_dir - path to the bin directory containing vp
 setup_shims_path() {
+  local bin_dir="$1"
   local shims_path="$INSTALL_DIR/shims"
   SHIMS_PATH_ADDED="false"
 
-  # Check if shims directory exists
-  if [ ! -d "$shims_path" ]; then
-    return 0
-  fi
-
   # Check if already in PATH
   if echo "$PATH" | tr ':' '\n' | grep -qx "$shims_path"; then
+    # Refresh shims if already configured
+    "$bin_dir/vp" env setup --refresh > /dev/null 2>&1 || true
     SHIMS_PATH_ADDED="already"
     return 0
   fi
@@ -359,12 +360,15 @@ setup_shims_path() {
   # Prompt user (only in interactive mode, not CI)
   if [ -t 0 ] && [ -z "$CI" ]; then
     echo ""
-    echo "Would you like Vite+ to manage Node.js versions?"
-    echo "This adds 'node', 'npm', and 'npx' shims to your PATH."
+    echo "Would you want Vite+ to manage Node.js versions?"
+    # echo "This adds 'node', 'npm', and 'npx' shims to your PATH."
     echo -n "Press Enter to accept (Y/n): "
     read -r add_shims < /dev/tty
 
     if [ -z "$add_shims" ] || [ "$add_shims" = "y" ] || [ "$add_shims" = "Y" ]; then
+      # Create shims
+      "$bin_dir/vp" env setup --refresh > /dev/null 2>&1 || true
+
       local path_result=1
 
       case "$SHELL" in
@@ -397,7 +401,7 @@ setup_shims_path() {
 
       if [ $path_result -eq 0 ]; then
         SHIMS_PATH_ADDED="true"
-        echo -e "  ${GREEN}✓${NC} Added shims to PATH"
+        # echo -e "  ${GREEN}✓${NC} Added shims (node, npm, npx) to PATH"
       elif [ $path_result -eq 2 ]; then
         SHIMS_PATH_ADDED="already"
       fi
@@ -524,9 +528,24 @@ main() {
   local platform
   platform=$(detect_platform)
 
-  # Fetch package metadata and resolve version
-  get_version_from_metadata
-  VITE_PLUS_VERSION="$RESOLVED_VERSION"
+  # Local development mode: skip npm entirely
+  if [ -n "$LOCAL_BINARY" ] && [ -n "$LOCAL_PACKAGE" ]; then
+    # Validate local paths
+    if [ ! -f "$LOCAL_BINARY" ]; then
+      error "Local binary not found: $LOCAL_BINARY"
+    fi
+    if [ ! -d "$LOCAL_PACKAGE" ]; then
+      error "Local package directory not found: $LOCAL_PACKAGE"
+    fi
+    # Use version as-is (default to "local-dev")
+    if [ "$VITE_PLUS_VERSION" = "latest" ]; then
+      VITE_PLUS_VERSION="local-dev"
+    fi
+  else
+    # Fetch package metadata and resolve version from npm
+    get_version_from_metadata
+    VITE_PLUS_VERSION="$RESOLVED_VERSION"
+  fi
 
   # Set up version-specific directories
   VERSION_DIR="$INSTALL_DIR/$VITE_PLUS_VERSION"
@@ -534,10 +553,6 @@ main() {
   DIST_DIR="$VERSION_DIR/dist"
   CURRENT_LINK="$INSTALL_DIR/current"
 
-  # Get package suffix from optionalDependencies (dynamic lookup)
-  get_package_suffix "$platform"
-
-  local package_name="@voidzero-dev/vite-plus-cli-${PACKAGE_SUFFIX}"
   local binary_name="vp"
   if [[ "$platform" == win32* ]]; then
     binary_name="vp.exe"
@@ -549,14 +564,14 @@ main() {
   # Download and extract native binary and .node files from platform package
   if [ -n "$LOCAL_BINARY" ]; then
     # Use local binary for development/testing
-    if [ ! -f "$LOCAL_BINARY" ]; then
-      error "Local binary not found: $LOCAL_BINARY"
-    fi
     info "Using local binary: $LOCAL_BINARY"
     cp "$LOCAL_BINARY" "$BIN_DIR/$binary_name"
     chmod +x "$BIN_DIR/$binary_name"
     # Note: .node files won't be available when using local binary
   else
+    # Get package suffix from optionalDependencies (dynamic lookup)
+    get_package_suffix "$platform"
+    local package_name="@voidzero-dev/vite-plus-cli-${PACKAGE_SUFFIX}"
     local platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${PACKAGE_SUFFIX}-${VITE_PLUS_VERSION}.tgz"
 
     # Create temp directory for extraction
@@ -576,46 +591,59 @@ main() {
     rm -rf "$platform_temp_dir"
   fi
 
-  # Download and extract JS bundle from main package
-  local main_url="${NPM_REGISTRY}/vite-plus-cli/-/vite-plus-cli-${VITE_PLUS_VERSION}.tgz"
-
-  # Create temp directory for extraction
-  local temp_dir
-  temp_dir=$(mktemp -d)
-  download_and_extract "$main_url" "$temp_dir" 1
-
-  # Copy directories and files to VERSION_DIR
+  # Copy JS bundle and assets from local package or download from npm
   local items_to_copy=("dist" "templates" "rules" "AGENTS.md" "package.json")
-  for item in "${items_to_copy[@]}"; do
-    if [ -e "$temp_dir/$item" ]; then
-      cp -r "$temp_dir/$item" "$VERSION_DIR/"
-    fi
-  done
-  rm -rf "$temp_dir"
+  if [ -n "$LOCAL_PACKAGE" ]; then
+    # Use local package for development/testing
+    info "Using local package: $LOCAL_PACKAGE"
+    for item in "${items_to_copy[@]}"; do
+      if [ -e "$LOCAL_PACKAGE/$item" ]; then
+        cp -r "$LOCAL_PACKAGE/$item" "$VERSION_DIR/"
+      fi
+    done
+  else
+    # Download and extract from npm
+    local main_url="${NPM_REGISTRY}/vite-plus-cli/-/vite-plus-cli-${VITE_PLUS_VERSION}.tgz"
 
-  # Remove devDependencies and optionalDependencies from package.json
-  # (temporary solution until deps are fully bundled)
-  local pkg_file="$VERSION_DIR/package.json"
-  awk '
-    /"(devDependencies|optionalDependencies)"[[:space:]]*:[[:space:]]*\{/ {
-      skip = 1
-      depth = 1
-      next
-    }
-    skip {
-      for (i = 1; i <= length($0); i++) {
-        c = substr($0, i, 1)
-        if (c == "{") depth++
-        else if (c == "}") depth--
+    # Create temp directory for extraction
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    download_and_extract "$main_url" "$temp_dir" 1
+
+    for item in "${items_to_copy[@]}"; do
+      if [ -e "$temp_dir/$item" ]; then
+        cp -r "$temp_dir/$item" "$VERSION_DIR/"
+      fi
+    done
+    rm -rf "$temp_dir"
+  fi
+
+  # Skip dependency installation for local package (deps already bundled or available)
+  if [ -z "$LOCAL_PACKAGE" ]; then
+    # Remove devDependencies and optionalDependencies from package.json
+    # (temporary solution until deps are fully bundled)
+    local pkg_file="$VERSION_DIR/package.json"
+    awk '
+      /"(devDependencies|optionalDependencies)"[[:space:]]*:[[:space:]]*\{/ {
+        skip = 1
+        depth = 1
+        next
       }
-      if (depth <= 0) skip = 0
-      next
-    }
-    { print }
-  ' "$pkg_file" > "$pkg_file.tmp" && mv "$pkg_file.tmp" "$pkg_file"
+      skip {
+        for (i = 1; i <= length($0); i++) {
+          c = substr($0, i, 1)
+          if (c == "{") depth++
+          else if (c == "}") depth--
+        }
+        if (depth <= 0) skip = 0
+        next
+      }
+      { print }
+    ' "$pkg_file" > "$pkg_file.tmp" && mv "$pkg_file.tmp" "$pkg_file"
 
-  # Install production dependencies
-  (cd "$VERSION_DIR" && CI=true "$BIN_DIR/vp" install --silent)
+    # Install production dependencies
+    (cd "$VERSION_DIR" && CI=true "$BIN_DIR/vp" install --silent)
+  fi
 
   # Create/update current symlink (use relative path for portability)
   ln -sfn "$VITE_PLUS_VERSION" "$CURRENT_LINK"
@@ -626,11 +654,8 @@ main() {
   # Setup PATH (sets SYMLINK_CREATED, SHELL_CONFIG_UPDATED, PATH_ALREADY_CONFIGURED)
   setup_path
 
-  # Setup shims for node version management
-  "$BIN_DIR/vp" env setup > /dev/null 2>&1 || true
-
-  # Ask user if they want to add shims to PATH
-  setup_shims_path
+  # Ask user if they want shims and set them up
+  setup_shims_path "$BIN_DIR"
 
   # Determine display location based on how PATH was configured
   local display_location
@@ -650,25 +675,22 @@ main() {
   echo ""
   echo "  Location: ${display_location}"
 
-  # Show shims status
-  if [ -d "$INSTALL_DIR/shims" ]; then
+  if [ "$SHIMS_PATH_ADDED" = "true" ] || [ "$SHIMS_PATH_ADDED" = "already" ]; then
     echo ""
-    echo -e "  ${GREEN}✓${NC} Created shims (node, npm, npx) in ~/.vite-plus/shims"
+    echo "  Node.js Manager: on"
+    # Show note about shims if added
+    if [ "$SHIMS_PATH_ADDED" = "true" ]; then
+      echo "  Restart your terminal and IDE, then run 'vp env doctor' to verify."
+    fi
   fi
 
   echo ""
-  echo "  Next: Run vp --help to get started"
+  echo "  Next: Run 'vp help' to get started"
 
   # Show note if shell config was updated (not symlink, not already configured)
   if [ "$SYMLINK_CREATED" = "false" ] && [ -n "$SHELL_CONFIG_UPDATED" ] && [ "$PATH_ALREADY_CONFIGURED" = "false" ]; then
     echo ""
     echo "  Note: Run \`source ~/$SHELL_CONFIG_UPDATED\` or restart your terminal."
-  fi
-
-  # Show note about shims if added
-  if [ "$SHIMS_PATH_ADDED" = "true" ]; then
-    echo ""
-    echo "  Restart your terminal and IDE, then run 'vp env doctor' to verify."
   fi
 
   echo ""

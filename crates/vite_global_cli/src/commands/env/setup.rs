@@ -191,5 +191,5 @@ fn print_path_instructions(shims_dir: &vite_path::AbsolutePath) {
     }
 
     println!();
-    println!("Restart your terminal and IDE, then run 'vp env --doctor' to verify.");
+    println!("Restart your terminal and IDE, then run 'vp env doctor' to verify.");
 }
