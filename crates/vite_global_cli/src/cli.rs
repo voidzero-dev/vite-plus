@@ -687,6 +687,20 @@ pub enum EnvSubcommands {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         command: Vec<String>,
     },
+
+    /// List installed global packages
+    Packages {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Uninstall a global package
+    Uninstall {
+        /// Package name(s) to uninstall
+        #[arg(required = true)]
+        packages: Vec<String>,
+    },
 }
 
 /// Package manager subcommands
