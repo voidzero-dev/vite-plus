@@ -5,7 +5,7 @@
 added 1 package in <variable>ms
   Warning: Package './conflict-pkg' provides 'node' binary, but it conflicts with a core shim. Skipping.
   Installed ./conflict-pkg v<semver>
-  Binaries: node, conflict-cli
+  Binaries: conflict-cli, node
 
 > vp env uninstall conflict-pkg # Cleanup
   Uninstalling conflict-pkg...
@@ -18,7 +18,7 @@ added 1 package in <variable>ms
 added 1 package in <variable>ms
   Warning: Package './conflict-pkg' provides 'node' binary, but it conflicts with a core shim. Skipping.
   Installed ./conflict-pkg v<semver>
-  Binaries: node, conflict-cli
+  Binaries: conflict-cli, node
 
 > vp env uninstall conflict-pkg # Cleanup
   Uninstalling conflict-pkg...

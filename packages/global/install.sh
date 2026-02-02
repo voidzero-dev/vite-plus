@@ -338,17 +338,35 @@ configure_shell_path() {
   local result=0
   case "$SHELL" in
     */zsh)
-      add_bin_to_path "$HOME/.zshrc" || result=$?
-      [ $result -eq 0 ] && SHELL_CONFIG_UPDATED=".zshrc"
+      # Add to both .zshenv (for all shells including IDE) and .zshrc (to ensure PATH is at front)
+      local zshenv_result=0 zshrc_result=0
+      add_bin_to_path "$HOME/.zshenv" || zshenv_result=$?
+      add_bin_to_path "$HOME/.zshrc" || zshrc_result=$?
+      # Prioritize .zshrc for user notification (easier to source)
+      if [ $zshrc_result -eq 0 ]; then
+        result=0
+        SHELL_CONFIG_UPDATED=".zshrc"
+      elif [ $zshenv_result -eq 0 ]; then
+        result=0
+        SHELL_CONFIG_UPDATED=".zshenv"
+      elif [ $zshenv_result -eq 2 ] || [ $zshrc_result -eq 2 ]; then
+        result=2  # already configured in at least one file
+      fi
       ;;
     */bash)
-      add_bin_to_path "$HOME/.bashrc" || result=$?
-      if [ $result -eq 0 ]; then
-        SHELL_CONFIG_UPDATED=".bashrc"
-      elif [ $result -eq 1 ]; then
+      # Add to both .bash_profile (for login shells/macOS) and .bashrc (for interactive shells/Linux)
+      local profile_result=0 bashrc_result=0
+      add_bin_to_path "$HOME/.bash_profile" || profile_result=$?
+      add_bin_to_path "$HOME/.bashrc" || bashrc_result=$?
+      # Prioritize .bashrc for user notification
+      if [ $bashrc_result -eq 0 ]; then
         result=0
-        add_bin_to_path "$HOME/.bash_profile" || result=$?
-        [ $result -eq 0 ] && SHELL_CONFIG_UPDATED=".bash_profile"
+        SHELL_CONFIG_UPDATED=".bashrc"
+      elif [ $profile_result -eq 0 ]; then
+        result=0
+        SHELL_CONFIG_UPDATED=".bash_profile"
+      elif [ $profile_result -eq 2 ] || [ $bashrc_result -eq 2 ]; then
+        result=2  # already configured in at least one file
       fi
       ;;
     */fish)

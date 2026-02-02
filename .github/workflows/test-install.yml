@@ -46,14 +46,24 @@ jobs:
         working-directory: ${{ runner.temp }}
         run: |
           # Source shell config to get PATH updated
-          if [ -f ~/.zshrc ]; then
+          if [ -f ~/.zshenv ]; then
+            # non-interactive shells use zshenv
+            source ~/.zshenv
+          elif [ -f ~/.zshrc ]; then
+            # interactive shells use zshrc
             source ~/.zshrc
+          elif [ -f ~/.bash_profile ]; then
+            # non-interactive shells use bash_profile
+            source ~/.bash_profile
           elif [ -f ~/.bashrc ]; then
+            # interactive shells use bashrc
             source ~/.bashrc
           else
-            ls -al ~/
             export PATH="$HOME/.vite-plus/bin:$PATH"
           fi
+          echo "PATH: $PATH"
+          ls -al ~/
+
           vp --version
           vp --help
           # test new command
@@ -102,9 +112,21 @@ jobs:
             -v "${{ github.workspace }}:/workspace" \
             -e VITE_PLUS_VERSION=test \
             ubuntu:20.04 bash -c "
+              ls -al ~/
+              cat ~/.bashrc
+              cat ~/.profile
               apt-get update && apt-get install -y curl ca-certificates
               bash /workspace/packages/global/install.sh
-              export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
+              if [ -f ~/.bash_profile ]; then
+                # non-interactive shells use bash_profile
+                source ~/.bash_profile
+              elif [ -f ~/.bashrc ]; then
+                # interactive shells use bashrc
+                source ~/.bashrc
+              else
+                export PATH="$HOME/.vite-plus/bin:$PATH"
+              fi
+
               vp --version
               vp --help
               vp dlx print-current-version
