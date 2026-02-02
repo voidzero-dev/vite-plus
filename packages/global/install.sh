@@ -335,7 +335,7 @@ add_bin_to_path() {
       return 2
     fi
     echo "" >> "$shell_config"
-    echo "# Vite-plus Node.js bin" >> "$shell_config"
+    echo "# Vite+ bin (https://viteplus.dev)" >> "$shell_config"
     echo "$path_line" >> "$shell_config"
     return 0
   fi
@@ -346,7 +346,7 @@ add_bin_to_path() {
 # Returns: 0 = path added, 1 = file not found, 2 = path already exists
 configure_shell_bin_path() {
   local bin_path="$INSTALL_DIR/bin"
-  local result=1
+  local result=0
 
   case "$SHELL" in
     */zsh)
@@ -366,7 +366,7 @@ configure_shell_bin_path() {
           result=2
         else
           echo "" >> "$fish_config"
-          echo "# Vite-plus Node.js bin" >> "$fish_config"
+          echo "# Vite+ bin (https://viteplus.dev)" >> "$fish_config"
           echo "set -gx PATH $bin_path \$PATH" >> "$fish_config"
           result=0
         fi
@@ -415,7 +415,8 @@ setup_bin_path() {
   fi
 
   # Prompt user (only in interactive mode, not CI)
-  if [ -t 0 ] && [ -z "$CI" ]; then
+  # Check: not CI, /dev/tty exists (can read input), stdout is TTY (can show prompt)
+  if [ -z "$CI" ] && [ -e /dev/tty ] && [ -t 1 ]; then
     echo ""
     echo "Would you want Vite+ to manage Node.js versions?"
     # echo "This adds 'node', 'npm', and 'npx' bin to your PATH."
