@@ -22,8 +22,9 @@ This RFC proposes adding a `vp env` command that provides system-wide, IDE-safe 
 
 A shim-based approach where:
 
-- `VITE_PLUS_HOME/shims/` directory is added to PATH (system-level for IDE reliability)
+- `VITE_PLUS_HOME/bin/` directory is added to PATH (system-level for IDE reliability)
 - Shims (`node`, `npm`, `npx`) are hardlinks/copies of the `vp` binary
+- The `vp` CLI itself is also in `VITE_PLUS_HOME/bin/`, so users only need one PATH entry
 - The binary detects invocation via `argv[0]` and dispatches accordingly
 - Version resolution and installation leverage existing `vite_js_runtime` infrastructure
 
@@ -131,7 +132,7 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 │                  │                                                          │
 │                  ▼                                                          │
 │  ┌──────────────────────────────┐                                           │
-│  │  ~/.vite-plus/shims/node     │  ◄── Hardlink to vp binary                │
+│  │  ~/.vite-plus/bin/node       │  ◄── Hardlink to vp binary                │
 │  │  (shim intercepts command)   │                                           │
 │  └──────────────┬───────────────┘                                           │
 │                 │                                                           │
@@ -168,12 +169,13 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ~/.vite-plus/                        (VITE_PLUS_HOME)                      │
-│  ├── shims/                                                                 │
+│  ├── bin/                                                                   │
+│  │   ├── vp   ──────────────────────  Symlink to ../current/vp              │
 │  │   ├── node ──────────────────────┐                                       │
 │  │   ├── npm  ──────────────────────┼──▶ Hardlinks to vp binary             │
 │  │   └── npx  ──────────────────────┘                                       │
-│  ├── config.json                      User settings (default version, etc.) │
-│  └── current/bin/vp                   The vp CLI binary                     │
+│  ├── current/vp                       The actual vp CLI binary              │
+│  └── config.json                      User settings (default version, etc.) │
 │                                                                             │
 │  $VITE_PLUS_HOME/js_runtime/node/     (Node.js installations)               │
 │      ├── 20.18.0/bin/node             Installed Node.js versions            │
@@ -213,17 +215,57 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 
 ```
 VITE_PLUS_HOME/                              # Default: ~/.vite-plus
-├── shims/
+├── bin/
+│   ├── vp -> ../current/vp           # Symlink to current vp binary (Unix)
 │   ├── node                          # Hardlink to vp binary (Unix)
 │   ├── npm                           # Hardlink to vp binary (Unix)
 │   ├── npx                           # Hardlink to vp binary (Unix)
-│   ├── node.exe                      # Copy of vp.exe (Windows)
+│   ├── tsc                           # Hardlink for global package binary (Unix)
+│   ├── vp.cmd                        # Wrapper script calling ..\current\vp.exe (Windows)
+│   ├── node.exe                      # Copy of current\vp.exe (Windows)
 │   ├── npm.cmd                       # Wrapper script (Windows)
 │   └── npx.cmd                       # Wrapper script (Windows)
+├── current/
+│   ├── vp                            # The actual vp CLI binary (Unix)
+│   └── vp.exe                        # The actual vp CLI binary (Windows)
+├── js_runtime/
+│   └── node/
+│       ├── 20.18.0/                  # Installed Node versions
+│       │   └── bin/
+│       │       ├── node
+│       │       ├── npm
+│       │       └── npx
+│       └── 22.13.0/
+├── packages/                         # Global packages
+│   ├── typescript/
+│   │   └── lib/
+│   │       └── node_modules/
+│   │           └── typescript/
+│   │               └── bin/
+│   ├── typescript.json               # Package metadata
+│   ├── eslint/
+│   └── eslint.json
+├── shared/                           # NODE_PATH symlinks
+│   ├── typescript -> ../packages/typescript/lib/node_modules/typescript
+│   └── eslint -> ../packages/eslint/lib/node_modules/eslint
 ├── cache/
 │   └── resolve_cache.json            # LRU cache for version resolution
+├── tmp/                              # Staging directory for installs
+│   └── packages/
 └── config.json                       # User configuration (default version, etc.)
 ```
+
+**Key Directories:**
+
+| Directory | Purpose |
+|-----------|---------|
+| `bin/` | vp symlink and all shims (node, npm, npx, global package binaries) |
+| `current/` | The actual vp CLI binary (bin/vp symlinks here) |
+| `js_runtime/node/` | Installed Node.js versions |
+| `packages/` | Installed global packages with metadata |
+| `shared/` | NODE_PATH symlinks for package require() resolution |
+| `tmp/` | Staging area for atomic installations |
+| `cache/` | Resolution cache |
 
 ### config.json Format
 
@@ -285,14 +327,72 @@ crates/vite_global_cli/
 ### Shim Dispatch Flow
 
 1. Check `VITE_PLUS_BYPASS` environment variable → bypass to system tool
-2. Check shim mode from config:
+2. Check `VITE_PLUS_TOOL_RECURSION` → if set, use passthrough mode
+3. Check shim mode from config:
    - If `system_first`: try system tool first, fallback to managed
    - If `managed`: use vite-plus managed Node.js
-3. Resolve version (with mtime-based caching)
-4. Ensure Node.js is installed (download if needed)
-5. Locate tool binary in the installed Node.js
-6. Prepend real node bin dir to PATH for child processes
-7. Execute the tool (Unix: `execve`, Windows: spawn)
+4. Resolve version (with mtime-based caching)
+5. Ensure Node.js is installed (download if needed)
+6. Locate tool binary in the installed Node.js
+7. Prepend real node bin dir to PATH for child processes
+8. Set `VITE_PLUS_TOOL_RECURSION=1` to prevent recursion
+9. Execute the tool (Unix: `execve`, Windows: spawn)
+
+### Shim Recursion Prevention
+
+To prevent infinite loops when shims invoke other shims, vite-plus uses an environment variable marker:
+
+**Environment Variable**: `VITE_PLUS_TOOL_RECURSION`
+
+**Mechanism:**
+1. When a shim executes the real binary, it sets `VITE_PLUS_TOOL_RECURSION=1`
+2. Subsequent shim invocations check this variable
+3. If set, shims use **passthrough mode** (skip version resolution, use current PATH)
+4. `vp env run` explicitly **removes** this variable to force re-evaluation
+
+**Flow Diagram:**
+```
+User runs: node app.js
+    │
+    ▼
+Shim checks VITE_PLUS_TOOL_RECURSION
+    │
+    ├── Not set → Resolve version, set RECURSION=1, exec real node
+    │
+    └── Set → Passthrough mode (use current PATH)
+```
+
+**Code Example:**
+```rust
+const RECURSION_ENV_VAR: &str = "VITE_PLUS_TOOL_RECURSION";
+
+fn execute_shim() {
+    if env::var(RECURSION_ENV_VAR).is_ok() {
+        // Passthrough: context already evaluated
+        execute_with_current_path();
+    } else {
+        // First invocation: resolve version and set marker
+        let version = resolve_version();
+        let path = build_path_for_version(version);
+
+        env::set_var(RECURSION_ENV_VAR, "1");
+        execute_with_path(path);
+    }
+}
+
+fn execute_run_command() {
+    // Clear marker to force re-evaluation
+    env::remove_var(RECURSION_ENV_VAR);
+
+    let version = parse_version_from_args();
+    execute_with_version(version);
+}
+```
+
+**Why This Matters:**
+- Prevents infinite loops when Node scripts spawn other Node processes
+- Allows `vp env run` to override versions mid-execution
+- Ensures consistent behavior in complex process trees
 
 ## Design Decisions
 
@@ -341,7 +441,7 @@ crates/vite_global_cli/
 
 ### 5. Separate VITE_PLUS_HOME from Cache
 
-**Decision**: Keep VITE_PLUS_HOME (shims, config) separate from cache (Node binaries).
+**Decision**: Keep VITE_PLUS_HOME (bin, config) separate from cache (Node binaries).
 
 **Rationale**:
 
@@ -413,14 +513,14 @@ VITE_PLUS_HOME: /Users/user/.vite-plus
   ✓ Shims directory exists
 
 PATH Analysis:
-  ✗ VP shims not in PATH
+  ✗ VP bin not in PATH
 
   Found 'node' at: /usr/local/bin/node (system)
-  Expected: /Users/user/.vite-plus/shims/node
+  Expected: /Users/user/.vite-plus/bin/node
 
 Recommended Fix:
   Add to ~/.zshrc:
-    export PATH="/Users/user/.vite-plus/shims:$PATH"
+    export PATH="/Users/user/.vite-plus/bin:$PATH"
 
   Then restart your terminal and IDE.
 ```
@@ -431,16 +531,16 @@ Recommended Fix:
 
 **Note on Directory Structure:**
 
-- CLI binary: `~/.vite-plus/current/bin/vp` (existing)
-- Shims directory: `~/.vite-plus/shims/` (new, for node/npm/npx intercept)
+- All binaries (vp CLI and shims): `~/.vite-plus/bin/`
 
 The global CLI installation script (`packages/global/install.sh`) will be updated to:
 
-1. Install the `vp` binary (existing behavior)
-2. Run `vp env --setup` to create shims (new)
-3. Prompt user: "Would you like to add vite-plus node shims to your PATH? (y/n)" (new)
-4. If yes and not already configured, prepend `~/.vite-plus/shims` to shell profile
-5. If already configured, skip silently
+1. Install the `vp` binary to `~/.vite-plus/current/vp`
+2. Create symlink `~/.vite-plus/bin/vp` → `../current/vp`
+3. Run `vp env setup` to create shims (node, npm, npx hardlinks)
+4. Prompt user: "Would you like to add vite-plus to your PATH? (y/n)"
+5. If yes and not already configured, prepend `~/.vite-plus/bin` to shell profile
+6. If already configured, skip silently
 
 ```bash
 $ curl -fsSL https://vite-plus.dev/install.sh | sh
@@ -450,17 +550,15 @@ Setting up VITE+(⚡)...
 ✔ VITE+(⚡) successfully installed!
 
   Version: 1.2.3
-  Location: ~/.vite-plus/current/bin
+  Location: ~/.vite-plus/bin
 
-  ✓ Created shims (node, npm, npx) in ~/.vite-plus/shims
+  ✓ Created shims (node, npm, npx) in ~/.vite-plus/bin
 
-Would you like to add vite-plus node shims to your PATH? (y/n): y
+Would you like to add vite-plus to your PATH? (y/n): y
   ✓ Added to ~/.zshrc
 
 Restart your terminal and IDE, then run 'vp env doctor' to verify.
 ```
-
-**Important**: The shims PATH (`~/.vite-plus/shims`) must be **before** the CLI bin PATH (`~/.vite-plus/current/bin`) if both are configured, so that `node` resolves to the shim first.
 
 ### Manual Setup
 
@@ -472,15 +570,15 @@ $ vp env setup
 Setting up vite-plus environment...
 
 Created shims:
-  /Users/user/.vite-plus/shims/node
-  /Users/user/.vite-plus/shims/npm
-  /Users/user/.vite-plus/shims/npx
+  /Users/user/.vite-plus/bin/node
+  /Users/user/.vite-plus/bin/npm
+  /Users/user/.vite-plus/bin/npx
 
 Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):
 
-  export PATH="/Users/user/.vite-plus/shims:$PATH"
+  export PATH="/Users/user/.vite-plus/bin:$PATH"
 
-For IDE support (VS Code, Cursor), ensure shims are in system PATH:
+For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:
   - macOS: Add to ~/.profile or use launchd
   - Linux: Add to ~/.profile for display manager integration
   - Windows: System Properties → Environment Variables → Path
@@ -498,7 +596,7 @@ VP Environment Doctor
 
 VITE_PLUS_HOME: /Users/user/.vite-plus
   ✓ Directory exists
-  ✓ Shims directory exists
+  ✓ Bin directory exists
   ✓ All shims present (node, npm, npx)
 
 Shim Mode:
@@ -509,9 +607,9 @@ Shim Mode:
   Run 'vp env off' to prefer system Node.js
 
 PATH Analysis:
-  ✓ VP shims first in PATH
+  ✓ VP bin first in PATH
 
-  node → /Users/user/.vite-plus/shims/node
+  node → /Users/user/.vite-plus/bin/node
 
 Current Directory: /Users/user/projects/my-app
   Version Source: .node-version
@@ -730,6 +828,161 @@ Error: Failed to resolve 'lts': Network error
   Check your network connection and try again
 ```
 
+## Global Package Management
+
+vite-plus intercepts global package installations (`npm install -g`, `npm i -g`, etc.) to provide isolated, reproducible global packages with platform pinning.
+
+### How It Works
+
+When you run `npm install -g typescript`, vite-plus:
+1. Detects the global install via argument parsing
+2. Redirects installation to `~/.vite-plus/packages/typescript/`
+3. Records metadata (package version, Node version used, binaries)
+4. Creates shims for each binary the package provides (`tsc`, `tsserver`)
+
+### Installation Flow
+
+```
+npm install -g typescript
+    │
+    ▼
+Shim intercepts → detects global install
+    │
+    ▼
+Create staging: ~/.vite-plus/tmp/packages/typescript/
+    │
+    ▼
+Set npm_config_prefix → staging directory
+    │
+    ▼
+Execute npm with modified environment
+    │
+    ▼
+On success:
+├── Move to: ~/.vite-plus/packages/typescript/
+├── Write config: ~/.vite-plus/packages/typescript.json
+├── Create shims: ~/.vite-plus/bin/tsc, tsserver
+└── Update shared NODE_PATH link
+```
+
+### Package Configuration File
+
+`~/.vite-plus/packages/typescript.json`:
+```json
+{
+  "name": "typescript",
+  "version": "5.7.0",
+  "platform": {
+    "node": "20.18.0",
+    "npm": "10.8.0"
+  },
+  "bins": ["tsc", "tsserver"],
+  "manager": "npm",
+  "installedAt": "2024-01-15T10:30:00Z"
+}
+```
+
+### Binary Execution
+
+When running `tsc`:
+1. Shim reads `~/.vite-plus/packages/typescript.json`
+2. Loads the pinned platform (Node 20.18.0)
+3. Constructs PATH with that Node version's bin directory
+4. Sets NODE_PATH to include shared packages
+5. Executes `~/.vite-plus/packages/typescript/lib/node_modules/.bin/tsc`
+
+### Upgrade and Uninstall
+
+```bash
+# Upgrade replaces the existing package
+npm install -g typescript@latest
+
+# Uninstall removes package and shims
+npm uninstall -g typescript
+# Or via vite-plus:
+vp env uninstall typescript
+```
+
+### Environment Variable: VITE_PLUS_UNSAFE_GLOBAL
+
+Set `VITE_PLUS_UNSAFE_GLOBAL=1` to bypass global package interception:
+```bash
+VITE_PLUS_UNSAFE_GLOBAL=1 npm install -g typescript
+# Installs to system npm global location
+```
+
+## Run Command
+
+The `vp env run` command executes a command with a specific Node.js version, useful for:
+- Testing code against different Node versions
+- Running one-off commands without changing project configuration
+- CI/CD scripts that need explicit version control
+
+### Usage
+
+```bash
+# Run with specific Node version
+vp env run --node 20.18.0 node app.js
+
+# Run with specific Node and npm versions
+vp env run --node 22.13.0 --npm 10.8.0 npm install
+
+# Version can be semver range (resolved at runtime)
+vp env run --node "^20.0.0" node -v
+
+# Run npm scripts
+vp env run --node 18.20.0 npm test
+
+# Pass arguments to the command
+vp env run --node 20 -- node --inspect app.js
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--node <version>` | Node.js version to use (required or from project) |
+| `--npm <version>` | npm version to use (optional, defaults to bundled) |
+
+### Behavior
+
+1. **Version Resolution**: Specified versions are resolved to exact versions
+2. **Auto-Install**: If the version isn't installed, it's downloaded automatically
+3. **PATH Construction**: Constructs PATH with specified version's bin directory
+4. **Recursion Reset**: Clears `VITE_PLUS_TOOL_RECURSION` to force context re-evaluation
+
+### Examples
+
+```bash
+# Test against multiple Node versions in CI
+for version in 18 20 22; do
+  vp env run --node $version npm test
+done
+
+# Run with exact version
+vp env run --node 20.18.0 node -e "console.log(process.version)"
+# Output: v20.18.0
+
+# Debug with specific Node version
+vp env run --node 22 -- node --inspect-brk app.js
+```
+
+### Use in Scripts
+
+```bash
+#!/bin/bash
+# test-matrix.sh
+
+VERSIONS="18.20.0 20.18.0 22.13.0"
+
+for v in $VERSIONS; do
+  echo "Testing with Node $v..."
+  vp env run --node "$v" npm test || exit 1
+done
+
+echo "All tests passed!"
+```
+
 ## List Command
 
 The `vp env list` command displays available Node.js versions.
@@ -815,23 +1068,39 @@ $ vp env --current --json
 
 ## Environment Variables
 
-| Variable               | Description                         | Default        |
-| ---------------------- | ----------------------------------- | -------------- |
-| `VITE_PLUS_HOME`       | Base directory for shims and config | `~/.vite-plus` |
-| `VITE_PLUS_LOG`        | Log level: debug, info, warn, error | `warn`         |
-| `VITE_PLUS_DEBUG_SHIM` | Enable extra shim diagnostics       | unset          |
-| `VITE_PLUS_BYPASS`     | Bypass shim and use system node     | unset          |
+| Variable                   | Description                            | Default        |
+| -------------------------- | -------------------------------------- | -------------- |
+| `VITE_PLUS_HOME`           | Base directory for bin and config      | `~/.vite-plus` |
+| `VITE_PLUS_LOG`            | Log level: debug, info, warn, error    | `warn`         |
+| `VITE_PLUS_DEBUG_SHIM`     | Enable extra shim diagnostics          | unset          |
+| `VITE_PLUS_BYPASS`         | Bypass shim and use system node        | unset          |
+| `VITE_PLUS_TOOL_RECURSION` | **Internal**: Prevents shim recursion  | unset          |
+| `VITE_PLUS_UNSAFE_GLOBAL`  | Bypass global package interception     | unset          |
 
 ## Windows-Specific Considerations
 
 ### Shim Structure
 
 ```
-VITE_PLUS_HOME\shims\
-├── node.exe        # Copy of vp.exe
-├── npm.cmd         # Wrapper script
-└── npx.cmd         # Wrapper script
+VITE_PLUS_HOME\
+├── bin\
+│   ├── vp.cmd      # Wrapper script calling ..\current\vp.exe
+│   ├── node.exe    # Copy of current\vp.exe
+│   ├── npm.cmd     # Wrapper script
+│   └── npx.cmd     # Wrapper script
+└── current\
+    └── vp.exe      # The actual vp CLI binary
 ```
+
+### Wrapper Script Template (vp.cmd)
+
+```batch
+@echo off
+"%~dp0..\current\vp.exe" %*
+exit /b %ERRORLEVEL%
+```
+
+The `vp.cmd` wrapper simply forwards all arguments to the actual `vp.exe` binary in the `current` directory.
 
 ### Wrapper Script Template (npm.cmd)
 
@@ -847,7 +1116,8 @@ The `.cmd` wrapper sets `VITE_PLUS_SHIM_TOOL` environment variable before callin
 
 **Benefits of this approach**:
 
-- Single `vp.exe` binary to update (copied as `node.exe`)
+- Single `vp.exe` binary to update in `current\` directory
+- `node.exe` in `bin\` is a copy for shim detection via argv[0]
 - `.cmd` wrappers are trivial text files
 - Clear separation of concerns: `.cmd` sets context, binary does the work
 
@@ -855,10 +1125,11 @@ The `.cmd` wrapper sets `VITE_PLUS_SHIM_TOOL` environment variable before callin
 
 The Windows installer (`install.ps1`) follows the same flow:
 
-1. Download and install `vp.exe`
-2. Run `vp env --setup` to create shims
-3. Prompt user to add shims to User PATH
-4. Update PATH via `[Environment]::SetEnvironmentVariable`
+1. Download and install `vp.exe` to `~/.vite-plus/current/`
+2. Create `~/.vite-plus/bin/vp.cmd` wrapper script
+3. Run `vp env setup` to create shims (node.exe copy, npm.cmd, npx.cmd)
+4. Prompt user to add `~/.vite-plus/bin` to User PATH
+5. Update PATH via `[Environment]::SetEnvironmentVariable`
 
 ## Testing Strategy
 
@@ -920,6 +1191,8 @@ env-doctor/
 9. Implement `vp env pin [version]` for per-directory version pinning
 10. Implement `vp env unpin` as alias for `pin --unpin`
 11. Implement `vp env list` to show available versions
+12. Implement recursion prevention (`VITE_PLUS_TOOL_RECURSION`)
+13. Implement `vp env run --node <version>` command
 
 ### Phase 2: Full Tool Support (P1)
 
@@ -927,6 +1200,9 @@ env-doctor/
 2. Implement `vp env which`
 3. Implement `vp env --current --json`
 4. Enhanced doctor with conflict detection
+5. Implement global package interception for npm
+6. Implement package metadata storage
+7. Implement per-package binary shims
 
 ### Phase 3: Polish (P2)
 
@@ -935,6 +1211,13 @@ env-doctor/
 3. Improve error messages
 4. Add IDE-specific setup guidance
 5. Documentation
+
+### Phase 4: Global Package Management (P3)
+
+1. Implement global package interception for yarn
+2. Implement `vp env uninstall <package>` command
+3. Implement `vp env packages` to list installed global packages
+4. NODE_PATH setup for shared package resolution
 
 ## Backward Compatibility
 
