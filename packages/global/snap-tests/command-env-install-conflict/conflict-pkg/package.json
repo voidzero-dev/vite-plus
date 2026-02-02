@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Test package with conflicting binary names",
   "bin": {
-    "node": "./cli.js",
-    "conflict-cli": "./cli.js"
+    "conflict-cli": "./cli.js",
+    "node": "./cli.js"
   }
 }

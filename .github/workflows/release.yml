@@ -78,6 +78,7 @@ jobs:
         run: |
           pnpm exec tool replace-file-content packages/cli/binding/Cargo.toml 'version = "0.0.0"' 'version = "${{ env.VERSION }}"'
           pnpm exec tool replace-file-content packages/global/binding/Cargo.toml 'version = "0.0.0"' 'version = "${{ env.VERSION }}"'
+          pnpm exec tool replace-file-content crates/vite_global_cli/Cargo.toml 'version = "0.0.0"' 'version = "${{ env.VERSION }}"'
 
       - name: Configure Git for access to vite-task
         run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
