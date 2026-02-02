@@ -354,18 +354,25 @@ configure_shell_path() {
       fi
       ;;
     */bash)
-      # Add to both .bash_profile (for login shells/macOS) and .bashrc (for interactive shells/Linux)
-      local profile_result=0 bashrc_result=0
-      add_bin_to_path "$HOME/.bash_profile" || profile_result=$?
+      # Add to .bash_profile, .bashrc, AND .profile for maximum compatibility
+      # - .bash_profile: login shells (macOS default)
+      # - .bashrc: interactive non-login shells (Linux default)
+      # - .profile: fallback for systems without .bash_profile (Ubuntu minimal, etc.)
+      local bash_profile_result=0 bashrc_result=0 profile_result=0
+      add_bin_to_path "$HOME/.bash_profile" || bash_profile_result=$?
       add_bin_to_path "$HOME/.bashrc" || bashrc_result=$?
-      # Prioritize .bashrc for user notification
+      add_bin_to_path "$HOME/.profile" || profile_result=$?
+      # Prioritize .bashrc for user notification (most commonly edited)
       if [ $bashrc_result -eq 0 ]; then
         result=0
         SHELL_CONFIG_UPDATED=".bashrc"
-      elif [ $profile_result -eq 0 ]; then
+      elif [ $bash_profile_result -eq 0 ]; then
         result=0
         SHELL_CONFIG_UPDATED=".bash_profile"
-      elif [ $profile_result -eq 2 ] || [ $bashrc_result -eq 2 ]; then
+      elif [ $profile_result -eq 0 ]; then
+        result=0
+        SHELL_CONFIG_UPDATED=".profile"
+      elif [ $bash_profile_result -eq 2 ] || [ $bashrc_result -eq 2 ] || [ $profile_result -eq 2 ]; then
         result=2  # already configured in at least one file
       fi
       ;;

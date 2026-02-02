@@ -686,6 +686,201 @@ Shim Mode:
 ...
 ```
 
+## Shell Configuration Reference
+
+This section documents shell configuration file behavior for PATH setup and troubleshooting.
+
+### Zsh Configuration Files
+
+| File        | When Loaded                                                              | Use Case                           |
+| ----------- | ------------------------------------------------------------------------ | ---------------------------------- |
+| `.zshenv`   | **Always** - every zsh instance (login, interactive, scripts, subshells) | PATH and environment variables     |
+| `.zprofile` | Login shells only                                                        | Login-time initialization          |
+| `.zshrc`    | Interactive shells only                                                  | Aliases, functions, prompts        |
+| `.zlogin`   | Login shells, after `.zshrc`                                             | Commands after full initialization |
+
+**Loading Order (Login Interactive Shell):**
+
+```
+1. /etc/zshenv     → System environment
+2. ~/.zshenv       → User environment (ALWAYS loaded)
+3. /etc/zprofile   → System login setup
+4. ~/.zprofile     → User login setup
+5. /etc/zshrc      → System interactive setup
+6. ~/.zshrc        → User interactive setup
+7. /etc/zlogin     → System login finalization
+8. ~/.zlogin       → User login finalization
+```
+
+**Key Point:** `.zshenv` is the **most reliable** location for PATH configuration because:
+
+- Loaded for ALL zsh instances including IDE-spawned processes
+- Loaded even for non-interactive scripts and subshells
+
+### Bash Configuration Files
+
+| File            | When Loaded                  | Use Case                                        |
+| --------------- | ---------------------------- | ----------------------------------------------- |
+| `.bash_profile` | Login shells only            | macOS Terminal, SSH sessions                    |
+| `.bash_login`   | Login shells only (fallback) | Used if `.bash_profile` absent                  |
+| `.profile`      | Login shells only (fallback) | Used if neither above exists; also read by `sh` |
+| `.bashrc`       | Interactive non-login shells | Linux terminal emulators, subshells             |
+
+**Loading Order (Login Shell):**
+
+```
+1. /etc/profile           → System profile
+2. FIRST found of:        → User profile (ONLY ONE is loaded)
+   - ~/.bash_profile
+   - ~/.bash_login
+   - ~/.profile
+3. ~/.bashrc              → ONLY if explicitly sourced by above
+```
+
+**Critical Behavior:**
+
+- Bash reads **only the first** profile file found (`.bash_profile` > `.bash_login` > `.profile`)
+- `.bashrc` is **NOT automatically loaded** in login shells - the profile file must source it
+- Standard pattern: `.bash_profile` should contain `source ~/.bashrc`
+
+### Fish Configuration Files
+
+Fish shell uses a simpler configuration model than bash/zsh.
+
+| File                              | When Loaded                                                    | Use Case                         |
+| --------------------------------- | -------------------------------------------------------------- | -------------------------------- |
+| `~/.config/fish/config.fish`      | **Always** - every fish instance (login, interactive, scripts) | All configuration including PATH |
+| `~/.config/fish/conf.d/*.fish`    | **Always** - before config.fish                                | Modular configuration snippets   |
+| `~/.config/fish/functions/*.fish` | On-demand when function called                                 | Autoloaded function definitions  |
+
+**Key Points:**
+
+- Fish has **no distinction** between login and non-login shells for configuration
+- `config.fish` is always loaded, similar to zsh's `.zshenv`
+- This makes Fish more reliable for IDE integration than bash
+- Universal variables (`set -U`) persist across sessions without config files
+
+**PATH Syntax:**
+
+```fish
+# Fish uses different syntax than bash/zsh
+set -gx PATH $HOME/.vite-plus/bin $PATH
+```
+
+### When Configuration Files May NOT Load
+
+| Scenario                 | Zsh Behavior    | Bash Behavior                       | Fish Behavior        |
+| ------------------------ | --------------- | ----------------------------------- | -------------------- |
+| Non-interactive scripts  | Only `.zshenv`  | **NOTHING** (unless `BASH_ENV` set) | `config.fish` loaded |
+| IDE-launched processes   | Only `.zshenv`  | **NOTHING** (critical gap)          | `config.fish` loaded |
+| SSH sessions             | All login files | `.bash_profile` only                | `config.fish` loaded |
+| Subshells                | Only `.zshenv`  | `.bashrc` (interactive) or nothing  | `config.fish` loaded |
+| macOS Terminal.app       | All login files | `.bash_profile` → `.bashrc`         | `config.fish` loaded |
+| Linux terminal emulators | `.zshrc`        | `.bashrc` only                      | `config.fish` loaded |
+
+### IDE Integration Challenges
+
+GUI-launched IDEs (VS Code, Cursor, JetBrains) have special PATH inheritance issues:
+
+**macOS:**
+
+- GUI apps inherit environment from `launchd`, not shell rc files
+- IDE terminals may spawn login or non-login shells (varies by IDE settings)
+- Solution: `.zshenv` for zsh; for bash, both `.bash_profile` and `.bashrc` needed
+
+**Linux:**
+
+- GUI apps inherit from display manager session
+- `~/.profile` is often sourced by display managers (GDM, SDDM, etc.)
+- Non-login terminals only read `.bashrc`
+
+**Windows:**
+
+- PATH is system/user environment variable
+- No shell rc file complications
+
+### Install Script Shell Configuration
+
+The `install.sh` script configures PATH in multiple shell files for maximum compatibility:
+
+**For Zsh (`$SHELL` ends with `/zsh`):**
+
+- Adds to `~/.zshenv` - ensures all zsh instances see the PATH
+- Adds to `~/.zshrc` - ensures PATH is at front for interactive shells
+
+**For Bash (`$SHELL` ends with `/bash`):**
+
+- Adds to `~/.bash_profile` - for login shells (macOS default)
+- Adds to `~/.bashrc` - for interactive non-login shells (Linux default)
+- Adds to `~/.profile` - fallback for systems without `.bash_profile`
+
+**For Fish (`$SHELL` ends with `/fish`):**
+
+- Adds to `~/.config/fish/config.fish`
+
+**Important Notes:**
+
+1. Only modifies files that **already exist** - does not create new rc files
+2. Checks for existing PATH entry to avoid duplicates
+3. Appends with comment marker: `# Vite+ bin (https://viteplus.dev)`
+
+### Troubleshooting PATH Issues
+
+**Symptom: `vp` not found after installation**
+
+1. Check which shell you're using:
+
+   ```bash
+   echo $SHELL
+   ```
+
+2. Verify the PATH entry was added:
+
+   ```bash
+   # For zsh
+   grep "vite-plus" ~/.zshenv ~/.zshrc
+
+   # For bash
+   grep "vite-plus" ~/.bash_profile ~/.bashrc ~/.profile
+
+   # For fish
+   grep "vite-plus" ~/.config/fish/config.fish
+   ```
+
+3. If no entry found, manually add to appropriate file:
+
+   ```bash
+   # For zsh/bash - add this line:
+   export PATH="$HOME/.vite-plus/bin:$PATH"
+
+   # For fish - add this line:
+   set -gx PATH $HOME/.vite-plus/bin $PATH
+   ```
+
+4. Source the file or restart terminal:
+   ```bash
+   source ~/.zshrc  # or ~/.bashrc
+   # For fish: source ~/.config/fish/config.fish
+   ```
+
+**Symptom: IDE terminal doesn't see `vp` or `node`**
+
+1. For VS Code, check terminal profile settings (login shell recommended)
+2. Ensure `~/.zshenv` contains the PATH entry (most reliable for zsh)
+3. For bash users: may need to configure IDE to use login shell (`bash -l`)
+4. Fish users: `config.fish` is always loaded, so PATH should work in IDEs
+5. Run `vp env doctor` to diagnose PATH configuration
+
+**Symptom: Shell scripts can't find `node`**
+
+For bash scripts, non-interactive execution doesn't load rc files. Options:
+
+- Use `#!/usr/bin/env bash` with `BASH_ENV` set
+- Source the rc file explicitly: `source ~/.bashrc`
+- Use full path: `~/.vite-plus/bin/node`
+
+Note: Fish scripts (`#!/usr/bin/env fish`) always load `config.fish`, so this issue doesn't apply.
+
 ### Default Version Command
 
 ```bash

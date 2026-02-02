@@ -113,15 +113,11 @@ jobs:
             -e VITE_PLUS_VERSION=test \
             ubuntu:20.04 bash -c "
               ls -al ~/
-              cat ~/.bashrc
-              cat ~/.profile
               apt-get update && apt-get install -y curl ca-certificates
               bash /workspace/packages/global/install.sh
-              if [ -f ~/.bash_profile ]; then
-                # non-interactive shells use bash_profile
-                source ~/.bash_profile
+              if [ -f ~/.profile ]; then
+                source ~/.profile
               elif [ -f ~/.bashrc ]; then
-                # interactive shells use bashrc
                 source ~/.bashrc
               else
                 export PATH="$HOME/.vite-plus/bin:$PATH"
