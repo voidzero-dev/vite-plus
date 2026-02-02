@@ -77,11 +77,6 @@ pub fn get_tmp_dir() -> Result<AbsolutePathBuf, Error> {
     Ok(get_vite_plus_home()?.join("tmp"))
 }
 
-/// Get the shared directory path for NODE_PATH symlinks (~/.vite-plus/shared/).
-pub fn get_shared_dir() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vite_plus_home()?.join("shared"))
-}
-
 /// Get the current directory path (where the actual vp binary lives).
 pub fn get_current_dir() -> Result<AbsolutePathBuf, Error> {
     Ok(get_vite_plus_home()?.join("current"))
