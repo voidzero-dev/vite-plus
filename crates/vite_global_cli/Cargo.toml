@@ -12,6 +12,7 @@ name = "vp"
 path = "src/main.rs"
 
 [dependencies]
+chrono = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 directories = { workspace = true }
 serde = { workspace = true }

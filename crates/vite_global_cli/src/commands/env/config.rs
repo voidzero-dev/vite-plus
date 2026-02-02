@@ -62,9 +62,24 @@ pub fn get_vite_plus_home() -> Result<AbsolutePathBuf, Error> {
     Ok(vite_shared::get_vite_plus_home()?)
 }
 
-/// Get the bin directory path.
+/// Get the bin directory path (~/.vite-plus/bin/).
 pub fn get_bin_dir() -> Result<AbsolutePathBuf, Error> {
     Ok(get_vite_plus_home()?.join("bin"))
+}
+
+/// Get the packages directory path (~/.vite-plus/packages/).
+pub fn get_packages_dir() -> Result<AbsolutePathBuf, Error> {
+    Ok(get_vite_plus_home()?.join("packages"))
+}
+
+/// Get the tmp directory path for staging (~/.vite-plus/tmp/).
+pub fn get_tmp_dir() -> Result<AbsolutePathBuf, Error> {
+    Ok(get_vite_plus_home()?.join("tmp"))
+}
+
+/// Get the shared directory path for NODE_PATH symlinks (~/.vite-plus/shared/).
+pub fn get_shared_dir() -> Result<AbsolutePathBuf, Error> {
+    Ok(get_vite_plus_home()?.join("shared"))
 }
 
 /// Get the current directory path (where the actual vp binary lives).
