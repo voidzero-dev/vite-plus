@@ -12,6 +12,7 @@ mod list;
 mod off;
 mod on;
 pub mod package_metadata;
+mod packages;
 mod pin;
 mod run;
 mod setup;
@@ -49,6 +50,16 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
             crate::cli::EnvSubcommands::Run { node, npm, command } => {
                 run::execute(&node, npm.as_deref(), &command).await
             }
+            crate::cli::EnvSubcommands::Packages { json } => packages::execute(json).await,
+            crate::cli::EnvSubcommands::Uninstall { packages } => {
+                for package in packages {
+                    if let Err(e) = global_install::uninstall(&package).await {
+                        eprintln!("Failed to uninstall {}: {}", package, e);
+                        return Ok(exit_status(1));
+                    }
+                }
+                Ok(ExitStatus::default())
+            }
         };
     }
 
@@ -81,6 +92,8 @@ fn print_help() {
     println!("  unpin              Remove the .node-version file from current directory");
     println!("  list [PATTERN]     List available Node.js versions");
     println!("  run --node <VER>   Run a command with a specific Node.js version");
+    println!("  packages           List installed global packages");
+    println!("  uninstall <package>  Uninstall a global package");
     println!();
     println!("Options:");
     println!("  --current          Show current environment information");
@@ -124,4 +137,18 @@ async fn print_env(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     println!("export PATH=\"{}:$PATH\"", bin_dir.as_path().display());
 
     Ok(ExitStatus::default())
+}
+
+/// Create an exit status with the given code.
+fn exit_status(code: i32) -> ExitStatus {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        ExitStatus::from_raw(code << 8)
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::ExitStatusExt;
+        ExitStatus::from_raw(code as u32)
+    }
 }
