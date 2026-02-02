@@ -47,6 +47,11 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     // Check for conflicts
     check_conflicts();
 
+    // Print IDE setup guidance
+    if let Ok(bin_dir) = get_bin_dir() {
+        print_ide_setup_guidance(&bin_dir);
+    }
+
     println!();
     if has_errors {
         println!("Some issues were found. Please address them for optimal operation.");
@@ -241,11 +246,11 @@ fn find_in_path(name: &str) -> Option<std::path::PathBuf> {
     which::which(name).ok()
 }
 
-/// Print PATH fix instructions.
+/// Print PATH fix instructions for shell setup.
 fn print_path_fix(bin_dir: &vite_path::AbsolutePath) {
     let bin_path = bin_dir.as_path().display();
 
-    println!("Recommended Fix:");
+    println!("Shell Setup (for terminal usage):");
 
     // Detect shell
     let shell = std::env::var("SHELL").unwrap_or_default();
@@ -257,7 +262,7 @@ fn print_path_fix(bin_dir: &vite_path::AbsolutePath) {
         println!("  Add to ~/.config/fish/config.fish:");
         println!("    set -gx PATH \"{bin_path}\" $PATH");
         println!();
-        println!("  Then restart your terminal and IDE.");
+        println!("  Then restart your terminal.");
         return;
     } else {
         println!("  Add to your shell profile:");
@@ -265,7 +270,42 @@ fn print_path_fix(bin_dir: &vite_path::AbsolutePath) {
 
     println!("    export PATH=\"{bin_path}:$PATH\"");
     println!();
-    println!("  Then restart your terminal and IDE.");
+    println!("  Then restart your terminal.");
+}
+
+/// Print IDE setup guidance for GUI applications.
+fn print_ide_setup_guidance(bin_dir: &vite_path::AbsolutePath) {
+    println!();
+    println!("IDE Setup (for VS Code, Cursor, and other GUI apps):");
+    println!("  GUI applications may not see shell PATH changes.");
+    println!();
+
+    #[cfg(target_os = "macos")]
+    {
+        println!("  macOS:");
+        println!("    Option 1: Add to ~/.profile (works for most apps after restart)");
+        println!("    Option 2: Use launchctl to set PATH for all GUI apps:");
+        println!("      launchctl setenv PATH \"{}:$PATH\"", bin_dir.as_path().display());
+        println!();
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        println!("  Linux:");
+        println!("    Add to ~/.profile for display manager integration.");
+        println!("    Then log out and log back in for changes to take effect.");
+        println!();
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        println!("  Windows:");
+        println!("    The PATH should already be set in User Environment Variables.");
+        println!("    If not, add it via: System Properties -> Environment Variables -> Path");
+        println!();
+    }
+
+    println!("  After setup, restart your IDE to apply changes.");
 }
 
 /// Check current directory version resolution.
