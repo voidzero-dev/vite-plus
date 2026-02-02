@@ -76,7 +76,7 @@ jobs:
           done
 
           # Verify vp env doctor works
-          export PATH="$HOME/.vite-plus/current/bin:$PATH"
+          export PATH="$HOME/.vite-plus/bin:$PATH"
           vp env doctor
 
   test-install-sh-arm64:
@@ -100,7 +100,7 @@ jobs:
             ubuntu:20.04 bash -c "
               apt-get update && apt-get install -y curl ca-certificates
               bash /workspace/packages/global/install.sh
-              export PATH=\"\$HOME/.local/bin:\$HOME/.vite-plus/current/bin:\$PATH\"
+              export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
               vp --version
               vp --help
               vp dlx print-current-version

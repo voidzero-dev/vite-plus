@@ -1,15 +1,15 @@
 //! Setup command implementation for creating bin directory and shims.
 //!
 //! Creates the following structure:
-//! - ~/.vite-plus/bin/     - Contains vp symlink and node/npm/npx shims
-//! - ~/.vite-plus/current/ - Contains the actual vp binary
+//! - ~/.vite-plus/bin/     - Contains vp wrapper and node/npm/npx shims
+//! - ~/.vite-plus/current/ - Symlink to the installed version directory
 //!
-//! On Unix: bin/vp is a symlink to ../current/vp
-//! On Windows: bin/vp.cmd is a wrapper script that calls ..\current\vp.exe
+//! On Unix: bin/vp is a wrapper script that calls current/bin/vp
+//! On Windows: bin/vp.cmd is a wrapper script that calls current\bin\vp.exe
 
 use std::process::ExitStatus;
 
-use super::config::{get_bin_dir, get_current_dir, get_vite_plus_home};
+use super::config::{get_bin_dir, get_vite_plus_home};
 use crate::error::Error;
 
 /// Tools to create shims for (node, npm, npx)
@@ -18,22 +18,20 @@ const SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
 /// Execute the setup command.
 pub async fn execute(refresh: bool) -> Result<ExitStatus, Error> {
     let bin_dir = get_bin_dir()?;
-    let current_dir = get_current_dir()?;
     let _vite_plus_home = get_vite_plus_home()?;
 
     println!("Setting up vite-plus environment...");
     println!();
 
-    // Ensure directories exist
+    // Ensure bin directory exists
     tokio::fs::create_dir_all(&bin_dir).await?;
-    tokio::fs::create_dir_all(&current_dir).await?;
 
-    // Get the current executable path
+    // Get the current executable path (for shims)
     let current_exe = std::env::current_exe()
         .map_err(|e| Error::ConfigError(format!("Cannot find current executable: {e}").into()))?;
 
-    // Setup vp binary in current/ and create symlink/wrapper in bin/
-    setup_vp_binary(&current_exe, &bin_dir, &current_dir, refresh).await?;
+    // Create wrapper script in bin/
+    setup_vp_wrapper(&bin_dir, refresh).await?;
 
     // Create shims for node, npm, npx
     let mut created = Vec::new();
@@ -73,74 +71,47 @@ pub async fn execute(refresh: bool) -> Result<ExitStatus, Error> {
     Ok(ExitStatus::default())
 }
 
-/// Setup the vp binary in current/ directory and create symlink/wrapper in bin/.
-async fn setup_vp_binary(
-    source: &std::path::Path,
-    bin_dir: &vite_path::AbsolutePath,
-    current_dir: &vite_path::AbsolutePath,
-    refresh: bool,
-) -> Result<(), Error> {
+/// Create wrapper script in bin/ that calls current/bin/vp.
+async fn setup_vp_wrapper(bin_dir: &vite_path::AbsolutePath, refresh: bool) -> Result<(), Error> {
     #[cfg(unix)]
     {
-        let current_vp = current_dir.join("vp");
         let bin_vp = bin_dir.join("vp");
 
-        // Copy vp binary to current/vp if needed
-        let should_copy = refresh
-            || !tokio::fs::try_exists(&current_vp).await.unwrap_or(false)
-            || is_different_binary(source, &current_vp).await;
-
-        if should_copy {
-            // Remove existing if present
-            if tokio::fs::try_exists(&current_vp).await.unwrap_or(false) {
-                tokio::fs::remove_file(&current_vp).await?;
-            }
-            tokio::fs::copy(source, &current_vp).await?;
-            tracing::debug!("Copied vp binary to {:?}", current_vp);
-        }
-
-        // Create symlink bin/vp -> ../current/vp
-        let should_create_symlink = refresh
+        // Create wrapper script bin/vp that calls current/bin/vp
+        let should_create_wrapper = refresh
             || !tokio::fs::try_exists(&bin_vp).await.unwrap_or(false)
-            || !is_symlink(&bin_vp).await;
+            || is_symlink(&bin_vp).await; // Replace symlink with wrapper
 
-        if should_create_symlink {
-            // Remove existing if present
+        if should_create_wrapper {
+            // Remove existing if present (could be old symlink or file)
             if tokio::fs::try_exists(&bin_vp).await.unwrap_or(false) {
                 tokio::fs::remove_file(&bin_vp).await?;
             }
-            // Create relative symlink
-            tokio::fs::symlink("../current/vp", &bin_vp).await?;
-            tracing::debug!("Created symlink {:?} -> ../current/vp", bin_vp);
+            // Create wrapper shell script with absolute path
+            let wrapper_content = r#"#!/bin/sh
+VITE_PLUS_HOME="$(cd "$(dirname "$0")/.." && pwd)"
+exec "$VITE_PLUS_HOME/current/bin/vp" "$@"
+"#;
+            tokio::fs::write(&bin_vp, wrapper_content).await?;
+            // Make executable
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o755);
+            tokio::fs::set_permissions(&bin_vp, perms).await?;
+            tracing::debug!("Created wrapper script {:?}", bin_vp);
         }
     }
 
     #[cfg(windows)]
     {
-        let current_vp = current_dir.join("vp.exe");
         let bin_vp_cmd = bin_dir.join("vp.cmd");
 
-        // Copy vp.exe binary to current/vp.exe if needed
-        let should_copy = refresh
-            || !tokio::fs::try_exists(&current_vp).await.unwrap_or(false)
-            || is_different_binary(source, &current_vp).await;
-
-        if should_copy {
-            // Remove existing if present
-            if tokio::fs::try_exists(&current_vp).await.unwrap_or(false) {
-                tokio::fs::remove_file(&current_vp).await?;
-            }
-            tokio::fs::copy(source, &current_vp).await?;
-            tracing::debug!("Copied vp.exe binary to {:?}", current_vp);
-        }
-
-        // Create wrapper script bin/vp.cmd that calls ..\current\vp.exe
+        // Create wrapper script bin/vp.cmd that calls current\bin\vp.exe
         let should_create_wrapper =
             refresh || !tokio::fs::try_exists(&bin_vp_cmd).await.unwrap_or(false);
 
         if should_create_wrapper {
             let cmd_content = r#"@echo off
-"%~dp0..\current\vp.exe" %*
+"%~dp0..\current\bin\vp.exe" %*
 exit /b %ERRORLEVEL%
 "#;
             tokio::fs::write(&bin_vp_cmd, cmd_content).await?;
@@ -149,19 +120,6 @@ exit /b %ERRORLEVEL%
     }
 
     Ok(())
-}
-
-/// Check if source and target binaries are different (by size).
-async fn is_different_binary(source: &std::path::Path, target: &vite_path::AbsolutePath) -> bool {
-    let source_meta = match tokio::fs::metadata(source).await {
-        Ok(m) => m,
-        Err(_) => return true,
-    };
-    let target_meta = match tokio::fs::metadata(target).await {
-        Ok(m) => m,
-        Err(_) => return true,
-    };
-    source_meta.len() != target_meta.len()
 }
 
 /// Check if a path is a symlink.

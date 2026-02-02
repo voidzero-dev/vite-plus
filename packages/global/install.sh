@@ -302,26 +302,6 @@ download_and_extract() {
   rm -f "$temp_file"
 }
 
-# Add to shell profile
-# Returns: 0 = path added, 1 = file not found, 2 = path already exists
-add_to_path() {
-  local shell_config="$1"
-  local path_to_add="$INSTALL_DIR/current/bin"
-  local path_line="export PATH=\"$path_to_add:\$PATH\""
-
-  if [ -f "$shell_config" ]; then
-    # Check if already has the current/bin path
-    if grep -q "$path_to_add" "$shell_config" 2>/dev/null; then
-      return 2
-    fi
-    echo "" >> "$shell_config"
-    echo "# Added by vite-plus installer" >> "$shell_config"
-    echo "$path_line" >> "$shell_config"
-    return 0
-  fi
-  return 1
-}
-
 # Add bin to shell profile
 # Returns: 0 = path added, 1 = file not found, 2 = path already exists
 add_bin_to_path() {
@@ -344,19 +324,25 @@ add_bin_to_path() {
 
 # Configure bin path for the current shell
 # Returns: 0 = path added, 1 = file not found, 2 = path already exists
+# Sets SHELL_CONFIG_UPDATED global variable with the config file name if updated
 configure_shell_bin_path() {
   local bin_path="$INSTALL_DIR/bin"
   local result=0
+  SHELL_CONFIG_UPDATED=""
 
   case "$SHELL" in
     */zsh)
       add_bin_to_path "$HOME/.zshrc" || result=$?
+      [ $result -eq 0 ] && SHELL_CONFIG_UPDATED=".zshrc"
       ;;
     */bash)
       add_bin_to_path "$HOME/.bashrc" || result=$?
-      if [ $result -eq 1 ]; then
+      if [ $result -eq 0 ]; then
+        SHELL_CONFIG_UPDATED=".bashrc"
+      elif [ $result -eq 1 ]; then
         result=0
         add_bin_to_path "$HOME/.bash_profile" || result=$?
+        [ $result -eq 0 ] && SHELL_CONFIG_UPDATED=".bash_profile"
       fi
       ;;
     */fish)
@@ -369,6 +355,7 @@ configure_shell_bin_path() {
           echo "# Vite+ bin (https://viteplus.dev)" >> "$fish_config"
           echo "set -gx PATH $bin_path \$PATH" >> "$fish_config"
           result=0
+          SHELL_CONFIG_UPDATED="config.fish"
         fi
       fi
       ;;
@@ -480,69 +467,6 @@ cleanup_old_versions() {
   for old_version in $sorted_versions; do
     rm -rf "$old_version"
   done
-}
-
-# Setup PATH - try ~/.local/bin symlink first, fallback to shell profile
-# Returns via global variables:
-#   SYMLINK_CREATED - "true" if symlink was created, "false" otherwise
-#   SHELL_CONFIG_UPDATED - shell config file name if updated, empty otherwise
-#   PATH_ALREADY_CONFIGURED - "true" if PATH was already set up
-setup_path() {
-  local local_bin="$HOME/.local/bin"
-  local path_to_add="$INSTALL_DIR/current/bin"
-
-  SYMLINK_CREATED="false"
-  SHELL_CONFIG_UPDATED=""
-  PATH_ALREADY_CONFIGURED="false"
-
-  # Check if ~/.local/bin is in PATH
-  if echo "$PATH" | tr ':' '\n' | grep -qx "$local_bin"; then
-    # Create ~/.local/bin if it doesn't exist
-    mkdir -p "$local_bin"
-    # Create symlink (force overwrite if exists)
-    ln -sf "$INSTALL_DIR/current/bin/vp" "$local_bin/vp"
-    SYMLINK_CREATED="true"
-    return 0
-  fi
-
-  # Fall back to adding to shell profile
-  local path_result=0  # 0=added, 1=failed, 2=already exists
-
-  case "$SHELL" in
-    */zsh)
-      add_to_path "$HOME/.zshrc" || path_result=$?
-      [ $path_result -ne 1 ] && SHELL_CONFIG_UPDATED=".zshrc"
-      ;;
-    */bash)
-      add_to_path "$HOME/.bashrc" || path_result=$?
-      if [ $path_result -ne 1 ]; then
-        SHELL_CONFIG_UPDATED=".bashrc"
-      else
-        path_result=0
-        add_to_path "$HOME/.bash_profile" || path_result=$?
-        [ $path_result -ne 1 ] && SHELL_CONFIG_UPDATED=".bash_profile"
-      fi
-      ;;
-    */fish)
-      local fish_config="$HOME/.config/fish/config.fish"
-      if [ -f "$fish_config" ]; then
-        if grep -q "$path_to_add" "$fish_config" 2>/dev/null; then
-          path_result=2
-          SHELL_CONFIG_UPDATED="config.fish"
-        else
-          echo "" >> "$fish_config"
-          echo "# Added by vite-plus installer" >> "$fish_config"
-          echo "set -gx PATH $path_to_add \$PATH" >> "$fish_config"
-          path_result=0
-          SHELL_CONFIG_UPDATED="config.fish"
-        fi
-      fi
-      ;;
-  esac
-
-  if [ $path_result -eq 2 ]; then
-    PATH_ALREADY_CONFIGURED="true"
-  fi
 }
 
 main() {
@@ -678,21 +602,12 @@ main() {
   # Cleanup old versions
   cleanup_old_versions
 
-  # Setup PATH (sets SYMLINK_CREATED, SHELL_CONFIG_UPDATED, PATH_ALREADY_CONFIGURED)
-  setup_path
-
-  # Ask user if they want bin and set them up
+  # Setup bin PATH (sets SHIMS_PATH_ADDED)
   setup_bin_path "$BIN_DIR"
 
-  # Determine display location based on how PATH was configured
-  local display_location
-  if [ "$SYMLINK_CREATED" = "true" ]; then
-    display_location="~/.local/bin/vp"
-  else
-    # Use ~ shorthand if install dir is under HOME, otherwise show full path
-    local display_dir="${INSTALL_DIR/#$HOME/~}"
-    display_location="${display_dir}/current/bin"
-  fi
+  # Use ~ shorthand if install dir is under HOME, otherwise show full path
+  local display_dir="${INSTALL_DIR/#$HOME/~}"
+  local display_location="${display_dir}/bin"
 
   # Print success message
   echo ""
@@ -705,17 +620,13 @@ main() {
   if [ "$SHIMS_PATH_ADDED" = "true" ] || [ "$SHIMS_PATH_ADDED" = "already" ]; then
     echo ""
     echo "  Node.js manager: on"
-    # Show note about bin if added
-    if [ "$SHIMS_PATH_ADDED" = "true" ]; then
-      echo "  Restart your terminal and IDE, then run 'vp env doctor' to verify."
-    fi
   fi
 
   echo ""
   echo "  Next: Run 'vp help' to get started"
 
-  # Show note if shell config was updated (not symlink, not already configured)
-  if [ "$SYMLINK_CREATED" = "false" ] && [ -n "$SHELL_CONFIG_UPDATED" ] && [ "$PATH_ALREADY_CONFIGURED" = "false" ]; then
+  # Show restart note if PATH was added to shell config
+  if [ "$SHIMS_PATH_ADDED" = "true" ] && [ -n "$SHELL_CONFIG_UPDATED" ]; then
     echo ""
     echo "  Note: Run \`source ~/$SHELL_CONFIG_UPDATED\` or restart your terminal."
   fi
