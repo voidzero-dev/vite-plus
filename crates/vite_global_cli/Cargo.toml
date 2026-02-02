@@ -14,7 +14,6 @@ path = "src/main.rs"
 [dependencies]
 chrono = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
-directories = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
