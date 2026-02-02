@@ -190,51 +190,60 @@ function Cleanup-OldVersions {
     }
 }
 
-# Setup bin PATH - auto-enables if no node detected, otherwise prompts user
-# Returns: "true" = path added, "false" = not added, "already" = already configured
-function Setup-BinPath {
-    param([string]$BinDir)
-
+# Configure user PATH for ~/.vite-plus/bin
+# Returns: "true" = added, "already" = already configured
+function Configure-UserPath {
     $binPath = "$InstallDir\bin"
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 
-    # Check if already in PATH
     if ($userPath -like "*$binPath*") {
-        # Refresh bin if already configured
+        return "already"
+    }
+
+    $newPath = "$binPath;$userPath"
+    [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+    $env:Path = "$binPath;$env:Path"
+    return "true"
+}
+
+# Setup Node.js version manager (node/npm/npx shims)
+# Returns: "true" = enabled, "false" = not enabled, "already" = already configured
+function Setup-NodeManager {
+    param([string]$BinDir)
+
+    $binPath = "$InstallDir\bin"
+
+    # Check if Vite+ is already managing Node.js (bin\node.exe exists)
+    if (Test-Path "$binPath\node.exe") {
+        # Already managing Node.js, just refresh shims
         & "$BinDir\vp.exe" env setup --refresh | Out-Null
         return "already"
+    }
+
+    # Auto-enable on CI environment
+    if ($env:CI) {
+        & "$BinDir\vp.exe" env setup --refresh | Out-Null
+        return "true"
     }
 
     # Check if node is available on the system
     $nodeAvailable = $null -ne (Get-Command node -ErrorAction SilentlyContinue)
 
-    # Auto-enable bin if node is not available (no prompt needed)
+    # Auto-enable if no node available on system
     if (-not $nodeAvailable) {
         & "$BinDir\vp.exe" env setup --refresh | Out-Null
-
-        # Add bin to PATH (bin path must come BEFORE bin path for proper interception)
-        $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
-        $newPath = "$binPath;$currentPath"
-        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-        $env:Path = "$binPath;$env:Path"
         return "true"
     }
 
-    # Prompt user (only in interactive mode, not CI)
-    $isInteractive = [Environment]::UserInteractive -and -not $env:CI
+    # Prompt user in interactive mode
+    $isInteractive = [Environment]::UserInteractive
     if ($isInteractive) {
         Write-Host ""
         Write-Host "Would you want Vite+ to manage Node.js versions?"
-        $addBin = Read-Host "Press Enter to accept (Y/n)"
+        $response = Read-Host "Press Enter to accept (Y/n)"
 
-        if ($addBin -eq '' -or $addBin -eq 'y' -or $addBin -eq 'Y') {
+        if ($response -eq '' -or $response -eq 'y' -or $response -eq 'Y') {
             & "$BinDir\vp.exe" env setup --refresh | Out-Null
-
-            # Add bin to PATH
-            $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
-            $newPath = "$binPath;$currentPath"
-            [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-            $env:Path = "$binPath;$env:Path"
             return "true"
         }
     }
@@ -397,27 +406,23 @@ function Main {
     # Create new junction pointing to the version directory
     cmd /c mklink /J "$CurrentLink" "$VersionDir" | Out-Null
 
+    # Create bin directory and vp.cmd wrapper (always done)
+    New-Item -ItemType Directory -Force -Path "$InstallDir\bin" | Out-Null
+    $wrapperContent = @"
+@echo off
+"%~dp0..\current\bin\vp.exe" %*
+exit /b %ERRORLEVEL%
+"@
+    Set-Content -Path "$InstallDir\bin\vp.cmd" -Value $wrapperContent -NoNewline
+
     # Cleanup old versions
     Cleanup-OldVersions -InstallDir $InstallDir
 
-    # Update PATH
-    $pathToAdd = "$InstallDir\current\bin"
-    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    # Configure user PATH (always attempted)
+    $pathResult = Configure-UserPath
 
-    # Check if we need to update PATH
-    $needsPathUpdate = $true
-    if ($userPath -like "*$pathToAdd*") {
-        $needsPathUpdate = $false
-    }
-
-    if ($needsPathUpdate) {
-        $newPath = "$pathToAdd;$userPath"
-        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-        $env:Path = "$pathToAdd;$env:Path"
-    }
-
-    # Ask user if they want bin and set them up
-    $binResult = Setup-BinPath -BinDir $BinDir
+    # Setup Node.js version manager (shims) - separate component
+    $nodeManagerResult = Setup-NodeManager -BinDir $BinDir
 
     # Use ~ shorthand if install dir is under USERPROFILE, otherwise show full path
     $displayDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'
@@ -429,23 +434,19 @@ function Main {
     Write-Host ""
     Write-Host "  Version: $ViteVersion"
     Write-Host ""
-    Write-Host "  Location: $displayDir\current\bin"
+    Write-Host "  Location: $displayDir\bin"
 
     # Show Node.js manager status
-    if ($binResult -eq "true" -or $binResult -eq "already") {
+    if ($nodeManagerResult -eq "true" -or $nodeManagerResult -eq "already") {
         Write-Host ""
         Write-Host "  Node.js manager: on"
-        # Show note about bin if added
-        if ($binResult -eq "true") {
-            Write-Host "  Restart your terminal and IDE, then run 'vp env doctor' to verify."
-        }
     }
 
     Write-Host ""
-    Write-Host "  Next: Run 'vp help' to get started"
+    Write-Host "  Next: Run ``vp help`` to get started"
 
-    # Show note if PATH was updated (but bin were not added - that has its own message)
-    if ($needsPathUpdate -and $binResult -ne "true") {
+    # Show note if PATH was updated
+    if ($pathResult -eq "true") {
         Write-Host ""
         Write-Host "  Note: Restart your terminal and IDE for changes to take effect."
     }

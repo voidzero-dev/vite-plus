@@ -582,10 +582,12 @@ The global CLI installation script (`packages/global/install.sh`) will be update
 
 1. Install the `vp` binary to `~/.vite-plus/current/vp`
 2. Create symlink `~/.vite-plus/bin/vp` → `../current/vp`
-3. Run `vp env setup` to create shims (node, npm, npx hardlinks)
-4. Prompt user: "Would you want Vite+ to manage Node.js versions? Press Enter to accept (Y/n)"
-5. If yes (or Enter), prepend `~/.vite-plus/bin` to shell profile
-6. If already configured, skip silently
+3. Configure shell PATH to include `~/.vite-plus/bin`
+4. Setup Node.js version manager based on environment:
+   - **CI environment**: Auto-enable (no prompt)
+   - **No system Node.js**: Auto-enable (no prompt)
+   - **Interactive with system Node.js**: Prompt user "Would you want Vite+ to manage Node.js versions?"
+5. If already configured, skip silently
 
 ```bash
 $ curl -fsSL https://viteplus.dev/install.sh | sh
@@ -1199,9 +1201,11 @@ The Windows installer (`install.ps1`) follows the same flow:
 
 1. Download and install `vp.exe` to `~/.vite-plus/current/`
 2. Create `~/.vite-plus/bin/vp.cmd` wrapper script
-3. Run `vp env setup` to create shims (node.exe copy, npm.cmd, npx.cmd)
-4. Prompt user to add `~/.vite-plus/bin` to User PATH
-5. Update PATH via `[Environment]::SetEnvironmentVariable`
+3. Configure User PATH to include `~/.vite-plus/bin`
+4. Setup Node.js version manager based on environment:
+   - **CI environment**: Auto-enable (no prompt)
+   - **No system Node.js**: Auto-enable (no prompt)
+   - **Interactive with system Node.js**: Prompt user
 
 ## Testing Strategy
 

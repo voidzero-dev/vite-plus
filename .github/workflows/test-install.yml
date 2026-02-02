@@ -50,6 +50,9 @@ jobs:
             source ~/.zshrc
           elif [ -f ~/.bashrc ]; then
             source ~/.bashrc
+          else
+            ls -al ~/
+            export PATH="$HOME/.vite-plus/bin:$PATH"
           fi
           vp --version
           vp --help
@@ -78,6 +81,7 @@ jobs:
           # Verify vp env doctor works
           export PATH="$HOME/.vite-plus/bin:$PATH"
           vp env doctor
+          vp env run --node 24 -- node -p "process.versions"
 
   test-install-sh-arm64:
     name: Test install.sh (Linux ARM64 glibc via QEMU)
@@ -121,6 +125,7 @@ jobs:
               vp env doctor
 
               export VITE_LOG=trace
+              vp env run --node 24 -- node -p "process.versions"
               # FIXME: qemu: uncaught target signal 11 (Segmentation fault) - core dumped
               # vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
               # cd hello && vp run build
@@ -146,7 +151,7 @@ jobs:
         working-directory: ${{ runner.temp }}
         run: |
           # Refresh PATH from environment
-          $env:Path = "$env:USERPROFILE\.vite-plus\current\bin;$env:Path"
+          $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
           vp --version
           vp --help
           # $env:VITE_LOG = "trace"
@@ -176,5 +181,6 @@ jobs:
           }
 
           # Verify vp env doctor works
-          $env:Path = "$env:USERPROFILE\.vite-plus\current\bin;$env:Path"
+          $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
           vp env doctor
+          vp env run --node 24 -- node -p "process.versions"

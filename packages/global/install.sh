@@ -322,14 +322,20 @@ add_bin_to_path() {
   return 1
 }
 
-# Configure bin path for the current shell
-# Returns: 0 = path added, 1 = file not found, 2 = path already exists
-# Sets SHELL_CONFIG_UPDATED global variable with the config file name if updated
-configure_shell_bin_path() {
+# Configure shell PATH for ~/.vite-plus/bin
+# Sets PATH_CONFIGURED and SHELL_CONFIG_UPDATED globals
+configure_shell_path() {
   local bin_path="$INSTALL_DIR/bin"
-  local result=0
+  PATH_CONFIGURED="false"
   SHELL_CONFIG_UPDATED=""
 
+  # Check if already in PATH
+  if echo "$PATH" | tr ':' '\n' | grep -qx "$bin_path"; then
+    PATH_CONFIGURED="already"
+    return 0
+  fi
+
+  local result=0
   case "$SHELL" in
     */zsh)
       add_bin_to_path "$HOME/.zshrc" || result=$?
@@ -361,22 +367,33 @@ configure_shell_bin_path() {
       ;;
   esac
 
-  return $result
+  if [ $result -eq 0 ]; then
+    PATH_CONFIGURED="true"
+  elif [ $result -eq 2 ]; then
+    PATH_CONFIGURED="already"
+  fi
 }
 
-# Setup bin PATH - auto-enables if no node detected, otherwise prompts user
-# Sets SHIMS_PATH_ADDED global variable
-# Arguments: bin_dir - path to the bin directory containing vp
-setup_bin_path() {
+# Setup Node.js version manager (node/npm/npx shims)
+# Sets NODE_MANAGER_ENABLED global
+# Arguments: bin_dir - path to the version's bin directory containing vp
+setup_node_manager() {
   local bin_dir="$1"
   local bin_path="$INSTALL_DIR/bin"
-  SHIMS_PATH_ADDED="false"
+  NODE_MANAGER_ENABLED="false"
 
-  # Check if already in PATH
-  if echo "$PATH" | tr ':' '\n' | grep -qx "$bin_path"; then
-    # Refresh bin if already configured
+  # Check if Vite+ is already managing Node.js (bin/node exists)
+  if [ -e "$bin_path/node" ]; then
+    # Already managing Node.js, just refresh shims
     "$bin_dir/vp" env setup --refresh > /dev/null
-    SHIMS_PATH_ADDED="already"
+    NODE_MANAGER_ENABLED="already"
+    return 0
+  fi
+
+  # Auto-enable on CI environment
+  if [ -n "$CI" ]; then
+    "$bin_dir/vp" env setup --refresh > /dev/null
+    NODE_MANAGER_ENABLED="true"
     return 0
   fi
 
@@ -386,41 +403,23 @@ setup_bin_path() {
     node_available="true"
   fi
 
-  # Auto-enable bin if node is not available (no prompt needed)
+  # Auto-enable if no node available on system
   if [ "$node_available" = "false" ]; then
     "$bin_dir/vp" env setup --refresh > /dev/null
-
-    local path_result=0
-    configure_shell_bin_path || path_result=$?
-
-    if [ $path_result -eq 0 ]; then
-      SHIMS_PATH_ADDED="true"
-    elif [ $path_result -eq 2 ]; then
-      SHIMS_PATH_ADDED="already"
-    fi
+    NODE_MANAGER_ENABLED="true"
     return 0
   fi
 
-  # Prompt user (only in interactive mode, not CI)
-  # Check: not CI, /dev/tty exists (can read input), stdout is TTY (can show prompt)
-  if [ -z "$CI" ] && [ -e /dev/tty ] && [ -t 1 ]; then
+  # Prompt user in interactive mode
+  if [ -e /dev/tty ] && [ -t 1 ]; then
     echo ""
     echo "Would you want Vite+ to manage Node.js versions?"
-    # echo "This adds 'node', 'npm', and 'npx' bin to your PATH."
     echo -n "Press Enter to accept (Y/n): "
-    read -r add_bin < /dev/tty
+    read -r response < /dev/tty
 
-    if [ -z "$add_bin" ] || [ "$add_bin" = "y" ] || [ "$add_bin" = "Y" ]; then
+    if [ -z "$response" ] || [ "$response" = "y" ] || [ "$response" = "Y" ]; then
       "$bin_dir/vp" env setup --refresh > /dev/null
-
-      local path_result=0
-      configure_shell_bin_path || path_result=$?
-
-      if [ $path_result -eq 0 ]; then
-        SHIMS_PATH_ADDED="true"
-      elif [ $path_result -eq 2 ]; then
-        SHIMS_PATH_ADDED="already"
-      fi
+      NODE_MANAGER_ENABLED="true"
     fi
   fi
 }
@@ -599,11 +598,18 @@ main() {
   # Create/update current symlink (use relative path for portability)
   ln -sfn "$VITE_PLUS_VERSION" "$CURRENT_LINK"
 
+  # Create bin directory and vp symlink (always done)
+  mkdir -p "$INSTALL_DIR/bin"
+  ln -sf "../current/bin/vp" "$INSTALL_DIR/bin/vp"
+
   # Cleanup old versions
   cleanup_old_versions
 
-  # Setup bin PATH (sets SHIMS_PATH_ADDED)
-  setup_bin_path "$BIN_DIR"
+  # Configure shell PATH (always attempted)
+  configure_shell_path
+
+  # Setup Node.js version manager (shims) - separate component
+  setup_node_manager "$BIN_DIR"
 
   # Use ~ shorthand if install dir is under HOME, otherwise show full path
   local display_dir="${INSTALL_DIR/#$HOME/~}"
@@ -617,16 +623,16 @@ main() {
   echo ""
   echo "  Location: ${display_location}"
 
-  if [ "$SHIMS_PATH_ADDED" = "true" ] || [ "$SHIMS_PATH_ADDED" = "already" ]; then
+  if [ "$NODE_MANAGER_ENABLED" = "true" ] || [ "$NODE_MANAGER_ENABLED" = "already" ]; then
     echo ""
     echo "  Node.js manager: on"
   fi
 
   echo ""
-  echo "  Next: Run 'vp help' to get started"
+  echo "  Next: Run \`vp help\` to get started"
 
   # Show restart note if PATH was added to shell config
-  if [ "$SHIMS_PATH_ADDED" = "true" ] && [ -n "$SHELL_CONFIG_UPDATED" ]; then
+  if [ "$PATH_CONFIGURED" = "true" ] && [ -n "$SHELL_CONFIG_UPDATED" ]; then
     echo ""
     echo "  Note: Run \`source ~/$SHELL_CONFIG_UPDATED\` or restart your terminal."
   fi
