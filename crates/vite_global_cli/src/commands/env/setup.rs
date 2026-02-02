@@ -1,11 +1,11 @@
 //! Setup command implementation for creating bin directory and shims.
 //!
 //! Creates the following structure:
-//! - ~/.vite-plus/bin/     - Contains vp wrapper and node/npm/npx shims
+//! - ~/.vite-plus/bin/     - Contains vp symlink and node/npm/npx shims
 //! - ~/.vite-plus/current/ - Symlink to the installed version directory
 //!
-//! On Unix: bin/vp is a wrapper script that calls current/bin/vp
-//! On Windows: bin/vp.cmd is a wrapper script that calls current\bin\vp.exe
+//! On Unix: bin/vp is a symlink to ../current/bin/vp
+//! On Windows: bin/vp.cmd is a wrapper script that calls ..\current\bin\vp.exe
 
 use std::process::ExitStatus;
 
@@ -71,33 +71,25 @@ pub async fn execute(refresh: bool) -> Result<ExitStatus, Error> {
     Ok(ExitStatus::default())
 }
 
-/// Create wrapper script in bin/ that calls current/bin/vp.
+/// Create symlink in bin/ that points to current/bin/vp.
 async fn setup_vp_wrapper(bin_dir: &vite_path::AbsolutePath, refresh: bool) -> Result<(), Error> {
     #[cfg(unix)]
     {
         let bin_vp = bin_dir.join("vp");
 
-        // Create wrapper script bin/vp that calls current/bin/vp
-        let should_create_wrapper = refresh
+        // Create symlink bin/vp -> ../current/bin/vp
+        let should_create_symlink = refresh
             || !tokio::fs::try_exists(&bin_vp).await.unwrap_or(false)
-            || is_symlink(&bin_vp).await; // Replace symlink with wrapper
+            || !is_symlink(&bin_vp).await; // Replace non-symlink with symlink
 
-        if should_create_wrapper {
-            // Remove existing if present (could be old symlink or file)
+        if should_create_symlink {
+            // Remove existing if present (could be old wrapper script or file)
             if tokio::fs::try_exists(&bin_vp).await.unwrap_or(false) {
                 tokio::fs::remove_file(&bin_vp).await?;
             }
-            // Create wrapper shell script with absolute path
-            let wrapper_content = r#"#!/bin/sh
-VITE_PLUS_HOME="$(cd "$(dirname "$0")/.." && pwd)"
-exec "$VITE_PLUS_HOME/current/bin/vp" "$@"
-"#;
-            tokio::fs::write(&bin_vp, wrapper_content).await?;
-            // Make executable
-            use std::os::unix::fs::PermissionsExt;
-            let perms = std::fs::Permissions::from_mode(0o755);
-            tokio::fs::set_permissions(&bin_vp, perms).await?;
-            tracing::debug!("Created wrapper script {:?}", bin_vp);
+            // Create relative symlink
+            tokio::fs::symlink("../current/bin/vp", &bin_vp).await?;
+            tracing::debug!("Created symlink {:?} -> ../current/bin/vp", bin_vp);
         }
     }
 
