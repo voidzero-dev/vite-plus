@@ -12,8 +12,8 @@ use std::process::ExitStatus;
 use super::config::{get_bin_dir, get_current_dir, get_vite_plus_home};
 use crate::error::Error;
 
-/// Tools to create shims for (node, npm, npx, yarn)
-const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "yarn"];
+/// Tools to create shims for (node, npm, npx)
+const SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
 
 /// Execute the setup command.
 pub async fn execute(refresh: bool) -> Result<ExitStatus, Error> {
