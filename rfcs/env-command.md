@@ -144,6 +144,29 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
+│                           PATH CONFIGURATION                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  User's PATH (after setup):                                                 │
+│                                                                             │
+│    PATH="~/.vite-plus/bin:/usr/local/bin:/usr/bin:..."                      │
+│           ▲                                                                 │
+│           │                                                                 │
+│           └── First in PATH = shims intercept node/npm/npx commands         │
+│                                                                             │
+│  When user runs `node`:                                                     │
+│                                                                             │
+│    $ node app.js                                                            │
+│        │                                                                    │
+│        ▼                                                                    │
+│    Shell searches PATH left-to-right:                                       │
+│        1. ~/.vite-plus/bin/node  ✓ Found! (shim)                            │
+│        2. /usr/local/bin/node    (skipped)                                  │
+│        3. /usr/bin/node          (skipped)                                  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
 │                           SHIM DISPATCH FLOW                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
@@ -151,7 +174,7 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 │                  │                                                          │
 │                  ▼                                                          │
 │  ┌──────────────────────────────┐                                           │
-│  │  ~/.vite-plus/bin/node       │  ◄── Hardlink to vp binary                │
+│  │  ~/.vite-plus/bin/node       │  ◄── Hardlink to vp binary (via PATH)     │
 │  │  (shim intercepts command)   │                                           │
 │  └──────────────┬───────────────┘                                           │
 │                 │                                                           │
