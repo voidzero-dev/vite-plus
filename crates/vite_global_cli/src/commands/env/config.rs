@@ -77,11 +77,6 @@ pub fn get_tmp_dir() -> Result<AbsolutePathBuf, Error> {
     Ok(get_vite_plus_home()?.join("tmp"))
 }
 
-/// Get the current directory path (where the actual vp binary lives).
-pub fn get_current_dir() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vite_plus_home()?.join("current"))
-}
-
 /// Get the config file path.
 pub fn get_config_path() -> Result<AbsolutePathBuf, Error> {
     Ok(get_vite_plus_home()?.join(CONFIG_FILE))
