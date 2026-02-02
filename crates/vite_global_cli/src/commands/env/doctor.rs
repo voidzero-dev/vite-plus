@@ -274,7 +274,7 @@ fn print_path_fix(bin_dir: &vite_path::AbsolutePath) {
 }
 
 /// Print IDE setup guidance for GUI applications.
-fn print_ide_setup_guidance(bin_dir: &vite_path::AbsolutePath) {
+fn print_ide_setup_guidance(_bin_dir: &vite_path::AbsolutePath) {
     println!();
     println!("IDE Setup (for VS Code, Cursor, and other GUI apps):");
     println!("  GUI applications may not see shell PATH changes.");
@@ -285,7 +285,7 @@ fn print_ide_setup_guidance(bin_dir: &vite_path::AbsolutePath) {
         println!("  macOS:");
         println!("    Option 1: Add to ~/.profile (works for most apps after restart)");
         println!("    Option 2: Use launchctl to set PATH for all GUI apps:");
-        println!("      launchctl setenv PATH \"{}:$PATH\"", bin_dir.as_path().display());
+        println!("      launchctl setenv PATH \"{}:$PATH\"", _bin_dir.as_path().display());
         println!();
     }
 

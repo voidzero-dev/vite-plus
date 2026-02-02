@@ -222,11 +222,12 @@ async fn create_package_shim(
     bin_name: &str,
     _package_name: &str,
 ) -> Result<(), Error> {
-    let current_exe = std::env::current_exe()
-        .map_err(|e| Error::ConfigError(format!("Cannot find current executable: {}", e).into()))?;
-
     #[cfg(unix)]
     {
+        let current_exe = std::env::current_exe().map_err(|e| {
+            Error::ConfigError(format!("Cannot find current executable: {e}").into())
+        })?;
+
         let shim_path = bin_dir.join(bin_name);
 
         // Skip if already exists (might be a core shim like node/npm/npx)
