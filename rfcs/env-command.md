@@ -1203,6 +1203,8 @@ env-doctor/
 5. Implement global package interception for npm
 6. Implement package metadata storage
 7. Implement per-package binary shims
+8. Implement `vp env packages` to list installed global packages
+9. Implement `vp env uninstall <package>` command
 
 ### Phase 3: Polish (P2)
 
@@ -1212,12 +1214,11 @@ env-doctor/
 4. Add IDE-specific setup guidance
 5. Documentation
 
-### Phase 4: Global Package Management (P3)
+### Phase 4: Future Enhancements (P3)
 
-1. Implement global package interception for yarn
-2. Implement `vp env uninstall <package>` command
-3. Implement `vp env packages` to list installed global packages
-4. NODE_PATH setup for shared package resolution
+1. NODE_PATH setup for shared package resolution
+2. Yarn global package interception (`yarn global add/remove`)
+3. pnpm global package interception (`pnpm add -g`)
 
 ## Backward Compatibility
 
