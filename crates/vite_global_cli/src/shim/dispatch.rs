@@ -38,9 +38,9 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         return bypass_to_system(tool, args);
     }
 
-    // Check for global package install interception (npm and yarn)
-    if (tool == "npm" || tool == "yarn") && std::env::var("VITE_PLUS_UNSAFE_GLOBAL").is_err() {
-        if let Some(result) = check_global_install(tool, args).await {
+    // Check for global package install interception (npm only)
+    if tool == "npm" && std::env::var("VITE_PLUS_UNSAFE_GLOBAL").is_err() {
+        if let Some(result) = check_global_install(args).await {
             return result;
         }
     }
@@ -409,16 +409,7 @@ fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
 
 /// Check if this is a global install command and handle it.
 /// Returns Some(exit_code) if handled, None to continue normal dispatch.
-async fn check_global_install(tool: &str, args: &[String]) -> Option<i32> {
-    match tool {
-        "npm" => check_npm_global_install(args).await,
-        "yarn" => check_yarn_global_install(args).await,
-        _ => None,
-    }
-}
-
-/// Check for npm global install/uninstall commands.
-async fn check_npm_global_install(args: &[String]) -> Option<i32> {
+async fn check_global_install(args: &[String]) -> Option<i32> {
     // Parse npm command to detect global install
     // npm install -g <package>
     // npm i -g <package>
@@ -453,47 +444,6 @@ async fn check_npm_global_install(args: &[String]) -> Option<i32> {
 
     if packages.is_empty() {
         eprintln!("vp: No package specified for npm global {}", command.unwrap());
-        return Some(1);
-    }
-
-    match command.unwrap() {
-        "install" => Some(handle_global_install(&packages).await),
-        "uninstall" => Some(handle_global_uninstall(&packages).await),
-        _ => None,
-    }
-}
-
-/// Check for yarn global add/remove commands.
-async fn check_yarn_global_install(args: &[String]) -> Option<i32> {
-    // yarn global add <package>
-    // yarn global remove <package>
-
-    let mut is_global = false;
-    let mut command: Option<&str> = None;
-    let mut packages: Vec<String> = Vec::new();
-
-    let mut i = 0;
-    while i < args.len() {
-        let arg = &args[i];
-        match arg.as_str() {
-            "global" => is_global = true,
-            "add" if is_global => command = Some("install"),
-            "remove" if is_global => command = Some("uninstall"),
-            _ if !arg.starts_with('-') && command.is_some() => {
-                // This is a package name (could be package@version)
-                packages.push(arg.clone());
-            }
-            _ => {}
-        }
-        i += 1;
-    }
-
-    if !is_global || command.is_none() {
-        return None; // Not a global command, continue normal dispatch
-    }
-
-    if packages.is_empty() {
-        eprintln!("vp: No package specified for yarn global {}", command.unwrap());
         return Some(1);
     }
 

@@ -1,7 +1,7 @@
-//! Shim module for intercepting node, npm, npx, yarn, and package binary commands.
+//! Shim module for intercepting node, npm, npx, and package binary commands.
 //!
 //! This module provides the functionality for the vp binary to act as a shim
-//! when invoked as `node`, `npm`, `npx`, `yarn`, or any globally installed package binary.
+//! when invoked as `node`, `npm`, `npx`, or any globally installed package binary.
 //! It detects the invocation mode via argv[0] or the VITE_PLUS_SHIM_TOOL environment variable.
 
 mod cache;
@@ -10,8 +10,8 @@ mod exec;
 
 pub use dispatch::dispatch;
 
-/// Core shim tools (node, npm, npx, yarn)
-pub const CORE_SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "yarn"];
+/// Core shim tools (node, npm, npx)
+pub const CORE_SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
 
 /// Extract the tool name from argv[0].
 ///
@@ -29,7 +29,7 @@ pub fn extract_tool_name(argv0: &str) -> String {
     stem.to_lowercase()
 }
 
-/// Check if the given tool name is a core shim tool (node/npm/npx/yarn).
+/// Check if the given tool name is a core shim tool (node/npm/npx).
 #[must_use]
 pub fn is_core_shim_tool(tool: &str) -> bool {
     CORE_SHIM_TOOLS.contains(&tool)
@@ -38,7 +38,7 @@ pub fn is_core_shim_tool(tool: &str) -> bool {
 /// Check if the given tool name is a shim tool (core or package binary).
 ///
 /// This is a quick check that returns true if:
-/// 1. The tool is a core shim (node/npm/npx/yarn), OR
+/// 1. The tool is a core shim (node/npm/npx), OR
 /// 2. The tool name is not "vp" (package binaries are detected later via metadata)
 #[must_use]
 pub fn is_shim_tool(tool: &str) -> bool {
@@ -126,7 +126,7 @@ mod tests {
         assert!(is_core_shim_tool("node"));
         assert!(is_core_shim_tool("npm"));
         assert!(is_core_shim_tool("npx"));
-        assert!(is_core_shim_tool("yarn"));
+        assert!(!is_core_shim_tool("yarn")); // yarn is not a core shim tool
         assert!(!is_core_shim_tool("vp"));
         assert!(!is_core_shim_tool("cargo"));
         assert!(!is_core_shim_tool("tsc")); // Package binary, not core
@@ -135,7 +135,6 @@ mod tests {
         assert!(is_shim_tool("node"));
         assert!(is_shim_tool("npm"));
         assert!(is_shim_tool("npx"));
-        assert!(is_shim_tool("yarn"));
         assert!(!is_shim_tool("vp")); // vp is never a shim
     }
 }
