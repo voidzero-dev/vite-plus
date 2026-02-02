@@ -14,7 +14,8 @@
 
 set -e
 
-VITE_PLUS_VERSION="${VITE_PLUS_VERSION:-latest}"
+# FIXME: change to test for now
+VITE_PLUS_VERSION="${VITE_PLUS_VERSION:-test}"
 INSTALL_DIR="${VITE_PLUS_HOME:-$HOME/.vite-plus}"
 # npm registry URL (strip trailing slash if present)
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
