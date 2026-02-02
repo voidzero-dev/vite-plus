@@ -99,6 +99,25 @@ vp env list --lts     # Show only LTS versions
 vp env list 20        # Show versions matching pattern
 ```
 
+### Global Package Commands
+
+```bash
+# Install a global package
+vp env install typescript
+vp env install typescript@5.0.0
+
+# Install with specific Node.js version
+vp env install --node 22 typescript
+vp env install --node lts typescript
+
+# List installed global packages
+vp env packages
+vp env packages --json
+
+# Uninstall a global package
+vp env uninstall typescript
+```
+
 ### Daily Usage (After Setup)
 
 ```bash
@@ -175,12 +194,11 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 │  │   ├── npm  ──────────────────────┼──▶ Hardlinks to vp binary             │
 │  │   └── npx  ──────────────────────┘                                       │
 │  ├── current/vp                       The actual vp CLI binary              │
+│  ├── js_runtime/node/                 Node.js installations                 │
+│  │   ├── 20.18.0/bin/node             Installed Node.js versions            │
+│  │   ├── 22.13.0/bin/node                                                   │
+│  │   └── ...                                                                │
 │  └── config.json                      User settings (default version, etc.) │
-│                                                                             │
-│  $VITE_PLUS_HOME/js_runtime/node/     (Node.js installations)               │
-│      ├── 20.18.0/bin/node             Installed Node.js versions            │
-│      ├── 22.13.0/bin/node                                                   │
-│      └── ...                                                                │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 
@@ -899,11 +917,32 @@ When running `tsc`:
 4. Sets NODE_PATH to include shared packages
 5. Executes `~/.vite-plus/packages/typescript/lib/node_modules/.bin/tsc`
 
+### Direct Installation via CLI
+
+You can also install global packages directly using `vp env install`:
+
+```bash
+# Install a global package (uses Node.js version from current directory)
+vp env install typescript
+
+# Install with a specific Node.js version
+vp env install --node 22 typescript
+vp env install --node 20.18.0 typescript
+vp env install --node lts typescript
+
+# Install multiple packages
+vp env install typescript eslint prettier
+```
+
+The `--node` flag allows you to specify which Node.js version to use for installation. If not provided, it resolves the version from the current directory (same as shim behavior).
+
 ### Upgrade and Uninstall
 
 ```bash
 # Upgrade replaces the existing package
 npm install -g typescript@latest
+# Or via vite-plus:
+vp env install typescript@latest
 
 # Uninstall removes package and shims
 npm uninstall -g typescript
@@ -1215,6 +1254,7 @@ env-doctor/
 7. Implement per-package binary shims
 8. Implement `vp env packages` to list installed global packages
 9. Implement `vp env uninstall <package>` command
+10. Implement `vp env install <package>` command with `--node` flag
 
 ### Phase 3: Polish (P2)
 

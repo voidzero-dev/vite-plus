@@ -3,6 +3,7 @@
 use std::process::Stdio;
 
 use tokio::process::Command;
+use vite_js_runtime::NodeProvider;
 use vite_path::AbsolutePathBuf;
 
 use super::{
@@ -12,26 +13,37 @@ use super::{
 use crate::error::Error;
 
 /// Install a global package.
-pub async fn install(package_spec: &str) -> Result<(), Error> {
+///
+/// If `node_version` is provided, uses that version. Otherwise, resolves from current directory.
+pub async fn install(package_spec: &str, node_version: Option<&str>) -> Result<(), Error> {
     // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
     let (package_name, _version_spec) = parse_package_spec(package_spec);
 
     println!("  Installing {} globally...", package_spec);
 
-    // 1. Resolve current Node.js version
-    let cwd = std::env::current_dir()
-        .map_err(|e| Error::ConfigError(format!("Cannot get current directory: {}", e).into()))?;
-    let cwd = AbsolutePathBuf::new(cwd)
-        .ok_or_else(|| Error::ConfigError("Invalid current directory".into()))?;
-
-    let resolution = resolve_version(&cwd).await?;
+    // 1. Resolve Node.js version
+    let version = if let Some(v) = node_version {
+        // Resolve the provided version to an exact version
+        let provider = NodeProvider::new();
+        if NodeProvider::is_exact_version(v) {
+            v.to_string()
+        } else {
+            provider.resolve_version(v).await?.to_string()
+        }
+    } else {
+        // Resolve from current directory
+        let cwd = std::env::current_dir().map_err(|e| {
+            Error::ConfigError(format!("Cannot get current directory: {}", e).into())
+        })?;
+        let cwd = AbsolutePathBuf::new(cwd)
+            .ok_or_else(|| Error::ConfigError("Invalid current directory".into()))?;
+        let resolution = resolve_version(&cwd).await?;
+        resolution.version
+    };
 
     // 2. Ensure Node.js is installed
-    let runtime = vite_js_runtime::download_runtime(
-        vite_js_runtime::JsRuntimeType::Node,
-        &resolution.version,
-    )
-    .await?;
+    let runtime =
+        vite_js_runtime::download_runtime(vite_js_runtime::JsRuntimeType::Node, &version).await?;
 
     let node_bin_dir = runtime.get_bin_prefix();
     let npm_path =
@@ -110,7 +122,7 @@ pub async fn install(package_spec: &str) -> Result<(), Error> {
     let metadata = PackageMetadata::new(
         package_name.clone(),
         installed_version.clone(),
-        resolution.version.clone(),
+        version.clone(),
         None, // npm version - could extract from runtime
         bins.clone(),
         "npm".to_string(),
@@ -216,12 +228,24 @@ fn extract_binaries(package_json: &serde_json::Value) -> Vec<String> {
     bins
 }
 
+/// Core shims that should not be overwritten by package binaries.
+const CORE_SHIMS: &[&str] = &["node", "npm", "npx", "vp"];
+
 /// Create a shim for a package binary.
 async fn create_package_shim(
     bin_dir: &vite_path::AbsolutePath,
     bin_name: &str,
-    _package_name: &str,
+    package_name: &str,
 ) -> Result<(), Error> {
+    // Check for conflicts with core shims
+    if CORE_SHIMS.contains(&bin_name) {
+        println!(
+            "  Warning: Package '{}' provides '{}' binary, but it conflicts with a core shim. Skipping.",
+            package_name, bin_name
+        );
+        return Ok(());
+    }
+
     #[cfg(unix)]
     {
         let current_exe = std::env::current_exe().map_err(|e| {
@@ -230,7 +254,7 @@ async fn create_package_shim(
 
         let shim_path = bin_dir.join(bin_name);
 
-        // Skip if already exists (might be a core shim like node/npm/npx)
+        // Skip if already exists (e.g., re-installing the same package)
         if tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
             return Ok(());
         }
@@ -246,6 +270,7 @@ async fn create_package_shim(
     {
         let shim_path = bin_dir.join(format!("{}.cmd", bin_name));
 
+        // Skip if already exists (e.g., re-installing the same package)
         if tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
             return Ok(());
         }
@@ -267,7 +292,7 @@ async fn remove_package_shim(
     bin_name: &str,
 ) -> Result<(), Error> {
     // Don't remove core shims
-    if matches!(bin_name, "node" | "npm" | "npx" | "vp") {
+    if CORE_SHIMS.contains(&bin_name) {
         return Ok(());
     }
 

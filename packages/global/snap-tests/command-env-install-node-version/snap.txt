@@ -1,0 +1,29 @@
+> vp env install --node 22 ./test-pkg # Install with Node.js 22
+  Installing ./test-pkg globally...
+  Running npm install...
+
+added 1 package in <variable>ms
+  Installed ./test-pkg v<semver>
+  Binaries: test-cli
+
+> vp env packages --json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d[0].platform.node.split('.')[0])" # Verify Node 22
+Node major: 22
+
+> vp env uninstall test-pkg # Cleanup
+  Uninstalling test-pkg...
+  Uninstalled test-pkg
+
+> vp env install --node 20 ./test-pkg # Install with Node.js 20
+  Installing ./test-pkg globally...
+  Running npm install...
+
+added 1 package in <variable>ms
+  Installed ./test-pkg v<semver>
+  Binaries: test-cli
+
+> vp env packages --json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d[0].platform.node.split('.')[0])" # Verify Node 20
+Node major: 20
+
+> vp env uninstall test-pkg # Cleanup
+  Uninstalling test-pkg...
+  Uninstalled test-pkg

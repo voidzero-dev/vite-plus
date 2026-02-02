@@ -1,0 +1,11 @@
+{
+  "env": {},
+  "commands": [
+    "vp env install --node 22 ./test-pkg # Install with Node.js 22",
+    "vp env packages --json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d[0].platform.node.split('.')[0])\" # Verify Node 22",
+    "vp env uninstall test-pkg # Cleanup",
+    "vp env install --node 20 ./test-pkg # Install with Node.js 20",
+    "vp env packages --json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d[0].platform.node.split('.')[0])\" # Verify Node 20",
+    "vp env uninstall test-pkg # Cleanup"
+  ]
+}
