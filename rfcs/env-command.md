@@ -257,15 +257,15 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 
 **Key Directories:**
 
-| Directory | Purpose |
-|-----------|---------|
-| `bin/` | vp symlink and all shims (node, npm, npx, global package binaries) |
-| `current/` | The actual vp CLI binary (bin/vp symlinks here) |
-| `js_runtime/node/` | Installed Node.js versions |
-| `packages/` | Installed global packages with metadata |
-| `shared/` | NODE_PATH symlinks for package require() resolution |
-| `tmp/` | Staging area for atomic installations |
-| `cache/` | Resolution cache |
+| Directory          | Purpose                                                            |
+| ------------------ | ------------------------------------------------------------------ |
+| `bin/`             | vp symlink and all shims (node, npm, npx, global package binaries) |
+| `current/`         | The actual vp CLI binary (bin/vp symlinks here)                    |
+| `js_runtime/node/` | Installed Node.js versions                                         |
+| `packages/`        | Installed global packages with metadata                            |
+| `shared/`          | NODE_PATH symlinks for package require() resolution                |
+| `tmp/`             | Staging area for atomic installations                              |
+| `cache/`           | Resolution cache                                                   |
 
 ### config.json Format
 
@@ -345,12 +345,14 @@ To prevent infinite loops when shims invoke other shims, vite-plus uses an envir
 **Environment Variable**: `VITE_PLUS_TOOL_RECURSION`
 
 **Mechanism:**
+
 1. When a shim executes the real binary, it sets `VITE_PLUS_TOOL_RECURSION=1`
 2. Subsequent shim invocations check this variable
 3. If set, shims use **passthrough mode** (skip version resolution, use current PATH)
 4. `vp env run` explicitly **removes** this variable to force re-evaluation
 
 **Flow Diagram:**
+
 ```
 User runs: node app.js
     │
@@ -363,6 +365,7 @@ Shim checks VITE_PLUS_TOOL_RECURSION
 ```
 
 **Code Example:**
+
 ```rust
 const RECURSION_ENV_VAR: &str = "VITE_PLUS_TOOL_RECURSION";
 
@@ -390,6 +393,7 @@ fn execute_run_command() {
 ```
 
 **Why This Matters:**
+
 - Prevents infinite loops when Node scripts spawn other Node processes
 - Allows `vp env run` to override versions mid-execution
 - Ensures consistent behavior in complex process trees
@@ -538,8 +542,8 @@ The global CLI installation script (`packages/global/install.sh`) will be update
 1. Install the `vp` binary to `~/.vite-plus/current/vp`
 2. Create symlink `~/.vite-plus/bin/vp` → `../current/vp`
 3. Run `vp env setup` to create shims (node, npm, npx hardlinks)
-4. Prompt user: "Would you like to add vite-plus to your PATH? (y/n)"
-5. If yes and not already configured, prepend `~/.vite-plus/bin` to shell profile
+4. Prompt user: "Would you want Vite+ to manage Node.js versions? Press Enter to accept (Y/n)"
+5. If yes (or Enter), prepend `~/.vite-plus/bin` to shell profile
 6. If already configured, skip silently
 
 ```bash
@@ -554,7 +558,8 @@ Setting up VITE+(⚡)...
 
   ✓ Created shims (node, npm, npx) in ~/.vite-plus/bin
 
-Would you like to add vite-plus to your PATH? (y/n): y
+Would you want Vite+ to manage Node.js versions?
+Press Enter to accept (Y/n):
   ✓ Added to ~/.zshrc
 
 Restart your terminal and IDE, then run 'vp env doctor' to verify.
@@ -835,6 +840,7 @@ vite-plus intercepts global package installations (`npm install -g`, `npm i -g`,
 ### How It Works
 
 When you run `npm install -g typescript`, vite-plus:
+
 1. Detects the global install via argument parsing
 2. Redirects installation to `~/.vite-plus/packages/typescript/`
 3. Records metadata (package version, Node version used, binaries)
@@ -868,6 +874,7 @@ On success:
 ### Package Configuration File
 
 `~/.vite-plus/packages/typescript.json`:
+
 ```json
 {
   "name": "typescript",
@@ -885,6 +892,7 @@ On success:
 ### Binary Execution
 
 When running `tsc`:
+
 1. Shim reads `~/.vite-plus/packages/typescript.json`
 2. Loads the pinned platform (Node 20.18.0)
 3. Constructs PATH with that Node version's bin directory
@@ -906,6 +914,7 @@ vp env uninstall typescript
 ### Environment Variable: VITE_PLUS_UNSAFE_GLOBAL
 
 Set `VITE_PLUS_UNSAFE_GLOBAL=1` to bypass global package interception:
+
 ```bash
 VITE_PLUS_UNSAFE_GLOBAL=1 npm install -g typescript
 # Installs to system npm global location
@@ -914,6 +923,7 @@ VITE_PLUS_UNSAFE_GLOBAL=1 npm install -g typescript
 ## Run Command
 
 The `vp env run` command executes a command with a specific Node.js version, useful for:
+
 - Testing code against different Node versions
 - Running one-off commands without changing project configuration
 - CI/CD scripts that need explicit version control
@@ -939,10 +949,10 @@ vp env run --node 20 -- node --inspect app.js
 
 ### Flags
 
-| Flag | Description |
-|------|-------------|
-| `--node <version>` | Node.js version to use (required or from project) |
-| `--npm <version>` | npm version to use (optional, defaults to bundled) |
+| Flag               | Description                                        |
+| ------------------ | -------------------------------------------------- |
+| `--node <version>` | Node.js version to use (required or from project)  |
+| `--npm <version>`  | npm version to use (optional, defaults to bundled) |
 
 ### Behavior
 
@@ -1068,14 +1078,14 @@ $ vp env --current --json
 
 ## Environment Variables
 
-| Variable                   | Description                            | Default        |
-| -------------------------- | -------------------------------------- | -------------- |
-| `VITE_PLUS_HOME`           | Base directory for bin and config      | `~/.vite-plus` |
-| `VITE_PLUS_LOG`            | Log level: debug, info, warn, error    | `warn`         |
-| `VITE_PLUS_DEBUG_SHIM`     | Enable extra shim diagnostics          | unset          |
-| `VITE_PLUS_BYPASS`         | Bypass shim and use system node        | unset          |
-| `VITE_PLUS_TOOL_RECURSION` | **Internal**: Prevents shim recursion  | unset          |
-| `VITE_PLUS_UNSAFE_GLOBAL`  | Bypass global package interception     | unset          |
+| Variable                   | Description                           | Default        |
+| -------------------------- | ------------------------------------- | -------------- |
+| `VITE_PLUS_HOME`           | Base directory for bin and config     | `~/.vite-plus` |
+| `VITE_PLUS_LOG`            | Log level: debug, info, warn, error   | `warn`         |
+| `VITE_PLUS_DEBUG_SHIM`     | Enable extra shim diagnostics         | unset          |
+| `VITE_PLUS_BYPASS`         | Bypass shim and use system node       | unset          |
+| `VITE_PLUS_TOOL_RECURSION` | **Internal**: Prevents shim recursion | unset          |
+| `VITE_PLUS_UNSAFE_GLOBAL`  | Bypass global package interception    | unset          |
 
 ## Windows-Specific Considerations
 
