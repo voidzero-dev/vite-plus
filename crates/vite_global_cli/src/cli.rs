@@ -701,6 +701,18 @@ pub enum EnvSubcommands {
         #[arg(required = true)]
         packages: Vec<String>,
     },
+
+    /// Install a global package
+    Install {
+        /// Node.js version to use for installation (e.g., "20.18.0", "lts", "^20.0.0")
+        /// If not provided, uses the resolved version from current directory
+        #[arg(long)]
+        node: Option<String>,
+
+        /// Package spec(s) to install (e.g., "typescript", "typescript@5.0.0")
+        #[arg(required = true)]
+        packages: Vec<String>,
+    },
 }
 
 /// Package manager subcommands

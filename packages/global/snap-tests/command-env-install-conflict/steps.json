@@ -1,0 +1,9 @@
+{
+  "env": {},
+  "commands": [
+    "vp env install ./conflict-pkg # Install package with conflicting binary name (uses cwd version)",
+    "vp env uninstall conflict-pkg # Cleanup",
+    "vp env install --node 20 ./conflict-pkg # Install with specific Node.js version",
+    "vp env uninstall conflict-pkg # Cleanup"
+  ]
+}

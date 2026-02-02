@@ -60,6 +60,15 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
                 }
                 Ok(ExitStatus::default())
             }
+            crate::cli::EnvSubcommands::Install { node, packages } => {
+                for package in &packages {
+                    if let Err(e) = global_install::install(package, node.as_deref()).await {
+                        eprintln!("Failed to install {}: {}", package, e);
+                        return Ok(exit_status(1));
+                    }
+                }
+                Ok(ExitStatus::default())
+            }
         };
     }
 
@@ -93,6 +102,7 @@ fn print_help() {
     println!("  list [PATTERN]     List available Node.js versions");
     println!("  run --node <VER>   Run a command with a specific Node.js version");
     println!("  packages           List installed global packages");
+    println!("  install <package>  Install a global package (--node to specify version)");
     println!("  uninstall <package>  Uninstall a global package");
     println!();
     println!("Options:");

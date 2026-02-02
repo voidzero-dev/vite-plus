@@ -104,6 +104,12 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/"integrity": "(\w+)-.+?"/g, '"integrity": "$1-<hash>"')
       // replace homedir; e.g.: /Users/foo/Library/pnpm/global/5/node_modules/testnpm2 => <homedir>/Library/pnpm/global/5/node_modules/testnpm2
       .replaceAll(homedir(), '<homedir>')
+      // replace npm log file path with timestamp
+      // e.g.: <homedir>/.npm/_logs/2026-02-02T05_38_04_267Z-debug-0.log => <homedir>/.npm/_logs/<timestamp>-debug.log
+      .replaceAll(
+        /(<homedir>\/\.npm\/_logs\/)\d{4}-\d{2}-\d{2}T\d{2}_\d{2}_\d{2}_\d+Z-debug-\d+\.log/g,
+        '$1<timestamp>-debug.log',
+      )
       // remove the newline after "Checking formatting..."
       .replaceAll(`Checking formatting...\n`, 'Checking formatting...')
       // remove warning <name>@<semver>: No license field

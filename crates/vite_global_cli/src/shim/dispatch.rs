@@ -460,7 +460,7 @@ async fn handle_global_install(packages: &[String]) -> i32 {
 
     for package in packages {
         println!("vp: Installing global package: {}", package);
-        if let Err(e) = global_install::install(package).await {
+        if let Err(e) = global_install::install(package, None).await {
             eprintln!("vp: Failed to install {}: {}", package, e);
             return 1;
         }
