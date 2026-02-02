@@ -190,17 +190,17 @@ function Cleanup-OldVersions {
     }
 }
 
-# Setup shims PATH - auto-enables if no node detected, otherwise prompts user
+# Setup bin PATH - auto-enables if no node detected, otherwise prompts user
 # Returns: "true" = path added, "false" = not added, "already" = already configured
-function Setup-ShimsPath {
+function Setup-BinPath {
     param([string]$BinDir)
 
-    $shimsPath = "$InstallDir\shims"
+    $binPath = "$InstallDir\bin"
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 
     # Check if already in PATH
-    if ($userPath -like "*$shimsPath*") {
-        # Refresh shims if already configured
+    if ($userPath -like "*$binPath*") {
+        # Refresh bin if already configured
         & "$BinDir\vp.exe" env setup --refresh | Out-Null
         return "already"
     }
@@ -208,15 +208,15 @@ function Setup-ShimsPath {
     # Check if node is available on the system
     $nodeAvailable = $null -ne (Get-Command node -ErrorAction SilentlyContinue)
 
-    # Auto-enable shims if node is not available (no prompt needed)
+    # Auto-enable bin if node is not available (no prompt needed)
     if (-not $nodeAvailable) {
         & "$BinDir\vp.exe" env setup --refresh | Out-Null
 
-        # Add shims to PATH (shims path must come BEFORE bin path for proper interception)
+        # Add bin to PATH (bin path must come BEFORE bin path for proper interception)
         $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
-        $newPath = "$shimsPath;$currentPath"
+        $newPath = "$binPath;$currentPath"
         [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-        $env:Path = "$shimsPath;$env:Path"
+        $env:Path = "$binPath;$env:Path"
         return "true"
     }
 
@@ -225,16 +225,16 @@ function Setup-ShimsPath {
     if ($isInteractive) {
         Write-Host ""
         Write-Host "Would you want Vite+ to manage Node.js versions?"
-        $addShims = Read-Host "Press Enter to accept (Y/n)"
+        $addBin = Read-Host "Press Enter to accept (Y/n)"
 
-        if ($addShims -eq '' -or $addShims -eq 'y' -or $addShims -eq 'Y') {
+        if ($addBin -eq '' -or $addBin -eq 'y' -or $addBin -eq 'Y') {
             & "$BinDir\vp.exe" env setup --refresh | Out-Null
 
-            # Add shims to PATH
+            # Add bin to PATH
             $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
-            $newPath = "$shimsPath;$currentPath"
+            $newPath = "$binPath;$currentPath"
             [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-            $env:Path = "$shimsPath;$env:Path"
+            $env:Path = "$binPath;$env:Path"
             return "true"
         }
     }
@@ -416,8 +416,8 @@ function Main {
         $env:Path = "$pathToAdd;$env:Path"
     }
 
-    # Ask user if they want shims and set them up
-    $shimsResult = Setup-ShimsPath -BinDir $BinDir
+    # Ask user if they want bin and set them up
+    $binResult = Setup-BinPath -BinDir $BinDir
 
     # Use ~ shorthand if install dir is under USERPROFILE, otherwise show full path
     $displayDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'
@@ -432,11 +432,11 @@ function Main {
     Write-Host "  Location: $displayDir\current\bin"
 
     # Show Node.js manager status
-    if ($shimsResult -eq "true" -or $shimsResult -eq "already") {
+    if ($binResult -eq "true" -or $binResult -eq "already") {
         Write-Host ""
         Write-Host "  Node.js manager: on"
-        # Show note about shims if added
-        if ($shimsResult -eq "true") {
+        # Show note about bin if added
+        if ($binResult -eq "true") {
             Write-Host "  Restart your terminal and IDE, then run 'vp env doctor' to verify."
         }
     }
@@ -444,8 +444,8 @@ function Main {
     Write-Host ""
     Write-Host "  Next: Run 'vp help' to get started"
 
-    # Show note if PATH was updated (but shims were not added - that has its own message)
-    if ($needsPathUpdate -and $shimsResult -ne "true") {
+    # Show note if PATH was updated (but bin were not added - that has its own message)
+    if ($needsPathUpdate -and $binResult -ne "true") {
         Write-Host ""
         Write-Host "  Note: Restart your terminal and IDE for changes to take effect."
     }

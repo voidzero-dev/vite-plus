@@ -57,22 +57,22 @@ jobs:
           vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
           cd hello && vp run build
 
-      - name: Verify shims setup
+      - name: Verify bin setup
         run: |
-          # Verify shims directory was created by vp env --setup
-          SHIMS_PATH="$HOME/.vite-plus/shims"
-          if [ ! -d "$SHIMS_PATH" ]; then
-            echo "Error: Shims directory not found: $SHIMS_PATH"
+          # Verify bin directory was created by vp env --setup
+          BIN_PATH="$HOME/.vite-plus/bin"
+          if [ ! -d "$BIN_PATH" ]; then
+            echo "Error: Bin directory not found: $BIN_PATH"
             exit 1
           fi
 
           # Verify shim executables exist
           for shim in node npm npx; do
-            if [ ! -f "$SHIMS_PATH/$shim" ]; then
-              echo "Error: Shim not found: $SHIMS_PATH/$shim"
+            if [ ! -f "$BIN_PATH/$shim" ]; then
+              echo "Error: Shim not found: $BIN_PATH/$shim"
               exit 1
             fi
-            echo "Found shim: $SHIMS_PATH/$shim"
+            echo "Found shim: $BIN_PATH/$shim"
           done
 
           # Verify vp env doctor works
@@ -105,18 +105,18 @@ jobs:
               vp --help
               vp dlx print-current-version
 
-              # Verify shims setup
-              SHIMS_PATH=\"\$HOME/.vite-plus/shims\"
-              if [ ! -d \"\$SHIMS_PATH\" ]; then
-                echo \"Error: Shims directory not found: \$SHIMS_PATH\"
+              # Verify bin setup
+              BIN_PATH=\"\$HOME/.vite-plus/bin\"
+              if [ ! -d \"\$BIN_PATH\" ]; then
+                echo \"Error: Bin directory not found: \$BIN_PATH\"
                 exit 1
               fi
               for shim in node npm npx; do
-                if [ ! -f \"\$SHIMS_PATH/\$shim\" ]; then
-                  echo \"Error: Shim not found: \$SHIMS_PATH/\$shim\"
+                if [ ! -f \"\$BIN_PATH/\$shim\" ]; then
+                  echo \"Error: Shim not found: \$BIN_PATH/\$shim\"
                   exit 1
                 fi
-                echo \"Found shim: \$SHIMS_PATH/\$shim\"
+                echo \"Found shim: \$BIN_PATH/\$shim\"
               done
               vp env doctor
 
@@ -154,20 +154,20 @@ jobs:
           vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
           cd hello && vp run build
 
-      - name: Verify shims setup
+      - name: Verify bin setup
         shell: pwsh
         run: |
-          # Verify shims directory was created by vp env --setup
-          $shimsPath = "$env:USERPROFILE\.vite-plus\shims"
-          if (-not (Test-Path $shimsPath)) {
-            Write-Error "Shims directory not found: $shimsPath"
+          # Verify bin directory was created by vp env --setup
+          $binPath = "$env:USERPROFILE\.vite-plus\bin"
+          if (-not (Test-Path $binPath)) {
+            Write-Error "Bin directory not found: $binPath"
             exit 1
           }
 
           # Verify shim executables exist
           $expectedShims = @("node.exe", "npm.cmd", "npx.cmd")
           foreach ($shim in $expectedShims) {
-            $shimFile = Join-Path $shimsPath $shim
+            $shimFile = Join-Path $binPath $shim
             if (-not (Test-Path $shimFile)) {
               Write-Error "Shim not found: $shimFile"
               exit 1

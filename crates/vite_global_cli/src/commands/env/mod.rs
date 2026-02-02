@@ -11,6 +11,7 @@ mod list;
 mod off;
 mod on;
 mod pin;
+mod run;
 mod setup;
 mod unpin;
 mod which;
@@ -43,6 +44,9 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
             crate::cli::EnvSubcommands::List { pattern, lts, all, json } => {
                 list::execute(pattern, lts, all, json).await
             }
+            crate::cli::EnvSubcommands::Run { node, npm, command } => {
+                run::execute(&node, npm.as_deref(), &command).await
+            }
         };
     }
 
@@ -68,12 +72,13 @@ fn print_help() {
     println!("  default [VERSION]  Set or show the global default Node.js version");
     println!("  on                 Enable managed mode (shims always use vite-plus Node.js)");
     println!("  off                Enable system-first mode (shims prefer system Node.js)");
-    println!("  setup              Create or update shims in ~/.vite-plus/shims");
+    println!("  setup              Create or update shims in ~/.vite-plus/bin");
     println!("  doctor             Run diagnostics and show environment status");
     println!("  which <TOOL>       Show path to the tool that would be executed");
     println!("  pin [VERSION]      Pin a Node.js version in current directory");
     println!("  unpin              Remove the .node-version file from current directory");
     println!("  list [PATTERN]     List available Node.js versions");
+    println!("  run --node <VER>   Run a command with a specific Node.js version");
     println!();
     println!("Options:");
     println!("  --current          Show current environment information");
@@ -94,6 +99,8 @@ fn print_help() {
     println!("  vp env list                   # List available Node.js versions");
     println!("  vp env list --lts             # List only LTS versions");
     println!("  vp env list 20                # List Node.js 20.x versions");
+    println!("  vp env run --node 20 node -v  # Run 'node -v' with Node.js 20");
+    println!("  vp env run --node lts npm i   # Run 'npm i' with latest LTS");
 }
 
 /// Print shell snippet for setting environment (--print flag)

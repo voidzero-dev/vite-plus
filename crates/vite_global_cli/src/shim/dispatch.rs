@@ -8,6 +8,12 @@
 use vite_path::AbsolutePathBuf;
 use vite_shared::{PrependOptions, prepend_to_path_env};
 
+/// Environment variable used to prevent infinite recursion in shim dispatch.
+///
+/// When set, the shim will skip version resolution and execute the tool
+/// directly using the current PATH (passthrough mode).
+const RECURSION_ENV_VAR: &str = "VITE_PLUS_TOOL_RECURSION";
+
 use super::{
     cache::{self, ResolveCache, ResolveCacheEntry},
     exec,
@@ -19,6 +25,11 @@ use crate::commands::env::config::{self, ShimMode};
 /// Called when the binary is invoked as node, npm, or npx.
 /// Returns an exit code to be used with std::process::exit.
 pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
+    // Check recursion prevention - if already in a shim context, passthrough directly
+    if std::env::var(RECURSION_ENV_VAR).is_ok() {
+        return passthrough_to_system(tool, args);
+    }
+
     // Check bypass mode (explicit environment variable)
     if std::env::var("VITE_PLUS_BYPASS").is_ok() {
         return bypass_to_system(tool, args);
@@ -89,6 +100,13 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         }
     }
 
+    // Set recursion prevention marker before executing
+    // This prevents infinite loops when the executed tool invokes another shim
+    // SAFETY: Setting env vars at this point before exec is safe
+    unsafe {
+        std::env::set_var(RECURSION_ENV_VAR, "1");
+    }
+
     // Execute the tool
     exec::exec_tool(&tool_path, args)
 }
@@ -99,6 +117,21 @@ fn bypass_to_system(tool: &str, args: &[String]) -> i32 {
         Some(system_path) => exec::exec_tool(&system_path, args),
         None => {
             eprintln!("vp: VITE_PLUS_BYPASS is set but no system '{tool}' found in PATH");
+            1
+        }
+    }
+}
+
+/// Passthrough mode for recursion prevention.
+///
+/// When VITE_PLUS_TOOL_RECURSION is set, we skip version resolution
+/// and execute the tool directly using the current PATH.
+/// This prevents infinite loops when a managed tool invokes another shim.
+fn passthrough_to_system(tool: &str, args: &[String]) -> i32 {
+    match find_system_tool(tool) {
+        Some(system_path) => exec::exec_tool(&system_path, args),
+        None => {
+            eprintln!("vp: Recursion detected but no '{tool}' found in PATH (excluding shims)");
             1
         }
     }
@@ -209,16 +242,16 @@ async fn load_shim_mode() -> ShimMode {
     config::load_config().await.map(|c| c.shim_mode).unwrap_or_default()
 }
 
-/// Find a system tool in PATH, skipping the vite-plus shims directory.
+/// Find a system tool in PATH, skipping the vite-plus bin directory.
 ///
 /// Returns the absolute path to the tool if found, None otherwise.
 fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
-    let shims_dir = config::get_shims_dir().ok();
+    let bin_dir = config::get_bin_dir().ok();
     let path_var = std::env::var_os("PATH")?;
 
-    // Filter PATH to exclude shims directory, then search
+    // Filter PATH to exclude bin directory, then search
     let filtered_paths: Vec<_> = std::env::split_paths(&path_var)
-        .filter(|p| if let Some(ref shims) = shims_dir { p != shims.as_path() } else { true })
+        .filter(|p| if let Some(ref bin) = bin_dir { p != bin.as_path() } else { true })
         .collect();
 
     let filtered_path = std::env::join_paths(filtered_paths).ok()?;

@@ -62,9 +62,14 @@ pub fn get_vite_plus_home() -> Result<AbsolutePathBuf, Error> {
     Ok(vite_shared::get_vite_plus_home()?)
 }
 
-/// Get the shims directory path.
-pub fn get_shims_dir() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vite_plus_home()?.join("shims"))
+/// Get the bin directory path.
+pub fn get_bin_dir() -> Result<AbsolutePathBuf, Error> {
+    Ok(get_vite_plus_home()?.join("bin"))
+}
+
+/// Get the current directory path (where the actual vp binary lives).
+pub fn get_current_dir() -> Result<AbsolutePathBuf, Error> {
+    Ok(get_vite_plus_home()?.join("current"))
 }
 
 /// Get the config file path.

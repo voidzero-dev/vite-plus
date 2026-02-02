@@ -617,7 +617,7 @@ pub enum EnvSubcommands {
     /// Enable system-first mode - shims prefer system Node.js, fallback to managed
     Off,
 
-    /// Create or update shims in VITE_PLUS_HOME/shims
+    /// Create or update shims in VITE_PLUS_HOME/bin
     Setup {
         /// Force refresh shims even if they exist
         #[arg(long)]
@@ -671,6 +671,21 @@ pub enum EnvSubcommands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+    },
+
+    /// Run a command with a specific Node.js version
+    Run {
+        /// Node.js version to use (e.g., "20.18.0", "lts", "^20.0.0")
+        #[arg(long, required = true)]
+        node: String,
+
+        /// npm version to use (optional, defaults to bundled)
+        #[arg(long)]
+        npm: Option<String>,
+
+        /// Command and arguments to run
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        command: Vec<String>,
     },
 }
 

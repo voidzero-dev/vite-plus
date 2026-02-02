@@ -4,7 +4,7 @@ use std::process::ExitStatus;
 
 use vite_path::AbsolutePathBuf;
 
-use super::config::{ShimMode, get_shims_dir, get_vite_plus_home, load_config, resolve_version};
+use super::config::{ShimMode, get_bin_dir, get_vite_plus_home, load_config, resolve_version};
 use crate::error::Error;
 
 /// Known version managers that might conflict
@@ -32,8 +32,8 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     // Check VITE_PLUS_HOME
     has_errors |= !check_vite_plus_home().await;
 
-    // Check shims directory
-    has_errors |= !check_shims_dir().await;
+    // Check bin directory
+    has_errors |= !check_bin_dir().await;
 
     // Check shim mode
     check_shim_mode().await;
@@ -80,26 +80,26 @@ async fn check_vite_plus_home() -> bool {
     }
 }
 
-/// Check shims directory and shim files.
-async fn check_shims_dir() -> bool {
-    let shims_dir = match get_shims_dir() {
+/// Check bin directory and shim files.
+async fn check_bin_dir() -> bool {
+    let bin_dir = match get_bin_dir() {
         Ok(d) => d,
         Err(_) => return false,
     };
 
-    if !tokio::fs::try_exists(&shims_dir).await.unwrap_or(false) {
-        println!("  \u{2717} Shims directory does not exist");
-        println!("  Run 'vp env --setup' to create shims.");
+    if !tokio::fs::try_exists(&bin_dir).await.unwrap_or(false) {
+        println!("  \u{2717} Bin directory does not exist");
+        println!("  Run 'vp env --setup' to create bin directory.");
         return false;
     }
 
-    println!("  \u{2713} Shims directory exists");
+    println!("  \u{2713} Bin directory exists");
 
     let mut all_present = true;
     let mut missing = Vec::new();
 
     for tool in SHIM_TOOLS {
-        let shim_path = shims_dir.join(shim_filename(tool));
+        let shim_path = bin_dir.join(shim_filename(tool));
         if tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
             // Shim exists
         } else {
@@ -167,14 +167,14 @@ async fn check_shim_mode() {
     println!("  Run 'vp env off' to prefer system Node.js");
 }
 
-/// Find system Node.js, skipping vite-plus shims.
+/// Find system Node.js, skipping vite-plus bin directory.
 fn find_system_node() -> Option<std::path::PathBuf> {
-    let shims_dir = get_shims_dir().ok();
+    let bin_dir = get_bin_dir().ok();
     let path_var = std::env::var_os("PATH")?;
 
-    // Filter PATH to exclude shims directory, then search
+    // Filter PATH to exclude bin directory, then search
     let filtered_paths: Vec<_> = std::env::split_paths(&path_var)
-        .filter(|p| if let Some(ref shims) = shims_dir { p != shims.as_path() } else { true })
+        .filter(|p| if let Some(ref bin) = bin_dir { p != bin.as_path() } else { true })
         .collect();
 
     let filtered_path = std::env::join_paths(filtered_paths).ok()?;
@@ -189,7 +189,7 @@ async fn check_path() -> bool {
     println!();
     println!("PATH Analysis:");
 
-    let shims_dir = match get_shims_dir() {
+    let bin_dir = match get_bin_dir() {
         Ok(d) => d,
         Err(_) => return false,
     };
@@ -197,29 +197,29 @@ async fn check_path() -> bool {
     let path_var = std::env::var_os("PATH").unwrap_or_default();
     let paths: Vec<_> = std::env::split_paths(&path_var).collect();
 
-    // Check if shims directory is in PATH
-    let shims_path = shims_dir.as_path();
-    let shims_position = paths.iter().position(|p| p == shims_path);
+    // Check if bin directory is in PATH
+    let bin_path = bin_dir.as_path();
+    let bin_position = paths.iter().position(|p| p == bin_path);
 
-    match shims_position {
+    match bin_position {
         Some(0) => {
-            println!("  \u{2713} VP shims first in PATH");
+            println!("  \u{2713} VP bin first in PATH");
         }
         Some(pos) => {
-            println!("  \u{26A0} VP shims in PATH at position {pos}");
-            println!("  For best results, shims should be first in PATH.");
+            println!("  \u{26A0} VP bin in PATH at position {pos}");
+            println!("  For best results, bin should be first in PATH.");
         }
         None => {
-            println!("  \u{2717} VP shims not in PATH");
+            println!("  \u{2717} VP bin not in PATH");
             println!();
-            print_path_fix(&shims_dir);
+            print_path_fix(&bin_dir);
             return false;
         }
     }
 
     // Show which node would be executed
     if let Some(node_path) = find_in_path("node") {
-        let expected_node = shims_dir.join(shim_filename("node"));
+        let expected_node = bin_dir.join(shim_filename("node"));
         if node_path == expected_node.as_path() {
             println!();
             println!("  node \u{2192} {} (vp shim)", node_path.display());
@@ -242,8 +242,8 @@ fn find_in_path(name: &str) -> Option<std::path::PathBuf> {
 }
 
 /// Print PATH fix instructions.
-fn print_path_fix(shims_dir: &vite_path::AbsolutePath) {
-    let shims_path = shims_dir.as_path().display();
+fn print_path_fix(bin_dir: &vite_path::AbsolutePath) {
+    let bin_path = bin_dir.as_path().display();
 
     println!("Recommended Fix:");
 
@@ -255,7 +255,7 @@ fn print_path_fix(shims_dir: &vite_path::AbsolutePath) {
         println!("  Add to ~/.bashrc:");
     } else if shell.ends_with("fish") {
         println!("  Add to ~/.config/fish/config.fish:");
-        println!("    set -gx PATH \"{shims_path}\" $PATH");
+        println!("    set -gx PATH \"{bin_path}\" $PATH");
         println!();
         println!("  Then restart your terminal and IDE.");
         return;
@@ -263,7 +263,7 @@ fn print_path_fix(shims_dir: &vite_path::AbsolutePath) {
         println!("  Add to your shell profile:");
     }
 
-    println!("    export PATH=\"{shims_path}:$PATH\"");
+    println!("    export PATH=\"{bin_path}:$PATH\"");
     println!();
     println!("  Then restart your terminal and IDE.");
 }

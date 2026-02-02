@@ -60,7 +60,7 @@ mod tests {
     fn test_extract_tool_name() {
         assert_eq!(extract_tool_name("node"), "node");
         assert_eq!(extract_tool_name("/usr/bin/node"), "node");
-        assert_eq!(extract_tool_name("/home/user/.vite-plus/shims/node"), "node");
+        assert_eq!(extract_tool_name("/home/user/.vite-plus/bin/node"), "node");
         assert_eq!(extract_tool_name("npm"), "npm");
         assert_eq!(extract_tool_name("npx"), "npx");
         assert_eq!(extract_tool_name("vp"), "vp");
@@ -72,7 +72,7 @@ mod tests {
         // Windows paths - only test on Windows
         #[cfg(windows)]
         {
-            assert_eq!(extract_tool_name("C:\\Users\\user\\.vite-plus\\shims\\node.exe"), "node");
+            assert_eq!(extract_tool_name("C:\\Users\\user\\.vite-plus\\bin\\node.exe"), "node");
         }
     }
 
