@@ -80,6 +80,38 @@ pub fn get_tmp_dir() -> Result<AbsolutePathBuf, Error> {
     Ok(get_vite_plus_home()?.join("tmp"))
 }
 
+/// Get the node_modules directory path for a package.
+///
+/// npm uses different layouts on Unix vs Windows:
+/// - Unix: `<prefix>/lib/node_modules/<package>`
+/// - Windows: `<prefix>/node_modules/<package>`
+///
+/// This function probes both paths and returns the one that exists,
+/// falling back to the platform default if neither exists.
+pub fn get_node_modules_dir(prefix: &AbsolutePath, package_name: &str) -> AbsolutePathBuf {
+    // Try Unix layout first (lib/node_modules)
+    let unix_path = prefix.join("lib").join("node_modules").join(package_name);
+    if unix_path.as_path().exists() {
+        return unix_path;
+    }
+
+    // Try Windows layout (node_modules)
+    let win_path = prefix.join("node_modules").join(package_name);
+    if win_path.as_path().exists() {
+        return win_path;
+    }
+
+    // Neither exists - return platform default (for pre-creation checks)
+    #[cfg(windows)]
+    {
+        win_path
+    }
+    #[cfg(not(windows))]
+    {
+        unix_path
+    }
+}
+
 /// Get the config file path.
 pub fn get_config_path() -> Result<AbsolutePathBuf, Error> {
     Ok(get_vite_plus_home()?.join(CONFIG_FILE))
@@ -216,6 +248,102 @@ mod tests {
     use vite_path::AbsolutePathBuf;
 
     use super::*;
+
+    #[test]
+    fn test_get_node_modules_dir_probes_unix_layout() {
+        let temp_dir = TempDir::new().unwrap();
+        let prefix = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create Unix layout
+        let unix_path = temp_dir.path().join("lib").join("node_modules").join("test-pkg");
+        std::fs::create_dir_all(&unix_path).unwrap();
+
+        let result = get_node_modules_dir(&prefix, "test-pkg");
+        assert!(
+            result.as_path().ends_with("lib/node_modules/test-pkg"),
+            "Should find Unix layout: {}",
+            result.as_path().display()
+        );
+    }
+
+    #[test]
+    fn test_get_node_modules_dir_probes_windows_layout() {
+        let temp_dir = TempDir::new().unwrap();
+        let prefix = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create Windows layout (no lib/)
+        let win_path = temp_dir.path().join("node_modules").join("test-pkg");
+        std::fs::create_dir_all(&win_path).unwrap();
+
+        let result = get_node_modules_dir(&prefix, "test-pkg");
+        assert!(
+            result.as_path().ends_with("node_modules/test-pkg")
+                && !result.as_path().to_string_lossy().contains("lib/node_modules"),
+            "Should find Windows layout: {}",
+            result.as_path().display()
+        );
+    }
+
+    #[test]
+    fn test_get_node_modules_dir_prefers_unix_layout_when_both_exist() {
+        let temp_dir = TempDir::new().unwrap();
+        let prefix = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create both layouts
+        let unix_path = temp_dir.path().join("lib").join("node_modules").join("test-pkg");
+        let win_path = temp_dir.path().join("node_modules").join("test-pkg");
+        std::fs::create_dir_all(&unix_path).unwrap();
+        std::fs::create_dir_all(&win_path).unwrap();
+
+        let result = get_node_modules_dir(&prefix, "test-pkg");
+        // Unix layout is checked first
+        assert!(
+            result.as_path().ends_with("lib/node_modules/test-pkg"),
+            "Should prefer Unix layout when both exist: {}",
+            result.as_path().display()
+        );
+    }
+
+    #[test]
+    fn test_get_node_modules_dir_returns_platform_default_when_neither_exists() {
+        let temp_dir = TempDir::new().unwrap();
+        let prefix = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Don't create any directories
+        let result = get_node_modules_dir(&prefix, "test-pkg");
+
+        #[cfg(windows)]
+        assert!(
+            result.as_path().ends_with("node_modules/test-pkg")
+                && !result.as_path().to_string_lossy().contains("lib/node_modules"),
+            "Should return Windows default: {}",
+            result.as_path().display()
+        );
+
+        #[cfg(not(windows))]
+        assert!(
+            result.as_path().ends_with("lib/node_modules/test-pkg"),
+            "Should return Unix default: {}",
+            result.as_path().display()
+        );
+    }
+
+    #[test]
+    fn test_get_node_modules_dir_handles_scoped_packages() {
+        let temp_dir = TempDir::new().unwrap();
+        let prefix = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create Unix layout for scoped package
+        let unix_path = temp_dir.path().join("lib").join("node_modules").join("@scope").join("pkg");
+        std::fs::create_dir_all(&unix_path).unwrap();
+
+        let result = get_node_modules_dir(&prefix, "@scope/pkg");
+        assert!(
+            result.as_path().ends_with("lib/node_modules/@scope/pkg"),
+            "Should find scoped package: {}",
+            result.as_path().display()
+        );
+    }
 
     #[tokio::test]
     async fn test_resolve_version_from_node_version_file() {
