@@ -1,5 +1,13 @@
 import { execSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -98,19 +106,42 @@ export function installGlobalCli() {
 
     // Create wrapper scripts
     const binDir = path.join(installDir, 'bin');
+    const currentBinDir = path.join(installDir, 'current', 'bin');
 
+    // Rename the actual vp binary to vp-raw, then create a wrapper at vp
+    // This ensures VITE_PLUS_HOME is always set when vp is invoked (including via shims)
+    // The wrapper uses `exec -a "$0"` to preserve argv[0] for shim detection
     if (isWindows) {
+      const vpExe = path.join(currentBinDir, 'vp.exe');
+      const vpRawExe = path.join(currentBinDir, 'vp-raw.exe');
+
+      // Rename vp.exe -> vp-raw.exe
+      if (existsSync(vpExe) && !existsSync(vpRawExe)) {
+        renameSync(vpExe, vpRawExe);
+        console.log(`Renamed ${vpExe} -> ${vpRawExe}`);
+      }
+
+      // Create vp.cmd wrapper in current/bin/ that sets VITE_PLUS_HOME and calls vp-raw.exe
+      const vpWrapperPath = path.join(currentBinDir, 'vp.cmd');
+      const vpWrapperContent = `@echo off\r
+set VITE_PLUS_HOME=${installDir}\r
+"%~dp0vp-raw.exe" %*\r
+exit /b %ERRORLEVEL%\r
+`;
+      writeFileSync(vpWrapperPath, vpWrapperContent);
+      console.log(`Created wrapper: ${vpWrapperPath}`);
+
       // On Windows, create bash script wrappers for Git Bash compatibility
       // (Git Bash doesn't execute .cmd files automatically)
       if (binName === 'vp-dev') {
-        // Remove the vp.cmd to avoid confusion
+        // Remove the vp.cmd in bin/ to avoid confusion
         rmSync(path.join(binDir, 'vp.cmd'), { force: true });
 
         // Create vp-dev.cmd for cmd.exe/PowerShell
         const cmdPath = path.join(binDir, 'vp-dev.cmd');
         const cmdContent = `@echo off\r
 set VITE_PLUS_HOME=${installDir}\r
-"%VITE_PLUS_HOME%\\current\\bin\\vp.exe" %*\r
+"%VITE_PLUS_HOME%\\current\\bin\\vp.cmd" %*\r
 exit /b %ERRORLEVEL%\r
 `;
         writeFileSync(cmdPath, cmdContent);
@@ -119,28 +150,49 @@ exit /b %ERRORLEVEL%\r
         const bashPath = path.join(binDir, 'vp-dev');
         const bashContent = `#!/bin/bash
 export VITE_PLUS_HOME="${installDir}"
-exec "$VITE_PLUS_HOME/current/bin/vp.exe" "$@"
+exec "$VITE_PLUS_HOME/current/bin/vp.cmd" "$@"
 `;
         writeFileSync(bashPath, bashContent);
         console.log(`\nCreated wrapper scripts: ${cmdPath}, ${bashPath}`);
       } else {
         // For 'vp', create bash script wrapper for Git Bash
-        // (install.ps1 already creates vp.cmd for cmd.exe/PowerShell)
+        // (install.ps1 already creates vp.cmd for cmd.exe/PowerShell, but we need to update it)
         const bashPath = path.join(binDir, 'vp');
         const bashContent = `#!/bin/bash
 export VITE_PLUS_HOME="${installDir}"
-exec "$VITE_PLUS_HOME/current/bin/vp.exe" "$@"
+exec "$VITE_PLUS_HOME/current/bin/vp.cmd" "$@"
 `;
         writeFileSync(bashPath, bashContent);
         console.log(`\nCreated bash wrapper: ${bashPath}`);
       }
     } else {
+      // Unix: Rename vp -> vp-raw, create wrapper
+      const vpBinary = path.join(currentBinDir, 'vp');
+      const vpRawBinary = path.join(currentBinDir, 'vp-raw');
+
+      // Rename vp -> vp-raw
+      if (existsSync(vpBinary) && !existsSync(vpRawBinary)) {
+        renameSync(vpBinary, vpRawBinary);
+        console.log(`Renamed ${vpBinary} -> ${vpRawBinary}`);
+      }
+
+      // Create vp wrapper in current/bin/ that sets VITE_PLUS_HOME and calls vp-raw
+      // Uses `exec -a "$0"` to preserve argv[0] for shim detection (node, npm, npx)
+      const vpWrapperPath = path.join(currentBinDir, 'vp');
+      const vpWrapperContent = `#!/bin/bash
+export VITE_PLUS_HOME="${installDir}"
+exec -a "$0" "$VITE_PLUS_HOME/current/bin/vp-raw" "$@"
+`;
+      writeFileSync(vpWrapperPath, vpWrapperContent);
+      chmodSync(vpWrapperPath, 0o755);
+      console.log(`Created wrapper: ${vpWrapperPath}`);
+
       // On Unix, create shell script wrappers
       if (binName === 'vp-dev') {
         // Remove the vp symlink to avoid confusion
         rmSync(path.join(binDir, 'vp'), { force: true });
 
-        // Create vp-dev wrapper that points directly to the binary
+        // Create vp-dev wrapper that points to current/bin/vp (the wrapper)
         const wrapperPath = path.join(binDir, 'vp-dev');
         const wrapperContent = `#!/bin/bash
 export VITE_PLUS_HOME="${installDir}"
@@ -150,7 +202,8 @@ exec "$VITE_PLUS_HOME/current/bin/vp" "$@"
         chmodSync(wrapperPath, 0o755);
         console.log(`\nCreated wrapper script: ${wrapperPath}`);
       }
-      // For 'vp' on Unix, install.sh already creates the symlink
+      // For 'vp' on Unix, install.sh already creates the symlink to ../current/bin/vp
+      // which now points to the wrapper script (which calls vp-raw)
     }
   } finally {
     // Cleanup temp dir only if we created it
