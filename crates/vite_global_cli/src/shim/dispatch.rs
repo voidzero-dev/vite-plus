@@ -422,6 +422,7 @@ async fn check_global_install(args: &[String]) -> Option<i32> {
     let mut is_global = false;
     let mut command: Option<&str> = None;
     let mut packages: Vec<String> = Vec::new();
+    let mut has_extra_flags = false;
 
     let mut i = 0;
     while i < args.len() {
@@ -430,6 +431,11 @@ async fn check_global_install(args: &[String]) -> Option<i32> {
             "install" | "i" | "add" => command = Some("install"),
             "uninstall" | "un" | "remove" | "rm" => command = Some("uninstall"),
             "-g" | "--global" => is_global = true,
+            s if s.starts_with('-') => {
+                // Any other flag (e.g., --registry, --ignore-scripts, --legacy-peer-deps)
+                // Skip interception to preserve npm's native flag handling
+                has_extra_flags = true;
+            }
             _ if !arg.starts_with('-') && command.is_some() => {
                 // This is a package name (could be package@version)
                 packages.push(arg.clone());
@@ -441,6 +447,12 @@ async fn check_global_install(args: &[String]) -> Option<i32> {
 
     if !is_global || command.is_none() {
         return None; // Not a global command, continue normal dispatch
+    }
+
+    // If extra flags are present, let npm handle it natively
+    // This preserves flags like --registry, --ignore-scripts, --legacy-peer-deps, etc.
+    if has_extra_flags {
+        return None;
     }
 
     if packages.is_empty() {

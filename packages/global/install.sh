@@ -13,8 +13,7 @@
 
 set -e
 
-# FIXME: change to test for now
-VITE_PLUS_VERSION="${VITE_PLUS_VERSION:-test}"
+VITE_PLUS_VERSION="${VITE_PLUS_VERSION:-latest}"
 INSTALL_DIR="${VITE_PLUS_HOME:-$HOME/.vite-plus}"
 # npm registry URL (strip trailing slash if present)
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
@@ -333,7 +332,7 @@ configure_shell_path() {
     return 0
   fi
 
-  local result=0
+  local result=1  # Default to failure - must explicitly set success
   case "$SHELL" in
     */zsh)
       # Add to both .zshenv (for all shells including IDE) and .zshrc (to ensure PATH is at front)
@@ -395,6 +394,7 @@ configure_shell_path() {
   elif [ $result -eq 2 ]; then
     PATH_CONFIGURED="already"
   fi
+  # If result is still 1, PATH_CONFIGURED remains "false" (set at function start)
 }
 
 # Setup Node.js version manager (node/npm/npx shims)
@@ -667,6 +667,21 @@ main() {
   if [ "$PATH_CONFIGURED" = "true" ] && [ -n "$SHELL_CONFIG_UPDATED" ]; then
     echo ""
     echo "  Note: Run \`source ~/$SHELL_CONFIG_UPDATED\` or restart your terminal."
+  fi
+
+  # Show warning if PATH could not be automatically configured
+  if [ "$PATH_CONFIGURED" = "false" ]; then
+    echo ""
+    echo -e "  ${YELLOW}note${NC}: Could not automatically add vp to your PATH."
+    echo ""
+    echo "  To use vp, add this line to your shell config file:"
+    echo ""
+    echo "    export PATH=\"$INSTALL_DIR/bin:\$PATH\""
+    echo ""
+    echo "  Common config files:"
+    echo "    - Bash: ~/.bashrc or ~/.bash_profile"
+    echo "    - Zsh:  ~/.zshrc"
+    echo "    - Fish: ~/.config/fish/config.fish"
   fi
 
   echo ""
