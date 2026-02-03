@@ -5,6 +5,7 @@ use std::process::Stdio;
 use tokio::process::Command;
 use vite_js_runtime::NodeProvider;
 use vite_path::AbsolutePathBuf;
+use vite_shared::format_path_prepended;
 
 use super::{
     config::{get_bin_dir, get_packages_dir, get_tmp_dir, resolve_version},
@@ -65,14 +66,7 @@ pub async fn install(package_spec: &str, node_version: Option<&str>) -> Result<(
     let status = Command::new(npm_path.as_path())
         .args(["install", "-g", package_spec])
         .env("npm_config_prefix", staging_dir.as_path())
-        .env(
-            "PATH",
-            format!(
-                "{}:{}",
-                node_bin_dir.as_path().display(),
-                std::env::var("PATH").unwrap_or_default()
-            ),
-        )
+        .env("PATH", format_path_prepended(node_bin_dir.as_path()))
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .status()
