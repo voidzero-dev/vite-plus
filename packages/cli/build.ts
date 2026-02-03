@@ -19,6 +19,7 @@ import { existsSync, globSync, readdirSync, statSync } from 'node:fs';
 import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 import { createBuildCommand, NapiCli } from '@napi-rs/cli';
 import { format } from 'oxfmt';
@@ -36,8 +37,15 @@ const projectDir = dirname(fileURLToPath(import.meta.url));
 const TEST_PACKAGE_NAME = '@voidzero-dev/vite-plus-test';
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 
-const skipNative = process.argv.includes('--skip-native');
-const skipTs = process.argv.includes('--skip-ts');
+const {
+  values: { ['skip-native']: skipNative, ['skip-ts']: skipTs },
+} = parseArgs({
+  options: {
+    ['skip-native']: { type: 'boolean', default: false },
+    ['skip-ts']: { type: 'boolean', default: false },
+  },
+});
+
 // Filter out custom flags before passing to NAPI CLI
 const napiArgs = process.argv
   .slice(2)
@@ -119,7 +127,6 @@ async function buildCli() {
   const cjsHost = createCompilerHost({
     ...options,
     module: ModuleKind.CommonJS,
-    outFile: 'dist/define-config.cjs',
   });
 
   const cjsProgram = createProgram({

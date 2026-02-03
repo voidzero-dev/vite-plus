@@ -48,6 +48,8 @@ runs:
         pnpm --filter vite build-types
         pnpm --filter=@voidzero-dev/vite-plus-core build
         pnpm --filter=@voidzero-dev/vite-plus-test build
+        pnpm --filter=vite-plus build-ts
+        pnpm --filter=vite-plus-cli build-ts
 
     # NAPI builds - only run on cache miss (slow, especially on Windows)
     # Must run before vite-plus/vite-plus-cli TypeScript builds which depend on the bindings
@@ -94,10 +96,3 @@ runs:
           packages/global/binding/index.js
           packages/global/binding/index.d.ts
         key: ${{ steps.cache-key.outputs.key }}
-
-    # Build vite-plus TypeScript after native bindings are ready
-    - name: Build vite-plus TypeScript packages
-      shell: bash
-      run: |
-        pnpm --filter=vite-plus build-ts
-        pnpm --filter=vite-plus-cli build-ts
