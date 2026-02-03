@@ -182,10 +182,17 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
         std::env::set_var(RECURSION_ENV_VAR, "1");
     }
 
-    // Execute: node <binary_path> <args>
-    let mut full_args = vec![binary_path.as_path().display().to_string()];
-    full_args.extend(args.iter().cloned());
-    exec::exec_tool(&node_path, &full_args)
+    // Check if the binary is a JavaScript file that needs Node.js
+    // This info was determined at install time and stored in metadata
+    if package_metadata.is_js_binary(tool) {
+        // Execute: node <binary_path> <args>
+        let mut full_args = vec![binary_path.as_path().display().to_string()];
+        full_args.extend(args.iter().cloned());
+        exec::exec_tool(&node_path, &full_args)
+    } else {
+        // Execute the binary directly (native executable or non-Node script)
+        exec::exec_tool(&binary_path, args)
+    }
 }
 
 /// Find the package that provides a given binary.
@@ -206,9 +213,9 @@ fn locate_package_binary(package_name: &str, binary_name: &str) -> Result<Absolu
     let packages_dir = config::get_packages_dir().map_err(|e| format!("{e}"))?;
     let package_dir = packages_dir.join(package_name);
 
-    // The binary is typically in lib/node_modules/<package>/bin/<binary>
-    // or referenced in package.json's bin field
-    let node_modules_dir = package_dir.join("lib").join("node_modules").join(package_name);
+    // The binary is referenced in package.json's bin field
+    // npm uses different layouts: Unix=lib/node_modules, Windows=node_modules
+    let node_modules_dir = config::get_node_modules_dir(&package_dir, package_name);
     let package_json_path = node_modules_dir.join("package.json");
 
     if !package_json_path.as_path().exists() {
