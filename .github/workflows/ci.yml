@@ -195,11 +195,8 @@ jobs:
         run: pnpm tsgo
 
       - name: Build CLI
-        run: pnpm bootstrap-cli:ci
-
-      - name: Add CLI to PATH
-        shell: bash
         run: |
+          pnpm bootstrap-cli:ci
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             echo "$USERPROFILE/.vite-plus-dev/bin" >> $GITHUB_PATH
           else

@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -7,23 +7,44 @@ import { parseArgs } from 'node:util';
 const isWindows = process.platform === 'win32';
 
 export function installGlobalCli() {
-  const { positionals } = parseArgs({
+  // Detect if running directly or via tools dispatcher
+  const isDirectInvocation = process.argv[1]?.endsWith('install-global-cli.ts');
+  const args = process.argv.slice(isDirectInvocation ? 2 : 3);
+
+  const { positionals, values } = parseArgs({
     allowPositionals: true,
-    args: process.argv.slice(3),
+    args,
+    options: {
+      tgz: {
+        type: 'string',
+        short: 't',
+      },
+    },
   });
 
   const binName = positionals[0];
   if (!binName || !['vp', 'vp-dev'].includes(binName)) {
-    console.error('Usage: tool install-global-cli <vp|vp-dev>');
+    console.error('Usage: tool install-global-cli <vp|vp-dev> [--tgz <path>]');
     process.exit(1);
   }
 
   console.log(`Installing global CLI with bin name: ${binName}`);
 
-  // Create temp directory for pnpm pack output
-  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'vite-plus-cli-'));
+  let tempDir: string | undefined;
+  let tgzPath: string;
 
-  try {
+  if (values.tgz) {
+    // Use provided tgz file directly
+    tgzPath = path.resolve(values.tgz);
+    if (!existsSync(tgzPath)) {
+      console.error(`Error: tgz file not found: ${tgzPath}`);
+      process.exit(1);
+    }
+    console.log(`Using provided tgz: ${tgzPath}`);
+  } else {
+    // Create temp directory for pnpm pack output
+    tempDir = mkdtempSync(path.join(os.tmpdir(), 'vite-plus-cli-'));
+
     // Use pnpm pack to create tarball
     // - Auto-resolves catalog: dependencies
     // - Includes binary (already in packages/global/bin/ after copy-vp-binary)
@@ -37,8 +58,10 @@ export function installGlobalCli() {
     if (!tgzFile) {
       throw new Error('pnpm pack did not create a .tgz file');
     }
-    const tgzPath = path.join(tempDir, tgzFile);
+    tgzPath = path.join(tempDir, tgzFile);
+  }
 
+  try {
     // Set up environment for install script
     // Both vp and vp-dev use ~/.vite-plus-dev to avoid conflicting with release version
     const installDir = path.join(os.homedir(), '.vite-plus-dev');
@@ -48,6 +71,7 @@ export function installGlobalCli() {
       VITE_PLUS_LOCAL_TGZ: tgzPath,
       VITE_PLUS_HOME: installDir,
       VITE_PLUS_VERSION: 'local-dev',
+      CI: 'true',
     };
 
     // Run platform-specific install script
@@ -121,7 +145,14 @@ exec "$VITE_PLUS_HOME/current/bin/vp" "$@"
       // For 'vp' on Unix, install.sh already creates the symlink
     }
   } finally {
-    // Cleanup temp dir
-    rmSync(tempDir, { recursive: true, force: true });
+    // Cleanup temp dir only if we created it
+    if (tempDir) {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   }
+}
+
+// Allow running directly via: npx tsx install-global-cli.ts <args>
+if (import.meta.main) {
+  installGlobalCli();
 }
