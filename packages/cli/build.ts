@@ -44,6 +44,7 @@ const {
     ['skip-native']: { type: 'boolean', default: false },
     ['skip-ts']: { type: 'boolean', default: false },
   },
+  strict: false,
 });
 
 // Filter out custom flags before passing to NAPI CLI
