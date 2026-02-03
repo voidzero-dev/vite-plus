@@ -101,20 +101,9 @@ jobs:
         with:
           target: ${{ matrix.target }}
 
-      - name: Build CLI
-        run: pnpm bootstrap-cli:ci
-
-      - name: Add CLI to PATH
-        shell: bash
-        run: |
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "$USERPROFILE/.vite-plus-dev/bin" >> $GITHUB_PATH
-          else
-            echo "$HOME/.vite-plus-dev/bin" >> $GITHUB_PATH
-          fi
-
       - name: Pack packages into tgz
         run: |
+          pnpm copy-cli-binding
           mkdir -p tmp/tgz
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/test && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
@@ -274,11 +263,18 @@ jobs:
           name: vite-plus-packages-${{ matrix.os }}
           path: tmp/tgz
 
-      - name: Install vite-plus from tgz in ${{ matrix.project.name }}
+      - name: Install vp CLI
+        run: |
+          node $GITHUB_WORKSPACE/packages/tools/src/install-global-cli.ts vp --tgz $GITHUB_WORKSPACE/tmp/tgz/vite-plus-cli-0.0.0.tgz
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "$USERPROFILE/.vite-plus-dev/bin" >> $GITHUB_PATH
+          else
+            echo "$HOME/.vite-plus-dev/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Migrate in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
         run: |
-          # install global CLI first
-          npm install -g $GITHUB_WORKSPACE/tmp/tgz/vite-plus-cli-0.0.0.tgz
           node $GITHUB_WORKSPACE/ecosystem-ci/patch-project.ts ${{ matrix.project.name }}
           vp install --no-frozen-lockfile
 
