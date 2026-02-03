@@ -40,7 +40,7 @@ jobs:
       - name: Run install.sh
         env:
           VITE_PLUS_VERSION: test
-        run: bash packages/global/install.sh
+        run: cat packages/global/install.sh | bash
 
       - name: Verify installation
         working-directory: ${{ runner.temp }}
@@ -114,7 +114,7 @@ jobs:
             ubuntu:20.04 bash -c "
               ls -al ~/
               apt-get update && apt-get install -y curl ca-certificates
-              bash /workspace/packages/global/install.sh
+              cat /workspace/packages/global/install.sh | sh
               if [ -f ~/.profile ]; then
                 source ~/.profile
               elif [ -f ~/.bashrc ]; then
@@ -188,8 +188,8 @@ jobs:
             exit 1
           }
 
-          # Verify shim executables exist
-          $expectedShims = @("node.exe", "npm.cmd", "npx.cmd")
+          # Verify shim executables exist (all use .cmd wrappers on Windows)
+          $expectedShims = @("node.cmd", "npm.cmd", "npx.cmd")
           foreach ($shim in $expectedShims) {
             $shimFile = Join-Path $binPath $shim
             if (-not (Test-Path $shimFile)) {

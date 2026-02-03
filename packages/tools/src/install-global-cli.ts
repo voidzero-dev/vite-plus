@@ -155,15 +155,24 @@ exec "$VITE_PLUS_HOME/current/bin/vp.cmd" "$@"
         writeFileSync(bashPath, bashContent);
         console.log(`\nCreated wrapper scripts: ${cmdPath}, ${bashPath}`);
       } else {
-        // For 'vp', create bash script wrapper for Git Bash
-        // (install.ps1 already creates vp.cmd for cmd.exe/PowerShell, but we need to update it)
+        // For 'vp', update bin/vp.cmd to call vp.cmd instead of vp.exe
+        // (install.ps1 creates it pointing to vp.exe, but we renamed that to vp-raw.exe)
+        const cmdPath = path.join(binDir, 'vp.cmd');
+        const cmdContent = `@echo off\r
+set VITE_PLUS_HOME=${installDir}\r
+"%VITE_PLUS_HOME%\\current\\bin\\vp.cmd" %*\r
+exit /b %ERRORLEVEL%\r
+`;
+        writeFileSync(cmdPath, cmdContent);
+
+        // Also create bash script wrapper for Git Bash
         const bashPath = path.join(binDir, 'vp');
         const bashContent = `#!/bin/bash
 export VITE_PLUS_HOME="${installDir}"
 exec "$VITE_PLUS_HOME/current/bin/vp.cmd" "$@"
 `;
         writeFileSync(bashPath, bashContent);
-        console.log(`\nCreated bash wrapper: ${bashPath}`);
+        console.log(`\nCreated wrapper scripts: ${cmdPath}, ${bashPath}`);
       }
     } else {
       // Unix: Rename vp -> vp-raw, create wrapper
