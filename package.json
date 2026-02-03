@@ -4,7 +4,7 @@
   "license": "BUSL-1.1",
   "type": "module",
   "scripts": {
-    "build": "pnpm -F @voidzero-dev/* -F vite-plus -F vite-plus-cli build",
+    "build": "pnpm -F @voidzero-dev/* -F vite-plus build && pnpm -F vite-plus-cli build",
     "bootstrap-cli": "pnpm build && pnpm install-global-cli:local",
     "bootstrap-cli:ci": "pnpm install-global-cli",
     "install-global-cli": "pnpm --filter=vite-plus-cli copy-binding && tool install-global-cli vite",
