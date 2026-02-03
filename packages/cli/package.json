@@ -2,7 +2,8 @@
   "name": "vite-plus",
   "version": "0.0.0",
   "bin": {
-    "vite": "./bin/vite"
+    "vite": "./bin/vite",
+    "vp": "./bin/vite"
   },
   "files": [
     "bin",
