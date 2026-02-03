@@ -36,7 +36,9 @@ pnpm bootstrap-cli
 vp-dev --version
 ```
 
-Note: Local development installs the CLI as `vp-dev` (package name: `vite-plus-cli-dev`) to avoid overriding the published `vite-plus-cli` package and its `vp` bin name. In CI, `pnpm bootstrap-cli:ci` installs it as `vp`.
+This installs the CLI to `~/.vite-plus-dev` (separate from the release version at `~/.vite-plus`) and creates a `vp-dev` wrapper script that sets the correct `VITE_PLUS_HOME` environment variable.
+
+Note: In CI, `pnpm bootstrap-cli:ci` installs `vp` (without the wrapper) to the same `~/.vite-plus-dev` directory.
 
 ## Workflow for build and test
 
@@ -58,35 +60,6 @@ To sync the latest upstream dependencies such as Rolldown and Vite, run:
 pnpm tool sync-remote
 just build
 ```
-
-## Testing install.sh locally
-
-To test the install script with a locally built binary instead of downloading from npm:
-
-```bash
-# Build the vp binary
-pnpm bootstrap-cli
-
-# Run install.sh with the local binary
-VITE_PLUS_LOCAL_BINARY=./target/release/vp bash ./packages/global/install.sh
-
-# Verify the installation
-~/.vite-plus/current/bin/vp --version
-```
-
-For fully offline testing (skip all npm downloads):
-
-```bash
-# Build the vp binary and JS bundle
-pnpm bootstrap-cli
-
-# Run install.sh with local binary and package
-VITE_PLUS_LOCAL_BINARY=./target/release/vp \
-VITE_PLUS_LOCAL_PACKAGE=./packages/global \
-bash ./packages/global/install.sh
-```
-
-This is useful when making changes to `install.sh` and want to verify it works correctly before publishing.
 
 ## macOS Performance Tip
 
