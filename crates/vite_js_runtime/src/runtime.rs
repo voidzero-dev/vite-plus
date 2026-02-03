@@ -421,6 +421,14 @@ async fn resolve_version_for_project(
         return Ok((version, true));
     }
 
+    // Handle LTS aliases (lts/*, lts/iron, lts/-1)
+    if NodeProvider::is_lts_alias(version_req) {
+        tracing::debug!("Resolving LTS alias: {version_req}");
+        let version = provider.resolve_lts_alias(version_req).await?;
+        // Don't write back - user explicitly specified an LTS alias
+        return Ok((version, false));
+    }
+
     // Check if it's an exact version
     if NodeProvider::is_exact_version(version_req) {
         let normalized = version_req.strip_prefix('v').unwrap_or(version_req);
@@ -496,7 +504,7 @@ fn check_constraint(
     }
 }
 
-/// Normalize and validate a version string as semver (exact version or range).
+/// Normalize and validate a version string as semver (exact version or range) or LTS alias.
 /// Trims whitespace and returns the normalized version, or None with a warning if invalid.
 fn normalize_version(version: &Str, source: &str) -> Option<Str> {
     // Trim leading/trailing whitespace
@@ -504,6 +512,11 @@ fn normalize_version(version: &Str, source: &str) -> Option<Str> {
 
     if trimmed.is_empty() {
         return None;
+    }
+
+    // Accept LTS aliases (lts/*, lts/iron, lts/-1)
+    if NodeProvider::is_lts_alias(&trimmed) {
+        return Some(trimmed);
     }
 
     // Try parsing as exact version (strip 'v' prefix for exact version check)
@@ -1215,6 +1228,60 @@ mod tests {
 
         let version = Str::from("   ");
         assert_eq!(normalize_version(&version, "test"), None);
+    }
+
+    #[test]
+    fn test_normalize_version_lts_aliases() {
+        // LTS aliases should be accepted by normalize_version
+        assert_eq!(normalize_version(&"lts/*".into(), ".node-version"), Some("lts/*".into()));
+        assert_eq!(normalize_version(&"lts/iron".into(), ".node-version"), Some("lts/iron".into()));
+        assert_eq!(normalize_version(&"lts/jod".into(), ".node-version"), Some("lts/jod".into()));
+        assert_eq!(normalize_version(&"lts/-1".into(), ".node-version"), Some("lts/-1".into()));
+        assert_eq!(normalize_version(&"lts/-2".into(), ".node-version"), Some("lts/-2".into()));
+    }
+
+    #[tokio::test]
+    async fn test_download_runtime_for_project_with_lts_alias_in_node_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version with LTS alias
+        tokio::fs::write(temp_path.join(".node-version"), "lts/iron\n").await.unwrap();
+
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+
+        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+        // lts/iron should resolve to v20.x
+        let version = runtime.version();
+        let parsed = node_semver::Version::parse(version).unwrap();
+        assert_eq!(parsed.major, 20, "lts/iron should resolve to v20.x, got {version}");
+
+        // Should NOT overwrite .node-version - user explicitly specified an LTS alias
+        let node_version_content =
+            tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
+        assert_eq!(node_version_content, "lts/iron\n", ".node-version should remain unchanged");
+    }
+
+    #[tokio::test]
+    async fn test_download_runtime_for_project_with_lts_latest_alias() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version with lts/* alias
+        tokio::fs::write(temp_path.join(".node-version"), "lts/*\n").await.unwrap();
+
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+
+        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+        // lts/* should resolve to latest LTS (at least v22.x as of 2026)
+        let version = runtime.version();
+        let parsed = node_semver::Version::parse(version).unwrap();
+        assert!(parsed.major >= 22, "lts/* should resolve to at least v22.x, got {version}");
+
+        // Should NOT overwrite .node-version
+        let node_version_content =
+            tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
+        assert_eq!(node_version_content, "lts/*\n", ".node-version should remain unchanged");
     }
 
     // ==========================================
