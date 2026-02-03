@@ -2,10 +2,16 @@
 //!
 //! Creates the following structure:
 //! - ~/.vite-plus/bin/     - Contains vp symlink and node/npm/npx shims
-//! - ~/.vite-plus/current/ - Symlink to the installed version directory
+//! - ~/.vite-plus/current/ - Contains the actual vp CLI binary
 //!
-//! On Unix: bin/vp is a symlink to ../current/bin/vp
-//! On Windows: bin/vp.cmd is a wrapper script that calls ..\current\bin\vp.exe
+//! On Unix:
+//! - bin/vp is a symlink to ../current/bin/vp
+//! - bin/node, bin/npm, bin/npx are symlinks to ../current/bin/vp
+//! - Symlinks preserve argv[0], allowing tool detection via the symlink name
+//!
+//! On Windows:
+//! - bin/vp.cmd is a wrapper script that calls ..\current\bin\vp.exe
+//! - bin/node.cmd, bin/npm.cmd, bin/npx.cmd are wrappers calling `vp env run <tool>`
 
 use std::process::ExitStatus;
 
@@ -160,7 +166,8 @@ async fn create_shim(
 fn shim_filename(tool: &str) -> String {
     #[cfg(windows)]
     {
-        if tool == "node" { format!("{tool}.exe") } else { format!("{tool}.cmd") }
+        // All tools use .cmd wrappers on Windows (including node)
+        format!("{tool}.cmd")
     }
 
     #[cfg(not(windows))]
@@ -169,57 +176,45 @@ fn shim_filename(tool: &str) -> String {
     }
 }
 
-/// Create a Unix shim using hardlink, falling back to copy.
+/// Create a Unix shim using symlink to ../current/bin/vp.
+///
+/// Symlinks preserve argv[0], allowing the vp binary to detect which tool
+/// was invoked. This is the same pattern used by Volta.
 #[cfg(unix)]
 async fn create_unix_shim(
-    source: &std::path::Path,
+    _source: &std::path::Path,
     shim_path: &vite_path::AbsolutePath,
     _tool: &str,
 ) -> Result<(), Error> {
-    // Try hardlink first
-    match tokio::fs::hard_link(source, shim_path).await {
-        Ok(()) => {
-            tracing::debug!("Created hardlink shim at {:?}", shim_path);
-        }
-        Err(e) => {
-            tracing::debug!("Hardlink failed ({e}), falling back to copy");
-            tokio::fs::copy(source, shim_path).await?;
-        }
-    }
+    // Create symlink to ../current/bin/vp (relative path)
+    tokio::fs::symlink("../current/bin/vp", shim_path).await?;
+    tracing::debug!("Created symlink shim at {:?} -> ../current/bin/vp", shim_path);
 
     Ok(())
 }
 
-/// Create Windows shims.
-/// - node.exe: Copy of vp.exe
-/// - npm.cmd, npx.cmd: Wrapper scripts that set VITE_PLUS_SHIM_TOOL
+/// Create Windows shims using .cmd wrappers that call `vp env run <tool>`.
+///
+/// All tools (node, npm, npx) get .cmd wrappers that invoke `vp env run`.
+/// This is consistent with Volta's Windows approach.
 #[cfg(windows)]
 async fn create_windows_shim(
-    source: &std::path::Path,
+    _source: &std::path::Path,
     bin_dir: &vite_path::AbsolutePath,
     tool: &str,
 ) -> Result<(), Error> {
-    if tool == "node" {
-        // Copy vp.exe as node.exe
-        let node_exe = bin_dir.join("node.exe");
-        tokio::fs::copy(source, &node_exe).await?;
-    } else {
-        // Create .cmd wrapper script
-        let cmd_path = bin_dir.join(format!("{tool}.cmd"));
-        let node_exe_path = bin_dir.join("node.exe");
+    let cmd_path = bin_dir.join(format!("{tool}.cmd"));
 
-        let cmd_content = format!(
-            r#"@echo off
-setlocal
-set "VITE_PLUS_SHIM_TOOL={tool}"
-"{}" %*
+    // Create .cmd wrapper that calls vp env run <tool>
+    let cmd_content = format!(
+        r#"@echo off
+"%~dp0..\current\bin\vp.exe" env run {tool} %*
 exit /b %ERRORLEVEL%
-"#,
-            node_exe_path.as_path().display()
-        );
+"#
+    );
 
-        tokio::fs::write(&cmd_path, cmd_content).await?;
-    }
+    tokio::fs::write(&cmd_path, cmd_content).await?;
+    tracing::debug!("Created Windows wrapper {:?} -> vp env run {}", cmd_path, tool);
 
     Ok(())
 }

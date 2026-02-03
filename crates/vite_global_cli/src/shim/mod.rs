@@ -2,7 +2,11 @@
 //!
 //! This module provides the functionality for the vp binary to act as a shim
 //! when invoked as `node`, `npm`, `npx`, or any globally installed package binary.
-//! It detects the invocation mode via argv[0] or the VITE_PLUS_SHIM_TOOL environment variable.
+//!
+//! Detection methods:
+//! - Unix: Symlinks to vp binary preserve argv[0], allowing tool detection
+//! - Windows: .cmd wrappers call `vp env run <tool>` directly
+//! - Legacy: VITE_PLUS_SHIM_TOOL env var (kept for backward compatibility)
 
 mod cache;
 mod dispatch;
@@ -99,10 +103,12 @@ fn is_potential_package_binary(tool: &str) -> bool {
 
 /// Detect the shim tool from environment and argv.
 ///
-/// Checks `VITE_PLUS_SHIM_TOOL` first (set by Windows .cmd wrappers),
-/// then falls back to argv[0] detection.
+/// Checks `VITE_PLUS_SHIM_TOOL` first (legacy, for backward compatibility),
+/// then falls back to argv[0] detection (primary method on Unix).
+///
+/// Note: Modern Windows wrappers use `vp env run <tool>` instead of env vars.
 pub fn detect_shim_tool(argv0: &str) -> Option<String> {
-    // Check VITE_PLUS_SHIM_TOOL env var first (set by Windows .cmd wrappers)
+    // Check VITE_PLUS_SHIM_TOOL env var first (legacy backward compatibility)
     if let Ok(tool) = std::env::var("VITE_PLUS_SHIM_TOOL") {
         if !tool.is_empty() {
             let tool_lower = tool.to_lowercase();

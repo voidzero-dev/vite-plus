@@ -289,6 +289,9 @@ fn is_javascript_binary(path: &AbsolutePath) -> bool {
 const CORE_SHIMS: &[&str] = &["node", "npm", "npx", "vp"];
 
 /// Create a shim for a package binary.
+///
+/// On Unix: Creates a symlink to ../current/bin/vp
+/// On Windows: Creates a .cmd wrapper that calls `vp env run <bin_name>`
 async fn create_package_shim(
     bin_dir: &vite_path::AbsolutePath,
     bin_name: &str,
@@ -308,10 +311,6 @@ async fn create_package_shim(
 
     #[cfg(unix)]
     {
-        let current_exe = std::env::current_exe().map_err(|e| {
-            Error::ConfigError(format!("Cannot find current executable: {e}").into())
-        })?;
-
         let shim_path = bin_dir.join(bin_name);
 
         // Skip if already exists (e.g., re-installing the same package)
@@ -319,11 +318,9 @@ async fn create_package_shim(
             return Ok(());
         }
 
-        // Create hardlink
-        if tokio::fs::hard_link(&current_exe, &shim_path).await.is_err() {
-            // Fallback to copy
-            tokio::fs::copy(&current_exe, &shim_path).await?;
-        }
+        // Create symlink to ../current/bin/vp
+        tokio::fs::symlink("../current/bin/vp", &shim_path).await?;
+        tracing::debug!("Created package shim symlink {:?} -> ../current/bin/vp", shim_path);
     }
 
     #[cfg(windows)]
@@ -335,12 +332,13 @@ async fn create_package_shim(
             return Ok(());
         }
 
-        // Create .cmd wrapper
+        // Create .cmd wrapper that calls vp env run <bin_name>
         let wrapper_content = format!(
-            "@echo off\r\nsetlocal\r\nset \"VITE_PLUS_SHIM_TOOL={}\"\r\n\"%~dp0node.exe\" %*\r\nexit /b %ERRORLEVEL%\r\n",
+            "@echo off\r\n\"%~dp0..\\current\\bin\\vp.exe\" env run {} %*\r\nexit /b %ERRORLEVEL%\r\n",
             bin_name
         );
         tokio::fs::write(&shim_path, wrapper_content).await?;
+        tracing::debug!("Created package shim wrapper {:?} -> vp env run {}", shim_path, bin_name);
     }
 
     Ok(())
@@ -359,7 +357,8 @@ async fn remove_package_shim(
     #[cfg(unix)]
     {
         let shim_path = bin_dir.join(bin_name);
-        if tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
+        // Use symlink_metadata to detect symlinks (even broken ones)
+        if tokio::fs::symlink_metadata(&shim_path).await.is_ok() {
             tokio::fs::remove_file(&shim_path).await?;
         }
     }
@@ -399,11 +398,20 @@ mod tests {
         assert!(bin_dir.as_path().exists());
 
         // Verify shim file was created (on Windows, shims have .cmd extension)
+        // On Unix, symlinks may be broken (target doesn't exist), so use symlink_metadata
         #[cfg(unix)]
-        let shim_path = bin_dir.join("test-shim");
+        {
+            let shim_path = bin_dir.join("test-shim");
+            assert!(
+                std::fs::symlink_metadata(shim_path.as_path()).is_ok(),
+                "Symlink shim should exist"
+            );
+        }
         #[cfg(windows)]
-        let shim_path = bin_dir.join("test-shim.cmd");
-        assert!(shim_path.as_path().exists());
+        {
+            let shim_path = bin_dir.join("test-shim.cmd");
+            assert!(shim_path.as_path().exists());
+        }
     }
 
     #[tokio::test]
@@ -437,17 +445,35 @@ mod tests {
         create_package_shim(&bin_dir, "tsc", "typescript").await.unwrap();
 
         // Verify the shim was created
+        // On Unix, symlinks may be broken (target doesn't exist), so use symlink_metadata
         #[cfg(unix)]
-        let shim_path = bin_dir.join("tsc");
+        {
+            let shim_path = bin_dir.join("tsc");
+            assert!(
+                std::fs::symlink_metadata(shim_path.as_path()).is_ok(),
+                "Shim should exist after creation"
+            );
+
+            // Remove the shim
+            remove_package_shim(&bin_dir, "tsc").await.unwrap();
+
+            // Verify the shim was removed
+            assert!(
+                std::fs::symlink_metadata(shim_path.as_path()).is_err(),
+                "Shim should be removed"
+            );
+        }
         #[cfg(windows)]
-        let shim_path = bin_dir.join("tsc.cmd");
-        assert!(shim_path.as_path().exists(), "Shim should exist after creation");
+        {
+            let shim_path = bin_dir.join("tsc.cmd");
+            assert!(shim_path.as_path().exists(), "Shim should exist after creation");
 
-        // Remove the shim
-        remove_package_shim(&bin_dir, "tsc").await.unwrap();
+            // Remove the shim
+            remove_package_shim(&bin_dir, "tsc").await.unwrap();
 
-        // Verify the shim was removed
-        assert!(!shim_path.as_path().exists(), "Shim should be removed");
+            // Verify the shim was removed
+            assert!(!shim_path.as_path().exists(), "Shim should be removed");
+        }
     }
 
     #[tokio::test]
@@ -486,10 +512,17 @@ mod tests {
         create_package_shim(&bin_dir, "tsserver", "typescript").await.unwrap();
 
         // Verify shims exist
+        // On Unix, symlinks may be broken (target doesn't exist), so use symlink_metadata
         #[cfg(unix)]
         {
-            assert!(bin_dir.join("tsc").as_path().exists(), "tsc shim should exist");
-            assert!(bin_dir.join("tsserver").as_path().exists(), "tsserver shim should exist");
+            assert!(
+                std::fs::symlink_metadata(bin_dir.join("tsc").as_path()).is_ok(),
+                "tsc shim should exist"
+            );
+            assert!(
+                std::fs::symlink_metadata(bin_dir.join("tsserver").as_path()).is_ok(),
+                "tsserver shim should exist"
+            );
         }
         #[cfg(windows)]
         {

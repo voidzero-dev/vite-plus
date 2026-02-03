@@ -1522,6 +1522,7 @@ VITE_PLUS_HOME/
 ### How argv[0] Detection Works
 
 When a user runs `node`:
+
 1. Shell finds `~/.vite-plus/bin/node` in PATH
 2. This is a symlink to `../current/bin/vp`
 3. Kernel resolves symlink and executes `vp` binary
@@ -1580,6 +1581,7 @@ exit /b %ERRORLEVEL%
 ```
 
 For npm:
+
 ```batch
 @echo off
 "%~dp0..\current\bin\vp.exe" env run npm %*
