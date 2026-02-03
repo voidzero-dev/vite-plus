@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fs, { readFileSync } from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import { open } from 'node:fs/promises';
-import { cpus, tmpdir } from 'node:os';
+import { cpus, homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { debuglog, parseArgs } from 'node:util';
@@ -158,6 +158,8 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
     NO_COLOR: 'true',
     // set CI=true make sure snap-tests are stable on GitHub Actions
     CI: 'true',
+    // Use the dev installation, same as vp-dev
+    VITE_PLUS_HOME: path.join(homedir(), '.vite-plus-dev'),
 
     // A test case can override/unset environment variables above.
     // For example, VITE_PLUS_CLI_TEST/CI can be unset to test the real-world outputs.

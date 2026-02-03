@@ -8,8 +8,7 @@
 #   VITE_PLUS_VERSION - Version to install (default: latest)
 #   VITE_PLUS_HOME - Installation directory (default: $env:USERPROFILE\.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
-#   VITE_PLUS_LOCAL_BINARY - Path to locally built binary (for development/testing)
-#   VITE_PLUS_LOCAL_PACKAGE - Path to local vite-plus-cli package dir (for development/testing)
+#   VITE_PLUS_LOCAL_TGZ - Path to local vite-plus-cli.tgz (for development/testing)
 
 $ErrorActionPreference = "Stop"
 
@@ -17,9 +16,8 @@ $ViteVersion = if ($env:VITE_PLUS_VERSION) { $env:VITE_PLUS_VERSION } else { "la
 $InstallDir = if ($env:VITE_PLUS_HOME) { $env:VITE_PLUS_HOME } else { "$env:USERPROFILE\.vite-plus" }
 # npm registry URL (strip trailing slash if present)
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
-# Local paths for development/testing
-$LocalBinary = $env:VITE_PLUS_LOCAL_BINARY
-$LocalPackage = $env:VITE_PLUS_LOCAL_PACKAGE
+# Local tarball for development/testing
+$LocalTgz = $env:VITE_PLUS_LOCAL_TGZ
 
 function Write-Info {
     param([string]$Message)
@@ -154,7 +152,7 @@ function Download-AndExtract {
         New-Item -ItemType Directory -Force -Path $tempExtract | Out-Null
 
         # Extract using tar (available in Windows 10+)
-        tar -xzf $tempFile -C $tempExtract
+        & "$env:SystemRoot\System32\tar.exe" -xzf $tempFile -C $tempExtract
 
         # Copy the specified file/directory
         $sourcePath = Join-Path $tempExtract "package" $Filter
@@ -262,17 +260,14 @@ function Main {
     $arch = Get-Architecture
     $platform = "win32-$arch"
 
-    # Local development mode: skip npm entirely
-    if ($LocalBinary -and $LocalPackage) {
-        # Validate local paths
-        if (-not (Test-Path $LocalBinary)) {
-            Write-Error-Exit "Local binary not found: $LocalBinary"
-        }
-        if (-not (Test-Path $LocalPackage)) {
-            Write-Error-Exit "Local package directory not found: $LocalPackage"
+    # Local development mode: use local tgz
+    if ($LocalTgz) {
+        # Validate local tgz
+        if (-not (Test-Path $LocalTgz)) {
+            Write-Error-Exit "Local tarball not found: $LocalTgz"
         }
         # Use version as-is (default to "local-dev")
-        if ($ViteVersion -eq "latest") {
+        if ($ViteVersion -eq "latest" -or $ViteVersion -eq "test") {
             $ViteVersion = "local-dev"
         }
     } else {
@@ -293,12 +288,47 @@ function Main {
     New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 
     # Download and extract native binary and .node files from platform package
-    if ($LocalBinary) {
-        # Use local binary for development/testing
-        Write-Info "Using local binary: $LocalBinary"
-        Copy-Item -Path $LocalBinary -Destination "$BinDir\$binaryName" -Force
-        # Note: .node files won't be available when using local binary
+    # Also copy JS bundle and assets
+    $itemsToCopy = @("dist", "templates", "rules", "AGENTS.md", "package.json")
+
+    if ($LocalTgz) {
+        # Use local tarball for development/testing
+        Write-Info "Using local tarball: $LocalTgz"
+
+        # Create temp extraction directory
+        $tempExtract = Join-Path $env:TEMP "vite-local-$(Get-Random)"
+        New-Item -ItemType Directory -Force -Path $tempExtract | Out-Null
+
+        # Extract the tgz
+        & "$env:SystemRoot\System32\tar.exe" -xzf $LocalTgz -C $tempExtract
+
+        # Copy binary
+        $binarySource = Join-Path $tempExtract "package" "bin" $binaryName
+        if (Test-Path $binarySource) {
+            Copy-Item -Path $binarySource -Destination $BinDir -Force
+        }
+
+        # Copy .node files if present
+        $nodeFilesPath = Join-Path $tempExtract "package" "dist"
+        Get-ChildItem -Path $nodeFilesPath -Filter "*.node" -ErrorAction SilentlyContinue | ForEach-Object {
+            $destFile = Join-Path $DistDir $_.Name
+            if (Test-Path $destFile) {
+                Remove-Item -Path $destFile -Force
+            }
+            Copy-Item -Path $_.FullName -Destination $DistDir -Force
+        }
+
+        # Copy JS assets
+        foreach ($item in $itemsToCopy) {
+            $itemSource = Join-Path $tempExtract "package" $item
+            if (Test-Path $itemSource) {
+                Copy-Item -Path $itemSource -Destination $VersionDir -Recurse -Force
+            }
+        }
+
+        Remove-Item -Recurse -Force $tempExtract
     } else {
+        # Download from npm registry
         # Get package suffix from optionalDependencies (dynamic lookup)
         $packageSuffix = Get-PackageSuffix -Platform $platform
         $packageName = "@voidzero-dev/vite-plus-cli-$packageSuffix"
@@ -313,7 +343,7 @@ function Main {
             New-Item -ItemType Directory -Force -Path $platformTempExtract | Out-Null
 
             # Extract the package
-            tar -xzf $platformTempFile -C $platformTempExtract
+            & "$env:SystemRoot\System32\tar.exe" -xzf $platformTempFile -C $platformTempExtract
 
             # Copy binary to BinDir
             $binarySource = Join-Path $platformTempExtract "package" $binaryName
@@ -335,20 +365,7 @@ function Main {
         } finally {
             Remove-Item $platformTempFile -ErrorAction SilentlyContinue
         }
-    }
 
-    # Copy JS bundle and assets from local package or download from npm
-    $itemsToCopy = @("dist", "templates", "rules", "AGENTS.md", "package.json")
-    if ($LocalPackage) {
-        # Use local package for development/testing
-        Write-Info "Using local package: $LocalPackage"
-        foreach ($item in $itemsToCopy) {
-            $itemSource = Join-Path $LocalPackage $item
-            if (Test-Path $itemSource) {
-                Copy-Item -Path $itemSource -Destination $VersionDir -Recurse -Force
-            }
-        }
-    } else {
         # Download and extract JS bundle from npm
         $mainUrl = "$NpmRegistry/vite-plus-cli/-/vite-plus-cli-$ViteVersion.tgz"
 
@@ -361,7 +378,7 @@ function Main {
             New-Item -ItemType Directory -Force -Path $mainTempExtract | Out-Null
 
             # Extract the package
-            tar -xzf $mainTempFile -C $mainTempExtract
+            & "$env:SystemRoot\System32\tar.exe" -xzf $mainTempFile -C $mainTempExtract
 
             # Copy directories and files to VersionDir
             foreach ($item in $itemsToCopy) {
@@ -377,24 +394,21 @@ function Main {
         }
     }
 
-    # Skip dependency installation for local package (deps already bundled or available)
-    if (-not $LocalPackage) {
-        # Remove devDependencies and optionalDependencies from package.json
-        # (temporary solution until deps are fully bundled)
-        $pkgFile = Join-Path $VersionDir "package.json"
-        $pkg = Get-Content $pkgFile -Raw | ConvertFrom-Json
-        $pkg.PSObject.Properties.Remove("devDependencies")
-        $pkg.PSObject.Properties.Remove("optionalDependencies")
-        $pkg | ConvertTo-Json -Depth 10 | Set-Content $pkgFile
+    # Remove devDependencies and optionalDependencies from package.json
+    # (temporary solution until deps are fully bundled)
+    $pkgFile = Join-Path $VersionDir "package.json"
+    $pkg = Get-Content $pkgFile -Raw | ConvertFrom-Json
+    $pkg.PSObject.Properties.Remove("devDependencies")
+    $pkg.PSObject.Properties.Remove("optionalDependencies")
+    $pkg | ConvertTo-Json -Depth 10 | Set-Content $pkgFile
 
-        # Install production dependencies
-        Push-Location $VersionDir
-        try {
-            $env:CI = "true"
-            & "$BinDir\vp.exe" install --silent
-        } finally {
-            Pop-Location
-        }
+    # Install production dependencies
+    Push-Location $VersionDir
+    try {
+        $env:CI = "true"
+        & "$BinDir\vp.exe" install --silent
+    } finally {
+        Pop-Location
     }
 
     # Create/update current junction (symlink)
