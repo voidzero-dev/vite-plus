@@ -1,6 +1,6 @@
 {
   "env": {},
-  "ignoredPlatforms": ["win32"],
+  "ignoredPlatforms": [],
   "commands": [
     "vp env run --node 20.19 node -v # Run node with specific major version",
     "vp env run --node 20.19 node -e \"console.log('Hello from Node ' + process.version)\" # Run inline script"

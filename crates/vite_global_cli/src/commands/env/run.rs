@@ -6,6 +6,7 @@
 use std::process::ExitStatus;
 
 use vite_js_runtime::NodeProvider;
+use vite_shared::{PrependOptions, PrependResult, format_path_with_prepend};
 
 use crate::error::Error;
 
@@ -41,20 +42,21 @@ pub async fn execute(
         std::env::remove_var("VITE_PLUS_TOOL_RECURSION");
     }
 
-    // 4. Build PATH with node bin dir first
+    // 4. Build PATH with node bin dir first (uses platform-specific separator)
     let node_bin_dir = runtime.get_bin_prefix();
-    let current_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = if current_path.is_empty() {
-        node_bin_dir.as_path().to_string_lossy().to_string()
-    } else {
-        format!("{}:{}", node_bin_dir.as_path().display(), current_path)
+    let options = PrependOptions { dedupe_anywhere: true };
+    let new_path = match format_path_with_prepend(node_bin_dir.as_path(), options) {
+        PrependResult::Prepended(path) => path,
+        PrependResult::AlreadyPresent | PrependResult::JoinError => {
+            std::env::var_os("PATH").unwrap_or_default()
+        }
     };
 
     // 5. Execute command
     let (cmd, args) = command.split_first().unwrap();
 
     let status =
-        tokio::process::Command::new(cmd).args(args).env("PATH", &new_path).status().await?;
+        tokio::process::Command::new(cmd).args(args).env("PATH", new_path).status().await?;
 
     Ok(status)
 }
