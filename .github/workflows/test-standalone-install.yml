@@ -114,7 +114,7 @@ jobs:
             ubuntu:20.04 bash -c "
               ls -al ~/
               apt-get update && apt-get install -y curl ca-certificates
-              cat /workspace/packages/global/install.sh | sh
+              cat /workspace/packages/global/install.sh | bash
               if [ -f ~/.profile ]; then
                 source ~/.profile
               elif [ -f ~/.bashrc ]; then

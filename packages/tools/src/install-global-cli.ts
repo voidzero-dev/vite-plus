@@ -108,74 +108,22 @@ export function installGlobalCli() {
     const binDir = path.join(installDir, 'bin');
     const currentBinDir = path.join(installDir, 'current', 'bin');
 
-    // Rename the actual vp binary to vp-raw, then create a wrapper at vp
-    // This ensures VITE_PLUS_HOME is always set when vp is invoked (including via shims)
-    // The wrapper uses `exec -a "$0"` to preserve argv[0] for shim detection
+    // Create wrapper scripts to ensure VITE_PLUS_HOME is always set
     if (isWindows) {
-      const vpExe = path.join(currentBinDir, 'vp.exe');
-      const vpRawExe = path.join(currentBinDir, 'vp-raw.exe');
-
-      // Rename vp.exe -> vp-raw.exe
-      if (existsSync(vpExe) && !existsSync(vpRawExe)) {
-        renameSync(vpExe, vpRawExe);
-        console.log(`Renamed ${vpExe} -> ${vpRawExe}`);
-      }
-
-      // Create vp.cmd wrapper in current/bin/ that sets VITE_PLUS_HOME and calls vp-raw.exe
-      const vpWrapperPath = path.join(currentBinDir, 'vp.cmd');
-      const vpWrapperContent = `@echo off\r
-set VITE_PLUS_HOME=${installDir}\r
-"%~dp0vp-raw.exe" %*\r
-exit /b %ERRORLEVEL%\r
-`;
-      writeFileSync(vpWrapperPath, vpWrapperContent);
-      console.log(`Created wrapper: ${vpWrapperPath}`);
-
-      // On Windows, create bash script wrappers for Git Bash compatibility
-      // (Git Bash doesn't execute .cmd files automatically)
+      // On Windows, install.ps1 already creates bin/vp.cmd with VITE_PLUS_HOME set.
+      // For 'vp-dev', we need to rename it to vp-dev.cmd.
       if (binName === 'vp-dev') {
-        // Remove the vp.cmd in bin/ to avoid confusion
-        rmSync(path.join(binDir, 'vp.cmd'), { force: true });
-
-        // Create vp-dev.cmd for cmd.exe/PowerShell
-        const cmdPath = path.join(binDir, 'vp-dev.cmd');
-        const cmdContent = `@echo off\r
-set VITE_PLUS_HOME=${installDir}\r
-"%VITE_PLUS_HOME%\\current\\bin\\vp.cmd" %*\r
-exit /b %ERRORLEVEL%\r
-`;
-        writeFileSync(cmdPath, cmdContent);
-
-        // Create vp-dev bash script for Git Bash
-        const bashPath = path.join(binDir, 'vp-dev');
-        const bashContent = `#!/bin/bash
-export VITE_PLUS_HOME="${installDir}"
-exec "$VITE_PLUS_HOME/current/bin/vp.cmd" "$@"
-`;
-        writeFileSync(bashPath, bashContent);
-        console.log(`\nCreated wrapper scripts: ${cmdPath}, ${bashPath}`);
-      } else {
-        // For 'vp', update bin/vp.cmd to call vp.cmd instead of vp.exe
-        // (install.ps1 creates it pointing to vp.exe, but we renamed that to vp-raw.exe)
-        const cmdPath = path.join(binDir, 'vp.cmd');
-        const cmdContent = `@echo off\r
-set VITE_PLUS_HOME=${installDir}\r
-"%VITE_PLUS_HOME%\\current\\bin\\vp.cmd" %*\r
-exit /b %ERRORLEVEL%\r
-`;
-        writeFileSync(cmdPath, cmdContent);
-
-        // Also create bash script wrapper for Git Bash
-        const bashPath = path.join(binDir, 'vp');
-        const bashContent = `#!/bin/bash
-export VITE_PLUS_HOME="${installDir}"
-exec "$VITE_PLUS_HOME/current/bin/vp.cmd" "$@"
-`;
-        writeFileSync(bashPath, bashContent);
-        console.log(`\nCreated wrapper scripts: ${cmdPath}, ${bashPath}`);
+        const vpCmd = path.join(binDir, 'vp.cmd');
+        const vpDevCmd = path.join(binDir, 'vp-dev.cmd');
+        if (existsSync(vpCmd)) {
+          renameSync(vpCmd, vpDevCmd);
+          console.log(`\nRenamed ${vpCmd} -> ${vpDevCmd}`);
+        }
       }
+      // For 'vp', bin/vp.cmd is already correct from install.ps1
     } else {
-      // Unix: Rename vp -> vp-raw, create wrapper
+      // Unix: Rename vp -> vp-raw, then create a wrapper at vp
+      // The wrapper sets VITE_PLUS_HOME and uses `exec -a "$0"` to preserve argv[0] for shim detection
       const vpBinary = path.join(currentBinDir, 'vp');
       const vpRawBinary = path.join(currentBinDir, 'vp-raw');
 

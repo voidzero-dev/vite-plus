@@ -421,10 +421,12 @@ function Main {
     cmd /c mklink /J "$CurrentLink" "$VersionDir" | Out-Null
 
     # Create bin directory and vp.cmd wrapper (always done)
+    # Set VITE_PLUS_HOME so the vp binary knows its home directory
     New-Item -ItemType Directory -Force -Path "$InstallDir\bin" | Out-Null
     $wrapperContent = @"
 @echo off
-"%~dp0..\current\bin\vp.exe" %*
+set VITE_PLUS_HOME=%~dp0..
+"%VITE_PLUS_HOME%\current\bin\vp.exe" %*
 exit /b %ERRORLEVEL%
 "@
     Set-Content -Path "$InstallDir\bin\vp.cmd" -Value $wrapperContent -NoNewline

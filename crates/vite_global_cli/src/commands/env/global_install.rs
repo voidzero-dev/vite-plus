@@ -333,8 +333,10 @@ async fn create_package_shim(
         }
 
         // Create .cmd wrapper that calls vp env run <bin_name>
+        // Set VITE_PLUS_HOME using %~dp0.. which resolves to the parent of bin/
+        // This ensures the vp binary knows its home directory
         let wrapper_content = format!(
-            "@echo off\r\n\"%~dp0..\\current\\bin\\vp.exe\" env run {} %*\r\nexit /b %ERRORLEVEL%\r\n",
+            "@echo off\r\nset VITE_PLUS_HOME=%~dp0..\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" env run {} %*\r\nexit /b %ERRORLEVEL%\r\n",
             bin_name
         );
         tokio::fs::write(&shim_path, wrapper_content).await?;
