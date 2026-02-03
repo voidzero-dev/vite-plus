@@ -101,9 +101,20 @@ jobs:
         with:
           target: ${{ matrix.target }}
 
+      - name: Build CLI
+        run: pnpm bootstrap-cli:ci
+
+      - name: Add CLI to PATH
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "$USERPROFILE/.vite-plus-dev/bin" >> $GITHUB_PATH
+          else
+            echo "$HOME/.vite-plus-dev/bin" >> $GITHUB_PATH
+          fi
+
       - name: Pack packages into tgz
         run: |
-          pnpm bootstrap-cli:ci
           mkdir -p tmp/tgz
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/test && pnpm pack --pack-destination ../../tmp/tgz && cd ../..

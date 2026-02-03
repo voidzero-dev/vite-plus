@@ -133,7 +133,9 @@ jobs:
           target: x86_64-unknown-linux-gnu
 
       - name: Build CLI
-        run: pnpm bootstrap-cli:ci
+        run: |
+          pnpm bootstrap-cli:ci
+          echo "$HOME/.vite-plus-dev/bin" >> $GITHUB_PATH
 
       - name: Print help for built-in commands
         run: |
@@ -193,8 +195,19 @@ jobs:
         run: pnpm tsgo
 
       - name: Build CLI
+        run: pnpm bootstrap-cli:ci
+
+      - name: Add CLI to PATH
+        shell: bash
         run: |
-          pnpm bootstrap-cli:ci
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "$USERPROFILE/.vite-plus-dev/bin" >> $GITHUB_PATH
+          else
+            echo "$HOME/.vite-plus-dev/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Verify CLI installation
+        run: |
           which vp
           vp --version
           vp -h
@@ -255,7 +268,9 @@ jobs:
           target: x86_64-unknown-linux-gnu
 
       - name: Build CLI
-        run: pnpm bootstrap-cli:ci
+        run: |
+          pnpm bootstrap-cli:ci
+          echo "$HOME/.vite-plus-dev/bin" >> $GITHUB_PATH
 
       - name: Run local CLI `vite install`
         run: |
