@@ -62,8 +62,12 @@ pub fn is_shim_tool(tool: &str) -> bool {
 
 /// Check if the tool could be a package binary shim.
 ///
-/// Returns true if the tool is invoked from the vite-plus bin directory.
+/// Returns true if a shim for the tool exists in the configured bin directory.
 /// This check respects the VITE_PLUS_HOME environment variable for custom home directories.
+///
+/// Note: We check the configured bin directory directly instead of using current_exe()
+/// because when running through a wrapper script (e.g., current/bin/vp), the current_exe()
+/// returns the wrapper's location, not the original shim's location.
 fn is_potential_package_binary(tool: &str) -> bool {
     use crate::commands::env::config;
 
@@ -72,33 +76,10 @@ fn is_potential_package_binary(tool: &str) -> bool {
         return false;
     };
 
-    // Check if we're running from the configured bin directory
-    let Ok(current_exe) = std::env::current_exe() else {
-        return false;
-    };
-
-    let Some(bin_dir) = current_exe.parent() else {
-        return false;
-    };
-
-    // Compare the executable's bin directory with the configured bin directory
-    // Use canonicalize to resolve symlinks and get consistent paths
-    let bin_dir_canonical = std::fs::canonicalize(bin_dir).ok();
-    let configured_canonical = std::fs::canonicalize(configured_bin.as_path()).ok();
-
-    let is_in_configured_bin = match (bin_dir_canonical, configured_canonical) {
-        (Some(a), Some(b)) => a == b,
-        // Fallback to direct comparison if canonicalize fails
-        _ => bin_dir == configured_bin.as_path(),
-    };
-
-    if !is_in_configured_bin {
-        return false;
-    }
-
-    // Check if the shim exists in the bin directory
-    let shim_path = bin_dir.join(tool);
-    shim_path.exists()
+    // Check if the shim exists in the configured bin directory
+    // Use symlink_metadata to detect symlinks (even broken ones)
+    let shim_path = configured_bin.join(tool);
+    std::fs::symlink_metadata(&shim_path).is_ok()
 }
 
 /// Detect the shim tool from environment and argv.
@@ -166,50 +147,20 @@ mod tests {
         assert!(!is_shim_tool("vp")); // vp is never a shim
     }
 
-    /// Test that package binary detection works with custom VITE_PLUS_HOME.
+    /// Test that is_potential_package_binary checks the configured bin directory.
     ///
-    /// BUG: Currently, is_potential_package_binary() uses a hardcoded string check:
-    /// `bin_dir_str.contains(".vite-plus") && bin_dir_str.ends_with("bin")`
-    ///
-    /// This fails when VITE_PLUS_HOME is set to a custom directory like
-    /// "~/.vite-plus-dev" because ".vite-plus-dev" contains ".vite-plus" but
-    /// is a different directory, or when set to something like "~/.my-tools"
-    /// which doesn't contain ".vite-plus" at all.
-    ///
-    /// The fix is to use config::get_bin_dir() which respects VITE_PLUS_HOME.
+    /// The function now checks if a shim exists in the configured bin directory
+    /// (from VITE_PLUS_HOME/bin) instead of relying on current_exe().
+    /// This allows it to work correctly with wrapper scripts.
     #[test]
-    fn test_is_potential_package_binary_with_custom_home_conceptual() {
-        // This is a conceptual test that documents the bug.
-        // We can't easily test the actual function because it relies on
-        // std::env::current_exe() which we can't mock.
+    fn test_is_potential_package_binary_checks_configured_bin() {
+        // The function checks config::get_bin_dir() which respects VITE_PLUS_HOME.
+        // Without setting VITE_PLUS_HOME, it defaults to ~/.vite-plus/bin.
         //
-        // The bug is that this check:
-        //   bin_dir_str.contains(".vite-plus") && bin_dir_str.ends_with("bin")
-        //
-        // Would fail for these valid VITE_PLUS_HOME values:
-        // - ~/.my-node-manager  (doesn't contain ".vite-plus")
-        // - /opt/vp             (doesn't contain ".vite-plus")
-        //
-        // And incorrectly match:
-        // - ~/.vite-plus-dev    (contains ".vite-plus" but is a different dir)
-        //
-        // After the fix, we compare against config::get_bin_dir() directly.
-
-        // Test the bug exists in the current implementation by checking the string logic
-        let cases = [
-            // (bin_dir, expected_with_bug, expected_after_fix)
-            ("/home/user/.vite-plus/bin", true, true), // Normal case
-            ("/home/user/.vite-plus-dev/bin", true, false), // BUG: matches but shouldn't
-            ("/home/user/.my-tools/bin", false, true), // BUG: doesn't match but should
-            ("/opt/vp/bin", false, true),              // BUG: doesn't match but should
-        ];
-
-        for (bin_dir, expected_with_bug, _expected_after_fix) in cases {
-            let result_with_bug = bin_dir.contains(".vite-plus") && bin_dir.ends_with("bin");
-            assert_eq!(result_with_bug, expected_with_bug, "Bug check failed for {bin_dir}");
-        }
-
-        // The fix will replace string matching with path comparison
-        // using config::get_bin_dir() which respects VITE_PLUS_HOME env var
+        // Since we can't easily create test shims in the actual bin directory,
+        // we just verify the function doesn't panic and returns false for
+        // non-existent tools.
+        assert!(!is_potential_package_binary("nonexistent-tool-12345"));
+        assert!(!is_potential_package_binary("another-fake-tool"));
     }
 }

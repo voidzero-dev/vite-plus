@@ -247,6 +247,8 @@ jobs:
         shell: pwsh
         run: |
           $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
+          $env:VITE_LOG = "trace"
+          vp env doctor
 
           # Test 1: Install a JS-based CLI (typescript)
           npm install -g typescript
