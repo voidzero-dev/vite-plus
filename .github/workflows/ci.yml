@@ -230,6 +230,54 @@ jobs:
           RUST_BACKTRACE=1 pnpm test
           git diff --exit-code
 
+      - name: Test global package install (Unix)
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: |
+          # Test 1: Install a JS-based CLI (typescript)
+          npm install -g typescript
+          tsc --version
+
+          # Test 2: Verify the package was installed correctly
+          ls -la ~/.vite-plus-dev/packages/typescript/
+          ls -la ~/.vite-plus-dev/bin/
+
+          # Test 3: Uninstall
+          npm uninstall -g typescript
+
+          # Test 4: Verify uninstall removed shim
+          echo "Checking bin dir after uninstall:"
+          ls -la ~/.vite-plus-dev/bin/
+          if [ -f ~/.vite-plus-dev/bin/tsc ]; then
+            echo "Error: tsc shim file still exists at ~/.vite-plus-dev/bin/tsc"
+            exit 1
+          fi
+          echo "tsc shim removed successfully"
+
+      - name: Test global package install (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          # Test 1: Install a JS-based CLI (typescript)
+          npm install -g typescript
+          tsc --version
+
+          # Test 2: Verify the package was installed correctly
+          Get-ChildItem "$env:USERPROFILE\.vite-plus-dev\packages\typescript\"
+          Get-ChildItem "$env:USERPROFILE\.vite-plus-dev\bin\"
+
+          # Test 3: Uninstall
+          npm uninstall -g typescript
+
+          # Test 4: Verify uninstall removed shim
+          Write-Host "Checking bin dir after uninstall:"
+          Get-ChildItem "$env:USERPROFILE\.vite-plus-dev\bin\"
+          $shimPath = "$env:USERPROFILE\.vite-plus-dev\bin\tsc.cmd"
+          if (Test-Path $shimPath) {
+            Write-Error "tsc shim file still exists at $shimPath"
+            exit 1
+          }
+          Write-Host "tsc shim removed successfully"
+
   install-e2e-test:
     name: Local CLI `vite install` E2E test
     needs:
