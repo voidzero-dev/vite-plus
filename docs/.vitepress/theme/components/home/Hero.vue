@@ -40,9 +40,9 @@
 </template>
 
 <script setup lang="ts">
-import RiveAnimation from "@components/shared/RiveAnimation.vue";
-import homepageAnimation from "@local-assets/animations/1280_x_580_vite+_masthead.riv";
-import homepageAnimationMobile from "@local-assets/animations/253_x_268_vite+_masthead_mobile.riv";
+import RiveAnimation from '@components/shared/RiveAnimation.vue';
+import homepageAnimation from '@local-assets/animations/1280_x_580_vite+_masthead.riv';
+import homepageAnimationMobile from '@local-assets/animations/253_x_268_vite+_masthead_mobile.riv';
 
 const smoothScrollTo = (e: Event, targetId: string) => {
   e.preventDefault();

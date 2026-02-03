@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted } from 'vue';
 
-const nav = [{ text: "Docs", link: "/vite/guide" }];
+const nav = [{ text: 'Docs', link: '/vite/guide' }];
 
 // Mobile menu state
 const mobileMenuOpen = ref(false);
@@ -10,21 +10,21 @@ const expandedMobileItem = ref<string | null>(null);
 // Body scroll lock for mobile menu
 const lockBodyScroll = () => {
   const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-  document.body.style.overflow = "hidden";
-  document.body.style.position = "fixed";
-  document.body.style.width = "100%";
-  document.body.style.top = "0";
+  document.body.style.overflow = 'hidden';
+  document.body.style.position = 'fixed';
+  document.body.style.width = '100%';
+  document.body.style.top = '0';
   if (scrollbarWidth > 0) {
     document.body.style.paddingRight = `${scrollbarWidth}px`;
   }
 };
 
 const unlockBodyScroll = () => {
-  document.body.style.overflow = "";
-  document.body.style.position = "";
-  document.body.style.width = "";
-  document.body.style.top = "";
-  document.body.style.paddingRight = "";
+  document.body.style.overflow = '';
+  document.body.style.position = '';
+  document.body.style.width = '';
+  document.body.style.top = '';
+  document.body.style.paddingRight = '';
 };
 
 // Close mobile menu
@@ -36,7 +36,7 @@ const closeMobileMenu = () => {
 
 // Handle keyboard navigation
 const handleKeydown = (e: KeyboardEvent) => {
-  if (e.key === "Escape") {
+  if (e.key === 'Escape') {
     if (mobileMenuOpen.value) {
       closeMobileMenu();
     }
@@ -56,11 +56,11 @@ const toggleMobileMenu = () => {
 };
 
 onMounted(() => {
-  document.addEventListener("keydown", handleKeydown);
+  document.addEventListener('keydown', handleKeydown);
 });
 
 onUnmounted(() => {
-  document.removeEventListener("keydown", handleKeydown);
+  document.removeEventListener('keydown', handleKeydown);
   unlockBodyScroll();
 });
 </script>
