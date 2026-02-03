@@ -246,6 +246,9 @@ async fn create_package_shim(
         return Ok(());
     }
 
+    // Ensure bin directory exists
+    tokio::fs::create_dir_all(bin_dir).await?;
+
     #[cfg(unix)]
     {
         let current_exe = std::env::current_exe().map_err(|e| {
