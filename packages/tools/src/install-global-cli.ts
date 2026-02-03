@@ -2,9 +2,14 @@ import { execSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const isWindows = process.platform === 'win32';
+
+// Get repo root from script location (packages/tools/src/install-global-cli.ts -> repo root)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, '../../..');
 
 export function installGlobalCli() {
   // Detect if running directly or via tools dispatcher
@@ -49,7 +54,7 @@ export function installGlobalCli() {
     // - Auto-resolves catalog: dependencies
     // - Includes binary (already in packages/global/bin/ after copy-vp-binary)
     execSync(`pnpm pack --pack-destination "${tempDir}"`, {
-      cwd: 'packages/global',
+      cwd: path.join(repoRoot, 'packages/global'),
       stdio: 'inherit',
     });
 
@@ -74,15 +79,18 @@ export function installGlobalCli() {
       CI: 'true',
     };
 
-    // Run platform-specific install script
+    // Run platform-specific install script (use absolute paths)
+    const installScriptDir = path.join(repoRoot, 'packages/global');
     if (isWindows) {
       // Use pwsh (PowerShell Core) for better UTF-8 handling
-      execSync(`pwsh -ExecutionPolicy Bypass -File .\\packages\\global\\install.ps1`, {
+      const ps1Path = path.join(installScriptDir, 'install.ps1');
+      execSync(`pwsh -ExecutionPolicy Bypass -File "${ps1Path}"`, {
         stdio: 'inherit',
         env,
       });
     } else {
-      execSync('bash ./packages/global/install.sh', {
+      const shPath = path.join(installScriptDir, 'install.sh');
+      execSync(`bash "${shPath}"`, {
         stdio: 'inherit',
         env,
       });
