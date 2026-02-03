@@ -23,7 +23,7 @@ This RFC proposes adding a `vp env` command that provides system-wide, IDE-safe 
 A shim-based approach where:
 
 - `VITE_PLUS_HOME/bin/` directory is added to PATH (system-level for IDE reliability)
-- Shims (`node`, `npm`, `npx`) are hardlinks/copies of the `vp` binary
+- Shims (`node`, `npm`, `npx`) are symlinks to the `vp` binary (Unix) or `.cmd` wrappers (Windows)
 - The `vp` CLI itself is also in `VITE_PLUS_HOME/bin/`, so users only need one PATH entry
 - The binary detects invocation via `argv[0]` and dispatches accordingly
 - Version resolution and installation leverage existing `vite_js_runtime` infrastructure
@@ -174,7 +174,7 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 │                  │                                                          │
 │                  ▼                                                          │
 │  ┌──────────────────────────────┐                                           │
-│  │  ~/.vite-plus/bin/node       │  ◄── Hardlink to vp binary (via PATH)     │
+│  │  ~/.vite-plus/bin/node       │  ◄── Symlink to vp binary (via PATH)      │
 │  │  (shim intercepts command)   │                                           │
 │  └──────────────┬───────────────┘                                           │
 │                 │                                                           │
@@ -212,11 +212,11 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 │                                                                             │
 │  ~/.vite-plus/                        (VITE_PLUS_HOME)                      │
 │  ├── bin/                                                                   │
-│  │   ├── vp   ──────────────────────  Symlink to ../current/vp              │
+│  │   ├── vp   ──────────────────────  Symlink to ../current/bin/vp          │
 │  │   ├── node ──────────────────────┐                                       │
-│  │   ├── npm  ──────────────────────┼──▶ Hardlinks to vp binary             │
+│  │   ├── npm  ──────────────────────┼──▶ Symlinks to ../current/bin/vp      │
 │  │   └── npx  ──────────────────────┘                                       │
-│  ├── current/vp                       The actual vp CLI binary              │
+│  ├── current/bin/vp                   The actual vp CLI binary              │
 │  ├── js_runtime/node/                 Node.js installations                 │
 │  │   ├── 20.18.0/bin/node             Installed Node.js versions            │
 │  │   ├── 22.13.0/bin/node                                                   │
@@ -257,18 +257,19 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 ```
 VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 ├── bin/
-│   ├── vp -> ../current/vp           # Symlink to current vp binary (Unix)
-│   ├── node                          # Hardlink to vp binary (Unix)
-│   ├── npm                           # Hardlink to vp binary (Unix)
-│   ├── npx                           # Hardlink to vp binary (Unix)
-│   ├── tsc                           # Hardlink for global package binary (Unix)
-│   ├── vp.cmd                        # Wrapper script calling ..\current\vp.exe (Windows)
-│   ├── node.exe                      # Copy of current\vp.exe (Windows)
-│   ├── npm.cmd                       # Wrapper script (Windows)
-│   └── npx.cmd                       # Wrapper script (Windows)
+│   ├── vp -> ../current/bin/vp       # Symlink to current vp binary (Unix)
+│   ├── node -> ../current/bin/vp     # Symlink to vp binary (Unix)
+│   ├── npm -> ../current/bin/vp      # Symlink to vp binary (Unix)
+│   ├── npx -> ../current/bin/vp      # Symlink to vp binary (Unix)
+│   ├── tsc -> ../current/bin/vp      # Symlink for global package (Unix)
+│   ├── vp.cmd                        # Wrapper calling ..\current\bin\vp.exe (Windows)
+│   ├── node.cmd                      # Wrapper calling vp env run node (Windows)
+│   ├── npm.cmd                       # Wrapper calling vp env run npm (Windows)
+│   └── npx.cmd                       # Wrapper calling vp env run npx (Windows)
 ├── current/
-│   ├── vp                            # The actual vp CLI binary (Unix)
-│   └── vp.exe                        # The actual vp CLI binary (Windows)
+│   └── bin/
+│       ├── vp                        # The actual vp CLI binary (Unix)
+│       └── vp.exe                    # The actual vp CLI binary (Windows)
 ├── js_runtime/
 │   └── node/
 │       ├── 20.18.0/                  # Installed Node versions
@@ -301,7 +302,7 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 | Directory          | Purpose                                                            |
 | ------------------ | ------------------------------------------------------------------ |
 | `bin/`             | vp symlink and all shims (node, npm, npx, global package binaries) |
-| `current/`         | The actual vp CLI binary (bin/vp symlinks here)                    |
+| `current/bin/`     | The actual vp CLI binary (bin/ shims point here)                   |
 | `js_runtime/node/` | Installed Node.js versions                                         |
 | `packages/`        | Installed global packages with metadata                            |
 | `shared/`          | NODE_PATH symlinks for package require() resolution                |
@@ -605,27 +606,29 @@ fn execute_run_command() {
 - Consistent behavior across all tools
 - Already proven pattern (used by fnm, volta)
 
-### 2. Hardlinks over Symlinks (Unix)
+### 2. Symlinks for Shims (Unix)
 
-**Decision**: Use hardlinks for shims on Unix, with fallback to copy.
+**Decision**: Use symlinks for all shims on Unix, pointing to the vp binary.
 
 **Rationale**:
 
-- Hardlinks work across more filesystem types than symlinks
-- Symlinks can cause argv[0] to resolve to the target name
-- Hardlinks preserve the intended argv[0] value
-- Copy fallback for cross-filesystem scenarios
+- Symlinks preserve argv[0] - executing a symlink sets argv[0] to the symlink path, not the target
+- Proven pattern used by Volta successfully
+- Single binary to maintain - update `current/bin/vp` and all shims work
+- No binary accumulation issues (symlinks are just filesystem pointers)
+- Relative symlinks (e.g., `../current/bin/vp`) work within the same directory tree
 
-### 3. Wrapper Scripts for Windows npm/npx
+### 3. Wrapper Scripts for Windows
 
-**Decision**: Use `.cmd` wrapper scripts for npm/npx on Windows with `VITE_PLUS_SHIM_TOOL` environment variable.
+**Decision**: Use `.cmd` wrapper scripts on Windows that call `vp env run <tool>`.
 
 **Rationale**:
 
 - Windows PATH resolution prefers `.cmd` over `.exe` for extensionless commands
-- npm is typically invoked as `npm` not `npm.exe`
-- `.cmd` wrappers set `VITE_PLUS_SHIM_TOOL` env var and forward to `vp.exe`
-- More maintainable than multiple .exe copies - only one binary to update
+- Simple wrapper format: `vp env run npm %*` - no binary copies needed
+- Same pattern as Volta (`volta run <tool>`)
+- Single `vp.exe` binary to maintain in `current/bin/`
+- No `VITE_PLUS_SHIM_TOOL` env var complexity - dispatch via `vp env run` command
 
 ### 4. execve on Unix, spawn on Windows
 
@@ -733,8 +736,8 @@ Recommended Fix:
 
 The global CLI installation script (`packages/global/install.sh`) will be updated to:
 
-1. Install the `vp` binary to `~/.vite-plus/current/vp`
-2. Create symlink `~/.vite-plus/bin/vp` → `../current/vp`
+1. Install the `vp` binary to `~/.vite-plus/current/bin/vp`
+2. Create symlink `~/.vite-plus/bin/vp` → `../current/bin/vp`
 3. Configure shell PATH to include `~/.vite-plus/bin`
 4. Setup Node.js version manager based on environment:
    - **CI environment**: Auto-enable (no prompt)
@@ -1499,6 +1502,49 @@ $ vp env --current --json
 | `VITE_PLUS_TOOL_RECURSION` | **Internal**: Prevents shim recursion | unset          |
 | `VITE_PLUS_UNSAFE_GLOBAL`  | Bypass global package interception    | unset          |
 
+## Unix-Specific Considerations
+
+### Shim Structure
+
+```
+VITE_PLUS_HOME/
+├── bin/
+│   ├── vp -> ../current/bin/vp      # Symlink to actual binary
+│   ├── node -> ../current/bin/vp    # Symlink to same binary
+│   ├── npm -> ../current/bin/vp     # Symlink to same binary
+│   ├── npx -> ../current/bin/vp     # Symlink to same binary
+│   └── tsc -> ../current/bin/vp     # Symlink for global package
+└── current/
+    └── bin/
+        └── vp                        # The actual vp CLI binary
+```
+
+### How argv[0] Detection Works
+
+When a user runs `node`:
+1. Shell finds `~/.vite-plus/bin/node` in PATH
+2. This is a symlink to `../current/bin/vp`
+3. Kernel resolves symlink and executes `vp` binary
+4. `argv[0]` is set to the invoking path: `node` (or full path)
+5. `vp` binary extracts tool name from `argv[0]` (gets "node")
+6. Dispatches to shim logic for node
+
+**Key Insight**: Symlinks preserve argv[0]. This is the same pattern Volta uses successfully.
+
+### Symlink Creation
+
+All shims use relative symlinks:
+
+```bash
+# Core tools
+ln -sf ../current/bin/vp ~/.vite-plus/bin/node
+ln -sf ../current/bin/vp ~/.vite-plus/bin/npm
+ln -sf ../current/bin/vp ~/.vite-plus/bin/npx
+
+# Global package binaries
+ln -sf ../current/bin/vp ~/.vite-plus/bin/tsc
+```
+
 ## Windows-Specific Considerations
 
 ### Shim Structure
@@ -1506,54 +1552,62 @@ $ vp env --current --json
 ```
 VITE_PLUS_HOME\
 ├── bin\
-│   ├── vp.cmd      # Wrapper script calling ..\current\vp.exe
-│   ├── node.exe    # Copy of current\vp.exe
-│   ├── npm.cmd     # Wrapper script
-│   └── npx.cmd     # Wrapper script
+│   ├── vp.cmd        # Wrapper calling ..\current\bin\vp.exe
+│   ├── node.cmd      # Wrapper calling vp env run node
+│   ├── npm.cmd       # Wrapper calling vp env run npm
+│   └── npx.cmd       # Wrapper calling vp env run npx
 └── current\
-    └── vp.exe      # The actual vp CLI binary
+    └── bin\
+        └── vp.exe    # The actual vp CLI binary
 ```
 
 ### Wrapper Script Template (vp.cmd)
 
 ```batch
 @echo off
-"%~dp0..\current\vp.exe" %*
+"%~dp0..\current\bin\vp.exe" %*
 exit /b %ERRORLEVEL%
 ```
 
-The `vp.cmd` wrapper simply forwards all arguments to the actual `vp.exe` binary in the `current` directory.
+The `vp.cmd` wrapper forwards all arguments to the actual `vp.exe` binary.
 
-### Wrapper Script Template (npm.cmd)
+### Wrapper Script Template (node.cmd, npm.cmd, npx.cmd)
 
 ```batch
 @echo off
-setlocal
-set "VITE_PLUS_SHIM_TOOL=npm"
-"%~dp0node.exe" %*
+"%~dp0..\current\bin\vp.exe" env run node %*
 exit /b %ERRORLEVEL%
 ```
 
-The `.cmd` wrapper sets `VITE_PLUS_SHIM_TOOL` environment variable before calling `node.exe` (which is a copy of `vp.exe`). The Rust binary checks this env var first before falling back to argv[0] detection.
+For npm:
+```batch
+@echo off
+"%~dp0..\current\bin\vp.exe" env run npm %*
+exit /b %ERRORLEVEL%
+```
+
+**How it works**:
+
+1. User runs `npm install`
+2. Windows finds `~/.vite-plus/bin/npm.cmd` in PATH
+3. Wrapper calls `vp.exe env run npm install`
+4. `vp env run` command handles version resolution and execution
 
 **Benefits of this approach**:
 
-- Single `vp.exe` binary to update in `current\` directory
-- `node.exe` in `bin\` is a copy for shim detection via argv[0]
-- `.cmd` wrappers are trivial text files
-- Clear separation of concerns: `.cmd` sets context, binary does the work
+- Single `vp.exe` binary to update in `current\bin\`
+- All shims are trivial `.cmd` text files (no binary copies)
+- Consistent with Volta's Windows approach
+- Clear, readable wrapper scripts
 
 ### Windows Installation (install.ps1)
 
-The Windows installer (`install.ps1`) follows the same flow:
+The Windows installer (`install.ps1`) follows this flow:
 
-1. Download and install `vp.exe` to `~/.vite-plus/current/`
+1. Download and install `vp.exe` to `~/.vite-plus/current/bin/`
 2. Create `~/.vite-plus/bin/vp.cmd` wrapper script
-3. Configure User PATH to include `~/.vite-plus/bin`
-4. Setup Node.js version manager based on environment:
-   - **CI environment**: Auto-enable (no prompt)
-   - **No system Node.js**: Auto-enable (no prompt)
-   - **Interactive with system Node.js**: Prompt user
+3. Create shim wrappers: `node.cmd`, `npm.cmd`, `npx.cmd`
+4. Configure User PATH to include `~/.vite-plus/bin`
 
 ## Testing Strategy
 
@@ -1605,9 +1659,9 @@ env-doctor/
 ### Phase 1: Core Infrastructure (P0)
 
 1. Add `vp env` command structure to CLI
-2. Implement argv[0] detection in main.rs (also check `VITE_PLUS_SHIM_TOOL` env var for Windows)
+2. Implement argv[0] detection in main.rs
 3. Implement shim dispatch logic for `node`
-4. Implement `vp env setup` (Unix hardlinks, Windows .exe copy + .cmd wrappers)
+4. Implement `vp env setup` (Unix symlinks, Windows .cmd wrappers)
 5. Implement `vp env doctor` basic diagnostics
 6. Add resolution cache (persists across upgrades with version field)
 7. Implement `vp env default [version]` to set/show global default Node.js version
@@ -1661,7 +1715,7 @@ The following decisions have been made:
 
 1. **VITE_PLUS_HOME Default Location**: `~/.vite-plus` - Simple, memorable path that's easy for users to find and configure.
 
-2. **Windows Wrapper Strategy**: `.cmd` wrappers with `VITE_PLUS_SHIM_TOOL` environment variable - More maintainable, only one binary to update.
+2. **Windows Wrapper Strategy**: `.cmd` wrappers that call `vp env run <tool>` - Consistent with Volta, no binary copies needed.
 
 3. **Corepack Handling**: Not included - vite-plus has integrated package manager functionality, making corepack shims unnecessary.
 
