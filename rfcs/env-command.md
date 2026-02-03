@@ -1208,10 +1208,10 @@ vp env run --node 20 -- node --inspect app.js
 
 ### Flags
 
-| Flag               | Description                                        |
-| ------------------ | -------------------------------------------------- |
-| `--node <version>` | Node.js version to use (required or from project)  |
-| `--npm <version>`  | npm version to use (optional, defaults to bundled) |
+| Flag               | Description                                                |
+| ------------------ | ---------------------------------------------------------- |
+| `--node <version>` | Node.js version to use (required or from project)          |
+| `--npm <version>`  | npm version to use (not yet implemented, uses bundled npm) |
 
 ### Behavior
 

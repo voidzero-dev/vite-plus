@@ -16,13 +16,18 @@ use crate::error::Error;
 /// it will be downloaded automatically.
 pub async fn execute(
     node_version: &str,
-    _npm_version: Option<&str>,
+    npm_version: Option<&str>,
     command: &[String],
 ) -> Result<ExitStatus, Error> {
     if command.is_empty() {
         eprintln!("vp env run: missing command to execute");
         eprintln!("Usage: vp env run --node <version> <command> [args...]");
         return Ok(exit_status(1));
+    }
+
+    // Warn about unsupported --npm flag
+    if npm_version.is_some() {
+        eprintln!("Warning: --npm flag is not yet implemented, using bundled npm");
     }
 
     // 1. Resolve version
