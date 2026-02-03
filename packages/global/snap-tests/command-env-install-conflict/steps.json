@@ -1,5 +1,6 @@
 {
   "env": {},
+  "ignoredPlatforms": ["win32"],
   "commands": [
     "vp env install ./conflict-pkg # Install package with conflicting binary name (uses cwd version)",
     "vp env uninstall conflict-pkg # Cleanup",

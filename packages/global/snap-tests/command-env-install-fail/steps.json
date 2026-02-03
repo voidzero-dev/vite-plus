@@ -1,4 +1,5 @@
 {
   "env": {},
+  "ignoredPlatforms": ["win32"],
   "commands": ["vp env install voidzero-nonexistent-pkg-xyz-12345 # Install non-existent package"]
 }

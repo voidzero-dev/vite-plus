@@ -20,7 +20,7 @@ Vite+/<semver>
 Options:
   -h, --help  Print help
 
-[129]> vp run -h # vp run should show help
+> vp run -h # vp run should show help
 Run tasks
 
 Usage: vite run [OPTIONS] <TASK_SPECIFIER> [ADDITIONAL_ARGS]...

@@ -1,5 +1,5 @@
-> vp env run --node 20 node -v # Run node with specific major version
-v20.20.0
+> vp env run --node 20.19 node -v # Run node with specific major version
+v20.19.6
 
-> vp env run --node 20 node -e "console.log('Hello from Node ' + process.version)" # Run inline script
+> vp env run --node 20.19 node -e "console.log('Hello from Node ' + process.version)" # Run inline script
 Hello from Node v<semver>

@@ -341,8 +341,11 @@ mod tests {
         // Verify bin directory was created
         assert!(bin_dir.as_path().exists());
 
-        // Verify shim file was created
+        // Verify shim file was created (on Windows, shims have .cmd extension)
+        #[cfg(unix)]
         let shim_path = bin_dir.join("test-shim");
+        #[cfg(windows)]
+        let shim_path = bin_dir.join("test-shim.cmd");
         assert!(shim_path.as_path().exists());
     }
 
@@ -358,7 +361,10 @@ mod tests {
         create_package_shim(&bin_dir, "node", "some-package").await.unwrap();
 
         // Verify the shim was NOT created (core shims should be skipped)
+        #[cfg(unix)]
         let shim_path = bin_dir.join("node");
+        #[cfg(windows)]
+        let shim_path = bin_dir.join("node.cmd");
         assert!(!shim_path.as_path().exists());
     }
 
