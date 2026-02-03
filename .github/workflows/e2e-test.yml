@@ -264,6 +264,7 @@ jobs:
           path: tmp/tgz
 
       - name: Install vp CLI
+        shell: bash
         run: |
           node $GITHUB_WORKSPACE/packages/tools/src/install-global-cli.ts vp --tgz $GITHUB_WORKSPACE/tmp/tgz/vite-plus-cli-0.0.0.tgz
           if [[ "$RUNNER_OS" == "Windows" ]]; then

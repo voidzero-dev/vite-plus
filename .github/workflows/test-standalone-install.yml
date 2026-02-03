@@ -70,10 +70,16 @@ jobs:
           vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
           cd hello && vp run build
 
+      - name: Set PATH
+        shell: bash
+        run: |
+          echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
+
       - name: Verify bin setup
         run: |
           # Verify bin directory was created by vp env --setup
           BIN_PATH="$HOME/.vite-plus/bin"
+          ls -al "$BIN_PATH"
           if [ ! -d "$BIN_PATH" ]; then
             echo "Error: Bin directory not found: $BIN_PATH"
             exit 1
@@ -89,9 +95,13 @@ jobs:
           done
 
           # Verify vp env doctor works
-          export PATH="$HOME/.vite-plus/bin:$PATH"
           vp env doctor
           vp env run --node 24 -- node -p "process.versions"
+
+          which node
+          which npm
+          which npx
+          which vp
 
   test-install-sh-arm64:
     name: Test install.sh (Linux ARM64 glibc via QEMU)
@@ -165,12 +175,17 @@ jobs:
         run: |
           & ./packages/global/install.ps1
 
-      - name: Verify installation
+      - name: Set PATH
+        shell: bash
+        run: |
+          echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
+
+      - name: Verify installation on powershell
         shell: pwsh
         working-directory: ${{ runner.temp }}
         run: |
-          # Refresh PATH from environment
-          $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
+          # Print PATH from environment
+          echo "PATH: $env:Path"
           vp --version
           vp --help
           # $env:VITE_LOG = "trace"
@@ -178,11 +193,12 @@ jobs:
           vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
           cd hello && vp run build
 
-      - name: Verify bin setup
+      - name: Verify bin setup on powershell
         shell: pwsh
         run: |
           # Verify bin directory was created by vp env --setup
           $binPath = "$env:USERPROFILE\.vite-plus\bin"
+          Get-ChildItem -Force $binPath
           if (-not (Test-Path $binPath)) {
             Write-Error "Bin directory not found: $binPath"
             exit 1
@@ -198,6 +214,10 @@ jobs:
             }
             Write-Host "Found shim: $shimFile"
           }
+          where.exe node
+          where.exe npm
+          where.exe npx
+          where.exe vp
 
           # Verify vp env doctor works
           $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"

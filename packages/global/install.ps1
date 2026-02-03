@@ -170,8 +170,11 @@ function Cleanup-OldVersions {
     param([string]$InstallDir)
 
     $maxVersions = 5
+    # Only cleanup semver format directories (0.1.0, 1.2.3-beta.1, etc.)
+    # This excludes 'current' symlink and non-semver directories like 'local-dev'
+    $semverPattern = '^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$'
     $versions = Get-ChildItem -Path $InstallDir -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -ne "current" }
+        Where-Object { $_.Name -match $semverPattern }
 
     if ($null -eq $versions -or $versions.Count -le $maxVersions) {
         return

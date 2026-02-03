@@ -452,11 +452,13 @@ cleanup_old_versions() {
   local max_versions=5
   local versions=()
 
-  # List version directories (exclude 'current' symlink)
+  # List version directories (only semver format like 0.1.0, 1.2.3-beta.1)
+  # This excludes 'current' symlink and non-semver directories like 'local-dev'
+  local semver_regex='^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$'
   for dir in "$INSTALL_DIR"/*/; do
     local name
     name=$(basename "$dir")
-    if [ "$name" != "current" ] && [ -d "$dir" ]; then
+    if [ -d "$dir" ] && [[ "$name" =~ $semver_regex ]]; then
       versions+=("$dir")
     fi
   done

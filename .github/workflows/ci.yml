@@ -195,6 +195,7 @@ jobs:
         run: pnpm tsgo
 
       - name: Build CLI
+        shell: bash
         run: |
           pnpm bootstrap-cli:ci
           if [[ "$RUNNER_OS" == "Windows" ]]; then
