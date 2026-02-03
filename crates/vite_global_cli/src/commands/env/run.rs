@@ -6,7 +6,7 @@
 use std::process::ExitStatus;
 
 use vite_js_runtime::NodeProvider;
-use vite_shared::{PrependOptions, PrependResult, format_path_with_prepend};
+use vite_shared::format_path_prepended;
 
 use crate::error::Error;
 
@@ -48,14 +48,9 @@ pub async fn execute(
     }
 
     // 4. Build PATH with node bin dir first (uses platform-specific separator)
+    // Always prepend to ensure the requested Node version is first in PATH
     let node_bin_dir = runtime.get_bin_prefix();
-    let options = PrependOptions { dedupe_anywhere: true };
-    let new_path = match format_path_with_prepend(node_bin_dir.as_path(), options) {
-        PrependResult::Prepended(path) => path,
-        PrependResult::AlreadyPresent | PrependResult::JoinError => {
-            std::env::var_os("PATH").unwrap_or_default()
-        }
-    };
+    let new_path = format_path_prepended(node_bin_dir.as_path());
 
     // 5. Execute command
     let (cmd, args) = command.split_first().unwrap();

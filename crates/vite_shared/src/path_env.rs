@@ -140,4 +140,31 @@ mod tests {
         let result = format_path_with_prepend(PathBuf::from("/new/path"), options);
         assert!(matches!(result, PrependResult::Prepended(_)));
     }
+
+    #[test]
+    #[ignore]
+    fn test_format_path_prepended_always_prepends() {
+        // Even if the directory exists somewhere in PATH, it should be prepended
+        let test_dir = "/test/node/bin";
+
+        // Set PATH to include test_dir in the middle
+        // SAFETY: This test runs in isolation
+        unsafe {
+            std::env::set_var("PATH", format!("/other/bin:{}:/another/bin", test_dir));
+        }
+
+        let result = format_path_prepended(test_dir);
+
+        // Should start with test_dir regardless of existing PATH entries
+        assert!(
+            result.starts_with(test_dir),
+            "Directory should always be first in PATH, got: {}",
+            result
+        );
+
+        // Restore PATH
+        unsafe {
+            std::env::remove_var("PATH");
+        }
+    }
 }

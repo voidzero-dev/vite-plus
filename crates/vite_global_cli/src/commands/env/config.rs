@@ -160,7 +160,9 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
 async fn resolve_version_string(version: &str, provider: &NodeProvider) -> Result<String, Error> {
     // If it's already an exact version, use it directly
     if NodeProvider::is_exact_version(version) {
-        return Ok(version.to_string());
+        // Strip v prefix if present (e.g., "v20.18.0" -> "20.18.0")
+        let normalized = version.strip_prefix('v').unwrap_or(version);
+        return Ok(normalized.to_string());
     }
 
     // Resolve from network
@@ -278,5 +280,13 @@ mod tests {
         // .node-version should take priority
         assert_eq!(resolution.version, "22.0.0");
         assert_eq!(resolution.source, ".node-version");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_version_string_strips_v_prefix() {
+        let provider = NodeProvider::new();
+        // Test that v-prefixed exact versions are normalized
+        let result = resolve_version_string("v20.18.0", &provider).await.unwrap();
+        assert_eq!(result, "20.18.0", "v prefix should be stripped from exact versions");
     }
 }

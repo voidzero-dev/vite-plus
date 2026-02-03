@@ -109,7 +109,10 @@ pub async fn install(package_spec: &str, node_version: Option<&str>) -> Result<(
         tokio::fs::remove_dir_all(&final_dir).await?;
     }
 
-    tokio::fs::create_dir_all(&packages_dir).await?;
+    // Create parent directory (handles scoped packages like @scope/pkg)
+    if let Some(parent) = final_dir.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
     tokio::fs::rename(&staging_dir, &final_dir).await?;
 
     // 7. Save package metadata
