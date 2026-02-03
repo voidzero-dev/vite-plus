@@ -56,6 +56,28 @@ export const defineConfig: typeof viteDefineConfig = (config) => {
         }),
       );
     }
+  } else if (typeof config === 'function') {
+    return viteDefineConfig((env) => {
+      const c = config(env);
+      if (c instanceof Promise) {
+        return c.then((v) => {
+          if (v.lazy) {
+            return v
+              .lazy()
+              .then(({ plugins }) =>
+                viteDefineConfig({ ...v, plugins: [...(v.plugins || []), ...(plugins || [])] }),
+              );
+          }
+          return v;
+        });
+      }
+      if (c.lazy) {
+        return c
+          .lazy()
+          .then(({ plugins }) => ({ ...c, plugins: [...(c.plugins || []), ...(plugins || [])] }));
+      }
+      return c;
+    });
   }
   return viteDefineConfig(config);
 };
