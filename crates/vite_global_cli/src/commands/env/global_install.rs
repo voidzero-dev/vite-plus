@@ -322,6 +322,46 @@ async fn remove_package_shim(
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn test_create_package_shim_creates_bin_dir() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        // Create a temp directory but don't create the bin subdirectory
+        let temp_dir = TempDir::new().unwrap();
+        let bin_dir = temp_dir.path().join("bin");
+        let bin_dir = AbsolutePathBuf::new(bin_dir).unwrap();
+
+        // Verify bin directory doesn't exist
+        assert!(!bin_dir.as_path().exists());
+
+        // Create a shim - this should create the bin directory
+        create_package_shim(&bin_dir, "test-shim", "test-package").await.unwrap();
+
+        // Verify bin directory was created
+        assert!(bin_dir.as_path().exists());
+
+        // Verify shim file was created
+        let shim_path = bin_dir.join("test-shim");
+        assert!(shim_path.as_path().exists());
+    }
+
+    #[tokio::test]
+    async fn test_create_package_shim_skips_core_shims() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let bin_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Try to create a shim for "node" which is a core shim
+        create_package_shim(&bin_dir, "node", "some-package").await.unwrap();
+
+        // Verify the shim was NOT created (core shims should be skipped)
+        let shim_path = bin_dir.join("node");
+        assert!(!shim_path.as_path().exists());
+    }
+
     #[test]
     fn test_parse_package_spec_simple() {
         let (name, version) = parse_package_spec("typescript");
