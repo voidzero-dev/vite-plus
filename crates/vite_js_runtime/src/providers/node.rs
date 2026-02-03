@@ -311,6 +311,118 @@ impl NodeProvider {
         let versions = self.fetch_version_index().await?;
         find_latest_lts_version(&versions)
     }
+
+    /// Check if a version string is an LTS alias (e.g., `lts/*`, `lts/iron`, `lts/-1`).
+    ///
+    /// Returns `true` for LTS alias formats:
+    /// - `lts/*` - Latest LTS version
+    /// - `lts/<codename>` - Specific LTS line (e.g., `lts/iron`, `lts/jod`)
+    /// - `lts/-n` - Nth-highest LTS line (e.g., `lts/-1` for second highest)
+    #[must_use]
+    pub fn is_lts_alias(version: &str) -> bool {
+        version.starts_with("lts/")
+    }
+
+    /// Resolve an LTS alias to an exact version.
+    ///
+    /// # Supported Formats
+    ///
+    /// - `lts/*` - Returns the latest LTS version
+    /// - `lts/<codename>` - Returns the highest version for that LTS line (e.g., `lts/iron` → 20.x)
+    /// - `lts/-n` - Returns the nth-highest LTS line (e.g., `lts/-1` → second highest)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The alias format is invalid
+    /// - The codename is not recognized
+    /// - The offset is too large (not enough LTS lines)
+    pub async fn resolve_lts_alias(&self, alias: &str) -> Result<Str, Error> {
+        let suffix = alias
+            .strip_prefix("lts/")
+            .ok_or_else(|| Error::InvalidLtsAlias { alias: alias.into() })?;
+
+        // lts/* - latest LTS
+        if suffix == "*" {
+            return self.resolve_latest_version().await;
+        }
+
+        // lts/-n - nth-highest LTS (e.g., lts/-1 = second highest)
+        if suffix.starts_with('-') {
+            if let Ok(n) = suffix.parse::<i32>() {
+                if n < 0 {
+                    return self.resolve_lts_by_offset(n).await;
+                }
+            }
+        }
+
+        // lts/<codename> - specific LTS line
+        self.resolve_lts_by_codename(suffix).await
+    }
+
+    /// Resolve LTS by codename (e.g., "iron" → 20.x, "jod" → 22.x).
+    async fn resolve_lts_by_codename(&self, codename: &str) -> Result<Str, Error> {
+        let versions = self.fetch_version_index().await?;
+        let target = codename.to_lowercase();
+
+        // Find all versions matching the codename
+        let matching: Vec<_> = versions
+            .iter()
+            .filter(|v| matches!(&v.lts, LtsInfo::Codename(name) if name.to_lowercase() == target))
+            .collect();
+
+        if matching.is_empty() {
+            return Err(Error::UnknownLtsCodename { codename: codename.into() });
+        }
+
+        // Find the highest matching version
+        let highest = matching
+            .into_iter()
+            .filter_map(|entry| {
+                let version_str = entry.version.strip_prefix('v').unwrap_or(&entry.version);
+                Version::parse(version_str).ok().map(|v| (v, version_str))
+            })
+            .max_by(|(a, _), (b, _)| a.cmp(b));
+
+        highest
+            .map(|(_, version_str)| version_str.into())
+            .ok_or_else(|| Error::UnknownLtsCodename { codename: codename.into() })
+    }
+
+    /// Resolve LTS by offset (e.g., -1 = second highest LTS line).
+    ///
+    /// The offset is negative: lts/-1 means "one below the latest LTS line".
+    async fn resolve_lts_by_offset(&self, offset: i32) -> Result<Str, Error> {
+        let versions = self.fetch_version_index().await?;
+
+        // Get unique LTS codenames ordered by highest version in each line
+        let mut lts_lines: Vec<(String, u64)> = Vec::new();
+
+        for entry in &versions {
+            if let LtsInfo::Codename(name) = &entry.lts {
+                let version_str = entry.version.strip_prefix('v').unwrap_or(&entry.version);
+                if let Ok(ver) = Version::parse(version_str) {
+                    let key = name.to_lowercase();
+                    // Only add if we haven't seen this codename yet (keeping highest version)
+                    if !lts_lines.iter().any(|(n, _)| n == &key) {
+                        lts_lines.push((key, ver.major));
+                    }
+                }
+            }
+        }
+
+        // Sort by major version descending (highest first)
+        lts_lines.sort_by(|a, b| b.1.cmp(&a.1));
+
+        // offset is negative, so lts/-1 = index 1 (second highest)
+        let index = (-offset) as usize;
+
+        let (codename, _) = lts_lines
+            .get(index)
+            .ok_or_else(|| Error::InvalidLtsOffset { offset, available: lts_lines.len() })?;
+
+        self.resolve_lts_by_codename(codename).await
+    }
 }
 
 /// Find the LTS version with the highest version number from a list of versions.
@@ -1005,5 +1117,107 @@ fedcba987654  node-v22.13.1-win-x64.zip";
         // ^20.18.0 should return 20.19.0 (the only LTS in range)
         let result = resolve_version_from_list("^20.18.0", &versions).unwrap();
         assert_eq!(result, "20.19.0");
+    }
+
+    // ========================================================================
+    // LTS Alias Tests
+    // ========================================================================
+
+    #[test]
+    fn test_is_lts_alias() {
+        // Valid LTS aliases
+        assert!(NodeProvider::is_lts_alias("lts/*"));
+        assert!(NodeProvider::is_lts_alias("lts/iron"));
+        assert!(NodeProvider::is_lts_alias("lts/jod"));
+        assert!(NodeProvider::is_lts_alias("lts/Iron")); // Case-insensitive for codename
+        assert!(NodeProvider::is_lts_alias("lts/Jod"));
+        assert!(NodeProvider::is_lts_alias("lts/hydrogen"));
+        assert!(NodeProvider::is_lts_alias("lts/-1")); // Offset format
+        assert!(NodeProvider::is_lts_alias("lts/-2"));
+
+        // Not LTS aliases
+        assert!(!NodeProvider::is_lts_alias("20.18.0")); // Exact version
+        assert!(!NodeProvider::is_lts_alias("^20.0.0")); // Semver range
+        assert!(!NodeProvider::is_lts_alias("20")); // Partial version
+        assert!(!NodeProvider::is_lts_alias("iron")); // Codename without lts/ prefix
+        assert!(!NodeProvider::is_lts_alias("Lts/*")); // Wrong case for prefix
+        assert!(!NodeProvider::is_lts_alias("LTS/*")); // All caps prefix
+        assert!(!NodeProvider::is_lts_alias("")); // Empty
+        assert!(!NodeProvider::is_lts_alias("latest")); // Different alias
+        assert!(!NodeProvider::is_lts_alias("lts")); // No suffix
+    }
+
+    #[tokio::test]
+    async fn test_resolve_lts_alias_latest() {
+        let provider = NodeProvider::new();
+
+        // lts/* should resolve to the latest LTS version
+        let version = provider.resolve_lts_alias("lts/*").await.unwrap();
+
+        // Should be a valid semver version
+        let parsed = Version::parse(&version).expect("Should parse as semver");
+
+        // As of 2026, latest LTS is at least v24.x (Krypton)
+        assert!(parsed.major >= 24, "Latest LTS should be at least v24.x, got {}", version);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_lts_alias_codename_iron() {
+        let provider = NodeProvider::new();
+
+        // lts/iron should resolve to v20.x
+        let version = provider.resolve_lts_alias("lts/iron").await.unwrap();
+        let parsed = Version::parse(&version).expect("Should parse as semver");
+        assert_eq!(parsed.major, 20, "lts/iron should resolve to v20.x, got {}", version);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_lts_alias_codename_jod() {
+        let provider = NodeProvider::new();
+
+        // lts/jod should resolve to v22.x
+        let version = provider.resolve_lts_alias("lts/jod").await.unwrap();
+        let parsed = Version::parse(&version).expect("Should parse as semver");
+        assert_eq!(parsed.major, 22, "lts/jod should resolve to v22.x, got {}", version);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_lts_alias_codename_case_insensitive() {
+        let provider = NodeProvider::new();
+
+        // Should be case-insensitive for codenames
+        let version_lower = provider.resolve_lts_alias("lts/iron").await.unwrap();
+        let version_mixed = provider.resolve_lts_alias("lts/Iron").await.unwrap();
+
+        assert_eq!(version_lower, version_mixed, "LTS codename should be case-insensitive");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_lts_alias_offset() {
+        let provider = NodeProvider::new();
+
+        // lts/-1 should resolve to the second-highest LTS line
+        // As of 2026: lts/* = 24.x (Krypton), lts/-1 = 22.x (Jod)
+        let version = provider.resolve_lts_alias("lts/-1").await.unwrap();
+        let parsed = Version::parse(&version).expect("Should parse as semver");
+        assert_eq!(parsed.major, 22, "lts/-1 should resolve to v22.x (Jod), got {}", version);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_lts_alias_unknown_codename() {
+        let provider = NodeProvider::new();
+
+        // Unknown codename should error
+        let result = provider.resolve_lts_alias("lts/unknown").await;
+        assert!(result.is_err(), "Unknown LTS codename should return error");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_lts_alias_invalid_offset() {
+        let provider = NodeProvider::new();
+
+        // Too large offset should error (there aren't 100 LTS lines)
+        let result = provider.resolve_lts_alias("lts/-100").await;
+        assert!(result.is_err(), "Invalid LTS offset should return error");
     }
 }

@@ -53,6 +53,9 @@ pub struct VersionResolution {
     pub source_path: Option<AbsolutePathBuf>,
     /// Project root directory (if version came from a project file)
     pub project_root: Option<AbsolutePathBuf>,
+    /// Whether the original version spec was a range (e.g., "20", "^20.0.0", "lts/*")
+    /// Range versions should use time-based cache expiry instead of mtime-only validation
+    pub is_range: bool,
 }
 
 /// Get the VITE_PLUS_HOME directory path.
@@ -125,12 +128,18 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
         .map_err(|e| Error::ConfigError(e.to_string().into()))?;
 
     if let Some(resolution) = resolution {
+        // Detect if the original version spec was a range (not exact)
+        // This includes partial versions (20, 20.18), semver ranges (^20.0.0), and LTS aliases
+        let is_range = NodeProvider::is_lts_alias(&resolution.version)
+            || !NodeProvider::is_exact_version(&resolution.version);
+
         let resolved = resolve_version_string(&resolution.version, &provider).await?;
         return Ok(VersionResolution {
             version: resolved,
             source: resolution.source.to_string(),
             source_path: resolution.source_path,
             project_root: resolution.project_root,
+            is_range,
         });
     }
 
@@ -138,13 +147,18 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
     let config = load_config().await?;
     if let Some(default_version) = config.default_node_version {
         let resolved = resolve_version_alias(&default_version, &provider).await?;
-        // Don't set source_path for aliases (lts, latest) so cache can refresh
+        // Check if default is an alias or range
         let is_alias = matches!(default_version.to_lowercase().as_str(), "lts" | "latest");
+        let is_range = is_alias
+            || NodeProvider::is_lts_alias(&default_version)
+            || !NodeProvider::is_exact_version(&default_version);
         return Ok(VersionResolution {
             version: resolved,
             source: "default".into(),
+            // Don't set source_path for aliases (lts, latest) so cache can refresh
             source_path: if is_alias { None } else { Some(get_config_path()?) },
             project_root: None,
+            is_range,
         });
     }
 
@@ -155,11 +169,18 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
         source: "lts".into(),
         source_path: None,
         project_root: None,
+        is_range: true, // LTS fallback is always a range (re-resolve periodically)
     })
 }
 
 /// Resolve a version string to an exact version.
 async fn resolve_version_string(version: &str, provider: &NodeProvider) -> Result<String, Error> {
+    // Check for LTS alias first (lts/*, lts/iron, lts/-1)
+    if NodeProvider::is_lts_alias(version) {
+        let resolved = provider.resolve_lts_alias(version).await?;
+        return Ok(resolved.to_string());
+    }
+
     // If it's already an exact version, use it directly
     if NodeProvider::is_exact_version(version) {
         // Strip v prefix if present (e.g., "v20.18.0" -> "20.18.0")
@@ -167,7 +188,7 @@ async fn resolve_version_string(version: &str, provider: &NodeProvider) -> Resul
         return Ok(normalized.to_string());
     }
 
-    // Resolve from network
+    // Resolve from network (semver ranges)
     let resolved = provider.resolve_version(version).await?;
     Ok(resolved.to_string())
 }

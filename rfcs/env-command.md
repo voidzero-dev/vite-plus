@@ -330,6 +330,159 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 }
 ```
 
+## Version Specification
+
+This section documents the supported version formats for `.node-version` files, `package.json` engines, and CLI commands.
+
+### Supported Version Formats
+
+vite-plus supports the following version specification formats, compatible with nvm, fnm, and actions/setup-node:
+
+| Format              | Example                           | Resolution                     | Cache Expiry        |
+| ------------------- | --------------------------------- | ------------------------------ | ------------------- |
+| **Exact version**   | `20.18.0`, `v20.18.0`             | Used directly                  | mtime-based         |
+| **Partial version** | `20`, `20.18`                     | Highest matching (prefers LTS) | time-based (1 hour) |
+| **Semver range**    | `^20.0.0`, `~20.18.0`, `>=20 <22` | Highest matching (prefers LTS) | time-based (1 hour) |
+| **LTS latest**      | `lts/*`                           | Highest LTS version            | time-based (1 hour) |
+| **LTS codename**    | `lts/iron`, `lts/jod`             | Highest version in LTS line    | time-based (1 hour) |
+| **LTS offset**      | `lts/-1`, `lts/-2`                | nth-highest LTS line           | time-based (1 hour) |
+| **Wildcard**        | `*`                               | Latest version                 | time-based (1 hour) |
+
+### Exact Versions
+
+Exact three-part versions are used directly without network resolution:
+
+```
+20.18.0      → 20.18.0
+v20.18.0     → 20.18.0 (v prefix stripped)
+22.13.1      → 22.13.1
+```
+
+### Partial Versions
+
+Partial versions (major or major.minor) are resolved to the highest matching version at runtime. LTS versions are preferred over non-LTS versions:
+
+```
+20           → 20.19.0 (highest 20.x LTS)
+20.18        → 20.18.3 (highest 20.18.x)
+22           → 22.13.0 (highest 22.x LTS)
+```
+
+### Semver Ranges
+
+Standard npm/node-semver range syntax is supported. LTS versions are preferred within the matching range:
+
+```
+^20.0.0      → 20.19.0 (highest 20.x.x LTS)
+~20.18.0     → 20.18.3 (highest 20.18.x)
+>=20 <22     → 20.19.0 (highest in range, LTS preferred)
+18 || 20     → 20.19.0 (highest LTS in either range)
+18.x         → 18.20.5 (highest 18.x)
+```
+
+### LTS Aliases
+
+LTS (Long Term Support) versions can be specified using special aliases, following the pattern established by nvm and actions/setup-node:
+
+**`lts/*`** - Resolves to the latest (highest version number) LTS version:
+
+```
+lts/*        → 22.13.0 (latest LTS as of 2025)
+```
+
+**`lts/<codename>`** - Resolves to the highest version in a specific LTS line:
+
+```
+lts/iron     → 20.19.0 (highest v20.x)
+lts/jod      → 22.13.0 (highest v22.x)
+lts/hydrogen → 18.20.5 (highest v18.x)
+lts/krypton  → 24.x.x (when available)
+```
+
+Codenames are case-insensitive (`lts/Iron` and `lts/iron` both work).
+
+**`lts/-n`** - Resolves to the nth-highest LTS line (useful for testing against older supported versions):
+
+```
+lts/-1       → 20.19.0 (second-highest LTS, when latest is 22.x)
+lts/-2       → 18.20.5 (third-highest LTS)
+```
+
+### LTS Codename Reference
+
+| Codename | Major Version | LTS Status                   |
+| -------- | ------------- | ---------------------------- |
+| Hydrogen | 18.x          | Maintenance until 2025-04-30 |
+| Iron     | 20.x          | Active LTS until 2026-04-30  |
+| Jod      | 22.x          | Active LTS until 2027-04-30  |
+| Krypton  | 24.x          | Will be LTS starting 2025-10 |
+
+New LTS codenames are added dynamically based on the Node.js release schedule. vite-plus fetches the version index from nodejs.org to resolve codenames, ensuring new LTS versions are supported automatically.
+
+### Version Resolution Priority
+
+When resolving which Node.js version to use, vite-plus checks the following sources in order:
+
+1. **`.node-version`** file (highest priority)
+   - Checked in current directory, then parent directories
+   - Simple format: one version per file
+
+2. **`package.json#engines.node`**
+   - Checked in current directory, then parent directories
+   - Standard npm constraint field
+
+3. **`package.json#devEngines.runtime`**
+   - Checked in current directory, then parent directories
+   - npm RFC-compliant development engines spec
+
+4. **User default** (`~/.vite-plus/config.json`)
+   - Set via `vp env default <version>`
+
+5. **System default** (latest LTS)
+   - Fallback when no version source is found
+
+### Cache Behavior
+
+Version resolution results are cached for performance:
+
+- **Exact versions**: Cached until the source file mtime changes
+- **Range versions** (partial, semver, LTS aliases): Cached with 1-hour TTL, then re-resolved to pick up new releases
+
+This ensures that:
+
+- Exact version pins are fast and deterministic
+- Range specifications can pick up new releases (e.g., `20` will use a newly released `20.20.0`)
+- LTS aliases automatically use newer patch versions
+
+### File Format Compatibility
+
+The `.node-version` file format is intentionally simple and compatible with other tools:
+
+```
+# Supported content (one per file):
+20.18.0
+v20.18.0
+20
+lts/*
+lts/iron
+^20.0.0
+
+# Comments are NOT supported
+# Leading/trailing whitespace is trimmed
+# Only the first line is used
+```
+
+**Compatibility matrix:**
+
+| Tool               | `.node-version` | `.nvmrc` | LTS aliases | Semver ranges |
+| ------------------ | --------------- | -------- | ----------- | ------------- |
+| vite-plus          | ✅              | ✅       | ✅          | ✅            |
+| nvm                | ❌              | ✅       | ✅          | ✅            |
+| fnm                | ✅              | ✅       | ✅          | ✅            |
+| volta              | ✅              | ❌       | ❌          | ❌            |
+| actions/setup-node | ✅              | ✅       | ✅          | ✅            |
+| asdf               | ✅              | ❌       | ❌          | ❌            |
+
 **Note**: Node.js binaries are stored in VITE_PLUS_HOME:
 
 - Linux/macOS: `~/.vite-plus/js_runtime/node/{version}/`

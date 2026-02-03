@@ -318,6 +318,7 @@ async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, 
             .source_path
             .as_ref()
             .map(|p: &AbsolutePathBuf| p.as_path().display().to_string()),
+        is_range: resolution.is_range,
     };
 
     // Save to cache
