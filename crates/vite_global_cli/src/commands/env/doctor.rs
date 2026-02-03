@@ -80,7 +80,7 @@ async fn check_vite_plus_home() -> bool {
         true
     } else {
         println!("  \u{2717} Directory does not exist");
-        println!("  Run 'vp env --setup' to create it.");
+        println!("  Run 'vp env setup' to create it.");
         false
     }
 }
@@ -94,7 +94,7 @@ async fn check_bin_dir() -> bool {
 
     if !tokio::fs::try_exists(&bin_dir).await.unwrap_or(false) {
         println!("  \u{2717} Bin directory does not exist");
-        println!("  Run 'vp env --setup' to create bin directory.");
+        println!("  Run 'vp env setup' to create bin directory.");
         return false;
     }
 
@@ -118,7 +118,7 @@ async fn check_bin_dir() -> bool {
         true
     } else {
         println!("  \u{2717} Missing shims: {}", missing.join(", "));
-        println!("  Run 'vp env --setup' to create missing shims.");
+        println!("  Run 'vp env setup' to create missing shims.");
         false
     }
 }

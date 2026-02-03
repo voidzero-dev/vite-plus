@@ -105,6 +105,8 @@ fn exit_status(code: i32) -> ExitStatus {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
+
     use super::*;
 
     #[tokio::test]
@@ -116,6 +118,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_execute_node_version() {
         // Run 'node --version' with a specific Node.js version
         let command = vec!["node".to_string(), "--version".to_string()];
