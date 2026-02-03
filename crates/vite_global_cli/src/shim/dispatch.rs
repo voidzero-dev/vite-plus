@@ -28,6 +28,7 @@ const RECURSION_ENV_VAR: &str = "VITE_PLUS_TOOL_RECURSION";
 /// Called when the binary is invoked as node, npm, npx, or a package binary.
 /// Returns an exit code to be used with std::process::exit.
 pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
+    tracing::debug!("dispatch: tool: {tool}, args: {:?}", args);
     // Check recursion prevention - if already in a shim context, passthrough directly
     if std::env::var(RECURSION_ENV_VAR).is_ok() {
         return passthrough_to_system(tool, args);

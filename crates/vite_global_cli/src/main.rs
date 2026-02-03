@@ -49,6 +49,7 @@ async fn main() -> ExitCode {
     // Check for shim mode (invoked as node, npm, or npx)
     let args: Vec<String> = std::env::args().collect();
     let argv0 = args.first().map(|s| s.as_str()).unwrap_or("vp");
+    tracing::debug!("argv0: {argv0}");
 
     if let Some(tool) = shim::detect_shim_tool(argv0) {
         // Shim mode - dispatch to the appropriate tool
