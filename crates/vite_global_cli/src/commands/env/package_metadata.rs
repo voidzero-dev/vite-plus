@@ -1,5 +1,7 @@
 //! Package metadata storage for global packages.
 
+use std::collections::HashSet;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use vite_path::AbsolutePathBuf;
@@ -19,6 +21,9 @@ pub struct PackageMetadata {
     pub platform: Platform,
     /// Binary names provided by this package
     pub bins: Vec<String>,
+    /// Binary names that are JavaScript files (need Node.js to run).
+    #[serde(default)]
+    pub js_bins: HashSet<String>,
     /// Package manager used for installation (npm, yarn, pnpm)
     pub manager: String,
     /// Installation timestamp
@@ -43,6 +48,7 @@ impl PackageMetadata {
         node_version: String,
         npm_version: Option<String>,
         bins: Vec<String>,
+        js_bins: HashSet<String>,
         manager: String,
     ) -> Self {
         Self {
@@ -50,9 +56,15 @@ impl PackageMetadata {
             version,
             platform: Platform { node: node_version, npm: npm_version },
             bins,
+            js_bins,
             manager,
             installed_at: Utc::now(),
         }
+    }
+
+    /// Check if a binary requires Node.js to run.
+    pub fn is_js_binary(&self, bin_name: &str) -> bool {
+        self.js_bins.contains(bin_name)
     }
 
     /// Get the metadata file path for a package.
@@ -186,6 +198,7 @@ mod tests {
             "20.18.0".to_string(),
             None,
             vec!["test-bin".to_string()],
+            HashSet::from(["test-bin".to_string()]),
             "npm".to_string(),
         );
 
@@ -224,6 +237,7 @@ mod tests {
             "20.18.0".to_string(),
             None,
             vec!["tsc".to_string()],
+            HashSet::from(["tsc".to_string()]),
             "npm".to_string(),
         );
         regular.save().await.unwrap();
@@ -235,6 +249,7 @@ mod tests {
             "20.18.0".to_string(),
             None,
             vec![],
+            HashSet::new(),
             "npm".to_string(),
         );
         scoped.save().await.unwrap();

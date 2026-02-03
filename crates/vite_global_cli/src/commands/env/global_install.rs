@@ -1,14 +1,14 @@
 //! Global package installation handling.
 
-use std::process::Stdio;
+use std::{collections::HashSet, io::Read, process::Stdio};
 
 use tokio::process::Command;
 use vite_js_runtime::NodeProvider;
-use vite_path::AbsolutePathBuf;
+use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::format_path_prepended;
 
 use super::{
-    config::{get_bin_dir, get_packages_dir, get_tmp_dir, resolve_version},
+    config::{get_bin_dir, get_node_modules_dir, get_packages_dir, get_tmp_dir, resolve_version},
     package_metadata::PackageMetadata,
 };
 use crate::error::Error;
@@ -81,7 +81,7 @@ pub async fn install(package_spec: &str, node_version: Option<&str>) -> Result<(
     }
 
     // 5. Find installed package and extract metadata
-    let node_modules_dir = staging_dir.join("lib").join("node_modules").join(&package_name);
+    let node_modules_dir = get_node_modules_dir(&staging_dir, &package_name);
     let package_json_path = node_modules_dir.join("package.json");
 
     if !tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
@@ -98,7 +98,18 @@ pub async fn install(package_spec: &str, node_version: Option<&str>) -> Result<(
 
     let installed_version = package_json["version"].as_str().unwrap_or("unknown").to_string();
 
-    let bins = extract_binaries(&package_json);
+    let binary_infos = extract_binaries(&package_json);
+
+    // Detect which binaries are JavaScript files
+    let mut bin_names = Vec::new();
+    let mut js_bins = HashSet::new();
+    for info in &binary_infos {
+        bin_names.push(info.name.clone());
+        let binary_path = node_modules_dir.join(&info.path);
+        if is_javascript_binary(&binary_path) {
+            js_bins.insert(info.name.clone());
+        }
+    }
 
     // 6. Move staging to final location
     let packages_dir = get_packages_dir()?;
@@ -121,20 +132,21 @@ pub async fn install(package_spec: &str, node_version: Option<&str>) -> Result<(
         installed_version.clone(),
         version.clone(),
         None, // npm version - could extract from runtime
-        bins.clone(),
+        bin_names.clone(),
+        js_bins,
         "npm".to_string(),
     );
     metadata.save().await?;
 
     // 8. Create shims for binaries
     let bin_dir = get_bin_dir()?;
-    for bin_name in &bins {
+    for bin_name in &bin_names {
         create_package_shim(&bin_dir, bin_name, &package_name).await?;
     }
 
     println!("  Installed {} v{}", package_name, installed_version);
-    if !bins.is_empty() {
-        println!("  Binaries: {}", bins.join(", "));
+    if !bin_names.is_empty() {
+        println!("  Binaries: {}", bin_names.join(", "));
     }
 
     Ok(())
@@ -198,24 +210,34 @@ fn parse_package_spec(spec: &str) -> (String, Option<String>) {
     (spec.to_string(), None)
 }
 
-/// Extract binary names from package.json.
-fn extract_binaries(package_json: &serde_json::Value) -> Vec<String> {
+/// Binary info extracted from package.json.
+struct BinaryInfo {
+    /// Binary name (the command users will run)
+    name: String,
+    /// Relative path to the binary file from package root
+    path: String,
+}
+
+/// Extract binary names and paths from package.json.
+fn extract_binaries(package_json: &serde_json::Value) -> Vec<BinaryInfo> {
     let mut bins = Vec::new();
 
     if let Some(bin) = package_json.get("bin") {
         match bin {
-            serde_json::Value::String(_) => {
+            serde_json::Value::String(path) => {
                 // Single binary with package name
                 if let Some(name) = package_json["name"].as_str() {
                     // Get just the package name without scope
                     let bin_name = name.split('/').last().unwrap_or(name);
-                    bins.push(bin_name.to_string());
+                    bins.push(BinaryInfo { name: bin_name.to_string(), path: path.clone() });
                 }
             }
             serde_json::Value::Object(map) => {
                 // Multiple binaries
-                for key in map.keys() {
-                    bins.push(key.clone());
+                for (name, path) in map {
+                    if let serde_json::Value::String(path) = path {
+                        bins.push(BinaryInfo { name: name.clone(), path: path.clone() });
+                    }
                 }
             }
             _ => {}
@@ -223,6 +245,44 @@ fn extract_binaries(package_json: &serde_json::Value) -> Vec<String> {
     }
 
     bins
+}
+
+/// Check if a file is a JavaScript file that should be run with Node.
+///
+/// Returns true if:
+/// - The file has a .js, .mjs, or .cjs extension
+/// - The file has a shebang containing "node"
+///
+/// This function safely reads only the first 256 bytes to check the shebang,
+/// avoiding issues with binary files that may not have newlines.
+fn is_javascript_binary(path: &AbsolutePath) -> bool {
+    // Check extension first (fast path, no file I/O)
+    if let Some(ext) = path.as_path().extension() {
+        let ext = ext.to_string_lossy().to_lowercase();
+        if ext == "js" || ext == "mjs" || ext == "cjs" {
+            return true;
+        }
+    }
+
+    // For extensionless files, read only first 256 bytes to check shebang
+    // This is safe even for binary files
+    if let Ok(mut file) = std::fs::File::open(path.as_path()) {
+        let mut buffer = [0u8; 256];
+        if let Ok(n) = file.read(&mut buffer) {
+            if n >= 2 && buffer[0] == b'#' && buffer[1] == b'!' {
+                // Found shebang, check for "node" in the first line
+                // Find newline or use entire buffer
+                let end = buffer[..n].iter().position(|&b| b == b'\n').unwrap_or(n);
+                if let Ok(shebang) = std::str::from_utf8(&buffer[..end]) {
+                    if shebang.contains("node") {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    false
 }
 
 /// Core shims that should not be overwritten by package binaries.
@@ -365,6 +425,131 @@ mod tests {
         assert!(!shim_path.as_path().exists());
     }
 
+    #[tokio::test]
+    async fn test_remove_package_shim_removes_shim() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let bin_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create a shim
+        create_package_shim(&bin_dir, "tsc", "typescript").await.unwrap();
+
+        // Verify the shim was created
+        #[cfg(unix)]
+        let shim_path = bin_dir.join("tsc");
+        #[cfg(windows)]
+        let shim_path = bin_dir.join("tsc.cmd");
+        assert!(shim_path.as_path().exists(), "Shim should exist after creation");
+
+        // Remove the shim
+        remove_package_shim(&bin_dir, "tsc").await.unwrap();
+
+        // Verify the shim was removed
+        assert!(!shim_path.as_path().exists(), "Shim should be removed");
+    }
+
+    #[tokio::test]
+    async fn test_remove_package_shim_handles_missing_shim() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let bin_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Remove a shim that doesn't exist - should not error
+        remove_package_shim(&bin_dir, "nonexistent").await.unwrap();
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_uninstall_removes_shims_from_metadata() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path().to_path_buf();
+
+        // Set VITE_PLUS_HOME to temp directory
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("VITE_PLUS_HOME", &temp_path);
+        }
+
+        // Create bin directory
+        let bin_dir = AbsolutePathBuf::new(temp_path.join("bin")).unwrap();
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+
+        // Create shims for "tsc" and "tsserver"
+        create_package_shim(&bin_dir, "tsc", "typescript").await.unwrap();
+        create_package_shim(&bin_dir, "tsserver", "typescript").await.unwrap();
+
+        // Verify shims exist
+        #[cfg(unix)]
+        {
+            assert!(bin_dir.join("tsc").as_path().exists(), "tsc shim should exist");
+            assert!(bin_dir.join("tsserver").as_path().exists(), "tsserver shim should exist");
+        }
+        #[cfg(windows)]
+        {
+            assert!(bin_dir.join("tsc.cmd").as_path().exists(), "tsc.cmd shim should exist");
+            assert!(
+                bin_dir.join("tsserver.cmd").as_path().exists(),
+                "tsserver.cmd shim should exist"
+            );
+        }
+
+        // Create metadata with bins
+        let metadata = PackageMetadata::new(
+            "typescript".to_string(),
+            "5.9.3".to_string(),
+            "20.18.0".to_string(),
+            None,
+            vec!["tsc".to_string(), "tsserver".to_string()],
+            HashSet::from(["tsc".to_string(), "tsserver".to_string()]),
+            "npm".to_string(),
+        );
+        metadata.save().await.unwrap();
+
+        // Create package directory (needed for uninstall)
+        let packages_dir = AbsolutePathBuf::new(temp_path.join("packages")).unwrap();
+        let package_dir = packages_dir.join("typescript");
+        tokio::fs::create_dir_all(&package_dir).await.unwrap();
+
+        // Verify metadata was saved
+        let loaded = PackageMetadata::load("typescript").await.unwrap();
+        assert!(loaded.is_some(), "Metadata should be loaded");
+        let loaded = loaded.unwrap();
+        assert_eq!(loaded.bins, vec!["tsc", "tsserver"], "bins should match");
+
+        // Run uninstall
+        uninstall("typescript").await.unwrap();
+
+        // Verify shims were removed
+        #[cfg(unix)]
+        {
+            assert!(!bin_dir.join("tsc").as_path().exists(), "tsc shim should be removed");
+            assert!(
+                !bin_dir.join("tsserver").as_path().exists(),
+                "tsserver shim should be removed"
+            );
+        }
+        #[cfg(windows)]
+        {
+            assert!(!bin_dir.join("tsc.cmd").as_path().exists(), "tsc.cmd shim should be removed");
+            assert!(
+                !bin_dir.join("tsserver.cmd").as_path().exists(),
+                "tsserver.cmd shim should be removed"
+            );
+        }
+
+        // Clean up env var
+        unsafe {
+            std::env::remove_var("VITE_PLUS_HOME");
+        }
+    }
+
     #[test]
     fn test_parse_package_spec_simple() {
         let (name, version) = parse_package_spec("typescript");
@@ -391,5 +576,123 @@ mod tests {
         let (name, version) = parse_package_spec("@types/node@20.0.0");
         assert_eq!(name, "@types/node");
         assert_eq!(version, Some("20.0.0".to_string()));
+    }
+
+    #[test]
+    fn test_is_javascript_binary_with_js_extension() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let js_file = temp_dir.path().join("cli.js");
+        std::fs::write(&js_file, "console.log('hello')").unwrap();
+
+        let path = AbsolutePathBuf::new(js_file).unwrap();
+        assert!(is_javascript_binary(&path));
+    }
+
+    #[test]
+    fn test_is_javascript_binary_with_mjs_extension() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mjs_file = temp_dir.path().join("cli.mjs");
+        std::fs::write(&mjs_file, "export default 'hello'").unwrap();
+
+        let path = AbsolutePathBuf::new(mjs_file).unwrap();
+        assert!(is_javascript_binary(&path));
+    }
+
+    #[test]
+    fn test_is_javascript_binary_with_cjs_extension() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let cjs_file = temp_dir.path().join("cli.cjs");
+        std::fs::write(&cjs_file, "module.exports = 'hello'").unwrap();
+
+        let path = AbsolutePathBuf::new(cjs_file).unwrap();
+        assert!(is_javascript_binary(&path));
+    }
+
+    #[test]
+    fn test_is_javascript_binary_with_node_shebang() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let cli_file = temp_dir.path().join("cli");
+        std::fs::write(&cli_file, "#!/usr/bin/env node\nconsole.log('hello')").unwrap();
+
+        let path = AbsolutePathBuf::new(cli_file).unwrap();
+        assert!(is_javascript_binary(&path));
+    }
+
+    #[test]
+    fn test_is_javascript_binary_with_direct_node_shebang() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let cli_file = temp_dir.path().join("cli");
+        std::fs::write(&cli_file, "#!/usr/bin/node\nconsole.log('hello')").unwrap();
+
+        let path = AbsolutePathBuf::new(cli_file).unwrap();
+        assert!(is_javascript_binary(&path));
+    }
+
+    #[test]
+    fn test_is_javascript_binary_native_executable() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        // Simulate a native binary (ELF header)
+        let native_file = temp_dir.path().join("native-cli");
+        std::fs::write(&native_file, b"\x7fELF").unwrap();
+
+        let path = AbsolutePathBuf::new(native_file).unwrap();
+        assert!(!is_javascript_binary(&path));
+    }
+
+    #[test]
+    fn test_is_javascript_binary_shell_script() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let shell_file = temp_dir.path().join("script.sh");
+        std::fs::write(&shell_file, "#!/bin/bash\necho hello").unwrap();
+
+        let path = AbsolutePathBuf::new(shell_file).unwrap();
+        assert!(!is_javascript_binary(&path));
+    }
+
+    #[test]
+    fn test_is_javascript_binary_python_script() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let python_file = temp_dir.path().join("script.py");
+        std::fs::write(&python_file, "#!/usr/bin/env python3\nprint('hello')").unwrap();
+
+        let path = AbsolutePathBuf::new(python_file).unwrap();
+        assert!(!is_javascript_binary(&path));
+    }
+
+    #[test]
+    fn test_is_javascript_binary_empty_file() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let empty_file = temp_dir.path().join("empty");
+        std::fs::write(&empty_file, "").unwrap();
+
+        let path = AbsolutePathBuf::new(empty_file).unwrap();
+        assert!(!is_javascript_binary(&path));
     }
 }
