@@ -93,6 +93,31 @@ jobs:
           vp env doctor
           vp env run --node 24 -- node -p "process.versions"
 
+      - name: Test global package install
+        run: |
+          export PATH="$HOME/.vite-plus/bin:$PATH"
+
+          # Test 1: Install a JS-based CLI (typescript)
+          npm install -g typescript
+          tsc --version
+
+          # Test 2: Verify the package was installed correctly
+          ls -la ~/.vite-plus/packages/typescript/
+          ls -la ~/.vite-plus/bin/
+
+          # Test 3: Uninstall
+          npm uninstall -g typescript
+
+          # Test 4: Verify uninstall removed shim
+          echo "Checking bin dir after uninstall:"
+          ls -la ~/.vite-plus/bin/
+          echo "Checking if tsc shim file exists:"
+          if [ -f ~/.vite-plus/bin/tsc ]; then
+            echo "Error: tsc shim file still exists at ~/.vite-plus/bin/tsc"
+            exit 1
+          fi
+          echo "tsc shim removed successfully"
+
   test-install-sh-arm64:
     name: Test install.sh (Linux ARM64 glibc via QEMU)
     runs-on: ubuntu-latest
@@ -143,7 +168,22 @@ jobs:
               vp env doctor
 
               export VITE_LOG=trace
-              vp env run --node 24 -- node -p "process.versions"
+              vp env run --node 24 -- node -p \"process.versions\"
+
+              # Test global package install
+              npm install -g typescript
+              tsc --version
+              ls -la ~/.vite-plus/packages/typescript/
+              ls -la ~/.vite-plus/bin/
+              npm uninstall -g typescript
+              echo \"Checking bin dir after uninstall:\"
+              ls -la ~/.vite-plus/bin/
+              if [ -f ~/.vite-plus/bin/tsc ]; then
+                echo \"Error: tsc shim file still exists\"
+                exit 1
+              fi
+              echo \"tsc shim removed successfully\"
+
               # FIXME: qemu: uncaught target signal 11 (Segmentation fault) - core dumped
               # vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
               # cd hello && vp run build
@@ -202,3 +242,29 @@ jobs:
           $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
           vp env doctor
           vp env run --node 24 -- node -p "process.versions"
+
+      - name: Test global package install
+        shell: pwsh
+        run: |
+          $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
+
+          # Test 1: Install a JS-based CLI (typescript)
+          npm install -g typescript
+          tsc --version
+
+          # Test 2: Verify the package was installed correctly
+          Get-ChildItem "$env:USERPROFILE\.vite-plus\packages\typescript\"
+          Get-ChildItem "$env:USERPROFILE\.vite-plus\bin\"
+
+          # Test 3: Uninstall
+          npm uninstall -g typescript
+
+          # Test 4: Verify uninstall removed shim
+          Write-Host "Checking bin dir after uninstall:"
+          Get-ChildItem "$env:USERPROFILE\.vite-plus\bin\"
+          $shimPath = "$env:USERPROFILE\.vite-plus\bin\tsc.cmd"
+          if (Test-Path $shimPath) {
+            Write-Error "tsc shim file still exists at $shimPath"
+            exit 1
+          }
+          Write-Host "tsc shim removed successfully"
