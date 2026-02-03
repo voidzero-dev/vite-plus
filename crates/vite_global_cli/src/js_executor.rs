@@ -238,6 +238,8 @@ impl JsExecutor {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
+
     use super::*;
 
     #[test]
@@ -285,6 +287,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_execute_cli_script_prints_node_version() {
         use std::io::Write;
 

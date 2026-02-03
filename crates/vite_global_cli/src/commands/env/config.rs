@@ -138,10 +138,12 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
     let config = load_config().await?;
     if let Some(default_version) = config.default_node_version {
         let resolved = resolve_version_alias(&default_version, &provider).await?;
+        // Don't set source_path for aliases (lts, latest) so cache can refresh
+        let is_alias = matches!(default_version.to_lowercase().as_str(), "lts" | "latest");
         return Ok(VersionResolution {
             version: resolved,
             source: "default".into(),
-            source_path: Some(get_config_path()?),
+            source_path: if is_alias { None } else { Some(get_config_path()?) },
             project_root: None,
         });
     }
@@ -288,5 +290,64 @@ mod tests {
         // Test that v-prefixed exact versions are normalized
         let result = resolve_version_string("v20.18.0", &provider).await.unwrap();
         assert_eq!(result, "20.18.0", "v prefix should be stripped from exact versions");
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires running outside of any Node.js project (walk-up finds .node-version)
+    async fn test_resolve_version_alias_default_no_source_path() {
+        // Create config with lts as default
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // SAFETY: This test runs in isolation
+        unsafe {
+            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
+        }
+
+        let config = Config { default_node_version: Some("lts".to_string()), ..Default::default() };
+        save_config(&config).await.unwrap();
+
+        // Create empty dir to resolve version in (no .node-version)
+        let test_dir = temp_path.join("test-project");
+        tokio::fs::create_dir_all(&test_dir).await.unwrap();
+
+        let resolution = resolve_version(&test_dir).await.unwrap();
+        assert_eq!(resolution.source, "default");
+        assert!(resolution.source_path.is_none(), "Alias defaults should not have source_path");
+
+        // Clean up env var
+        unsafe {
+            std::env::remove_var("VITE_PLUS_HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires running outside of any Node.js project (walk-up finds .node-version)
+    async fn test_resolve_version_exact_default_has_source_path() {
+        // Create config with exact version as default
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // SAFETY: This test runs in isolation
+        unsafe {
+            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
+        }
+
+        let config =
+            Config { default_node_version: Some("20.18.0".to_string()), ..Default::default() };
+        save_config(&config).await.unwrap();
+
+        // Create empty dir to resolve version in (no .node-version)
+        let test_dir = temp_path.join("test-project");
+        tokio::fs::create_dir_all(&test_dir).await.unwrap();
+
+        let resolution = resolve_version(&test_dir).await.unwrap();
+        assert_eq!(resolution.source, "default");
+        assert!(resolution.source_path.is_some(), "Exact version defaults should have source_path");
+
+        // Clean up env var
+        unsafe {
+            std::env::remove_var("VITE_PLUS_HOME");
+        }
     }
 }

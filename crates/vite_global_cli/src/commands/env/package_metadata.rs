@@ -106,25 +106,44 @@ impl PackageMetadata {
         }
 
         let mut packages = Vec::new();
-        let mut entries = tokio::fs::read_dir(&packages_dir).await?;
-
-        while let Some(entry) = entries.next_entry().await? {
-            let path = entry.path();
-            if path.extension().is_some_and(|e| e == "json") {
-                if let Ok(content) = tokio::fs::read_to_string(&path).await {
-                    if let Ok(metadata) = serde_json::from_str::<Self>(&content) {
-                        packages.push(metadata);
-                    }
-                }
-            }
-        }
-
+        list_packages_recursive(&packages_dir, &mut packages).await?;
         Ok(packages)
     }
 }
 
+/// Recursively list packages in a directory (handles scoped packages in subdirs).
+async fn list_packages_recursive(
+    dir: &vite_path::AbsolutePath,
+    packages: &mut Vec<PackageMetadata>,
+) -> Result<(), Error> {
+    let mut entries = tokio::fs::read_dir(dir).await?;
+
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+        let file_type = entry.file_type().await?;
+
+        if file_type.is_dir() {
+            // Recurse into subdirectories (e.g., @scope/)
+            if let Some(abs_path) = AbsolutePathBuf::new(path) {
+                Box::pin(list_packages_recursive(&abs_path, packages)).await?;
+            }
+        } else if path.extension().is_some_and(|e| e == "json") {
+            // Read JSON metadata files
+            if let Ok(content) = tokio::fs::read_to_string(&path).await {
+                if let Ok(metadata) = serde_json::from_str::<PackageMetadata>(&content) {
+                    packages.push(metadata);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
+
     use super::*;
 
     #[test]
@@ -147,7 +166,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[serial]
     async fn test_save_scoped_package_metadata() {
         use tempfile::TempDir;
 
@@ -178,6 +197,55 @@ mod tests {
         // Verify the file exists at the correct location
         let expected_path = temp_path.join("packages").join("@scope").join("test-pkg.json");
         assert!(expected_path.exists(), "Metadata file not found at {:?}", expected_path);
+
+        // Clean up env var
+        unsafe {
+            std::env::remove_var("VITE_PLUS_HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_list_all_includes_scoped_packages() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path().to_path_buf();
+
+        // SAFETY: This test runs in isolation
+        unsafe {
+            std::env::set_var("VITE_PLUS_HOME", &temp_path);
+        }
+
+        // Create regular package metadata
+        let regular = PackageMetadata::new(
+            "typescript".to_string(),
+            "5.0.0".to_string(),
+            "20.18.0".to_string(),
+            None,
+            vec!["tsc".to_string()],
+            "npm".to_string(),
+        );
+        regular.save().await.unwrap();
+
+        // Create scoped package metadata
+        let scoped = PackageMetadata::new(
+            "@types/node".to_string(),
+            "20.0.0".to_string(),
+            "20.18.0".to_string(),
+            None,
+            vec![],
+            "npm".to_string(),
+        );
+        scoped.save().await.unwrap();
+
+        // list_all should find both
+        let all = PackageMetadata::list_all().await.unwrap();
+        assert_eq!(all.len(), 2, "Expected 2 packages, got {}", all.len());
+
+        let names: Vec<_> = all.iter().map(|p| p.name.as_str()).collect();
+        assert!(names.contains(&"typescript"), "Missing typescript package");
+        assert!(names.contains(&"@types/node"), "Missing @types/node package");
 
         // Clean up env var
         unsafe {
