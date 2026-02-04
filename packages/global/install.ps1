@@ -257,7 +257,6 @@ function Main {
     Write-Host "Setting up " -NoNewline
     Write-Host "VITE+(⚡︎)" -ForegroundColor Cyan -NoNewline
     Write-Host "..."
-    Write-Host ""
 
     # Suppress progress bars for cleaner output
     $ProgressPreference = 'SilentlyContinue'

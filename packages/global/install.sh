@@ -500,7 +500,6 @@ cleanup_old_versions() {
 main() {
   echo ""
   echo -e "Setting up ${BRIGHT_BLUE}VITE+(⚡︎)${NC}..."
-  echo ""
 
   check_requirements
 
