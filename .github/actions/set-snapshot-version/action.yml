@@ -1,0 +1,19 @@
+name: Set Snapshot Version
+description: Set snapshot version (0.0.0-{sha}.{timestamp}) for pre-release builds
+
+outputs:
+  version:
+    description: The computed version string
+    value: ${{ steps.version.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set snapshot version
+      id: version
+      shell: bash
+      run: |
+        SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-8)
+        BUILD_TIME=$(date -u +%Y%m%d-%H%M)
+        VERSION="0.0.0-${SHORT_SHA}.${BUILD_TIME}"
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
