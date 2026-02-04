@@ -754,20 +754,27 @@ The global CLI installation script (`packages/global/install.sh`) will be update
 ```bash
 $ curl -fsSL https://viteplus.dev/install.sh | sh
 
-Setting up VITE+(⚡)...
-
-✔ VITE+(⚡) successfully installed!
-
-  Version: 1.2.3
-  Location: ~/.vite-plus/bin
-
-  ✓ Created shims (node, npm, npx) in ~/.vite-plus/bin
+Setting up VITE+(⚡︎)...
 
 Would you want Vite+ to manage Node.js versions?
 Press Enter to accept (Y/n):
-  ✓ Added to ~/.zshrc
 
-Restart your terminal and IDE, then run 'vp env doctor' to verify.
+✔ VITE+(⚡︎) successfully installed!
+
+  The Unified Toolchain for the Web.
+
+  Get started:
+    vp new          Create a new project
+    vp env          Manage Node.js versions
+    vp install      Install dependencies
+    vp dev          Start dev server
+
+  Node.js is now managed by Vite+ (via vp env).
+  Run vp env doctor to verify your setup.
+
+  Run vp help for more information.
+
+  Note: Run `source ~/.zshrc` or restart your terminal.
 ```
 
 ### Manual Setup

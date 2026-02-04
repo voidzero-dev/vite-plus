@@ -254,7 +254,9 @@ function Setup-NodeManager {
 
 function Main {
     Write-Host ""
-    Write-Host "Setting up VITE+(⚡︎)..."
+    Write-Host "Setting up " -NoNewline
+    Write-Host "VITE+(⚡︎)" -ForegroundColor Cyan -NoNewline
+    Write-Host "..."
     Write-Host ""
 
     # Suppress progress bars for cleaner output
@@ -457,23 +459,36 @@ exec "`$VITE_PLUS_HOME/current/bin/vp.exe" "`$@"
     # Use ~ shorthand if install dir is under USERPROFILE, otherwise show full path
     $displayDir = $InstallDir -replace [regex]::Escape($env:USERPROFILE), '~'
 
+    # ANSI color codes for consistent output
+    $e = [char]27
+    $GREEN = "$e[32m"
+    $BRIGHT_BLUE = "$e[94m"
+    $BOLD = "$e[1m"
+    $DIM = "$e[2m"
+    $BOLD_BRIGHT_BLUE = "$e[1;94m"
+    $NC = "$e[0m"
+
     # Print success message
     Write-Host ""
-    Write-Host "✔ " -ForegroundColor Green -NoNewline
-    Write-Host "VITE+(⚡︎) successfully installed!"
+    Write-Host "${GREEN}✔${NC} ${BOLD_BRIGHT_BLUE}VITE+(⚡︎)${NC} successfully installed!"
     Write-Host ""
-    Write-Host "  Version: $ViteVersion"
+    Write-Host "  The Unified Toolchain for the Web."
     Write-Host ""
-    Write-Host "  Location: $displayDir\bin"
+    Write-Host "  ${BOLD}Get started:${NC}"
+    Write-Host "    ${BRIGHT_BLUE}vp new${NC}          Create a new project"
+    Write-Host "    ${BRIGHT_BLUE}vp env${NC}          Manage Node.js versions"
+    Write-Host "    ${BRIGHT_BLUE}vp install${NC}      Install dependencies"
+    Write-Host "    ${BRIGHT_BLUE}vp dev${NC}          Start dev server"
 
     # Show Node.js manager status
     if ($nodeManagerResult -eq "true" -or $nodeManagerResult -eq "already") {
         Write-Host ""
-        Write-Host "  Node.js manager: on"
+        Write-Host "  Node.js is now managed by Vite+ (via ${BRIGHT_BLUE}vp env${NC})."
+        Write-Host "  Run ${BRIGHT_BLUE}vp env doctor${NC} to verify your setup."
     }
 
     Write-Host ""
-    Write-Host "  Next: Run ``vp help`` to get started"
+    Write-Host "  Run ${BRIGHT_BLUE}vp help${NC} for more information."
 
     # Show note if PATH was updated
     if ($pathResult -eq "true") {

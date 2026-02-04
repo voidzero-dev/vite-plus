@@ -26,6 +26,10 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
+BRIGHT_BLUE='\033[0;94m'
+BOLD='\033[1m'
+DIM='\033[2m'
+BOLD_BRIGHT_BLUE='\033[1;94m'
 NC='\033[0m' # No Color
 
 info() {
@@ -495,7 +499,7 @@ cleanup_old_versions() {
 
 main() {
   echo ""
-  echo "Setting up VITE+(⚡︎)..."
+  echo -e "Setting up ${BRIGHT_BLUE}VITE+(⚡︎)${NC}..."
   echo ""
 
   check_requirements
@@ -651,19 +655,24 @@ main() {
 
   # Print success message
   echo ""
-  echo -e "${GREEN}✔${NC} VITE+(⚡︎) successfully installed!"
+  echo -e "${GREEN}✔${NC} ${BOLD_BRIGHT_BLUE}VITE+(⚡︎)${NC} successfully installed!"
   echo ""
-  echo "  Version: ${VITE_PLUS_VERSION}"
+  echo "  The Unified Toolchain for the Web."
   echo ""
-  echo "  Location: ${display_location}"
+  echo -e "  ${BOLD}Get started:${NC}"
+  echo -e "    ${BRIGHT_BLUE}vp new${NC}          Create a new project"
+  echo -e "    ${BRIGHT_BLUE}vp env${NC}          Manage Node.js versions"
+  echo -e "    ${BRIGHT_BLUE}vp install${NC}      Install dependencies"
+  echo -e "    ${BRIGHT_BLUE}vp dev${NC}          Start dev server"
 
   if [ "$NODE_MANAGER_ENABLED" = "true" ] || [ "$NODE_MANAGER_ENABLED" = "already" ]; then
     echo ""
-    echo "  Node.js manager: on"
+    echo -e "  Node.js is now managed by Vite+ (via ${BRIGHT_BLUE}vp env${NC})."
+    echo -e "  Run ${BRIGHT_BLUE}vp env doctor${NC} to verify your setup."
   fi
 
   echo ""
-  echo "  Next: Run \`vp help\` to get started"
+  echo -e "  Run ${BRIGHT_BLUE}vp help${NC} for more information."
 
   # Show restart note if PATH was added to shell config
   if [ "$PATH_CONFIGURED" = "true" ] && [ -n "$SHELL_CONFIG_UPDATED" ]; then
