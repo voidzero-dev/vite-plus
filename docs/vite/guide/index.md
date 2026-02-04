@@ -12,15 +12,36 @@ Vite+ is a unified toolchain for modern web development that extends Vite with p
 - **Formatting**: Integrated oxfmt for consistent code formatting
 - **Code Generation**: Scaffolding for new projects and monorepo workspaces
 - **Dependency Management**: Integrated dependency management with pnpm, yarn, npm and bun(coming soon)
+- **Node.js Version Manager**: Built-in Node.js version management
 
 All in a single, cohesive tool designed for scale, speed, and developer sanity.
 
 ## Installation
 
-### Global CLI
+Install Vite+ globally as `vp`:
+
+For Linux or macOS:
 
 ```bash
-npm install -g vite-plus-cli
+curl -fsSL https://viteplus.dev/install.sh | bash
+```
+
+For Windows:
+
+```bash
+irm https://viteplus.dev/install.ps1 | iex
+```
+
+## Node.js Version Manager
+
+Vite+ includes a built-in Node.js version manager. During installation, you can opt-in to let Vite+ manage your Node.js versions.
+
+```bash
+vp env pin 22.12.0        # Pin version in .node-version
+vp env default lts        # Set global default
+vp env list               # Show available versions
+vp env doctor             # Diagnose issues
+vp env help               # Show all commands
 ```
 
 ## Scaffolding Your First Vite+ Project
