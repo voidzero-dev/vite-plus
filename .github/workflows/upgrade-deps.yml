@@ -57,6 +57,7 @@ jobs:
         continue-on-error: true
         with:
           target: x86_64-unknown-linux-gnu
+          print-after-build: 'true'
         env:
           RELEASE_BUILD: 'true'
 
@@ -85,6 +86,13 @@ jobs:
             - If deps in our `Cargo.toml` need to be upgraded, you can refer to the `./.claude/agents/cargo-workspace-merger.md`
               - If `Cargo.toml` has been modified, you need to run `cargo shear` to ensure there is nothing wrong with our dependencies.
               - Run `cargo check --all-targets --all-features` to ensure everything works fine if any Rust related codes are modified.
+            - Run the following commands to ensure everything works fine:
+              vite -h
+              vite run -h
+              vite lint -h
+              vite test -h
+              vite build -h
+              vite fmt -h
 
             Help me fix the errors in `build-upstream` steps, no need to commit changes after your fixing.
           claude_args: |

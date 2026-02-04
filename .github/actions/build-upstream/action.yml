@@ -4,6 +4,9 @@ inputs:
   target:
     description: 'The target platform'
     required: true
+  print-after-build:
+    description: 'Print the output after the build'
+    required: false
 
 runs:
   using: 'composite'
@@ -81,6 +84,17 @@ runs:
         pnpm --filter=vite-plus-cli build-native --target ${{ inputs.target }}
       env:
         DEBUG: napi:*
+
+    - name: Print output after build
+      shell: bash
+      if: inputs.print-after-build == 'true'
+      run: |
+        pnpm vite -h
+        pnpm vite run -h
+        pnpm vite lint -h
+        pnpm vite test -h
+        pnpm vite build -h
+        pnpm vite fmt -h
 
     - name: Save NAPI binding cache
       if: steps.cache-restore.outputs.cache-hit != 'true'
