@@ -8,13 +8,26 @@ permissions: {}
 env:
   RELEASE_BUILD: 'true'
   DEBUG: 'napi:*'
-  VERSION: 0.0.0-${{ github.sha }}
 
 jobs:
-  build-rust:
-    runs-on: ${{ matrix.settings.os }}
+  prepare:
+    runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: ./.github/actions/set-snapshot-version
+        id: version
+
+  build-rust:
+    runs-on: ${{ matrix.settings.os }}
+    needs: prepare
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -109,11 +122,13 @@ jobs:
 
   Release:
     runs-on: ubuntu-latest
-    needs: build-rust
+    needs: [prepare, build-rust]
     permissions:
       contents: write
       packages: write
       id-token: write # Required for OIDC
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: ./.github/actions/clone
