@@ -32,8 +32,14 @@ export async function lint(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
-  // Resolve the oxlint binary directly (it's a native executable)
-  const binPath = resolve('oxlint/bin/oxlint');
+  // Resolve the oxlint package path first, then navigate to the bin file.
+  // The bin/oxlint subpath is not exported in package.json exports, so we
+  // resolve the main entry point and derive the bin path from it.
+  // resolve('oxlint') returns .../oxlint/dist/index.js, so we need to go up
+  // two directories (past 'dist') to reach the package root.
+  const oxlintMainPath = resolve('oxlint');
+  const oxlintPackageRoot = dirname(dirname(oxlintMainPath));
+  const binPath = join(oxlintPackageRoot, 'bin', 'oxlint');
   let oxlintTsgolintPath = resolve('oxlint-tsgolint/bin/tsgolint');
   if (process.platform === 'win32') {
     // If on Windows, resolve the tsgolint binary from the local node_modules
