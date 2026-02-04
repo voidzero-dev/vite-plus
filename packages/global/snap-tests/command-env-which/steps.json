@@ -1,0 +1,13 @@
+{
+  "env": {},
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp env which node # Core tool - shows resolved Node.js binary path",
+    "vp env which npm # Core tool - shows resolved npm binary path",
+    "vp env which npx # Core tool - shows resolved npx binary path",
+    "vp env run npm install -g cowsay # Install a global package via vp",
+    "vp env which cowsay # Global package - shows binary path with metadata",
+    "vp env run npm uninstall -g cowsay # Cleanup",
+    "vp env which unknown-tool # Unknown tool - error message"
+  ]
+}

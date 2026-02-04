@@ -1103,12 +1103,47 @@ Shims will always use vite-plus managed Node.js.
 
 ### Which Command
 
+Shows the path to the tool binary that would be executed.
+
+**Core tools** - shows the resolved Node.js binary path:
+
 ```bash
 $ vp env which node
 /Users/user/.cache/vite-plus/js_runtime/node/20.18.0/bin/node
 
 $ vp env which npm
 /Users/user/.cache/vite-plus/js_runtime/node/20.18.0/bin/npm
+```
+
+**Global packages** - shows binary path plus package metadata, pinned Node.js, and install time:
+
+```bash
+$ vp env which tsc
+/Users/user/.vite-plus/packages/typescript/lib/node_modules/typescript/bin/tsc
+  Package: typescript@5.7.0
+  Node.js: /Users/user/.vite-plus/js_runtime/node/20.18.0/bin/node
+  Installed: 2024-01-15 10:30:00
+
+$ vp env which eslint
+/Users/user/.vite-plus/packages/eslint/lib/node_modules/eslint/bin/eslint.js
+  Package: eslint@9.0.0
+  Node.js: /Users/user/.vite-plus/js_runtime/node/22.13.0/bin/node
+  Installed: 2024-02-20 14:45:30
+```
+
+| Tool Type       | Resolution                          | Output                                                      |
+| --------------- | ----------------------------------- | ----------------------------------------------------------- |
+| Core tools      | Node.js version from project config | Binary path only                                            |
+| Global packages | Package metadata lookup             | Binary path + Package version + Node.js path + Install time |
+
+**Error cases:**
+
+```bash
+# Unknown tool (not core tool, not in any global package)
+$ vp env which unknown-tool
+vp: Unknown tool 'unknown-tool'
+Not a core tool (node, npm, npx) and not found in any installed global package.
+Run 'vp env packages' to see installed global packages.
 ```
 
 ## Pin Command

@@ -33,6 +33,15 @@ Start at  15:01:23
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
 
+  test('replace full datetime (YYYY-MM-DD HH:MM:SS)', () => {
+    const output = `
+  Installed: 2026-02-04 15:30:45
+  Created: 2024-01-15 10:30:00
+  Updated: 1999-12-31 23:59:59
+    `;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
+
   test('replace unstable pnpm install output', () => {
     const outputs = [
       `
