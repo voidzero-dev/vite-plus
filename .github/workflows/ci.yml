@@ -200,6 +200,7 @@ jobs:
           pnpm bootstrap-cli:ci
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             echo "$USERPROFILE/.vite-plus-dev/bin" >> $GITHUB_PATH
+            ls -al $USERPROFILE/.vite-plus-dev/bin
           else
             echo "$HOME/.vite-plus-dev/bin" >> $GITHUB_PATH
           fi
