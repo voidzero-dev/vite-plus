@@ -54,12 +54,6 @@ exports[`replaceUnstableOutput() > replace ignore tarball download average speed
 
 exports[`replaceUnstableOutput() > replace pnpm registry request error warning log 1`] = `"Progress: resolved"`;
 
-exports[`replaceUnstableOutput() > replace semver version at start of line 1`] = `
-"v<semver>
-v<semver>
-<semver>"
-`;
-
 exports[`replaceUnstableOutput() > replace tsdown output 1`] = `
 "ℹ tsdown v<semver> powered by rolldown v<semver>
 ℹ entry: src/index.ts
