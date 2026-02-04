@@ -429,6 +429,14 @@ async fn resolve_version_for_project(
         return Ok((version, false));
     }
 
+    // Handle "latest" alias - resolves to absolute latest version (including non-LTS)
+    if NodeProvider::is_latest_alias(version_req) {
+        tracing::debug!("Resolving 'latest' alias");
+        let version = provider.resolve_version("*").await?;
+        // Don't write back - user explicitly specified "latest"
+        return Ok((version, false));
+    }
+
     // Check if it's an exact version
     if NodeProvider::is_exact_version(version_req) {
         let normalized = version_req.strip_prefix('v').unwrap_or(version_req);
@@ -514,8 +522,8 @@ pub fn normalize_version(version: &Str, source: &str) -> Option<Str> {
         return None;
     }
 
-    // Accept LTS aliases (lts/*, lts/iron, lts/-1)
-    if NodeProvider::is_lts_alias(&trimmed) {
+    // Accept version aliases (lts/*, lts/iron, lts/-1, latest)
+    if NodeProvider::is_version_alias(&trimmed) {
         return Some(trimmed);
     }
 
@@ -536,7 +544,7 @@ pub fn normalize_version(version: &Str, source: &str) -> Option<Str> {
 }
 
 /// Read package.json contents.
-async fn read_package_json(
+pub async fn read_package_json(
     package_json_path: &AbsolutePathBuf,
 ) -> Result<Option<PackageJson>, Error> {
     if !tokio::fs::try_exists(package_json_path).await.unwrap_or(false) {
@@ -1240,6 +1248,14 @@ mod tests {
         assert_eq!(normalize_version(&"lts/-2".into(), ".node-version"), Some("lts/-2".into()));
     }
 
+    #[test]
+    fn test_normalize_version_latest_alias() {
+        // "latest" alias should be accepted by normalize_version (case-insensitive)
+        assert_eq!(normalize_version(&"latest".into(), ".node-version"), Some("latest".into()));
+        assert_eq!(normalize_version(&"Latest".into(), ".node-version"), Some("Latest".into()));
+        assert_eq!(normalize_version(&"LATEST".into(), ".node-version"), Some("LATEST".into()));
+    }
+
     #[tokio::test]
     async fn test_download_runtime_for_project_with_lts_alias_in_node_version() {
         let temp_dir = TempDir::new().unwrap();
@@ -1282,6 +1298,29 @@ mod tests {
         let node_version_content =
             tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
         assert_eq!(node_version_content, "lts/*\n", ".node-version should remain unchanged");
+    }
+
+    #[tokio::test]
+    async fn test_download_runtime_for_project_with_latest_alias_in_node_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version with "latest" alias
+        tokio::fs::write(temp_path.join(".node-version"), "latest\n").await.unwrap();
+
+        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+
+        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+        // "latest" should resolve to the absolute latest version (including non-LTS)
+        let version = runtime.version();
+        let parsed = node_semver::Version::parse(version).unwrap();
+        // Latest version should be at least v20.x
+        assert!(parsed.major >= 20, "'latest' should resolve to at least v20.x, got {version}");
+
+        // Should NOT overwrite .node-version - user explicitly specified "latest"
+        let node_version_content =
+            tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
+        assert_eq!(node_version_content, "latest\n", ".node-version should remain unchanged");
     }
 
     // ==========================================

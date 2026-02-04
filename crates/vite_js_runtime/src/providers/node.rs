@@ -323,6 +323,21 @@ impl NodeProvider {
         version.starts_with("lts/")
     }
 
+    /// Check if a version string is a "latest" alias.
+    ///
+    /// Returns `true` for:
+    /// - `latest` - The absolute latest Node.js version (including non-LTS)
+    #[must_use]
+    pub fn is_latest_alias(version: &str) -> bool {
+        version.eq_ignore_ascii_case("latest")
+    }
+
+    /// Check if a version string is any kind of alias (lts/* or latest).
+    #[must_use]
+    pub fn is_version_alias(version: &str) -> bool {
+        Self::is_lts_alias(version) || Self::is_latest_alias(version)
+    }
+
     /// Resolve an LTS alias to an exact version.
     ///
     /// # Supported Formats
@@ -1145,6 +1160,38 @@ fedcba987654  node-v22.13.1-win-x64.zip";
         assert!(!NodeProvider::is_lts_alias("")); // Empty
         assert!(!NodeProvider::is_lts_alias("latest")); // Different alias
         assert!(!NodeProvider::is_lts_alias("lts")); // No suffix
+    }
+
+    #[test]
+    fn test_is_latest_alias() {
+        // Valid "latest" aliases (case-insensitive)
+        assert!(NodeProvider::is_latest_alias("latest"));
+        assert!(NodeProvider::is_latest_alias("Latest"));
+        assert!(NodeProvider::is_latest_alias("LATEST"));
+
+        // Not "latest" aliases
+        assert!(!NodeProvider::is_latest_alias("lts/*"));
+        assert!(!NodeProvider::is_latest_alias("20.18.0"));
+        assert!(!NodeProvider::is_latest_alias("^20.0.0"));
+        assert!(!NodeProvider::is_latest_alias(""));
+        assert!(!NodeProvider::is_latest_alias("late"));
+        assert!(!NodeProvider::is_latest_alias("latestversion"));
+    }
+
+    #[test]
+    fn test_is_version_alias() {
+        // LTS aliases
+        assert!(NodeProvider::is_version_alias("lts/*"));
+        assert!(NodeProvider::is_version_alias("lts/iron"));
+
+        // "latest" alias
+        assert!(NodeProvider::is_version_alias("latest"));
+        assert!(NodeProvider::is_version_alias("LATEST"));
+
+        // Not aliases
+        assert!(!NodeProvider::is_version_alias("20.18.0"));
+        assert!(!NodeProvider::is_version_alias("^20.0.0"));
+        assert!(!NodeProvider::is_version_alias(""));
     }
 
     #[tokio::test]

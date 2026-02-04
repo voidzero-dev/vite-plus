@@ -6,7 +6,9 @@
 //! - Config file management
 
 use serde::{Deserialize, Serialize};
-use vite_js_runtime::{NodeProvider, normalize_version, resolve_node_version};
+use vite_js_runtime::{
+    NodeProvider, VersionSource, normalize_version, read_package_json, resolve_node_version,
+};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::error::Error;
@@ -166,8 +168,8 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
             normalize_version(&resolution.version.clone().into(), &resolution.source.to_string())
         {
             // Detect if the original version spec was a range (not exact)
-            // This includes partial versions (20, 20.18), semver ranges (^20.0.0), and LTS aliases
-            let is_range = NodeProvider::is_lts_alias(&validated)
+            // This includes partial versions (20, 20.18), semver ranges (^20.0.0), LTS aliases, and "latest"
+            let is_range = NodeProvider::is_version_alias(&validated)
                 || !NodeProvider::is_exact_version(&validated);
 
             let resolved = resolve_version_string(&validated, &provider).await?;
@@ -179,7 +181,57 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
                 is_range,
             });
         }
-        // Invalid version - fall through to user default or LTS
+
+        // Invalid .node-version - check package.json sources in the same directory
+        // This mirrors the fallback logic in download_runtime_for_project()
+        if matches!(resolution.source, VersionSource::NodeVersionFile) {
+            if let Some(project_root) = &resolution.project_root {
+                let package_json_path = project_root.join("package.json");
+                if let Ok(Some(pkg)) = read_package_json(&package_json_path).await {
+                    // Try engines.node
+                    if let Some(engines_node) = pkg
+                        .engines
+                        .as_ref()
+                        .and_then(|e| e.node.clone())
+                        .and_then(|v| normalize_version(&v, "engines.node"))
+                    {
+                        let resolved = resolve_version_string(&engines_node, &provider).await?;
+                        let is_range = NodeProvider::is_lts_alias(&engines_node)
+                            || !NodeProvider::is_exact_version(&engines_node);
+                        return Ok(VersionResolution {
+                            version: resolved,
+                            source: "engines.node".into(),
+                            source_path: Some(package_json_path),
+                            project_root: Some(project_root.clone()),
+                            is_range,
+                        });
+                    }
+
+                    // Try devEngines.runtime
+                    if let Some(dev_engines) = pkg
+                        .dev_engines
+                        .as_ref()
+                        .and_then(|de| de.runtime.as_ref())
+                        .and_then(|rt| rt.find_by_name("node"))
+                        .map(|r| r.version.clone())
+                        .filter(|v| !v.is_empty())
+                        .and_then(|v| normalize_version(&v, "devEngines.runtime"))
+                    {
+                        let resolved = resolve_version_string(&dev_engines, &provider).await?;
+                        let is_range = NodeProvider::is_lts_alias(&dev_engines)
+                            || !NodeProvider::is_exact_version(&dev_engines);
+                        return Ok(VersionResolution {
+                            version: resolved,
+                            source: "devEngines.runtime".into(),
+                            source_path: Some(package_json_path),
+                            project_root: Some(project_root.clone()),
+                            is_range,
+                        });
+                    }
+                }
+            }
+        }
+        // Invalid version and no valid package.json sources - fall through to user default or LTS
     }
 
     // CLI-specific: Check user default from config
@@ -217,6 +269,12 @@ async fn resolve_version_string(version: &str, provider: &NodeProvider) -> Resul
     // Check for LTS alias first (lts/*, lts/iron, lts/-1)
     if NodeProvider::is_lts_alias(version) {
         let resolved = provider.resolve_lts_alias(version).await?;
+        return Ok(resolved.to_string());
+    }
+
+    // Check for "latest" alias - resolves to absolute latest version (including non-LTS)
+    if NodeProvider::is_latest_alias(version) {
+        let resolved = provider.resolve_version("*").await?;
         return Ok(resolved.to_string());
     }
 
@@ -567,5 +625,99 @@ mod tests {
         unsafe {
             std::env::remove_var("VITE_PLUS_HOME");
         }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_resolve_version_invalid_node_version_falls_through_to_engines_node() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version file with invalid version (typo or unsupported alias)
+        tokio::fs::write(temp_path.join(".node-version"), "laetst\n").await.unwrap();
+
+        // Create package.json with valid engines.node
+        let package_json = r#"{"engines":{"node":"^20.18.0"}}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        // SAFETY: Set VITE_PLUS_HOME to temp dir to avoid using user's config
+        unsafe {
+            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
+        }
+
+        // resolve_version should NOT fail - it should fall through to engines.node
+        let resolution = resolve_version(&temp_path).await.unwrap();
+
+        // Should fall through to engines.node since .node-version is invalid
+        assert_eq!(resolution.source, "engines.node");
+        // Version should be resolved from ^20.18.0 (a 20.x version)
+        assert!(
+            resolution.version.starts_with("20."),
+            "Expected version to start with '20.', got: {}",
+            resolution.version
+        );
+
+        // Clean up env var
+        unsafe {
+            std::env::remove_var("VITE_PLUS_HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_resolve_version_invalid_node_version_falls_through_to_dev_engines() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version file with invalid version
+        tokio::fs::write(temp_path.join(".node-version"), "invalid\n").await.unwrap();
+
+        // Create package.json with devEngines.runtime but no engines.node
+        let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"^20.18.0"}}}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        // SAFETY: Set VITE_PLUS_HOME to temp dir to avoid using user's config
+        unsafe {
+            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
+        }
+
+        // resolve_version should NOT fail - it should fall through to devEngines.runtime
+        let resolution = resolve_version(&temp_path).await.unwrap();
+
+        // Should fall through to devEngines.runtime since .node-version is invalid
+        assert_eq!(resolution.source, "devEngines.runtime");
+        // Version should be resolved from ^20.18.0 (a 20.x version)
+        assert!(
+            resolution.version.starts_with("20."),
+            "Expected version to start with '20.', got: {}",
+            resolution.version
+        );
+
+        // Clean up env var
+        unsafe {
+            std::env::remove_var("VITE_PLUS_HOME");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_resolve_version_latest_alias_in_node_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version file with "latest" alias
+        tokio::fs::write(temp_path.join(".node-version"), "latest\n").await.unwrap();
+
+        let resolution = resolve_version(&temp_path).await.unwrap();
+
+        // Should resolve from .node-version
+        assert_eq!(resolution.source, ".node-version");
+        // "latest" is a range (should be re-resolved periodically)
+        assert!(resolution.is_range, "'latest' should be marked as a range");
+        // Version should be at least v20.x
+        assert!(
+            resolution.version.starts_with("2") || resolution.version.starts_with("3"),
+            "Expected version to be at least v20.x, got: {}",
+            resolution.version
+        );
     }
 }
