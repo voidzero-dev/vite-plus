@@ -1,30 +1,88 @@
 //! Run command for executing commands with a specific Node.js version.
 //!
-//! Handles `vp env run --node <version> [--npm <version>] <command>` to run a command
-//! with a specific Node.js version.
+//! Handles two modes:
+//! 1. Explicit version: `vp env run --node <version> [--npm <version>] <command>`
+//! 2. Shim mode: `vp env run <tool> [args...]` where tool is node/npm/npx or a global package binary
+//!
+//! The shim mode uses the same dispatch logic as Unix symlinks, ensuring identical behavior
+//! across platforms (used by Windows .cmd wrappers and Git Bash shell scripts).
 
 use std::process::ExitStatus;
 
 use vite_js_runtime::NodeProvider;
 use vite_shared::format_path_prepended;
 
-use crate::error::Error;
+use crate::{
+    error::Error,
+    shim::{dispatch as shim_dispatch, is_shim_tool},
+};
 
 /// Execute the run command.
 ///
-/// Runs a command with the specified Node.js version. If the version isn't installed,
-/// it will be downloaded automatically.
+/// When `--node` is provided, runs a command with the specified Node.js version.
+/// When `--node` is not provided and the command is a shim tool (node/npm/npx or global package),
+/// uses the same shim dispatch logic as Unix symlinks.
 pub async fn execute(
-    node_version: &str,
+    node_version: Option<&str>,
     npm_version: Option<&str>,
     command: &[String],
 ) -> Result<ExitStatus, Error> {
     if command.is_empty() {
         eprintln!("vp env run: missing command to execute");
-        eprintln!("Usage: vp env run --node <version> <command> [args...]");
+        eprintln!("Usage: vp env run [--node <version>] <command> [args...]");
         return Ok(exit_status(1));
     }
 
+    // If --node is provided, use explicit version mode (existing behavior)
+    if let Some(version) = node_version {
+        return execute_with_version(version, npm_version, command).await;
+    }
+
+    // No --node provided - check if first command is a shim tool
+    // This includes:
+    // - Core tools (node, npm, npx)
+    // - Globally installed package binaries (tsc, eslint, etc.)
+    let tool = &command[0];
+    if is_shim_tool(tool) {
+        // Clear recursion env var to force fresh version resolution.
+        // This is needed because `vp env run` may be invoked from within a context
+        // where VITE_PLUS_TOOL_RECURSION is already set (e.g., when pnpm runs through
+        // the vite-plus shim). Without clearing it, shim_dispatch would passthrough
+        // to the system node instead of resolving the version.
+        // SAFETY: This is safe because we're about to spawn a child process and we want
+        // fresh version resolution, not passthrough behavior.
+        unsafe {
+            std::env::remove_var("VITE_PLUS_TOOL_RECURSION");
+        }
+
+        // Use the SAME shim dispatch as Unix symlinks - this ensures:
+        // - Core tools: Version resolved from .node-version/package.json/default
+        // - Package binaries: Uses Node.js version from package metadata
+        // - Automatic Node.js download if needed
+        // - Recursion prevention via VITE_PLUS_TOOL_RECURSION
+        // - Shim mode checking (managed vs system-first)
+        let args: Vec<String> = command[1..].to_vec();
+        let exit_code = shim_dispatch(tool, &args).await;
+        return Ok(exit_status(exit_code));
+    }
+
+    // Not a shim tool and no --node - error
+    eprintln!("vp env run: --node is required when running non-shim commands");
+    eprintln!("Usage: vp env run --node <version> <command> [args...]");
+    eprintln!();
+    eprintln!("For shim tools, --node is optional (version resolved automatically):");
+    eprintln!("  vp env run node script.js    # Core tool");
+    eprintln!("  vp env run npm install       # Core tool");
+    eprintln!("  vp env run tsc --version     # Global package");
+    Ok(exit_status(1))
+}
+
+/// Execute a command with an explicitly specified Node.js version.
+async fn execute_with_version(
+    node_version: &str,
+    npm_version: Option<&str>,
+    command: &[String],
+) -> Result<ExitStatus, Error> {
     // Warn about unsupported --npm flag
     if npm_version.is_some() {
         eprintln!("Warning: --npm flag is not yet implemented, using bundled npm");
@@ -111,7 +169,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_missing_command() {
-        let result = execute("20.18.0", None, &[]).await;
+        let result = execute(Some("20.18.0"), None, &[]).await;
         assert!(result.is_ok());
         let status = result.unwrap();
         assert!(!status.success());
@@ -122,7 +180,7 @@ mod tests {
     async fn test_execute_node_version() {
         // Run 'node --version' with a specific Node.js version
         let command = vec!["node".to_string(), "--version".to_string()];
-        let result = execute("20.18.0", None, &command).await;
+        let result = execute(Some("20.18.0"), None, &command).await;
         assert!(result.is_ok());
         let status = result.unwrap();
         assert!(status.success());
@@ -168,5 +226,16 @@ mod tests {
         // Major version should be >= 20 (current LTS line)
         let major: u32 = parts[0].parse().expect("Major version should be a number");
         assert!(major >= 20, "Expected major version >= 20, got: {major}");
+    }
+
+    #[tokio::test]
+    async fn test_shim_mode_error_for_non_shim_command() {
+        // Running a non-shim command without --node should error
+        let command = vec!["python".to_string(), "--version".to_string()];
+        let result = execute(None, None, &command).await;
+        assert!(result.is_ok());
+        let status = result.unwrap();
+        // Should fail because python is not a shim tool and --node was not provided
+        assert!(!status.success(), "Non-shim command without --node should fail");
     }
 }

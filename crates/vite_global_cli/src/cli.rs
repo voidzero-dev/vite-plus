@@ -676,8 +676,10 @@ pub enum EnvSubcommands {
     /// Run a command with a specific Node.js version
     Run {
         /// Node.js version to use (e.g., "20.18.0", "lts", "^20.0.0")
-        #[arg(long, required = true)]
-        node: String,
+        /// If not provided and command is node/npm/npx or a global package binary,
+        /// version is resolved automatically (same as shim behavior)
+        #[arg(long)]
+        node: Option<String>,
 
         /// npm version to use (optional, defaults to bundled)
         #[arg(long)]

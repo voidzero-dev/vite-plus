@@ -1,0 +1,18 @@
+> vp env run node -v # Shim mode: version resolved from package.json engines.node
+v20.18.0
+
+> vp env run npm -v # Shim mode: npm uses same version
+10.8.2
+
+> vp env run node -e "console.log('Hello from shim mode')" # Shim mode: run inline script
+Hello from shim mode
+
+> vp env run nonexistent-tool --version || echo 'Expected error: non-shim command requires --node' # Error: non-shim tool
+vp env run: --node is required when running non-shim commands
+Usage: vp env run --node <version> <command> [args...]
+
+For shim tools, --node is optional (version resolved automatically):
+  vp env run node script.js    # Core tool
+  vp env run npm install       # Core tool
+  vp env run tsc --version     # Global package
+Expected error: non-shim command requires --node

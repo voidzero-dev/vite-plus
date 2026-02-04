@@ -1,0 +1,8 @@
+{
+  "name": "command-env-run-shim-mode",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "20.18.0"
+  }
+}

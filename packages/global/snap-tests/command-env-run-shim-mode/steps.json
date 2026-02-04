@@ -1,0 +1,10 @@
+{
+  "env": {},
+  "ignoredPlatforms": [],
+  "commands": [
+    "vp env run node -v # Shim mode: version resolved from package.json engines.node",
+    "vp env run npm -v # Shim mode: npm uses same version",
+    "vp env run node -e \"console.log('Hello from shim mode')\" # Shim mode: run inline script",
+    "vp env run nonexistent-tool --version || echo 'Expected error: non-shim command requires --node' # Error: non-shim tool"
+  ]
+}
