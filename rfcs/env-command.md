@@ -1385,10 +1385,10 @@ vp env run python --version      # Fails: --node required for non-shim tools
 
 ### Flags
 
-| Flag               | Description                                                                    |
-| ------------------ | ------------------------------------------------------------------------------ |
-| `--node <version>` | Node.js version to use (optional for shim tools, required for other commands)  |
-| `--npm <version>`  | npm version to use (not yet implemented, uses bundled npm)                     |
+| Flag               | Description                                                                   |
+| ------------------ | ----------------------------------------------------------------------------- |
+| `--node <version>` | Node.js version to use (optional for shim tools, required for other commands) |
+| `--npm <version>`  | npm version to use (not yet implemented, uses bundled npm)                    |
 
 ### Shim Mode Behavior
 

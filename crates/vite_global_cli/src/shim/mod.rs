@@ -82,15 +82,38 @@ fn is_potential_package_binary(tool: &str) -> bool {
     std::fs::symlink_metadata(&shim_path).is_ok()
 }
 
+/// Environment variable used for shim tool detection via shell wrapper scripts.
+const SHIM_TOOL_ENV_VAR: &str = "VITE_PLUS_SHIM_TOOL";
+
 /// Detect the shim tool from environment and argv.
 ///
-/// Checks `VITE_PLUS_SHIM_TOOL` first (legacy, for backward compatibility),
-/// then falls back to argv[0] detection (primary method on Unix).
+/// Detection priority:
+/// 1. If argv[0] is "vp" or "vp.exe", this is a direct CLI invocation - NOT shim mode
+/// 2. Check `VITE_PLUS_SHIM_TOOL` env var (for shell wrapper scripts)
+/// 3. Fall back to argv[0] detection (primary method on Unix with symlinks)
 ///
 /// Note: Modern Windows wrappers use `vp env run <tool>` instead of env vars.
+///
+/// IMPORTANT: This function clears `VITE_PLUS_SHIM_TOOL` after reading it to
+/// prevent the env var from leaking to child processes.
 pub fn detect_shim_tool(argv0: &str) -> Option<String> {
-    // Check VITE_PLUS_SHIM_TOOL env var first (legacy backward compatibility)
-    if let Ok(tool) = std::env::var("VITE_PLUS_SHIM_TOOL") {
+    // Always clear the env var to prevent it from leaking to child processes.
+    // We read it first, then clear it immediately.
+    // SAFETY: We're at program startup before any threads are spawned.
+    let env_tool = std::env::var(SHIM_TOOL_ENV_VAR).ok();
+    unsafe {
+        std::env::remove_var(SHIM_TOOL_ENV_VAR);
+    }
+
+    // If argv[0] is explicitly "vp" or "vp.exe", this is a direct CLI invocation.
+    // Do NOT use the env var in this case - it may be stale from a parent process.
+    let argv0_tool = extract_tool_name(argv0);
+    if argv0_tool == "vp" {
+        return None; // Direct vp invocation, not shim mode
+    }
+
+    // Check VITE_PLUS_SHIM_TOOL env var (set by shell wrapper scripts)
+    if let Some(tool) = env_tool {
         if !tool.is_empty() {
             let tool_lower = tool.to_lowercase();
             // Accept any tool from env var (could be core or package binary)
@@ -101,8 +124,7 @@ pub fn detect_shim_tool(argv0: &str) -> Option<String> {
     }
 
     // Fall back to argv[0] detection
-    let tool = extract_tool_name(argv0);
-    if is_shim_tool(&tool) { Some(tool) } else { None }
+    if is_shim_tool(&argv0_tool) { Some(argv0_tool) } else { None }
 }
 
 #[cfg(test)]
