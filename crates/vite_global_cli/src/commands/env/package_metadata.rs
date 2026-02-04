@@ -121,6 +121,21 @@ impl PackageMetadata {
         list_packages_recursive(&packages_dir, &mut packages).await?;
         Ok(packages)
     }
+
+    /// Find the package that provides a given binary.
+    ///
+    /// Returns the package metadata if found, None otherwise.
+    pub async fn find_by_binary(binary_name: &str) -> Result<Option<Self>, Error> {
+        let packages = Self::list_all().await?;
+
+        for package in packages {
+            if package.bins.contains(&binary_name.to_string()) {
+                return Ok(Some(package));
+            }
+        }
+
+        Ok(None)
+    }
 }
 
 /// Recursively list packages in a directory (handles scoped packages in subdirs).
@@ -261,6 +276,66 @@ mod tests {
         let names: Vec<_> = all.iter().map(|p| p.name.as_str()).collect();
         assert!(names.contains(&"typescript"), "Missing typescript package");
         assert!(names.contains(&"@types/node"), "Missing @types/node package");
+
+        // Clean up env var
+        unsafe {
+            std::env::remove_var("VITE_PLUS_HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_find_by_binary() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path().to_path_buf();
+
+        // SAFETY: This test runs in isolation
+        unsafe {
+            std::env::set_var("VITE_PLUS_HOME", &temp_path);
+        }
+
+        // Create typescript package with tsc and tsserver binaries
+        let typescript = PackageMetadata::new(
+            "typescript".to_string(),
+            "5.0.0".to_string(),
+            "20.18.0".to_string(),
+            None,
+            vec!["tsc".to_string(), "tsserver".to_string()],
+            HashSet::from(["tsc".to_string(), "tsserver".to_string()]),
+            "npm".to_string(),
+        );
+        typescript.save().await.unwrap();
+
+        // Create eslint package with eslint binary
+        let eslint = PackageMetadata::new(
+            "eslint".to_string(),
+            "9.0.0".to_string(),
+            "22.13.0".to_string(),
+            None,
+            vec!["eslint".to_string()],
+            HashSet::from(["eslint".to_string()]),
+            "npm".to_string(),
+        );
+        eslint.save().await.unwrap();
+
+        // Find by binary should return the correct package
+        let found = PackageMetadata::find_by_binary("tsc").await.unwrap();
+        assert!(found.is_some(), "Should find package providing tsc");
+        assert_eq!(found.unwrap().name, "typescript");
+
+        let found = PackageMetadata::find_by_binary("tsserver").await.unwrap();
+        assert!(found.is_some(), "Should find package providing tsserver");
+        assert_eq!(found.unwrap().name, "typescript");
+
+        let found = PackageMetadata::find_by_binary("eslint").await.unwrap();
+        assert!(found.is_some(), "Should find package providing eslint");
+        assert_eq!(found.unwrap().name, "eslint");
+
+        // Non-existent binary should return None
+        let found = PackageMetadata::find_by_binary("nonexistent").await.unwrap();
+        assert!(found.is_none(), "Should not find package for nonexistent binary");
 
         // Clean up env var
         unsafe {

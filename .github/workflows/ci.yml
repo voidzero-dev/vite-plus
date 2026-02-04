@@ -228,9 +228,16 @@ jobs:
 
       - name: Test global package install (bash)
         run: |
+          echo "PATH: $PATH"
+          where node
+          where npm
+          where npx
+          where vp
+
           # Test 1: Install a JS-based CLI (typescript)
           npm install -g typescript
           tsc --version
+          where tsc
 
           # Test 2: Verify the package was installed correctly
           ls -la ~/.vite-plus-dev/packages/typescript/
@@ -252,9 +259,16 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         shell: pwsh
         run: |
+          echo "PATH: $env:Path"
+          where.exe node
+          where.exe npm
+          where.exe npx
+          where.exe vp
+
           # Test 1: Install a JS-based CLI (typescript)
           npm install -g typescript
           tsc --version
+          where.exe tsc
 
           # Test 2: Verify the package was installed correctly
           Get-ChildItem "$env:USERPROFILE\.vite-plus-dev\packages\typescript\"
@@ -277,9 +291,16 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         shell: cmd
         run: |
+          echo "PATH: %PATH%"
+          where.exe node
+          where.exe npm
+          where.exe npx
+          where.exe vp
+
           :: Test 1: Install a JS-based CLI (typescript)
           npm install -g typescript
           tsc --version
+          where.exe tsc
 
           :: Test 2: Verify the package was installed correctly
           dir "%USERPROFILE%\.vite-plus-dev\packages\typescript\"

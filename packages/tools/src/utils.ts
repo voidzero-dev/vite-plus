@@ -27,7 +27,9 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       // vite-plus hash version
       // e.g.: `vite-plus": "^0.0.0-aa9f90fe23216b8ad85b0ba4fc1bccb0614afaf0"` -> `vite-plus": "^0.0.0-<hash>`
       .replaceAll(/0\.0\.0-\w{40}/g, '0.0.0-<hash>')
-      // date
+      // date (YYYY-MM-DD HH:MM:SS)
+      .replaceAll(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/g, '<date>')
+      // time only (HH:MM:SS)
       .replaceAll(/\d{2}:\d{2}:\d{2}/g, '<date>')
       // duration
       .replaceAll(/\d+(?:\.\d+)?(?:s|ms|µs|ns)/g, '<variable>ms')

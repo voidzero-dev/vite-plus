@@ -5,6 +5,12 @@ exports[`replaceUnstableOutput() > replace date 1`] = `
 <date>"
 `;
 
+exports[`replaceUnstableOutput() > replace full datetime (YYYY-MM-DD HH:MM:SS) 1`] = `
+"Installed: <date>
+  Created: <date>
+  Updated: <date>"
+`;
+
 exports[`replaceUnstableOutput() > replace hash values 1`] = `
 "npm notice shasum: <hash>
 npm notice integrity: sha512-<hash>
