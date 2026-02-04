@@ -8,7 +8,10 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::format_path_prepended;
 
 use super::{
-    config::{get_bin_dir, get_node_modules_dir, get_packages_dir, get_tmp_dir, resolve_version},
+    config::{
+        get_bin_dir, get_node_modules_dir, get_packages_dir, get_tmp_dir, resolve_version,
+        resolve_version_alias,
+    },
     package_metadata::PackageMetadata,
 };
 use crate::error::Error;
@@ -24,13 +27,8 @@ pub async fn install(package_spec: &str, node_version: Option<&str>) -> Result<(
 
     // 1. Resolve Node.js version
     let version = if let Some(v) = node_version {
-        // Resolve the provided version to an exact version
         let provider = NodeProvider::new();
-        if NodeProvider::is_exact_version(v) {
-            v.to_string()
-        } else {
-            provider.resolve_version(v).await?.to_string()
-        }
+        resolve_version_alias(v, &provider).await?
     } else {
         // Resolve from current directory
         let cwd = std::env::current_dir().map_err(|e| {
@@ -87,7 +85,12 @@ pub async fn install(package_spec: &str, node_version: Option<&str>) -> Result<(
     if !tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
         let _ = tokio::fs::remove_dir_all(&staging_dir).await;
         return Err(Error::ConfigError(
-            format!("Package {} was not installed correctly", package_name).into(),
+            format!(
+                "Package {} was not installed correctly, package.json not found at {}",
+                package_name,
+                package_json_path.as_path().display()
+            )
+            .into(),
         ));
     }
 

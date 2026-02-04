@@ -1,0 +1,7 @@
+{
+  "name": "command-env-install-version-alias-pkg",
+  "version": "1.0.0",
+  "bin": {
+    "command-env-install-version-alias-pkg-cli": "./cli.js"
+  }
+}

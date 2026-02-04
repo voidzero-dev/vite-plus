@@ -291,7 +291,10 @@ async fn resolve_version_string(version: &str, provider: &NodeProvider) -> Resul
 }
 
 /// Resolve version alias (lts, latest) to an exact version.
-async fn resolve_version_alias(version: &str, provider: &NodeProvider) -> Result<String, Error> {
+pub async fn resolve_version_alias(
+    version: &str,
+    provider: &NodeProvider,
+) -> Result<String, Error> {
     match version.to_lowercase().as_str() {
         "lts" => {
             let resolved = provider.resolve_latest_version().await?;
