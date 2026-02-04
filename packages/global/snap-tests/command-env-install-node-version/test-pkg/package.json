@@ -1,7 +1,0 @@
-{
-  "name": "test-pkg",
-  "version": "1.0.0",
-  "bin": {
-    "test-cli": "./cli.js"
-  }
-}
