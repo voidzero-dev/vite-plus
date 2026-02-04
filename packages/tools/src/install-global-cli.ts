@@ -127,8 +127,11 @@ export function installGlobalCli() {
       const vpBinary = path.join(currentBinDir, 'vp');
       const vpRawBinary = path.join(currentBinDir, 'vp-raw');
 
-      // Rename vp -> vp-raw
-      if (existsSync(vpBinary) && !existsSync(vpRawBinary)) {
+      // Rename vp -> vp-raw (always replace to ensure latest binary)
+      if (existsSync(vpBinary)) {
+        if (existsSync(vpRawBinary)) {
+          rmSync(vpRawBinary);
+        }
         renameSync(vpBinary, vpRawBinary);
         console.log(`Renamed ${vpBinary} -> ${vpRawBinary}`);
       }
