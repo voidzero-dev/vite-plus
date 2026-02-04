@@ -100,6 +100,7 @@ async fn execute_package_binary(
 
     // Print metadata
     println!("  Package: {}@{}", metadata.name, metadata.version);
+    println!("  Binaries: {}", metadata.bins.join(", "));
     println!("  Node.js: {}", node_path.as_path().display());
     println!("  Installed: {}", installed_str);
 
