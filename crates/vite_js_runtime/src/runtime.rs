@@ -506,7 +506,7 @@ fn check_constraint(
 
 /// Normalize and validate a version string as semver (exact version or range) or LTS alias.
 /// Trims whitespace and returns the normalized version, or None with a warning if invalid.
-fn normalize_version(version: &Str, source: &str) -> Option<Str> {
+pub fn normalize_version(version: &Str, source: &str) -> Option<Str> {
     // Trim leading/trailing whitespace
     let trimmed: Str = version.trim().into();
 
