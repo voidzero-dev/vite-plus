@@ -224,6 +224,44 @@ jobs:
           vp env doctor
           vp env run --node 24 -- node -p "process.versions"
 
+      - name: Verify installation on cmd
+        shell: cmd
+        working-directory: ${{ runner.temp }}
+        run: |
+          echo PATH: %PATH%
+          dir "%USERPROFILE%\.vite-plus\bin"
+
+          vp --version
+          vp --help
+          :: test new command
+          vp new create-vite --no-interactive --no-agent -- hello-cmd --no-interactive -t vanilla
+          cd hello-cmd && vp run build
+
+      - name: Verify bin setup on cmd
+        shell: cmd
+        run: |
+          :: Verify bin directory was created by vp env --setup
+          set "BIN_PATH=%USERPROFILE%\.vite-plus\bin"
+          dir "%BIN_PATH%"
+
+          :: Verify shim executables exist (Windows uses .cmd wrappers)
+          for %%s in (node.cmd npm.cmd npx.cmd vp.cmd) do (
+            if not exist "%BIN_PATH%\%%s" (
+              echo Error: Shim not found: %BIN_PATH%\%%s
+              exit /b 1
+            )
+            echo Found shim: %BIN_PATH%\%%s
+          )
+
+          where node
+          where npm
+          where npx
+          where vp
+
+          :: Verify vp env doctor works
+          vp env doctor
+          vp env run --node 24 -- node -p "process.versions"
+
       - name: Verify installation on bash
         shell: bash
         working-directory: ${{ runner.temp }}
@@ -249,13 +287,22 @@ jobs:
             exit 1
           fi
 
-          # Verify shim executables exist (Windows uses .cmd wrappers)
-          for shim in node.cmd npm.cmd npx.cmd; do
+          # Verify .cmd wrappers exist (for cmd.exe/PowerShell)
+          for shim in node.cmd npm.cmd npx.cmd vp.cmd; do
             if [ ! -f "$BIN_PATH/$shim" ]; then
-              echo "Error: Shim not found: $BIN_PATH/$shim"
+              echo "Error: .cmd wrapper not found: $BIN_PATH/$shim"
               exit 1
             fi
-            echo "Found shim: $BIN_PATH/$shim"
+            echo "Found .cmd wrapper: $BIN_PATH/$shim"
+          done
+
+          # Verify shell scripts exist (for Git Bash)
+          for shim in node npm npx vp; do
+            if [ ! -f "$BIN_PATH/$shim" ]; then
+              echo "Error: Shell script not found: $BIN_PATH/$shim"
+              exit 1
+            fi
+            echo "Found shell script: $BIN_PATH/$shim"
           done
 
           # Verify vp env doctor works
