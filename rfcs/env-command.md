@@ -262,10 +262,16 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 │   ├── npm -> ../current/bin/vp      # Symlink to vp binary (Unix)
 │   ├── npx -> ../current/bin/vp      # Symlink to vp binary (Unix)
 │   ├── tsc -> ../current/bin/vp      # Symlink for global package (Unix)
+│   ├── vp                            # Shell script for Git Bash (Windows)
 │   ├── vp.cmd                        # Wrapper calling ..\current\bin\vp.exe (Windows)
+│   ├── node                          # Shell script for Git Bash (Windows)
 │   ├── node.cmd                      # Wrapper calling vp env run node (Windows)
+│   ├── npm                           # Shell script for Git Bash (Windows)
 │   ├── npm.cmd                       # Wrapper calling vp env run npm (Windows)
-│   └── npx.cmd                       # Wrapper calling vp env run npx (Windows)
+│   ├── npx                           # Shell script for Git Bash (Windows)
+│   ├── npx.cmd                       # Wrapper calling vp env run npx (Windows)
+│   ├── tsc                           # Shell script for global package Git Bash (Windows)
+│   └── tsc.cmd                       # Wrapper for global package (Windows)
 ├── current/
 │   └── bin/
 │       ├── vp                        # The actual vp CLI binary (Unix)
@@ -1553,20 +1559,65 @@ ln -sf ../current/bin/vp ~/.vite-plus/bin/tsc
 ```
 VITE_PLUS_HOME\
 ├── bin\
-│   ├── vp.cmd        # Wrapper calling ..\current\bin\vp.exe
-│   ├── node.cmd      # Wrapper calling vp env run node
-│   ├── npm.cmd       # Wrapper calling vp env run npm
-│   └── npx.cmd       # Wrapper calling vp env run npx
+│   ├── vp           # Shell script for Git Bash (calls vp.exe directly)
+│   ├── vp.cmd       # Wrapper for cmd.exe/PowerShell
+│   ├── node         # Shell script for Git Bash (calls vp env run node)
+│   ├── node.cmd     # Wrapper calling vp env run node
+│   ├── npm          # Shell script for Git Bash (calls vp env run npm)
+│   ├── npm.cmd      # Wrapper calling vp env run npm
+│   ├── npx          # Shell script for Git Bash (calls vp env run npx)
+│   ├── npx.cmd      # Wrapper calling vp env run npx
+│   ├── tsc          # Shell script for global package (Git Bash)
+│   └── tsc.cmd      # Wrapper for global package (cmd.exe/PowerShell)
 └── current\
     └── bin\
-        └── vp.exe    # The actual vp CLI binary
+        └── vp.exe   # The actual vp CLI binary
 ```
+
+### Shell Scripts for Git Bash
+
+Git Bash (MSYS2/MinGW) doesn't use Windows' PATHEXT mechanism, so it won't find `.cmd` files when you type a command without extension. Shell script wrappers (without extension) are created alongside all `.cmd` files.
+
+#### Why Not Symlinks?
+
+On Unix, shims are symlinks to the vp binary, which preserves argv[0] for tool detection. On Windows, we use explicit `vp env run <tool>` calls instead of symlinks because:
+
+1. **Admin privileges required**: Windows symlinks need admin rights or Developer Mode
+2. **Unreliable Git Bash support**: Symlink emulation varies by Git for Windows version
+3. **Consistent with .cmd approach**: Both .cmd and shell scripts use the same dispatch pattern
+
+#### Wrapper Scripts
+
+**vp wrapper** (calls vp.exe directly):
+
+```sh
+#!/bin/sh
+VITE_PLUS_HOME="$(dirname "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")")"
+export VITE_PLUS_HOME
+exec "$VITE_PLUS_HOME/current/bin/vp.exe" "$@"
+```
+
+**Tool wrappers** (node, npm, npx - uses explicit dispatch):
+
+```sh
+#!/bin/sh
+VITE_PLUS_HOME="$(dirname "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")")"
+export VITE_PLUS_HOME
+exec "$VITE_PLUS_HOME/current/bin/vp.exe" env run node "$@"
+```
+
+This ensures all commands work in:
+
+- Git Bash
+- WSL (if accessing Windows paths)
+- Any POSIX-compatible shell on Windows
 
 ### Wrapper Script Template (vp.cmd)
 
 ```batch
 @echo off
-"%~dp0..\current\bin\vp.exe" %*
+set VITE_PLUS_HOME=%~dp0..
+"%VITE_PLUS_HOME%\current\bin\vp.exe" %*
 exit /b %ERRORLEVEL%
 ```
 
@@ -1576,7 +1627,8 @@ The `vp.cmd` wrapper forwards all arguments to the actual `vp.exe` binary.
 
 ```batch
 @echo off
-"%~dp0..\current\bin\vp.exe" env run node %*
+set VITE_PLUS_HOME=%~dp0..
+"%VITE_PLUS_HOME%\current\bin\vp.exe" env run node %*
 exit /b %ERRORLEVEL%
 ```
 
@@ -1584,23 +1636,25 @@ For npm:
 
 ```batch
 @echo off
-"%~dp0..\current\bin\vp.exe" env run npm %*
+set VITE_PLUS_HOME=%~dp0..
+"%VITE_PLUS_HOME%\current\bin\vp.exe" env run npm %*
 exit /b %ERRORLEVEL%
 ```
 
 **How it works**:
 
 1. User runs `npm install`
-2. Windows finds `~/.vite-plus/bin/npm.cmd` in PATH
+2. Windows finds `~/.vite-plus/bin/npm.cmd` in PATH (cmd.exe/PowerShell) or `npm` (Git Bash)
 3. Wrapper calls `vp.exe env run npm install`
 4. `vp env run` command handles version resolution and execution
 
 **Benefits of this approach**:
 
 - Single `vp.exe` binary to update in `current\bin\`
-- All shims are trivial `.cmd` text files (no binary copies)
+- All shims are trivial `.cmd` text files and shell scripts (no binary copies)
 - Consistent with Volta's Windows approach
 - Clear, readable wrapper scripts
+- Works in both cmd.exe/PowerShell and Git Bash
 
 ### Windows Installation (install.ps1)
 
@@ -1608,8 +1662,9 @@ The Windows installer (`install.ps1`) follows this flow:
 
 1. Download and install `vp.exe` to `~/.vite-plus/current/bin/`
 2. Create `~/.vite-plus/bin/vp.cmd` wrapper script
-3. Create shim wrappers: `node.cmd`, `npm.cmd`, `npx.cmd`
-4. Configure User PATH to include `~/.vite-plus/bin`
+3. Create `~/.vite-plus/bin/vp` shell script (for Git Bash)
+4. Create shim wrappers: `node.cmd`, `npm.cmd`, `npx.cmd` (and corresponding shell scripts)
+5. Configure User PATH to include `~/.vite-plus/bin`
 
 ## Testing Strategy
 

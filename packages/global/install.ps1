@@ -434,6 +434,17 @@ exit /b %ERRORLEVEL%
 "@
     Set-Content -Path "$InstallDir\bin\vp.cmd" -Value $wrapperContent -NoNewline
 
+    # Create shell script wrapper for Git Bash (vp without extension)
+    # Note: We call vp.exe directly (not via symlink) because Windows symlinks
+    # require admin privileges and Git Bash symlink support is unreliable
+    $shContent = @"
+#!/bin/sh
+VITE_PLUS_HOME="`$(dirname "`$(dirname "`$(readlink -f "`$0" 2>/dev/null || echo "`$0")")")"
+export VITE_PLUS_HOME
+exec "`$VITE_PLUS_HOME/current/bin/vp.exe" "`$@"
+"@
+    Set-Content -Path "$InstallDir\bin\vp" -Value $shContent -NoNewline
+
     # Cleanup old versions
     Cleanup-OldVersions -InstallDir $InstallDir
 

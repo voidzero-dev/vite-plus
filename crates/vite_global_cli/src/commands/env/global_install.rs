@@ -325,10 +325,10 @@ async fn create_package_shim(
 
     #[cfg(windows)]
     {
-        let shim_path = bin_dir.join(format!("{}.cmd", bin_name));
+        let cmd_path = bin_dir.join(format!("{}.cmd", bin_name));
 
         // Skip if already exists (e.g., re-installing the same package)
-        if tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
+        if tokio::fs::try_exists(&cmd_path).await.unwrap_or(false) {
             return Ok(());
         }
 
@@ -339,8 +339,23 @@ async fn create_package_shim(
             "@echo off\r\nset VITE_PLUS_HOME=%~dp0..\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" env run {} %*\r\nexit /b %ERRORLEVEL%\r\n",
             bin_name
         );
-        tokio::fs::write(&shim_path, wrapper_content).await?;
-        tracing::debug!("Created package shim wrapper {:?} -> vp env run {}", shim_path, bin_name);
+        tokio::fs::write(&cmd_path, wrapper_content).await?;
+
+        // Also create shell script for Git Bash (bin_name without extension)
+        // Uses explicit "vp env run <bin_name>" instead of symlink+argv[0] because
+        // Windows symlinks require admin privileges
+        let sh_path = bin_dir.join(bin_name);
+        let sh_content = format!(
+            r#"#!/bin/sh
+VITE_PLUS_HOME="$(dirname "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")")"
+export VITE_PLUS_HOME
+exec "$VITE_PLUS_HOME/current/bin/vp.exe" env run {} "$@"
+"#,
+            bin_name
+        );
+        tokio::fs::write(&sh_path, sh_content).await?;
+
+        tracing::debug!("Created package shim wrappers for {} (.cmd and shell script)", bin_name);
     }
 
     Ok(())
@@ -367,9 +382,16 @@ async fn remove_package_shim(
 
     #[cfg(windows)]
     {
-        let shim_path = bin_dir.join(format!("{}.cmd", bin_name));
-        if tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
-            tokio::fs::remove_file(&shim_path).await?;
+        // Remove .cmd wrapper
+        let cmd_path = bin_dir.join(format!("{}.cmd", bin_name));
+        if tokio::fs::try_exists(&cmd_path).await.unwrap_or(false) {
+            tokio::fs::remove_file(&cmd_path).await?;
+        }
+
+        // Also remove shell script (for Git Bash)
+        let sh_path = bin_dir.join(bin_name);
+        if tokio::fs::try_exists(&sh_path).await.unwrap_or(false) {
+            tokio::fs::remove_file(&sh_path).await?;
         }
     }
 

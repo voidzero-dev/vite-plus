@@ -114,6 +114,22 @@ async fn setup_vp_wrapper(bin_dir: &vite_path::AbsolutePath, refresh: bool) -> R
             tokio::fs::write(&bin_vp_cmd, cmd_content).await?;
             tracing::debug!("Created wrapper script {:?}", bin_vp_cmd);
         }
+
+        // Also create shell script for Git Bash (vp without extension)
+        // Note: We call vp.exe directly, not via symlink, because Windows
+        // symlinks require admin privileges and Git Bash support is unreliable
+        let bin_vp = bin_dir.join("vp");
+        let should_create_sh = refresh || !tokio::fs::try_exists(&bin_vp).await.unwrap_or(false);
+
+        if should_create_sh {
+            let sh_content = r#"#!/bin/sh
+VITE_PLUS_HOME="$(dirname "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")")"
+export VITE_PLUS_HOME
+exec "$VITE_PLUS_HOME/current/bin/vp.exe" "$@"
+"#;
+            tokio::fs::write(&bin_vp, sh_content).await?;
+            tracing::debug!("Created shell wrapper script {:?}", bin_vp);
+        }
     }
 
     Ok(())
@@ -195,6 +211,7 @@ async fn create_unix_shim(
 /// Create Windows shims using .cmd wrappers that call `vp env run <tool>`.
 ///
 /// All tools (node, npm, npx) get .cmd wrappers that invoke `vp env run`.
+/// Also creates shell scripts (without extension) for Git Bash compatibility.
 /// This is consistent with Volta's Windows approach.
 #[cfg(windows)]
 async fn create_windows_shim(
@@ -213,7 +230,22 @@ async fn create_windows_shim(
     );
 
     tokio::fs::write(&cmd_path, cmd_content).await?;
-    tracing::debug!("Created Windows wrapper {:?} -> vp env run {}", cmd_path, tool);
+
+    // Also create shell script for Git Bash (tool without extension)
+    // Uses explicit "vp env run <tool>" instead of symlink+argv[0] because
+    // Windows symlinks require admin privileges
+    let sh_path = bin_dir.join(tool);
+    let sh_content = format!(
+        r#"#!/bin/sh
+VITE_PLUS_HOME="$(dirname "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")")"
+export VITE_PLUS_HOME
+exec "$VITE_PLUS_HOME/current/bin/vp.exe" env run {} "$@"
+"#,
+        tool
+    );
+    tokio::fs::write(&sh_path, sh_content).await?;
+
+    tracing::debug!("Created Windows wrappers for {} (.cmd and shell script)", tool);
 
     Ok(())
 }
