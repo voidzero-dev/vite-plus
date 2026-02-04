@@ -195,15 +195,9 @@ jobs:
         run: pnpm tsgo
 
       - name: Build CLI
-        shell: bash
         run: |
           pnpm bootstrap-cli:ci
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "$USERPROFILE/.vite-plus-dev/bin" >> $GITHUB_PATH
-            ls -al $USERPROFILE/.vite-plus-dev/bin
-          else
-            echo "$HOME/.vite-plus-dev/bin" >> $GITHUB_PATH
-          fi
+          echo "$HOME/.vite-plus-dev/bin" >> $GITHUB_PATH
 
       - name: Verify CLI installation
         run: |
@@ -232,8 +226,7 @@ jobs:
           RUST_BACKTRACE=1 pnpm test
           git diff --exit-code
 
-      - name: Test global package install (Unix)
-        if: ${{ matrix.os != 'windows-latest' }}
+      - name: Test global package install (bash)
         run: |
           # Test 1: Install a JS-based CLI (typescript)
           npm install -g typescript
@@ -255,7 +248,7 @@ jobs:
           fi
           echo "tsc shim removed successfully"
 
-      - name: Test global package install (Windows)
+      - name: Test global package install (powershell)
         if: ${{ matrix.os == 'windows-latest' }}
         shell: pwsh
         run: |
@@ -279,6 +272,37 @@ jobs:
             exit 1
           }
           Write-Host "tsc shim removed successfully"
+
+      - name: Test global package install (cmd)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: cmd
+        run: |
+          :: Test 1: Install a JS-based CLI (typescript)
+          npm install -g typescript
+          tsc --version
+
+          :: Test 2: Verify the package was installed correctly
+          dir "%USERPROFILE%\.vite-plus-dev\packages\typescript\"
+          dir "%USERPROFILE%\.vite-plus-dev\bin\"
+
+          :: Test 3: Uninstall
+          npm uninstall -g typescript
+
+          :: Test 4: Verify uninstall removed shim (.cmd wrapper)
+          echo Checking bin dir after uninstall:
+          dir "%USERPROFILE%\.vite-plus-dev\bin\"
+          if exist "%USERPROFILE%\.vite-plus-dev\bin\tsc.cmd" (
+            echo Error: tsc.cmd shim file still exists
+            exit /b 1
+          )
+          echo tsc.cmd shim removed successfully
+
+          :: Test 5: Verify shell script was also removed (for Git Bash)
+          if exist "%USERPROFILE%\.vite-plus-dev\bin\tsc" (
+            echo Error: tsc shell script still exists
+            exit /b 1
+          )
+          echo tsc shell script removed successfully
 
   install-e2e-test:
     name: Local CLI `vite install` E2E test

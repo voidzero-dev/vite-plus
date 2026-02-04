@@ -267,11 +267,7 @@ jobs:
         shell: bash
         run: |
           node $GITHUB_WORKSPACE/packages/tools/src/install-global-cli.ts vp --tgz $GITHUB_WORKSPACE/tmp/tgz/vite-plus-cli-0.0.0.tgz
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "$USERPROFILE/.vite-plus-dev/bin" >> $GITHUB_PATH
-          else
-            echo "$HOME/.vite-plus-dev/bin" >> $GITHUB_PATH
-          fi
+          echo "$HOME/.vite-plus-dev/bin" >> $GITHUB_PATH
 
       - name: Migrate in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
