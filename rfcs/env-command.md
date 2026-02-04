@@ -1343,16 +1343,28 @@ VITE_PLUS_UNSAFE_GLOBAL=1 npm install -g typescript
 
 ## Run Command
 
-The `vp env run` command executes a command with a specific Node.js version, useful for:
+The `vp env run` command executes a command with a specific Node.js version. It operates in two modes:
+
+1. **Explicit version mode**: When `--node` is provided, runs with the specified version
+2. **Shim mode**: When `--node` is not provided and the command is a shim tool (node/npm/npx or global package), uses the same version resolution as Unix symlinks
+
+This is useful for:
 
 - Testing code against different Node versions
 - Running one-off commands without changing project configuration
 - CI/CD scripts that need explicit version control
+- Windows shims (`.cmd` wrappers and Git Bash shell scripts call `vp env run <tool>`)
 
 ### Usage
 
 ```bash
-# Run with specific Node version
+# Shim mode: version resolved automatically (same as Unix symlinks)
+vp env run node --version        # Core tool - resolves from .node-version/package.json
+vp env run npm install           # Core tool
+vp env run npx vitest            # Core tool
+vp env run tsc --version         # Global package - uses Node.js from install time
+
+# Explicit version mode: run with specific Node version
 vp env run --node 20.18.0 node app.js
 
 # Run with specific Node and npm versions
@@ -1366,16 +1378,32 @@ vp env run --node 18.20.0 npm test
 
 # Pass arguments to the command
 vp env run --node 20 -- node --inspect app.js
+
+# Error: non-shim command without --node
+vp env run python --version      # Fails: --node required for non-shim tools
 ```
 
 ### Flags
 
-| Flag               | Description                                                |
-| ------------------ | ---------------------------------------------------------- |
-| `--node <version>` | Node.js version to use (required or from project)          |
-| `--npm <version>`  | npm version to use (not yet implemented, uses bundled npm) |
+| Flag               | Description                                                                    |
+| ------------------ | ------------------------------------------------------------------------------ |
+| `--node <version>` | Node.js version to use (optional for shim tools, required for other commands)  |
+| `--npm <version>`  | npm version to use (not yet implemented, uses bundled npm)                     |
 
-### Behavior
+### Shim Mode Behavior
+
+When `--node` is **not provided** and the first command is a shim tool:
+
+- **Core tools (node, npm, npx)**: Version resolved from `.node-version`, `package.json#engines.node`, or default
+- **Global packages (tsc, eslint, etc.)**: Uses the Node.js version that was used during `npm install -g`
+
+Both use the **exact same code path** as Unix symlinks (`shim::dispatch()`), ensuring identical behavior across platforms. This is how Windows `.cmd` wrappers and Git Bash shell scripts work.
+
+**Important**: The `VITE_PLUS_TOOL_RECURSION` environment variable is cleared before dispatch to ensure fresh version resolution, even when invoked from within a context where the variable is already set (e.g., when pnpm runs through the vite-plus shim).
+
+### Explicit Version Mode Behavior
+
+When `--node` **is provided**:
 
 1. **Version Resolution**: Specified versions are resolved to exact versions
 2. **Auto-Install**: If the version isn't installed, it's downloaded automatically
@@ -1385,6 +1413,11 @@ vp env run --node 20 -- node --inspect app.js
 ### Examples
 
 ```bash
+# Shim mode: same behavior as Unix symlinks
+vp env run node -v               # Uses version from project config
+vp env run npm install           # Uses same version
+vp env run tsc --version         # Global package
+
 # Test against multiple Node versions in CI
 for version in 18 20 22; do
   vp env run --node $version npm test

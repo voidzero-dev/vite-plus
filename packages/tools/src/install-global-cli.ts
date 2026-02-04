@@ -123,7 +123,7 @@ export function installGlobalCli() {
       // For 'vp', bin/vp.cmd is already correct from install.ps1
     } else {
       // Unix: Rename vp -> vp-raw, then create a wrapper at vp
-      // The wrapper sets VITE_PLUS_HOME and uses `exec -a "$0"` to preserve argv[0] for shim detection
+      // The wrapper sets VITE_PLUS_HOME and VITE_PLUS_SHIM_TOOL for shim detection
       const vpBinary = path.join(currentBinDir, 'vp');
       const vpRawBinary = path.join(currentBinDir, 'vp-raw');
 
@@ -134,11 +134,13 @@ export function installGlobalCli() {
       }
 
       // Create vp wrapper in current/bin/ that sets VITE_PLUS_HOME and calls vp-raw
-      // Uses `exec -a "$0"` to preserve argv[0] for shim detection (node, npm, npx)
+      // Uses VITE_PLUS_SHIM_TOOL env var for shim detection (more portable than exec -a)
       const vpWrapperPath = path.join(currentBinDir, 'vp');
-      const vpWrapperContent = `#!/bin/bash
+      const vpWrapperContent = `#!/bin/sh
+VITE_PLUS_SHIM_TOOL="\$(basename "\$0")"
+export VITE_PLUS_SHIM_TOOL
 export VITE_PLUS_HOME="${installDir}"
-exec -a "$0" "$VITE_PLUS_HOME/current/bin/vp-raw" "$@"
+exec "$VITE_PLUS_HOME/current/bin/vp-raw" "$@"
 `;
       writeFileSync(vpWrapperPath, vpWrapperContent);
       chmodSync(vpWrapperPath, 0o755);
@@ -151,7 +153,7 @@ exec -a "$0" "$VITE_PLUS_HOME/current/bin/vp-raw" "$@"
 
         // Create vp-dev wrapper that points to current/bin/vp (the wrapper)
         const wrapperPath = path.join(binDir, 'vp-dev');
-        const wrapperContent = `#!/bin/bash
+        const wrapperContent = `#!/bin/sh
 export VITE_PLUS_HOME="${installDir}"
 exec "$VITE_PLUS_HOME/current/bin/vp" "$@"
 `;
