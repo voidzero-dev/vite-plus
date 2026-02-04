@@ -127,7 +127,8 @@ async fn check_bin_dir() -> bool {
 fn shim_filename(tool: &str) -> String {
     #[cfg(windows)]
     {
-        if tool == "node" { format!("{tool}.exe") } else { format!("{tool}.cmd") }
+        // All tools use .cmd wrappers on Windows (including node)
+        format!("{tool}.cmd")
     }
 
     #[cfg(not(windows))]
@@ -386,5 +387,34 @@ fn check_conflicts() {
         println!();
         println!("  Consider removing other version managers from your PATH");
         println!("  to avoid version conflicts.");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_shim_filename_consistency() {
+        // All tools should use the same extension pattern
+        // On Windows: all .cmd, On Unix: all without extension
+        let node = shim_filename("node");
+        let npm = shim_filename("npm");
+        let npx = shim_filename("npx");
+
+        #[cfg(windows)]
+        {
+            // All shims should use .cmd on Windows (matching setup.rs)
+            assert_eq!(node, "node.cmd");
+            assert_eq!(npm, "npm.cmd");
+            assert_eq!(npx, "npx.cmd");
+        }
+
+        #[cfg(not(windows))]
+        {
+            assert_eq!(node, "node");
+            assert_eq!(npm, "npm");
+            assert_eq!(npx, "npx");
+        }
     }
 }
