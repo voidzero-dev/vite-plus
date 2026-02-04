@@ -150,9 +150,14 @@ async fn list_packages_recursive(
         let file_type = entry.file_type().await?;
 
         if file_type.is_dir() {
-            // Recurse into subdirectories (e.g., @scope/)
-            if let Some(abs_path) = AbsolutePathBuf::new(path) {
-                Box::pin(list_packages_recursive(&abs_path, packages)).await?;
+            // Only recurse into scoped package directories (@scope/)
+            // Skip package installation directories (typescript/, projj/)
+            if let Some(name) = entry.file_name().to_str() {
+                if name.starts_with('@') {
+                    if let Some(abs_path) = AbsolutePathBuf::new(path) {
+                        Box::pin(list_packages_recursive(&abs_path, packages)).await?;
+                    }
+                }
             }
         } else if path.extension().is_some_and(|e| e == "json") {
             // Read JSON metadata files

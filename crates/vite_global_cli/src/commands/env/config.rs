@@ -6,7 +6,7 @@
 //! - Config file management
 
 use serde::{Deserialize, Serialize};
-use vite_js_runtime::{NodeProvider, resolve_node_version};
+use vite_js_runtime::{NodeProvider, normalize_version, resolve_node_version};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::error::Error;
@@ -160,19 +160,26 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
         .map_err(|e| Error::ConfigError(e.to_string().into()))?;
 
     if let Some(resolution) = resolution {
-        // Detect if the original version spec was a range (not exact)
-        // This includes partial versions (20, 20.18), semver ranges (^20.0.0), and LTS aliases
-        let is_range = NodeProvider::is_lts_alias(&resolution.version)
-            || !NodeProvider::is_exact_version(&resolution.version);
+        // Validate version before attempting resolution
+        // If invalid, warning is printed by normalize_version and we fall through to defaults
+        if let Some(validated) =
+            normalize_version(&resolution.version.clone().into(), &resolution.source.to_string())
+        {
+            // Detect if the original version spec was a range (not exact)
+            // This includes partial versions (20, 20.18), semver ranges (^20.0.0), and LTS aliases
+            let is_range = NodeProvider::is_lts_alias(&validated)
+                || !NodeProvider::is_exact_version(&validated);
 
-        let resolved = resolve_version_string(&resolution.version, &provider).await?;
-        return Ok(VersionResolution {
-            version: resolved,
-            source: resolution.source.to_string(),
-            source_path: resolution.source_path,
-            project_root: resolution.project_root,
-            is_range,
-        });
+            let resolved = resolve_version_string(&validated, &provider).await?;
+            return Ok(VersionResolution {
+                version: resolved,
+                source: resolution.source.to_string(),
+                source_path: resolution.source_path,
+                project_root: resolution.project_root,
+                is_range,
+            });
+        }
+        // Invalid version - fall through to user default or LTS
     }
 
     // CLI-specific: Check user default from config
@@ -243,6 +250,7 @@ async fn resolve_version_alias(version: &str, provider: &NodeProvider) -> Result
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
     use tempfile::TempDir;
     use vite_js_runtime::VersionSource;
     use vite_path::AbsolutePathBuf;
@@ -493,6 +501,67 @@ mod tests {
         let resolution = resolve_version(&test_dir).await.unwrap();
         assert_eq!(resolution.source, "default");
         assert!(resolution.source_path.is_some(), "Exact version defaults should have source_path");
+
+        // Clean up env var
+        unsafe {
+            std::env::remove_var("VITE_PLUS_HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_resolve_version_invalid_node_version_falls_through_to_lts() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version file with invalid version
+        tokio::fs::write(temp_path.join(".node-version"), "invalid-version\n").await.unwrap();
+
+        // SAFETY: Set VITE_PLUS_HOME to temp dir to avoid using user's config
+        unsafe {
+            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
+        }
+
+        // resolve_version should NOT fail - it should fall through to LTS
+        let resolution = resolve_version(&temp_path).await.unwrap();
+
+        // Should fall through to LTS since the .node-version is invalid
+        // and no user default is configured
+        assert_eq!(resolution.source, "lts");
+        assert!(resolution.source_path.is_none());
+        assert!(resolution.is_range, "LTS fallback should be marked as range");
+
+        // Clean up env var
+        unsafe {
+            std::env::remove_var("VITE_PLUS_HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_resolve_version_invalid_node_version_falls_through_to_default() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version file with invalid version
+        tokio::fs::write(temp_path.join(".node-version"), "not-a-version\n").await.unwrap();
+
+        // SAFETY: Set VITE_PLUS_HOME to temp dir
+        unsafe {
+            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
+        }
+
+        // Create config with a default version
+        let config =
+            Config { default_node_version: Some("20.18.0".to_string()), ..Default::default() };
+        save_config(&config).await.unwrap();
+
+        // resolve_version should NOT fail - it should fall through to user default
+        let resolution = resolve_version(&temp_path).await.unwrap();
+
+        // Should fall through to user default since .node-version is invalid
+        assert_eq!(resolution.source, "default");
+        assert_eq!(resolution.version, "20.18.0");
 
         // Clean up env var
         unsafe {
