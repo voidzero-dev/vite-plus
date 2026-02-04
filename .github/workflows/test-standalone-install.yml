@@ -223,3 +223,46 @@ jobs:
           $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
           vp env doctor
           vp env run --node 24 -- node -p "process.versions"
+
+      - name: Verify installation on bash
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          echo "PATH: $PATH"
+          ls -al ~/.vite-plus
+          ls -al ~/.vite-plus/bin
+
+          vp --version
+          vp --help
+          # test new command
+          vp new create-vite --no-interactive --no-agent -- hello-bash --no-interactive -t vanilla
+          cd hello-bash && vp run build
+
+      - name: Verify bin setup on bash
+        shell: bash
+        run: |
+          # Verify bin directory was created by vp env --setup
+          BIN_PATH="$HOME/.vite-plus/bin"
+          ls -al "$BIN_PATH"
+          if [ ! -d "$BIN_PATH" ]; then
+            echo "Error: Bin directory not found: $BIN_PATH"
+            exit 1
+          fi
+
+          # Verify shim executables exist (Windows uses .cmd wrappers)
+          for shim in node.cmd npm.cmd npx.cmd; do
+            if [ ! -f "$BIN_PATH/$shim" ]; then
+              echo "Error: Shim not found: $BIN_PATH/$shim"
+              exit 1
+            fi
+            echo "Found shim: $BIN_PATH/$shim"
+          done
+
+          # Verify vp env doctor works
+          vp env doctor
+          vp env run --node 24 -- node -p "process.versions"
+
+          which node
+          which npm
+          which npx
+          which vp
