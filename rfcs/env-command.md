@@ -1121,12 +1121,14 @@ $ vp env which npm
 $ vp env which tsc
 /Users/user/.vite-plus/packages/typescript/lib/node_modules/typescript/bin/tsc
   Package: typescript@5.7.0
+  Binaries: tsc, tsserver
   Node.js: /Users/user/.vite-plus/js_runtime/node/20.18.0/bin/node
   Installed: 2024-01-15 10:30:00
 
 $ vp env which eslint
 /Users/user/.vite-plus/packages/eslint/lib/node_modules/eslint/bin/eslint.js
   Package: eslint@9.0.0
+  Binaries: eslint
   Node.js: /Users/user/.vite-plus/js_runtime/node/22.13.0/bin/node
   Installed: 2024-02-20 14:45:30
 ```

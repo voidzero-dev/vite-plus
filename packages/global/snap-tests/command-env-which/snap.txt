@@ -10,9 +10,9 @@ v20.18.0
 > vp env which npx # Core tool - shows resolved npx binary path
 <homedir>/.vite-plus-dev/js_runtime/node/<semver>/bin/npx
 
-> vp env run npm install -g cowsay # Install a global package via vp
-vp: Installing global package: cowsay
-  Installing cowsay globally...
+> vp env run npm install -g cowsay@1.6.0 # Install a global package via vp
+vp: Installing global package: cowsay@<semver>
+  Installing cowsay@<semver> globally...
   Running npm install...
 
 added 41 packages in <variable>ms
@@ -25,6 +25,7 @@ added 41 packages in <variable>ms
 > vp env which cowsay # Global package - shows binary path with metadata
 <homedir>/.vite-plus-dev/packages/cowsay/lib/node_modules/cowsay/./cli.js
   Package: cowsay@<semver>
+  Binaries: cowsay, cowthink
   Node.js: <homedir>/.vite-plus-dev/js_runtime/node/<semver>/bin/node
   Installed: <date>
 
