@@ -99,26 +99,42 @@ vp env list --lts     # Show only LTS versions
 vp env list 20        # Show versions matching pattern
 ```
 
+### Node.js Version Management
+
+```bash
+# Install a Node.js version
+vp env install 20.18.0
+vp env install lts
+vp env install latest
+
+# Uninstall a Node.js version
+vp env uninstall 20.18.0
+```
+
 ### Global Package Commands
 
 ```bash
 # Install a global package
-vp env install typescript
-vp env install typescript@5.0.0
+vp install -g typescript
+vp install -g typescript@5.0.0
 
 # Install with specific Node.js version
-vp env install --node 22 typescript
-vp env install --node lts typescript
+vp install -g --node 22 typescript
+vp install -g --node lts typescript
 
 # Force install (auto-uninstalls conflicting packages)
-vp env install --force eslint-v9    # Removes 'eslint' if it provides same binary
+vp install -g --force eslint-v9    # Removes 'eslint' if it provides same binary
 
 # List installed global packages
 vp env packages
 vp env packages --json
 
 # Uninstall a global package
-vp env uninstall typescript
+vp remove -g typescript
+
+# Update global packages
+vp update -g              # Update all global packages
+vp update -g typescript   # Update specific package
 ```
 
 ### Daily Usage (After Setup)
@@ -1299,24 +1315,26 @@ Error: Failed to resolve 'lts': Network error
 
 ## Global Package Management
 
-vite-plus intercepts global package installations (`npm install -g`, `npm i -g`, etc.) to provide isolated, reproducible global packages with platform pinning.
+vite-plus provides cross-Node-version global package management via `vp install -g`, `vp remove -g`, and `vp update -g`. Unlike `npm install -g` which installs into a Node-version-specific directory, vite-plus manages global packages independently so they persist across Node.js version changes.
+
+Note: `npm install -g` passes through to the real npm (Node-version-specific). Use `vp install -g` for vite-plus managed global packages.
 
 ### How It Works
 
-When you run `npm install -g typescript`, vite-plus:
+When you run `vp install -g typescript`, vite-plus:
 
-1. Detects the global install via argument parsing
-2. Redirects installation to `~/.vite-plus/packages/typescript/`
+1. Resolves the Node.js version (from `--node` flag or current directory)
+2. Installs the package to `~/.vite-plus/packages/typescript/`
 3. Records metadata (package version, Node version used, binaries)
 4. Creates shims for each binary the package provides (`tsc`, `tsserver`)
 
 ### Installation Flow
 
 ```
-npm install -g typescript
+vp install -g typescript
     │
     ▼
-Shim intercepts → detects global install
+Parse global flag → route to managed global install
     │
     ▼
 Create staging: ~/.vite-plus/tmp/packages/typescript/
@@ -1363,21 +1381,19 @@ When running `tsc`:
 4. Sets NODE_PATH to include shared packages
 5. Executes `~/.vite-plus/packages/typescript/lib/node_modules/.bin/tsc`
 
-### Direct Installation via CLI
-
-You can also install global packages directly using `vp env install`:
+### Installation with Specific Node.js Version
 
 ```bash
 # Install a global package (uses Node.js version from current directory)
-vp env install typescript
+vp install -g typescript
 
 # Install with a specific Node.js version
-vp env install --node 22 typescript
-vp env install --node 20.18.0 typescript
-vp env install --node lts typescript
+vp install -g --node 22 typescript
+vp install -g --node 20.18.0 typescript
+vp install -g --node lts typescript
 
 # Install multiple packages
-vp env install typescript eslint prettier
+vp install -g typescript eslint prettier
 ```
 
 The `--node` flag allows you to specify which Node.js version to use for installation. If not provided, it resolves the version from the current directory (same as shim behavior).
@@ -1386,14 +1402,14 @@ The `--node` flag allows you to specify which Node.js version to use for install
 
 ```bash
 # Upgrade replaces the existing package
-npm install -g typescript@latest
-# Or via vite-plus:
-vp env install typescript@latest
+vp update -g typescript
+vp install -g typescript@latest
+
+# Update all global packages
+vp update -g
 
 # Uninstall removes package and shims
-npm uninstall -g typescript
-# Or via vite-plus:
-vp env uninstall typescript
+vp remove -g typescript
 ```
 
 ### Binary Conflict Handling
@@ -1431,7 +1447,7 @@ Each binary has a per-binary config file that tracks which package owns it:
 When installing a package that provides a binary already owned by another package, the installation **fails with a clear error**:
 
 ```bash
-$ vp env install eslint-v9
+$ vp install -g eslint-v9
   Installing eslint-v9 globally...
 
 error: Executable 'eslint' is already installed by eslint
@@ -1450,7 +1466,7 @@ This approach:
 The `--force` flag automatically uninstalls the conflicting package before installing the new one:
 
 ```bash
-$ vp env install eslint-v9 --force
+$ vp install -g --force eslint-v9
   Installing eslint-v9 globally...
   Uninstalling eslint (conflicts with eslint-v9)...
   Uninstalled eslint
@@ -1472,12 +1488,12 @@ This allows recovery even if package metadata is corrupted or manually deleted.
 
 ```bash
 # Normal uninstall
-$ vp env uninstall typescript
+$ vp remove -g typescript
   Uninstalling typescript...
   Uninstalled typescript
 
 # Recovery mode (if typescript.json is missing)
-$ vp env uninstall typescript
+$ vp remove -g typescript
   Uninstalling typescript...
   Note: Package metadata not found, scanning for orphaned binaries...
   Uninstalled typescript
@@ -1492,15 +1508,6 @@ Binary execution uses per-binary config for deterministic lookup:
 3. If not found, the binary is not installed (no fallback scanning)
 
 This eliminates the non-deterministic behavior of filesystem iteration order.
-
-### Environment Variable: VITE_PLUS_UNSAFE_GLOBAL
-
-Set `VITE_PLUS_UNSAFE_GLOBAL=1` to bypass global package interception:
-
-```bash
-VITE_PLUS_UNSAFE_GLOBAL=1 npm install -g typescript
-# Installs to system npm global location
-```
 
 ## Run Command
 
@@ -1556,7 +1563,7 @@ vp env run python --version      # Fails: --node required for non-shim tools
 When `--node` is **not provided** and the first command is a shim tool:
 
 - **Core tools (node, npm, npx)**: Version resolved from `.node-version`, `package.json#engines.node`, or default
-- **Global packages (tsc, eslint, etc.)**: Uses the Node.js version that was used during `npm install -g`
+- **Global packages (tsc, eslint, etc.)**: Uses the Node.js version that was used during `vp install -g`
 
 Both use the **exact same code path** as Unix symlinks (`shim::dispatch()`), ensuring identical behavior across platforms. This is how Windows `.cmd` wrappers and Git Bash shell scripts work.
 
@@ -1700,7 +1707,6 @@ $ vp env --current --json
 | `VITE_PLUS_DEBUG_SHIM`     | Enable extra shim diagnostics                                                                   | unset          |
 | `VITE_PLUS_BYPASS`         | PATH-style list of bin dirs to skip when finding system tools; set `=1` to bypass shim entirely | unset          |
 | `VITE_PLUS_TOOL_RECURSION` | **Internal**: Prevents shim recursion                                                           | unset          |
-| `VITE_PLUS_UNSAFE_GLOBAL`  | Bypass global package interception                                                              | unset          |
 
 ## Unix-Specific Considerations
 
@@ -1929,12 +1935,12 @@ env-doctor/
 2. Implement `vp env which`
 3. Implement `vp env --current --json`
 4. Enhanced doctor with conflict detection
-5. Implement global package interception for npm
+5. Implement `vp install -g` / `vp remove -g` / `vp update -g` for managed global packages
 6. Implement package metadata storage
 7. Implement per-package binary shims
 8. Implement `vp env packages` to list installed global packages
-9. Implement `vp env uninstall <package>` command
-10. Implement `vp env install <package>` command with `--node` flag
+9. Implement `vp env install <VERSION>` to install Node.js versions
+10. Implement `vp env uninstall <VERSION>` to uninstall Node.js versions
 11. Implement per-binary config files (`bins/`) for conflict detection
 12. Implement binary conflict detection (hard fail by default)
 13. Implement `--force` flag for auto-uninstall on conflict
@@ -1951,8 +1957,6 @@ env-doctor/
 ### Phase 4: Future Enhancements (P3)
 
 1. NODE_PATH setup for shared package resolution
-2. Yarn global package interception (`yarn global add/remove`)
-3. pnpm global package interception (`pnpm add -g`)
 
 ## Backward Compatibility
 
