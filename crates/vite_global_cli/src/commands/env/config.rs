@@ -453,7 +453,12 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_resolve_version_from_node_version_file() {
+        // SAFETY: Clear session override so .node-version is used
+        unsafe {
+            std::env::remove_var(VERSION_ENV_VAR);
+        }
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
@@ -467,7 +472,12 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_resolve_version_walks_up_directory() {
+        // SAFETY: Clear session override so .node-version is used
+        unsafe {
+            std::env::remove_var(VERSION_ENV_VAR);
+        }
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
@@ -525,7 +535,12 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_resolve_version_node_version_takes_priority() {
+        // SAFETY: Clear session override so .node-version is used
+        unsafe {
+            std::env::remove_var(VERSION_ENV_VAR);
+        }
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
@@ -741,7 +756,12 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_resolve_version_latest_alias_in_node_version() {
+        // SAFETY: Clear session override so .node-version is used
+        unsafe {
+            std::env::remove_var(VERSION_ENV_VAR);
+        }
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
@@ -783,6 +803,40 @@ mod tests {
         assert_eq!(resolution.source, VERSION_ENV_VAR);
         assert!(resolution.source_path.is_none());
         assert!(!resolution.is_range);
+
+        unsafe {
+            std::env::remove_var(VERSION_ENV_VAR);
+        }
+    }
+
+    /// Verify that the env var source is accepted by `vp env install` (no-arg) source validation.
+    /// This is a regression test for a bug where `vp env use 24` followed by `vp env install`
+    /// would fail with "No Node.js version found in current project."
+    #[tokio::test]
+    #[serial]
+    async fn test_env_var_source_accepted_by_install_validation() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var(VERSION_ENV_VAR, "22.0.0");
+        }
+
+        let resolution = resolve_version(&temp_path).await.unwrap();
+
+        // The install command uses this match to validate sources.
+        // VERSION_ENV_VAR must be accepted alongside project-file sources.
+        let accepted = matches!(
+            resolution.source.as_str(),
+            ".node-version" | "engines.node" | "devEngines.runtime" | VERSION_ENV_VAR
+        );
+        assert!(
+            accepted,
+            "Install source validation should accept '{}' but it was rejected",
+            resolution.source
+        );
+        assert_eq!(resolution.version, "22.0.0");
 
         unsafe {
             std::env::remove_var(VERSION_ENV_VAR);
