@@ -1,0 +1,49 @@
+> bash -c '. $VITE_PLUS_HOME/env && type vp-dev' # should show vp-dev is a shell function
+vp-dev is a function
+vp-dev () 
+{ 
+    if [ "$1" = "env" ] && [ "$2" = "use" ]; then
+        case " $* " in 
+            *" -h "* | *" --help "*)
+                command vp-dev "$@";
+                return
+            ;;
+        esac;
+        __vp_out="$(command vp-dev "$@")" || return $?;
+        eval "$__vp_out";
+    else
+        command vp-dev "$@";
+    fi
+}
+
+> bash -c '. $VITE_PLUS_HOME/env && vp-dev env use -h' # should show help via shell wrapper
+Use a specific Node.js version for this shell session
+
+Usage: vp env use [OPTIONS] [VERSION]
+
+Arguments:
+  [VERSION]  Version to use (e.g., "20", "20.18.0", "lts", "latest") If not provided, reads from .node-version or package.json
+
+Options:
+      --unset                Remove session override (revert to file-based resolution)
+      --no-install           Skip auto-installation if version not present
+      --silent-if-unchanged  Suppress output if version is already active
+  -h, --help                 Print help
+
+> bash -c '. $VITE_PLUS_HOME/env && vp-dev env use --help' # should show help via shell wrapper
+Use a specific Node.js version for this shell session
+
+Usage: vp env use [OPTIONS] [VERSION]
+
+Arguments:
+  [VERSION]  Version to use (e.g., "20", "20.18.0", "lts", "latest") If not provided, reads from .node-version or package.json
+
+Options:
+      --unset                Remove session override (revert to file-based resolution)
+      --no-install           Skip auto-installation if version not present
+      --silent-if-unchanged  Suppress output if version is already active
+  -h, --help                 Print help
+
+> bash -c '. $VITE_PLUS_HOME/env && vp-dev env use 20.18.0 --no-install && echo VITE_PLUS_NODE_VERSION=$VITE_PLUS_NODE_VERSION' # should set env var via eval
+Using Node.js v<semver> (resolved from <semver>)
+VITE_PLUS_NODE_VERSION=20.18.0

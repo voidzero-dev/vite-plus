@@ -3,6 +3,7 @@ import {
   chmodSync,
   existsSync,
   mkdtempSync,
+  readFileSync,
   readdirSync,
   renameSync,
   rmSync,
@@ -140,7 +141,7 @@ export function installGlobalCli() {
       // Uses VITE_PLUS_SHIM_TOOL env var for shim detection (more portable than exec -a)
       const vpWrapperPath = path.join(currentBinDir, 'vp');
       const vpWrapperContent = `#!/bin/sh
-VITE_PLUS_SHIM_TOOL="\$(basename "\$0")"
+VITE_PLUS_SHIM_TOOL="$(basename "$0")"
 export VITE_PLUS_SHIM_TOOL
 export VITE_PLUS_HOME="${installDir}"
 exec "$VITE_PLUS_HOME/current/bin/vp-raw" "$@"
@@ -166,6 +167,43 @@ exec "$VITE_PLUS_HOME/current/bin/vp" "$@"
       }
       // For 'vp' on Unix, install.sh already creates the symlink to ../current/bin/vp
       // which now points to the wrapper script (which calls vp-raw)
+    }
+
+    // Patch env files for vp-dev: the shell function wrappers created by `vp env setup`
+    // define vp() but in dev mode the binary is vp-dev, so we rename the functions
+    if (binName === 'vp-dev') {
+      const envPatches: Array<{ file: string; replacements: [string, string][] }> = [
+        {
+          file: 'env',
+          replacements: [
+            ['vp() {', 'vp-dev() {'],
+            ['command vp ', 'command vp-dev '],
+          ],
+        },
+        {
+          file: 'env.fish',
+          replacements: [
+            ['function vp\n', 'function vp-dev\n'],
+            ['command vp ', 'command vp-dev '],
+          ],
+        },
+        {
+          file: 'env.ps1',
+          replacements: [['function vp {', 'function vp-dev {']],
+        },
+      ];
+
+      for (const { file, replacements } of envPatches) {
+        const filePath = path.join(installDir, file);
+        if (existsSync(filePath)) {
+          let content = readFileSync(filePath, 'utf-8');
+          for (const [from, to] of replacements) {
+            content = content.replaceAll(from, to);
+          }
+          writeFileSync(filePath, content);
+          console.log(`Patched ${filePath} for vp-dev`);
+        }
+      }
     }
   } finally {
     // Cleanup temp dir only if we created it

@@ -99,6 +99,43 @@ vp env list --lts     # Show only LTS versions
 vp env list 20        # Show versions matching pattern
 ```
 
+### Session Version Override
+
+```bash
+# Use a specific Node.js version for this shell session
+vp env use 24          # Switch to Node 24.x
+vp env use lts         # Switch to latest LTS
+vp env use             # Install & activate project's configured version
+vp env use --unset     # Remove session override
+
+# Options
+vp env use --no-install         # Skip auto-install if version not present
+vp env use --silent-if-unchanged  # Suppress output if version already active
+```
+
+**How it works:**
+
+1. `~/.vite-plus/env` includes a `vp()` shell function that intercepts `vp env use` calls
+2. The function runs `command vp env use ...`, captures stdout (shell commands), and evals it
+3. `vp env use` outputs `export VITE_PLUS_NODE_VERSION=20.18.1` to stdout, status messages to stderr
+4. The shim dispatch checks `VITE_PLUS_NODE_VERSION` env var first in the resolution chain
+
+**Shell-specific output:**
+
+| Shell            | Set                                       | Unset                                        |
+| ---------------- | ----------------------------------------- | -------------------------------------------- |
+| POSIX (bash/zsh) | `export VITE_PLUS_NODE_VERSION=20.18.1`   | `unset VITE_PLUS_NODE_VERSION`               |
+| Fish             | `set -gx VITE_PLUS_NODE_VERSION 20.18.1`  | `set -e VITE_PLUS_NODE_VERSION`              |
+| PowerShell       | `$env:VITE_PLUS_NODE_VERSION = "20.18.1"` | `Remove-Item Env:VITE_PLUS_NODE_VERSION ...` |
+| cmd.exe          | `set VITE_PLUS_NODE_VERSION=20.18.1`      | `set VITE_PLUS_NODE_VERSION=`                |
+
+**Shell function wrappers** are included in env files created by `vp env setup`:
+
+- `~/.vite-plus/env` (POSIX - bash/zsh): `vp()` function
+- `~/.vite-plus/env.fish` (fish): `function vp`
+- `~/.vite-plus/env.ps1` (PowerShell): `function vp`
+- `~/.vite-plus/bin/vp-use.cmd` (cmd.exe): dedicated wrapper since cmd.exe lacks shell functions
+
 ### Node.js Version Management
 
 ```bash
@@ -206,8 +243,9 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 │                 ▼                                                           │
 │  ┌──────────────────────────────┐     ┌─────────────────────────────┐       │
 │  │  Version Resolution          │────▶│  Priority Order:            │       │
-│  │  (walk up directory tree)    │     │  1. .node-version           │       │
-│  └──────────────┬───────────────┘     │  2. package.json#engines    │       │
+│  │  (walk up directory tree)    │     │  0. VITE_PLUS_NODE_VERSION  │       │
+│  └──────────────┬───────────────┘     │  1. .node-version           │       │
+│                 │                     │  2. package.json#engines    │       │
 │                 │                     │  3. package.json#devEngines │       │
 │                 │                     │  4. User default (config)   │       │
 │                 │                     │  5. Latest LTS              │       │
@@ -454,7 +492,11 @@ New LTS codenames are added dynamically based on the Node.js release schedule. v
 
 When resolving which Node.js version to use, vite-plus checks the following sources in order:
 
-1. **`.node-version`** file (highest priority)
+0. **`VITE_PLUS_NODE_VERSION` env var** (session override, highest priority)
+   - Set by `vp env use` command
+   - Overrides all file-based resolution
+
+1. **`.node-version`** file
    - Checked in current directory, then parent directories
    - Simple format: one version per file
 
@@ -546,7 +588,8 @@ crates/vite_global_cli/
 │           ├── off.rs                # off subcommand implementation
 │           ├── pin.rs                # pin subcommand implementation
 │           ├── unpin.rs              # unpin subcommand implementation
-│           └── list.rs               # list subcommand implementation
+│           ├── list.rs               # list subcommand implementation
+│           └── use.rs                # use subcommand implementation
 ```
 
 ### Shim Dispatch Flow
@@ -858,6 +901,11 @@ Shim Mode:
 
   Run 'vp env on' to always use managed Node.js
   Run 'vp env off' to prefer system Node.js
+
+Session Override:
+  ⓘ VITE_PLUS_NODE_VERSION=20.18.0 (set by `vp env use`)
+  This overrides all file-based version resolution.
+  Run 'vp env use --unset' to remove.
 
 PATH Analysis:
   ✓ VP bin first in PATH
@@ -1703,6 +1751,7 @@ $ vp env --current --json
 | Variable                   | Description                                                                                     | Default        |
 | -------------------------- | ----------------------------------------------------------------------------------------------- | -------------- |
 | `VITE_PLUS_HOME`           | Base directory for bin and config                                                               | `~/.vite-plus` |
+| `VITE_PLUS_NODE_VERSION`   | Session override for Node.js version (set by `vp env use`)                                      | unset          |
 | `VITE_PLUS_LOG`            | Log level: debug, info, warn, error                                                             | `warn`         |
 | `VITE_PLUS_DEBUG_SHIM`     | Enable extra shim diagnostics                                                                   | unset          |
 | `VITE_PLUS_BYPASS`         | PATH-style list of bin dirs to skip when finding system tools; set `=1` to bypass shim entirely | unset          |

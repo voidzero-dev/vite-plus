@@ -727,6 +727,25 @@ pub enum EnvSubcommands {
         /// If not provided, installs the version from .node-version or package.json
         version: Option<String>,
     },
+
+    /// Use a specific Node.js version for this shell session
+    Use {
+        /// Version to use (e.g., "20", "20.18.0", "lts", "latest")
+        /// If not provided, reads from .node-version or package.json
+        version: Option<String>,
+
+        /// Remove session override (revert to file-based resolution)
+        #[arg(long)]
+        unset: bool,
+
+        /// Skip auto-installation if version not present
+        #[arg(long)]
+        no_install: bool,
+
+        /// Suppress output if version is already active
+        #[arg(long)]
+        silent_if_unchanged: bool,
+    },
 }
 
 /// Package manager subcommands

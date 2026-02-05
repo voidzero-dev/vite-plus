@@ -297,6 +297,23 @@ fn passthrough_to_system(tool: &str, args: &[String]) -> i32 {
 
 /// Resolve version with caching.
 async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, String> {
+    // Fast-path: VITE_PLUS_NODE_VERSION env var set by `vp env use`
+    // Skip all disk I/O for cache when session override is active
+    if let Ok(env_version) = std::env::var(config::VERSION_ENV_VAR) {
+        let env_version = env_version.trim().to_string();
+        if !env_version.is_empty() {
+            return Ok(ResolveCacheEntry {
+                version: env_version,
+                source: config::VERSION_ENV_VAR.to_string(),
+                project_root: None,
+                resolved_at: cache::now_timestamp(),
+                version_file_mtime: 0,
+                source_path: None,
+                is_range: false,
+            });
+        }
+    }
+
     // Load cache
     let cache_path = cache::get_cache_path();
     let mut cache = cache_path.as_ref().map(|p| ResolveCache::load(p)).unwrap_or_default();

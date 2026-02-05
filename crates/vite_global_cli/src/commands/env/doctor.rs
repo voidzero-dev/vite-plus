@@ -34,6 +34,9 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     // Check shim mode
     check_shim_mode().await;
 
+    // Check session override
+    check_session_override();
+
     // Check PATH
     has_errors |= !check_path().await;
 
@@ -197,6 +200,24 @@ fn find_system_node() -> Option<std::path::PathBuf> {
     // Use which::which_in with filtered PATH - stops at first match
     let cwd = current_dir().ok()?;
     which::which_in("node", Some(filtered_path), cwd).ok()
+}
+
+/// Check for active session override via VITE_PLUS_NODE_VERSION.
+fn check_session_override() {
+    if let Ok(version) = std::env::var(super::config::VERSION_ENV_VAR) {
+        let version = version.trim();
+        if !version.is_empty() {
+            println!();
+            println!("Session Override:");
+            println!(
+                "  {}",
+                format!("\u{2139} VITE_PLUS_NODE_VERSION={} (set by `vp env use`)", version)
+                    .yellow()
+            );
+            println!("  This overrides all file-based version resolution.");
+            println!("  Run 'vp env use --unset' to remove.");
+        }
+    }
 }
 
 /// Check PATH configuration.

@@ -145,15 +145,34 @@ pub async fn save_config(config: &Config) -> Result<(), Error> {
     Ok(())
 }
 
+/// Environment variable for per-shell session Node.js version override.
+/// Set by `vp env use` command.
+pub const VERSION_ENV_VAR: &str = "VITE_PLUS_NODE_VERSION";
+
 /// Resolve Node.js version for a directory.
 ///
 /// Resolution order:
+/// 0. `VITE_PLUS_NODE_VERSION` env var (session override from `vp env use`)
 /// 1. `.node-version` file in current or parent directories
 /// 2. `package.json#engines.node` in current or parent directories
 /// 3. `package.json#devEngines.runtime` in current or parent directories
 /// 4. User default from config.json
 /// 5. Latest LTS version
 pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Error> {
+    // Session override via environment variable (set by `vp env use`)
+    if let Ok(env_version) = std::env::var(VERSION_ENV_VAR) {
+        let env_version = env_version.trim();
+        if !env_version.is_empty() {
+            return Ok(VersionResolution {
+                version: env_version.to_string(),
+                source: VERSION_ENV_VAR.into(),
+                source_path: None,
+                project_root: None,
+                is_range: false,
+            });
+        }
+    }
+
     let provider = NodeProvider::new();
 
     // Use shared version resolution with directory walking
@@ -291,11 +310,13 @@ async fn resolve_version_string(version: &str, provider: &NodeProvider) -> Resul
 }
 
 /// Resolve version alias (lts, latest) to an exact version.
+///
+/// Wraps resolution errors with a user-friendly message showing valid examples.
 pub async fn resolve_version_alias(
     version: &str,
     provider: &NodeProvider,
 ) -> Result<String, Error> {
-    match version.to_lowercase().as_str() {
+    let result = match version.to_lowercase().as_str() {
         "lts" => {
             let resolved = provider.resolve_latest_version().await?;
             Ok(resolved.to_string())
@@ -306,7 +327,24 @@ pub async fn resolve_version_alias(
             Ok(resolved.to_string())
         }
         _ => resolve_version_string(version, provider).await,
-    }
+    };
+    result.map_err(|e| match e {
+        Error::RuntimeDownload(
+            vite_js_runtime::Error::SemverRange(_)
+            | vite_js_runtime::Error::NoMatchingVersion { .. },
+        ) => Error::Other(
+            format!(
+                "Invalid Node.js version: \"{version}\"\n\n\
+                 Valid examples:\n  \
+                 vp env use 20          # Latest Node.js 20.x\n  \
+                 vp env use 20.18.0     # Exact version\n  \
+                 vp env use lts         # Latest LTS version\n  \
+                 vp env use latest      # Latest version"
+            )
+            .into(),
+        ),
+        other => other,
+    })
 }
 
 #[cfg(test)]
@@ -722,5 +760,84 @@ mod tests {
             "Expected version to be at least v20.x, got: {}",
             resolution.version
         );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_resolve_version_env_var_takes_priority() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version file
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var(VERSION_ENV_VAR, "22.0.0");
+        }
+
+        let resolution = resolve_version(&temp_path).await.unwrap();
+
+        // VITE_PLUS_NODE_VERSION should take priority over .node-version
+        assert_eq!(resolution.version, "22.0.0");
+        assert_eq!(resolution.source, VERSION_ENV_VAR);
+        assert!(resolution.source_path.is_none());
+        assert!(!resolution.is_range);
+
+        unsafe {
+            std::env::remove_var(VERSION_ENV_VAR);
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_resolve_version_empty_env_var_is_ignored() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version file
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+
+        // Set empty env var - should be ignored
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var(VERSION_ENV_VAR, "");
+        }
+
+        let resolution = resolve_version(&temp_path).await.unwrap();
+
+        // Empty env var should be ignored, should fall through to .node-version
+        assert_eq!(resolution.version, "20.18.0");
+        assert_eq!(resolution.source, ".node-version");
+
+        unsafe {
+            std::env::remove_var(VERSION_ENV_VAR);
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_resolve_version_whitespace_env_var_is_ignored() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Create .node-version file
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+
+        // Set whitespace-only env var - should be ignored
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var(VERSION_ENV_VAR, "   ");
+        }
+
+        let resolution = resolve_version(&temp_path).await.unwrap();
+
+        // Whitespace env var should be ignored, should fall through to .node-version
+        assert_eq!(resolution.version, "20.18.0");
+        assert_eq!(resolution.source, ".node-version");
+
+        unsafe {
+            std::env::remove_var(VERSION_ENV_VAR);
+        }
     }
 }

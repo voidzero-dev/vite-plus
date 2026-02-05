@@ -1,0 +1,11 @@
+{
+  "env": {},
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp env use --help # should show help",
+    "vp env use 20.18.0 --no-install # should output export command to stdout",
+    "vp env use --unset # should output unset command to stdout",
+    "vp env use d # should show friendly error for invalid version",
+    "vp env use abc # should show friendly error for invalid version"
+  ]
+}

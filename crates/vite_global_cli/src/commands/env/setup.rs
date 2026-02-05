@@ -266,8 +266,10 @@ exec "$VITE_PLUS_HOME/current/bin/vp.exe" env run {} "$@"
 /// Create env files with PATH guard (prevents duplicate PATH entries).
 ///
 /// Creates:
-/// - `~/.vite-plus/env` (POSIX shell — bash/zsh)
-/// - `~/.vite-plus/env.fish` (fish shell)
+/// - `~/.vite-plus/env` (POSIX shell — bash/zsh) with `vp()` wrapper function
+/// - `~/.vite-plus/env.fish` (fish shell) with `vp` wrapper function
+/// - `~/.vite-plus/env.ps1` (PowerShell) with PATH setup + `vp` function
+/// - `~/.vite-plus/bin/vp-use.cmd` (cmd.exe wrapper for `vp env use`)
 async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<(), Error> {
     let bin_path = vite_plus_home.join("bin");
 
@@ -287,6 +289,7 @@ async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<()
     // POSIX env file (bash/zsh)
     // When sourced multiple times, removes existing entry and re-prepends to front
     // Uses parameter expansion to split PATH around the bin entry in O(1) operations
+    // Includes vp() shell function wrapper for `vp env use` (evals stdout)
     let env_content = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
 __vp_bin="__VP_BIN__"
@@ -305,20 +308,91 @@ case ":${PATH}:" in
         ;;
 esac
 unset __vp_bin
+
+# Shell function wrapper: intercepts `vp env use` to eval its stdout,
+# which sets/unsets VITE_PLUS_NODE_VERSION in the current shell session.
+vp() {
+    if [ "$1" = "env" ] && [ "$2" = "use" ]; then
+        case " $* " in *" -h "*|*" --help "*) command vp "$@"; return; esac
+        __vp_out="$(command vp "$@")" || return $?
+        eval "$__vp_out"
+    else
+        command vp "$@"
+    fi
+}
 "#
     .replace("__VP_BIN__", &bin_path_ref);
     let env_file = vite_plus_home.join("env");
     tokio::fs::write(&env_file, env_content).await?;
 
-    // Fish env file
+    // Fish env file with vp wrapper function
     let env_fish_content = r#"# Vite+ environment setup (https://viteplus.dev)
 set -l __vp_idx (contains -i -- __VP_BIN__ $PATH)
 and set -e PATH[$__vp_idx]
 set -gx PATH __VP_BIN__ $PATH
+
+# Shell function wrapper: intercepts `vp env use` to eval its stdout,
+# which sets/unsets VITE_PLUS_NODE_VERSION in the current shell session.
+function vp
+    if test (count $argv) -ge 2; and test "$argv[1]" = "env"; and test "$argv[2]" = "use"
+        if contains -- -h $argv; or contains -- --help $argv
+            command vp $argv; return
+        end
+        set -l __vp_out (command vp $argv); or return $status
+        eval $__vp_out
+    else
+        command vp $argv
+    end
+end
 "#
     .replace("__VP_BIN__", &bin_path_ref);
     let env_fish_file = vite_plus_home.join("env.fish");
     tokio::fs::write(&env_fish_file, env_fish_content).await?;
+
+    // PowerShell env file
+    let env_ps1_content = r#"# Vite+ environment setup (https://viteplus.dev)
+$__vp_bin = "__VP_BIN_WIN__"
+if ($env:Path -split ';' -notcontains $__vp_bin) {
+    $env:Path = "$__vp_bin;$env:Path"
+}
+
+# Shell function wrapper: intercepts `vp env use` to eval its stdout,
+# which sets/unsets VITE_PLUS_NODE_VERSION in the current shell session.
+function vp {
+    if ($args.Count -ge 2 -and $args[0] -eq "env" -and $args[1] -eq "use") {
+        if ($args -contains "-h" -or $args -contains "--help") {
+            & (Join-Path $__vp_bin "vp.exe") @args; return
+        }
+        $output = & (Join-Path $__vp_bin "vp.exe") @args 2>&1 | ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                Write-Host $_.Exception.Message
+            } else {
+                $_
+            }
+        }
+        if ($LASTEXITCODE -eq 0 -and $output) {
+            Invoke-Expression ($output -join "`n")
+        }
+    } else {
+        & (Join-Path $__vp_bin "vp.exe") @args
+    }
+}
+"#;
+
+    // For PowerShell, use the actual absolute path (not $HOME-relative)
+    let bin_path_win = bin_path.as_path().display().to_string();
+    let env_ps1_content = env_ps1_content.replace("__VP_BIN_WIN__", &bin_path_win);
+    let env_ps1_file = vite_plus_home.join("env.ps1");
+    tokio::fs::write(&env_ps1_file, env_ps1_content).await?;
+
+    // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions)
+    // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`
+    let vp_use_cmd_content = "@echo off\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\n";
+    // Only write if bin directory exists (it may not during --env-only)
+    if tokio::fs::try_exists(&bin_path).await.unwrap_or(false) {
+        let vp_use_cmd_file = bin_path.join("vp-use.cmd");
+        tokio::fs::write(&vp_use_cmd_file, vp_use_cmd_content).await?;
+    }
 
     Ok(())
 }
@@ -347,6 +421,10 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
     println!("For fish shell, add to ~/.config/fish/config.fish:");
     println!();
     println!("  source \"{home_path}/env.fish\"");
+    println!();
+    println!("For PowerShell, add to your $PROFILE:");
+    println!();
+    println!("  . \"{home_path}/env.ps1\"");
     println!();
     println!("For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:");
 
@@ -379,7 +457,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn test_create_env_files_creates_both_files() {
+    async fn test_create_env_files_creates_all_files() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
@@ -392,8 +470,10 @@ mod tests {
 
         let env_path = home.join("env");
         let env_fish_path = home.join("env.fish");
+        let env_ps1_path = home.join("env.ps1");
         assert!(env_path.as_path().exists(), "env file should be created");
         assert!(env_fish_path.as_path().exists(), "env.fish file should be created");
+        assert!(env_ps1_path.as_path().exists(), "env.ps1 file should be created");
 
         unsafe {
             std::env::remove_var("HOME");
@@ -564,13 +644,116 @@ mod tests {
         create_env_files(&home).await.unwrap();
         let first_env = tokio::fs::read_to_string(home.join("env")).await.unwrap();
         let first_fish = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+        let first_ps1 = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
         create_env_files(&home).await.unwrap();
         let second_env = tokio::fs::read_to_string(home.join("env")).await.unwrap();
         let second_fish = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+        let second_ps1 = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
         assert_eq!(first_env, second_env, "env file should be identical after second write");
         assert_eq!(first_fish, second_fish, "env.fish file should be identical after second write");
+        assert_eq!(first_ps1, second_ps1, "env.ps1 file should be identical after second write");
+
+        unsafe {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_create_env_files_posix_contains_vp_shell_function() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("HOME", temp_dir.path());
+        }
+
+        create_env_files(&home).await.unwrap();
+
+        let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
+
+        // Verify vp() shell function wrapper is present
+        assert!(env_content.contains("vp() {"), "env file should contain vp() shell function");
+        assert!(
+            env_content.contains("\"$1\" = \"env\""),
+            "env file should check for 'env' subcommand"
+        );
+        assert!(
+            env_content.contains("\"$2\" = \"use\""),
+            "env file should check for 'use' subcommand"
+        );
+        assert!(env_content.contains("eval \"$__vp_out\""), "env file should eval the output");
+        assert!(
+            env_content.contains("command vp \"$@\""),
+            "env file should use 'command vp' for passthrough"
+        );
+
+        unsafe {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_create_env_files_fish_contains_vp_function() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("HOME", temp_dir.path());
+        }
+
+        create_env_files(&home).await.unwrap();
+
+        let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+
+        // Verify fish vp function wrapper is present
+        assert!(fish_content.contains("function vp"), "env.fish file should contain vp function");
+        assert!(
+            fish_content.contains("\"$argv[1]\" = \"env\""),
+            "env.fish should check for 'env' subcommand"
+        );
+        assert!(
+            fish_content.contains("\"$argv[2]\" = \"use\""),
+            "env.fish should check for 'use' subcommand"
+        );
+        assert!(
+            fish_content.contains("command vp $argv"),
+            "env.fish should use 'command vp' for passthrough"
+        );
+
+        unsafe {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_create_env_files_ps1_contains_vp_function() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("HOME", temp_dir.path());
+        }
+
+        create_env_files(&home).await.unwrap();
+
+        let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
+
+        // Verify PowerShell function is present
+        assert!(ps1_content.contains("function vp {"), "env.ps1 should contain vp function");
+        assert!(ps1_content.contains("Invoke-Expression"), "env.ps1 should use Invoke-Expression");
+        // Should not contain placeholders
+        assert!(
+            !ps1_content.contains("__VP_BIN_WIN__"),
+            "env.ps1 should not contain __VP_BIN_WIN__ placeholder"
+        );
 
         unsafe {
             std::env::remove_var("HOME");
@@ -599,6 +782,7 @@ mod tests {
         // Env files should be written
         assert!(fresh_home.join("env").exists(), "env file should be created");
         assert!(fresh_home.join("env.fish").exists(), "env.fish file should be created");
+        assert!(fresh_home.join("env.ps1").exists(), "env.ps1 file should be created");
 
         unsafe {
             std::env::remove_var("VITE_PLUS_HOME");

@@ -18,6 +18,7 @@ mod pin;
 mod run;
 mod setup;
 mod unpin;
+mod r#use;
 mod which;
 
 use std::process::ExitStatus;
@@ -71,6 +72,9 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
                 })?;
                 println!("Uninstalled Node.js v{}", resolved);
                 Ok(ExitStatus::default())
+            }
+            crate::cli::EnvSubcommands::Use { version, unset, no_install, silent_if_unchanged } => {
+                r#use::execute(cwd, version, unset, no_install, silent_if_unchanged).await
             }
             crate::cli::EnvSubcommands::Install { version } => {
                 let resolved = if let Some(version) = version {
@@ -126,6 +130,7 @@ fn print_help() {
     println!("  pin [VERSION]      Pin a Node.js version in current directory");
     println!("  unpin              Remove the .node-version file from current directory");
     println!("  list [PATTERN]     List available Node.js versions");
+    println!("  use [VERSION]      Use a Node.js version for this shell session");
     println!("  run [--node <VER>] Run a command (--node optional for shim tools)");
     println!("  packages           List installed global packages");
     println!("  install [VERSION]  Install a Node.js version (reads project config if omitted)");
@@ -154,6 +159,10 @@ fn print_help() {
     println!("  vp env install                # Install version from .node-version / package.json");
     println!("  vp env install lts            # Install latest LTS version");
     println!("  vp env uninstall 20.18.0      # Uninstall Node.js 20.18.0");
+    println!("  vp env use 20                 # Use Node.js 20 for this shell session");
+    println!("  vp env use lts                # Use latest LTS for this shell session");
+    println!("  vp env use                    # Use project version for this shell session");
+    println!("  vp env use --unset            # Remove session override");
     println!("  vp env run --node 20 node -v  # Run 'node -v' with Node.js 20");
     println!("  vp env run --node lts npm i   # Run 'npm i' with latest LTS");
     println!("  vp env run node -v            # Shim mode (version auto-resolved)");

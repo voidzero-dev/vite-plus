@@ -242,7 +242,7 @@ jobs:
           Get-ChildItem "$env:USERPROFILE\.vite-plus-dev\bin\"
 
           # Test 3: Uninstall
-          npm uninstall -g typescript
+          vp uninstall -g typescript
 
           # Test 4: Verify uninstall removed shim
           Write-Host "Checking bin dir after uninstall:"
@@ -274,7 +274,7 @@ jobs:
           dir "%USERPROFILE%\.vite-plus-dev\bin\"
 
           :: Test 3: Uninstall
-          npm uninstall -g typescript
+          vp uninstall -g typescript
 
           :: Test 4: Verify uninstall removed shim (.cmd wrapper)
           echo Checking bin dir after uninstall:
@@ -312,7 +312,7 @@ jobs:
           ls -la ~/.vite-plus-dev/bin/
 
           # Test 3: Uninstall
-          npm uninstall -g typescript
+          vp uninstall -g typescript
 
           # Test 4: Verify uninstall removed shim
           echo "Checking bin dir after uninstall:"
