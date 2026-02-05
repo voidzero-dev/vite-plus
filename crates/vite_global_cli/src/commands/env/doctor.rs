@@ -2,7 +2,7 @@
 
 use std::process::ExitStatus;
 
-use vite_path::AbsolutePathBuf;
+use vite_path::{AbsolutePathBuf, current_dir};
 
 use super::config::{ShimMode, get_bin_dir, get_vite_plus_home, load_config, resolve_version};
 use crate::error::Error;
@@ -186,7 +186,7 @@ fn find_system_node() -> Option<std::path::PathBuf> {
     let filtered_path = std::env::join_paths(filtered_paths).ok()?;
 
     // Use which::which_in with filtered PATH - stops at first match
-    let cwd = std::env::current_dir().ok()?;
+    let cwd = current_dir().ok()?;
     which::which_in("node", Some(filtered_path), cwd).ok()
 }
 

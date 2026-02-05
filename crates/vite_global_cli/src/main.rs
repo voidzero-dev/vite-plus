@@ -15,8 +15,6 @@ mod shim;
 
 use std::process::ExitCode;
 
-use vite_path::AbsolutePathBuf;
-
 use crate::cli::{parse_args_from, run_command};
 
 /// Normalize help arguments: transform `help [command]` into `[command] --help`
@@ -58,15 +56,8 @@ async fn main() -> ExitCode {
     }
 
     // Normal CLI mode - get current working directory
-    let cwd = match std::env::current_dir() {
-        Ok(path) => {
-            if let Some(abs_path) = AbsolutePathBuf::new(path) {
-                abs_path
-            } else {
-                eprintln!("Error: Invalid current directory path");
-                return ExitCode::FAILURE;
-            }
-        }
+    let cwd = match vite_path::current_dir() {
+        Ok(path) => path,
         Err(e) => {
             eprintln!("Error: Failed to get current directory: {e}");
             return ExitCode::FAILURE;

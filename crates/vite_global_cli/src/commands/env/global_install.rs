@@ -4,7 +4,7 @@ use std::{collections::HashSet, io::Read, process::Stdio};
 
 use tokio::process::Command;
 use vite_js_runtime::NodeProvider;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_path::{AbsolutePath, current_dir};
 use vite_shared::format_path_prepended;
 
 use super::{
@@ -37,11 +37,9 @@ pub async fn install(
         resolve_version_alias(v, &provider).await?
     } else {
         // Resolve from current directory
-        let cwd = std::env::current_dir().map_err(|e| {
+        let cwd = current_dir().map_err(|e| {
             Error::ConfigError(format!("Cannot get current directory: {}", e).into())
         })?;
-        let cwd = AbsolutePathBuf::new(cwd)
-            .ok_or_else(|| Error::ConfigError("Invalid current directory".into()))?;
         let resolution = resolve_version(&cwd).await?;
         resolution.version
     };
