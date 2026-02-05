@@ -1,0 +1,8 @@
+{
+  "name": "env-binary-conflict-pkg-b",
+  "version": "2.0.0",
+  "description": "Test package B that also provides 'env-binary-conflict-cli' binary",
+  "bin": {
+    "env-binary-conflict-cli": "./cli.js"
+  }
+}

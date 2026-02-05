@@ -8,6 +8,7 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::format_path_prepended;
 
 use super::{
+    bin_config::BinConfig,
     config::{
         get_bin_dir, get_node_modules_dir, get_packages_dir, get_tmp_dir, resolve_version,
         resolve_version_alias,
@@ -19,7 +20,12 @@ use crate::error::Error;
 /// Install a global package.
 ///
 /// If `node_version` is provided, uses that version. Otherwise, resolves from current directory.
-pub async fn install(package_spec: &str, node_version: Option<&str>) -> Result<(), Error> {
+/// If `force` is true, auto-uninstalls conflicting packages.
+pub async fn install(
+    package_spec: &str,
+    node_version: Option<&str>,
+    force: bool,
+) -> Result<(), Error> {
     // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
     let (package_name, _version_spec) = parse_package_spec(package_spec);
 
@@ -114,6 +120,40 @@ pub async fn install(package_spec: &str, node_version: Option<&str>) -> Result<(
         }
     }
 
+    // 5b. Check for binary conflicts (before moving staging to final location)
+    let mut conflicts: Vec<(String, String)> = Vec::new(); // (bin_name, existing_package)
+
+    for bin_name in &bin_names {
+        if let Some(config) = BinConfig::load(bin_name).await? {
+            // Only conflict if owned by a different package
+            if config.package != package_name {
+                conflicts.push((bin_name.clone(), config.package.clone()));
+            }
+        }
+    }
+
+    if !conflicts.is_empty() {
+        if force {
+            // Auto-uninstall conflicting packages
+            let packages_to_remove: HashSet<_> =
+                conflicts.iter().map(|(_, pkg)| pkg.clone()).collect();
+            for pkg in packages_to_remove {
+                println!("  Uninstalling {} (conflicts with {})...", pkg, package_name);
+                // Use Box::pin to avoid recursive async type issues
+                Box::pin(uninstall(&pkg)).await?;
+            }
+        } else {
+            // Hard fail with clear error
+            // Clean up staging directory
+            let _ = tokio::fs::remove_dir_all(&staging_dir).await;
+            return Err(Error::BinaryConflict {
+                bin_name: conflicts[0].0.clone(),
+                existing_package: conflicts[0].1.clone(),
+                new_package: package_name.clone(),
+            });
+        }
+    }
+
     // 6. Move staging to final location
     let packages_dir = get_packages_dir()?;
     let final_dir = packages_dir.join(&package_name);
@@ -141,10 +181,19 @@ pub async fn install(package_spec: &str, node_version: Option<&str>) -> Result<(
     );
     metadata.save().await?;
 
-    // 8. Create shims for binaries
+    // 8. Create shims for binaries and save per-binary configs
     let bin_dir = get_bin_dir()?;
     for bin_name in &bin_names {
         create_package_shim(&bin_dir, bin_name, &package_name).await?;
+
+        // Write per-binary config
+        let bin_config = BinConfig::new(
+            bin_name.clone(),
+            package_name.clone(),
+            installed_version.clone(),
+            version.clone(),
+        );
+        bin_config.save().await?;
     }
 
     println!("  Installed {} v{}", package_name, installed_version);
@@ -156,36 +205,44 @@ pub async fn install(package_spec: &str, node_version: Option<&str>) -> Result<(
 }
 
 /// Uninstall a global package.
+///
+/// Uses two-phase uninstall:
+/// 1. Try to use PackageMetadata for binary list
+/// 2. Fallback to scanning BinConfig files for orphaned binaries
 pub async fn uninstall(package_name: &str) -> Result<(), Error> {
     let (package_name, _) = parse_package_spec(package_name);
 
     println!("  Uninstalling {}...", package_name);
 
-    // 1. Load metadata to get binary names
-    let metadata = PackageMetadata::load(&package_name).await?;
+    // Phase 1: Try to use PackageMetadata for binary list
+    let bins = if let Some(metadata) = PackageMetadata::load(&package_name).await? {
+        metadata.bins.clone()
+    } else {
+        // Phase 2: Fallback - scan BinConfig files for orphaned binaries
+        let orphan_bins = BinConfig::find_by_package(&package_name).await?;
+        if orphan_bins.is_empty() {
+            return Err(Error::ConfigError(
+                format!("Package {} is not installed", package_name).into(),
+            ));
+        }
+        orphan_bins
+    };
 
-    if metadata.is_none() {
-        return Err(Error::ConfigError(
-            format!("Package {} is not installed", package_name).into(),
-        ));
-    }
-
-    let metadata = metadata.unwrap();
-
-    // 2. Remove shims for binaries
+    // Remove shims and bin configs
     let bin_dir = get_bin_dir()?;
-    for bin_name in &metadata.bins {
+    for bin_name in &bins {
         remove_package_shim(&bin_dir, bin_name).await?;
+        BinConfig::delete(bin_name).await?;
     }
 
-    // 3. Remove package directory
+    // Remove package directory
     let packages_dir = get_packages_dir()?;
     let package_dir = packages_dir.join(&package_name);
     if tokio::fs::try_exists(&package_dir).await.unwrap_or(false) {
         tokio::fs::remove_dir_all(&package_dir).await?;
     }
 
-    // 4. Remove metadata file
+    // Remove metadata file
     PackageMetadata::delete(&package_name).await?;
 
     println!("  Uninstalled {}", package_name);

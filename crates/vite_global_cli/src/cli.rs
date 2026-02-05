@@ -711,6 +711,10 @@ pub enum EnvSubcommands {
         #[arg(long)]
         node: Option<String>,
 
+        /// Force install by auto-uninstalling conflicting packages
+        #[arg(short = 'f', long)]
+        force: bool,
+
         /// Package spec(s) to install (e.g., "typescript", "typescript@5.0.0")
         #[arg(required = true)]
         packages: Vec<String>,

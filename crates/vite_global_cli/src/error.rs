@@ -42,4 +42,9 @@ pub enum Error {
 
     #[error("{0}")]
     Other(Str),
+
+    #[error(
+        "Executable '{bin_name}' is already installed by {existing_package}\n\nPlease remove {existing_package} before installing {new_package}, or use --force to auto-replace"
+    )]
+    BinaryConflict { bin_name: String, existing_package: String, new_package: String },
 }
