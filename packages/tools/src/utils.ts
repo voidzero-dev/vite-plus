@@ -82,6 +82,8 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
         '$1$2\n',
       )
       .replaceAll(/\nfound \d+ vulnerabilities\n/g, '')
+      // vite modules transformed count
+      .replaceAll(/✓ \d+ modules? transformed/g, '✓ <variable> modules transformed')
       // replace size for tsdown
       .replaceAll(/ \d+(\.\d+)? ([km]?B)/g, ' <variable> $2')
       // replace npm notice size:
