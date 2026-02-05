@@ -1,5 +1,5 @@
 > vp env run node --version # Ensure Node.js is installed first
-v22.22.0
+v20.18.0
 
 > vp env which node # Core tool - shows resolved Node.js binary path
 <homedir>/.vite-plus-dev/js_runtime/node/<semver>/bin/node

@@ -8,19 +8,34 @@ Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-  -P, --save-prod                         Save to `dependencies` (default)
-  -D, --save-dev                          Save to `devDependencies`
-      --save-peer                         Save to `peerDependencies` and `devDependencies`
-  -O, --save-optional                     Save to `optionalDependencies`
-  -E, --save-exact                        Save exact version rather than semver range
-      --save-catalog-name <CATALOG_NAME>  Save the new dependency to the specified catalog name
-      --save-catalog                      Save the new dependency to the default catalog
-      --allow-build <NAMES>               A list of package names allowed to run postinstall
-      --filter <PATTERN>                  Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root                    Add to workspace root
-      --workspace                         Only add if package exists in workspace (pnpm-specific)
-  -g, --global                            Install globally
-  -h, --help                              Print help
+  -P, --save-prod
+          Save to `dependencies` (default)
+  -D, --save-dev
+          Save to `devDependencies`
+      --save-peer
+          Save to `peerDependencies` and `devDependencies`
+  -O, --save-optional
+          Save to `optionalDependencies`
+  -E, --save-exact
+          Save exact version rather than semver range
+      --save-catalog-name <CATALOG_NAME>
+          Save the new dependency to the specified catalog name
+      --save-catalog
+          Save the new dependency to the default catalog
+      --allow-build <NAMES>
+          A list of package names allowed to run postinstall
+      --filter <PATTERN>
+          Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root
+          Add to workspace root
+      --workspace
+          Only add if package exists in workspace (pnpm-specific)
+  -g, --global
+          Install globally
+      --node <NODE>
+          Node.js version to use for global installation (only with -g)
+  -h, --help
+          Print help
 
 [2]> vp add # should error because no packages specified
 error: the following required arguments were not provided:

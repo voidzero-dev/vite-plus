@@ -11,7 +11,7 @@ added 1 package in <variable>ms
   "name": "env-binary-conflict-cli",
   "package": "./env-binary-conflict-pkg-a",
   "version": "1.0.0",
-  "nodeVersion": "24.13.0"
+  "nodeVersion": "22.22.0"
 }
 [1]> vp install -g ./env-binary-conflict-pkg-b # Try to install pkg-b without force - should fail
   Installing ./env-binary-conflict-pkg-b globally...
@@ -27,7 +27,7 @@ Please remove ./env-binary-conflict-pkg-a before installing ./env-binary-conflic
   "name": "env-binary-conflict-cli",
   "package": "./env-binary-conflict-pkg-a",
   "version": "1.0.0",
-  "nodeVersion": "24.13.0"
+  "nodeVersion": "22.22.0"
 }
 > vp install -g --force ./env-binary-conflict-pkg-b # Force install pkg-b - should auto-uninstall pkg-a
   Installing ./env-binary-conflict-pkg-b globally...
@@ -45,7 +45,7 @@ added 1 package in <variable>ms
   "name": "env-binary-conflict-cli",
   "package": "./env-binary-conflict-pkg-b",
   "version": "2.0.0",
-  "nodeVersion": "24.13.0"
+  "nodeVersion": "22.22.0"
 }
 > vp remove -g env-binary-conflict-pkg-b # Cleanup
   Uninstalling env-binary-conflict-pkg-b...

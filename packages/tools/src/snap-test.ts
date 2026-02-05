@@ -71,8 +71,31 @@ export async function snapTest() {
 
   // Create a unique temporary directory for testing
   // On macOS, `tmpdir()` is a symlink. Resolve it so that we can replace the resolved cwd in outputs.
-  const tempTmpDir = `${fs.realpathSync(tmpdir())}/vite-plus-test-${randomUUID()}`;
+  const systemTmpDir = fs.realpathSync(tmpdir());
+  const tempTmpDir = `${systemTmpDir}/vite-plus-test-${randomUUID()}`;
   fs.mkdirSync(tempTmpDir, { recursive: true });
+
+  // Clean up stale .node-version and package.json in the system temp directory.
+  // vite-plus walks up the directory tree to resolve Node.js versions, so leftover
+  // files from previous runs can cause tests to pick up unexpected version configs.
+  for (const staleFile of ['.node-version', 'package.json']) {
+    const stalePath = path.join(systemTmpDir, staleFile);
+    if (fs.existsSync(stalePath)) {
+      fs.rmSync(stalePath);
+    }
+  }
+
+  // Ensure shim mode is "managed" so snap tests use vite-plus managed Node.js
+  // instead of the system Node.js (equivalent to running `vp env on`).
+  const vitePlusHome = path.join(homedir(), '.vite-plus-dev');
+  const configPath = path.join(vitePlusHome, 'config.json');
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    if (config.shimMode && config.shimMode !== 'managed') {
+      delete config.shimMode;
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+    }
+  }
 
   // Make dependencies available in the test cases
   fs.symlinkSync(
