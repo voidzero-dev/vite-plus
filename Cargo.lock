@@ -7131,6 +7131,7 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "clap",
+ "owo-colors",
  "serde",
  "serde_json",
  "serial_test",

@@ -119,9 +119,10 @@ async fn setup_vp_wrapper(bin_dir: &vite_path::AbsolutePath, refresh: bool) -> R
             refresh || !tokio::fs::try_exists(&bin_vp_cmd).await.unwrap_or(false);
 
         if should_create_wrapper {
-            // Set VITE_PLUS_HOME using %~dp0.. which resolves to the parent of bin/
-            // This ensures the vp binary knows its home directory
-            let cmd_content = "@echo off\r\nset VITE_PLUS_HOME=%~dp0..\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" %*\r\nexit /b %ERRORLEVEL%\r\n";
+            // Set VITE_PLUS_HOME using a for loop to canonicalize the path.
+            // %~dp0.. would produce paths like C:\Users\x\.vite-plus\bin\..
+            // The for loop resolves this to a clean C:\Users\x\.vite-plus
+            let cmd_content = "@echo off\r\nfor %%I in (\"%~dp0..\") do set VITE_PLUS_HOME=%%~fI\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" %*\r\nexit /b %ERRORLEVEL%\r\n";
             tokio::fs::write(&bin_vp_cmd, cmd_content).await?;
             tracing::debug!("Created wrapper script {:?}", bin_vp_cmd);
         }
@@ -233,10 +234,11 @@ async fn create_windows_shim(
     let cmd_path = bin_dir.join(format!("{tool}.cmd"));
 
     // Create .cmd wrapper that calls vp env run <tool>
-    // Set VITE_PLUS_HOME using %~dp0.. which resolves to the parent of bin/
-    // This ensures the vp binary knows its home directory
+    // Use a for loop to canonicalize VITE_PLUS_HOME path.
+    // %~dp0.. would produce paths like C:\Users\x\.vite-plus\bin\..
+    // The for loop resolves this to a clean C:\Users\x\.vite-plus
     let cmd_content = format!(
-        "@echo off\r\nset VITE_PLUS_HOME=%~dp0..\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" env run {} %*\r\nexit /b %ERRORLEVEL%\r\n",
+        "@echo off\r\nfor %%I in (\"%~dp0..\") do set VITE_PLUS_HOME=%%~fI\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" env run {} %*\r\nexit /b %ERRORLEVEL%\r\n",
         tool
     );
 

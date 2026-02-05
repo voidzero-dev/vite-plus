@@ -535,10 +535,10 @@ crates/vite_global_cli/
 
 ### Shim Dispatch Flow
 
-1. Check `VITE_PLUS_BYPASS` environment variable → bypass to system tool
+1. Check `VITE_PLUS_BYPASS` environment variable → bypass to system tool (filters all listed directories from PATH)
 2. Check `VITE_PLUS_TOOL_RECURSION` → if set, use passthrough mode
 3. Check shim mode from config:
-   - If `system_first`: try system tool first, fallback to managed
+   - If `system_first`: try system tool first, fallback to managed; appends own bin dir to `VITE_PLUS_BYPASS` before exec to prevent loops with multiple installations
    - If `managed`: use vite-plus managed Node.js
 4. Resolve version (with mtime-based caching)
 5. Ensure Node.js is installed (download if needed)
@@ -549,7 +549,7 @@ crates/vite_global_cli/
 
 ### Shim Recursion Prevention
 
-To prevent infinite loops when shims invoke other shims, vite-plus uses an environment variable marker:
+To prevent infinite loops when shims invoke other shims, vite-plus uses environment variable markers:
 
 **Environment Variable**: `VITE_PLUS_TOOL_RECURSION`
 
@@ -559,6 +559,18 @@ To prevent infinite loops when shims invoke other shims, vite-plus uses an envir
 2. Subsequent shim invocations check this variable
 3. If set, shims use **passthrough mode** (skip version resolution, use current PATH)
 4. `vp env run` explicitly **removes** this variable to force re-evaluation
+
+**Environment Variable**: `VITE_PLUS_BYPASS` (PATH-style list)
+
+**SystemFirst Loop Prevention:**
+
+When multiple vite-plus installations exist in PATH and `system_first` mode is active, each installation could find the other's shim as the "system tool", causing an infinite exec loop. To prevent this:
+
+1. In `system_first` mode, before exec'ing the found system tool, the current installation appends its own bin directory to `VITE_PLUS_BYPASS`
+2. The next installation sees `VITE_PLUS_BYPASS` is set and enters bypass mode via `find_system_tool()`
+3. `find_system_tool()` filters all directories listed in `VITE_PLUS_BYPASS` (plus its own bin dir) from PATH
+4. This ensures the search skips all known vite-plus bin directories and finds the real system binary (or errors cleanly)
+5. `VITE_PLUS_BYPASS` is preserved through `vp env run` so loop protection remains active
 
 **Flow Diagram:**
 
@@ -1681,14 +1693,14 @@ $ vp env --current --json
 
 ## Environment Variables
 
-| Variable                   | Description                           | Default        |
-| -------------------------- | ------------------------------------- | -------------- |
-| `VITE_PLUS_HOME`           | Base directory for bin and config     | `~/.vite-plus` |
-| `VITE_PLUS_LOG`            | Log level: debug, info, warn, error   | `warn`         |
-| `VITE_PLUS_DEBUG_SHIM`     | Enable extra shim diagnostics         | unset          |
-| `VITE_PLUS_BYPASS`         | Bypass shim and use system node       | unset          |
-| `VITE_PLUS_TOOL_RECURSION` | **Internal**: Prevents shim recursion | unset          |
-| `VITE_PLUS_UNSAFE_GLOBAL`  | Bypass global package interception    | unset          |
+| Variable                   | Description                                                                                     | Default        |
+| -------------------------- | ----------------------------------------------------------------------------------------------- | -------------- |
+| `VITE_PLUS_HOME`           | Base directory for bin and config                                                               | `~/.vite-plus` |
+| `VITE_PLUS_LOG`            | Log level: debug, info, warn, error                                                             | `warn`         |
+| `VITE_PLUS_DEBUG_SHIM`     | Enable extra shim diagnostics                                                                   | unset          |
+| `VITE_PLUS_BYPASS`         | PATH-style list of bin dirs to skip when finding system tools; set `=1` to bypass shim entirely | unset          |
+| `VITE_PLUS_TOOL_RECURSION` | **Internal**: Prevents shim recursion                                                           | unset          |
+| `VITE_PLUS_UNSAFE_GLOBAL`  | Bypass global package interception                                                              | unset          |
 
 ## Unix-Specific Considerations
 
