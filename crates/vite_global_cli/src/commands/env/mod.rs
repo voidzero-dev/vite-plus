@@ -78,13 +78,17 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
                 r#use::execute(cwd, version, unset, no_install, silent_if_unchanged).await
             }
             crate::cli::EnvSubcommands::Install { version } => {
-                let resolved = if let Some(version) = version {
+                let (resolved, from_env_var) = if let Some(version) = version {
                     let provider = vite_js_runtime::NodeProvider::new();
-                    config::resolve_version_alias(&version, &provider).await?
+                    (config::resolve_version_alias(&version, &provider).await?, false)
                 } else {
                     let resolution = config::resolve_version(&cwd).await?;
+                    let from_env = resolution.source == config::VERSION_ENV_VAR;
                     match resolution.source.as_str() {
-                        ".node-version" | "engines.node" | "devEngines.runtime" => {}
+                        ".node-version"
+                        | "engines.node"
+                        | "devEngines.runtime"
+                        | config::VERSION_ENV_VAR => {}
                         _ => {
                             eprintln!("No Node.js version found in current project.");
                             eprintln!("Specify a version: vp env install <VERSION>");
@@ -92,12 +96,19 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
                             return Ok(exit_status(1));
                         }
                     }
-                    resolution.version
+                    (resolution.version, from_env)
                 };
                 println!("Installing Node.js v{}...", resolved);
                 vite_js_runtime::download_runtime(vite_js_runtime::JsRuntimeType::Node, &resolved)
                     .await?;
                 println!("Installed Node.js v{}", resolved);
+                if from_env_var {
+                    eprintln!(
+                        "Note: Installed from session override ({}).",
+                        config::VERSION_ENV_VAR
+                    );
+                    eprintln!("Run `vp env use --unset` to revert to project version resolution.");
+                }
                 Ok(ExitStatus::default())
             }
         };
