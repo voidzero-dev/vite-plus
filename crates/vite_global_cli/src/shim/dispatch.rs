@@ -40,13 +40,6 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         return bypass_to_system(tool, args);
     }
 
-    // Check for global package install interception (npm only)
-    if tool == "npm" && std::env::var("VITE_PLUS_UNSAFE_GLOBAL").is_err() {
-        if let Some(result) = check_global_install(args).await {
-            return result;
-        }
-    }
-
     // Check shim mode from config
     let shim_mode = load_shim_mode().await;
     if shim_mode == ShimMode::SystemFirst {
@@ -149,7 +142,7 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
         Ok(Some(metadata)) => metadata,
         Ok(None) => {
             eprintln!("vp: Binary '{tool}' not found in any installed package");
-            eprintln!("vp: Run 'npm install -g <package>' to install");
+            eprintln!("vp: Run 'vp install -g <package>' to install");
             return 1;
         }
         Err(e) => {
@@ -440,94 +433,6 @@ fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
     let cwd = current_dir().ok()?;
     let path = which::which_in(tool, Some(filtered_path), cwd).ok()?;
     AbsolutePathBuf::new(path)
-}
-
-/// Check if this is a global install command and handle it.
-/// Returns Some(exit_code) if handled, None to continue normal dispatch.
-async fn check_global_install(args: &[String]) -> Option<i32> {
-    // Parse npm command to detect global install
-    // npm install -g <package>
-    // npm i -g <package>
-    // npm install --global <package>
-    // npm i --global <package>
-    // npm uninstall -g <package>
-    // npm un -g <package>
-
-    let mut is_global = false;
-    let mut command: Option<&str> = None;
-    let mut packages: Vec<String> = Vec::new();
-    let mut has_extra_flags = false;
-
-    let mut i = 0;
-    while i < args.len() {
-        let arg = &args[i];
-        match arg.as_str() {
-            "install" | "i" | "add" => command = Some("install"),
-            "uninstall" | "un" | "remove" | "rm" => command = Some("uninstall"),
-            "-g" | "--global" => is_global = true,
-            s if s.starts_with('-') => {
-                // Any other flag (e.g., --registry, --ignore-scripts, --legacy-peer-deps)
-                // Skip interception to preserve npm's native flag handling
-                has_extra_flags = true;
-            }
-            _ if !arg.starts_with('-') && command.is_some() => {
-                // This is a package name (could be package@version)
-                packages.push(arg.clone());
-            }
-            _ => {}
-        }
-        i += 1;
-    }
-
-    if !is_global || command.is_none() {
-        return None; // Not a global command, continue normal dispatch
-    }
-
-    // If extra flags are present, let npm handle it natively
-    // This preserves flags like --registry, --ignore-scripts, --legacy-peer-deps, etc.
-    if has_extra_flags {
-        return None;
-    }
-
-    if packages.is_empty() {
-        eprintln!("vp: No package specified for npm global {}", command.unwrap());
-        return Some(1);
-    }
-
-    match command.unwrap() {
-        "install" => Some(handle_global_install(&packages).await),
-        "uninstall" => Some(handle_global_uninstall(&packages).await),
-        _ => None,
-    }
-}
-
-/// Handle global package installation.
-async fn handle_global_install(packages: &[String]) -> i32 {
-    use crate::commands::env::global_install;
-
-    for package in packages {
-        println!("vp: Installing global package: {}", package);
-        // When intercepting npm install -g, don't use force by default
-        if let Err(e) = global_install::install(package, None, false).await {
-            eprintln!("vp: Failed to install {}: {}", package, e);
-            return 1;
-        }
-    }
-    0
-}
-
-/// Handle global package uninstallation.
-async fn handle_global_uninstall(packages: &[String]) -> i32 {
-    use crate::commands::env::global_install;
-
-    for package in packages {
-        println!("vp: Uninstalling global package: {}", package);
-        if let Err(e) = global_install::uninstall(package).await {
-            eprintln!("vp: Failed to uninstall {}: {}", package, e);
-            return 1;
-        }
-    }
-    0
 }
 
 #[cfg(test)]

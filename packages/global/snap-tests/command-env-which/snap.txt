@@ -1,5 +1,5 @@
 > vp env run node --version # Ensure Node.js is installed first
-v20.18.0
+v22.22.0
 
 > vp env which node # Core tool - shows resolved Node.js binary path
 <homedir>/.vite-plus-dev/js_runtime/node/<semver>/bin/node
@@ -10,8 +10,7 @@ v20.18.0
 > vp env which npx # Core tool - shows resolved npx binary path
 <homedir>/.vite-plus-dev/js_runtime/node/<semver>/bin/npx
 
-> vp env run npm install -g cowsay@1.6.0 # Install a global package via vp
-vp: Installing global package: cowsay@<semver>
+> vp install -g cowsay@1.6.0 # Install a global package via vp
   Installing cowsay@<semver> globally...
   Running npm install...
 
@@ -29,8 +28,7 @@ added 41 packages in <variable>ms
   Node.js: <homedir>/.vite-plus-dev/js_runtime/node/<semver>/bin/node
   Installed: <date>
 
-> vp env run npm uninstall -g cowsay # Cleanup
-vp: Uninstalling global package: cowsay
+> vp remove -g cowsay # Cleanup
   Uninstalling cowsay...
   Uninstalled cowsay
 

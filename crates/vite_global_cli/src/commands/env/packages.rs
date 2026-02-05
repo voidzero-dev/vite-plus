@@ -15,7 +15,7 @@ pub async fn execute(json: bool) -> Result<ExitStatus, Error> {
         } else {
             println!("No global packages installed.");
             println!();
-            println!("Install packages with: npm install -g <package>");
+            println!("Install packages with: vp install -g <package>");
         }
         return Ok(ExitStatus::default());
     }

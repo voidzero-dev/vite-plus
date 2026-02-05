@@ -1,6 +1,6 @@
 //! Per-binary configuration storage for global packages.
 //!
-//! Each binary installed via `vp env install` gets a config file at
+//! Each binary installed via `vp install -g` gets a config file at
 //! `~/.vite-plus/bins/{name}.json` that tracks which package owns it.
 //! This enables:
 //! - Deterministic binary-to-package resolution

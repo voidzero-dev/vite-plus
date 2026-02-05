@@ -1,4 +1,4 @@
-> vp env install ./env-binary-conflict-pkg-a # Install pkg-a which provides env-binary-conflict-cli binary
+> vp install -g ./env-binary-conflict-pkg-a # Install pkg-a which provides env-binary-conflict-cli binary
   Installing ./env-binary-conflict-pkg-a globally...
   Running npm install...
 
@@ -13,7 +13,7 @@ added 1 package in <variable>ms
   "version": "1.0.0",
   "nodeVersion": "24.13.0"
 }
-[1]> vp env install ./env-binary-conflict-pkg-b # Try to install pkg-b without force - should fail
+[1]> vp install -g ./env-binary-conflict-pkg-b # Try to install pkg-b without force - should fail
   Installing ./env-binary-conflict-pkg-b globally...
   Running npm install...
 
@@ -29,7 +29,7 @@ Please remove ./env-binary-conflict-pkg-a before installing ./env-binary-conflic
   "version": "1.0.0",
   "nodeVersion": "24.13.0"
 }
-> vp env install --force ./env-binary-conflict-pkg-b # Force install pkg-b - should auto-uninstall pkg-a
+> vp install -g --force ./env-binary-conflict-pkg-b # Force install pkg-b - should auto-uninstall pkg-a
   Installing ./env-binary-conflict-pkg-b globally...
   Running npm install...
 
@@ -47,9 +47,9 @@ added 1 package in <variable>ms
   "version": "2.0.0",
   "nodeVersion": "24.13.0"
 }
-> vp env uninstall ./env-binary-conflict-pkg-b # Cleanup
-  Uninstalling ./env-binary-conflict-pkg-b...
-  Uninstalled ./env-binary-conflict-pkg-b
+> vp remove -g env-binary-conflict-pkg-b # Cleanup
+  Uninstalling env-binary-conflict-pkg-b...
+  Uninstalled env-binary-conflict-pkg-b
 
 > test ! -f $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json && echo 'bin config removed' # Bin config should be deleted
 bin config removed
