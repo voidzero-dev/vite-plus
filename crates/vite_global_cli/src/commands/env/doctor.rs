@@ -169,14 +169,27 @@ async fn check_shim_mode() {
     println!("  Run 'vp env off' to prefer system Node.js");
 }
 
-/// Find system Node.js, skipping vite-plus bin directory.
+/// Find system Node.js, skipping vite-plus bin directory and any
+/// directories listed in `VITE_PLUS_BYPASS`.
 fn find_system_node() -> Option<std::path::PathBuf> {
     let bin_dir = get_bin_dir().ok();
     let path_var = std::env::var_os("PATH")?;
 
-    // Filter PATH to exclude bin directory, then search
+    // Parse VITE_PLUS_BYPASS as a PATH-style list of additional directories to skip
+    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os("VITE_PLUS_BYPASS")
+        .map(|v| std::env::split_paths(&v).collect())
+        .unwrap_or_default();
+
+    // Filter PATH to exclude our bin directory and any bypass directories
     let filtered_paths: Vec<_> = std::env::split_paths(&path_var)
-        .filter(|p| if let Some(ref bin) = bin_dir { p != bin.as_path() } else { true })
+        .filter(|p| {
+            if let Some(ref bin) = bin_dir {
+                if p == bin.as_path() {
+                    return false;
+                }
+            }
+            !bypass_paths.iter().any(|bp| p == bp)
+        })
         .collect();
 
     let filtered_path = std::env::join_paths(filtered_paths).ok()?;
@@ -469,6 +482,9 @@ fn check_conflicts() {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
+    use tempfile::TempDir;
+
     use super::*;
 
     #[test]
@@ -493,5 +509,95 @@ mod tests {
             assert_eq!(npm, "npm");
             assert_eq!(npx, "npx");
         }
+    }
+
+    /// Create a fake executable file in the given directory.
+    #[cfg(unix)]
+    fn create_fake_executable(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let path = dir.join(name);
+        std::fs::write(&path, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path
+    }
+
+    #[cfg(windows)]
+    fn create_fake_executable(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+        let path = dir.join(format!("{name}.exe"));
+        std::fs::write(&path, "fake").unwrap();
+        path
+    }
+
+    /// Helper to save and restore PATH and VITE_PLUS_BYPASS around a test.
+    struct EnvGuard {
+        original_path: Option<std::ffi::OsString>,
+        original_bypass: Option<std::ffi::OsString>,
+    }
+
+    impl EnvGuard {
+        fn new() -> Self {
+            Self {
+                original_path: std::env::var_os("PATH"),
+                original_bypass: std::env::var_os("VITE_PLUS_BYPASS"),
+            }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            unsafe {
+                match &self.original_path {
+                    Some(v) => std::env::set_var("PATH", v),
+                    None => std::env::remove_var("PATH"),
+                }
+                match &self.original_bypass {
+                    Some(v) => std::env::set_var("VITE_PLUS_BYPASS", v),
+                    None => std::env::remove_var("VITE_PLUS_BYPASS"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_find_system_node_skips_bypass_paths() {
+        let _guard = EnvGuard::new();
+        let temp = TempDir::new().unwrap();
+        let dir_a = temp.path().join("bin_a");
+        let dir_b = temp.path().join("bin_b");
+        std::fs::create_dir_all(&dir_a).unwrap();
+        std::fs::create_dir_all(&dir_b).unwrap();
+        create_fake_executable(&dir_a, "node");
+        create_fake_executable(&dir_b, "node");
+
+        let path = std::env::join_paths([dir_a.as_path(), dir_b.as_path()]).unwrap();
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("PATH", &path);
+            std::env::set_var("VITE_PLUS_BYPASS", dir_a.as_os_str());
+        }
+
+        let result = find_system_node();
+        assert!(result.is_some(), "Should find node in non-bypassed directory");
+        assert!(result.unwrap().starts_with(&dir_b), "Should find node in dir_b, not dir_a");
+    }
+
+    #[test]
+    #[serial]
+    fn test_find_system_node_returns_none_when_all_paths_bypassed() {
+        let _guard = EnvGuard::new();
+        let temp = TempDir::new().unwrap();
+        let dir_a = temp.path().join("bin_a");
+        std::fs::create_dir_all(&dir_a).unwrap();
+        create_fake_executable(&dir_a, "node");
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("PATH", dir_a.as_os_str());
+            std::env::set_var("VITE_PLUS_BYPASS", dir_a.as_os_str());
+        }
+
+        let result = find_system_node();
+        assert!(result.is_none(), "Should return None when all paths are bypassed");
     }
 }

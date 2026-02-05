@@ -52,6 +52,23 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     if shim_mode == ShimMode::SystemFirst {
         // In system-first mode, try to find system tool first
         if let Some(system_path) = find_system_tool(tool) {
+            // Append current bin_dir to VITE_PLUS_BYPASS to prevent infinite loops
+            // when multiple vite-plus installations exist in PATH.
+            // The next installation will filter all accumulated paths.
+            if let Ok(bin_dir) = config::get_bin_dir() {
+                let bypass_val = match std::env::var_os("VITE_PLUS_BYPASS") {
+                    Some(existing) => {
+                        let mut paths: Vec<_> = std::env::split_paths(&existing).collect();
+                        paths.push(bin_dir.as_path().to_path_buf());
+                        std::env::join_paths(paths).unwrap_or(existing)
+                    }
+                    None => std::ffi::OsString::from(bin_dir.as_path()),
+                };
+                // SAFETY: Setting env vars before exec (which replaces the process) is safe
+                unsafe {
+                    std::env::set_var("VITE_PLUS_BYPASS", bypass_val);
+                }
+            }
             return exec::exec_tool(&system_path, args);
         }
         // Fall through to managed if system not found
@@ -391,16 +408,30 @@ async fn load_shim_mode() -> ShimMode {
     config::load_config().await.map(|c| c.shim_mode).unwrap_or_default()
 }
 
-/// Find a system tool in PATH, skipping the vite-plus bin directory.
+/// Find a system tool in PATH, skipping the vite-plus bin directory and any
+/// directories listed in `VITE_PLUS_BYPASS`.
 ///
 /// Returns the absolute path to the tool if found, None otherwise.
 fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
     let bin_dir = config::get_bin_dir().ok();
     let path_var = std::env::var_os("PATH")?;
 
-    // Filter PATH to exclude bin directory, then search
+    // Parse VITE_PLUS_BYPASS as a PATH-style list of additional directories to skip.
+    // This prevents infinite loops when multiple vite-plus installations exist in PATH.
+    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os("VITE_PLUS_BYPASS")
+        .map(|v| std::env::split_paths(&v).collect())
+        .unwrap_or_default();
+
+    // Filter PATH to exclude our bin directory and any bypass directories
     let filtered_paths: Vec<_> = std::env::split_paths(&path_var)
-        .filter(|p| if let Some(ref bin) = bin_dir { p != bin.as_path() } else { true })
+        .filter(|p| {
+            if let Some(ref bin) = bin_dir {
+                if p == bin.as_path() {
+                    return false;
+                }
+            }
+            !bypass_paths.iter().any(|bp| p == bp)
+        })
         .collect();
 
     let filtered_path = std::env::join_paths(filtered_paths).ok()?;
@@ -497,4 +528,238 @@ async fn handle_global_uninstall(packages: &[String]) -> i32 {
         }
     }
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use serial_test::serial;
+    use tempfile::TempDir;
+
+    use super::*;
+
+    /// Create a fake executable file in the given directory.
+    #[cfg(unix)]
+    fn create_fake_executable(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let path = dir.join(name);
+        std::fs::write(&path, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path
+    }
+
+    #[cfg(windows)]
+    fn create_fake_executable(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+        let path = dir.join(format!("{name}.exe"));
+        std::fs::write(&path, "fake").unwrap();
+        path
+    }
+
+    /// Helper to save and restore PATH and VITE_PLUS_BYPASS around a test.
+    struct EnvGuard {
+        original_path: Option<std::ffi::OsString>,
+        original_bypass: Option<std::ffi::OsString>,
+    }
+
+    impl EnvGuard {
+        fn new() -> Self {
+            Self {
+                original_path: std::env::var_os("PATH"),
+                original_bypass: std::env::var_os("VITE_PLUS_BYPASS"),
+            }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            unsafe {
+                match &self.original_path {
+                    Some(v) => std::env::set_var("PATH", v),
+                    None => std::env::remove_var("PATH"),
+                }
+                match &self.original_bypass {
+                    Some(v) => std::env::set_var("VITE_PLUS_BYPASS", v),
+                    None => std::env::remove_var("VITE_PLUS_BYPASS"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_find_system_tool_works_without_bypass() {
+        let _guard = EnvGuard::new();
+        let temp = TempDir::new().unwrap();
+        let dir = temp.path().join("bin_a");
+        std::fs::create_dir_all(&dir).unwrap();
+        create_fake_executable(&dir, "mytesttool");
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("PATH", &dir);
+            std::env::remove_var("VITE_PLUS_BYPASS");
+        }
+
+        let result = find_system_tool("mytesttool");
+        assert!(result.is_some(), "Should find tool when no bypass is set");
+        assert!(result.unwrap().as_path().starts_with(&dir));
+    }
+
+    #[test]
+    #[serial]
+    fn test_find_system_tool_skips_single_bypass_path() {
+        let _guard = EnvGuard::new();
+        let temp = TempDir::new().unwrap();
+        let dir_a = temp.path().join("bin_a");
+        let dir_b = temp.path().join("bin_b");
+        std::fs::create_dir_all(&dir_a).unwrap();
+        std::fs::create_dir_all(&dir_b).unwrap();
+        create_fake_executable(&dir_a, "mytesttool");
+        create_fake_executable(&dir_b, "mytesttool");
+
+        let path = std::env::join_paths([dir_a.as_path(), dir_b.as_path()]).unwrap();
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("PATH", &path);
+            // Bypass dir_a — should skip it and find dir_b's tool
+            std::env::set_var("VITE_PLUS_BYPASS", dir_a.as_os_str());
+        }
+
+        let result = find_system_tool("mytesttool");
+        assert!(result.is_some(), "Should find tool in non-bypassed directory");
+        assert!(
+            result.unwrap().as_path().starts_with(&dir_b),
+            "Should find tool in dir_b, not dir_a"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn test_find_system_tool_filters_multiple_bypass_paths() {
+        let _guard = EnvGuard::new();
+        let temp = TempDir::new().unwrap();
+        let dir_a = temp.path().join("bin_a");
+        let dir_b = temp.path().join("bin_b");
+        let dir_c = temp.path().join("bin_c");
+        std::fs::create_dir_all(&dir_a).unwrap();
+        std::fs::create_dir_all(&dir_b).unwrap();
+        std::fs::create_dir_all(&dir_c).unwrap();
+        create_fake_executable(&dir_a, "mytesttool");
+        create_fake_executable(&dir_b, "mytesttool");
+        create_fake_executable(&dir_c, "mytesttool");
+
+        let path =
+            std::env::join_paths([dir_a.as_path(), dir_b.as_path(), dir_c.as_path()]).unwrap();
+        let bypass = std::env::join_paths([dir_a.as_path(), dir_b.as_path()]).unwrap();
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("PATH", &path);
+            std::env::set_var("VITE_PLUS_BYPASS", &bypass);
+        }
+
+        let result = find_system_tool("mytesttool");
+        assert!(result.is_some(), "Should find tool in dir_c");
+        assert!(
+            result.unwrap().as_path().starts_with(&dir_c),
+            "Should find tool in dir_c since dir_a and dir_b are bypassed"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn test_find_system_tool_returns_none_when_all_paths_bypassed() {
+        let _guard = EnvGuard::new();
+        let temp = TempDir::new().unwrap();
+        let dir_a = temp.path().join("bin_a");
+        std::fs::create_dir_all(&dir_a).unwrap();
+        create_fake_executable(&dir_a, "mytesttool");
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("PATH", dir_a.as_os_str());
+            std::env::set_var("VITE_PLUS_BYPASS", dir_a.as_os_str());
+        }
+
+        let result = find_system_tool("mytesttool");
+        assert!(result.is_none(), "Should return None when all paths are bypassed");
+    }
+
+    /// Simulates the SystemFirst loop prevention: Installation A sets VITE_PLUS_BYPASS
+    /// with its own bin dir, then Installation B (seeing VITE_PLUS_BYPASS) should filter
+    /// both A's dir (from bypass) and its own dir (from get_bin_dir), finding the real tool
+    /// in a third directory or returning None.
+    #[test]
+    #[serial]
+    fn test_find_system_tool_cumulative_bypass_prevents_loop() {
+        let _guard = EnvGuard::new();
+        let temp = TempDir::new().unwrap();
+        let install_a_bin = temp.path().join("install_a_bin");
+        let install_b_bin = temp.path().join("install_b_bin");
+        let real_system_bin = temp.path().join("real_system");
+        std::fs::create_dir_all(&install_a_bin).unwrap();
+        std::fs::create_dir_all(&install_b_bin).unwrap();
+        std::fs::create_dir_all(&real_system_bin).unwrap();
+        create_fake_executable(&install_a_bin, "mytesttool");
+        create_fake_executable(&install_b_bin, "mytesttool");
+        create_fake_executable(&real_system_bin, "mytesttool");
+
+        // PATH has all three dirs: install_a, install_b, real_system
+        let path = std::env::join_paths([
+            install_a_bin.as_path(),
+            install_b_bin.as_path(),
+            real_system_bin.as_path(),
+        ])
+        .unwrap();
+
+        // Simulate: Installation A already set VITE_PLUS_BYPASS=<install_a_bin>
+        // Installation B also needs to filter install_b_bin (via get_bin_dir),
+        // but get_bin_dir returns the real vite-plus home. So we test by putting
+        // install_b_bin in the bypass as well (simulating cumulative append).
+        let bypass =
+            std::env::join_paths([install_a_bin.as_path(), install_b_bin.as_path()]).unwrap();
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("PATH", &path);
+            std::env::set_var("VITE_PLUS_BYPASS", &bypass);
+        }
+
+        let result = find_system_tool("mytesttool");
+        assert!(result.is_some(), "Should find tool in real_system directory");
+        assert!(
+            result.unwrap().as_path().starts_with(&real_system_bin),
+            "Should find the real system tool, not any vite-plus installation"
+        );
+    }
+
+    /// When both installations are bypassed and no real system tool exists, should return None.
+    #[test]
+    #[serial]
+    fn test_find_system_tool_returns_none_with_no_real_system_tool() {
+        let _guard = EnvGuard::new();
+        let temp = TempDir::new().unwrap();
+        let install_a_bin = temp.path().join("install_a_bin");
+        let install_b_bin = temp.path().join("install_b_bin");
+        std::fs::create_dir_all(&install_a_bin).unwrap();
+        std::fs::create_dir_all(&install_b_bin).unwrap();
+        create_fake_executable(&install_a_bin, "mytesttool");
+        create_fake_executable(&install_b_bin, "mytesttool");
+
+        let path =
+            std::env::join_paths([install_a_bin.as_path(), install_b_bin.as_path()]).unwrap();
+        let bypass =
+            std::env::join_paths([install_a_bin.as_path(), install_b_bin.as_path()]).unwrap();
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("PATH", &path);
+            std::env::set_var("VITE_PLUS_BYPASS", &bypass);
+        }
+
+        let result = find_system_tool("mytesttool");
+        assert!(
+            result.is_none(),
+            "Should return None when all dirs are bypassed and no real system tool exists"
+        );
+    }
 }
