@@ -109,3 +109,4 @@ Or, if you are using Yarn:
   "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
 }
 ```
+# test
