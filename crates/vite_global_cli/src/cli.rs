@@ -713,6 +713,7 @@ pub enum EnvSubcommands {
     },
 
     /// Uninstall a Node.js version
+    #[command(alias = "uni")]
     Uninstall {
         /// Version to uninstall (e.g., "20.18.0")
         #[arg(required = true)]
@@ -720,6 +721,7 @@ pub enum EnvSubcommands {
     },
 
     /// Install a Node.js version
+    #[command(alias = "i")]
     Install {
         /// Version to install (e.g., "20", "20.18.0", "lts", "latest")
         /// If not provided, installs the version from .node-version or package.json
