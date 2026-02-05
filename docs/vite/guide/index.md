@@ -49,7 +49,7 @@ vp env help               # Show all commands
 Create a Vite+ project:
 
 ```bash
-vite new
+vp new
 ```
 
 Follow the prompts to select your preferred framework and configuration.
@@ -60,16 +60,16 @@ Vite+ provides built-in commands that work seamlessly in both single-package and
 
 ```bash
 # Development
-vite dev              # Start dev server
+vp dev              # Start dev server
 
 # Build
-vite build            # Build for production
+vp build            # Build for production
 
 # Test
-vite test             # Run tests
+vp test             # Run tests
 
 # Lint
-vite lint             # Lint code with oxlint
+vp lint             # Lint code with oxlint
 ```
 
 ## Monorepo Task Execution
@@ -79,21 +79,21 @@ Vite+ includes a powerful task runner for managing tasks across monorepo package
 ### Run tasks recursively
 
 ```bash
-vite run build -r              # Build all packages with topological ordering
-vite run test -r               # Test all packages
+vp run build -r              # Build all packages with topological ordering
+vp run test -r               # Test all packages
 ```
 
 ### Run tasks for specific packages
 
 ```bash
-vite run app#build web#build   # Build specific packages
-vite run @scope/*#test         # Test all packages matching pattern
+vp run app#build web#build   # Build specific packages
+vp run @scope/*#test         # Test all packages matching pattern
 ```
 
 ### Current package
 
 ```bash
-vite dev                       # Run dev script in current package
+vp dev                       # Run dev script in current package
 ```
 
 ## Task Dependencies
@@ -119,7 +119,7 @@ Tasks automatically respect dependencies:
 Disable topological ordering:
 
 ```bash
-vite run build -r --no-topological
+vp run build -r --no-topological
 ```
 
 ## Intelligent Caching
@@ -133,7 +133,7 @@ Vite+ caches task outputs to speed up repeated builds:
 View cache operations:
 
 ```bash
-vite run build -r --debug
+vp run build -r --debug
 ```
 
 ## Next Steps
