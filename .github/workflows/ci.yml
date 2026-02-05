@@ -233,7 +233,7 @@ jobs:
           where.exe vp
 
           # Test 1: Install a JS-based CLI (typescript)
-          npm install -g typescript
+          vp install -g typescript
           tsc --version
           where.exe tsc
 
@@ -265,7 +265,7 @@ jobs:
           where.exe vp
 
           :: Test 1: Install a JS-based CLI (typescript)
-          npm install -g typescript
+          vp install -g typescript
           tsc --version
           where.exe tsc
 
@@ -303,7 +303,7 @@ jobs:
           which vp
 
           # Test 1: Install a JS-based CLI (typescript)
-          npm install -g typescript
+          vp install -g typescript
           tsc --version
           which tsc
 
