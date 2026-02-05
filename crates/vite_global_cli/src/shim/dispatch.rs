@@ -5,7 +5,7 @@
 //! 2. Node.js installation (if needed)
 //! 3. Tool execution (core tools and package binaries)
 
-use vite_path::AbsolutePathBuf;
+use vite_path::{AbsolutePathBuf, current_dir};
 use vite_shared::{PrependOptions, prepend_to_path_env};
 
 use super::{
@@ -63,14 +63,8 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     }
 
     // Get current working directory
-    let cwd = match std::env::current_dir() {
-        Ok(path) => match AbsolutePathBuf::new(path) {
-            Some(abs_path) => abs_path,
-            None => {
-                eprintln!("vp: Invalid current directory path");
-                return 1;
-            }
-        },
+    let cwd = match current_dir() {
+        Ok(path) => path,
         Err(e) => {
             eprintln!("vp: Failed to get current directory: {e}");
             return 1;
@@ -412,7 +406,7 @@ fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
     let filtered_path = std::env::join_paths(filtered_paths).ok()?;
 
     // Use which::which_in with filtered PATH - stops at first match
-    let cwd = std::env::current_dir().ok()?;
+    let cwd = current_dir().ok()?;
     let path = which::which_in(tool, Some(filtered_path), cwd).ok()?;
     AbsolutePathBuf::new(path)
 }

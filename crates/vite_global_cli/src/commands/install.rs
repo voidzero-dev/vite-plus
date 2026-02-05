@@ -64,6 +64,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_install_command_with_package_json_with_package_manager() {
         let temp_dir = TempDir::new().unwrap();
         let workspace_root = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
