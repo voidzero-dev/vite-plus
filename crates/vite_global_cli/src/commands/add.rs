@@ -36,6 +36,7 @@ impl AddCommand {
         pass_through_args: Option<&[String]>,
     ) -> Result<ExitStatus, Error> {
         prepend_js_runtime_to_path_env(&self.cwd).await?;
+        super::ensure_package_json(&self.cwd).await?;
 
         let add_command_options = AddCommandOptions {
             packages,
