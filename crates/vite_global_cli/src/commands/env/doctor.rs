@@ -2,6 +2,7 @@
 
 use std::process::ExitStatus;
 
+use owo_colors::OwoColorize;
 use vite_path::{AbsolutePathBuf, current_dir};
 
 use super::config::{ShimMode, get_bin_dir, get_vite_plus_home, load_config, resolve_version};
@@ -22,11 +23,6 @@ const SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
 
 /// Execute the doctor command.
 pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
-    println!();
-    println!("VP Environment Doctor");
-    println!("=====================");
-    println!();
-
     let mut has_errors = false;
 
     // Check VITE_PLUS_HOME
@@ -54,12 +50,12 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
     println!();
     if has_errors {
-        println!("Some issues were found. Please address them for optimal operation.");
+        println!("{}", "Some issues were found. Please address them for optimal operation.".red());
+        Ok(super::exit_status(1))
     } else {
-        println!("No issues detected.");
+        println!("{}", "\u{2713} All good! Your environment is set up correctly.".green());
+        Ok(ExitStatus::default())
     }
-
-    Ok(ExitStatus::default())
 }
 
 /// Check VITE_PLUS_HOME directory.
@@ -68,7 +64,7 @@ async fn check_vite_plus_home() -> bool {
         Ok(h) => h,
         Err(e) => {
             println!("VITE_PLUS_HOME: <error>");
-            println!("  \u{2717} {e}");
+            println!("  {}", format!("\u{2717} {e}").red());
             return false;
         }
     };
@@ -76,10 +72,10 @@ async fn check_vite_plus_home() -> bool {
     println!("VITE_PLUS_HOME: {}", home.as_path().display());
 
     if tokio::fs::try_exists(&home).await.unwrap_or(false) {
-        println!("  \u{2713} Directory exists");
+        println!("  {}", "\u{2713} Directory exists".green());
         true
     } else {
-        println!("  \u{2717} Directory does not exist");
+        println!("  {}", "\u{2717} Directory does not exist".red());
         println!("  Run 'vp env setup' to create it.");
         false
     }
@@ -93,12 +89,12 @@ async fn check_bin_dir() -> bool {
     };
 
     if !tokio::fs::try_exists(&bin_dir).await.unwrap_or(false) {
-        println!("  \u{2717} Bin directory does not exist");
+        println!("  {}", "\u{2717} Bin directory does not exist".red());
         println!("  Run 'vp env setup' to create bin directory.");
         return false;
     }
 
-    println!("  \u{2713} Bin directory exists");
+    println!("  {}", "\u{2713} Bin directory exists".green());
 
     let mut all_present = true;
     let mut missing = Vec::new();
@@ -114,10 +110,10 @@ async fn check_bin_dir() -> bool {
     }
 
     if all_present {
-        println!("  \u{2713} All shims present (node, npm, npx)");
+        println!("  {}", "\u{2713} All shims present (node, npm, npx)".green());
         true
     } else {
-        println!("  \u{2717} Missing shims: {}", missing.join(", "));
+        println!("  {}", format!("\u{2717} Missing shims: {}", missing.join(", ")).red());
         println!("  Run 'vp env setup' to create missing shims.");
         false
     }
@@ -145,7 +141,7 @@ async fn check_shim_mode() {
     let config = match load_config().await {
         Ok(c) => c,
         Err(e) => {
-            println!("  \u{26A0} Failed to load config: {e}");
+            println!("  {}", format!("\u{26A0} Failed to load config: {e}").yellow());
             return;
         }
     };
@@ -153,17 +149,17 @@ async fn check_shim_mode() {
     match config.shim_mode {
         ShimMode::Managed => {
             println!("  Mode: managed");
-            println!("  \u{2713} Shims always use vite-plus managed Node.js");
+            println!("  {}", "\u{2713} Shims always use vite-plus managed Node.js".green());
         }
         ShimMode::SystemFirst => {
             println!("  Mode: system-first");
-            println!("  \u{2713} Shims prefer system Node.js, fallback to managed");
+            println!("  {}", "\u{2713} Shims prefer system Node.js, fallback to managed".green());
 
             // Check if system Node.js is available
             if let Some(system_node) = find_system_node() {
                 println!("  System Node.js: {}", system_node.display());
             } else {
-                println!("  \u{26A0} No system Node.js found (will use managed)");
+                println!("  {}", "\u{26A0} No system Node.js found (will use managed)".yellow());
             }
         }
     }
@@ -209,34 +205,40 @@ async fn check_path() -> bool {
 
     match bin_position {
         Some(0) => {
-            println!("  \u{2713} VP bin first in PATH");
+            println!("  {}", "\u{2713} Vite+ bin first in PATH".green());
         }
         Some(pos) => {
-            println!("  \u{26A0} VP bin in PATH at position {pos}");
+            println!("  {}", format!("\u{26A0} Vite+ bin in PATH at position {pos}").yellow());
             println!("  For best results, bin should be first in PATH.");
         }
         None => {
-            println!("  \u{2717} VP bin not in PATH");
+            println!("  {}", "\u{2717} Vite+ bin not in PATH".red());
+            println!("    Expected: {}", bin_dir.as_path().display());
             println!();
             print_path_fix(&bin_dir);
             return false;
         }
     }
 
-    // Show which node would be executed
-    if let Some(node_path) = find_in_path("node") {
-        let expected_node = bin_dir.join(shim_filename("node"));
-        if node_path == expected_node.as_path() {
-            println!();
-            println!("  node \u{2192} {} (vp shim)", node_path.display());
+    // Show which tool would be executed for each shim
+    println!();
+    for tool in SHIM_TOOLS {
+        if let Some(tool_path) = find_in_path(tool) {
+            let expected = bin_dir.join(shim_filename(tool));
+            if tool_path == expected.as_path() {
+                println!(
+                    "  {}",
+                    format!("{tool} \u{2192} {} (vp shim)", tool_path.display()).green()
+                );
+            } else {
+                println!(
+                    "  {}",
+                    format!("{tool} \u{2192} {} (not vp shim)", tool_path.display()).yellow()
+                );
+            }
         } else {
-            println!();
-            println!("  Found 'node' at: {} (not vp shim)", node_path.display());
-            println!("  Expected: {}", expected_node.as_path().display());
+            println!("  {tool} \u{2192} not found");
         }
-    } else {
-        println!();
-        println!("  No 'node' found in PATH");
     }
 
     true
@@ -249,64 +251,135 @@ fn find_in_path(name: &str) -> Option<std::path::PathBuf> {
 
 /// Print PATH fix instructions for shell setup.
 fn print_path_fix(bin_dir: &vite_path::AbsolutePath) {
-    let bin_path = bin_dir.as_path().display();
+    #[cfg(not(windows))]
+    {
+        // Derive vite_plus_home from bin_dir (parent), using $HOME prefix for readability
+        let home_path = bin_dir
+            .parent()
+            .map(|p| p.as_path().display().to_string())
+            .unwrap_or_else(|| bin_dir.as_path().display().to_string());
+        let home_path = if let Ok(home_dir) = std::env::var("HOME") {
+            if let Some(suffix) = home_path.strip_prefix(&home_dir) {
+                format!("$HOME{suffix}")
+            } else {
+                home_path
+            }
+        } else {
+            home_path
+        };
 
-    println!("Shell Setup (for terminal usage):");
-
-    // Detect shell
-    let shell = std::env::var("SHELL").unwrap_or_default();
-    if shell.ends_with("zsh") {
-        println!("  Add to ~/.zshrc:");
-    } else if shell.ends_with("bash") {
-        println!("  Add to ~/.bashrc:");
-    } else if shell.ends_with("fish") {
-        println!("  Add to ~/.config/fish/config.fish:");
-        println!("    set -gx PATH \"{bin_path}\" $PATH");
+        println!("  Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):");
+        println!();
+        println!("    . \"{home_path}/env\"");
+        println!();
+        println!("  For fish shell, add to ~/.config/fish/config.fish:");
+        println!();
+        println!("    source \"{home_path}/env.fish\"");
         println!();
         println!("  Then restart your terminal.");
-        return;
-    } else {
-        println!("  Add to your shell profile:");
     }
 
-    println!("    export PATH=\"{bin_path}:$PATH\"");
-    println!();
-    println!("  Then restart your terminal.");
+    #[cfg(windows)]
+    {
+        let _ = bin_dir;
+        println!("  Add the bin directory to your PATH via:");
+        println!("    System Properties -> Environment Variables -> Path");
+        println!();
+        println!("  Then restart your terminal.");
+    }
+}
+
+/// Check profile files for vite-plus env sourcing line.
+///
+/// Returns `Some(display_path)` if any known profile file contains a reference
+/// to the vite-plus env file, `None` otherwise.
+#[cfg(not(windows))]
+fn check_profile_files(vite_plus_home: &str) -> Option<String> {
+    let home_dir = std::env::var("HOME").ok()?;
+    let env_path = format!("{vite_plus_home}/env");
+
+    #[cfg(target_os = "macos")]
+    let profile_files: &[&str] = &[".zshenv", ".profile"];
+
+    #[cfg(target_os = "linux")]
+    let profile_files: &[&str] = &[".profile"];
+
+    // Fallback for other Unix platforms
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    let profile_files: &[&str] = &[".profile"];
+
+    for file in profile_files {
+        let full_path = format!("{home_dir}/{file}");
+        if let Ok(content) = std::fs::read_to_string(&full_path) {
+            if content.contains(&env_path) {
+                return Some(format!("~/{file}"));
+            }
+        }
+    }
+
+    None
 }
 
 /// Print IDE setup guidance for GUI applications.
-fn print_ide_setup_guidance(_bin_dir: &vite_path::AbsolutePath) {
-    println!();
-    println!("IDE Setup (for VS Code, Cursor, and other GUI apps):");
-    println!("  GUI applications may not see shell PATH changes.");
-    println!();
-
-    #[cfg(target_os = "macos")]
+fn print_ide_setup_guidance(bin_dir: &vite_path::AbsolutePath) {
+    // On Windows, IDE PATH is handled by System Environment Variables (covered by check_path)
+    #[cfg(windows)]
     {
-        println!("  macOS:");
-        println!("    Option 1: Add to ~/.profile (works for most apps after restart)");
-        println!("    Option 2: Use launchctl to set PATH for all GUI apps:");
-        println!("      launchctl setenv PATH \"{}:$PATH\"", _bin_dir.as_path().display());
-        println!();
+        let _ = bin_dir;
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(not(windows))]
     {
-        println!("  Linux:");
-        println!("    Add to ~/.profile for display manager integration.");
-        println!("    Then log out and log back in for changes to take effect.");
-        println!();
-    }
+        // Derive vite_plus_home display path from bin_dir.parent(), using $HOME prefix
+        let home_path = bin_dir
+            .parent()
+            .map(|p| p.as_path().display().to_string())
+            .unwrap_or_else(|| bin_dir.as_path().display().to_string());
+        let home_path = if let Ok(home_dir) = std::env::var("HOME") {
+            if let Some(suffix) = home_path.strip_prefix(&home_dir) {
+                format!("$HOME{suffix}")
+            } else {
+                home_path
+            }
+        } else {
+            home_path
+        };
 
-    #[cfg(target_os = "windows")]
-    {
-        println!("  Windows:");
-        println!("    The PATH should already be set in User Environment Variables.");
-        println!("    If not, add it via: System Properties -> Environment Variables -> Path");
         println!();
-    }
 
-    println!("  After setup, restart your IDE to apply changes.");
+        if let Some(file) = check_profile_files(&home_path) {
+            println!("IDE Setup:");
+            println!("  {}", format!("\u{2713} Found env sourcing in {file}").green());
+        } else {
+            println!("IDE Setup (for VS Code, Cursor, and other GUI apps):");
+            println!("  {}", "\u{26A0} GUI applications may not see shell PATH changes.".yellow());
+            println!();
+
+            #[cfg(target_os = "macos")]
+            {
+                println!("  macOS:");
+                println!("    Add to ~/.zshenv or ~/.profile:");
+                println!("      . \"{home_path}/env\"");
+                println!("    Then restart your IDE to apply changes.");
+            }
+
+            #[cfg(target_os = "linux")]
+            {
+                println!("  Linux:");
+                println!("    Add to ~/.profile:");
+                println!("      . \"{home_path}/env\"");
+                println!("    Then log out and log back in for changes to take effect.");
+            }
+
+            // Fallback for other Unix platforms
+            #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+            {
+                println!("    Add to your shell profile:");
+                println!("      . \"{home_path}/env\"");
+                println!("    Then restart your IDE to apply changes.");
+            }
+        }
+    }
 }
 
 /// Check current directory version resolution.
@@ -335,14 +408,18 @@ async fn check_current_resolution(cwd: &AbsolutePathBuf) {
 
             if tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
                 println!("  Node Path: {}", binary_path.as_path().display());
-                println!("  \u{2713} Node binary exists");
+                println!("  {}", "\u{2713} Node binary exists".green());
             } else {
-                println!("  \u{26A0} Node {version} not installed", version = resolution.version);
+                println!(
+                    "  {}",
+                    format!("\u{26A0} Node {version} not installed", version = resolution.version)
+                        .yellow()
+                );
                 println!("  It will be downloaded on first use.");
             }
         }
         Err(e) => {
-            println!("  \u{2717} Failed to resolve version: {e}");
+            println!("  {}", format!("\u{2717} Failed to resolve version: {e}").red());
         }
     }
 }
@@ -378,11 +455,11 @@ fn check_conflicts() {
     }
 
     if conflicts.is_empty() {
-        println!("No conflicts detected.");
+        println!("{}", "No conflicts detected.".green());
     } else {
-        println!("Potential Conflicts Detected:");
+        println!("{}", "Potential Conflicts Detected:".yellow());
         for manager in &conflicts {
-            println!("  \u{26A0} {manager} is installed");
+            println!("  {}", format!("\u{26A0} {manager} is installed").yellow());
         }
         println!();
         println!("  Consider removing other version managers from your PATH");
