@@ -249,7 +249,7 @@ jobs:
 
       - name: 'Setup npm'
         run: |
-          vp install -g npm@latest
+          npm install -g npm@latest
 
       - name: Publish native addons
         run: |
