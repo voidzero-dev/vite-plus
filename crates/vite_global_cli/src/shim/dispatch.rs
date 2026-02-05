@@ -13,6 +13,7 @@ use super::{
     exec, is_core_shim_tool,
 };
 use crate::commands::env::{
+    bin_config::BinConfig,
     config::{self, ShimMode},
     package_metadata::PackageMetadata,
 };
@@ -197,15 +198,15 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
 }
 
 /// Find the package that provides a given binary.
+///
+/// Uses BinConfig for deterministic O(1) lookup instead of scanning all packages.
 async fn find_package_for_binary(binary_name: &str) -> Result<Option<PackageMetadata>, String> {
-    let packages = PackageMetadata::list_all().await.map_err(|e| format!("{e}"))?;
-
-    for package in packages {
-        if package.bins.contains(&binary_name.to_string()) {
-            return Ok(Some(package));
-        }
+    // Use BinConfig for deterministic lookup
+    if let Some(bin_config) = BinConfig::load(binary_name).await.map_err(|e| format!("{e}"))? {
+        return PackageMetadata::load(&bin_config.package).await.map_err(|e| format!("{e}"));
     }
 
+    // Binary not installed
     Ok(None)
 }
 
@@ -481,7 +482,8 @@ async fn handle_global_install(packages: &[String]) -> i32 {
 
     for package in packages {
         println!("vp: Installing global package: {}", package);
-        if let Err(e) = global_install::install(package, None).await {
+        // When intercepting npm install -g, don't use force by default
+        if let Err(e) = global_install::install(package, None, false).await {
             eprintln!("vp: Failed to install {}: {}", package, e);
             return 1;
         }

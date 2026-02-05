@@ -110,6 +110,9 @@ vp env install typescript@5.0.0
 vp env install --node 22 typescript
 vp env install --node lts typescript
 
+# Force install (auto-uninstalls conflicting packages)
+vp env install --force eslint-v9    # Removes 'eslint' if it provides same binary
+
 # List installed global packages
 vp env packages
 vp env packages --json
@@ -293,6 +296,10 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 │   ├── typescript.json               # Package metadata
 │   ├── eslint/
 │   └── eslint.json
+├── bins/                             # Per-binary config files (tracks ownership)
+│   ├── tsc.json                      # { "package": "typescript", ... }
+│   ├── tsserver.json
+│   └── eslint.json
 ├── shared/                           # NODE_PATH symlinks
 │   ├── typescript -> ../packages/typescript/lib/node_modules/typescript
 │   └── eslint -> ../packages/eslint/lib/node_modules/eslint
@@ -311,6 +318,7 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 | `current/bin/`     | The actual vp CLI binary (bin/ shims point here)                   |
 | `js_runtime/node/` | Installed Node.js versions                                         |
 | `packages/`        | Installed global packages with metadata                            |
+| `bins/`            | Per-binary config files (tracks which package owns each binary)    |
 | `shared/`          | NODE_PATH symlinks for package require() resolution                |
 | `tmp/`             | Staging area for atomic installations                              |
 | `cache/`           | Resolution cache                                                   |
@@ -1376,6 +1384,103 @@ npm uninstall -g typescript
 vp env uninstall typescript
 ```
 
+### Binary Conflict Handling
+
+When two packages provide the same binary name (e.g., both `eslint` and `eslint-v9` provide an `eslint` binary), vite-plus uses a **Volta-style hard fail** approach:
+
+#### Conflict Detection
+
+Each binary has a per-binary config file that tracks which package owns it:
+
+```
+~/.vite-plus/
+  packages/
+    typescript.json      # Package metadata
+    eslint.json
+  bins/                  # Per-binary config files
+    tsc.json             # { "package": "typescript", ... }
+    tsserver.json
+    eslint.json          # { "package": "eslint", ... }
+```
+
+**Binary config format** (`~/.vite-plus/bins/tsc.json`):
+
+```json
+{
+  "name": "tsc",
+  "package": "typescript",
+  "version": "5.7.0",
+  "nodeVersion": "20.18.0"
+}
+```
+
+#### Default Behavior: Hard Fail
+
+When installing a package that provides a binary already owned by another package, the installation **fails with a clear error**:
+
+```bash
+$ vp env install eslint-v9
+  Installing eslint-v9 globally...
+
+error: Executable 'eslint' is already installed by eslint
+
+Please remove eslint before installing eslint-v9, or use --force to auto-replace
+```
+
+This approach:
+
+- Prevents silent binary masking
+- Makes conflicts explicit and visible
+- Requires intentional user action to resolve
+
+#### Force Mode: Auto-Uninstall
+
+The `--force` flag automatically uninstalls the conflicting package before installing the new one:
+
+```bash
+$ vp env install eslint-v9 --force
+  Installing eslint-v9 globally...
+  Uninstalling eslint (conflicts with eslint-v9)...
+  Uninstalled eslint
+  Running npm install...
+  Installed eslint-v9 v9.0.0
+  Binaries: eslint
+```
+
+**Important**: `--force` completely removes the conflicting package (not just the binary). This ensures a clean state without orphaned files.
+
+#### Two-Phase Uninstall
+
+Uninstall uses a resilient two-phase approach (inspired by Volta):
+
+1. **Phase 1**: Try to use `PackageMetadata` to get binary names
+2. **Phase 2**: If metadata is missing, scan `bins/` directory for orphaned binary configs
+
+This allows recovery even if package metadata is corrupted or manually deleted.
+
+```bash
+# Normal uninstall
+$ vp env uninstall typescript
+  Uninstalling typescript...
+  Uninstalled typescript
+
+# Recovery mode (if typescript.json is missing)
+$ vp env uninstall typescript
+  Uninstalling typescript...
+  Note: Package metadata not found, scanning for orphaned binaries...
+  Uninstalled typescript
+```
+
+#### Deterministic Binary Resolution
+
+Binary execution uses per-binary config for deterministic lookup:
+
+1. Check `~/.vite-plus/bins/{binary}.json` for owner package
+2. Load package metadata to get Node.js version and binary path
+3. If not found, the binary is not installed (no fallback scanning)
+
+This eliminates the non-deterministic behavior of filesystem iteration order.
+
 ### Environment Variable: VITE_PLUS_UNSAFE_GLOBAL
 
 Set `VITE_PLUS_UNSAFE_GLOBAL=1` to bypass global package interception:
@@ -1818,6 +1923,10 @@ env-doctor/
 8. Implement `vp env packages` to list installed global packages
 9. Implement `vp env uninstall <package>` command
 10. Implement `vp env install <package>` command with `--node` flag
+11. Implement per-binary config files (`bins/`) for conflict detection
+12. Implement binary conflict detection (hard fail by default)
+13. Implement `--force` flag for auto-uninstall on conflict
+14. Implement two-phase uninstall with orphan recovery
 
 ### Phase 3: Polish (P2)
 

@@ -3,6 +3,7 @@
 //! This module provides the `vp env` command for managing Node.js environments
 //! through shim-based version management.
 
+pub mod bin_config;
 pub mod config;
 mod current;
 mod default;
@@ -60,9 +61,9 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
                 }
                 Ok(ExitStatus::default())
             }
-            crate::cli::EnvSubcommands::Install { node, packages } => {
+            crate::cli::EnvSubcommands::Install { node, force, packages } => {
                 for package in &packages {
-                    if let Err(e) = global_install::install(package, node.as_deref()).await {
+                    if let Err(e) = global_install::install(package, node.as_deref(), force).await {
                         eprintln!("Failed to install {}: {}", package, e);
                         return Ok(exit_status(1));
                     }
