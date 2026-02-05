@@ -1,7 +1,8 @@
 {
   "ignoredPlatforms": ["linux", "win32"],
   "env": {
-    "VITE_DISABLE_AUTO_INSTALL": "1"
+    "VITE_DISABLE_AUTO_INSTALL": "1",
+    "NODE_OPTIONS": "--no-deprecation"
   },
   "commands": [
     "vite install --help # print help message",

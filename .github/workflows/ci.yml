@@ -254,6 +254,12 @@ jobs:
           }
           Write-Host "tsc shim removed successfully"
 
+          # Test 5: use session
+          vp env use 18
+          node --version
+          vp env use --unset
+          node --version
+
       - name: Test global package install (cmd)
         if: ${{ matrix.os == 'windows-latest' }}
         shell: cmd
@@ -292,6 +298,12 @@ jobs:
           )
           echo tsc shell script removed successfully
 
+          :: Test 6: use session
+          vp env use 18
+          node --version
+          vp env use --unset
+          node --version
+
       - name: Test global package install (bash)
         run: |
           echo "PATH: $PATH"
@@ -322,6 +334,12 @@ jobs:
             exit 1
           fi
           echo "tsc shim removed successfully"
+
+          # Test 5: use session
+          vp env use 18
+          node --version
+          vp env use --unset
+          node --version
 
       - name: Install Playwright browsers
         run: pnpx playwright install chromium

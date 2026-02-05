@@ -93,10 +93,14 @@ vp env unpin          # Alternative syntax
 # Skip pre-downloading the pinned version
 vp env pin 20.18.0 --no-install
 
-# List available Node.js versions
+# List locally installed Node.js versions
 vp env list
-vp env list --lts     # Show only LTS versions
-vp env list 20        # Show versions matching pattern
+vp env ls             # Alias
+
+# List available Node.js versions from the registry
+vp env list-remote
+vp env list-remote --lts     # Show only LTS versions
+vp env list-remote 20        # Show versions matching pattern
 ```
 
 ### Session Version Override
@@ -1353,7 +1357,7 @@ Error: Invalid Node.js version: invalid
 # Version doesn't exist
 $ vp env pin 99.0.0
 Error: Node.js version 99.0.0 does not exist
-  Run 'vp env list' to see available versions
+  Run 'vp env list-remote' to see available versions
 
 # Network error during alias resolution
 $ vp env pin lts
@@ -1663,62 +1667,92 @@ done
 echo "All tests passed!"
 ```
 
-## List Command
+## List Command (Local)
 
-The `vp env list` command displays available Node.js versions.
+The `vp env list` (alias `ls`) command displays locally installed Node.js versions.
 
 ### Usage
 
 ```bash
-# List recent versions (default: last 10 major versions)
 $ vp env list
-Available Node.js versions:
-
-  LTS Versions:
-    22.13.0 (Jod)      ← Latest LTS
-    20.18.0 (Iron)
-    18.20.0 (Hydrogen)
-
-  Current:
-    24.0.0             ← Latest
-
-  Use 'vp env pin <version>' to pin a version.
-  Use 'vp env list --all' to see all versions.
-
-# List only LTS versions
-$ vp env list --lts
-LTS Node.js versions:
-  22.13.0 (Jod)        ← Latest LTS
-  22.12.0 (Jod)
-  22.11.0 (Jod)
-  ...
-  20.18.0 (Iron)
-  ...
-
-# Filter by major version
-$ vp env list 20
-Node.js 20.x versions:
-  20.18.0 (Iron LTS)
-  20.17.0
-  20.16.0
-  ...
-
-# Show all versions
-$ vp env list --all
+* v18.20.0
+* v20.18.0 default
+* v22.13.0 current
 ```
+
+- Current version line is highlighted in cyan
+- `current` and `default` markers are shown in dimmed text
 
 ### Flags
 
-| Flag     | Description                         |
-| -------- | ----------------------------------- |
-| `--lts`  | Show only LTS versions              |
-| `--all`  | Show all versions (not just recent) |
-| `--json` | Output as JSON                      |
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
 
 ### JSON Output
 
 ```bash
 $ vp env list --json
+[
+  {"version": "18.20.0", "current": false, "default": false},
+  {"version": "20.18.0", "current": false, "default": true},
+  {"version": "22.13.0", "current": true, "default": false}
+]
+```
+
+### Empty State
+
+```bash
+$ vp env list
+No Node.js versions installed.
+
+Install a version with: vp env install <version>
+```
+
+## List-Remote Command
+
+The `vp env list-remote` (alias `ls-remote`) command displays available Node.js versions from the registry.
+
+### Usage
+
+```bash
+# List recent versions (default: last 10 major versions, ascending order)
+$ vp env list-remote
+v20.0.0
+v20.1.0
+...
+v20.18.0 (Iron)
+v22.0.0
+...
+v22.13.0 (Jod)
+v24.0.0
+
+# List only LTS versions
+$ vp env list-remote --lts
+
+# Filter by major version
+$ vp env list-remote 20
+
+# Show all versions
+$ vp env list-remote --all
+
+# Sort newest first
+$ vp env list-remote --sort desc
+```
+
+### Flags
+
+| Flag                 | Description                         |
+| -------------------- | ----------------------------------- |
+| `--lts`              | Show only LTS versions              |
+| `--all`              | Show all versions (not just recent) |
+| `--json`             | Output as JSON                      |
+| `--sort <asc\|desc>` | Sorting order (default: asc)        |
+
+### JSON Output
+
+```bash
+$ vp env list-remote --json
 {
   "versions": [
     {"version": "24.0.0", "lts": false, "latest": true},
@@ -1974,7 +2008,7 @@ env-doctor/
 8. Implement `vp env on` and `vp env off` for shim mode control
 9. Implement `vp env pin [version]` for per-directory version pinning
 10. Implement `vp env unpin` as alias for `pin --unpin`
-11. Implement `vp env list` to show available versions
+11. Implement `vp env list` (local) and `vp env list-remote` (remote) to show versions
 12. Implement recursion prevention (`VITE_PLUS_TOOL_RECURSION`)
 13. Implement `vp env run --node <version>` command
 

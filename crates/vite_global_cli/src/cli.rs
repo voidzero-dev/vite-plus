@@ -670,8 +670,17 @@ pub enum EnvSubcommands {
     /// Remove the .node-version file from current directory (alias for `pin --unpin`)
     Unpin,
 
-    /// List available Node.js versions
+    /// List locally installed Node.js versions
+    #[command(alias = "ls")]
     List {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List available Node.js versions from the registry
+    #[command(name = "list-remote", alias = "ls-remote")]
+    ListRemote {
         /// Filter versions by pattern (e.g., "20" for 20.x versions)
         pattern: Option<String>,
 
@@ -686,6 +695,10 @@ pub enum EnvSubcommands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+
+        /// Version sorting order
+        #[arg(long, value_enum, default_value_t = SortingMethod::Asc)]
+        sort: SortingMethod,
     },
 
     /// Run a command with a specific Node.js version
@@ -746,6 +759,16 @@ pub enum EnvSubcommands {
         #[arg(long)]
         silent_if_unchanged: bool,
     },
+}
+
+/// Version sorting order for list-remote command
+#[derive(clap::ValueEnum, Clone, Debug, Default)]
+pub enum SortingMethod {
+    /// Sort versions in ascending order (earliest to latest)
+    #[default]
+    Asc,
+    /// Sort versions in descending order (latest to earliest)
+    Desc,
 }
 
 /// Package manager subcommands
