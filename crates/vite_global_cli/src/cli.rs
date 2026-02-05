@@ -135,6 +135,10 @@ pub enum Commands {
         #[arg(short = 'g', long)]
         global: bool,
 
+        /// Node.js version to use for global installation (only with -g)
+        #[arg(long, requires = "global")]
+        node: Option<String>,
+
         /// Packages to add (if provided, acts as `vp add`)
         #[arg(required = false)]
         packages: Option<Vec<String>>,
@@ -193,6 +197,10 @@ pub enum Commands {
         /// Install globally
         #[arg(short = 'g', long)]
         global: bool,
+
+        /// Node.js version to use for global installation (only with -g)
+        #[arg(long, requires = "global")]
+        node: Option<String>,
 
         /// Packages to add
         #[arg(required = true)]
@@ -700,27 +708,18 @@ pub enum EnvSubcommands {
         json: bool,
     },
 
-    /// Uninstall a global package
+    /// Uninstall a Node.js version
     Uninstall {
-        /// Package name(s) to uninstall
+        /// Version to uninstall (e.g., "20.18.0")
         #[arg(required = true)]
-        packages: Vec<String>,
+        version: String,
     },
 
-    /// Install a global package
+    /// Install a Node.js version
     Install {
-        /// Node.js version to use for installation (e.g., "20.18.0", "lts", "^20.0.0")
-        /// If not provided, uses the resolved version from current directory
-        #[arg(long)]
-        node: Option<String>,
-
-        /// Force install by auto-uninstalling conflicting packages
-        #[arg(short = 'f', long)]
-        force: bool,
-
-        /// Package spec(s) to install (e.g., "typescript", "typescript@5.0.0")
-        #[arg(required = true)]
-        packages: Vec<String>,
+        /// Version to install (e.g., "20", "20.18.0", "lts", "latest")
+        /// If not provided, installs the version from .node-version or package.json
+        version: Option<String>,
     },
 }
 
@@ -1102,6 +1101,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             save_optional,
             save_catalog,
             global,
+            node,
             packages,
             pass_through_args,
         } => {
@@ -1109,6 +1109,20 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             if let Some(pkgs) = packages
                 && !pkgs.is_empty()
             {
+                // Handle global install via vite-plus managed global install
+                if global {
+                    use crate::commands::env::global_install;
+                    for package in &pkgs {
+                        if let Err(e) =
+                            global_install::install(package, node.as_deref(), force).await
+                        {
+                            eprintln!("Failed to install {}: {}", package, e);
+                            return Ok(exit_status(1));
+                        }
+                    }
+                    return Ok(ExitStatus::default());
+                }
+
                 let save_dependency_type =
                     determine_save_dependency_type(dev, save_peer, save_optional, prod);
 
@@ -1165,9 +1179,22 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             workspace_root,
             workspace,
             global,
+            node,
             packages,
             pass_through_args,
         } => {
+            // Handle global install via vite-plus managed global install
+            if global {
+                use crate::commands::env::global_install;
+                for package in &packages {
+                    if let Err(e) = global_install::install(package, node.as_deref(), false).await {
+                        eprintln!("Failed to install {}: {}", package, e);
+                        return Ok(exit_status(1));
+                    }
+                }
+                return Ok(ExitStatus::default());
+            }
+
             let save_dependency_type =
                 determine_save_dependency_type(save_dev, save_peer, save_optional, save_prod);
 
@@ -1201,6 +1228,18 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             packages,
             pass_through_args,
         } => {
+            // Handle global uninstall via vite-plus managed global install
+            if global {
+                use crate::commands::env::global_install;
+                for package in &packages {
+                    if let Err(e) = global_install::uninstall(package).await {
+                        eprintln!("Failed to uninstall {}: {}", package, e);
+                        return Ok(exit_status(1));
+                    }
+                }
+                return Ok(ExitStatus::default());
+            }
+
             RemoveCommand::new(cwd)
                 .execute(
                     &packages,
@@ -1231,6 +1270,29 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             packages,
             pass_through_args,
         } => {
+            // Handle global update via vite-plus managed global install
+            if global {
+                use crate::commands::env::{global_install, package_metadata::PackageMetadata};
+
+                let packages_to_update = if packages.is_empty() {
+                    let all = PackageMetadata::list_all().await?;
+                    if all.is_empty() {
+                        println!("No global packages installed.");
+                        return Ok(ExitStatus::default());
+                    }
+                    all.iter().map(|p| p.name.clone()).collect::<Vec<_>>()
+                } else {
+                    packages.clone()
+                };
+                for package in &packages_to_update {
+                    if let Err(e) = global_install::install(package, None, false).await {
+                        eprintln!("Failed to update {}: {}", package, e);
+                        return Ok(exit_status(1));
+                    }
+                }
+                return Ok(ExitStatus::default());
+            }
+
             UpdateCommand::new(cwd)
                 .execute(
                     &packages,
@@ -1376,6 +1438,20 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
         Commands::Cache { args } => commands::delegate::execute(cwd, "cache", &args).await,
 
         Commands::Env(args) => commands::env::execute(cwd, args).await,
+    }
+}
+
+/// Create an exit status with the given code.
+fn exit_status(code: i32) -> ExitStatus {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        ExitStatus::from_raw(code << 8)
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::ExitStatusExt;
+        ExitStatus::from_raw(code as u32)
     }
 }
 

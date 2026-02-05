@@ -54,22 +54,45 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
                 run::execute(node.as_deref(), npm.as_deref(), &command).await
             }
             crate::cli::EnvSubcommands::Packages { json } => packages::execute(json).await,
-            crate::cli::EnvSubcommands::Uninstall { packages } => {
-                for package in packages {
-                    if let Err(e) = global_install::uninstall(&package).await {
-                        eprintln!("Failed to uninstall {}: {}", package, e);
-                        return Ok(exit_status(1));
-                    }
+            crate::cli::EnvSubcommands::Uninstall { version } => {
+                let provider = vite_js_runtime::NodeProvider::new();
+                let resolved = config::resolve_version_alias(&version, &provider).await?;
+                let home_dir = vite_shared::get_vite_plus_home()
+                    .map_err(|e| crate::error::Error::ConfigError(format!("{e}").into()))?;
+                let version_dir = home_dir.join("js_runtime").join("node").join(&resolved);
+                if !version_dir.as_path().exists() {
+                    eprintln!("Node.js v{} is not installed", resolved);
+                    return Ok(exit_status(1));
                 }
+                tokio::fs::remove_dir_all(version_dir.as_path()).await.map_err(|e| {
+                    crate::error::Error::ConfigError(
+                        format!("Failed to remove Node.js v{}: {}", resolved, e).into(),
+                    )
+                })?;
+                println!("Uninstalled Node.js v{}", resolved);
                 Ok(ExitStatus::default())
             }
-            crate::cli::EnvSubcommands::Install { node, force, packages } => {
-                for package in &packages {
-                    if let Err(e) = global_install::install(package, node.as_deref(), force).await {
-                        eprintln!("Failed to install {}: {}", package, e);
-                        return Ok(exit_status(1));
+            crate::cli::EnvSubcommands::Install { version } => {
+                let resolved = if let Some(version) = version {
+                    let provider = vite_js_runtime::NodeProvider::new();
+                    config::resolve_version_alias(&version, &provider).await?
+                } else {
+                    let resolution = config::resolve_version(&cwd).await?;
+                    match resolution.source.as_str() {
+                        ".node-version" | "engines.node" | "devEngines.runtime" => {}
+                        _ => {
+                            eprintln!("No Node.js version found in current project.");
+                            eprintln!("Specify a version: vp env install <VERSION>");
+                            eprintln!("Or pin one:       vp env pin <VERSION>");
+                            return Ok(exit_status(1));
+                        }
                     }
-                }
+                    resolution.version
+                };
+                println!("Installing Node.js v{}...", resolved);
+                vite_js_runtime::download_runtime(vite_js_runtime::JsRuntimeType::Node, &resolved)
+                    .await?;
+                println!("Installed Node.js v{}", resolved);
                 Ok(ExitStatus::default())
             }
         };
@@ -105,8 +128,8 @@ fn print_help() {
     println!("  list [PATTERN]     List available Node.js versions");
     println!("  run [--node <VER>] Run a command (--node optional for shim tools)");
     println!("  packages           List installed global packages");
-    println!("  install <package>  Install a global package (--node to specify version)");
-    println!("  uninstall <package>  Uninstall a global package");
+    println!("  install [VERSION]  Install a Node.js version (reads project config if omitted)");
+    println!("  uninstall <VERSION>  Uninstall a Node.js version");
     println!();
     println!("Options:");
     println!("  --current          Show current environment information");
@@ -127,10 +150,19 @@ fn print_help() {
     println!("  vp env list                   # List available Node.js versions");
     println!("  vp env list --lts             # List only LTS versions");
     println!("  vp env list 20                # List Node.js 20.x versions");
+    println!("  vp env install 20.18.0        # Install Node.js 20.18.0");
+    println!("  vp env install                # Install version from .node-version / package.json");
+    println!("  vp env install lts            # Install latest LTS version");
+    println!("  vp env uninstall 20.18.0      # Uninstall Node.js 20.18.0");
     println!("  vp env run --node 20 node -v  # Run 'node -v' with Node.js 20");
     println!("  vp env run --node lts npm i   # Run 'npm i' with latest LTS");
     println!("  vp env run node -v            # Shim mode (version auto-resolved)");
-    println!("  vp env run npm install        # Shim mode (used by Windows wrappers)");
+    println!("  vp env run npm install        # Shim mode (version auto-resolved)");
+    println!();
+    println!("Global Packages:");
+    println!("  vp install -g <package>       # Install a global package");
+    println!("  vp uninstall -g <package>     # Uninstall a global package");
+    println!("  vp update -g [package]        # Update global package(s)");
 }
 
 /// Print shell snippet for setting environment (--print flag)
