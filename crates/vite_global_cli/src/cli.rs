@@ -242,6 +242,10 @@ pub enum Commands {
         #[arg(short = 'g', long)]
         global: bool,
 
+        /// Preview what would be removed without actually removing (only with -g)
+        #[arg(long, requires = "global")]
+        dry_run: bool,
+
         /// Packages to remove
         #[arg(required = true)]
         packages: Vec<String>,
@@ -1225,6 +1229,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             workspace_root,
             recursive,
             global,
+            dry_run,
             packages,
             pass_through_args,
         } => {
@@ -1232,7 +1237,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             if global {
                 use crate::commands::env::global_install;
                 for package in &packages {
-                    if let Err(e) = global_install::uninstall(package).await {
+                    if let Err(e) = global_install::uninstall(package, dry_run).await {
                         eprintln!("Failed to uninstall {}: {}", package, e);
                         return Ok(exit_status(1));
                     }

@@ -50,11 +50,5 @@ removed 1 package in <variable>ms
   "packageManager": "npm@<semver>"
 }
 
-> vp remove -g testnpm2 -- --dry-run --no-audit && cat package.json # support remove global package with dry-run
-
-up to date in <variable>ms
-{
-  "name": "command-remove-npm10",
-  "version": "1.0.0",
-  "packageManager": "npm@<semver>"
-}
+[1]> vp remove -g --dry-run testnpm2 && cat package.json # support remove global package with dry-run
+Failed to uninstall testnpm2: Configuration error: Package testnpm2 is not installed

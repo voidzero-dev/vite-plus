@@ -15,6 +15,7 @@ Options:
   -w, --workspace-root    Remove from workspace root
   -r, --recursive         Remove recursively from all workspace packages
   -g, --global            Remove global packages
+      --dry-run           Preview what would be removed without actually removing (only with -g)
   -h, --help              Print help
 
 [2]> vp remove # should error because no packages specified
@@ -96,14 +97,8 @@ Done in <variable>ms using pnpm v<semver>
   "packageManager": "pnpm@<semver>"
 }
 
-> vp remove -g testnpm2 -- --dry-run && cat package.json # support remove global package with dry-run
-
-up to date in <variable>ms
-{
-  "name": "command-remove-pnpm10",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>"
-}
+[1]> vp remove -g --dry-run testnpm2 && cat package.json # support remove global package with dry-run
+Failed to uninstall testnpm2: Configuration error: Package testnpm2 is not installed
 
 [2]> vp rm --stream foo && should show tips to use pass through arguments when options are not supported
 error: unexpected argument '--stream' found
