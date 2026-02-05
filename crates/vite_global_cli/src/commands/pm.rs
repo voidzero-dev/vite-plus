@@ -44,6 +44,11 @@ pub async fn execute_pm_subcommand(
     cwd: AbsolutePathBuf,
     command: PmCommands,
 ) -> Result<ExitStatus, Error> {
+    // Intercept `pm list -g` to use vite-plus managed global packages listing
+    if let PmCommands::List { global: true, json, ref pattern, .. } = command {
+        return crate::commands::env::packages::execute(json, pattern.as_deref()).await;
+    }
+
     prepend_js_runtime_to_path_env(&cwd).await?;
 
     let package_manager = PackageManager::builder(&cwd).build_with_default().await?;

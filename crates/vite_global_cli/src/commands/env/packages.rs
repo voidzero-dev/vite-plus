@@ -6,12 +6,23 @@ use super::package_metadata::PackageMetadata;
 use crate::error::Error;
 
 /// Execute the packages command.
-pub async fn execute(json: bool) -> Result<ExitStatus, Error> {
-    let packages = PackageMetadata::list_all().await?;
+pub async fn execute(json: bool, pattern: Option<&str>) -> Result<ExitStatus, Error> {
+    let all_packages = PackageMetadata::list_all().await?;
+
+    let packages: Vec<_> = if let Some(pat) = pattern {
+        let pat_lower = pat.to_lowercase();
+        all_packages.into_iter().filter(|p| p.name.to_lowercase().contains(&pat_lower)).collect()
+    } else {
+        all_packages
+    };
 
     if packages.is_empty() {
         if json {
             println!("[]");
+        } else if pattern.is_some() {
+            println!("No global packages matching '{}'.", pattern.unwrap());
+            println!();
+            println!("Run 'vp list -g' to see all installed global packages.");
         } else {
             println!("No global packages installed.");
             println!();

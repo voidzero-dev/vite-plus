@@ -17,21 +17,30 @@ use std::process::ExitCode;
 
 use crate::cli::{parse_args_from, run_command};
 
-/// Normalize help arguments: transform `help [command]` into `[command] --help`
-fn normalize_help_args() -> Vec<String> {
-    let args: Vec<String> = std::env::args().collect();
-
-    // Skip the binary name (args[0])
+/// Normalize CLI arguments:
+/// - `vp list ...` / `vp ls ...` → `vp pm list ...`
+/// - `vp help [command]` → `vp [command] --help`
+fn normalize_args(args: Vec<String>) -> Vec<String> {
     match args.get(1).map(String::as_str) {
+        // `vp list ...` → `vp pm list ...`
+        // `vp ls ...` → `vp pm list ...`
+        Some("list" | "ls") => {
+            let mut normalized = Vec::with_capacity(args.len() + 1);
+            normalized.push(args[0].clone());
+            normalized.push("pm".to_string());
+            normalized.push("list".to_string());
+            normalized.extend(args[2..].iter().cloned());
+            normalized
+        }
         // `vp help` alone -> show main help
         Some("help") if args.len() == 2 => vec![args[0].clone(), "--help".to_string()],
         // `vp help [command] [args...]` -> `vp [command] --help [args...]`
         Some("help") if args.len() > 2 => {
             let mut normalized = Vec::with_capacity(args.len());
-            normalized.push(args[0].clone()); // binary name
-            normalized.push(args[2].clone()); // command
+            normalized.push(args[0].clone());
+            normalized.push(args[2].clone());
             normalized.push("--help".to_string());
-            normalized.extend(args[3..].iter().cloned()); // remaining args
+            normalized.extend(args[3..].iter().cloned());
             normalized
         }
         // No transformation needed
@@ -64,8 +73,8 @@ async fn main() -> ExitCode {
         }
     };
 
-    // Normalize help arguments: transform `help [command]` into `[command] --help`
-    let normalized_args = normalize_help_args();
+    // Normalize arguments (list/ls aliases, help rewriting)
+    let normalized_args = normalize_args(args);
 
     // Parse CLI arguments (using custom help formatting)
     let args = parse_args_from(normalized_args);

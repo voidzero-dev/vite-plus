@@ -14,7 +14,7 @@ mod list_remote;
 mod off;
 mod on;
 pub mod package_metadata;
-mod packages;
+pub mod packages;
 mod pin;
 mod run;
 mod setup;
@@ -56,7 +56,6 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
             crate::cli::EnvSubcommands::Run { node, npm, command } => {
                 run::execute(node.as_deref(), npm.as_deref(), &command).await
             }
-            crate::cli::EnvSubcommands::Packages { json } => packages::execute(json).await,
             crate::cli::EnvSubcommands::Uninstall { version } => {
                 let provider = vite_js_runtime::NodeProvider::new();
                 let resolved = config::resolve_version_alias(&version, &provider).await?;
@@ -135,7 +134,6 @@ fn print_help() {
     println!("  list-remote [PAT]  List available Node.js versions from the registry");
     println!("  use [VERSION]      Use a Node.js version for this shell session");
     println!("  run [--node <VER>] Run a command (--node optional for shim tools)");
-    println!("  packages           List installed global packages");
     println!("  install [VERSION]  Install a Node.js version (reads project config if omitted)");
     println!("  uninstall <VERSION>  Uninstall a Node.js version");
     println!();
@@ -176,6 +174,7 @@ fn print_help() {
     println!("  vp install -g <package>       # Install a global package");
     println!("  vp uninstall -g <package>     # Uninstall a global package");
     println!("  vp update -g [package]        # Update global package(s)");
+    println!("  vp list -g [package]          # List installed global packages");
 }
 
 /// Print shell snippet for setting environment (--print flag)

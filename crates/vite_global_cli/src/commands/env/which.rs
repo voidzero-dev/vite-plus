@@ -34,7 +34,7 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     // Unknown tool
     eprintln!("vp: Unknown tool '{tool}'");
     eprintln!("Not a core tool (node, npm, npx) and not found in any installed global package.");
-    eprintln!("Run 'vp env packages' to see installed global packages.");
+    eprintln!("Run 'vp list -g' to see installed global packages.");
     Ok(exit_status(1))
 }
 

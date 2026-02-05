@@ -718,13 +718,6 @@ pub enum EnvSubcommands {
         command: Vec<String>,
     },
 
-    /// List installed global packages
-    Packages {
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-
     /// Uninstall a Node.js version
     #[command(alias = "uni")]
     Uninstall {

@@ -35,4 +35,4 @@ added 41 packages in <variable>ms
 [1]> vp env which unknown-tool # Unknown tool - error message
 vp: Unknown tool 'unknown-tool'
 Not a core tool (node, npm, npx) and not found in any installed global package.
-Run 'vp env packages' to see installed global packages.
+Run 'vp list -g' to see installed global packages.

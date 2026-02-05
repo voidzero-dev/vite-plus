@@ -167,8 +167,8 @@ vp install -g --node lts typescript
 vp install -g --force eslint-v9    # Removes 'eslint' if it provides same binary
 
 # List installed global packages
-vp env packages
-vp env packages --json
+vp list -g
+vp list -g --json
 
 # Uninstall a global package
 vp remove -g typescript
@@ -1240,7 +1240,7 @@ $ vp env which eslint
 $ vp env which unknown-tool
 vp: Unknown tool 'unknown-tool'
 Not a core tool (node, npm, npx) and not found in any installed global package.
-Run 'vp env packages' to see installed global packages.
+Run 'vp list -g' to see installed global packages.
 ```
 
 ## Pin Command
@@ -2021,7 +2021,7 @@ env-doctor/
 5. Implement `vp install -g` / `vp remove -g` / `vp update -g` for managed global packages
 6. Implement package metadata storage
 7. Implement per-package binary shims
-8. Implement `vp env packages` to list installed global packages
+8. Implement `vp list -g` / `vp pm list -g` to list installed global packages
 9. Implement `vp env install <VERSION>` to install Node.js versions
 10. Implement `vp env uninstall <VERSION>` to uninstall Node.js versions
 11. Implement per-binary config files (`bins/`) for conflict detection
