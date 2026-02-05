@@ -10,6 +10,7 @@ mod default;
 mod doctor;
 pub mod global_install;
 mod list;
+mod list_remote;
 mod off;
 mod on;
 pub mod package_metadata;
@@ -48,8 +49,9 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
                 pin::execute(cwd, version, unpin, no_install, force).await
             }
             crate::cli::EnvSubcommands::Unpin => unpin::execute(cwd).await,
-            crate::cli::EnvSubcommands::List { pattern, lts, all, json } => {
-                list::execute(pattern, lts, all, json).await
+            crate::cli::EnvSubcommands::List { json } => list::execute(cwd, json).await,
+            crate::cli::EnvSubcommands::ListRemote { pattern, lts, all, json, sort } => {
+                list_remote::execute(pattern, lts, all, json, sort).await
             }
             crate::cli::EnvSubcommands::Run { node, npm, command } => {
                 run::execute(node.as_deref(), npm.as_deref(), &command).await
@@ -129,7 +131,8 @@ fn print_help() {
     println!("  which <TOOL>       Show path to the tool that would be executed");
     println!("  pin [VERSION]      Pin a Node.js version in current directory");
     println!("  unpin              Remove the .node-version file from current directory");
-    println!("  list [PATTERN]     List available Node.js versions");
+    println!("  list               List locally installed Node.js versions");
+    println!("  list-remote [PAT]  List available Node.js versions from the registry");
     println!("  use [VERSION]      Use a Node.js version for this shell session");
     println!("  run [--node <VER>] Run a command (--node optional for shim tools)");
     println!("  packages           List installed global packages");
@@ -152,9 +155,10 @@ fn print_help() {
     println!("  vp env pin 20.18.0            # Pin Node.js version in current directory");
     println!("  vp env pin lts                # Pin to latest LTS version");
     println!("  vp env unpin                  # Remove pinned version");
-    println!("  vp env list                   # List available Node.js versions");
-    println!("  vp env list --lts             # List only LTS versions");
-    println!("  vp env list 20                # List Node.js 20.x versions");
+    println!("  vp env list                   # List locally installed Node.js versions");
+    println!("  vp env list-remote            # List available remote Node.js versions");
+    println!("  vp env list-remote --lts      # List only LTS versions");
+    println!("  vp env list-remote 20         # List Node.js 20.x versions");
     println!("  vp env install 20.18.0        # Install Node.js 20.18.0");
     println!("  vp env install                # Install version from .node-version / package.json");
     println!("  vp env install lts            # Install latest LTS version");

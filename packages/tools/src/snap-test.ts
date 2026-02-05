@@ -189,6 +189,10 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
     ...steps.env,
   };
 
+  // Unset VITE_PLUS_NODE_VERSION to prevent `vp env use` session overrides
+  // from leaking into snap tests (it passes through via the VITE_* pattern).
+  delete env['VITE_PLUS_NODE_VERSION'];
+
   // Sometimes on Windows, the PATH variable is named 'Path'
   if ('Path' in env && !('PATH' in env)) {
     env['PATH'] = env['Path'];
