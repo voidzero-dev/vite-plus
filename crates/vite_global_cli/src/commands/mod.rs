@@ -28,6 +28,20 @@ use vite_shared::{PrependOptions, prepend_to_path_env};
 
 use crate::{error::Error, js_executor::JsExecutor};
 
+/// Ensure a package.json exists in the given directory.
+/// If it doesn't exist, create a minimal one with `{ "type": "module" }`.
+pub async fn ensure_package_json(project_path: &AbsolutePath) -> Result<(), Error> {
+    let package_json_path = project_path.join("package.json");
+    if !package_json_path.as_path().exists() {
+        let content = serde_json::to_string_pretty(&serde_json::json!({
+            "type": "module"
+        }))?;
+        tokio::fs::write(&package_json_path, format!("{content}\n")).await?;
+        tracing::info!("Created package.json in {:?}", project_path);
+    }
+    Ok(())
+}
+
 /// Ensure the JS runtime is downloaded and prepend its bin directory to PATH.
 /// This should be called before executing any package manager command.
 ///

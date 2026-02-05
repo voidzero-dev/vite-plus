@@ -18,6 +18,7 @@ impl InstallCommand {
 
     pub async fn execute(self, options: &InstallCommandOptions<'_>) -> Result<ExitStatus, Error> {
         prepend_js_runtime_to_path_env(&self.cwd).await?;
+        super::ensure_package_json(&self.cwd).await?;
 
         let package_manager = PackageManager::builder(&self.cwd).build_with_default().await?;
 
@@ -81,6 +82,42 @@ mod tests {
         let result = command.execute(&InstallCommandOptions::default()).await;
         println!("result: {result:?}");
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_ensure_package_json_creates_when_missing() {
+        let temp_dir = TempDir::new().unwrap();
+        let dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_json_path = dir_path.join("package.json");
+
+        // Verify no package.json exists
+        assert!(!package_json_path.as_path().exists());
+
+        // Call ensure_package_json
+        crate::commands::ensure_package_json(&dir_path).await.unwrap();
+
+        // Verify package.json was created with correct content
+        let content = fs::read_to_string(&package_json_path).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(parsed["type"], "module");
+    }
+
+    #[tokio::test]
+    async fn test_ensure_package_json_does_not_overwrite_existing() {
+        let temp_dir = TempDir::new().unwrap();
+        let dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_json_path = dir_path.join("package.json");
+
+        // Create an existing package.json
+        let existing_content = r#"{"name": "existing-package"}"#;
+        fs::write(&package_json_path, existing_content).unwrap();
+
+        // Call ensure_package_json
+        crate::commands::ensure_package_json(&dir_path).await.unwrap();
+
+        // Verify existing package.json was NOT overwritten
+        let content = fs::read_to_string(&package_json_path).unwrap();
+        assert_eq!(content, existing_content);
     }
 
     #[tokio::test]
