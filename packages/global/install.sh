@@ -303,21 +303,22 @@ download_and_extract() {
   rm -f "$temp_file"
 }
 
-# Add bin to shell profile
+# Add bin to shell profile by sourcing the env file
 # Returns: 0 = path added, 1 = file not found, 2 = path already exists
 add_bin_to_path() {
   local shell_config="$1"
-  local bin_path="$INSTALL_DIR/bin"
-  local path_line="export PATH=\"$bin_path:\$PATH\""
+  local env_file="$INSTALL_DIR/env"
+  # Escape INSTALL_DIR for grep (special regex chars become literal)
+  local install_dir_pattern
+  install_dir_pattern=$(printf '%s' "$INSTALL_DIR" | sed 's/[.[\*^$()+?{|]/\\&/g')
 
   if [ -f "$shell_config" ]; then
-    # Check if already has the bin path
-    if grep -q "$bin_path" "$shell_config" 2>/dev/null; then
+    if grep -q "${install_dir_pattern}/env" "$shell_config" 2>/dev/null; then
       return 2
     fi
     echo "" >> "$shell_config"
     echo "# Vite+ bin (https://viteplus.dev)" >> "$shell_config"
-    echo "$path_line" >> "$shell_config"
+    echo ". \"$env_file\"" >> "$shell_config"
     return 0
   fi
   return 1
@@ -330,16 +331,13 @@ configure_shell_path() {
   PATH_CONFIGURED="false"
   SHELL_CONFIG_UPDATED=""
 
-  # Check if already in PATH
-  if echo "$PATH" | tr ':' '\n' | grep -qx "$bin_path"; then
-    PATH_CONFIGURED="already"
-    return 0
-  fi
-
   local result=1  # Default to failure - must explicitly set success
   case "$SHELL" in
     */zsh)
       # Add to both .zshenv (for all shells including IDE) and .zshrc (to ensure PATH is at front)
+      # Create .zshenv if missing — it's the canonical place for PATH in zsh
+      # and is sourced by all session types (interactive, non-interactive, IDE)
+      [ -f "$HOME/.zshenv" ] || touch "$HOME/.zshenv"
       local zshenv_result=0 zshrc_result=0
       add_bin_to_path "$HOME/.zshenv" || zshenv_result=$?
       add_bin_to_path "$HOME/.zshrc" || zshrc_result=$?
@@ -379,13 +377,16 @@ configure_shell_path() {
       ;;
     */fish)
       local fish_config="$HOME/.config/fish/config.fish"
+      # Escape INSTALL_DIR for grep (special regex chars become literal)
+      local fish_install_dir_pattern
+      fish_install_dir_pattern=$(printf '%s' "$INSTALL_DIR" | sed 's/[.[\*^$()+?{|]/\\&/g')
       if [ -f "$fish_config" ]; then
-        if grep -q "$bin_path" "$fish_config" 2>/dev/null; then
+        if grep -q "${fish_install_dir_pattern}/env" "$fish_config" 2>/dev/null; then
           result=2
         else
           echo "" >> "$fish_config"
           echo "# Vite+ bin (https://viteplus.dev)" >> "$fish_config"
-          echo "set -gx PATH $bin_path \$PATH" >> "$fish_config"
+          echo "source \"$INSTALL_DIR/env.fish\"" >> "$fish_config"
           result=0
           SHELL_CONFIG_UPDATED="config.fish"
         fi
@@ -456,9 +457,9 @@ cleanup_old_versions() {
   local max_versions=5
   local versions=()
 
-  # List version directories (only semver format like 0.1.0, 1.2.3-beta.1)
+  # List version directories (semver format like 0.1.0, 1.2.3-beta.1, 0.0.0-f48af939.20260205-0533)
   # This excludes 'current' symlink and non-semver directories like 'local-dev'
-  local semver_regex='^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$'
+  local semver_regex='^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9._-]+)?$'
   for dir in "$INSTALL_DIR"/*/; do
     local name
     name=$(basename "$dir")
@@ -499,7 +500,7 @@ cleanup_old_versions() {
 
 main() {
   echo ""
-  echo -e "Setting up ${BRIGHT_BLUE}VITE+(⚡︎)${NC}..."
+  echo -e "Setting up VITE+(⚡︎)..."
 
   check_requirements
 
@@ -642,6 +643,9 @@ main() {
   # Cleanup old versions
   cleanup_old_versions
 
+  # Create env files with PATH guard (prevents duplicate PATH entries)
+  "$INSTALL_DIR/bin/vp" env setup --env-only > /dev/null
+
   # Configure shell PATH (always attempted)
   configure_shell_path
 
@@ -686,12 +690,12 @@ main() {
     echo ""
     echo "  To use vp, add this line to your shell config file:"
     echo ""
-    echo "    export PATH=\"$INSTALL_DIR/bin:\$PATH\""
+    echo "    . \"$INSTALL_DIR/env\""
     echo ""
     echo "  Common config files:"
     echo "    - Bash: ~/.bashrc or ~/.bash_profile"
     echo "    - Zsh:  ~/.zshrc"
-    echo "    - Fish: ~/.config/fish/config.fish"
+    echo "    - Fish: source \"$INSTALL_DIR/env.fish\" in ~/.config/fish/config.fish"
   fi
 
   echo ""

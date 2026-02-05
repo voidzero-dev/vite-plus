@@ -38,7 +38,9 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
             crate::cli::EnvSubcommands::Default { version } => default::execute(cwd, version).await,
             crate::cli::EnvSubcommands::On => on::execute().await,
             crate::cli::EnvSubcommands::Off => off::execute().await,
-            crate::cli::EnvSubcommands::Setup { refresh } => setup::execute(refresh).await,
+            crate::cli::EnvSubcommands::Setup { refresh, env_only } => {
+                setup::execute(refresh, env_only).await
+            }
             crate::cli::EnvSubcommands::Doctor => doctor::execute(cwd).await,
             crate::cli::EnvSubcommands::Which { tool } => which::execute(cwd, &tool).await,
             crate::cli::EnvSubcommands::Pin { version, unpin, no_install, force } => {

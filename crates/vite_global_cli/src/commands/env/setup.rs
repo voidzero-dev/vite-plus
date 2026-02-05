@@ -22,9 +22,20 @@ use crate::error::Error;
 const SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
 
 /// Execute the setup command.
-pub async fn execute(refresh: bool) -> Result<ExitStatus, Error> {
+pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
+    let vite_plus_home = get_vite_plus_home()?;
+
+    // Ensure home directory exists (env files are written here)
+    tokio::fs::create_dir_all(&vite_plus_home).await?;
+
+    // Create env files with PATH guard (prevents duplicate PATH entries)
+    create_env_files(&vite_plus_home).await?;
+
+    if env_only {
+        return Ok(ExitStatus::default());
+    }
+
     let bin_dir = get_bin_dir()?;
-    let _vite_plus_home = get_vite_plus_home()?;
 
     println!("Setting up vite-plus environment...");
     println!();
@@ -250,13 +261,90 @@ exec "$VITE_PLUS_HOME/current/bin/vp.exe" env run {} "$@"
     Ok(())
 }
 
+/// Create env files with PATH guard (prevents duplicate PATH entries).
+///
+/// Creates:
+/// - `~/.vite-plus/env` (POSIX shell — bash/zsh)
+/// - `~/.vite-plus/env.fish` (fish shell)
+async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<(), Error> {
+    let bin_path = vite_plus_home.join("bin");
+
+    // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env)
+    // This makes the env file portable across sessions where HOME may differ
+    let bin_path_ref = if let Ok(home_dir) = std::env::var("HOME") {
+        let home = std::path::Path::new(&home_dir);
+        if let Ok(suffix) = bin_path.as_path().strip_prefix(home) {
+            format!("$HOME/{}", suffix.display())
+        } else {
+            bin_path.as_path().display().to_string()
+        }
+    } else {
+        bin_path.as_path().display().to_string()
+    };
+
+    // POSIX env file (bash/zsh)
+    // When sourced multiple times, removes existing entry and re-prepends to front
+    // Uses parameter expansion to split PATH around the bin entry in O(1) operations
+    let env_content = r#"#!/bin/sh
+# Vite+ environment setup (https://viteplus.dev)
+__vp_bin="__VP_BIN__"
+case ":${PATH}:" in
+    *":${__vp_bin}:"*)
+        __vp_tmp=":${PATH}:"
+        __vp_before="${__vp_tmp%%":${__vp_bin}:"*}"
+        __vp_before="${__vp_before#:}"
+        __vp_after="${__vp_tmp#*":${__vp_bin}:"}"
+        __vp_after="${__vp_after%:}"
+        export PATH="${__vp_bin}${__vp_before:+:${__vp_before}}${__vp_after:+:${__vp_after}}"
+        unset __vp_tmp __vp_before __vp_after
+        ;;
+    *)
+        export PATH="$__vp_bin:$PATH"
+        ;;
+esac
+unset __vp_bin
+"#
+    .replace("__VP_BIN__", &bin_path_ref);
+    let env_file = vite_plus_home.join("env");
+    tokio::fs::write(&env_file, env_content).await?;
+
+    // Fish env file
+    let env_fish_content = r#"# Vite+ environment setup (https://viteplus.dev)
+set -l __vp_idx (contains -i -- __VP_BIN__ $PATH)
+and set -e PATH[$__vp_idx]
+set -gx PATH __VP_BIN__ $PATH
+"#
+    .replace("__VP_BIN__", &bin_path_ref);
+    let env_fish_file = vite_plus_home.join("env.fish");
+    tokio::fs::write(&env_fish_file, env_fish_content).await?;
+
+    Ok(())
+}
+
 /// Print instructions for adding bin directory to PATH.
 fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
-    let bin_path = bin_dir.as_path().display();
+    // Derive vite_plus_home from bin_dir (parent), using $HOME prefix for readability
+    let home_path = bin_dir
+        .parent()
+        .map(|p| p.as_path().display().to_string())
+        .unwrap_or_else(|| bin_dir.as_path().display().to_string());
+    let home_path = if let Ok(home_dir) = std::env::var("HOME") {
+        if let Some(suffix) = home_path.strip_prefix(&home_dir) {
+            format!("$HOME{suffix}")
+        } else {
+            home_path
+        }
+    } else {
+        home_path
+    };
 
     println!("Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):");
     println!();
-    println!("  export PATH=\"{bin_path}:$PATH\"");
+    println!("  . \"{home_path}/env\"");
+    println!();
+    println!("For fish shell, add to ~/.config/fish/config.fish:");
+    println!();
+    println!("  source \"{home_path}/env.fish\"");
     println!();
     println!("For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:");
 
@@ -277,4 +365,242 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
 
     println!();
     println!("Restart your terminal and IDE, then run 'vp env doctor' to verify.");
+}
+
+#[cfg(test)]
+mod tests {
+    use serial_test::serial;
+    use tempfile::TempDir;
+    use vite_path::AbsolutePathBuf;
+
+    use super::*;
+
+    #[tokio::test]
+    #[serial]
+    async fn test_create_env_files_creates_both_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("HOME", temp_dir.path());
+        }
+
+        create_env_files(&home).await.unwrap();
+
+        let env_path = home.join("env");
+        let env_fish_path = home.join("env.fish");
+        assert!(env_path.as_path().exists(), "env file should be created");
+        assert!(env_fish_path.as_path().exists(), "env.fish file should be created");
+
+        unsafe {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_create_env_files_replaces_placeholder_with_home_relative_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("HOME", temp_dir.path());
+        }
+
+        create_env_files(&home).await.unwrap();
+
+        let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
+        let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+
+        // Placeholder should be fully replaced
+        assert!(
+            !env_content.contains("__VP_BIN__"),
+            "env file should not contain __VP_BIN__ placeholder"
+        );
+        assert!(
+            !fish_content.contains("__VP_BIN__"),
+            "env.fish file should not contain __VP_BIN__ placeholder"
+        );
+
+        // Should use $HOME-relative path since install dir is under HOME
+        assert!(
+            env_content.contains("$HOME/bin"),
+            "env file should reference $HOME/bin, got: {env_content}"
+        );
+        assert!(
+            fish_content.contains("$HOME/bin"),
+            "env.fish file should reference $HOME/bin, got: {fish_content}"
+        );
+
+        unsafe {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_create_env_files_uses_absolute_path_when_not_under_home() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Set HOME to a different path so install dir is NOT under HOME
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("HOME", "/nonexistent-home-dir");
+        }
+
+        create_env_files(&home).await.unwrap();
+
+        let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
+        let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+
+        // Should use absolute path since install dir is not under HOME
+        let expected_bin = home.join("bin");
+        let expected_str = expected_bin.as_path().display().to_string();
+        assert!(
+            env_content.contains(&expected_str),
+            "env file should use absolute path {expected_str}, got: {env_content}"
+        );
+        assert!(
+            fish_content.contains(&expected_str),
+            "env.fish file should use absolute path {expected_str}, got: {fish_content}"
+        );
+
+        // Should NOT use $HOME-relative path
+        assert!(!env_content.contains("$HOME/bin"), "env file should not reference $HOME/bin");
+
+        unsafe {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_create_env_files_posix_contains_path_guard() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("HOME", temp_dir.path());
+        }
+
+        create_env_files(&home).await.unwrap();
+
+        let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
+
+        // Verify PATH guard structure: case statement checks for duplicate
+        assert!(
+            env_content.contains("case \":${PATH}:\" in"),
+            "env file should contain PATH guard case statement"
+        );
+        assert!(
+            env_content.contains("*\":${__vp_bin}:\"*)"),
+            "env file should check for existing bin in PATH"
+        );
+        // Verify it re-prepends to front when already present
+        assert!(
+            env_content.contains("export PATH=\"${__vp_bin}"),
+            "env file should re-prepend bin to front of PATH"
+        );
+        // Verify simple prepend for new entry
+        assert!(
+            env_content.contains("export PATH=\"$__vp_bin:$PATH\""),
+            "env file should prepend bin to PATH for new entry"
+        );
+
+        unsafe {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_create_env_files_fish_contains_path_guard() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("HOME", temp_dir.path());
+        }
+
+        create_env_files(&home).await.unwrap();
+
+        let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+
+        // Verify fish PATH guard: remove existing entry before prepending
+        assert!(
+            fish_content.contains("contains -i --"),
+            "env.fish should check for existing bin in PATH"
+        );
+        assert!(
+            fish_content.contains("set -e PATH[$__vp_idx]"),
+            "env.fish should remove existing entry"
+        );
+        assert!(fish_content.contains("set -gx PATH"), "env.fish should set PATH globally");
+
+        unsafe {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_create_env_files_is_idempotent() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("HOME", temp_dir.path());
+        }
+
+        // Create env files twice
+        create_env_files(&home).await.unwrap();
+        let first_env = tokio::fs::read_to_string(home.join("env")).await.unwrap();
+        let first_fish = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+
+        create_env_files(&home).await.unwrap();
+        let second_env = tokio::fs::read_to_string(home.join("env")).await.unwrap();
+        let second_fish = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+
+        assert_eq!(first_env, second_env, "env file should be identical after second write");
+        assert_eq!(first_fish, second_fish, "env.fish file should be identical after second write");
+
+        unsafe {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_execute_env_only_creates_home_dir_and_env_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let fresh_home = temp_dir.path().join("new-vite-plus");
+        // Directory does NOT exist yet — execute should create it
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("VITE_PLUS_HOME", &fresh_home);
+            std::env::set_var("HOME", temp_dir.path());
+        }
+
+        let status = execute(false, true).await.unwrap();
+        assert!(status.success(), "execute --env-only should succeed");
+
+        // Directory should now exist
+        assert!(fresh_home.exists(), "VITE_PLUS_HOME directory should be created");
+
+        // Env files should be written
+        assert!(fresh_home.join("env").exists(), "env file should be created");
+        assert!(fresh_home.join("env.fish").exists(), "env.fish file should be created");
+
+        unsafe {
+            std::env::remove_var("VITE_PLUS_HOME");
+            std::env::remove_var("HOME");
+        }
+    }
 }

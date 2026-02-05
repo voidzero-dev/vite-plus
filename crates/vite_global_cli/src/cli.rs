@@ -622,6 +622,9 @@ pub enum EnvSubcommands {
         /// Force refresh shims even if they exist
         #[arg(long)]
         refresh: bool,
+        /// Only create env files (skip shims and instructions)
+        #[arg(long)]
+        env_only: bool,
     },
 
     /// Run diagnostics and show environment status
