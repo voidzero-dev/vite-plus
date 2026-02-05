@@ -2,6 +2,8 @@
 
 use std::process::ExitStatus;
 
+use chrono::Local;
+
 use super::package_metadata::PackageMetadata;
 use crate::error::Error;
 
@@ -40,10 +42,14 @@ pub async fn execute(json: bool, pattern: Option<&str>) -> Result<ExitStatus, Er
         println!();
 
         for pkg in &packages {
-            println!("  {} v{} (Node {})", pkg.name, pkg.version, pkg.platform.node);
+            let installed_local = pkg.installed_at.with_timezone(&Local);
+            let installed_str = installed_local.format("%Y-%m-%d %H:%M:%S").to_string();
+            println!("  Package: {}@{}", pkg.name, pkg.version);
             if !pkg.bins.is_empty() {
-                println!("    Binaries: {}", pkg.bins.join(", "));
+                println!("  Binaries: {}", pkg.bins.join(", "));
             }
+            println!("  Node.js: {}", pkg.platform.node);
+            println!("  Installed: {}", installed_str);
             println!();
         }
     }
