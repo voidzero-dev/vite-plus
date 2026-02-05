@@ -81,11 +81,5 @@ $ yarn remove [-A,--all] [--mode #0] ...
   "packageManager": "yarn@<semver>"
 }
 
-> vp remove -g testnpm2 -- --dry-run && cat package.json # support remove global package with dry-run
-
-up to date in <variable>ms
-{
-  "name": "command-remove-yarn4",
-  "version": "1.0.0",
-  "packageManager": "yarn@<semver>"
-}
+[1]> vp remove -g --dry-run testnpm2 && cat package.json # support remove global package with dry-run
+Failed to uninstall testnpm2: Configuration error: Package testnpm2 is not installed

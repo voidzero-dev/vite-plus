@@ -138,7 +138,7 @@ pub async fn install(
             for pkg in packages_to_remove {
                 println!("  Uninstalling {} (conflicts with {})...", pkg, package_name);
                 // Use Box::pin to avoid recursive async type issues
-                Box::pin(uninstall(&pkg)).await?;
+                Box::pin(uninstall(&pkg, false)).await?;
             }
         } else {
             // Hard fail with clear error
@@ -207,10 +207,8 @@ pub async fn install(
 /// Uses two-phase uninstall:
 /// 1. Try to use PackageMetadata for binary list
 /// 2. Fallback to scanning BinConfig files for orphaned binaries
-pub async fn uninstall(package_name: &str) -> Result<(), Error> {
+pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     let (package_name, _) = parse_package_spec(package_name);
-
-    println!("  Uninstalling {}...", package_name);
 
     // Phase 1: Try to use PackageMetadata for binary list
     let bins = if let Some(metadata) = PackageMetadata::load(&package_name).await? {
@@ -225,6 +223,23 @@ pub async fn uninstall(package_name: &str) -> Result<(), Error> {
         }
         orphan_bins
     };
+
+    if dry_run {
+        let bin_dir = get_bin_dir()?;
+        let packages_dir = get_packages_dir()?;
+        let package_dir = packages_dir.join(&package_name);
+        let metadata_path = PackageMetadata::metadata_path(&package_name)?;
+
+        println!("  Would uninstall {}:", package_name);
+        for bin_name in &bins {
+            println!("    - shim: {}", bin_dir.join(bin_name).as_path().display());
+        }
+        println!("    - package dir: {}", package_dir.as_path().display());
+        println!("    - metadata: {}", metadata_path.as_path().display());
+        return Ok(());
+    }
+
+    println!("  Uninstalling {}...", package_name);
 
     // Remove shims and bin configs
     let bin_dir = get_bin_dir()?;
@@ -639,7 +654,7 @@ mod tests {
         assert_eq!(loaded.bins, vec!["tsc", "tsserver"], "bins should match");
 
         // Run uninstall
-        uninstall("typescript").await.unwrap();
+        uninstall("typescript", false).await.unwrap();
 
         // Verify shims were removed
         #[cfg(unix)]
