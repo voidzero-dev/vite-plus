@@ -4,7 +4,7 @@ Manage package owners
 Usage: vp pm owner <COMMAND>
 
 Commands:
-  list  List package owners
+  list  List package owners [aliases: ls]
   add   Add package owner
   rm    Remove package owner
 

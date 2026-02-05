@@ -45,7 +45,7 @@ pub enum Commands {
     // Category A: Package Manager Commands
     // =========================================================================
     /// Install all dependencies, or add packages if package names are provided
-    #[command(alias = "i")]
+    #[command(visible_alias = "i")]
     Install {
         /// Do not install devDependencies
         #[arg(short = 'P', long)]
@@ -212,7 +212,7 @@ pub enum Commands {
     },
 
     /// Remove packages from dependencies
-    #[command(alias = "rm", alias = "un", alias = "uninstall")]
+    #[command(visible_alias = "rm", visible_alias = "un", visible_alias = "uninstall")]
     Remove {
         /// Only remove from `devDependencies` (pnpm-specific)
         #[arg(short = 'D', long)]
@@ -256,7 +256,7 @@ pub enum Commands {
     },
 
     /// Update packages to their latest versions
-    #[command(alias = "up")]
+    #[command(visible_alias = "up")]
     Update {
         /// Update to latest version (ignore semver range)
         #[arg(short = 'L', long)]
@@ -311,7 +311,7 @@ pub enum Commands {
     },
 
     /// Deduplicate dependencies
-    #[command(alias = "ddp")]
+    #[command(visible_alias = "ddp")]
     Dedupe {
         /// Check if deduplication would make changes
         #[arg(long)]
@@ -377,7 +377,7 @@ pub enum Commands {
     },
 
     /// Show why a package is installed
-    #[command(alias = "explain")]
+    #[command(visible_alias = "explain")]
     Why {
         /// Package(s) to check
         #[arg(required = true)]
@@ -441,7 +441,7 @@ pub enum Commands {
     },
 
     /// View package information from the registry
-    #[command(alias = "view", alias = "show")]
+    #[command(visible_alias = "view", visible_alias = "show")]
     Info {
         /// Package name with optional version
         #[arg(required = true)]
@@ -460,7 +460,7 @@ pub enum Commands {
     },
 
     /// Link packages for local development
-    #[command(alias = "ln")]
+    #[command(visible_alias = "ln")]
     Link {
         /// Package name or directory to link
         #[arg(value_name = "PACKAGE|DIR")]
@@ -592,6 +592,40 @@ pub enum Commands {
 
 /// Arguments for the `env` command
 #[derive(clap::Args, Debug)]
+#[command(after_help = "\
+Examples:
+  vp env setup                  # Create shims for node, npm, npx
+  vp env setup --refresh        # Force refresh shims
+  vp env doctor                 # Check environment configuration
+  vp env default 20.18.0        # Set default Node.js version
+  vp env on                     # Use vite-plus managed Node.js
+  vp env off                    # Prefer system Node.js
+  vp env which node             # Show which node binary will be used
+  vp env pin 20.18.0            # Pin Node.js version in current directory
+  vp env pin lts                # Pin to latest LTS version
+  vp env unpin                  # Remove pinned version
+  vp env list                   # List locally installed Node.js versions
+  vp env list-remote            # List available remote Node.js versions
+  vp env list-remote --lts      # List only LTS versions
+  vp env list-remote 20         # List Node.js 20.x versions
+  vp env install 20.18.0        # Install Node.js 20.18.0
+  vp env install                # Install version from .node-version / package.json
+  vp env install lts            # Install latest LTS version
+  vp env uninstall 20.18.0      # Uninstall Node.js 20.18.0
+  vp env use 20                 # Use Node.js 20 for this shell session
+  vp env use lts                # Use latest LTS for this shell session
+  vp env use                    # Use project version for this shell session
+  vp env use --unset            # Remove session override
+  vp env run --node 20 node -v  # Run 'node -v' with Node.js 20
+  vp env run --node lts npm i   # Run 'npm i' with latest LTS
+  vp env run node -v            # Shim mode (version auto-resolved)
+  vp env run npm install        # Shim mode (version auto-resolved)
+
+Global Packages:
+  vp install -g <package>       # Install a global package
+  vp uninstall -g <package>     # Uninstall a global package
+  vp update -g [package]        # Update global package(s)
+  vp list -g [package]          # List installed global packages")]
 pub struct EnvArgs {
     /// Show current environment information
     #[arg(long)]
@@ -613,9 +647,6 @@ pub struct EnvArgs {
 /// Subcommands for the `env` command
 #[derive(clap::Subcommand, Debug)]
 pub enum EnvSubcommands {
-    /// Show help information
-    Help,
-
     /// Set or show the global default Node.js version
     Default {
         /// Version to set as default (e.g., "20.18.0", "lts", "latest")
@@ -671,7 +702,7 @@ pub enum EnvSubcommands {
     Unpin,
 
     /// List locally installed Node.js versions
-    #[command(alias = "ls")]
+    #[command(visible_alias = "ls")]
     List {
         /// Output as JSON
         #[arg(long)]
@@ -679,7 +710,7 @@ pub enum EnvSubcommands {
     },
 
     /// List available Node.js versions from the registry
-    #[command(name = "list-remote", alias = "ls-remote")]
+    #[command(name = "list-remote", visible_alias = "ls-remote")]
     ListRemote {
         /// Filter versions by pattern (e.g., "20" for 20.x versions)
         pattern: Option<String>,
@@ -719,7 +750,7 @@ pub enum EnvSubcommands {
     },
 
     /// Uninstall a Node.js version
-    #[command(alias = "uni")]
+    #[command(visible_alias = "uni")]
     Uninstall {
         /// Version to uninstall (e.g., "20.18.0")
         #[arg(required = true)]
@@ -727,7 +758,7 @@ pub enum EnvSubcommands {
     },
 
     /// Install a Node.js version
-    #[command(alias = "i")]
+    #[command(visible_alias = "i")]
     Install {
         /// Version to install (e.g., "20", "20.18.0", "lts", "latest")
         /// If not provided, installs the version from .node-version or package.json
@@ -814,7 +845,7 @@ pub enum PmCommands {
     },
 
     /// List installed packages
-    #[command(alias = "ls")]
+    #[command(visible_alias = "ls")]
     List {
         /// Package pattern to filter
         pattern: Option<String>,
@@ -877,7 +908,7 @@ pub enum PmCommands {
     },
 
     /// View package information from the registry
-    #[command(alias = "info", alias = "show")]
+    #[command(visible_alias = "info", visible_alias = "show")]
     View {
         /// Package name with optional version
         #[arg(required = true)]
@@ -951,7 +982,7 @@ pub enum PmCommands {
     },
 
     /// Manage package owners
-    #[command(subcommand, alias = "author")]
+    #[command(subcommand, visible_alias = "author")]
     Owner(OwnerCommands),
 
     /// Manage package cache
@@ -966,7 +997,7 @@ pub enum PmCommands {
     },
 
     /// Manage package manager configuration
-    #[command(subcommand, alias = "c")]
+    #[command(subcommand, visible_alias = "c")]
     Config(ConfigCommands),
 }
 
@@ -1046,7 +1077,7 @@ pub enum ConfigCommands {
 #[derive(Subcommand, Debug, Clone)]
 pub enum OwnerCommands {
     /// List package owners
-    #[command(alias = "ls")]
+    #[command(visible_alias = "ls")]
     List {
         /// Package name
         package: String,
@@ -1524,18 +1555,19 @@ fn apply_custom_help(cmd: clap::Command) -> clap::Command {
   {bold}env{reset}        Manage Node.js versions
 
 {bold_underline}Package Manager Commands:{reset}
-  {bold}install{reset}    Install all dependencies, or add packages if package names are provided
-  {bold}add{reset}        Add packages to dependencies
-  {bold}remove{reset}     Remove packages from dependencies
-  {bold}dedupe{reset}     Deduplicate dependencies by removing older versions
-  {bold}dlx{reset}        Execute a package binary without installing it as a dependency
-  {bold}info{reset}       View package information from the registry
-  {bold}link{reset}       Link packages for local development
-  {bold}outdated{reset}   Check for outdated packages
-  {bold}pm{reset}         Forward a command to the package manager
-  {bold}unlink{reset}     Unlink packages
-  {bold}update{reset}     Update packages to their latest versions
-  {bold}why{reset}        Show why a package is installed
+  {bold}install, i{reset}                     Install all dependencies, or add packages if package names are provided
+  {bold}add{reset}                            Add packages to dependencies
+  {bold}remove, rm, un, uninstall{reset}      Remove packages from dependencies
+  {bold}dedupe, ddp{reset}                    Deduplicate dependencies by removing older versions
+  {bold}dlx{reset}                            Execute a package binary without installing it as a dependency
+  {bold}info, view, show{reset}               View package information from the registry
+  {bold}link, ln{reset}                       Link packages for local development
+  {bold}list, ls{reset}                       List installed packages
+  {bold}outdated{reset}                       Check for outdated packages
+  {bold}pm{reset}                             Forward a command to the package manager
+  {bold}unlink{reset}                         Unlink packages
+  {bold}update, up{reset}                     Update packages to their latest versions
+  {bold}why, explain{reset}                   Show why a package is installed
 "
     );
     let help_template = format!(
