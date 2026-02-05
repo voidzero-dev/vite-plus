@@ -1,0 +1,33 @@
+> VITE_MY_VAR=1 vite build
+vite v<semver>
+[2Ktransforming...✓ 3 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                <variable> kB │ gzip: <variable> kB
+dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
+
+✓ built in <variable>ms
+
+
+> VITE_MY_VAR=1 vite build # should hit cache
+vite v<semver>
+[2Ktransforming...✓ 3 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                <variable> kB │ gzip: <variable> kB
+dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
+
+✓ built in <variable>ms
+✓ cache hit, logs replayed
+
+
+> VITE_MY_VAR=2 vite build # env changed, should miss cache
+vite v<semver>
+[2Ktransforming...✓ 3 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                <variable> kB │ gzip: <variable> kB
+dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
+
+✓ built in <variable>ms
+

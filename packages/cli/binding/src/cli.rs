@@ -403,7 +403,16 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .chain(iter::once(Str::from("build")))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    task_options: Default::default(),
+                    task_options: UserTaskOptions {
+                        cache_config: UserCacheConfig::Enabled {
+                            cache: None,
+                            enabled_cache_config: EnabledCacheConfig {
+                                envs: Some(Box::new([Str::from("VITE_*")])),
+                                pass_through_envs: None,
+                            },
+                        },
+                        ..Default::default()
+                    },
                     direct_execution_cache_key,
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -479,7 +488,16 @@ impl TaskSynthesizer<CustomTaskSubcommand> for VitePlusTaskSynthesizer {
                         .chain(iter::once(Str::from("dev")))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    task_options: Default::default(),
+                    task_options: UserTaskOptions {
+                        cache_config: UserCacheConfig::Enabled {
+                            cache: None,
+                            enabled_cache_config: EnabledCacheConfig {
+                                envs: Some(Box::new([Str::from("VITE_*")])),
+                                pass_through_envs: None,
+                            },
+                        },
+                        ..Default::default()
+                    },
                     direct_execution_cache_key,
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })

@@ -1,0 +1,11 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "VITE_MY_VAR=1 vite build",
+    "VITE_MY_VAR=1 vite build # should hit cache",
+    "VITE_MY_VAR=2 vite build # env changed, should miss cache"
+  ]
+}
