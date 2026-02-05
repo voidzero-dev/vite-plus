@@ -6,7 +6,7 @@ added 1 package in <variable>ms
   Installed ./command-env-install-node-version-pkg v<semver>
   Binaries: command-env-install-node-version-pkg-cli
 
-> vp env packages --json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d[0].platform.node.split('.')[0])" # Verify Node 22
+> cat $VITE_PLUS_HOME/bins/command-env-install-node-version-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d.nodeVersion.split('.')[0])" # Verify Node 22
 Node major: 22
 
 > vp env uninstall command-env-install-node-version-pkg # Cleanup
@@ -21,7 +21,7 @@ added 1 package in <variable>ms
   Installed ./command-env-install-node-version-pkg v<semver>
   Binaries: command-env-install-node-version-pkg-cli
 
-> vp env packages --json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d[0].platform.node.split('.')[0])" # Verify Node 20
+> cat $VITE_PLUS_HOME/bins/command-env-install-node-version-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d.nodeVersion.split('.')[0])" # Verify Node 20
 Node major: 20
 
 > vp env uninstall command-env-install-node-version-pkg # Cleanup

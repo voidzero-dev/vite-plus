@@ -3,10 +3,10 @@
   "env": {},
   "commands": [
     "vp env install --node lts ./command-env-install-version-alias-pkg # Install with LTS alias",
-    "vp env packages --json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d[0].platform.node.split('.')[0]); console.log('LTS major >= 20:', v >= 20)\" # Verify LTS version",
+    "cat $VITE_PLUS_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('LTS major >= 20:', v >= 20)\" # Verify LTS version",
     "vp env uninstall command-env-install-version-alias-pkg # Cleanup",
     "vp env install --node latest ./command-env-install-version-alias-pkg # Install with latest alias",
-    "vp env packages --json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d[0].platform.node.split('.')[0]); console.log('Latest major >= 20:', v >= 20)\" # Verify latest version",
+    "cat $VITE_PLUS_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('Latest major >= 20:', v >= 20)\" # Verify latest version",
     "vp env uninstall command-env-install-version-alias-pkg # Cleanup"
   ]
 }

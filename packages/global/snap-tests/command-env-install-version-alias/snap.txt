@@ -6,7 +6,7 @@ added 1 package in <variable>ms
   Installed ./command-env-install-version-alias-pkg v<semver>
   Binaries: command-env-install-version-alias-pkg-cli
 
-> vp env packages --json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d[0].platform.node.split('.')[0]); console.log('LTS major >= 20:', v >= 20)" # Verify LTS version
+> cat $VITE_PLUS_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('LTS major >= 20:', v >= 20)" # Verify LTS version
 LTS major >= 20: true
 
 > vp env uninstall command-env-install-version-alias-pkg # Cleanup
@@ -21,7 +21,7 @@ added 1 package in <variable>ms
   Installed ./command-env-install-version-alias-pkg v<semver>
   Binaries: command-env-install-version-alias-pkg-cli
 
-> vp env packages --json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d[0].platform.node.split('.')[0]); console.log('Latest major >= 20:', v >= 20)" # Verify latest version
+> cat $VITE_PLUS_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('Latest major >= 20:', v >= 20)" # Verify latest version
 Latest major >= 20: true
 
 > vp env uninstall command-env-install-version-alias-pkg # Cleanup

@@ -3,10 +3,10 @@
   "env": {},
   "commands": [
     "vp env install --node 22 ./command-env-install-node-version-pkg # Install with Node.js 22",
-    "vp env packages --json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d[0].platform.node.split('.')[0])\" # Verify Node 22",
+    "cat $VITE_PLUS_HOME/bins/command-env-install-node-version-pkg-cli.json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d.nodeVersion.split('.')[0])\" # Verify Node 22",
     "vp env uninstall command-env-install-node-version-pkg # Cleanup",
     "vp env install --node 20 ./command-env-install-node-version-pkg # Install with Node.js 20",
-    "vp env packages --json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d[0].platform.node.split('.')[0])\" # Verify Node 20",
+    "cat $VITE_PLUS_HOME/bins/command-env-install-node-version-pkg-cli.json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d.nodeVersion.split('.')[0])\" # Verify Node 20",
     "vp env uninstall command-env-install-node-version-pkg # Cleanup"
   ]
 }
