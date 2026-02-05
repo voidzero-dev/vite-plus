@@ -33,10 +33,6 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
     // Handle subcommands first
     if let Some(subcommand) = args.command {
         return match subcommand {
-            crate::cli::EnvSubcommands::Help => {
-                print_help();
-                Ok(ExitStatus::default())
-            }
             crate::cli::EnvSubcommands::Default { version } => default::execute(cwd, version).await,
             crate::cli::EnvSubcommands::On => on::execute().await,
             crate::cli::EnvSubcommands::Off => off::execute().await,
@@ -123,69 +119,19 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
         return print_env(cwd).await;
     }
 
-    // No flags provided - show help
-    print_help();
+    // No flags provided - show help (use clap's built-in help printer)
+    use clap::CommandFactory;
+    let bin_name = crate::cli::Args::command().get_bin_name().unwrap_or("vp").to_string();
+    let display_name: &'static str = Box::leak(format!("{bin_name} env").into_boxed_str());
+    crate::cli::Args::command()
+        .find_subcommand("env")
+        .unwrap()
+        .clone()
+        .name(display_name)
+        .disable_help_subcommand(true)
+        .print_help()
+        .ok();
     Ok(ExitStatus::default())
-}
-
-/// Print help information for the env command.
-fn print_help() {
-    println!("Usage: vp env [OPTIONS] [COMMAND]");
-    println!();
-    println!("Commands:");
-    println!("  default [VERSION]  Set or show the global default Node.js version");
-    println!("  on                 Enable managed mode (shims always use vite-plus Node.js)");
-    println!("  off                Enable system-first mode (shims prefer system Node.js)");
-    println!("  setup              Create or update shims in ~/.vite-plus/bin");
-    println!("  doctor             Run diagnostics and show environment status");
-    println!("  which <TOOL>       Show path to the tool that would be executed");
-    println!("  pin [VERSION]      Pin a Node.js version in current directory");
-    println!("  unpin              Remove the .node-version file from current directory");
-    println!("  list               List locally installed Node.js versions");
-    println!("  list-remote [PAT]  List available Node.js versions from the registry");
-    println!("  use [VERSION]      Use a Node.js version for this shell session");
-    println!("  run [--node <VER>] Run a command (--node optional for shim tools)");
-    println!("  install [VERSION]  Install a Node.js version (reads project config if omitted)");
-    println!("  uninstall <VERSION>  Uninstall a Node.js version");
-    println!();
-    println!("Options:");
-    println!("  --current          Show current environment information");
-    println!("  --json             Output in JSON format (requires --current)");
-    println!("  --print            Print shell snippet to set environment");
-    println!();
-    println!("Examples:");
-    println!("  vp env setup                  # Create shims for node, npm, npx");
-    println!("  vp env setup --refresh        # Force refresh shims");
-    println!("  vp env doctor                 # Check environment configuration");
-    println!("  vp env default 20.18.0        # Set default Node.js version");
-    println!("  vp env on                     # Use vite-plus managed Node.js");
-    println!("  vp env off                    # Prefer system Node.js");
-    println!("  vp env which node             # Show which node binary will be used");
-    println!("  vp env pin 20.18.0            # Pin Node.js version in current directory");
-    println!("  vp env pin lts                # Pin to latest LTS version");
-    println!("  vp env unpin                  # Remove pinned version");
-    println!("  vp env list                   # List locally installed Node.js versions");
-    println!("  vp env list-remote            # List available remote Node.js versions");
-    println!("  vp env list-remote --lts      # List only LTS versions");
-    println!("  vp env list-remote 20         # List Node.js 20.x versions");
-    println!("  vp env install 20.18.0        # Install Node.js 20.18.0");
-    println!("  vp env install                # Install version from .node-version / package.json");
-    println!("  vp env install lts            # Install latest LTS version");
-    println!("  vp env uninstall 20.18.0      # Uninstall Node.js 20.18.0");
-    println!("  vp env use 20                 # Use Node.js 20 for this shell session");
-    println!("  vp env use lts                # Use latest LTS for this shell session");
-    println!("  vp env use                    # Use project version for this shell session");
-    println!("  vp env use --unset            # Remove session override");
-    println!("  vp env run --node 20 node -v  # Run 'node -v' with Node.js 20");
-    println!("  vp env run --node lts npm i   # Run 'npm i' with latest LTS");
-    println!("  vp env run node -v            # Shim mode (version auto-resolved)");
-    println!("  vp env run npm install        # Shim mode (version auto-resolved)");
-    println!();
-    println!("Global Packages:");
-    println!("  vp install -g <package>       # Install a global package");
-    println!("  vp uninstall -g <package>     # Uninstall a global package");
-    println!("  vp update -g [package]        # Update global package(s)");
-    println!("  vp list -g [package]          # List installed global packages");
 }
 
 /// Print shell snippet for setting environment (--print flag)

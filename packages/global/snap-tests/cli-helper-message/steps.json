@@ -11,6 +11,8 @@
     "vp dedupe -h # show dedupe help message",
     "vp outdated -h # show outdated help message",
     "vp why -h # show why help message",
-    "vp pm -h # show pm help message"
+    "vp info -h # show info help message",
+    "vp pm -h # show pm help message",
+    "vp env # show env help message"
   ]
 }

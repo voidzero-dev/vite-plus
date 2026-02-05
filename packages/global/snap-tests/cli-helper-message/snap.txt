@@ -17,18 +17,19 @@ Vite+ Commands:
   env        Manage Node.js versions
 
 Package Manager Commands:
-  install    Install all dependencies, or add packages if package names are provided
-  add        Add packages to dependencies
-  remove     Remove packages from dependencies
-  dedupe     Deduplicate dependencies by removing older versions
-  dlx        Execute a package binary without installing it as a dependency
-  info       View package information from the registry
-  link       Link packages for local development
-  outdated   Check for outdated packages
-  pm         Forward a command to the package manager
-  unlink     Unlink packages
-  update     Update packages to their latest versions
-  why        Show why a package is installed
+  install, i                     Install all dependencies, or add packages if package names are provided
+  add                            Add packages to dependencies
+  remove, rm, un, uninstall      Remove packages from dependencies
+  dedupe, ddp                    Deduplicate dependencies by removing older versions
+  dlx                            Execute a package binary without installing it as a dependency
+  info, view, show               View package information from the registry
+  link, ln                       Link packages for local development
+  list, ls                       List installed packages
+  outdated                       Check for outdated packages
+  pm                             Forward a command to the package manager
+  unlink                         Unlink packages
+  update, up                     Update packages to their latest versions
+  why, explain                   Show why a package is installed
 
 Options:
   -V, --version  Print version
@@ -243,6 +244,20 @@ Options:
       --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
   -h, --help                   Print help
 
+> vp info -h # show info help message
+View package information from the registry
+
+Usage: vp info [OPTIONS] <PACKAGE> [FIELD] [-- <PASS_THROUGH_ARGS>...]
+
+Arguments:
+  <PACKAGE>               Package name with optional version
+  [FIELD]                 Specific field to view
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+      --json  Output in JSON format
+  -h, --help  Print help
+
 > vp pm -h # show pm help message
 Forward a command to the package manager
 
@@ -251,12 +266,73 @@ Usage: vp pm <COMMAND>
 Commands:
   prune    Remove unnecessary packages
   pack     Create a tarball of the package
-  list     List installed packages
-  view     View package information from the registry
+  list     List installed packages [aliases: ls]
+  view     View package information from the registry [aliases: info, show]
   publish  Publish package to registry
-  owner    Manage package owners
+  owner    Manage package owners [aliases: author]
   cache    Manage package cache
-  config   Manage package manager configuration
+  config   Manage package manager configuration [aliases: c]
 
 Options:
   -h, --help  Print help
+
+> vp env # show env help message
+Manage Node.js versions
+
+Usage: vp env [OPTIONS] [COMMAND]
+
+Commands:
+  default      Set or show the global default Node.js version
+  on           Enable managed mode - shims always use vite-plus managed Node.js
+  off          Enable system-first mode - shims prefer system Node.js, fallback to managed
+  setup        Create or update shims in VITE_PLUS_HOME/bin
+  doctor       Run diagnostics and show environment status
+  which        Show path to the tool that would be executed
+  pin          Pin a Node.js version in the current directory (creates .node-version)
+  unpin        Remove the .node-version file from current directory (alias for `pin --unpin`)
+  list         List locally installed Node.js versions [aliases: ls]
+  list-remote  List available Node.js versions from the registry [aliases: ls-remote]
+  run          Run a command with a specific Node.js version
+  uninstall    Uninstall a Node.js version [aliases: uni]
+  install      Install a Node.js version [aliases: i]
+  use          Use a specific Node.js version for this shell session
+
+Options:
+      --current  Show current environment information
+      --json     Output in JSON format
+      --print    Print shell snippet to set environment for current session
+  -h, --help     Print help
+
+Examples:
+  vp env setup                  # Create shims for node, npm, npx
+  vp env setup --refresh        # Force refresh shims
+  vp env doctor                 # Check environment configuration
+  vp env default <semver>        # Set default Node.js version
+  vp env on                     # Use vite-plus managed Node.js
+  vp env off                    # Prefer system Node.js
+  vp env which node             # Show which node binary will be used
+  vp env pin <semver>            # Pin Node.js version in current directory
+  vp env pin lts                # Pin to latest LTS version
+  vp env unpin                  # Remove pinned version
+  vp env list                   # List locally installed Node.js versions
+  vp env list-remote            # List available remote Node.js versions
+  vp env list-remote --lts      # List only LTS versions
+  vp env list-remote 20         # List Node.js 20.x versions
+  vp env install <semver>        # Install Node.js <semver>
+  vp env install                # Install version from .node-version / package.json
+  vp env install lts            # Install latest LTS version
+  vp env uninstall <semver>      # Uninstall Node.js <semver>
+  vp env use 20                 # Use Node.js 20 for this shell session
+  vp env use lts                # Use latest LTS for this shell session
+  vp env use                    # Use project version for this shell session
+  vp env use --unset            # Remove session override
+  vp env run --node 20 node -v  # Run 'node -v' with Node.js 20
+  vp env run --node lts npm i   # Run 'npm i' with latest LTS
+  vp env run node -v            # Shim mode (version auto-resolved)
+  vp env run npm install        # Shim mode (version auto-resolved)
+
+Global Packages:
+  vp install -g <package>       # Install a global package
+  vp uninstall -g <package>     # Uninstall a global package
+  vp update -g [package]        # Update global package(s)
+  vp list -g [package]          # List installed global packages
