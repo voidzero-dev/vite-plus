@@ -4,7 +4,7 @@ import { defineConfig } from './define-config.js';
 import type { LibUserConfig } from './lib';
 import type { FormatOptions } from './oxfmt-config';
 import type { OxlintConfig } from './oxlint-config';
-import type { Tasks } from './task-config';
+import type { RunConfig } from './run-config';
 
 declare module '@voidzero-dev/vite-plus-core' {
   interface UserConfig {
@@ -17,7 +17,7 @@ declare module '@voidzero-dev/vite-plus-core' {
 
     lib?: LibUserConfig | LibUserConfig[];
 
-    tasks?: Tasks;
+    run?: RunConfig;
 
     // temporary solution to load plugins lazily
     // We need to support this in the upstream vite

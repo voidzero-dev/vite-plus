@@ -16,8 +16,8 @@ use vite_str::Str;
 use vite_task::{
     CLIArgs, LabeledReporter, Session, SessionCallbacks, TaskSynthesizer,
     config::{
-        UserConfigFile,
-        user::{EnabledCacheConfig, UserCacheConfig, UserConfigTasks, UserTaskOptions},
+        UserRunConfig,
+        user::{EnabledCacheConfig, UserCacheConfig, UserTaskOptions},
     },
     loader::UserConfigLoader,
     plan_request::SyntheticPlanRequest,
@@ -31,7 +31,7 @@ pub struct ResolvedUniversalViteConfig {
     pub config_file: Option<String>,
     pub lint: Option<serde_json::Value>,
     pub fmt: Option<serde_json::Value>,
-    pub tasks: Option<serde_json::Value>,
+    pub run: Option<serde_json::Value>,
 }
 
 /// Result type for resolved commands from JavaScript
@@ -591,7 +591,7 @@ impl UserConfigLoader for VitePlusConfigLoader {
     async fn load_user_config_file(
         &self,
         package_path: &AbsolutePath,
-    ) -> anyhow::Result<UserConfigFile> {
+    ) -> anyhow::Result<Option<UserRunConfig>> {
         let package_path_str = package_path
             .as_path()
             .to_str()
@@ -603,12 +603,11 @@ impl UserConfigLoader for VitePlusConfigLoader {
                 tracing::error!("Failed to parse vite config: {config_json}");
             })?;
 
-        let tasks = if let Some(tasks) = resolved.tasks {
-            serde_json::from_value(tasks)?
-        } else {
-            UserConfigTasks::default()
+        let run_config = match resolved.run {
+            Some(run) => serde_json::from_value(run)?,
+            None => UserRunConfig::default(),
         };
-        Ok(UserConfigFile { tasks })
+        Ok(Some(run_config))
     }
 }
 
@@ -869,25 +868,25 @@ pub fn init_tracing() {
 mod tests {
     use std::path::PathBuf;
 
-    use vite_task::config::user::UserConfigTasks;
+    use vite_task::config::UserRunConfig;
 
     #[test]
-    fn task_config_types_in_sync() {
+    fn run_config_types_in_sync() {
         // Remove \r for cross-platform consistency
-        let ts_type = UserConfigTasks::TS_TYPE.replace('\r', "");
+        let ts_type = UserRunConfig::TS_TYPE.replace('\r', "");
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
-        let task_config_path = PathBuf::from(manifest_dir).join("../src/task-config.ts");
+        let run_config_path = PathBuf::from(manifest_dir).join("../src/run-config.ts");
 
         if std::env::var("VITE_UPDATE_TASK_TYPES").as_deref() == Ok("1") {
-            std::fs::write(&task_config_path, &ts_type).expect("Failed to write task-config.ts");
+            std::fs::write(&run_config_path, &ts_type).expect("Failed to write run-config.ts");
         } else {
-            let current = std::fs::read_to_string(&task_config_path)
-                .expect("Failed to read task-config.ts")
+            let current = std::fs::read_to_string(&run_config_path)
+                .expect("Failed to read run-config.ts")
                 .replace('\r', "");
             pretty_assertions::assert_eq!(
                 current,
                 ts_type,
-                "task-config.ts is out of sync. Run `VITE_UPDATE_TASK_TYPES=1 cargo test -p vite-plus-cli task_config_types_in_sync` to update."
+                "run-config.ts is out of sync. Run `VITE_UPDATE_TASK_TYPES=1 cargo test -p vite-plus-cli run_config_types_in_sync` to update."
             );
         }
     }

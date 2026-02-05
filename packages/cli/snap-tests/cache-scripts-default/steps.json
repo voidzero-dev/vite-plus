@@ -1,0 +1,9 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite run hello # cache should be disabled by default for package.json scripts",
+    "vite run hello # second run should also show cache disabled"
+  ]
+}

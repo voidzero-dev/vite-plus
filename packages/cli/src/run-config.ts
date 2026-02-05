@@ -36,4 +36,16 @@ export type Task = {
     }
 );
 
-export type Tasks = { [key in string]?: Task };
+export type RunConfig = {
+  /**
+   * Enable cache for all scripts from package.json.
+   *
+   * This option can only be set in the workspace root's config file.
+   * Setting it in a package's config will result in an error.
+   */
+  cacheScripts?: boolean;
+  /**
+   * Task definitions
+   */
+  tasks?: { [key in string]?: Task };
+};

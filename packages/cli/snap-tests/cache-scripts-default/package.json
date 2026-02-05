@@ -1,0 +1,6 @@
+{
+  "name": "cache-scripts-default-test",
+  "scripts": {
+    "hello": "node hello.mjs"
+  }
+}

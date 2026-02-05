@@ -71,18 +71,20 @@ export default defineConfig({
       order: 'asc',
     },
   },
-  tasks: {
-    'build:src': {
-      command: [
-        'vite run @rolldown/pluginutils#build',
-        'vite run rolldown#build-binding:release',
-        'vite run rolldown#build-node',
-        'vite run vite#build-types',
-        'vite run @voidzero-dev/vite-plus-core#build',
-        'vite run @voidzero-dev/vite-plus-test#build',
-        'vite run vite-plus#build',
-        'vite run vite-plus-cli#build',
-      ].join(' && '),
+  run: {
+    tasks: {
+      'build:src': {
+        command: [
+          'vite run @rolldown/pluginutils#build',
+          'vite run rolldown#build-binding:release',
+          'vite run rolldown#build-node',
+          'vite run vite#build-types',
+          'vite run @voidzero-dev/vite-plus-core#build',
+          'vite run @voidzero-dev/vite-plus-test#build',
+          'vite run vite-plus#build',
+          'vite run vite-plus-cli#build',
+        ].join(' && '),
+      },
     },
   },
 });

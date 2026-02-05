@@ -1,0 +1,35 @@
+> vite run hello # first run should be cache miss
+$ node hello.mjs
+hello from script
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] cache-scripts-enabled-test#hello: $ node hello.mjs ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> vite run hello # second run should be cache hit
+$ node hello.mjs ✓ cache hit, replaying
+hello from script
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate, <variable>ms saved in total
+
+Task Details:
+────────────────────────────────────────────────
+  [1] cache-scripts-enabled-test#hello: $ node hello.mjs ✓
+      → Cache hit - output replayed - <variable>ms saved
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
