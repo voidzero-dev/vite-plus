@@ -2,7 +2,7 @@
 
 use std::process::ExitStatus;
 
-use chrono::Local;
+use owo_colors::OwoColorize;
 
 use super::package_metadata::PackageMetadata;
 use crate::error::Error;
@@ -38,19 +38,34 @@ pub async fn execute(json: bool, pattern: Option<&str>) -> Result<ExitStatus, Er
             .map_err(|e| Error::ConfigError(format!("Failed to serialize: {e}").into()))?;
         println!("{json_output}");
     } else {
-        println!("Installed global packages:");
-        println!();
+        let col_pkg = "Package";
+        let col_node = "Node version";
+        let col_bins = "Binaries";
+
+        let mut w_pkg = col_pkg.len();
+        let mut w_node = col_node.len();
 
         for pkg in &packages {
-            let installed_local = pkg.installed_at.with_timezone(&Local);
-            let installed_str = installed_local.format("%Y-%m-%d %H:%M:%S").to_string();
-            println!("  Package: {}@{}", pkg.name, pkg.version);
-            if !pkg.bins.is_empty() {
-                println!("  Binaries: {}", pkg.bins.join(", "));
-            }
-            println!("  Node.js: {}", pkg.platform.node);
-            println!("  Installed: {}", installed_str);
-            println!();
+            let name = format!("{}@{}", pkg.name, pkg.version);
+            w_pkg = w_pkg.max(name.len());
+            w_node = w_node.max(pkg.platform.node.len());
+        }
+
+        let gap = 3;
+        println!("{:<w_pkg$}{:>gap$}{:<w_node$}{:>gap$}{}", col_pkg, "", col_node, "", col_bins);
+        println!("{:<w_pkg$}{:>gap$}{:<w_node$}{:>gap$}{}", "---", "", "---", "", "---");
+
+        for pkg in &packages {
+            let name = format!("{:<w_pkg$}", format!("{}@{}", pkg.name, pkg.version));
+            let bins = pkg.bins.join(", ");
+            println!(
+                "{}{:>gap$}{:<w_node$}{:>gap$}{}",
+                name.bright_blue(),
+                "",
+                pkg.platform.node,
+                "",
+                bins
+            );
         }
     }
 

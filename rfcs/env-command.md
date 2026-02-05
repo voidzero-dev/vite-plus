@@ -170,6 +170,13 @@ vp install -g --force eslint-v9    # Removes 'eslint' if it provides same binary
 vp list -g
 vp list -g --json
 
+# Example output (table format with colored package names):
+# Package            Node version   Binaries
+# ---                ---            ---
+# pnpm@10.28.2      22.22.0        pnpm, pnpx
+# serve@14.2.5      22.22.0        serve
+# typescript@5.9.3  22.22.0        tsc, tsserver
+
 # Uninstall a global package
 vp remove -g typescript
 
