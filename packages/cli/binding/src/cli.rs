@@ -672,7 +672,20 @@ async fn execute_direct_subcommand(
     let resolved =
         resolver.resolve(subcommand, &envs, &cwd_arc).await.map_err(|e| Error::Anyhow(e))?;
 
-    let mut child = tokio::process::Command::new(resolved.program.as_ref())
+    // Resolve the program path using `which` to handle Windows .cmd/.bat files (PATHEXT)
+    let program_path = {
+        let paths = resolved.envs.iter().find_map(|(k, v)| {
+            if k.as_ref() == "PATH" { Some(v.as_ref().to_os_string()) } else { None }
+        });
+        which::which_in(resolved.program.as_ref(), paths, cwd.as_path()).map_err(|_| {
+            Error::Anyhow(anyhow::anyhow!(
+                "Cannot find program: {}",
+                resolved.program.to_string_lossy()
+            ))
+        })?
+    };
+
+    let mut child = tokio::process::Command::new(&program_path)
         .args(resolved.args.iter().map(|s| s.as_str()))
         .envs(resolved.envs.iter().map(|(k, v)| (k.as_ref(), v.as_ref())))
         .current_dir(cwd.as_path())

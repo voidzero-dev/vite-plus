@@ -4784,6 +4784,7 @@ dependencies = [
  "commondir",
  "cow-utils",
  "css-module-lexer",
+ "dashmap",
  "dunce",
  "futures",
  "glob",
@@ -6958,6 +6959,7 @@ dependencies = [
  "vite_str",
  "vite_task",
  "vite_workspace",
+ "which",
 ]
 
 [[package]]
