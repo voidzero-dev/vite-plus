@@ -15,6 +15,12 @@ set -e
 
 VITE_PLUS_VERSION="${VITE_PLUS_VERSION:-latest}"
 INSTALL_DIR="${VITE_PLUS_HOME:-$HOME/.vite-plus}"
+# Use $HOME-relative path for shell config references (portable across sessions)
+if case "$INSTALL_DIR" in "$HOME"/*) true;; *) false;; esac; then
+  INSTALL_DIR_REF="\$HOME${INSTALL_DIR#"$HOME"}"
+else
+  INSTALL_DIR_REF="$INSTALL_DIR"
+fi
 # npm registry URL (strip trailing slash if present)
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
 NPM_REGISTRY="${NPM_REGISTRY%/}"
@@ -307,13 +313,15 @@ download_and_extract() {
 # Returns: 0 = path added, 1 = file not found, 2 = path already exists
 add_bin_to_path() {
   local shell_config="$1"
-  local env_file="$INSTALL_DIR/env"
-  # Escape INSTALL_DIR for grep (special regex chars become literal)
-  local install_dir_pattern
-  install_dir_pattern=$(printf '%s' "$INSTALL_DIR" | sed 's/[.[\*^$()+?{|]/\\&/g')
+  local env_file="$INSTALL_DIR_REF/env"
+  # Escape both absolute and $HOME-relative forms for grep (backward compat)
+  local abs_pattern ref_pattern
+  abs_pattern=$(printf '%s' "$INSTALL_DIR" | sed 's/[.[\*^$()+?{|]/\\&/g')
+  ref_pattern=$(printf '%s' "$INSTALL_DIR_REF" | sed 's/[.[\*^$()+?{|]/\\&/g')
 
   if [ -f "$shell_config" ]; then
-    if grep -q "${install_dir_pattern}/env" "$shell_config" 2>/dev/null; then
+    if grep -q "${abs_pattern}/env" "$shell_config" 2>/dev/null || \
+       grep -q "${ref_pattern}/env" "$shell_config" 2>/dev/null; then
       return 2
     fi
     echo "" >> "$shell_config"
@@ -377,16 +385,18 @@ configure_shell_path() {
       ;;
     */fish)
       local fish_config="$HOME/.config/fish/config.fish"
-      # Escape INSTALL_DIR for grep (special regex chars become literal)
-      local fish_install_dir_pattern
-      fish_install_dir_pattern=$(printf '%s' "$INSTALL_DIR" | sed 's/[.[\*^$()+?{|]/\\&/g')
+      # Escape both absolute and $HOME-relative forms for grep (backward compat)
+      local fish_abs_pattern fish_ref_pattern
+      fish_abs_pattern=$(printf '%s' "$INSTALL_DIR" | sed 's/[.[\*^$()+?{|]/\\&/g')
+      fish_ref_pattern=$(printf '%s' "$INSTALL_DIR_REF" | sed 's/[.[\*^$()+?{|]/\\&/g')
       if [ -f "$fish_config" ]; then
-        if grep -q "${fish_install_dir_pattern}/env" "$fish_config" 2>/dev/null; then
+        if grep -q "${fish_abs_pattern}/env" "$fish_config" 2>/dev/null || \
+           grep -q "${fish_ref_pattern}/env" "$fish_config" 2>/dev/null; then
           result=2
         else
           echo "" >> "$fish_config"
           echo "# Vite+ bin (https://viteplus.dev)" >> "$fish_config"
-          echo "source \"$INSTALL_DIR/env.fish\"" >> "$fish_config"
+          echo "source \"$INSTALL_DIR_REF/env.fish\"" >> "$fish_config"
           result=0
           SHELL_CONFIG_UPDATED="config.fish"
         fi
@@ -690,12 +700,12 @@ main() {
     echo ""
     echo "  To use vp, add this line to your shell config file:"
     echo ""
-    echo "    . \"$INSTALL_DIR/env\""
+    echo "    . \"$INSTALL_DIR_REF/env\""
     echo ""
     echo "  Common config files:"
     echo "    - Bash: ~/.bashrc or ~/.bash_profile"
     echo "    - Zsh:  ~/.zshrc"
-    echo "    - Fish: source \"$INSTALL_DIR/env.fish\" in ~/.config/fish/config.fish"
+    echo "    - Fish: source \"$INSTALL_DIR_REF/env.fish\" in ~/.config/fish/config.fish"
   fi
 
   echo ""
