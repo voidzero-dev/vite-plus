@@ -4,10 +4,10 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite test",
+    "vite run test",
     "echo //comment >> src/foo.js",
-    "vite test",
+    "vite run test",
     "echo //comment >> src/bar.js",
-    "vite test"
+    "vite run test"
   ]
 }

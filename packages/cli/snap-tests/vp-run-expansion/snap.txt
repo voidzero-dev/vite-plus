@@ -1,52 +1,35 @@
 > vite run hello
-$ vp lint ./src
-Found 0 warnings and 0 errors.
-Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
-
-$ vp lint
-Found 0 warnings and 0 errors.
-Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
+$ node -p '40+2'
+42
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   2 tasks • 0 cache hits • 2 cache misses 
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
 Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello: $ vp lint ./src ✓
-      → Cache miss: no previous cache entry found
-  ·······················································
-  [2] root-package#hello: $ vp lint ✓
+  [1] vp-run-expansion-test#greet: $ node -p '40+2' ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> echo 'console.log(123)' > a.ts
-> vite run hello # report cache status from the inner runner
-$ vp lint ./src ✓ cache hit, replaying
-Found 0 warnings and 0 errors.
-Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
-
-$ vp lint ✗ cache miss: content of input 'a.ts' changed, executing
-Found 0 warnings and 0 errors.
-Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
+> vite run hello # should hit cache
+$ node -p '40+2' ✓ cache hit, replaying
+42
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   2 tasks • 1 cache hits • 1 cache misses 
-Performance:  50% cache hit rate, <variable>ms saved in total
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] root-package#hello: $ vp lint ./src ✓
+  [1] vp-run-expansion-test#greet: $ node -p '40+2' ✓
       → Cache hit - output replayed - <variable>ms saved
-  ·······················································
-  [2] root-package#hello: $ vp lint ✓
-      → Cache miss: content of input 'a.ts' changed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

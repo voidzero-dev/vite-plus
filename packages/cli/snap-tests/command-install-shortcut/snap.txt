@@ -1,4 +1,5 @@
-> vite i # install shortcut
+> vite run install # install shortcut
+$ vp install
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -9,7 +10,21 @@ dependencies:
 Done in <variable>ms using pnpm v<semver>
 
 
-> vite i # install shortcut hit cache
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] command-install-shortcut#install: $ vp install ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> vite run install # install shortcut hit cache
+$ vp install ✓ cache hit, replaying
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -18,17 +33,17 @@ dependencies:
 + tslib <semver>
 
 Done in <variable>ms using pnpm v<semver>
-✓ cache hit, logs replayed
 
 
-> vite install # install command still hit cache
-Packages: +<variable>
-+<repeat>
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-dependencies:
-+ tslib <semver>
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate, <variable>ms saved in total
 
-Done in <variable>ms using pnpm v<semver>
-✓ cache hit, logs replayed
-
+Task Details:
+────────────────────────────────────────────────
+  [1] command-install-shortcut#install: $ vp install ✓
+      → Cache hit - output replayed - <variable>ms saved
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

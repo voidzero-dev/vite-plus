@@ -4,6 +4,6 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "build": "vite lib"
+    "build": "vp lib"
   }
 }

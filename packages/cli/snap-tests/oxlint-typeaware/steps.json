@@ -4,12 +4,12 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite lint ./src",
+    "vite run lint",
     "echo //comment >> types.ts",
-    "vite lint ./src # non-type-aware linting doesn't read types.ts",
+    "vite run lint # non-type-aware linting doesn't read types.ts",
 
-    "vite lint --type-aware ./src",
+    "vite run lint-typeaware",
     "echo //comment >> types.ts",
-    "vite lint --type-aware ./src # type-aware linting reads types.ts"
+    "vite run lint-typeaware # type-aware linting reads types.ts"
   ]
 }

@@ -64,8 +64,8 @@
   Visit https://yarnpkg.com/en/docs/cli/install for documentation about this command.
 
 
-
-> vite install --prod # https://classic.yarnpkg.com/en/docs/cli/install#toc-yarn-install-production-true-false
+> vite run install
+$ vp install --prod
 yarn install v<semver>
 info No lockfile found.
 [1/4] Resolving packages...
@@ -75,11 +75,25 @@ info No lockfile found.
 success Saved lockfile.
 Done in <variable>ms.
 
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] yarn-install-with-options#install: $ vp install --prod ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > ls node_modules
 tslib
 
-> vite install --prod # install again hit cache
+> vite run install # install again hit cache
+$ vp install --prod ✓ cache hit, replaying
 yarn install v<semver>
 info No lockfile found.
 [1/4] Resolving packages...
@@ -88,5 +102,17 @@ info No lockfile found.
 [4/4] Building fresh packages...
 success Saved lockfile.
 Done in <variable>ms.
-✓ cache hit, logs replayed
 
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate, <variable>ms saved in total
+
+Task Details:
+────────────────────────────────────────────────
+  [1] yarn-install-with-options#install: $ vp install --prod ✓
+      → Cache hit - output replayed - <variable>ms saved
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

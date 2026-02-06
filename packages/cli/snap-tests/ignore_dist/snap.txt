@@ -1,11 +1,38 @@
-> vite lint
+> vite run lint
+$ vp lint
 Found 0 warnings and 0 errors.
-Finished in <variable>ms on 0 files with <variable> rules using <variable> threads.
+Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] lint: $ vp lint ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > mkdir dist
-> vite lint # new dist folder should not invalidate cache
+> vite run lint # new dist folder should not invalidate cache
+$ vp lint ✓ cache hit, replaying
 Found 0 warnings and 0 errors.
-Finished in <variable>ms on 0 files with <variable> rules using <variable> threads.
-✓ cache hit, logs replayed
+Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate, <variable>ms saved in total
+
+Task Details:
+────────────────────────────────────────────────
+  [1] lint: $ vp lint ✓
+      → Cache hit - output replayed - <variable>ms saved
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
