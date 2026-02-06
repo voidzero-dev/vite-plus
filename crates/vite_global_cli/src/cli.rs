@@ -1602,9 +1602,6 @@ fn apply_custom_help(cmd: clap::Command) -> clap::Command {
   {bold}run{reset}        Run tasks
   {bold}env{reset}        Manage Node.js versions
 
-{bold_underline}Self-Management:{reset}
-  {bold}self-update, upgrade{reset}            Update vp itself to the latest version
-
 {bold_underline}Package Manager Commands:{reset}
   {bold}install, i{reset}                     Install all dependencies, or add packages if package names are provided
   {bold}add{reset}                            Add packages to dependencies
@@ -1619,6 +1616,9 @@ fn apply_custom_help(cmd: clap::Command) -> clap::Command {
   {bold}unlink{reset}                         Unlink packages
   {bold}update, up{reset}                     Update packages to their latest versions
   {bold}why, explain{reset}                   Show why a package is installed
+
+{bold_underline}Maintenance Commands:{reset}
+  {bold}self-update, upgrade{reset}           Update vp itself to the latest version
 "
     );
     let help_template = format!(

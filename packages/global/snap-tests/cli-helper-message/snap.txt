@@ -31,6 +31,9 @@ Package Manager Commands:
   update, up                     Update packages to their latest versions
   why, explain                   Show why a package is installed
 
+Maintenance Commands:
+  self-update, upgrade           Update vp itself to the latest version
+
 Options:
   -V, --version  Print version
   -h, --help     Print help
@@ -336,3 +339,20 @@ Global Packages:
   vp uninstall -g <package>     # Uninstall a global package
   vp update -g [package]        # Update global package(s)
   vp list -g [package]          # List installed global packages
+
+> vp self-update -h # show self-update help message
+Update vp itself to the latest version
+
+Usage: vp self-update [OPTIONS] [VERSION]
+
+Arguments:
+  [VERSION]  Target version (e.g., "0.2.0"). Defaults to latest
+
+Options:
+      --tag <TAG>            npm dist-tag to install (default: "latest", also: "test") [default: latest]
+      --check                Check for updates without installing
+      --rollback             Revert to the previously active version
+      --force                Force reinstall even if already on the target version
+      --silent               Suppress output
+      --registry <REGISTRY>  Custom npm registry URL
+  -h, --help                 Print help

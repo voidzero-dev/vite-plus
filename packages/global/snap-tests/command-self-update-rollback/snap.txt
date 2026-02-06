@@ -1,0 +1,2 @@
+[1]> vp self-update --rollback # should fail with no previous version
+Error: Self-update error: No previous version found. Cannot rollback.

@@ -180,6 +180,7 @@ GET {registry}/vite-plus-cli/{version_or_tag}
 - Default to `latest`
 
 Parse the JSON response to extract:
+
 - `version`: the resolved semver version
 - `optionalDependencies`: to find the platform-specific package name
 
@@ -212,6 +213,7 @@ Download two tarballs from the npm registry:
 ```
 
 Verification flow:
+
 1. Download tarball to temp file
 2. Compute SHA-512 hash of the downloaded file
 3. Base64-encode and compare against `integrity` field (format: `sha512-{base64}`)
@@ -241,10 +243,12 @@ fn verify_integrity(data: &[u8], expected: &str) -> Result<(), Error> {
 ```
 
 To get the `integrity` field for the platform package, we need to query its metadata separately:
+
 - Main package metadata: `{registry}/vite-plus-cli/{version}` → contains `dist.integrity`
 - Platform package metadata: `{registry}/@voidzero-dev/vite-plus-cli-{suffix}/{version}` → contains `dist.integrity`
 
 Platform detection reuses existing logic from `vite_js_runtime` or mirrors the bash script's approach:
+
 - `uname -s` → os (darwin, linux)
 - `uname -m` → arch (x64, arm64)
 - Linux: detect gnu vs musl libc
@@ -287,6 +291,7 @@ junction::create(version_dir, &current_link)?;
 ```
 
 Key differences on Windows:
+
 - **Junctions** (`mklink /J`) are used instead of symlinks — junctions don't require admin privileges
 - Junctions only work for directories (which `current` is), and use absolute paths internally
 - The swap is **not atomic** — there's a brief window (~milliseconds) where `current` doesn't exist
@@ -311,6 +316,7 @@ The running `vp` process is **not** the binary being replaced. The flow is:
 ```
 
 After the `current` link swap, any **new** invocation of `vp` will use the new binary. The currently running process continues to execute from the old version's binary file on disk:
+
 - **Unix**: The old binary remains valid because Unix doesn't delete open files until all file descriptors are closed
 - **Windows**: The old `.exe` file is locked while running, but since we install to a **new version directory** (not overwriting in-place), there's no conflict. The old version directory is preserved (kept in the "last 5" cleanup policy)
 
@@ -319,10 +325,12 @@ After the `current` link swap, any **new** invocation of `vp` will use the new b
 The `--rollback` flag switches the `current` symlink to the previously active version.
 
 To track the previous version, we can:
+
 1. Read the `current` symlink target before updating
 2. After the update, write the previous version to `~/.vite-plus/.previous-version`
 
 For `--rollback`:
+
 1. Read `~/.vite-plus/.previous-version`
 2. Verify that version directory still exists
 3. Swap `current` symlink to point to it
@@ -330,15 +338,15 @@ For `--rollback`:
 
 ### Error Handling
 
-| Error | Recovery |
-|-------|----------|
-| Network failure during download | Clean up partial temp files, exit with helpful message |
-| Integrity mismatch (SHA-512) | Delete downloaded file, report expected vs actual hash, abort |
-| Corrupted tarball | Verify extraction success, clean up version dir if partial |
-| `vp install` fails | Remove the version dir, keep current version unchanged |
-| Disk full | Detect and report, clean up partial state |
-| Permission denied | Report with suggestion to check directory ownership |
-| Registry returns error | Parse npm error JSON, show human-readable message |
+| Error                           | Recovery                                                      |
+| ------------------------------- | ------------------------------------------------------------- |
+| Network failure during download | Clean up partial temp files, exit with helpful message        |
+| Integrity mismatch (SHA-512)    | Delete downloaded file, report expected vs actual hash, abort |
+| Corrupted tarball               | Verify extraction success, clean up version dir if partial    |
+| `vp install` fails              | Remove the version dir, keep current version unchanged        |
+| Disk full                       | Detect and report, clean up partial state                     |
+| Permission denied               | Report with suggestion to check directory ownership           |
+| Registry returns error          | Parse npm error JSON, show human-readable message             |
 
 Key principle: **The `current` symlink is only swapped after all steps succeed.** If any step fails, the existing installation is untouched.
 
@@ -444,10 +452,12 @@ SelfUpdate {
 **Decision**: Use `vp self-update` (with hyphen).
 
 **Alternatives considered**:
+
 - `vp upgrade` — used by Deno, Bun, proto; shorter but ambiguous with `vp update` (packages)
 - `vp self upgrade` — used by rustup (`rustup self update`); requires subcommand group
 
 **Rationale**:
+
 - Matches pnpm (`pnpm self-update`) and mise (`mise self-update`) conventions
 - Zero ambiguity with `vp update` (which updates npm packages)
 - The hyphen is consistent with `list-remote` in `vp env`
@@ -459,6 +469,7 @@ SelfUpdate {
 **Decision**: Implement the update logic entirely in Rust.
 
 **Rationale**:
+
 - No dependency on bash or curl being installed
 - Better error handling and progress reporting
 - Consistent behavior across platforms
@@ -469,6 +480,7 @@ SelfUpdate {
 **Decision**: Download tarballs from the same npm registry used by `install.sh`.
 
 **Rationale**:
+
 - No new infrastructure needed
 - Same release pipeline, same artifacts
 - Supports custom registries and mirrors via `--registry` or `NPM_CONFIG_REGISTRY`
@@ -479,6 +491,7 @@ SelfUpdate {
 **Decision**: Do not check for updates on every `vp` invocation.
 
 **Rationale**:
+
 - Avoids unexpected network requests that slow down commands
 - Avoids privacy concerns (phoning home on every run)
 - Users can opt into periodic checks via their own cron/launchd if desired
@@ -489,6 +502,7 @@ SelfUpdate {
 **Decision**: Maintain the same cleanup policy as `install.sh` (keep 5 most recent versions).
 
 **Rationale**:
+
 - Consistent with existing behavior
 - Provides rollback safety net without unbounded disk usage
 - Each version is ~20-30MB, so 5 versions is ~100-150MB total
@@ -498,6 +512,7 @@ SelfUpdate {
 ### Phase 0 (P0): Core Self-Update
 
 **Scope:**
+
 - `vp self-update` — downloads and installs the latest version
 - `vp self-update <version>` — installs a specific version
 - `--tag`, `--force`, `--silent` flags
@@ -506,6 +521,7 @@ SelfUpdate {
 - Error handling with clean rollback
 
 **Files to create/modify:**
+
 - `crates/vite_global_cli/src/commands/self_update/mod.rs` (new)
 - `crates/vite_global_cli/src/commands/self_update/registry.rs` (new)
 - `crates/vite_global_cli/src/commands/self_update/platform.rs` (new)
@@ -515,6 +531,7 @@ SelfUpdate {
 - `crates/vite_global_cli/src/cli.rs` (add command variant + routing)
 
 **Success Criteria:**
+
 - [ ] `vp self-update` downloads and installs the latest version
 - [ ] `vp self-update 0.x.y` installs a specific version
 - [ ] Downloaded tarballs are verified against npm registry `integrity` (SHA-512)
@@ -526,21 +543,25 @@ SelfUpdate {
 ### Phase 1 (P1): Rollback and Check
 
 **Scope:**
+
 - `--rollback` flag with `.previous-version` tracking
 - `--check` flag for update availability check
 
 **Success Criteria:**
+
 - [ ] `vp self-update --rollback` reverts to previous version
 - [ ] `vp self-update --check` shows available update without installing
 
 ### Phase 2 (P2): Enhanced UX
 
 **Scope:**
+
 - Progress bar for downloads (using `indicatif` or similar)
 - Release notes URL in update success message
 - `--registry` flag for custom npm registry
 
 **Success Criteria:**
+
 - [ ] Download progress is visible for large binaries
 - [ ] Release notes link is shown after successful update
 
