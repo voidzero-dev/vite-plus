@@ -8,11 +8,9 @@ use std::{
     process::Stdio, sync::Arc,
 };
 
-use tokio::io::AsyncReadExt;
-
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
-use tokio::fs::write;
+use tokio::{fs::write, io::AsyncReadExt};
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
@@ -571,13 +569,11 @@ impl CommandHandler for VitePlusCommandHandler {
         }
         // Parse "vp <args>" using CLIArgs
         let cli_args = CLIArgs::try_parse_from(
-            iter::once(command.program.as_str())
-                .chain(command.args.iter().map(Str::as_str)),
+            iter::once(command.program.as_str()).chain(command.args.iter().map(Str::as_str)),
         )?;
         match cli_args {
             CLIArgs::Synthesizable(subcmd) => {
-                let resolved =
-                    self.resolver.resolve(subcmd, &command.envs, &command.cwd).await?;
+                let resolved = self.resolver.resolve(subcmd, &command.envs, &command.cwd).await?;
                 Ok(HandledCommand::Synthesized(resolved.into_synthetic_plan_request()))
             }
             CLIArgs::ViteTask(cmd) => Ok(HandledCommand::ViteTaskCommand(cmd)),
@@ -673,10 +669,8 @@ async fn execute_direct_subcommand(
     );
     let cwd_arc: Arc<AbsolutePath> = cwd.clone().into();
 
-    let resolved = resolver
-        .resolve(subcommand, &envs, &cwd_arc)
-        .await
-        .map_err(|e| Error::Anyhow(e))?;
+    let resolved =
+        resolver.resolve(subcommand, &envs, &cwd_arc).await.map_err(|e| Error::Anyhow(e))?;
 
     let mut child = tokio::process::Command::new(resolved.program.as_ref())
         .args(resolved.args.iter().map(|s| s.as_str()))

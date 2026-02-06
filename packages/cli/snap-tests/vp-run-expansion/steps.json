@@ -2,8 +2,5 @@
   "env": {
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
-  "commands": [
-    "vite run hello",
-    "vite run hello # should hit cache"
-  ]
+  "commands": ["vite run hello", "vite run hello # should hit cache"]
 }
