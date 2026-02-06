@@ -31,9 +31,9 @@ enum Shell {
 fn detect_shell() -> Shell {
     if std::env::var("FISH_VERSION").is_ok() {
         Shell::Fish
-    } else if std::env::var("PSModulePath").is_ok() {
+    } else if cfg!(windows) && std::env::var("PSModulePath").is_ok() {
         Shell::PowerShell
-    } else if std::env::var("COMSPEC").is_ok() {
+    } else if cfg!(windows) {
         Shell::Cmd
     } else {
         Shell::Posix
@@ -136,7 +136,60 @@ pub async fn execute(
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
+
     use super::*;
+
+    #[test]
+    #[serial]
+    fn test_detect_shell_posix_even_with_psmodulepath() {
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::remove_var("FISH_VERSION");
+            std::env::set_var("PSModulePath", "/some/path");
+        }
+        let shell = detect_shell();
+        #[cfg(not(windows))]
+        assert!(matches!(shell, Shell::Posix));
+        #[cfg(windows)]
+        assert!(matches!(shell, Shell::PowerShell));
+        // Cleanup
+        unsafe {
+            std::env::remove_var("PSModulePath");
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_detect_shell_fish() {
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("FISH_VERSION", "3.7.0");
+            std::env::remove_var("PSModulePath");
+        }
+        let shell = detect_shell();
+        assert!(matches!(shell, Shell::Fish));
+        // Cleanup
+        unsafe {
+            std::env::remove_var("FISH_VERSION");
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_detect_shell_posix_default() {
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::remove_var("FISH_VERSION");
+            std::env::remove_var("PSModulePath");
+            std::env::remove_var("COMSPEC");
+        }
+        let shell = detect_shell();
+        #[cfg(not(windows))]
+        assert!(matches!(shell, Shell::Posix));
+        #[cfg(windows)]
+        assert!(matches!(shell, Shell::Cmd));
+    }
 
     #[test]
     fn test_format_export_posix() {
