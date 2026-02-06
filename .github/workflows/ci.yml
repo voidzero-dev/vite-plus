@@ -361,6 +361,105 @@ jobs:
           RUST_BACKTRACE=1 pnpm test
           git diff --exit-code
 
+  cli-self-update:
+    name: CLI self-update test
+    needs:
+      - download-previous-rolldown-binaries
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: namespace-profile-mac-default
+          - os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: ./.github/actions/clone
+
+      - name: Configure Git for access to vite-task
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
+
+      - run: |
+          brew install rustup
+          rustup install stable
+          echo "PATH=/opt/homebrew/opt/rustup/bin:$PATH" >> $GITHUB_ENV
+        if: ${{ matrix.os == 'namespace-profile-mac-default' }}
+
+      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: cli-self-update
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
+
+      - name: Build with upstream
+        uses: ./.github/actions/build-upstream
+        with:
+          target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' ||  matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'aarch64-apple-darwin' }}
+
+      - name: Build CLI
+        run: |
+          pnpm bootstrap-cli:ci
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "$USERPROFILE\.vite-plus-dev\bin" >> $GITHUB_PATH
+          else
+            echo "$HOME/.vite-plus-dev/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Verify CLI installation
+        run: |
+          which vp
+          vp --version
+
+      - name: Test self-update
+        run: |
+          # Helper to read the installed CLI version from package.json
+          get_cli_version() {
+            node -p "require(require('path').resolve(process.env.USERPROFILE || process.env.HOME, '.vite-plus-dev', 'current', 'package.json')).version"
+          }
+
+          # Save initial (dev build) version
+          INITIAL_VERSION=$(get_cli_version)
+          echo "Initial version: $INITIAL_VERSION"
+
+          # --check queries npm registry and prints update status
+          vp self-update --check
+          # upgrade alias should also work
+          vp upgrade --check
+
+          # full self-update: download, extract, swap
+          vp self-update --tag test --force
+          vp --version
+          vp env doctor
+
+          # Verify version changed after update
+          UPDATED_VERSION=$(get_cli_version)
+          echo "Updated version: $UPDATED_VERSION"
+          if [ "$UPDATED_VERSION" == "$INITIAL_VERSION" ]; then
+            echo "Error: version should have changed after self-update (still $INITIAL_VERSION)"
+            exit 1
+          fi
+
+          # rollback to the previous version
+          vp self-update --rollback
+          vp --version
+          vp env doctor
+
+          # Verify version restored after rollback
+          ROLLBACK_VERSION=$(get_cli_version)
+          echo "Rollback version: $ROLLBACK_VERSION"
+          if [ "$ROLLBACK_VERSION" != "$INITIAL_VERSION" ]; then
+            echo "Error: version should have been restored after rollback (expected $INITIAL_VERSION, got $ROLLBACK_VERSION)"
+            exit 1
+          fi
+
   install-e2e-test:
     name: Local CLI `vite install` E2E test
     needs:
@@ -440,6 +539,7 @@ jobs:
       - lint
       - run
       - cli-e2e-test
+      - cli-self-update
     steps:
       - run: exit 1
         # Thank you, next https://github.com/vercel/next.js/blob/canary/.github/workflows/build_and_test.yml#L379
