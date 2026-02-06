@@ -200,18 +200,20 @@ pub async fn install_production_deps(version_dir: &AbsolutePath) -> Result<(), E
 
     tracing::debug!("Running vp install in {}", version_dir.as_path().display());
 
-    let status = tokio::process::Command::new(vp_binary.as_path())
+    let output = tokio::process::Command::new(vp_binary.as_path())
         .args(["install", "--silent"])
         .current_dir(version_dir)
         .env("CI", "true")
-        .status()
+        .output()
         .await?;
 
-    if !status.success() {
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(Error::SelfUpdate(
             format!(
-                "Failed to install production dependencies (exit code: {})",
-                status.code().unwrap_or(-1)
+                "Failed to install production dependencies (exit code: {})\n{}",
+                output.status.code().unwrap_or(-1),
+                stderr.trim()
             )
             .into(),
         ));
@@ -280,8 +282,15 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
             })?;
         }
 
-        junction::create(&version_dir, &current_link)
-            .map_err(|e| Error::SelfUpdate(format!("Failed to create junction: {e}").into()))?;
+        junction::create(&version_dir, &current_link).map_err(|e| {
+            Error::SelfUpdate(
+                format!(
+                    "Failed to create junction at {}: {e}\nTry removing it manually and run again.",
+                    current_link.as_path().display()
+                )
+                .into(),
+            )
+        })?;
     }
 
     tracing::debug!("Swapped current → {}", version);
@@ -303,15 +312,17 @@ pub async fn refresh_shims(install_dir: &AbsolutePath) -> Result<(), Error> {
 
     tracing::debug!("Refreshing shims...");
 
-    let status = tokio::process::Command::new(vp_binary.as_path())
+    let output = tokio::process::Command::new(vp_binary.as_path())
         .args(["env", "setup", "--refresh"])
-        .status()
+        .output()
         .await?;
 
-    if !status.success() {
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
         tracing::warn!(
-            "Shim refresh exited with code {}, continuing anyway",
-            status.code().unwrap_or(-1)
+            "Shim refresh exited with code {}, continuing anyway\n{}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
         );
     }
 
