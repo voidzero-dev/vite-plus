@@ -314,6 +314,19 @@ async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, 
         }
     }
 
+    // Fast-path: session version file written by `vp env use`
+    if let Some(session_version) = config::read_session_version().await {
+        return Ok(ResolveCacheEntry {
+            version: session_version,
+            source: config::SESSION_VERSION_FILE.to_string(),
+            project_root: None,
+            resolved_at: cache::now_timestamp(),
+            version_file_mtime: 0,
+            source_path: None,
+            is_range: false,
+        });
+    }
+
     // Load cache
     let cache_path = cache::get_cache_path();
     let mut cache = cache_path.as_ref().map(|p| ResolveCache::load(p)).unwrap_or_default();

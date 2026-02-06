@@ -122,7 +122,12 @@ vp env use --silent-if-unchanged  # Suppress output if version already active
 1. `~/.vite-plus/env` includes a `vp()` shell function that intercepts `vp env use` calls
 2. The function runs `command vp env use ...`, captures stdout (shell commands), and evals it
 3. `vp env use` outputs `export VITE_PLUS_NODE_VERSION=20.18.1` to stdout, status messages to stderr
-4. The shim dispatch checks `VITE_PLUS_NODE_VERSION` env var first in the resolution chain
+4. `vp env use` also writes the resolved version to `~/.vite-plus/.session-node-version` (session file)
+5. The shim dispatch checks `VITE_PLUS_NODE_VERSION` env var first, then the session file, in the resolution chain
+
+**Why both env var and session file?**
+
+The env var requires a shell wrapper to `eval` the output, which isn't available in CI environments (GitHub Actions) or when running `command vp env use` directly. The session file works without eval — shims read it directly from disk. The env var still takes priority when set, so the shell wrapper experience is unchanged.
 
 **Shell-specific output:**
 
@@ -255,11 +260,12 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 │  ┌──────────────────────────────┐     ┌─────────────────────────────┐       │
 │  │  Version Resolution          │────▶│  Priority Order:            │       │
 │  │  (walk up directory tree)    │     │  0. VITE_PLUS_NODE_VERSION  │       │
-│  └──────────────┬───────────────┘     │  1. .node-version           │       │
-│                 │                     │  2. package.json#engines    │       │
-│                 │                     │  3. package.json#devEngines │       │
-│                 │                     │  4. User default (config)   │       │
-│                 │                     │  5. Latest LTS              │       │
+│  └──────────────┬───────────────┘     │  1. .session-node-version   │       │
+│                 │                     │  2. .node-version           │       │
+│                 │                     │  3. package.json#engines    │       │
+│                 │                     │  4. package.json#devEngines │       │
+│                 │                     │  5. User default (config)   │       │
+│                 │                     │  6. Latest LTS              │       │
 │                 ▼                     └─────────────────────────────┘       │
 │  ┌──────────────────────────────┐                                           │
 │  │  Ensure Node.js installed    │                                           │
@@ -289,6 +295,7 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 │  │   ├── 20.18.0/bin/node             Installed Node.js versions            │
 │  │   ├── 22.13.0/bin/node                                                   │
 │  │   └── ...                                                                │
+│  ├── .session-node-version              Session override (written by vp env use)│
 │  └── config.json                      User settings (default version, etc.) │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -372,6 +379,7 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 │   └── resolve_cache.json            # LRU cache for version resolution
 ├── tmp/                              # Staging directory for installs
 │   └── packages/
+├── .session-node-version             # Session override (written by `vp env use`)
 └── config.json                       # User configuration (default version, etc.)
 ```
 
@@ -504,25 +512,30 @@ New LTS codenames are added dynamically based on the Node.js release schedule. v
 When resolving which Node.js version to use, vite-plus checks the following sources in order:
 
 0. **`VITE_PLUS_NODE_VERSION` env var** (session override, highest priority)
-   - Set by `vp env use` command
+   - Set by `vp env use` via shell wrapper eval
    - Overrides all file-based resolution
 
-1. **`.node-version`** file
+1. **`.session-node-version`** file (session override)
+   - Written by `vp env use` to `~/.vite-plus/.session-node-version`
+   - Works without shell eval wrapper (CI environments)
+   - Deleted by `vp env use --unset`
+
+2. **`.node-version`** file
    - Checked in current directory, then parent directories
    - Simple format: one version per file
 
-2. **`package.json#engines.node`**
+3. **`package.json#engines.node`**
    - Checked in current directory, then parent directories
    - Standard npm constraint field
 
-3. **`package.json#devEngines.runtime`**
+4. **`package.json#devEngines.runtime`**
    - Checked in current directory, then parent directories
    - npm RFC-compliant development engines spec
 
-4. **User default** (`~/.vite-plus/config.json`)
+5. **User default** (`~/.vite-plus/config.json`)
    - Set via `vp env default <version>`
 
-5. **System default** (latest LTS)
+6. **System default** (latest LTS)
    - Fallback when no version source is found
 
 ### Cache Behavior
@@ -774,11 +787,13 @@ v22.13.0  # Falls back to latest LTS
 
 The resolution order is:
 
-1. `.node-version` in current or parent directories
-2. `package.json#engines.node` in current or parent directories
-3. `package.json#devEngines.runtime` in current or parent directories
-4. **User Default**: Configured via `vp env default <version>` (stored in `~/.vite-plus/config.json`)
-5. **System Default**: Latest LTS version
+1. `VITE_PLUS_NODE_VERSION` env var (session override)
+2. `.session-node-version` file (session override)
+3. `.node-version` in current or parent directories
+4. `package.json#engines.node` in current or parent directories
+5. `package.json#devEngines.runtime` in current or parent directories
+6. **User Default**: Configured via `vp env default <version>` (stored in `~/.vite-plus/config.json`)
+7. **System Default**: Latest LTS version
 
 ### Installation Failure
 
@@ -935,6 +950,8 @@ Configuration
   ⚠ Session override  VITE_PLUS_NODE_VERSION=20.18.0
                       Overrides all file-based resolution.
                       Run 'vp env use --unset' to remove.
+  ⚠ Session override (file)  .session-node-version=20.18.0
+                      Written by 'vp env use'. Run 'vp env use --unset' to remove.
 
 ...
 ```

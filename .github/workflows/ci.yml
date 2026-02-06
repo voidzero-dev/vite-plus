@@ -231,6 +231,7 @@ jobs:
           where.exe npm
           where.exe npx
           where.exe vp
+          vp env doctor
 
           # Test 1: Install a JS-based CLI (typescript)
           vp install -g typescript
@@ -269,6 +270,7 @@ jobs:
           where.exe npm
           where.exe npx
           where.exe vp
+          vp env doctor
 
           :: Test 1: Install a JS-based CLI (typescript)
           vp install -g typescript
@@ -313,6 +315,7 @@ jobs:
           which npm
           which npx
           which vp
+          vp env doctor
 
           # Test 1: Install a JS-based CLI (typescript)
           vp install -g typescript

@@ -5,7 +5,9 @@ use std::process::ExitStatus;
 use owo_colors::OwoColorize;
 use vite_path::{AbsolutePathBuf, current_dir};
 
-use super::config::{ShimMode, get_bin_dir, get_vite_plus_home, load_config, resolve_version};
+use super::config::{
+    self, ShimMode, get_bin_dir, get_vite_plus_home, load_config, resolve_version,
+};
 use crate::error::Error;
 
 /// Known version managers that might conflict
@@ -299,9 +301,9 @@ fn find_system_node() -> Option<std::path::PathBuf> {
     which::which_in("node", Some(filtered_path), cwd).ok()
 }
 
-/// Check for active session override via VITE_PLUS_NODE_VERSION.
+/// Check for active session override via VITE_PLUS_NODE_VERSION or session file.
 fn check_session_override() {
-    if let Ok(version) = std::env::var(super::config::VERSION_ENV_VAR) {
+    if let Ok(version) = std::env::var(config::VERSION_ENV_VAR) {
         let version = version.trim();
         if !version.is_empty() {
             print_check(
@@ -312,6 +314,16 @@ fn check_session_override() {
             print_hint("Overrides all file-based resolution.");
             print_hint("Run 'vp env use --unset' to remove.");
         }
+    }
+
+    // Also check session version file
+    if let Some(version) = config::read_session_version_sync() {
+        print_check(
+            &"\u{26A0}".yellow().to_string(),
+            "Session override (file)",
+            &format!("{}={version}", config::SESSION_VERSION_FILE).yellow().to_string(),
+        );
+        print_hint("Written by 'vp env use'. Run 'vp env use --unset' to remove.");
     }
 }
 

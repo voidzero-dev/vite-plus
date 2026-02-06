@@ -74,6 +74,7 @@ pub async fn execute(
 
     // Handle --unset: remove session override
     if unset {
+        config::delete_session_version().await?;
         println!("{}", format_unset(&shell));
         eprintln!("Reverted to file-based Node.js version resolution");
         return Ok(ExitStatus::default());
@@ -93,12 +94,14 @@ pub async fn execute(
 
     // Check if already active and suppress output if requested
     if silent_if_unchanged {
-        if let Ok(current) = std::env::var(VERSION_ENV_VAR) {
-            if current.trim() == resolved_version {
-                // Already active, output the export anyway (idempotent) but skip stderr
-                println!("{}", format_export(&shell, &resolved_version));
-                return Ok(ExitStatus::default());
-            }
+        let current_env = std::env::var(VERSION_ENV_VAR).ok().map(|v| v.trim().to_string());
+        let current_session = config::read_session_version().await;
+        let current = current_env.or(current_session);
+        if current.as_deref() == Some(&resolved_version) {
+            // Already active, output the export anyway (idempotent) but skip stderr
+            config::write_session_version(&resolved_version).await?;
+            println!("{}", format_export(&shell, &resolved_version));
+            return Ok(ExitStatus::default());
         }
     }
 
@@ -124,6 +127,9 @@ pub async fn execute(
             .await?;
         }
     }
+
+    // Write session version file (works without shell eval wrapper, e.g. in CI)
+    config::write_session_version(&resolved_version).await?;
 
     // Output the shell command to stdout (consumed by shell wrapper's eval)
     println!("{}", format_export(&shell, &resolved_version));

@@ -74,17 +74,21 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
                 r#use::execute(cwd, version, unset, no_install, silent_if_unchanged).await
             }
             crate::cli::EnvSubcommands::Install { version } => {
-                let (resolved, from_env_var) = if let Some(version) = version {
+                let (resolved, from_session_override) = if let Some(version) = version {
                     let provider = vite_js_runtime::NodeProvider::new();
                     (config::resolve_version_alias(&version, &provider).await?, false)
                 } else {
                     let resolution = config::resolve_version(&cwd).await?;
-                    let from_env = resolution.source == config::VERSION_ENV_VAR;
+                    let from_session_override = matches!(
+                        resolution.source.as_str(),
+                        config::VERSION_ENV_VAR | config::SESSION_VERSION_FILE
+                    );
                     match resolution.source.as_str() {
                         ".node-version"
                         | "engines.node"
                         | "devEngines.runtime"
-                        | config::VERSION_ENV_VAR => {}
+                        | config::VERSION_ENV_VAR
+                        | config::SESSION_VERSION_FILE => {}
                         _ => {
                             eprintln!("No Node.js version found in current project.");
                             eprintln!("Specify a version: vp env install <VERSION>");
@@ -92,17 +96,14 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
                             return Ok(exit_status(1));
                         }
                     }
-                    (resolution.version, from_env)
+                    (resolution.version, from_session_override)
                 };
                 println!("Installing Node.js v{}...", resolved);
                 vite_js_runtime::download_runtime(vite_js_runtime::JsRuntimeType::Node, &resolved)
                     .await?;
                 println!("Installed Node.js v{}", resolved);
-                if from_env_var {
-                    eprintln!(
-                        "Note: Installed from session override ({}).",
-                        config::VERSION_ENV_VAR
-                    );
+                if from_session_override {
+                    eprintln!("Note: Installed from session override.");
                     eprintln!("Run `vp env use --unset` to revert to project version resolution.");
                 }
                 Ok(ExitStatus::default())
