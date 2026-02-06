@@ -675,7 +675,12 @@ async fn execute_direct_subcommand(
     // Resolve the program path using `which` to handle Windows .cmd/.bat files (PATHEXT)
     let program_path = {
         let paths = resolved.envs.iter().find_map(|(k, v)| {
-            if k.as_ref() == "PATH" { Some(v.as_ref().to_os_string()) } else { None }
+            let is_path = if cfg!(windows) {
+                k.as_ref().eq_ignore_ascii_case("PATH")
+            } else {
+                k.as_ref() == "PATH"
+            };
+            if is_path { Some(v.as_ref().to_os_string()) } else { None }
         });
         which::which_in(resolved.program.as_ref(), paths, cwd.as_path()).map_err(|_| {
             Error::Anyhow(anyhow::anyhow!(
