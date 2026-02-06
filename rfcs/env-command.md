@@ -801,25 +801,27 @@ vp: npx is available in Node 5.2.0+
 
 ```bash
 $ vp env doctor
+Installation
+  ✓ VITE_PLUS_HOME    ~/.vite-plus
+  ✓ Bin directory     exists
+  ✓ Shims             node, npm, npx
 
-VP Environment Doctor
-=====================
+Configuration
+  ✓ Shim mode         managed
 
-VITE_PLUS_HOME: /Users/user/.vite-plus
-  ✓ Directory exists
-  ✓ Shims directory exists
+PATH
+  ✗ vp                not in PATH
+                      Expected: ~/.vite-plus/bin
 
-PATH Analysis:
-  ✗ VP bin not in PATH
+    Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):
 
-  Found 'node' at: /usr/local/bin/node (system)
-  Expected: /Users/user/.vite-plus/bin/node
+      . "$HOME/.vite-plus/env"
 
-Recommended Fix:
-  Add to ~/.zshrc:
-    export PATH="/Users/user/.vite-plus/bin:$PATH"
+    Then restart your terminal.
 
-  Then restart your terminal and IDE.
+...
+
+✗ Some issues found. Run the suggested commands to fix them.
 ```
 
 ## User Experience
@@ -897,57 +899,125 @@ Restart your terminal and IDE, then run 'vp env doctor' to verify.
 
 ```bash
 $ vp env doctor
+Installation
+  ✓ VITE_PLUS_HOME    ~/.vite-plus
+  ✓ Bin directory     exists
+  ✓ Shims             node, npm, npx
 
-VP Environment Doctor
-=====================
+Configuration
+  ✓ Shim mode         managed
+  ✓ IDE integration   env sourced in ~/.zshenv
 
-VITE_PLUS_HOME: /Users/user/.vite-plus
-  ✓ Directory exists
-  ✓ Bin directory exists
-  ✓ All shims present (node, npm, npx)
+PATH
+  ✓ vp                first in PATH
+  ✓ node              ~/.vite-plus/bin/node (vp shim)
+  ✓ npm               ~/.vite-plus/bin/npm (vp shim)
+  ✓ npx               ~/.vite-plus/bin/npx (vp shim)
 
-Shim Mode:
-  Mode: managed
-  ✓ Shims always use vite-plus managed Node.js
+Version Resolution
+    Directory         /Users/user/projects/my-app
+    Source            .node-version
+    Version           20.18.0
+  ✓ Node binary       installed
 
-  Run 'vp env on' to always use managed Node.js
-  Run 'vp env off' to prefer system Node.js
+✓ All checks passed
+```
 
-Session Override:
-  ⓘ VITE_PLUS_NODE_VERSION=20.18.0 (set by `vp env use`)
-  This overrides all file-based version resolution.
-  Run 'vp env use --unset' to remove.
+**Doctor Output with Session Override:**
 
-PATH Analysis:
-  ✓ VP bin first in PATH
+```bash
+$ vp env doctor
+...
 
-  node → /Users/user/.vite-plus/bin/node
+Configuration
+  ✓ Shim mode         managed
+  ✓ IDE integration   env sourced in ~/.zshenv
+  ⚠ Session override  VITE_PLUS_NODE_VERSION=20.18.0
+                      Overrides all file-based resolution.
+                      Run 'vp env use --unset' to remove.
 
-Current Directory: /Users/user/projects/my-app
-  Version Source: .node-version
-  Resolved Version: 20.18.0
-  Node Path: /Users/user/.cache/vite-plus/js_runtime/node/20.18.0/bin/node
-  ✓ Node binary exists
-
-No conflicts detected.
+...
 ```
 
 **Doctor Output with System-First Mode:**
 
 ```bash
 $ vp env doctor
-
 ...
 
-Shim Mode:
-  Mode: system-first
-  ✓ Shims prefer system Node.js, fallback to managed
-  System Node.js: /usr/local/bin/node
-
-  Run 'vp env on' to always use managed Node.js
-  Run 'vp env off' to prefer system Node.js
+Configuration
+  ✓ Shim mode         system-first
+    System Node.js    /usr/local/bin/node
+  ✓ IDE integration   env sourced in ~/.zshenv
 
 ...
+```
+
+**Doctor Output with System-First Mode (No System Node):**
+
+```bash
+$ vp env doctor
+...
+
+Configuration
+  ✓ Shim mode         system-first
+  ⚠ System Node.js    not found (will use managed)
+
+...
+```
+
+**Doctor Output (Unhealthy):**
+
+```bash
+$ vp env doctor
+Installation
+  ✓ VITE_PLUS_HOME    ~/.vite-plus
+  ✗ Bin directory     does not exist
+  ✗ Missing shims     node, npm, npx
+                      Run 'vp env setup' to create bin directory and shims.
+
+Configuration
+  ✓ Shim mode         managed
+
+PATH
+  ✗ vp                not in PATH
+                      Expected: ~/.vite-plus/bin
+
+    Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):
+
+      . "$HOME/.vite-plus/env"
+
+    For fish shell, add to ~/.config/fish/config.fish:
+
+      source "$HOME/.vite-plus/env.fish"
+
+    Then restart your terminal.
+
+  node                not found
+  npm                 not found
+  npx                 not found
+
+Version Resolution
+    Directory         /Users/user/projects/my-app
+    Source            .node-version
+    Version           20.18.0
+  ⚠ Node binary       not installed
+                      Version will be downloaded on first use.
+
+Conflicts
+  ⚠ nvm               detected (NVM_DIR is set)
+                      Consider removing other version managers from your PATH
+                      to avoid version conflicts.
+
+IDE Setup
+  ⚠ GUI applications may not see shell PATH changes.
+
+    macOS:
+      Add to ~/.zshenv or ~/.profile:
+        . "$HOME/.vite-plus/env"
+      Then restart your IDE to apply changes.
+
+✗ Some issues found. Run the suggested commands to fix them.
 ```
 
 ## Shell Configuration Reference
@@ -1205,49 +1275,74 @@ Shims will always use vite-plus managed Node.js.
 
 ### Which Command
 
-Shows the path to the tool binary that would be executed.
+Shows the path to the tool binary that would be executed. The first line is always the bare path (pipe-friendly, copy-pastable).
 
-**Core tools** - shows the resolved Node.js binary path:
+**Core tools** - shows the resolved Node.js binary path with version and resolution source:
 
 ```bash
 $ vp env which node
-/Users/user/.cache/vite-plus/js_runtime/node/20.18.0/bin/node
+/Users/user/.vite-plus/js_runtime/node/20.18.0/bin/node
+  Version:    20.18.0
+  Source:     .node-version
 
 $ vp env which npm
-/Users/user/.cache/vite-plus/js_runtime/node/20.18.0/bin/npm
+/Users/user/.vite-plus/js_runtime/node/20.18.0/bin/npm
+  Version:    20.18.0
+  Source:     .node-version
 ```
 
-**Global packages** - shows binary path plus package metadata, pinned Node.js, and install time:
+When using session override:
+
+```bash
+$ vp env which node
+/Users/user/.vite-plus/js_runtime/node/18.20.0/bin/node
+  Version:    18.20.0
+  Source:     VITE_PLUS_NODE_VERSION (session)
+```
+
+**Global packages** - shows binary path plus package metadata:
 
 ```bash
 $ vp env which tsc
 /Users/user/.vite-plus/packages/typescript/lib/node_modules/typescript/bin/tsc
-  Package: typescript@5.7.0
-  Binaries: tsc, tsserver
-  Node.js: /Users/user/.vite-plus/js_runtime/node/20.18.0/bin/node
-  Installed: 2024-01-15 10:30:00
+  Package:    typescript@5.7.0
+  Binaries:   tsc, tsserver
+  Node:       20.18.0
+  Installed:  2024-01-15
 
 $ vp env which eslint
 /Users/user/.vite-plus/packages/eslint/lib/node_modules/eslint/bin/eslint.js
-  Package: eslint@9.0.0
-  Binaries: eslint
-  Node.js: /Users/user/.vite-plus/js_runtime/node/22.13.0/bin/node
-  Installed: 2024-02-20 14:45:30
+  Package:    eslint@9.0.0
+  Binaries:   eslint
+  Node:       22.13.0
+  Installed:  2024-02-20
 ```
 
-| Tool Type       | Resolution                          | Output                                                      |
-| --------------- | ----------------------------------- | ----------------------------------------------------------- |
-| Core tools      | Node.js version from project config | Binary path only                                            |
-| Global packages | Package metadata lookup             | Binary path + Package version + Node.js path + Install time |
+| Tool Type       | Resolution                          | Output                                                         |
+| --------------- | ----------------------------------- | -------------------------------------------------------------- |
+| Core tools      | Node.js version from project config | Binary path + Version + Source                                 |
+| Global packages | Package metadata lookup             | Binary path + Package version + Node.js version + Install date |
 
 **Error cases:**
 
 ```bash
 # Unknown tool (not core tool, not in any global package)
 $ vp env which unknown-tool
-vp: Unknown tool 'unknown-tool'
-Not a core tool (node, npm, npx) and not found in any installed global package.
-Run 'vp list -g' to see installed global packages.
+error: tool 'unknown-tool' not found
+Not a core tool (node, npm, npx) or installed global package.
+Run 'vp list -g' to see installed packages.
+
+# Node.js version not installed
+$ vp env which node
+error: node not found
+Node.js 20.18.0 is not installed.
+Run 'vp env install 20.18.0' to install it.
+
+# Global package binary missing
+$ vp env which tsc
+error: binary 'tsc' not found
+Package typescript may need to be reinstalled.
+Run 'vp install -g typescript' to reinstall.
 ```
 
 ## Pin Command

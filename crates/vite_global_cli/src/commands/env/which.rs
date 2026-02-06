@@ -2,22 +2,27 @@
 //!
 //! Shows the path to the tool binary that would be executed.
 //!
-//! For core tools (node, npm, npx), shows the resolved Node.js binary path.
+//! For core tools (node, npm, npx), shows the resolved Node.js binary path
+//! along with version and resolution source.
 //! For global packages, shows the binary path plus package metadata.
 
 use std::process::ExitStatus;
 
 use chrono::Local;
+use owo_colors::OwoColorize;
 use vite_path::AbsolutePathBuf;
 
 use super::{
-    config::{get_node_modules_dir, get_packages_dir, resolve_version},
+    config::{VERSION_ENV_VAR, get_node_modules_dir, get_packages_dir, resolve_version},
     package_metadata::PackageMetadata,
 };
 use crate::error::Error;
 
 /// Core tools (node, npm, npx)
 const CORE_TOOLS: &[&str] = &["node", "npm", "npx"];
+
+/// Column width for left-side labels in aligned metadata output
+const LABEL_WIDTH: usize = 10;
 
 /// Execute the which command.
 pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
@@ -32,9 +37,9 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     }
 
     // Unknown tool
-    eprintln!("vp: Unknown tool '{tool}'");
-    eprintln!("Not a core tool (node, npm, npx) and not found in any installed global package.");
-    eprintln!("Run 'vp list -g' to see installed global packages.");
+    eprintln!("{} tool '{}' not found", "error:".red().bold(), tool.bold());
+    eprintln!("Not a core tool (node, npm, npx) or installed global package.");
+    eprintln!("Run 'vp list -g' to see installed packages.");
     Ok(exit_status(1))
 }
 
@@ -61,15 +66,30 @@ async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatu
 
     // Check if the tool exists
     if !tokio::fs::try_exists(&tool_path).await.unwrap_or(false) {
-        eprintln!("vp: {} not found at {}", tool, tool_path.as_path().display());
-        eprintln!("Node.js {} may not be installed yet.", resolution.version);
-        eprintln!("Run 'node -v' to trigger installation.");
+        eprintln!("{} {} not found", "error:".red().bold(), tool.bold());
+        eprintln!("Node.js {} is not installed.", resolution.version);
+        eprintln!("Run 'vp env install {}' to install it.", resolution.version);
         return Ok(exit_status(1));
     }
 
+    // Print binary path (first line, uncolored, pipe-friendly)
     println!("{}", tool_path.as_path().display());
 
+    // Print metadata
+    let source_display = format_source(&resolution.source);
+    println!("  {:<LABEL_WIDTH$}  {}", "Version:".dimmed(), resolution.version.bright_green());
+    println!("  {:<LABEL_WIDTH$}  {}", "Source:".dimmed(), source_display.dimmed());
+
     Ok(ExitStatus::default())
+}
+
+/// Format the resolution source for human-friendly display.
+fn format_source(source: &str) -> String {
+    match source {
+        s if s == VERSION_ENV_VAR => format!("{s} (session)"),
+        "lts" => "lts (fallback)".to_string(),
+        other => other.to_string(),
+    }
 }
 
 /// Execute which for a global package binary.
@@ -82,27 +102,28 @@ async fn execute_package_binary(
 
     // Check if binary exists
     if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-        eprintln!("vp: Binary '{}' not found at {}", tool, binary_path.as_path().display());
+        eprintln!("{} binary '{}' not found", "error:".red().bold(), tool.bold());
         eprintln!("Package {} may need to be reinstalled.", metadata.name);
+        eprintln!("Run 'vp install -g {}' to reinstall.", metadata.name);
         return Ok(exit_status(1));
     }
 
-    // Get the Node.js path for this package
-    let node_version = &metadata.platform.node;
-    let node_path = get_node_path(node_version)?;
-
-    // Format installation timestamp in local timezone
+    // Format installation timestamp (date only)
     let installed_local = metadata.installed_at.with_timezone(&Local);
-    let installed_str = installed_local.format("%Y-%m-%d %H:%M:%S").to_string();
+    let installed_str = installed_local.format("%Y-%m-%d").to_string();
 
-    // Print binary path
+    // Print binary path (first line, uncolored, pipe-friendly)
     println!("{}", binary_path.as_path().display());
 
     // Print metadata
-    println!("  Package: {}@{}", metadata.name, metadata.version);
-    println!("  Binaries: {}", metadata.bins.join(", "));
-    println!("  Node.js: {}", node_path.as_path().display());
-    println!("  Installed: {}", installed_str);
+    println!(
+        "  {:<LABEL_WIDTH$}  {}",
+        "Package:".dimmed(),
+        format!("{}@{}", metadata.name, metadata.version).bright_blue()
+    );
+    println!("  {:<LABEL_WIDTH$}  {}", "Binaries:".dimmed(), metadata.bins.join(", "));
+    println!("  {:<LABEL_WIDTH$}  {}", "Node:".dimmed(), metadata.platform.node.bright_green());
+    println!("  {:<LABEL_WIDTH$}  {}", "Installed:".dimmed(), installed_str.dimmed());
 
     Ok(ExitStatus::default())
 }
@@ -157,19 +178,6 @@ fn locate_package_binary(package_name: &str, binary_name: &str) -> Result<Absolu
     };
 
     Ok(binary_path)
-}
-
-/// Get the path to the node binary for a given version.
-fn get_node_path(version: &str) -> Result<AbsolutePathBuf, Error> {
-    let home_dir = vite_shared::get_vite_plus_home()?.join("js_runtime").join("node").join(version);
-
-    #[cfg(windows)]
-    let node_path = home_dir.join("node.exe");
-
-    #[cfg(not(windows))]
-    let node_path = home_dir.join("bin").join("node");
-
-    Ok(node_path)
 }
 
 /// Create an exit status with the given code.
