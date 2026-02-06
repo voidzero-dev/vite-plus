@@ -1538,7 +1538,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
 
         Commands::Fmt { args } => commands::delegate::execute(cwd, "fmt", &args).await,
 
-        Commands::Run { args } => commands::delegate::execute(cwd, "run", &args).await,
+        Commands::Run { args } => commands::run_or_delegate::execute(cwd, &args).await,
 
         Commands::Preview { args } => commands::delegate::execute(cwd, "preview", &args).await,
 

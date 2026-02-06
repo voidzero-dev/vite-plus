@@ -23,11 +23,49 @@
 //! Category C - Local CLI Delegation:
 //! - `delegate`: Local CLI delegation
 
+use std::{collections::HashMap, io::BufReader};
+
 use vite_install::package_manager::PackageManager;
 use vite_path::AbsolutePath;
 use vite_shared::{PrependOptions, prepend_to_path_env};
 
 use crate::{error::Error, js_executor::JsExecutor};
+
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct DepCheckPackageJson {
+    #[serde(default)]
+    dependencies: HashMap<String, serde_json::Value>,
+    #[serde(default)]
+    dev_dependencies: HashMap<String, serde_json::Value>,
+}
+
+/// Check if vite-plus is listed in the nearest package.json's
+/// dependencies or devDependencies.
+///
+/// Returns `true` if vite-plus is found, `false` if not found
+/// or if no package.json exists.
+pub fn has_vite_plus_dependency(cwd: &AbsolutePath) -> bool {
+    let mut current = cwd;
+    loop {
+        let package_json_path = current.join("package.json");
+        if package_json_path.as_path().exists() {
+            if let Ok(file) = std::fs::File::open(&package_json_path) {
+                if let Ok(pkg) =
+                    serde_json::from_reader::<_, DepCheckPackageJson>(BufReader::new(file))
+                {
+                    return pkg.dependencies.contains_key("vite-plus")
+                        || pkg.dev_dependencies.contains_key("vite-plus");
+                }
+            }
+            return false; // Found package.json but couldn't parse deps → treat as no dependency
+        }
+        match current.parent() {
+            Some(parent) if parent != current => current = parent,
+            _ => return false, // Reached filesystem root
+        }
+    }
+}
 
 /// Ensure a package.json exists in the given directory.
 /// If it doesn't exist, create a minimal one with `{ "type": "module" }`.
@@ -106,6 +144,7 @@ pub mod self_update;
 
 // Category C: Local CLI Delegation
 pub mod delegate;
+pub mod run_or_delegate;
 
 // Re-export command structs for convenient access
 pub use add::AddCommand;
@@ -118,3 +157,99 @@ pub use remove::RemoveCommand;
 pub use unlink::UnlinkCommand;
 pub use update::UpdateCommand;
 pub use why::WhyCommand;
+
+#[cfg(test)]
+mod tests {
+    use vite_path::AbsolutePathBuf;
+
+    use super::*;
+
+    #[test]
+    fn test_has_vite_plus_in_dev_dependencies() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        std::fs::write(
+            temp_path.join("package.json"),
+            r#"{ "devDependencies": { "vite-plus": "^1.0.0" } }"#,
+        )
+        .unwrap();
+        assert!(has_vite_plus_dependency(&temp_path));
+    }
+
+    #[test]
+    fn test_has_vite_plus_in_dependencies() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        std::fs::write(
+            temp_path.join("package.json"),
+            r#"{ "dependencies": { "vite-plus": "^1.0.0" } }"#,
+        )
+        .unwrap();
+        assert!(has_vite_plus_dependency(&temp_path));
+    }
+
+    #[test]
+    fn test_no_vite_plus_dependency() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        std::fs::write(
+            temp_path.join("package.json"),
+            r#"{ "devDependencies": { "vite": "^6.0.0" } }"#,
+        )
+        .unwrap();
+        assert!(!has_vite_plus_dependency(&temp_path));
+    }
+
+    #[test]
+    fn test_no_package_json() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        assert!(!has_vite_plus_dependency(&temp_path));
+    }
+
+    #[test]
+    fn test_nested_directory_walks_up() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        std::fs::write(
+            temp_path.join("package.json"),
+            r#"{ "devDependencies": { "vite-plus": "^1.0.0" } }"#,
+        )
+        .unwrap();
+        let child_dir = temp_path.join("child");
+        std::fs::create_dir(&child_dir).unwrap();
+        let child_path = AbsolutePathBuf::new(child_dir.as_path().to_path_buf()).unwrap();
+        assert!(has_vite_plus_dependency(&child_path));
+    }
+
+    #[test]
+    fn test_empty_package_json() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        std::fs::write(temp_path.join("package.json"), r#"{}"#).unwrap();
+        assert!(!has_vite_plus_dependency(&temp_path));
+    }
+
+    #[test]
+    fn test_nested_dir_stops_at_nearest_package_json() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        // Parent has vite-plus
+        std::fs::write(
+            temp_path.join("package.json"),
+            r#"{ "devDependencies": { "vite-plus": "^1.0.0" } }"#,
+        )
+        .unwrap();
+        // Child has its own package.json without vite-plus
+        let child_dir = temp_path.join("child");
+        std::fs::create_dir(&child_dir).unwrap();
+        std::fs::write(
+            child_dir.join("package.json"),
+            r#"{ "devDependencies": { "vite": "^6.0.0" } }"#,
+        )
+        .unwrap();
+        let child_path = AbsolutePathBuf::new(child_dir.as_path().to_path_buf()).unwrap();
+        // Should find the child's package.json first and return false
+        assert!(!has_vite_plus_dependency(&child_path));
+    }
+}
