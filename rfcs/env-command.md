@@ -113,8 +113,9 @@ vp env use             # Install & activate project's configured version
 vp env use --unset     # Remove session override
 
 # Options
-vp env use --no-install         # Skip auto-install if version not present
+vp env use --no-install           # Skip auto-install if version not present
 vp env use --silent-if-unchanged  # Suppress output if version already active
+vp env use --write-session        # Write session file (for CI without eval wrapper)
 ```
 
 **How it works:**
@@ -122,12 +123,18 @@ vp env use --silent-if-unchanged  # Suppress output if version already active
 1. `~/.vite-plus/env` includes a `vp()` shell function that intercepts `vp env use` calls
 2. The function runs `command vp env use ...`, captures stdout (shell commands), and evals it
 3. `vp env use` outputs `export VITE_PLUS_NODE_VERSION=20.18.1` to stdout, status messages to stderr
-4. `vp env use` also writes the resolved version to `~/.vite-plus/.session-node-version` (session file)
-5. The shim dispatch checks `VITE_PLUS_NODE_VERSION` env var first, then the session file, in the resolution chain
+4. The shim dispatch checks `VITE_PLUS_NODE_VERSION` env var first, then the session file, in the resolution chain
 
-**Why both env var and session file?**
+**`--write-session` flag (for CI / wrapper-less environments):**
 
-The env var requires a shell wrapper to `eval` the output, which isn't available in CI environments (GitHub Actions) or when running `command vp env use` directly. The session file works without eval — shims read it directly from disk. The env var still takes priority when set, so the shell wrapper experience is unchanged.
+When `--write-session` is passed, `vp env use` writes the resolved version to `~/.vite-plus/.session-node-version`. Shims read this file directly from disk, so `vp env use` works even without the shell eval wrapper. The env var still takes priority when set, so the shell wrapper experience is unchanged. The session file is only written when explicitly requested to avoid creating a machine-global override inadvertently.
+
+```bash
+# GitHub Actions example (no shell wrapper available)
+- run: vp env use 20 --write-session
+- run: node --version   # v20.x via shim reading session file
+- run: vp env use --unset --write-session  # Clean up
+```
 
 **Shell-specific output:**
 

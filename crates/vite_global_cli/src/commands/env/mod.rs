@@ -70,8 +70,15 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
                 println!("Uninstalled Node.js v{}", resolved);
                 Ok(ExitStatus::default())
             }
-            crate::cli::EnvSubcommands::Use { version, unset, no_install, silent_if_unchanged } => {
-                r#use::execute(cwd, version, unset, no_install, silent_if_unchanged).await
+            crate::cli::EnvSubcommands::Use {
+                version,
+                unset,
+                no_install,
+                silent_if_unchanged,
+                write_session,
+            } => {
+                r#use::execute(cwd, version, unset, no_install, silent_if_unchanged, write_session)
+                    .await
             }
             crate::cli::EnvSubcommands::Install { version } => {
                 let (resolved, from_session_override) = if let Some(version) = version {

@@ -782,6 +782,11 @@ pub enum EnvSubcommands {
         /// Suppress output if version is already active
         #[arg(long)]
         silent_if_unchanged: bool,
+
+        /// Write a session version file so shims work without the shell eval wrapper.
+        /// Use this in CI or environments where the vp() shell function is not sourced.
+        #[arg(long)]
+        write_session: bool,
     },
 }
 
