@@ -2,7 +2,7 @@ export default {
   run: {
     tasks: {
       doc: {
-        command: "vp doc build",
+        command: 'vp doc build',
       },
     },
   },

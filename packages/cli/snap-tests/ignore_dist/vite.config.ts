@@ -2,7 +2,7 @@ export default {
   run: {
     tasks: {
       lint: {
-        command: "vp lint",
+        command: 'vp lint',
       },
     },
   },

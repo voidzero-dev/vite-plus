@@ -2,7 +2,7 @@ export default {
   run: {
     tasks: {
       install: {
-        command: "vp install --prod",
+        command: 'vp install --prod',
       },
     },
   },
