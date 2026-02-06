@@ -115,25 +115,25 @@ vp env use --unset     # Remove session override
 # Options
 vp env use --no-install           # Skip auto-install if version not present
 vp env use --silent-if-unchanged  # Suppress output if version already active
-vp env use --write-session        # Write session file (for CI without eval wrapper)
 ```
 
 **How it works:**
 
 1. `~/.vite-plus/env` includes a `vp()` shell function that intercepts `vp env use` calls
-2. The function runs `command vp env use ...`, captures stdout (shell commands), and evals it
-3. `vp env use` outputs `export VITE_PLUS_NODE_VERSION=20.18.1` to stdout, status messages to stderr
-4. The shim dispatch checks `VITE_PLUS_NODE_VERSION` env var first, then the session file, in the resolution chain
+2. The wrapper sets `VITE_PLUS_ENV_USE_EVAL_ENABLE=1` before calling `command vp env use ...`
+3. When the env var is present (wrapper active), `vp env use` outputs shell commands to stdout for eval
+4. When the env var is absent (CI, direct invocation), `vp env use` writes a session file (`~/.vite-plus/.session-node-version`) instead
+5. The shim dispatch checks `VITE_PLUS_NODE_VERSION` env var first, then the session file, in the resolution chain
 
-**`--write-session` flag (for CI / wrapper-less environments):**
+**Automatic session file (for CI / wrapper-less environments):**
 
-When `--write-session` is passed, `vp env use` writes the resolved version to `~/.vite-plus/.session-node-version`. Shims read this file directly from disk, so `vp env use` works even without the shell eval wrapper. The env var still takes priority when set, so the shell wrapper experience is unchanged. The session file is only written when explicitly requested to avoid creating a machine-global override inadvertently.
+When `vp env use` detects that the shell eval wrapper is not active (i.e., `VITE_PLUS_ENV_USE_EVAL_ENABLE` is not set), it automatically writes the resolved version to `~/.vite-plus/.session-node-version`. Shims read this file directly from disk, so `vp env use` works without the shell wrapper — no extra flags needed. The env var still takes priority when set, so the shell wrapper experience is unchanged.
 
 ```bash
-# GitHub Actions example (no shell wrapper available)
-- run: vp env use 20 --write-session
+# GitHub Actions example (no shell wrapper, session file written automatically)
+- run: vp env use 20
 - run: node --version   # v20.x via shim reading session file
-- run: vp env use --unset --write-session  # Clean up
+- run: vp env use --unset  # Clean up
 ```
 
 **Shell-specific output:**
@@ -1908,14 +1908,15 @@ $ vp env --current --json
 
 ## Environment Variables
 
-| Variable                   | Description                                                                                     | Default        |
-| -------------------------- | ----------------------------------------------------------------------------------------------- | -------------- |
-| `VITE_PLUS_HOME`           | Base directory for bin and config                                                               | `~/.vite-plus` |
-| `VITE_PLUS_NODE_VERSION`   | Session override for Node.js version (set by `vp env use`)                                      | unset          |
-| `VITE_PLUS_LOG`            | Log level: debug, info, warn, error                                                             | `warn`         |
-| `VITE_PLUS_DEBUG_SHIM`     | Enable extra shim diagnostics                                                                   | unset          |
-| `VITE_PLUS_BYPASS`         | PATH-style list of bin dirs to skip when finding system tools; set `=1` to bypass shim entirely | unset          |
-| `VITE_PLUS_TOOL_RECURSION` | **Internal**: Prevents shim recursion                                                           | unset          |
+| Variable                        | Description                                                                                     | Default        |
+| ------------------------------- | ----------------------------------------------------------------------------------------------- | -------------- |
+| `VITE_PLUS_HOME`                | Base directory for bin and config                                                               | `~/.vite-plus` |
+| `VITE_PLUS_NODE_VERSION`        | Session override for Node.js version (set by `vp env use`)                                      | unset          |
+| `VITE_PLUS_LOG`                 | Log level: debug, info, warn, error                                                             | `warn`         |
+| `VITE_PLUS_DEBUG_SHIM`          | Enable extra shim diagnostics                                                                   | unset          |
+| `VITE_PLUS_BYPASS`              | PATH-style list of bin dirs to skip when finding system tools; set `=1` to bypass shim entirely | unset          |
+| `VITE_PLUS_TOOL_RECURSION`      | **Internal**: Prevents shim recursion                                                           | unset          |
+| `VITE_PLUS_ENV_USE_EVAL_ENABLE` | **Internal**: Set by shell wrappers to signal that `vp env use` output will be eval'd           | unset          |
 
 ## Unix-Specific Considerations
 

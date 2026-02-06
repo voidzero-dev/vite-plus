@@ -258,6 +258,7 @@ jobs:
           # Test 5: use session
           vp env use 18
           node --version
+          vp env doctor
           vp env use --unset
           node --version
 
@@ -270,21 +271,27 @@ jobs:
           where.exe npm
           where.exe npx
           where.exe vp
+
+          vp env use 18
+          node --version
+          vp env use --unset
+          node --version
+
           vp env doctor
 
-          :: Test 1: Install a JS-based CLI (typescript)
+          REM Test 1: Install a JS-based CLI (typescript)
           vp install -g typescript
           tsc --version
           where.exe tsc
 
-          :: Test 2: Verify the package was installed correctly
+          REM Test 2: Verify the package was installed correctly
           dir "%USERPROFILE%\.vite-plus-dev\packages\typescript\"
           dir "%USERPROFILE%\.vite-plus-dev\bin\"
 
-          :: Test 3: Uninstall
+          REM Test 3: Uninstall
           vp uninstall -g typescript
 
-          :: Test 4: Verify uninstall removed shim (.cmd wrapper)
+          REM Test 4: Verify uninstall removed shim (.cmd wrapper)
           echo Checking bin dir after uninstall:
           dir "%USERPROFILE%\.vite-plus-dev\bin\"
           if exist "%USERPROFILE%\.vite-plus-dev\bin\tsc.cmd" (
@@ -293,16 +300,17 @@ jobs:
           )
           echo tsc.cmd shim removed successfully
 
-          :: Test 5: Verify shell script was also removed (for Git Bash)
+          REM Test 5: Verify shell script was also removed (for Git Bash)
           if exist "%USERPROFILE%\.vite-plus-dev\bin\tsc" (
             echo Error: tsc shell script still exists
             exit /b 1
           )
           echo tsc shell script removed successfully
 
-          :: Test 6: use session
+          REM Test 6: use session
           vp env use 18
           node --version
+          vp env doctor
           vp env use --unset
           node --version
 
@@ -341,6 +349,7 @@ jobs:
           # Test 5: use session
           vp env use 18
           node --version
+          vp env doctor
           vp env use --unset
           node --version
 

@@ -231,20 +231,18 @@ jobs:
           echo PATH: %PATH%
           dir "%USERPROFILE%\.vite-plus\bin"
 
-          vp --version
-          vp --help
-          :: test new command
+          REM test new command
           vp new create-vite --no-interactive --no-agent -- hello-cmd --no-interactive -t vanilla
           cd hello-cmd && vp run build
 
       - name: Verify bin setup on cmd
         shell: cmd
         run: |
-          :: Verify bin directory was created by vp env --setup
+          REM Verify bin directory was created by vp env --setup
           set "BIN_PATH=%USERPROFILE%\.vite-plus\bin"
           dir "%BIN_PATH%"
 
-          :: Verify shim executables exist (Windows uses .cmd wrappers)
+          REM Verify shim executables exist (Windows uses .cmd wrappers)
           for %%s in (node.cmd npm.cmd npx.cmd vp.cmd) do (
             if not exist "%BIN_PATH%\%%s" (
               echo Error: Shim not found: %BIN_PATH%\%%s
@@ -258,7 +256,7 @@ jobs:
           where npx
           where vp
 
-          :: Verify vp env doctor works
+          REM Verify vp env doctor works
           vp env doctor
           vp env run --node 24 -- node -p "process.versions"
 

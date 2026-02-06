@@ -62,6 +62,13 @@ fn format_unset(shell: &Shell) -> String {
     }
 }
 
+/// Whether the shell eval wrapper is active.
+/// When true, the wrapper will eval our stdout to set env vars — no session file needed.
+/// When false (CI, direct invocation), we write a session file so shims can read it.
+fn has_eval_wrapper() -> bool {
+    std::env::var("VITE_PLUS_ENV_USE_EVAL_ENABLE").is_ok()
+}
+
 /// Execute the `vp env use` command.
 pub async fn execute(
     cwd: AbsolutePathBuf,
@@ -69,16 +76,16 @@ pub async fn execute(
     unset: bool,
     no_install: bool,
     silent_if_unchanged: bool,
-    write_session: bool,
 ) -> Result<ExitStatus, Error> {
     let shell = detect_shell();
 
     // Handle --unset: remove session override
     if unset {
-        if write_session {
+        if has_eval_wrapper() {
+            println!("{}", format_unset(&shell));
+        } else {
             config::delete_session_version().await?;
         }
-        println!("{}", format_unset(&shell));
         eprintln!("Reverted to file-based Node.js version resolution");
         return Ok(ExitStatus::default());
     }
@@ -98,17 +105,18 @@ pub async fn execute(
     // Check if already active and suppress output if requested
     if silent_if_unchanged {
         let current_env = std::env::var(VERSION_ENV_VAR).ok().map(|v| v.trim().to_string());
-        let current = if write_session {
+        let current = if !has_eval_wrapper() {
             current_env.or(config::read_session_version().await)
         } else {
             current_env
         };
         if current.as_deref() == Some(&resolved_version) {
-            // Already active, output the export anyway (idempotent) but skip stderr
-            if write_session {
+            // Already active — idempotent, skip stderr status message
+            if has_eval_wrapper() {
+                println!("{}", format_export(&shell, &resolved_version));
+            } else {
                 config::write_session_version(&resolved_version).await?;
             }
-            println!("{}", format_export(&shell, &resolved_version));
             return Ok(ExitStatus::default());
         }
     }
@@ -136,14 +144,13 @@ pub async fn execute(
         }
     }
 
-    // Write session version file when --write-session is passed
-    // (for CI or environments where the vp() shell eval wrapper is not available)
-    if write_session {
+    if has_eval_wrapper() {
+        // Output the shell command to stdout (consumed by shell wrapper's eval)
+        println!("{}", format_export(&shell, &resolved_version));
+    } else {
+        // No eval wrapper (CI or direct invocation) — write session file so shims can read it
         config::write_session_version(&resolved_version).await?;
     }
-
-    // Output the shell command to stdout (consumed by shell wrapper's eval)
-    println!("{}", format_export(&shell, &resolved_version));
 
     // Status message to stderr (visible to user)
     eprintln!("Using Node.js v{} (resolved from {})", resolved_version, source_desc);

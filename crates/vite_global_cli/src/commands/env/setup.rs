@@ -314,7 +314,7 @@ unset __vp_bin
 vp() {
     if [ "$1" = "env" ] && [ "$2" = "use" ]; then
         case " $* " in *" -h "*|*" --help "*) command vp "$@"; return; esac
-        __vp_out="$(command vp "$@")" || return $?
+        __vp_out="$(VITE_PLUS_ENV_USE_EVAL_ENABLE=1 command vp "$@")" || return $?
         eval "$__vp_out"
     else
         command vp "$@"
@@ -338,6 +338,7 @@ function vp
         if contains -- -h $argv; or contains -- --help $argv
             command vp $argv; return
         end
+        set -lx VITE_PLUS_ENV_USE_EVAL_ENABLE 1
         set -l __vp_out (command vp $argv); or return $status
         eval $__vp_out
     else
@@ -363,6 +364,7 @@ function vp {
         if ($args -contains "-h" -or $args -contains "--help") {
             & (Join-Path $__vp_bin "vp.exe") @args; return
         }
+        $env:VITE_PLUS_ENV_USE_EVAL_ENABLE = "1"
         $output = & (Join-Path $__vp_bin "vp.exe") @args 2>&1 | ForEach-Object {
             if ($_ -is [System.Management.Automation.ErrorRecord]) {
                 Write-Host $_.Exception.Message
@@ -370,6 +372,7 @@ function vp {
                 $_
             }
         }
+        Remove-Item Env:VITE_PLUS_ENV_USE_EVAL_ENABLE -ErrorAction SilentlyContinue
         if ($LASTEXITCODE -eq 0 -and $output) {
             Invoke-Expression ($output -join "`n")
         }
@@ -387,7 +390,7 @@ function vp {
 
     // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions)
     // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`
-    let vp_use_cmd_content = "@echo off\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\n";
+    let vp_use_cmd_content = "@echo off\r\nset VITE_PLUS_ENV_USE_EVAL_ENABLE=1\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VITE_PLUS_ENV_USE_EVAL_ENABLE=\r\n";
     // Only write if bin directory exists (it may not during --env-only)
     if tokio::fs::try_exists(&bin_path).await.unwrap_or(false) {
         let vp_use_cmd_file = bin_path.join("vp-use.cmd");
