@@ -1,101 +1,27 @@
-[1]> vite run hello#build # should build the library
-~/packages/hello$ vp lib
-file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/filename-DvJ5Js1a.js:1
-import { RUNTIME_MODULE_ID } from "@voidzero-dev/vite-plus-core/rolldown";
-         ^^^^^^^^^^^^^^^^^
-SyntaxError: The requested module '@voidzero-dev/vite-plus-core/rolldown' does not provide an export named 'RUNTIME_MODULE_ID'
-    at ModuleJob._instantiate (node:internal/modules/esm/module_job:228:21)
-    at async ModuleJob.run (node:internal/modules/esm/module_job:337:5)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
-
-Node.js v<semver>
-
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Vite+ Task Runner • Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Statistics:   1 tasks • 0 cache hits • 1 cache misses • 1 failed 
-Performance:  0% cache hit rate
-
-Task Details:
-────────────────────────────────────────────────
-  [1] hello#build: ~/packages/hello$ vp lib ✗ (exit code: 1)
-      → Cache miss: no previous cache entry found
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[1]> ls packages/hello/dist # should have the library
-ls: packages/hello/dist: No such file or directory
+> vite run hello#build # should build the library
+> ls packages/hello/dist # should have the library
+index.cjs
 
 > vite run hello#build | grep 'cache hit' # should hit cache
-Statistics:   1 tasks • 0 cache hits • 1 cache misses • 1 failed 
-Performance:  0% cache hit rate
+~/packages/hello$ vp lib ✓ cache hit, replaying
+Statistics:   1 tasks • 1 cache hits • 0 cache misses
+Performance:  100% cache hit rate, <variable>ms saved in total
 
-[1]> vite run array-config#build # should build the library supports array config
-~/packages/array-config$ vp lib
-file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/filename-DvJ5Js1a.js:1
-import { RUNTIME_MODULE_ID } from "@voidzero-dev/vite-plus-core/rolldown";
-         ^^^^^^^^^^^^^^^^^
-SyntaxError: The requested module '@voidzero-dev/vite-plus-core/rolldown' does not provide an export named 'RUNTIME_MODULE_ID'
-    at ModuleJob._instantiate (node:internal/modules/esm/module_job:228:21)
-    at async ModuleJob.run (node:internal/modules/esm/module_job:337:5)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
-
-Node.js v<semver>
-
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Vite+ Task Runner • Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Statistics:   1 tasks • 0 cache hits • 1 cache misses • 1 failed 
-Performance:  0% cache hit rate
-
-Task Details:
-────────────────────────────────────────────────
-  [1] array-config#build: ~/packages/array-config$ vp lib ✗ (exit code: 1)
-      → Cache miss: no previous cache entry found
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[1]> ls packages/array-config/dist # should have the library
-ls: packages/array-config/dist: No such file or directory
+> vite run array-config#build # should build the library supports array config
+> ls packages/array-config/dist # should have the library
+index.d.mts
+index.mjs
 
 > vite run array-config#build | grep 'cache hit' # should hit cache
-Statistics:   1 tasks • 0 cache hits • 1 cache misses • 1 failed 
-Performance:  0% cache hit rate
+~/packages/array-config$ vp lib ✓ cache hit, replaying
+Statistics:   1 tasks • 1 cache hits • 0 cache misses
+Performance:  100% cache hit rate, <variable>ms saved in total
 
-[1]> vite run default-config#build # should build the library supports default config
-~/packages/default-config$ vp lib
-file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/filename-DvJ5Js1a.js:1
-import { RUNTIME_MODULE_ID } from "@voidzero-dev/vite-plus-core/rolldown";
-         ^^^^^^^^^^^^^^^^^
-SyntaxError: The requested module '@voidzero-dev/vite-plus-core/rolldown' does not provide an export named 'RUNTIME_MODULE_ID'
-    at ModuleJob._instantiate (node:internal/modules/esm/module_job:228:21)
-    at async ModuleJob.run (node:internal/modules/esm/module_job:337:5)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
-
-Node.js v<semver>
-
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Vite+ Task Runner • Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Statistics:   1 tasks • 0 cache hits • 1 cache misses • 1 failed 
-Performance:  0% cache hit rate
-
-Task Details:
-────────────────────────────────────────────────
-  [1] default-config#build: ~/packages/default-config$ vp lib ✗ (exit code: 1)
-      → Cache miss: no previous cache entry found
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[1]> ls packages/default-config/dist # should have the library
-ls: packages/default-config/dist: No such file or directory
+> vite run default-config#build # should build the library supports default config
+> ls packages/default-config/dist # should have the library
+index.mjs
 
 > vite run default-config#build | grep 'cache hit' # should hit cache
-Statistics:   1 tasks • 0 cache hits • 1 cache misses • 1 failed 
-Performance:  0% cache hit rate
+~/packages/default-config$ vp lib ✓ cache hit, replaying
+Statistics:   1 tasks • 1 cache hits • 0 cache misses
+Performance:  100% cache hit rate, <variable>ms saved in total

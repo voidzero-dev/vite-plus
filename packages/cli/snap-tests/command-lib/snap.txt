@@ -1,68 +1,59 @@
-[1]> vite lib -h # should print the help message
-file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/filename-DvJ5Js1a.js:1
-import { RUNTIME_MODULE_ID } from "@voidzero-dev/vite-plus-core/rolldown";
-         ^^^^^^^^^^^^^^^^^
-SyntaxError: The requested module '@voidzero-dev/vite-plus-core/rolldown' does not provide an export named 'RUNTIME_MODULE_ID'
-    at ModuleJob._instantiate (node:internal/modules/esm/module_job:228:21)
-    at async ModuleJob.run (node:internal/modules/esm/module_job:337:5)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+> vite lib -h # should print the help message
+vite lib
 
-Node.js v<semver>
+Usage:
+  $ vite lib [...files]
 
-[1]> vite run lib # should build the library
-$ vp lib src/index.ts
-file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/filename-DvJ5Js1a.js:1
-import { RUNTIME_MODULE_ID } from "@voidzero-dev/vite-plus-core/rolldown";
-         ^^^^^^^^^^^^^^^^^
-SyntaxError: The requested module '@voidzero-dev/vite-plus-core/rolldown' does not provide an export named 'RUNTIME_MODULE_ID'
-    at ModuleJob._instantiate (node:internal/modules/esm/module_job:228:21)
-    at async ModuleJob.run (node:internal/modules/esm/module_job:337:5)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+Commands:
+  [...files]  Bundle files
 
-Node.js v<semver>
+For more info, run any command with the `--help` flag:
+  $ vite lib --help
 
+Options:
+  --config-loader <loader>  Config loader to use: auto, native, unrun (default: auto)
+  --no-config               Disable config file (default: true)
+  -f, --format <format>     Bundle format: esm, cjs, iife, umd (default: esm)
+  --clean                   Clean output directory, --no-clean to disable
+  --external <module>       Mark dependencies as external
+  --minify                  Minify output
+  --devtools                Enable devtools integration
+  --debug [feat]            Show debug logs
+  --target <target>         Bundle target, e.g "es2015", "esnext"
+  -l, --logLevel <level>    Set log level: info, warn, error, silent
+  --fail-on-warn            Fail on warnings (default: true)
+  --no-write                Disable writing files to disk, incompatible with watch mode (default: true)
+  -d, --out-dir <dir>       Output directory (default: dist)
+  --treeshake               Tree-shake bundle (default: true)
+  --sourcemap               Generate source map (default: false)
+  --shims                   Enable cjs and esm shims (default: false)
+  --platform <platform>     Target platform (default: node)
+  --dts                     Generate dts files
+  --publint                 Enable publint (default: false)
+  --attw                    Enable Are the types wrong integration (default: false)
+  --unused                  Enable unused dependencies check (default: false)
+  -w, --watch [path]        Watch mode
+  --ignore-watch <path>     Ignore custom paths in watch mode
+  --from-vite [vitest]      Reuse config from Vite or Vitest
+  --report                  Size report (default: true)
+  --env.* <value>           Define compile-time env variables
+  --env-file <file>         Load environment variables from a file, when used together with --env, variables in --env take precedence
+  --env-prefix <prefix>     Prefix for env variables to inject into the bundle (default: VITE_LIB_,TSDOWN_)
+  --on-success <command>    Command to run on success
+  --copy <dir>              Copy files to output dir
+  --public-dir <dir>        Alias for --copy, deprecated
+  --tsconfig <tsconfig>     Set tsconfig path
+  --unbundle                Unbundle mode
+  -W, --workspace [dir]     Enable workspace mode
+  -F, --filter <pattern>    Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name
+  --exports                 Generate export-related metadata for package.json (experimental)
+  -h, --help                Display this message
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Vite+ Task Runner • Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+> vite run lib # should build the library
+> ls dist # should have the library
+index.cjs
 
-Statistics:   1 tasks • 0 cache hits • 1 cache misses • 1 failed 
-Performance:  0% cache hit rate
-
-Task Details:
-────────────────────────────────────────────────
-  [1] command-lib#lib: $ vp lib src/index.ts ✗ (exit code: 1)
-      → Cache miss: no previous cache entry found
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[1]> ls dist # should have the library
-ls: dist: No such file or directory
-
-[1]> vite run lib # should hit cache
-$ vp lib src/index.ts
-file:///Volumes/code/vite-plus-workspace/vite-plus/packages/core/dist/tsdown/filename-DvJ5Js1a.js:1
-import { RUNTIME_MODULE_ID } from "@voidzero-dev/vite-plus-core/rolldown";
-         ^^^^^^^^^^^^^^^^^
-SyntaxError: The requested module '@voidzero-dev/vite-plus-core/rolldown' does not provide an export named 'RUNTIME_MODULE_ID'
-    at ModuleJob._instantiate (node:internal/modules/esm/module_job:228:21)
-    at async ModuleJob.run (node:internal/modules/esm/module_job:337:5)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
-
-Node.js v<semver>
-
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Vite+ Task Runner • Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Statistics:   1 tasks • 0 cache hits • 1 cache misses • 1 failed 
-Performance:  0% cache hit rate
-
-Task Details:
-────────────────────────────────────────────────
-  [1] command-lib#lib: $ vp lib src/index.ts ✗ (exit code: 1)
-      → Cache miss: no previous cache entry found
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+> vite run lib # should hit cache
+$ vp lib src/index.ts ✓ cache hit, replaying
+Statistics:   1 tasks • 1 cache hits • 0 cache misses
+Performance:  100% cache hit rate, <variable>ms saved in total
