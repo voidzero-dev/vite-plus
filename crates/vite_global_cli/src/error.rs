@@ -43,6 +43,10 @@ pub enum Error {
     #[error("{0}")]
     Other(Str),
 
+    /// User-facing message printed without "Error: " prefix.
+    #[error("{0}")]
+    UserMessage(Str),
+
     #[error(
         "Executable '{bin_name}' is already installed by {existing_package}\n\nPlease remove {existing_package} before installing {new_package}, or use --force to auto-replace"
     )]

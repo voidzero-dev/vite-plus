@@ -1,9 +1,9 @@
 use std::process::ExitStatus;
 
-use vite_install::{commands::remove::RemoveCommandOptions, package_manager::PackageManager};
+use vite_install::commands::remove::RemoveCommandOptions;
 use vite_path::AbsolutePathBuf;
 
-use super::prepend_js_runtime_to_path_env;
+use super::{build_package_manager, prepend_js_runtime_to_path_env};
 use crate::error::Error;
 
 /// Remove command for removing packages from dependencies.
@@ -33,8 +33,7 @@ impl RemoveCommand {
     ) -> Result<ExitStatus, Error> {
         prepend_js_runtime_to_path_env(&self.cwd).await?;
 
-        // Detect package manager
-        let package_manager = PackageManager::builder(&self.cwd).build_with_default().await?;
+        let package_manager = build_package_manager(&self.cwd).await?;
 
         let remove_command_options = RemoveCommandOptions {
             packages,

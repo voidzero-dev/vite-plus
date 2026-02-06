@@ -1,2 +1,5 @@
-> vp ls # should output nothing without package.json
-> vp pm list # should output nothing without package.json
+[1]> vp ls # should output nothing without package.json
+No package.json found.
+
+[1]> vp pm list # should output nothing without package.json
+No package.json found.

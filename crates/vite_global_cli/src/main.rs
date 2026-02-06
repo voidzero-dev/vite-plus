@@ -90,7 +90,11 @@ async fn main() -> ExitCode {
             }
         }
         Err(e) => {
-            eprintln!("Error: {e}");
+            if matches!(&e, error::Error::UserMessage(_)) {
+                eprintln!("{e}");
+            } else {
+                eprintln!("Error: {e}");
+            }
             ExitCode::FAILURE
         }
     }

@@ -1,9 +1,9 @@
 use std::process::ExitStatus;
 
-use vite_install::{commands::why::WhyCommandOptions, package_manager::PackageManager};
+use vite_install::commands::why::WhyCommandOptions;
 use vite_path::AbsolutePathBuf;
 
-use super::prepend_js_runtime_to_path_env;
+use super::{build_package_manager, prepend_js_runtime_to_path_env};
 use crate::error::Error;
 
 /// Why command for showing why a package is installed.
@@ -40,8 +40,7 @@ impl WhyCommand {
     ) -> Result<ExitStatus, Error> {
         prepend_js_runtime_to_path_env(&self.cwd).await?;
 
-        // Detect package manager
-        let package_manager = PackageManager::builder(&self.cwd).build_with_default().await?;
+        let package_manager = build_package_manager(&self.cwd).await?;
 
         let why_command_options = WhyCommandOptions {
             packages,

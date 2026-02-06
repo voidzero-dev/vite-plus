@@ -1,9 +1,9 @@
 use std::process::ExitStatus;
 
-use vite_install::{commands::dlx::DlxCommandOptions, package_manager::PackageManager};
+use vite_install::commands::dlx::DlxCommandOptions;
 use vite_path::AbsolutePathBuf;
 
-use super::prepend_js_runtime_to_path_env;
+use super::{build_package_manager, prepend_js_runtime_to_path_env};
 use crate::error::Error;
 
 /// Dlx command for executing packages without installing them as dependencies.
@@ -40,8 +40,7 @@ impl DlxCommand {
         let package_spec = &args[0];
         let command_args: Vec<String> = args[1..].to_vec();
 
-        // Detect package manager
-        let package_manager = PackageManager::builder(&self.cwd).build_with_default().await?;
+        let package_manager = build_package_manager(&self.cwd).await?;
 
         let dlx_command_options = DlxCommandOptions {
             packages: &packages,

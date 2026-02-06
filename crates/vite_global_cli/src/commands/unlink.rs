@@ -1,9 +1,9 @@
 use std::process::ExitStatus;
 
-use vite_install::{commands::unlink::UnlinkCommandOptions, package_manager::PackageManager};
+use vite_install::commands::unlink::UnlinkCommandOptions;
 use vite_path::AbsolutePathBuf;
 
-use super::prepend_js_runtime_to_path_env;
+use super::{build_package_manager, prepend_js_runtime_to_path_env};
 use crate::error::Error;
 
 /// Unlink command for removing package links.
@@ -27,8 +27,7 @@ impl UnlinkCommand {
     ) -> Result<ExitStatus, Error> {
         prepend_js_runtime_to_path_env(&self.cwd).await?;
 
-        // Detect package manager
-        let package_manager = PackageManager::builder(&self.cwd).build_with_default().await?;
+        let package_manager = build_package_manager(&self.cwd).await?;
 
         let unlink_command_options = UnlinkCommandOptions { package, recursive, pass_through_args };
         Ok(package_manager.run_unlink_command(&unlink_command_options, &self.cwd).await?)

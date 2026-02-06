@@ -6,17 +6,14 @@
 
 use std::process::ExitStatus;
 
-use vite_install::{
-    PackageManager,
-    commands::{
-        cache::CacheCommandOptions, config::ConfigCommandOptions, list::ListCommandOptions,
-        owner::OwnerSubcommand, pack::PackCommandOptions, prune::PruneCommandOptions,
-        publish::PublishCommandOptions, view::ViewCommandOptions,
-    },
+use vite_install::commands::{
+    cache::CacheCommandOptions, config::ConfigCommandOptions, list::ListCommandOptions,
+    owner::OwnerSubcommand, pack::PackCommandOptions, prune::PruneCommandOptions,
+    publish::PublishCommandOptions, view::ViewCommandOptions,
 };
 use vite_path::AbsolutePathBuf;
 
-use super::prepend_js_runtime_to_path_env;
+use super::{build_package_manager, prepend_js_runtime_to_path_env};
 use crate::{
     cli::{ConfigCommands, OwnerCommands, PmCommands},
     error::Error,
@@ -32,7 +29,7 @@ pub async fn execute_info(
 ) -> Result<ExitStatus, Error> {
     prepend_js_runtime_to_path_env(&cwd).await?;
 
-    let package_manager = PackageManager::builder(&cwd).build_with_default().await?;
+    let package_manager = build_package_manager(&cwd).await?;
 
     let options = ViewCommandOptions { package, field, json, pass_through_args };
 
@@ -51,24 +48,7 @@ pub async fn execute_pm_subcommand(
 
     prepend_js_runtime_to_path_env(&cwd).await?;
 
-    let package_manager = match PackageManager::builder(&cwd).build_with_default().await {
-        Ok(pm) => pm,
-        Err(e) => {
-            // For `list` command, silently succeed when no workspace is found
-            // (matches `pnpm list` behavior in dirs without package.json)
-            if matches!(&command, PmCommands::List { .. })
-                && matches!(
-                    &e,
-                    vite_error::Error::WorkspaceError(vite_workspace::Error::PackageJsonNotFound(
-                        _
-                    ))
-                )
-            {
-                return Ok(ExitStatus::default());
-            }
-            return Err(e.into());
-        }
-    };
+    let package_manager = build_package_manager(&cwd).await?;
 
     match command {
         PmCommands::Prune { prod, no_optional, pass_through_args } => {
