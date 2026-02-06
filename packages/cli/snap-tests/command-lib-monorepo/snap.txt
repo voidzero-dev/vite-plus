@@ -4,7 +4,7 @@ index.cjs
 
 > vite run hello#build | grep 'cache hit' # should hit cache
 ~/packages/hello$ vp lib ✓ cache hit, replaying
-Statistics:   1 tasks • 1 cache hits • 0 cache misses
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
 Performance:  100% cache hit rate, <variable>ms saved in total
 
 > vite run array-config#build # should build the library supports array config
@@ -14,7 +14,7 @@ index.mjs
 
 > vite run array-config#build | grep 'cache hit' # should hit cache
 ~/packages/array-config$ vp lib ✓ cache hit, replaying
-Statistics:   1 tasks • 1 cache hits • 0 cache misses
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
 Performance:  100% cache hit rate, <variable>ms saved in total
 
 > vite run default-config#build # should build the library supports default config
@@ -23,5 +23,5 @@ index.mjs
 
 > vite run default-config#build | grep 'cache hit' # should hit cache
 ~/packages/default-config$ vp lib ✓ cache hit, replaying
-Statistics:   1 tasks • 1 cache hits • 0 cache misses
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
 Performance:  100% cache hit rate, <variable>ms saved in total
