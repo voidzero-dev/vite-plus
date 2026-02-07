@@ -1,8 +1,8 @@
-//! Run command for executing commands with a specific Node.js version.
+//! Exec command for executing commands with a specific Node.js version.
 //!
 //! Handles two modes:
-//! 1. Explicit version: `vp env run --node <version> [--npm <version>] <command>`
-//! 2. Shim mode: `vp env run <tool> [args...]` where tool is node/npm/npx or a global package binary
+//! 1. Explicit version: `vp env exec --node <version> [--npm <version>] <command>`
+//! 2. Shim mode: `vp env exec <tool> [args...]` where tool is node/npm/npx or a global package binary
 //!
 //! The shim mode uses the same dispatch logic as Unix symlinks, ensuring identical behavior
 //! across platforms (used by Windows .cmd wrappers and Git Bash shell scripts).
@@ -17,7 +17,7 @@ use crate::{
     shim::{dispatch as shim_dispatch, is_shim_tool},
 };
 
-/// Execute the run command.
+/// Execute the exec command.
 ///
 /// When `--node` is provided, runs a command with the specified Node.js version.
 /// When `--node` is not provided and the command is a shim tool (node/npm/npx or global package),
@@ -28,8 +28,8 @@ pub async fn execute(
     command: &[String],
 ) -> Result<ExitStatus, Error> {
     if command.is_empty() {
-        eprintln!("vp env run: missing command to execute");
-        eprintln!("Usage: vp env run [--node <version>] <command> [args...]");
+        eprintln!("vp env exec: missing command to execute");
+        eprintln!("Usage: vp env exec [--node <version>] <command> [args...]");
         return Ok(exit_status(1));
     }
 
@@ -45,7 +45,7 @@ pub async fn execute(
     let tool = &command[0];
     if is_shim_tool(tool) {
         // Clear recursion env var to force fresh version resolution.
-        // This is needed because `vp env run` may be invoked from within a context
+        // This is needed because `vp env exec` may be invoked from within a context
         // where VITE_PLUS_TOOL_RECURSION is already set (e.g., when pnpm runs through
         // the vite-plus shim). Without clearing it, shim_dispatch would passthrough
         // to the system node instead of resolving the version.
@@ -67,13 +67,13 @@ pub async fn execute(
     }
 
     // Not a shim tool and no --node - error
-    eprintln!("vp env run: --node is required when running non-shim commands");
-    eprintln!("Usage: vp env run --node <version> <command> [args...]");
+    eprintln!("vp env exec: --node is required when running non-shim commands");
+    eprintln!("Usage: vp env exec --node <version> <command> [args...]");
     eprintln!();
     eprintln!("For shim tools, --node is optional (version resolved automatically):");
-    eprintln!("  vp env run node script.js    # Core tool");
-    eprintln!("  vp env run npm install       # Core tool");
-    eprintln!("  vp env run tsc --version     # Global package");
+    eprintln!("  vp env exec node script.js    # Core tool");
+    eprintln!("  vp env exec npm install       # Core tool");
+    eprintln!("  vp env exec tsc --version     # Global package");
     Ok(exit_status(1))
 }
 

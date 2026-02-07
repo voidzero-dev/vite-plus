@@ -1,5 +1,5 @@
 {
-  "name": "command-env-run-shim-mode",
+  "name": "command-env-exec-shim-mode",
   "version": "1.0.0",
   "private": true,
   "engines": {

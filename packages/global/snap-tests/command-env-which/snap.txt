@@ -1,4 +1,4 @@
-> vp env run node --version # Ensure Node.js is installed first
+> vp env exec node --version # Ensure Node.js is installed first
 v20.18.0
 
 > vp env which node # Core tool - shows resolved Node.js binary path

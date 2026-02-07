@@ -650,10 +650,10 @@ Examples:
   vp env use lts                # Use latest LTS for this shell session
   vp env use                    # Use project version for this shell session
   vp env use --unset            # Remove session override
-  vp env run --node 20 node -v  # Run 'node -v' with Node.js 20
-  vp env run --node lts npm i   # Run 'npm i' with latest LTS
-  vp env run node -v            # Shim mode (version auto-resolved)
-  vp env run npm install        # Shim mode (version auto-resolved)
+  vp env exec --node 20 node -v # Execute 'node -v' with Node.js 20
+  vp env exec --node lts npm i  # Execute 'npm i' with latest LTS
+  vp env exec node -v           # Shim mode (version auto-resolved)
+  vp env exec npm install       # Shim mode (version auto-resolved)
 
 Global Packages:
   vp install -g <package>       # Install a global package
@@ -766,8 +766,9 @@ pub enum EnvSubcommands {
         sort: SortingMethod,
     },
 
-    /// Run a command with a specific Node.js version
-    Run {
+    /// Execute a command with a specific Node.js version
+    #[command(visible_alias = "run")]
+    Exec {
         /// Node.js version to use (e.g., "20.18.0", "lts", "^20.0.0")
         /// If not provided and command is node/npm/npx or a global package binary,
         /// version is resolved automatically (same as shim behavior)

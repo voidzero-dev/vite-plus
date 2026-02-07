@@ -295,7 +295,7 @@ Commands:
   unpin        Remove the .node-version file from current directory (alias for `pin --unpin`)
   list         List locally installed Node.js versions [aliases: ls]
   list-remote  List available Node.js versions from the registry [aliases: ls-remote]
-  run          Run a command with a specific Node.js version
+  exec         Execute a command with a specific Node.js version [aliases: run]
   uninstall    Uninstall a Node.js version [aliases: uni]
   install      Install a Node.js version [aliases: i]
   use          Use a specific Node.js version for this shell session
@@ -329,10 +329,10 @@ Examples:
   vp env use lts                # Use latest LTS for this shell session
   vp env use                    # Use project version for this shell session
   vp env use --unset            # Remove session override
-  vp env run --node 20 node -v  # Run 'node -v' with Node.js 20
-  vp env run --node lts npm i   # Run 'npm i' with latest LTS
-  vp env run node -v            # Shim mode (version auto-resolved)
-  vp env run npm install        # Shim mode (version auto-resolved)
+  vp env exec --node 20 node -v # Execute 'node -v' with Node.js 20
+  vp env exec --node lts npm i  # Execute 'npm i' with latest LTS
+  vp env exec node -v           # Shim mode (version auto-resolved)
+  vp env exec npm install       # Shim mode (version auto-resolved)
 
 Global Packages:
   vp install -g <package>       # Install a global package

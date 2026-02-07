@@ -11,7 +11,7 @@
 //!
 //! On Windows:
 //! - bin/vp.cmd is a wrapper script that calls ..\current\bin\vp.exe
-//! - bin/node.cmd, bin/npm.cmd, bin/npx.cmd are wrappers calling `vp env run <tool>`
+//! - bin/node.cmd, bin/npm.cmd, bin/npx.cmd are wrappers calling `vp env exec <tool>`
 
 use std::process::ExitStatus;
 
@@ -220,9 +220,9 @@ async fn create_unix_shim(
     Ok(())
 }
 
-/// Create Windows shims using .cmd wrappers that call `vp env run <tool>`.
+/// Create Windows shims using .cmd wrappers that call `vp env exec <tool>`.
 ///
-/// All tools (node, npm, npx) get .cmd wrappers that invoke `vp env run`.
+/// All tools (node, npm, npx) get .cmd wrappers that invoke `vp env exec`.
 /// Also creates shell scripts (without extension) for Git Bash compatibility.
 /// This is consistent with Volta's Windows approach.
 #[cfg(windows)]
@@ -233,26 +233,26 @@ async fn create_windows_shim(
 ) -> Result<(), Error> {
     let cmd_path = bin_dir.join(format!("{tool}.cmd"));
 
-    // Create .cmd wrapper that calls vp env run <tool>
+    // Create .cmd wrapper that calls vp env exec <tool>
     // Use a for loop to canonicalize VITE_PLUS_HOME path.
     // %~dp0.. would produce paths like C:\Users\x\.vite-plus\bin\..
     // The for loop resolves this to a clean C:\Users\x\.vite-plus
     let cmd_content = format!(
-        "@echo off\r\nfor %%I in (\"%~dp0..\") do set VITE_PLUS_HOME=%%~fI\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" env run {} %*\r\nexit /b %ERRORLEVEL%\r\n",
+        "@echo off\r\nfor %%I in (\"%~dp0..\") do set VITE_PLUS_HOME=%%~fI\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" env exec {} %*\r\nexit /b %ERRORLEVEL%\r\n",
         tool
     );
 
     tokio::fs::write(&cmd_path, cmd_content).await?;
 
     // Also create shell script for Git Bash (tool without extension)
-    // Uses explicit "vp env run <tool>" instead of symlink+argv[0] because
+    // Uses explicit "vp env exec <tool>" instead of symlink+argv[0] because
     // Windows symlinks require admin privileges
     let sh_path = bin_dir.join(tool);
     let sh_content = format!(
         r#"#!/bin/sh
 VITE_PLUS_HOME="$(dirname "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")")"
 export VITE_PLUS_HOME
-exec "$VITE_PLUS_HOME/current/bin/vp.exe" env run {} "$@"
+exec "$VITE_PLUS_HOME/current/bin/vp.exe" env exec {} "$@"
 "#,
         tool
     );

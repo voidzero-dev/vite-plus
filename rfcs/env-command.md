@@ -347,11 +347,11 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 │   ├── vp                            # Shell script for Git Bash (Windows)
 │   ├── vp.cmd                        # Wrapper calling ..\current\bin\vp.exe (Windows)
 │   ├── node                          # Shell script for Git Bash (Windows)
-│   ├── node.cmd                      # Wrapper calling vp env run node (Windows)
+│   ├── node.cmd                      # Wrapper calling vp env exec node (Windows)
 │   ├── npm                           # Shell script for Git Bash (Windows)
-│   ├── npm.cmd                       # Wrapper calling vp env run npm (Windows)
+│   ├── npm.cmd                       # Wrapper calling vp env exec npm (Windows)
 │   ├── npx                           # Shell script for Git Bash (Windows)
-│   ├── npx.cmd                       # Wrapper calling vp env run npx (Windows)
+│   ├── npx.cmd                       # Wrapper calling vp env exec npx (Windows)
 │   ├── tsc                           # Shell script for global package Git Bash (Windows)
 │   └── tsc.cmd                       # Wrapper for global package (Windows)
 ├── current/
@@ -648,7 +648,7 @@ To prevent infinite loops when shims invoke other shims, vite-plus uses environm
 1. When a shim executes the real binary, it sets `VITE_PLUS_TOOL_RECURSION=1`
 2. Subsequent shim invocations check this variable
 3. If set, shims use **passthrough mode** (skip version resolution, use current PATH)
-4. `vp env run` explicitly **removes** this variable to force re-evaluation
+4. `vp env exec` explicitly **removes** this variable to force re-evaluation
 
 **Environment Variable**: `VITE_PLUS_BYPASS` (PATH-style list)
 
@@ -660,7 +660,7 @@ When multiple vite-plus installations exist in PATH and `system_first` mode is a
 2. The next installation sees `VITE_PLUS_BYPASS` is set and enters bypass mode via `find_system_tool()`
 3. `find_system_tool()` filters all directories listed in `VITE_PLUS_BYPASS` (plus its own bin dir) from PATH
 4. This ensures the search skips all known vite-plus bin directories and finds the real system binary (or errors cleanly)
-5. `VITE_PLUS_BYPASS` is preserved through `vp env run` so loop protection remains active
+5. `VITE_PLUS_BYPASS` is preserved through `vp env exec` so loop protection remains active
 
 **Flow Diagram:**
 
@@ -706,7 +706,7 @@ fn execute_run_command() {
 **Why This Matters:**
 
 - Prevents infinite loops when Node scripts spawn other Node processes
-- Allows `vp env run` to override versions mid-execution
+- Allows `vp env exec` to override versions mid-execution
 - Ensures consistent behavior in complex process trees
 
 ## Design Decisions
@@ -736,15 +736,15 @@ fn execute_run_command() {
 
 ### 3. Wrapper Scripts for Windows
 
-**Decision**: Use `.cmd` wrapper scripts on Windows that call `vp env run <tool>`.
+**Decision**: Use `.cmd` wrapper scripts on Windows that call `vp env exec <tool>`.
 
 **Rationale**:
 
 - Windows PATH resolution prefers `.cmd` over `.exe` for extensionless commands
-- Simple wrapper format: `vp env run npm %*` - no binary copies needed
+- Simple wrapper format: `vp env exec npm %*` - no binary copies needed
 - Same pattern as Volta (`volta run <tool>`)
 - Single `vp.exe` binary to maintain in `current/bin/`
-- No `VITE_PLUS_SHIM_TOOL` env var complexity - dispatch via `vp env run` command
+- No `VITE_PLUS_SHIM_TOOL` env var complexity - dispatch via `vp env exec` command
 
 ### 4. execve on Unix, spawn on Windows
 
@@ -1687,9 +1687,9 @@ Binary execution uses per-binary config for deterministic lookup:
 
 This eliminates the non-deterministic behavior of filesystem iteration order.
 
-## Run Command
+## Exec Command
 
-The `vp env run` command executes a command with a specific Node.js version. It operates in two modes:
+The `vp env exec` command executes a command with a specific Node.js version. It operates in two modes:
 
 1. **Explicit version mode**: When `--node` is provided, runs with the specified version
 2. **Shim mode**: When `--node` is not provided and the command is a shim tool (node/npm/npx or global package), uses the same version resolution as Unix symlinks
@@ -1699,34 +1699,34 @@ This is useful for:
 - Testing code against different Node versions
 - Running one-off commands without changing project configuration
 - CI/CD scripts that need explicit version control
-- Windows shims (`.cmd` wrappers and Git Bash shell scripts call `vp env run <tool>`)
+- Windows shims (`.cmd` wrappers and Git Bash shell scripts call `vp env exec <tool>`)
 
 ### Usage
 
 ```bash
 # Shim mode: version resolved automatically (same as Unix symlinks)
-vp env run node --version        # Core tool - resolves from .node-version/package.json
-vp env run npm install           # Core tool
-vp env run npx vitest            # Core tool
-vp env run tsc --version         # Global package - uses Node.js from install time
+vp env exec node --version        # Core tool - resolves from .node-version/package.json
+vp env exec npm install           # Core tool
+vp env exec npx vitest            # Core tool
+vp env exec tsc --version         # Global package - uses Node.js from install time
 
 # Explicit version mode: run with specific Node version
-vp env run --node 20.18.0 node app.js
+vp env exec --node 20.18.0 node app.js
 
 # Run with specific Node and npm versions
-vp env run --node 22.13.0 --npm 10.8.0 npm install
+vp env exec --node 22.13.0 --npm 10.8.0 npm install
 
 # Version can be semver range (resolved at runtime)
-vp env run --node "^20.0.0" node -v
+vp env exec --node "^20.0.0" node -v
 
 # Run npm scripts
-vp env run --node 18.20.0 npm test
+vp env exec --node 18.20.0 npm test
 
 # Pass arguments to the command
-vp env run --node 20 -- node --inspect app.js
+vp env exec --node 20 -- node --inspect app.js
 
 # Error: non-shim command without --node
-vp env run python --version      # Fails: --node required for non-shim tools
+vp env exec python --version      # Fails: --node required for non-shim tools
 ```
 
 ### Flags
@@ -1760,21 +1760,21 @@ When `--node` **is provided**:
 
 ```bash
 # Shim mode: same behavior as Unix symlinks
-vp env run node -v               # Uses version from project config
-vp env run npm install           # Uses same version
-vp env run tsc --version         # Global package
+vp env exec node -v               # Uses version from project config
+vp env exec npm install           # Uses same version
+vp env exec tsc --version         # Global package
 
 # Test against multiple Node versions in CI
 for version in 18 20 22; do
-  vp env run --node $version npm test
+  vp env exec --node $version npm test
 done
 
 # Run with exact version
-vp env run --node 20.18.0 node -e "console.log(process.version)"
+vp env exec --node 20.18.0 node -e "console.log(process.version)"
 # Output: v20.18.0
 
 # Debug with specific Node version
-vp env run --node 22 -- node --inspect-brk app.js
+vp env exec --node 22 -- node --inspect-brk app.js
 ```
 
 ### Use in Scripts
@@ -1787,7 +1787,7 @@ VERSIONS="18.20.0 20.18.0 22.13.0"
 
 for v in $VERSIONS; do
   echo "Testing with Node $v..."
-  vp env run --node "$v" npm test || exit 1
+  vp env exec --node "$v" npm test || exit 1
 done
 
 echo "All tests passed!"
@@ -1971,12 +1971,12 @@ VITE_PLUS_HOME\
 ├── bin\
 │   ├── vp           # Shell script for Git Bash (calls vp.exe directly)
 │   ├── vp.cmd       # Wrapper for cmd.exe/PowerShell
-│   ├── node         # Shell script for Git Bash (calls vp env run node)
-│   ├── node.cmd     # Wrapper calling vp env run node
-│   ├── npm          # Shell script for Git Bash (calls vp env run npm)
-│   ├── npm.cmd      # Wrapper calling vp env run npm
-│   ├── npx          # Shell script for Git Bash (calls vp env run npx)
-│   ├── npx.cmd      # Wrapper calling vp env run npx
+│   ├── node         # Shell script for Git Bash (calls vp env exec node)
+│   ├── node.cmd     # Wrapper calling vp env exec node
+│   ├── npm          # Shell script for Git Bash (calls vp env exec npm)
+│   ├── npm.cmd      # Wrapper calling vp env exec npm
+│   ├── npx          # Shell script for Git Bash (calls vp env exec npx)
+│   ├── npx.cmd      # Wrapper calling vp env exec npx
 │   ├── tsc          # Shell script for global package (Git Bash)
 │   └── tsc.cmd      # Wrapper for global package (cmd.exe/PowerShell)
 └── current\
@@ -1990,7 +1990,7 @@ Git Bash (MSYS2/MinGW) doesn't use Windows' PATHEXT mechanism, so it won't find 
 
 #### Why Not Symlinks?
 
-On Unix, shims are symlinks to the vp binary, which preserves argv[0] for tool detection. On Windows, we use explicit `vp env run <tool>` calls instead of symlinks because:
+On Unix, shims are symlinks to the vp binary, which preserves argv[0] for tool detection. On Windows, we use explicit `vp env exec <tool>` calls instead of symlinks because:
 
 1. **Admin privileges required**: Windows symlinks need admin rights or Developer Mode
 2. **Unreliable Git Bash support**: Symlink emulation varies by Git for Windows version
@@ -2013,7 +2013,7 @@ exec "$VITE_PLUS_HOME/current/bin/vp.exe" "$@"
 #!/bin/sh
 VITE_PLUS_HOME="$(dirname "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")")"
 export VITE_PLUS_HOME
-exec "$VITE_PLUS_HOME/current/bin/vp.exe" env run node "$@"
+exec "$VITE_PLUS_HOME/current/bin/vp.exe" env exec node "$@"
 ```
 
 This ensures all commands work in:
@@ -2038,7 +2038,7 @@ The `vp.cmd` wrapper forwards all arguments to the actual `vp.exe` binary.
 ```batch
 @echo off
 set VITE_PLUS_HOME=%~dp0..
-"%VITE_PLUS_HOME%\current\bin\vp.exe" env run node %*
+"%VITE_PLUS_HOME%\current\bin\vp.exe" env exec node %*
 exit /b %ERRORLEVEL%
 ```
 
@@ -2047,7 +2047,7 @@ For npm:
 ```batch
 @echo off
 set VITE_PLUS_HOME=%~dp0..
-"%VITE_PLUS_HOME%\current\bin\vp.exe" env run npm %*
+"%VITE_PLUS_HOME%\current\bin\vp.exe" env exec npm %*
 exit /b %ERRORLEVEL%
 ```
 
@@ -2055,8 +2055,8 @@ exit /b %ERRORLEVEL%
 
 1. User runs `npm install`
 2. Windows finds `~/.vite-plus/bin/npm.cmd` in PATH (cmd.exe/PowerShell) or `npm` (Git Bash)
-3. Wrapper calls `vp.exe env run npm install`
-4. `vp env run` command handles version resolution and execution
+3. Wrapper calls `vp.exe env exec npm install`
+4. `vp env exec` command handles version resolution and execution
 
 **Benefits of this approach**:
 
@@ -2137,7 +2137,7 @@ env-doctor/
 10. Implement `vp env unpin` as alias for `pin --unpin`
 11. Implement `vp env list` (local) and `vp env list-remote` (remote) to show versions
 12. Implement recursion prevention (`VITE_PLUS_TOOL_RECURSION`)
-13. Implement `vp env run --node <version>` command
+13. Implement `vp env exec --node <version>` command
 
 ### Phase 2: Full Tool Support (P1)
 
@@ -2184,7 +2184,7 @@ The following decisions have been made:
 
 1. **VITE_PLUS_HOME Default Location**: `~/.vite-plus` - Simple, memorable path that's easy for users to find and configure.
 
-2. **Windows Wrapper Strategy**: `.cmd` wrappers that call `vp env run <tool>` - Consistent with Volta, no binary copies needed.
+2. **Windows Wrapper Strategy**: `.cmd` wrappers that call `vp env exec <tool>` - Consistent with Volta, no binary copies needed.
 
 3. **Corepack Handling**: Not included - vite-plus has integrated package manager functionality, making corepack shims unnecessary.
 

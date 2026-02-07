@@ -8,6 +8,7 @@ pub mod config;
 mod current;
 mod default;
 mod doctor;
+mod exec;
 pub mod global_install;
 mod list;
 mod list_remote;
@@ -16,7 +17,6 @@ mod on;
 pub mod package_metadata;
 pub mod packages;
 mod pin;
-mod run;
 mod setup;
 mod unpin;
 mod r#use;
@@ -49,8 +49,8 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
             crate::cli::EnvSubcommands::ListRemote { pattern, lts, all, json, sort } => {
                 list_remote::execute(pattern, lts, all, json, sort).await
             }
-            crate::cli::EnvSubcommands::Run { node, npm, command } => {
-                run::execute(node.as_deref(), npm.as_deref(), &command).await
+            crate::cli::EnvSubcommands::Exec { node, npm, command } => {
+                exec::execute(node.as_deref(), npm.as_deref(), &command).await
             }
             crate::cli::EnvSubcommands::Uninstall { version } => {
                 let provider = vite_js_runtime::NodeProvider::new();

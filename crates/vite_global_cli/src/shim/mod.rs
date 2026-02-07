@@ -5,7 +5,7 @@
 //!
 //! Detection methods:
 //! - Unix: Symlinks to vp binary preserve argv[0], allowing tool detection
-//! - Windows: .cmd wrappers call `vp env run <tool>` directly
+//! - Windows: .cmd wrappers call `vp env exec <tool>` directly
 //! - Legacy: VITE_PLUS_SHIM_TOOL env var (kept for backward compatibility)
 
 mod cache;
@@ -92,7 +92,7 @@ const SHIM_TOOL_ENV_VAR: &str = "VITE_PLUS_SHIM_TOOL";
 /// 2. Check `VITE_PLUS_SHIM_TOOL` env var (for shell wrapper scripts)
 /// 3. Fall back to argv[0] detection (primary method on Unix with symlinks)
 ///
-/// Note: Modern Windows wrappers use `vp env run <tool>` instead of env vars.
+/// Note: Modern Windows wrappers use `vp env exec <tool>` instead of env vars.
 ///
 /// IMPORTANT: This function clears `VITE_PLUS_SHIM_TOOL` after reading it to
 /// prevent the env var from leaking to child processes.

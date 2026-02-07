@@ -364,7 +364,7 @@ const CORE_SHIMS: &[&str] = &["node", "npm", "npx", "vp"];
 /// Create a shim for a package binary.
 ///
 /// On Unix: Creates a symlink to ../current/bin/vp
-/// On Windows: Creates a .cmd wrapper that calls `vp env run <bin_name>`
+/// On Windows: Creates a .cmd wrapper that calls `vp env exec <bin_name>`
 async fn create_package_shim(
     bin_dir: &vite_path::AbsolutePath,
     bin_name: &str,
@@ -405,24 +405,24 @@ async fn create_package_shim(
             return Ok(());
         }
 
-        // Create .cmd wrapper that calls vp env run <bin_name>
+        // Create .cmd wrapper that calls vp env exec <bin_name>
         // Set VITE_PLUS_HOME using %~dp0.. which resolves to the parent of bin/
         // This ensures the vp binary knows its home directory
         let wrapper_content = format!(
-            "@echo off\r\nset VITE_PLUS_HOME=%~dp0..\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" env run {} %*\r\nexit /b %ERRORLEVEL%\r\n",
+            "@echo off\r\nset VITE_PLUS_HOME=%~dp0..\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" env exec {} %*\r\nexit /b %ERRORLEVEL%\r\n",
             bin_name
         );
         tokio::fs::write(&cmd_path, wrapper_content).await?;
 
         // Also create shell script for Git Bash (bin_name without extension)
-        // Uses explicit "vp env run <bin_name>" instead of symlink+argv[0] because
+        // Uses explicit "vp env exec <bin_name>" instead of symlink+argv[0] because
         // Windows symlinks require admin privileges
         let sh_path = bin_dir.join(bin_name);
         let sh_content = format!(
             r#"#!/bin/sh
 VITE_PLUS_HOME="$(dirname "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")")"
 export VITE_PLUS_HOME
-exec "$VITE_PLUS_HOME/current/bin/vp.exe" env run {} "$@"
+exec "$VITE_PLUS_HOME/current/bin/vp.exe" env exec {} "$@"
 "#,
             bin_name
         );
