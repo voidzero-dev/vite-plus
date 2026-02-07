@@ -29,6 +29,8 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/0\.0\.0-\w{40}/g, '0.0.0-<hash>')
       // date (YYYY-MM-DD HH:MM:SS)
       .replaceAll(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/g, '<date>')
+      // date only (YYYY-MM-DD)
+      .replaceAll(/\d{4}-\d{2}-\d{2}/g, '<date>')
       // time only (HH:MM:SS)
       .replaceAll(/\d{2}:\d{2}:\d{2}/g, '<date>')
       // duration
@@ -107,9 +109,9 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       // replace homedir; e.g.: /Users/foo/Library/pnpm/global/5/node_modules/testnpm2 => <homedir>/Library/pnpm/global/5/node_modules/testnpm2
       .replaceAll(homedir(), '<homedir>')
       // replace npm log file path with timestamp
-      // e.g.: <homedir>/.npm/_logs/2026-02-02T05_38_04_267Z-debug-0.log => <homedir>/.npm/_logs/<timestamp>-debug.log
+      // e.g.: <homedir>/.npm/_logs/<date>T07_38_18_387Z-debug-0.log => <homedir>/.npm/_logs/<timestamp>-debug.log
       .replaceAll(
-        /(<homedir>\/\.npm\/_logs\/)\d{4}-\d{2}-\d{2}T\d{2}_\d{2}_\d{2}_\d+Z-debug-\d+\.log/g,
+        /(<homedir>\/\.npm\/_logs\/)<date>T\d{2}_\d{2}_\d{2}_\d+Z-debug-\d+\.log/g,
         '$1<timestamp>-debug.log',
       )
       // remove the newline after "Checking formatting..."

@@ -32,7 +32,7 @@ added 41 packages in <variable>ms
   [2mPackage:  [0m  [94mcowsay@<semver>[39m
   [2mBinaries: [0m  cowsay, cowthink
   [2mNode:     [0m  [92m20.18.0[39m
-  [2mInstalled:[0m  [2m2026-02-06[0m
+  [2mInstalled:[0m  [2m<date>[0m
 
 > vp remove -g cowsay # Cleanup
   Uninstalling cowsay...
