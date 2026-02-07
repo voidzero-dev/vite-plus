@@ -10,7 +10,7 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
-use tokio::fs::write;
+use tokio::{fs::write, io::AsyncReadExt};
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
@@ -695,12 +695,43 @@ async fn execute_direct_subcommand(
         .envs(resolved.envs.iter().map(|(k, v)| (k.as_ref(), v.as_ref())))
         .current_dir(cwd.as_path())
         .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| Error::Anyhow(e.into()))?;
 
-    let status = child.wait().await;
+    let mut child_stdout = child.stdout.take().unwrap();
+    let mut child_stderr = child.stderr.take().unwrap();
+
+    let (status, _, _) = tokio::join!(
+        child.wait(),
+        async {
+            let mut buf = [0u8; 8192];
+            loop {
+                match child_stdout.read(&mut buf).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        use std::io::Write;
+                        std::io::stdout().write_all(&buf[..n]).ok();
+                        std::io::stdout().flush().ok();
+                    }
+                }
+            }
+        },
+        async {
+            let mut buf = [0u8; 8192];
+            loop {
+                match child_stderr.read(&mut buf).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        use std::io::Write;
+                        std::io::stderr().write_all(&buf[..n]).ok();
+                        std::io::stderr().flush().ok();
+                    }
+                }
+            }
+        },
+    );
 
     resolver.cleanup_temp_files().await;
 
