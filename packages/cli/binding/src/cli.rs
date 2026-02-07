@@ -695,15 +695,25 @@ async fn execute_direct_subcommand(
         })?
     };
 
-    let mut child = tokio::process::Command::new(&program_path)
-        .args(resolved.args.iter().map(|s| s.as_str()))
+    let mut cmd = tokio::process::Command::new(&program_path);
+    cmd.args(resolved.args.iter().map(|s| s.as_str()))
+        .env_clear()
         .envs(resolved.envs.iter().map(|(k, v)| (k.as_ref(), v.as_ref())))
         .current_dir(cwd.as_path())
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .map_err(|e| Error::Anyhow(e.into()))?;
+        .stderr(Stdio::inherit());
+
+    // Clear FD_CLOEXEC on stdio fds before exec, since Node.js (NAPI host) may have set it.
+    #[cfg(unix)]
+    unsafe {
+        cmd.pre_exec(|| {
+            vite_command::fix_stdio_streams();
+            Ok(())
+        });
+    }
+
+    let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
 
     let status = child.wait().await;
 

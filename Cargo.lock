@@ -6953,6 +6953,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "vite_command",
  "vite_error",
  "vite_install",
  "vite_path",

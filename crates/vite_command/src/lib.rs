@@ -146,7 +146,7 @@ where
 }
 
 #[cfg(unix)]
-fn fix_stdio_streams() {
+pub fn fix_stdio_streams() {
     // libuv may mark stdin/stdout/stderr as close-on-exec, which interferes with Rust's subprocess spawning.
     // As a workaround, we clear the FD_CLOEXEC flag on these file descriptors to prevent them from being closed when spawning child processes.
     //
