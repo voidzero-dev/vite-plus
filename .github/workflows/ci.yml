@@ -418,7 +418,7 @@ jobs:
           which vp
           vp --version
 
-      - name: Test self-update
+      - name: Test self-update (bash)
         shell: bash
         run: |
           # Helper to read the installed CLI version from package.json
@@ -462,6 +462,93 @@ jobs:
             echo "Error: version should have been restored after rollback (expected $INITIAL_VERSION, got $ROLLBACK_VERSION)"
             exit 1
           fi
+
+      - name: Test self-update (powershell)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          # Helper to read the installed CLI version from package.json
+          function Get-CliVersion {
+            node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'package.json')).version"
+          }
+
+          # Save initial (dev build) version
+          $initialVersion = Get-CliVersion
+          Write-Host "Initial version: $initialVersion"
+
+          # --check queries npm registry and prints update status
+          vp self-update --check
+          # upgrade alias should also work
+          vp upgrade --check
+
+          # full self-update: download, extract, swap
+          vp self-update --tag test --force
+          vp --version
+          vp env doctor
+
+          Get-ChildItem "$env:USERPROFILE\.vite-plus\"
+
+          # Verify version changed after update
+          $updatedVersion = Get-CliVersion
+          Write-Host "Updated version: $updatedVersion"
+          if ($updatedVersion -eq $initialVersion) {
+            Write-Error "Error: version should have changed after self-update (still $initialVersion)"
+            exit 1
+          }
+
+          # rollback to the previous version
+          vp self-update --rollback
+          vp --version
+          vp env doctor
+
+          # Verify version restored after rollback
+          $rollbackVersion = Get-CliVersion
+          Write-Host "Rollback version: $rollbackVersion"
+          if ($rollbackVersion -ne $initialVersion) {
+            Write-Error "Error: version should have been restored after rollback (expected $initialVersion, got $rollbackVersion)"
+            exit 1
+          }
+
+      - name: Test self-update (cmd)
+        if: matrix.os == 'windows-latest'
+        shell: cmd
+        run: |
+          REM Save initial (dev build) version
+          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'package.json')).version"`) do set INITIAL_VERSION=%%v
+          echo Initial version: %INITIAL_VERSION%
+
+          REM --check queries npm registry and prints update status
+          vp self-update --check
+          REM upgrade alias should also work
+          vp upgrade --check
+
+          REM full self-update: download, extract, swap
+          vp self-update --tag test --force
+          vp --version
+          vp env doctor
+
+          dir "%USERPROFILE%\.vite-plus\"
+
+          REM Verify version changed after update
+          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'package.json')).version"`) do set UPDATED_VERSION=%%v
+          echo Updated version: %UPDATED_VERSION%
+          if "%UPDATED_VERSION%"=="%INITIAL_VERSION%" (
+            echo Error: version should have changed after self-update, still %INITIAL_VERSION%
+            exit /b 1
+          )
+
+          REM rollback to the previous version
+          vp self-update --rollback
+          vp --version
+          vp env doctor
+
+          REM Verify version restored after rollback
+          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'package.json')).version"`) do set ROLLBACK_VERSION=%%v
+          echo Rollback version: %ROLLBACK_VERSION%
+          if not "%ROLLBACK_VERSION%"=="%INITIAL_VERSION%" (
+            echo Error: version should have been restored after rollback, expected %INITIAL_VERSION%, got %ROLLBACK_VERSION%
+            exit /b 1
+          )
 
   install-e2e-test:
     name: Local CLI `vite install` E2E test
