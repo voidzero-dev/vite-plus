@@ -1,0 +1,8 @@
+{
+  "env": {},
+  "commands": [
+    "vp install -g ./recursive-cli-pkg # Install test package",
+    "recursive-cli # Outer call triggers recursive inner call through shim",
+    "vp remove -g recursive-cli-pkg # Cleanup"
+  ]
+}

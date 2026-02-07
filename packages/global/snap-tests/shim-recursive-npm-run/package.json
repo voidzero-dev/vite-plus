@@ -1,0 +1,12 @@
+{
+  "name": "shim-recursive-npm-run",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "outer": "npm run inner",
+    "inner": "echo hello from inner"
+  },
+  "engines": {
+    "node": "22.12.0"
+  }
+}

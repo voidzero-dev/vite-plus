@@ -1,0 +1,10 @@
+> npm run outer # Outer script calls npm run inner recursively
+
+> shim-recursive-npm-run@<semver> outer
+> npm run inner
+
+
+> shim-recursive-npm-run@<semver> inner
+> echo hello from inner
+
+hello from inner

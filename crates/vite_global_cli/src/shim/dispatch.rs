@@ -31,18 +31,23 @@ const RECURSION_ENV_VAR: &str = "VITE_PLUS_TOOL_RECURSION";
 pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     tracing::debug!("dispatch: tool: {tool}, args: {:?}", args);
     // Check recursion prevention - if already in a shim context, passthrough directly
-    if std::env::var(RECURSION_ENV_VAR).is_ok() {
+    // Only applies to core tools (node/npm/npx) whose bin dir is prepended to PATH.
+    // Package binaries are always resolved via metadata lookup, so they can't loop.
+    if std::env::var(RECURSION_ENV_VAR).is_ok() && is_core_shim_tool(tool) {
+        tracing::debug!("recursion prevention enabled for core tool");
         return passthrough_to_system(tool, args);
     }
 
     // Check bypass mode (explicit environment variable)
     if std::env::var("VITE_PLUS_BYPASS").is_ok() {
+        tracing::debug!("bypass mode enabled");
         return bypass_to_system(tool, args);
     }
 
     // Check shim mode from config
     let shim_mode = load_shim_mode().await;
     if shim_mode == ShimMode::SystemFirst {
+        tracing::debug!("system-first mode enabled");
         // In system-first mode, try to find system tool first
         if let Some(system_path) = find_system_tool(tool) {
             // Append current bin_dir to VITE_PLUS_BYPASS to prevent infinite loops
@@ -181,12 +186,6 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
     // Prepare environment for recursive invocations
     let node_bin_dir = node_path.parent().expect("Node has no parent directory");
     prepend_to_path_env(node_bin_dir, PrependOptions::default());
-
-    // Set recursion prevention marker before executing
-    // SAFETY: Setting env vars at this point before exec is safe
-    unsafe {
-        std::env::set_var(RECURSION_ENV_VAR, "1");
-    }
 
     // Check if the binary is a JavaScript file that needs Node.js
     // This info was determined at install time and stored in metadata
@@ -438,12 +437,14 @@ async fn load_shim_mode() -> ShimMode {
 fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
     let bin_dir = config::get_bin_dir().ok();
     let path_var = std::env::var_os("PATH")?;
+    tracing::debug!("path_var: {:?}", path_var);
 
     // Parse VITE_PLUS_BYPASS as a PATH-style list of additional directories to skip.
     // This prevents infinite loops when multiple vite-plus installations exist in PATH.
     let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os("VITE_PLUS_BYPASS")
         .map(|v| std::env::split_paths(&v).collect())
         .unwrap_or_default();
+    tracing::debug!("bypass_paths: {:?}", bypass_paths);
 
     // Filter PATH to exclude our bin directory and any bypass directories
     let filtered_paths: Vec<_> = std::env::split_paths(&path_var)

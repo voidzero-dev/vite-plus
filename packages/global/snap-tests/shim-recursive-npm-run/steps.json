@@ -1,0 +1,4 @@
+{
+  "env": {},
+  "commands": ["npm run outer # Outer script calls npm run inner recursively"]
+}
