@@ -1,14 +1,5 @@
 import { execSync } from 'node:child_process';
-import {
-  chmodSync,
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,8 +16,8 @@ export function installGlobalCli() {
   const isDirectInvocation = process.argv[1]?.endsWith('install-global-cli.ts');
   const args = process.argv.slice(isDirectInvocation ? 2 : 3);
 
-  const { positionals, values } = parseArgs({
-    allowPositionals: true,
+  const { values } = parseArgs({
+    allowPositionals: false,
     args,
     options: {
       tgz: {
@@ -36,13 +27,7 @@ export function installGlobalCli() {
     },
   });
 
-  const binName = positionals[0];
-  if (!binName || !['vp', 'vp-dev'].includes(binName)) {
-    console.error('Usage: tool install-global-cli <vp|vp-dev> [--tgz <path>]');
-    process.exit(1);
-  }
-
-  console.log(`Installing global CLI with bin name: ${binName}`);
+  console.log('Installing global CLI: vp');
 
   let tempDir: string | undefined;
   let tgzPath: string;
@@ -76,10 +61,7 @@ export function installGlobalCli() {
   }
 
   try {
-    // Set up environment for install script
-    // vp uses ~/.vite-plus (matches real user environment, used in CI)
-    // vp-dev uses ~/.vite-plus-dev (avoids conflicting with release version during local dev)
-    const installDir = path.join(os.homedir(), binName === 'vp' ? '.vite-plus' : '.vite-plus-dev');
+    const installDir = path.join(os.homedir(), '.vite-plus');
 
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
@@ -105,104 +87,7 @@ export function installGlobalCli() {
         env,
       });
     }
-
-    // Create wrapper scripts
-    const binDir = path.join(installDir, 'bin');
-    const currentBinDir = path.join(installDir, 'current', 'bin');
-
-    // Create wrapper scripts to ensure VITE_PLUS_HOME is always set
-    if (isWindows) {
-      // On Windows, install.ps1 already creates bin/vp.cmd with VITE_PLUS_HOME set.
-      // For 'vp-dev', we need to rename it to vp-dev.cmd.
-      if (binName === 'vp-dev') {
-        const vpCmd = path.join(binDir, 'vp.cmd');
-        const vpDevCmd = path.join(binDir, 'vp-dev.cmd');
-        if (existsSync(vpCmd)) {
-          renameSync(vpCmd, vpDevCmd);
-          console.log(`\nRenamed ${vpCmd} -> ${vpDevCmd}`);
-        }
-      }
-      // For 'vp', bin/vp.cmd is already correct from install.ps1
-    } else if (binName === 'vp-dev') {
-      // Unix vp-dev: Rename vp -> vp-raw, then create a wrapper at vp
-      // The wrapper sets VITE_PLUS_HOME to ~/.vite-plus-dev (overriding the default)
-      const vpBinary = path.join(currentBinDir, 'vp');
-      const vpRawBinary = path.join(currentBinDir, 'vp-raw');
-
-      // Rename vp -> vp-raw (always replace to ensure latest binary)
-      if (existsSync(vpBinary)) {
-        if (existsSync(vpRawBinary)) {
-          rmSync(vpRawBinary);
-        }
-        renameSync(vpBinary, vpRawBinary);
-        console.log(`Renamed ${vpBinary} -> ${vpRawBinary}`);
-      }
-
-      // Create vp wrapper in current/bin/ that sets VITE_PLUS_HOME and calls vp-raw
-      // Uses VITE_PLUS_SHIM_TOOL env var for shim detection (more portable than exec -a)
-      const vpWrapperPath = path.join(currentBinDir, 'vp');
-      const vpWrapperContent = `#!/bin/sh
-VITE_PLUS_SHIM_TOOL="$(basename "$0")"
-export VITE_PLUS_SHIM_TOOL
-export VITE_PLUS_HOME="${installDir}"
-exec "$VITE_PLUS_HOME/current/bin/vp-raw" "$@"
-`;
-      writeFileSync(vpWrapperPath, vpWrapperContent);
-      chmodSync(vpWrapperPath, 0o755);
-      console.log(`Created wrapper: ${vpWrapperPath}`);
-
-      // Remove the vp symlink in bin/ to avoid confusion
-      rmSync(path.join(binDir, 'vp'), { force: true });
-
-      // Create vp-dev wrapper that points to current/bin/vp (the wrapper)
-      const wrapperPath = path.join(binDir, 'vp-dev');
-      const wrapperContent = `#!/bin/sh
-export VITE_PLUS_HOME="${installDir}"
-exec "$VITE_PLUS_HOME/current/bin/vp" "$@"
-`;
-      writeFileSync(wrapperPath, wrapperContent);
-      chmodSync(wrapperPath, 0o755);
-      console.log(`\nCreated wrapper script: ${wrapperPath}`);
-    }
-    // For 'vp' on Unix, install.sh already creates the symlink to ../current/bin/vp
-    // which points directly to the real binary (no wrapper needed)
-
-    // Patch env files for vp-dev: the shell function wrappers created by `vp env setup`
-    // define vp() but in dev mode the binary is vp-dev, so we rename the functions
-    if (binName === 'vp-dev') {
-      const envPatches: Array<{ file: string; replacements: [string, string][] }> = [
-        {
-          file: 'env',
-          replacements: [
-            ['vp() {', 'vp-dev() {'],
-            ['command vp ', 'command vp-dev '],
-          ],
-        },
-        {
-          file: 'env.fish',
-          replacements: [
-            ['function vp\n', 'function vp-dev\n'],
-            ['command vp ', 'command vp-dev '],
-          ],
-        },
-        {
-          file: 'env.ps1',
-          replacements: [['function vp {', 'function vp-dev {']],
-        },
-      ];
-
-      for (const { file, replacements } of envPatches) {
-        const filePath = path.join(installDir, file);
-        if (existsSync(filePath)) {
-          let content = readFileSync(filePath, 'utf-8');
-          for (const [from, to] of replacements) {
-            content = content.replaceAll(from, to);
-          }
-          writeFileSync(filePath, content);
-          console.log(`Patched ${filePath} for vp-dev`);
-        }
-      }
-    }
+    // install.sh/install.ps1 already creates the correct symlinks and wrappers for vp
   } finally {
     // Cleanup temp dir only if we created it
     if (tempDir) {

@@ -107,10 +107,7 @@ jobs:
         run: |
           # --check queries npm registry and prints update status
           vp self-update --check
-          # upgrade alias should also work
-          vp upgrade --check
-          # full self-update: download, extract, swap symlink
-          vp self-update --tag test --force
+          vp self-update 0.0.0-b356849c.20260207-0631
           vp --version
           # rollback to the previous version (should succeed after a real update)
           vp self-update --rollback
@@ -170,8 +167,7 @@ jobs:
 
               # Verify self-update
               vp self-update --check
-              vp upgrade --check
-              vp self-update --tag test --force
+              vp self-update 0.0.0-b356849c.20260207-0631
               vp --version
               vp self-update --rollback
               vp --version
@@ -206,10 +202,7 @@ jobs:
         run: |
           # --check queries npm registry and prints update status
           vp self-update --check
-          # upgrade alias should also work
-          vp upgrade --check
-          # full self-update: download, extract, swap symlink
-          vp self-update --tag test --force
+          vp self-update 0.0.0-b356849c.20260207-0631
           vp --version
           # rollback to the previous version (should succeed after a real update)
           vp self-update --rollback

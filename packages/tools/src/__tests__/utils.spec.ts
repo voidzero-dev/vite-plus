@@ -200,23 +200,16 @@ line 3
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
 
-  test.skipIf(process.platform === 'win32')(
-    'replace vite-plus home paths (.vite-plus and .vite-plus-dev)',
-    () => {
-      const home = homedir();
-      const output = [
-        `${home}/.vite-plus-dev/js_runtime/node/v20.18.0/bin/node`,
-        `${home}/.vite-plus/js_runtime/node/v20.18.0/bin/node`,
-        `${home}/.vite-plus-dev/packages/cowsay/lib/node_modules/cowsay/./cli.js`,
-        `${home}/.vite-plus/packages/cowsay/lib/node_modules/cowsay/./cli.js`,
-        `${home}/.vite-plus-dev`,
-        `${home}/.vite-plus`,
-        `${home}/.vite-plus-dev/bin`,
-        `${home}/.vite-plus/bin`,
-      ].join('\n');
-      expect(replaceUnstableOutput(output)).toMatchSnapshot();
-    },
-  );
+  test.skipIf(process.platform === 'win32')('replace vite-plus home paths', () => {
+    const home = homedir();
+    const output = [
+      `${home}/.vite-plus/js_runtime/node/v20.18.0/bin/node`,
+      `${home}/.vite-plus/packages/cowsay/lib/node_modules/cowsay/./cli.js`,
+      `${home}/.vite-plus`,
+      `${home}/.vite-plus/bin`,
+    ].join('\n');
+    expect(replaceUnstableOutput(output)).toMatchSnapshot();
+  });
 
   test('replace ignore npm warn exec The following package was not found and will be installed: cowsay@<semver> warning log', () => {
     const output = `

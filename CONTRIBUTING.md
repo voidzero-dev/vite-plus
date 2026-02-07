@@ -33,12 +33,10 @@ just build
 
 ```
 pnpm bootstrap-cli
-vp-dev --version
+vp --version
 ```
 
-This installs the CLI to `~/.vite-plus-dev` (separate from the release version at `~/.vite-plus`) and creates a `vp-dev` wrapper script that sets the correct `VITE_PLUS_HOME` environment variable.
-
-Note: In CI, `pnpm bootstrap-cli:ci` installs `vp` to `~/.vite-plus`, matching the real user environment.
+This installs the CLI to `~/.vite-plus` and creates the `vp` binary.
 
 ## Workflow for build and test
 

@@ -467,6 +467,8 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
+          Get-ChildItem "$env:USERPROFILE\.vite-plus\"
+
           # Helper to read the installed CLI version from package.json
           function Get-CliVersion {
             node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'package.json')).version"
