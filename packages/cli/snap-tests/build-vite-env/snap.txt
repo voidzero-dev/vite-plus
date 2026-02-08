@@ -1,4 +1,5 @@
-> VITE_MY_VAR=1 vite build
+> VITE_MY_VAR=1 vite run build
+$ vp build
 vite v<semver>
 [2Ktransforming...✓ <variable> modules transformed.
 rendering chunks...
@@ -9,7 +10,21 @@ dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
 ✓ built in <variable>ms
 
 
-> VITE_MY_VAR=1 vite build # should hit cache
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] build-vite-env-test#build: $ vp build ✓
+      → Cache miss: no previous cache entry found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> VITE_MY_VAR=1 vite run build # should hit cache
+$ vp build ✓ cache hit, replaying
 vite v<semver>
 [2Ktransforming...✓ <variable> modules transformed.
 rendering chunks...
@@ -18,10 +33,23 @@ dist/index.html                <variable> kB │ gzip: <variable> kB
 dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
 
 ✓ built in <variable>ms
-✓ cache hit, logs replayed
 
 
-> VITE_MY_VAR=2 vite build # env changed, should miss cache
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 1 cache hits • 0 cache misses 
+Performance:  100% cache hit rate, <variable>ms saved in total
+
+Task Details:
+────────────────────────────────────────────────
+  [1] build-vite-env-test#build: $ vp build ✓
+      → Cache hit - output replayed - <variable>ms saved
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> VITE_MY_VAR=2 vite run build # env changed, should miss cache
+$ vp build ✗ cache miss: envs changed, executing
 vite v<semver>
 [2Ktransforming...✓ <variable> modules transformed.
 rendering chunks...
@@ -31,3 +59,16 @@ dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
 
 ✓ built in <variable>ms
 
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 1 cache misses 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] build-vite-env-test#build: $ vp build ✓
+      → Cache miss: env VITE_MY_VAR value changed from '1' to '2'
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

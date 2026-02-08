@@ -4,7 +4,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite doc build # build documentation",
-    "vite doc build # build documentation again should hit the cache"
+    "vite run doc # build documentation",
+    "vite run doc # build documentation again should hit the cache"
   ]
 }

@@ -4,4 +4,3 @@ src/valid.js (<variable>ms)
 
 Format issues found in above 1 files. Run without `--check` to fix.
 Finished in <variable>ms on 4 files using <variable> threads.
-

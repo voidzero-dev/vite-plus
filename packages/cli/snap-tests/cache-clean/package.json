@@ -1,5 +1,5 @@
 {
   "scripts": {
-    "hello": "vite fmt"
+    "hello": "vp fmt"
   }
 }
