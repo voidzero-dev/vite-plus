@@ -7,29 +7,26 @@ use tracing_subscriber::{
     prelude::*,
 };
 
-use crate::EnvConfig;
-
-/// Initialize tracing with the current `EnvConfig`.
-///
-/// Uses `EnvConfig::get().vite_log` for the log filter.
+/// Initialize tracing with VITE_LOG environment variable.
 ///
 /// Uses `OnceLock` to ensure tracing is only initialized once,
 /// even if called multiple times.
+///
+/// # Environment Variables
+/// - `VITE_LOG`: Controls log filtering (e.g., "debug", "vite_task=trace")
 pub fn init_tracing() {
     static TRACING: OnceLock<()> = OnceLock::new();
     TRACING.get_or_init(|| {
-        let config = EnvConfig::get();
-        let targets = match config.vite_log {
-            Some(ref env_var) => {
-                use std::str::FromStr;
-                Targets::from_str(env_var).unwrap_or_default()
-            }
-            None => Targets::new(),
-        };
-
         tracing_subscriber::registry()
             .with(
-                targets
+                std::env::var("VITE_LOG")
+                    .map_or_else(
+                        |_| Targets::new(),
+                        |env_var| {
+                            use std::str::FromStr;
+                            Targets::from_str(&env_var).unwrap_or_default()
+                        },
+                    )
                     // disable brush-parser tracing
                     .with_targets([("tokenize", LevelFilter::OFF), ("parse", LevelFilter::OFF)]),
             )

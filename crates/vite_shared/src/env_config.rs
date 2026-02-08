@@ -54,11 +54,6 @@ pub struct EnvConfig {
     /// Env: `VITE_PLUS_HOME`
     pub vite_plus_home: Option<PathBuf>,
 
-    /// Log filter string for `tracing_subscriber`.
-    ///
-    /// Env: `VITE_LOG`
-    pub vite_log: Option<String>,
-
     /// NPM registry URL.
     ///
     /// Env: `npm_config_registry` or `NPM_CONFIG_REGISTRY`
@@ -134,7 +129,6 @@ impl EnvConfig {
     pub fn from_env() -> Self {
         Self {
             vite_plus_home: std::env::var("VITE_PLUS_HOME").ok().map(PathBuf::from),
-            vite_log: std::env::var("VITE_LOG").ok(),
             npm_registry: std::env::var("npm_config_registry")
                 .or_else(|_| std::env::var("NPM_CONFIG_REGISTRY"))
                 .unwrap_or_else(|_| "https://registry.npmjs.org".into()),
@@ -222,7 +216,6 @@ impl EnvConfig {
     pub fn for_test() -> Self {
         Self {
             vite_plus_home: None,
-            vite_log: None,
             npm_registry: "https://registry.npmjs.org".into(),
             node_dist_mirror: None,
             is_ci: false,
@@ -273,7 +266,6 @@ mod tests {
     fn test_for_test_returns_defaults() {
         let config = EnvConfig::for_test();
         assert!(config.vite_plus_home.is_none());
-        assert!(config.vite_log.is_none());
         assert_eq!(config.npm_registry, "https://registry.npmjs.org");
         assert!(!config.is_ci);
         assert!(!config.bypass_shim);
