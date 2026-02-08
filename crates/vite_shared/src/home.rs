@@ -43,9 +43,10 @@ mod tests {
 
     #[test]
     fn test_get_vite_plus_home_with_custom_path() {
-        EnvConfig::test_scope(EnvConfig::for_test_with_home("/custom/path"), || {
+        let temp_dir = std::env::temp_dir().join("vp-test-custom-home");
+        EnvConfig::test_scope(EnvConfig::for_test_with_home(&temp_dir), || {
             let home = get_vite_plus_home().unwrap();
-            assert_eq!(home.as_path().to_str().unwrap(), "/custom/path");
+            assert_eq!(home.as_path(), temp_dir.as_path());
         });
     }
 }
