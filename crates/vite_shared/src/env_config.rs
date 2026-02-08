@@ -33,9 +33,7 @@
 //! );
 //! ```
 
-use std::cell::RefCell;
-use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::{cell::RefCell, path::PathBuf, sync::OnceLock};
 
 /// Global config initialized once in `main()`.
 static ENV_CONFIG: OnceLock<EnvConfig> = OnceLock::new();
@@ -243,10 +241,7 @@ impl EnvConfig {
 
     /// Create a test configuration with a custom home directory.
     pub fn for_test_with_home(home: impl Into<PathBuf>) -> Self {
-        Self {
-            vite_plus_home: Some(home.into()),
-            ..Self::for_test()
-        }
+        Self { vite_plus_home: Some(home.into()), ..Self::for_test() }
     }
 
     /// Set a test config override and return a guard that restores the previous on drop.
@@ -287,10 +282,7 @@ mod tests {
     #[test]
     fn test_for_test_with_home() {
         let config = EnvConfig::for_test_with_home("/tmp/test-home");
-        assert_eq!(
-            config.vite_plus_home,
-            Some(PathBuf::from("/tmp/test-home"))
-        );
+        assert_eq!(config.vite_plus_home, Some(PathBuf::from("/tmp/test-home")));
     }
 
     #[test]
@@ -307,59 +299,41 @@ mod tests {
 
     #[test]
     fn test_scope_overrides_get() {
-        EnvConfig::test_scope(
-            EnvConfig::for_test_with_home("/scoped/home"),
-            || {
-                let config = EnvConfig::get();
-                assert_eq!(
-                    config.vite_plus_home.as_ref().unwrap().to_str().unwrap(),
-                    "/scoped/home"
-                );
-            },
-        );
+        EnvConfig::test_scope(EnvConfig::for_test_with_home("/scoped/home"), || {
+            let config = EnvConfig::get();
+            assert_eq!(config.vite_plus_home.as_ref().unwrap().to_str().unwrap(), "/scoped/home");
+        });
     }
 
     #[test]
     fn test_scope_restores_previous() {
         let before = EnvConfig::get();
-        EnvConfig::test_scope(
-            EnvConfig::for_test_with_home("/tmp/scope"),
-            || {
-                assert!(EnvConfig::get().vite_plus_home.is_some());
-            },
-        );
+        EnvConfig::test_scope(EnvConfig::for_test_with_home("/tmp/scope"), || {
+            assert!(EnvConfig::get().vite_plus_home.is_some());
+        });
         let after = EnvConfig::get();
-        assert_eq!(
-            before.vite_plus_home.is_some(),
-            after.vite_plus_home.is_some()
-        );
+        assert_eq!(before.vite_plus_home.is_some(), after.vite_plus_home.is_some());
     }
 
     #[test]
     fn test_nested_scopes() {
-        EnvConfig::test_scope(
-            EnvConfig::for_test_with_home("/outer"),
-            || {
+        EnvConfig::test_scope(EnvConfig::for_test_with_home("/outer"), || {
+            assert_eq!(
+                EnvConfig::get().vite_plus_home.as_ref().unwrap().to_str().unwrap(),
+                "/outer"
+            );
+            EnvConfig::test_scope(EnvConfig::for_test_with_home("/inner"), || {
                 assert_eq!(
                     EnvConfig::get().vite_plus_home.as_ref().unwrap().to_str().unwrap(),
-                    "/outer"
+                    "/inner"
                 );
-                EnvConfig::test_scope(
-                    EnvConfig::for_test_with_home("/inner"),
-                    || {
-                        assert_eq!(
-                            EnvConfig::get().vite_plus_home.as_ref().unwrap().to_str().unwrap(),
-                            "/inner"
-                        );
-                    },
-                );
-                // Restored to outer
-                assert_eq!(
-                    EnvConfig::get().vite_plus_home.as_ref().unwrap().to_str().unwrap(),
-                    "/outer"
-                );
-            },
-        );
+            });
+            // Restored to outer
+            assert_eq!(
+                EnvConfig::get().vite_plus_home.as_ref().unwrap().to_str().unwrap(),
+                "/outer"
+            );
+        });
     }
 
     #[test]
