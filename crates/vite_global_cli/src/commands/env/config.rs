@@ -406,7 +406,6 @@ pub async fn resolve_version_alias(
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
     use tempfile::TempDir;
     use vite_js_runtime::VersionSource;
     use vite_path::AbsolutePathBuf;
@@ -510,14 +509,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_version_from_node_version_file() {
-        // SAFETY: Clear session override so .node-version is used
-        unsafe {
-            std::env::remove_var(VERSION_ENV_VAR);
-        }
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig::for_test());
 
         // Create .node-version file
         tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
@@ -529,14 +524,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_version_walks_up_directory() {
-        // SAFETY: Clear session override so .node-version is used
-        unsafe {
-            std::env::remove_var(VERSION_ENV_VAR);
-        }
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig::for_test());
 
         // Create .node-version in parent
         tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
@@ -592,14 +583,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_version_node_version_takes_priority() {
-        // SAFETY: Clear session override so .node-version is used
-        unsafe {
-            std::env::remove_var(VERSION_ENV_VAR);
-        }
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig::for_test());
 
         // Create both .node-version and package.json with engines.node
         tokio::fs::write(temp_path.join(".node-version"), "22.0.0\n").await.unwrap();
@@ -623,14 +610,11 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires running outside of any Node.js project (walk-up finds .node-version)
     async fn test_resolve_version_alias_default_no_source_path() {
-        // Create config with lts as default
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: This test runs in isolation
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         let config = Config { default_node_version: Some("lts".to_string()), ..Default::default() };
         save_config(&config).await.unwrap();
@@ -642,24 +626,16 @@ mod tests {
         let resolution = resolve_version(&test_dir).await.unwrap();
         assert_eq!(resolution.source, "default");
         assert!(resolution.source_path.is_none(), "Alias defaults should not have source_path");
-
-        // Clean up env var
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
     #[ignore] // Requires running outside of any Node.js project (walk-up finds .node-version)
     async fn test_resolve_version_exact_default_has_source_path() {
-        // Create config with exact version as default
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: This test runs in isolation
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         let config =
             Config { default_node_version: Some("20.18.0".to_string()), ..Default::default() };
@@ -672,26 +648,18 @@ mod tests {
         let resolution = resolve_version(&test_dir).await.unwrap();
         assert_eq!(resolution.source, "default");
         assert!(resolution.source_path.is_some(), "Exact version defaults should have source_path");
-
-        // Clean up env var
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_version_invalid_node_version_falls_through_to_lts() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         // Create .node-version file with invalid version
         tokio::fs::write(temp_path.join(".node-version"), "invalid-version\n").await.unwrap();
-
-        // SAFETY: Set VITE_PLUS_HOME to temp dir to avoid using user's config
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
 
         // resolve_version should NOT fail - it should fall through to LTS
         let resolution = resolve_version(&temp_path).await.unwrap();
@@ -701,26 +669,18 @@ mod tests {
         assert_eq!(resolution.source, "lts");
         assert!(resolution.source_path.is_none());
         assert!(resolution.is_range, "LTS fallback should be marked as range");
-
-        // Clean up env var
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_version_invalid_node_version_falls_through_to_default() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         // Create .node-version file with invalid version
         tokio::fs::write(temp_path.join(".node-version"), "not-a-version\n").await.unwrap();
-
-        // SAFETY: Set VITE_PLUS_HOME to temp dir
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
 
         // Create config with a default version
         let config =
@@ -733,18 +693,15 @@ mod tests {
         // Should fall through to user default since .node-version is invalid
         assert_eq!(resolution.source, "default");
         assert_eq!(resolution.version, "20.18.0");
-
-        // Clean up env var
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_version_invalid_node_version_falls_through_to_engines_node() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         // Create .node-version file with invalid version (typo or unsupported alias)
         tokio::fs::write(temp_path.join(".node-version"), "laetst\n").await.unwrap();
@@ -752,11 +709,6 @@ mod tests {
         // Create package.json with valid engines.node
         let package_json = r#"{"engines":{"node":"^20.18.0"}}"#;
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
-
-        // SAFETY: Set VITE_PLUS_HOME to temp dir to avoid using user's config
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
 
         // resolve_version should NOT fail - it should fall through to engines.node
         let resolution = resolve_version(&temp_path).await.unwrap();
@@ -769,18 +721,15 @@ mod tests {
             "Expected version to start with '20.', got: {}",
             resolution.version
         );
-
-        // Clean up env var
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_version_invalid_node_version_falls_through_to_dev_engines() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         // Create .node-version file with invalid version
         tokio::fs::write(temp_path.join(".node-version"), "invalid\n").await.unwrap();
@@ -788,11 +737,6 @@ mod tests {
         // Create package.json with devEngines.runtime but no engines.node
         let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"^20.18.0"}}}"#;
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
-
-        // SAFETY: Set VITE_PLUS_HOME to temp dir to avoid using user's config
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
 
         // resolve_version should NOT fail - it should fall through to devEngines.runtime
         let resolution = resolve_version(&temp_path).await.unwrap();
@@ -805,22 +749,13 @@ mod tests {
             "Expected version to start with '20.', got: {}",
             resolution.version
         );
-
-        // Clean up env var
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_version_latest_alias_in_node_version() {
-        // SAFETY: Clear session override so .node-version is used
-        unsafe {
-            std::env::remove_var(VERSION_ENV_VAR);
-        }
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig::for_test());
 
         // Create .node-version file with "latest" alias
         tokio::fs::write(temp_path.join(".node-version"), "latest\n").await.unwrap();
@@ -840,18 +775,16 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_version_env_var_takes_priority() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            node_version: Some("22.0.0".into()),
+            ..vite_shared::EnvConfig::for_test()
+        });
 
         // Create .node-version file
         tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var(VERSION_ENV_VAR, "22.0.0");
-        }
 
         let resolution = resolve_version(&temp_path).await.unwrap();
 
@@ -860,25 +793,19 @@ mod tests {
         assert_eq!(resolution.source, VERSION_ENV_VAR);
         assert!(resolution.source_path.is_none());
         assert!(!resolution.is_range);
-
-        unsafe {
-            std::env::remove_var(VERSION_ENV_VAR);
-        }
     }
 
     /// Verify that the env var source is accepted by `vp env install` (no-arg) source validation.
     /// This is a regression test for a bug where `vp env use 24` followed by `vp env install`
     /// would fail with "No Node.js version found in current project."
     #[tokio::test]
-    #[serial]
     async fn test_env_var_source_accepted_by_install_validation() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var(VERSION_ENV_VAR, "22.0.0");
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            node_version: Some("22.0.0".into()),
+            ..vite_shared::EnvConfig::for_test()
+        });
 
         let resolution = resolve_version(&temp_path).await.unwrap();
 
@@ -894,22 +821,16 @@ mod tests {
             resolution.source
         );
         assert_eq!(resolution.version, "22.0.0");
-
-        unsafe {
-            std::env::remove_var(VERSION_ENV_VAR);
-        }
     }
 
     // ── Session version file tests ──
 
     #[tokio::test]
-    #[serial]
     async fn test_write_and_read_session_version() {
         let temp_dir = TempDir::new().unwrap();
-        // SAFETY: Isolate VITE_PLUS_HOME to temp dir
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         // Write a session version
         write_session_version("22.0.0").await.unwrap();
@@ -921,36 +842,25 @@ mod tests {
         // Read it back (sync)
         let version_sync = read_session_version_sync();
         assert_eq!(version_sync.as_deref(), Some("22.0.0"));
-
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_read_session_version_returns_none_when_missing() {
         let temp_dir = TempDir::new().unwrap();
-        // SAFETY: Isolate VITE_PLUS_HOME to temp dir (no session file exists)
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         assert!(read_session_version().await.is_none());
         assert!(read_session_version_sync().is_none());
-
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_read_session_version_returns_none_for_empty_file() {
         let temp_dir = TempDir::new().unwrap();
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         // Write empty content
         let path = get_session_version_path().unwrap();
@@ -964,19 +874,14 @@ mod tests {
         tokio::fs::write(&path, "   \n  ").await.unwrap();
         assert!(read_session_version().await.is_none());
         assert!(read_session_version_sync().is_none());
-
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_read_session_version_trims_whitespace() {
         let temp_dir = TempDir::new().unwrap();
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         write_session_version("20.18.0").await.unwrap();
 
@@ -986,19 +891,14 @@ mod tests {
 
         assert_eq!(read_session_version().await.as_deref(), Some("20.18.0"));
         assert_eq!(read_session_version_sync().as_deref(), Some("20.18.0"));
-
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_delete_session_version() {
         let temp_dir = TempDir::new().unwrap();
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         // Write then delete
         write_session_version("22.0.0").await.unwrap();
@@ -1006,40 +906,27 @@ mod tests {
 
         delete_session_version().await.unwrap();
         assert!(read_session_version().await.is_none());
-
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_delete_session_version_ignores_missing_file() {
         let temp_dir = TempDir::new().unwrap();
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         // Deleting a non-existent file should succeed
         let result = delete_session_version().await;
         assert!(result.is_ok());
-
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_version_session_file_takes_priority_over_node_version() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: Clear env var and set VITE_PLUS_HOME to temp dir
-        unsafe {
-            std::env::remove_var(VERSION_ENV_VAR);
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         // Create .node-version file
         tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
@@ -1057,22 +944,17 @@ mod tests {
 
         // Clean up
         delete_session_version().await.unwrap();
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_version_env_var_takes_priority_over_session_file() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: Set env var and VITE_PLUS_HOME
-        unsafe {
-            std::env::set_var(VERSION_ENV_VAR, "24.0.0");
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            node_version: Some("24.0.0".into()),
+            vite_plus_home: Some(temp_dir.path().into()),
+            ..vite_shared::EnvConfig::for_test()
+        });
 
         // Write session version file with different version
         write_session_version("22.0.0").await.unwrap();
@@ -1085,23 +967,15 @@ mod tests {
 
         // Clean up
         delete_session_version().await.unwrap();
-        unsafe {
-            std::env::remove_var(VERSION_ENV_VAR);
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_version_falls_through_when_no_session_file() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: Clear env var, set VITE_PLUS_HOME (no session file written)
-        unsafe {
-            std::env::remove_var(VERSION_ENV_VAR);
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         // Create .node-version file
         tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
@@ -1111,26 +985,18 @@ mod tests {
         // Should fall through to .node-version since no session file exists
         assert_eq!(resolution.version, "20.18.0");
         assert_eq!(resolution.source, ".node-version");
-
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     /// Verify that the session file source is accepted by `vp env install` (no-arg) source validation.
     /// This is a regression test ensuring `vp env use 24` followed by `vp env install`
     /// works when the session file is the resolution source.
     #[tokio::test]
-    #[serial]
     async fn test_session_file_source_accepted_by_install_validation() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: Clear env var, set VITE_PLUS_HOME
-        unsafe {
-            std::env::remove_var(VERSION_ENV_VAR);
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         // Write session version file
         write_session_version("22.0.0").await.unwrap();
@@ -1157,60 +1023,43 @@ mod tests {
 
         // Clean up
         delete_session_version().await.unwrap();
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_version_empty_env_var_is_ignored() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            node_version: Some("".into()),
+            ..vite_shared::EnvConfig::for_test()
+        });
 
         // Create .node-version file
         tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
-
-        // Set empty env var - should be ignored
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var(VERSION_ENV_VAR, "");
-        }
 
         let resolution = resolve_version(&temp_path).await.unwrap();
 
         // Empty env var should be ignored, should fall through to .node-version
         assert_eq!(resolution.version, "20.18.0");
         assert_eq!(resolution.source, ".node-version");
-
-        unsafe {
-            std::env::remove_var(VERSION_ENV_VAR);
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_resolve_version_whitespace_env_var_is_ignored() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            node_version: Some("   ".into()),
+            ..vite_shared::EnvConfig::for_test()
+        });
 
         // Create .node-version file
         tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
-
-        // Set whitespace-only env var - should be ignored
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var(VERSION_ENV_VAR, "   ");
-        }
 
         let resolution = resolve_version(&temp_path).await.unwrap();
 
         // Whitespace env var should be ignored, should fall through to .node-version
         assert_eq!(resolution.version, "20.18.0");
         assert_eq!(resolution.source, ".node-version");
-
-        unsafe {
-            std::env::remove_var(VERSION_ENV_VAR);
-        }
     }
 }

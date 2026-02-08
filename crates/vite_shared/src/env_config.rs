@@ -224,6 +224,26 @@ impl EnvConfig {
             ..Self::for_test()
         }
     }
+
+    /// Set a test config override and return a guard that restores the previous on drop.
+    /// Works with async tests since it uses RAII instead of closures.
+    pub fn test_guard(config: Self) -> TestEnvGuard {
+        let prev = TEST_CONFIG.with(|c| c.borrow_mut().replace(config));
+        TestEnvGuard { prev }
+    }
+}
+
+/// RAII guard for test config override. Restores previous config on drop.
+pub struct TestEnvGuard {
+    prev: Option<EnvConfig>,
+}
+
+impl Drop for TestEnvGuard {
+    fn drop(&mut self) {
+        TEST_CONFIG.with(|c| {
+            *c.borrow_mut() = self.prev.take();
+        });
+    }
 }
 
 #[cfg(test)]

@@ -174,8 +174,6 @@ async fn list_packages_recursive(
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
-
     use super::*;
 
     #[test]
@@ -198,19 +196,14 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_save_scoped_package_metadata() {
         use tempfile::TempDir;
 
-        // Create temp directory and set VITE_PLUS_HOME
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path().to_path_buf();
-
-        // Temporarily override VITE_PLUS_HOME for this test
-        // SAFETY: This test runs in isolation
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", &temp_path);
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(&temp_path),
+        );
 
         let metadata = PackageMetadata::new(
             "@scope/test-pkg".to_string(),
@@ -230,11 +223,6 @@ mod tests {
         // Verify the file exists at the correct location
         let expected_path = temp_path.join("packages").join("@scope").join("test-pkg.json");
         assert!(expected_path.exists(), "Metadata file not found at {:?}", expected_path);
-
-        // Clean up env var
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
