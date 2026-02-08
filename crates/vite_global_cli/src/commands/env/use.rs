@@ -29,9 +29,10 @@ enum Shell {
 
 /// Detect the current shell from environment variables.
 fn detect_shell() -> Shell {
-    if std::env::var("FISH_VERSION").is_ok() {
+    let config = vite_shared::EnvConfig::get();
+    if config.fish_version.is_some() {
         Shell::Fish
-    } else if cfg!(windows) && std::env::var("PSModulePath").is_ok() {
+    } else if cfg!(windows) && config.ps_module_path.is_some() {
         Shell::PowerShell
     } else if cfg!(windows) {
         Shell::Cmd
@@ -160,54 +161,35 @@ pub async fn execute(
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
-
     use super::*;
 
     #[test]
-    #[serial]
     fn test_detect_shell_posix_even_with_psmodulepath() {
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::remove_var("FISH_VERSION");
-            std::env::set_var("PSModulePath", "/some/path");
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            ps_module_path: Some("/some/path".into()),
+            ..vite_shared::EnvConfig::for_test()
+        });
         let shell = detect_shell();
         #[cfg(not(windows))]
         assert!(matches!(shell, Shell::Posix));
         #[cfg(windows)]
         assert!(matches!(shell, Shell::PowerShell));
-        // Cleanup
-        unsafe {
-            std::env::remove_var("PSModulePath");
-        }
     }
 
     #[test]
-    #[serial]
     fn test_detect_shell_fish() {
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("FISH_VERSION", "3.7.0");
-            std::env::remove_var("PSModulePath");
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            fish_version: Some("3.7.0".into()),
+            ..vite_shared::EnvConfig::for_test()
+        });
         let shell = detect_shell();
         assert!(matches!(shell, Shell::Fish));
-        // Cleanup
-        unsafe {
-            std::env::remove_var("FISH_VERSION");
-        }
     }
 
     #[test]
-    #[serial]
     fn test_detect_shell_posix_default() {
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::remove_var("FISH_VERSION");
-            std::env::remove_var("PSModulePath");
-            std::env::remove_var("COMSPEC");
-        }
+        // All shell detection fields None → defaults
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig::for_test());
         let shell = detect_shell();
         #[cfg(not(windows))]
         assert!(matches!(shell, Shell::Posix));

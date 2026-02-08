@@ -112,6 +112,21 @@ pub struct EnvConfig {
     ///
     /// Env: `VITE_PLUS_NODE_VERSION`
     pub node_version: Option<String>,
+
+    /// User home directory.
+    ///
+    /// Env: `HOME` (Unix) / `USERPROFILE` (Windows)
+    pub user_home: Option<PathBuf>,
+
+    /// Fish shell version (indicates running under fish).
+    ///
+    /// Env: `FISH_VERSION`
+    pub fish_version: Option<String>,
+
+    /// PowerShell module path (indicates running under PowerShell on Windows).
+    ///
+    /// Env: `PSModulePath`
+    pub ps_module_path: Option<String>,
 }
 
 impl EnvConfig {
@@ -134,6 +149,12 @@ impl EnvConfig {
             js_scripts_dir: std::env::var("VITE_GLOBAL_CLI_JS_SCRIPTS_DIR").ok(),
             update_task_types: std::env::var("VITE_UPDATE_TASK_TYPES").ok(),
             node_version: std::env::var("VITE_PLUS_NODE_VERSION").ok(),
+            user_home: std::env::var("HOME")
+                .or_else(|_| std::env::var("USERPROFILE"))
+                .ok()
+                .map(PathBuf::from),
+            fish_version: std::env::var("FISH_VERSION").ok(),
+            ps_module_path: std::env::var("PSModulePath").ok(),
         }
     }
 
@@ -214,6 +235,9 @@ impl EnvConfig {
             js_scripts_dir: None,
             update_task_types: None,
             node_version: None,
+            user_home: None,
+            fish_version: None,
+            ps_module_path: None,
         }
     }
 

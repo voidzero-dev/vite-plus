@@ -226,17 +226,14 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_list_all_includes_scoped_packages() {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path().to_path_buf();
-
-        // SAFETY: This test runs in isolation
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", &temp_path);
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(&temp_path),
+        );
 
         // Create regular package metadata
         let regular = PackageMetadata::new(
@@ -269,25 +266,17 @@ mod tests {
         let names: Vec<_> = all.iter().map(|p| p.name.as_str()).collect();
         assert!(names.contains(&"typescript"), "Missing typescript package");
         assert!(names.contains(&"@types/node"), "Missing @types/node package");
-
-        // Clean up env var
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_find_by_binary() {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path().to_path_buf();
-
-        // SAFETY: This test runs in isolation
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", &temp_path);
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(&temp_path),
+        );
 
         // Create typescript package with tsc and tsserver binaries
         let typescript = PackageMetadata::new(
@@ -329,10 +318,5 @@ mod tests {
         // Non-existent binary should return None
         let found = PackageMetadata::find_by_binary("nonexistent").await.unwrap();
         assert!(found.is_none(), "Should not find package for nonexistent binary");
-
-        // Clean up env var
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 }

@@ -275,9 +275,8 @@ async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<()
 
     // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env)
     // This makes the env file portable across sessions where HOME may differ
-    let bin_path_ref = if let Ok(home_dir) = std::env::var("HOME") {
-        let home = std::path::Path::new(&home_dir);
-        if let Ok(suffix) = bin_path.as_path().strip_prefix(home) {
+    let bin_path_ref = if let Some(home_dir) = vite_shared::EnvConfig::get().user_home {
+        if let Ok(suffix) = bin_path.as_path().strip_prefix(&home_dir) {
             format!("$HOME/{}", suffix.display())
         } else {
             bin_path.as_path().display().to_string()
@@ -452,22 +451,24 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
     use tempfile::TempDir;
     use vite_path::AbsolutePathBuf;
 
     use super::*;
 
+    /// Helper: create a test_guard with user_home set to the given path.
+    fn home_guard(home: impl Into<std::path::PathBuf>) -> vite_shared::TestEnvGuard {
+        vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            user_home: Some(home.into()),
+            ..vite_shared::EnvConfig::for_test()
+        })
+    }
+
     #[tokio::test]
-    #[serial]
     async fn test_create_env_files_creates_all_files() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("HOME", temp_dir.path());
-        }
+        let _guard = home_guard(temp_dir.path());
 
         create_env_files(&home).await.unwrap();
 
@@ -477,22 +478,13 @@ mod tests {
         assert!(env_path.as_path().exists(), "env file should be created");
         assert!(env_fish_path.as_path().exists(), "env.fish file should be created");
         assert!(env_ps1_path.as_path().exists(), "env.ps1 file should be created");
-
-        unsafe {
-            std::env::remove_var("HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_create_env_files_replaces_placeholder_with_home_relative_path() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("HOME", temp_dir.path());
-        }
+        let _guard = home_guard(temp_dir.path());
 
         create_env_files(&home).await.unwrap();
 
@@ -518,23 +510,14 @@ mod tests {
             fish_content.contains("$HOME/bin"),
             "env.fish file should reference $HOME/bin, got: {fish_content}"
         );
-
-        unsafe {
-            std::env::remove_var("HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_create_env_files_uses_absolute_path_when_not_under_home() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // Set HOME to a different path so install dir is NOT under HOME
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("HOME", "/nonexistent-home-dir");
-        }
+        // Set user_home to a different path so install dir is NOT under HOME
+        let _guard = home_guard("/nonexistent-home-dir");
 
         create_env_files(&home).await.unwrap();
 
@@ -555,22 +538,13 @@ mod tests {
 
         // Should NOT use $HOME-relative path
         assert!(!env_content.contains("$HOME/bin"), "env file should not reference $HOME/bin");
-
-        unsafe {
-            std::env::remove_var("HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_create_env_files_posix_contains_path_guard() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("HOME", temp_dir.path());
-        }
+        let _guard = home_guard(temp_dir.path());
 
         create_env_files(&home).await.unwrap();
 
@@ -595,22 +569,13 @@ mod tests {
             env_content.contains("export PATH=\"$__vp_bin:$PATH\""),
             "env file should prepend bin to PATH for new entry"
         );
-
-        unsafe {
-            std::env::remove_var("HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_create_env_files_fish_contains_path_guard() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("HOME", temp_dir.path());
-        }
+        let _guard = home_guard(temp_dir.path());
 
         create_env_files(&home).await.unwrap();
 
@@ -626,22 +591,13 @@ mod tests {
             "env.fish should remove existing entry"
         );
         assert!(fish_content.contains("set -gx PATH"), "env.fish should set PATH globally");
-
-        unsafe {
-            std::env::remove_var("HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_create_env_files_is_idempotent() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("HOME", temp_dir.path());
-        }
+        let _guard = home_guard(temp_dir.path());
 
         // Create env files twice
         create_env_files(&home).await.unwrap();
@@ -657,22 +613,13 @@ mod tests {
         assert_eq!(first_env, second_env, "env file should be identical after second write");
         assert_eq!(first_fish, second_fish, "env.fish file should be identical after second write");
         assert_eq!(first_ps1, second_ps1, "env.ps1 file should be identical after second write");
-
-        unsafe {
-            std::env::remove_var("HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_create_env_files_posix_contains_vp_shell_function() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("HOME", temp_dir.path());
-        }
+        let _guard = home_guard(temp_dir.path());
 
         create_env_files(&home).await.unwrap();
 
@@ -693,22 +640,13 @@ mod tests {
             env_content.contains("command vp \"$@\""),
             "env file should use 'command vp' for passthrough"
         );
-
-        unsafe {
-            std::env::remove_var("HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_create_env_files_fish_contains_vp_function() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("HOME", temp_dir.path());
-        }
+        let _guard = home_guard(temp_dir.path());
 
         create_env_files(&home).await.unwrap();
 
@@ -728,22 +666,13 @@ mod tests {
             fish_content.contains("command vp $argv"),
             "env.fish should use 'command vp' for passthrough"
         );
-
-        unsafe {
-            std::env::remove_var("HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_create_env_files_ps1_contains_vp_function() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("HOME", temp_dir.path());
-        }
+        let _guard = home_guard(temp_dir.path());
 
         create_env_files(&home).await.unwrap();
 
@@ -757,24 +686,18 @@ mod tests {
             !ps1_content.contains("__VP_BIN_WIN__"),
             "env.ps1 should not contain __VP_BIN_WIN__ placeholder"
         );
-
-        unsafe {
-            std::env::remove_var("HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_execute_env_only_creates_home_dir_and_env_files() {
         let temp_dir = TempDir::new().unwrap();
         let fresh_home = temp_dir.path().join("new-vite-plus");
         // Directory does NOT exist yet — execute should create it
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", &fresh_home);
-            std::env::set_var("HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            vite_plus_home: Some(fresh_home.clone()),
+            user_home: Some(temp_dir.path().to_path_buf()),
+            ..vite_shared::EnvConfig::for_test()
+        });
 
         let status = execute(false, true).await.unwrap();
         assert!(status.success(), "execute --env-only should succeed");
@@ -786,10 +709,5 @@ mod tests {
         assert!(fresh_home.join("env").exists(), "env file should be created");
         assert!(fresh_home.join("env.fish").exists(), "env.fish file should be created");
         assert!(fresh_home.join("env.ps1").exists(), "env.ps1 file should be created");
-
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-            std::env::remove_var("HOME");
-        }
     }
 }

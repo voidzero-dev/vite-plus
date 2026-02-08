@@ -112,20 +112,16 @@ impl BinConfig {
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
     use tempfile::TempDir;
 
     use super::*;
 
     #[tokio::test]
-    #[serial]
     async fn test_save_and_load() {
         let temp_dir = TempDir::new().unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         let config = BinConfig::new(
             "tsc".to_string(),
@@ -142,22 +138,14 @@ mod tests {
         assert_eq!(loaded.package, "typescript");
         assert_eq!(loaded.version, "5.0.0");
         assert_eq!(loaded.node_version, "20.18.0");
-
-        // Clean up env var
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_find_by_package() {
         let temp_dir = TempDir::new().unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         // Create configs for typescript (tsc, tsserver)
         let tsc = BinConfig::new(
@@ -197,22 +185,14 @@ mod tests {
 
         let nonexistent_bins = BinConfig::find_by_package("nonexistent").await.unwrap();
         assert!(nonexistent_bins.is_empty());
-
-        // Clean up env var
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_delete() {
         let temp_dir = TempDir::new().unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         let config = BinConfig::new(
             "tsc".to_string(),
@@ -235,29 +215,16 @@ mod tests {
 
         // Delete again should not error
         BinConfig::delete("tsc").await.unwrap();
-
-        // Clean up env var
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_load_nonexistent() {
         let temp_dir = TempDir::new().unwrap();
-
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", temp_dir.path());
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
 
         let loaded = BinConfig::load("nonexistent").await.unwrap();
         assert!(loaded.is_none());
-
-        // Clean up env var
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
-        }
     }
 }

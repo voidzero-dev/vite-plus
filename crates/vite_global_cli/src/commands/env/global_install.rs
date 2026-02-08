@@ -586,19 +586,15 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_uninstall_removes_shims_from_metadata() {
         use tempfile::TempDir;
         use vite_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path().to_path_buf();
-
-        // Set VITE_PLUS_HOME to temp directory
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("VITE_PLUS_HOME", &temp_path);
-        }
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(&temp_path),
+        );
 
         // Create bin directory
         let bin_dir = AbsolutePathBuf::new(temp_path.join("bin")).unwrap();
@@ -672,11 +668,6 @@ mod tests {
                 !bin_dir.join("tsserver.cmd").as_path().exists(),
                 "tsserver.cmd shim should be removed"
             );
-        }
-
-        // Clean up env var
-        unsafe {
-            std::env::remove_var("VITE_PLUS_HOME");
         }
     }
 
