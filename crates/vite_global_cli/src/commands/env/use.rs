@@ -66,7 +66,7 @@ fn format_unset(shell: &Shell) -> String {
 /// When true, the wrapper will eval our stdout to set env vars — no session file needed.
 /// When false (CI, direct invocation), we write a session file so shims can read it.
 fn has_eval_wrapper() -> bool {
-    std::env::var("VITE_PLUS_ENV_USE_EVAL_ENABLE").is_ok()
+    vite_shared::EnvConfig::get().env_use_eval_enable
 }
 
 /// Execute the `vp env use` command.
@@ -104,7 +104,7 @@ pub async fn execute(
 
     // Check if already active and suppress output if requested
     if silent_if_unchanged {
-        let current_env = std::env::var(VERSION_ENV_VAR).ok().map(|v| v.trim().to_string());
+        let current_env = vite_shared::EnvConfig::get().node_version.map(|v| v.trim().to_string());
         let current = if !has_eval_wrapper() {
             current_env.or(config::read_session_version().await)
         } else {

@@ -53,7 +53,7 @@ pub async fn download_file(
     let total_size = response.content_length();
 
     // Create progress bar (only in TTY and not in CI)
-    let is_ci = std::env::var("CI").is_ok();
+    let is_ci = vite_shared::EnvConfig::get().is_ci;
     let progress = if std::io::stderr().is_terminal() && !is_ci {
         let pb = match total_size {
             Some(size) => {

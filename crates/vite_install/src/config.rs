@@ -1,20 +1,21 @@
-use std::{env, sync::LazyLock};
+use vite_shared::EnvConfig;
 
-pub static NPM_REGISTRY: LazyLock<String> = LazyLock::new(|| {
-    env::var("npm_config_registry")
-        .or_else(|_| env::var("NPM_CONFIG_REGISTRY"))
-        .unwrap_or_else(|_| "https://registry.npmjs.org".into())
-});
+/// Get the configured NPM registry URL.
+pub fn npm_registry() -> String {
+    EnvConfig::get().npm_registry.clone()
+}
 
 /// Get the tgz url of a npm package
 pub fn get_npm_package_tgz_url(name: &str, version: &str) -> String {
+    let registry = npm_registry();
     // convert `@scope/name` to `name`
     let filename = name.split('/').next_back().unwrap_or(name);
-    format!("{}/{}/-/{}-{}.tgz", NPM_REGISTRY.clone(), name, filename, version)
+    format!("{}/{}/-/{}-{}.tgz", registry, name, filename, version)
 }
 
 pub fn get_npm_package_version_url(name: &str, version_or_tag: &str) -> String {
-    format!("{}/{}/{}", NPM_REGISTRY.clone(), name, version_or_tag)
+    let registry = npm_registry();
+    format!("{}/{}/{}", registry, name, version_or_tag)
 }
 
 #[cfg(test)]
@@ -22,19 +23,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_npm_registry() {
-        assert_eq!(NPM_REGISTRY.clone(), "https://registry.npmjs.org");
+    fn test_npm_registry_default() {
+        EnvConfig::test_scope(EnvConfig::for_test(), || {
+            assert_eq!(npm_registry(), "https://registry.npmjs.org");
+        });
+    }
+
+    #[test]
+    fn test_npm_registry_custom() {
+        EnvConfig::test_scope(
+            EnvConfig {
+                npm_registry: "https://registry.npmmirror.com".into(),
+                ..EnvConfig::for_test()
+            },
+            || {
+                assert_eq!(npm_registry(), "https://registry.npmmirror.com");
+            },
+        );
     }
 
     #[test]
     fn test_npm_tgz_url() {
-        assert_eq!(
-            get_npm_package_tgz_url("vite", "7.1.3"),
-            "https://registry.npmjs.org/vite/-/vite-7.1.3.tgz"
-        );
-        assert_eq!(
-            get_npm_package_tgz_url("@vitejs/release-scripts", "1.6.0"),
-            "https://registry.npmjs.org/@vitejs/release-scripts/-/release-scripts-1.6.0.tgz"
-        );
+        EnvConfig::test_scope(EnvConfig::for_test(), || {
+            assert_eq!(
+                get_npm_package_tgz_url("vite", "7.1.3"),
+                "https://registry.npmjs.org/vite/-/vite-7.1.3.tgz"
+            );
+            assert_eq!(
+                get_npm_package_tgz_url("@vitejs/release-scripts", "1.6.0"),
+                "https://registry.npmjs.org/@vitejs/release-scripts/-/release-scripts-1.6.0.tgz"
+            );
+        });
     }
 }

@@ -206,7 +206,7 @@ pub async fn delete_session_version() -> Result<(), Error> {
 /// 6. Latest LTS version
 pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Error> {
     // Session override via environment variable (set by `vp env use`)
-    if let Ok(env_version) = std::env::var(VERSION_ENV_VAR) {
+    if let Some(env_version) = vite_shared::EnvConfig::get().node_version {
         let env_version = env_version.trim();
         if !env_version.is_empty() {
             return Ok(VersionResolution {

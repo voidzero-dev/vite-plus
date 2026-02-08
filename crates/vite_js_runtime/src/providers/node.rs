@@ -1,9 +1,6 @@
 //! Node.js runtime provider implementation.
 
-use std::{
-    env,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use node_semver::{Range, Version};
@@ -22,7 +19,6 @@ use crate::{
 const DEFAULT_NODE_DIST_URL: &str = "https://nodejs.org/dist";
 
 /// Environment variable to override the Node.js distribution URL
-const NODE_DIST_MIRROR_ENV: &str = "VITE_NODE_DIST_MIRROR";
 
 /// Default cache TTL in seconds (1 hour)
 const DEFAULT_CACHE_TTL_SECS: u64 = 3600;
@@ -535,8 +531,9 @@ fn calculate_expires_at(max_age: Option<u64>) -> u64 {
 /// Returns the value of `VITE_NODE_DIST_MIRROR` environment variable if set,
 /// otherwise returns the default `https://nodejs.org/dist`.
 fn get_dist_url() -> Str {
-    env::var(NODE_DIST_MIRROR_ENV)
-        .map_or_else(|_| DEFAULT_NODE_DIST_URL.into(), |url| url.trim_end_matches('/').into())
+    vite_shared::EnvConfig::get()
+        .node_dist_mirror
+        .map_or_else(|| DEFAULT_NODE_DIST_URL.into(), |url| Str::from(url.trim_end_matches('/').to_string()))
 }
 
 #[async_trait]
@@ -725,24 +722,35 @@ fedcba987654  node-v22.13.1-win-x64.zip";
 
     #[test]
     fn test_get_dist_url_default() {
-        // When env var is not set, should return default URL
-        unsafe { env::remove_var(NODE_DIST_MIRROR_ENV) };
-        assert_eq!(get_dist_url(), "https://nodejs.org/dist");
+        vite_shared::EnvConfig::test_scope(vite_shared::EnvConfig::for_test(), || {
+            assert_eq!(get_dist_url(), "https://nodejs.org/dist");
+        });
     }
 
     #[test]
     fn test_get_dist_url_with_mirror() {
-        unsafe { env::set_var(NODE_DIST_MIRROR_ENV, "https://nodejs.org/dist") };
-        assert_eq!(get_dist_url(), "https://nodejs.org/dist");
-        unsafe { env::remove_var(NODE_DIST_MIRROR_ENV) };
+        vite_shared::EnvConfig::test_scope(
+            vite_shared::EnvConfig {
+                node_dist_mirror: Some("https://nodejs.org/dist".into()),
+                ..vite_shared::EnvConfig::for_test()
+            },
+            || {
+                assert_eq!(get_dist_url(), "https://nodejs.org/dist");
+            },
+        );
     }
 
     #[test]
     fn test_get_dist_url_trims_trailing_slash() {
-        // Should trim trailing slash from mirror URL
-        unsafe { env::set_var(NODE_DIST_MIRROR_ENV, "https://nodejs.org/dist/") };
-        assert_eq!(get_dist_url(), "https://nodejs.org/dist");
-        unsafe { env::remove_var(NODE_DIST_MIRROR_ENV) };
+        vite_shared::EnvConfig::test_scope(
+            vite_shared::EnvConfig {
+                node_dist_mirror: Some("https://nodejs.org/dist/".into()),
+                ..vite_shared::EnvConfig::for_test()
+            },
+            || {
+                assert_eq!(get_dist_url(), "https://nodejs.org/dist");
+            },
+        );
     }
 
     #[test]
