@@ -767,7 +767,7 @@ async fn execute_vite_task_command(
         if let Ok(install_request) = create_install_synthetic_request(&cwd).await {
             let cache_key: Arc<[Str]> = vec![Str::from("install")].into();
             let status = session
-                .exec(install_request, cache_key, true)
+                .execute_synthetic(install_request, cache_key, true)
                 .await
                 .map_err(|e| Error::Anyhow(e))?;
             if status != ExitStatus::SUCCESS {
