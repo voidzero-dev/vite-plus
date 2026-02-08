@@ -1,0 +1,342 @@
+name: Test Standalone Install Scripts
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'packages/global/install.sh'
+      - 'packages/global/install.ps1'
+      - '.github/workflows/test-standalone-install.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test-install-sh:
+    name: Test install.sh (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux x64 glibc
+          - os: macos-15-intel
+            name: macOS x64
+          - os: namespace-profile-mac-default
+            name: macOS ARM64
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Run install.sh
+        env:
+          VITE_PLUS_VERSION: test
+        run: cat packages/global/install.sh | bash
+
+      - name: Verify installation
+        working-directory: ${{ runner.temp }}
+        run: |
+          # Source shell config to get PATH updated
+          if [ -f ~/.zshenv ]; then
+            # non-interactive shells use zshenv
+            source ~/.zshenv
+          elif [ -f ~/.zshrc ]; then
+            # interactive shells use zshrc
+            source ~/.zshrc
+          elif [ -f ~/.bash_profile ]; then
+            # non-interactive shells use bash_profile
+            source ~/.bash_profile
+          elif [ -f ~/.bashrc ]; then
+            # interactive shells use bashrc
+            source ~/.bashrc
+          else
+            export PATH="$HOME/.vite-plus/bin:$PATH"
+          fi
+          echo "PATH: $PATH"
+          ls -al ~/
+
+          vp --version
+          vp --help
+          # test new command
+          vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          cd hello && vp run build
+
+      - name: Set PATH
+        shell: bash
+        run: |
+          echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
+
+      - name: Verify bin setup
+        run: |
+          # Verify bin directory was created by vp env --setup
+          BIN_PATH="$HOME/.vite-plus/bin"
+          ls -al "$BIN_PATH"
+          if [ ! -d "$BIN_PATH" ]; then
+            echo "Error: Bin directory not found: $BIN_PATH"
+            exit 1
+          fi
+
+          # Verify shim executables exist
+          for shim in node npm npx; do
+            if [ ! -f "$BIN_PATH/$shim" ]; then
+              echo "Error: Shim not found: $BIN_PATH/$shim"
+              exit 1
+            fi
+            echo "Found shim: $BIN_PATH/$shim"
+          done
+
+          # Verify vp env doctor works
+          vp env doctor
+          vp env run --node 24 -- node -p "process.versions"
+
+          which node
+          which npm
+          which npx
+          which vp
+
+      - name: Verify self-update
+        run: |
+          # --check queries npm registry and prints update status
+          vp self-update --check
+          vp self-update 0.0.0-b356849c.20260207-0631
+          vp --version
+          # rollback to the previous version (should succeed after a real update)
+          vp self-update --rollback
+          vp --version
+
+  test-install-sh-arm64:
+    name: Test install.sh (Linux ARM64 glibc via QEMU)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+        with:
+          platforms: arm64
+
+      - name: Run install.sh in ARM64 container
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v "${{ github.workspace }}:/workspace" \
+            -e VITE_PLUS_VERSION=test \
+            ubuntu:20.04 bash -c "
+              ls -al ~/
+              apt-get update && apt-get install -y curl ca-certificates
+              cat /workspace/packages/global/install.sh | bash
+              if [ -f ~/.profile ]; then
+                source ~/.profile
+              elif [ -f ~/.bashrc ]; then
+                source ~/.bashrc
+              else
+                export PATH="$HOME/.vite-plus/bin:$PATH"
+              fi
+
+              vp --version
+              vp --help
+              vp dlx print-current-version
+
+              # Verify bin setup
+              BIN_PATH=\"\$HOME/.vite-plus/bin\"
+              if [ ! -d \"\$BIN_PATH\" ]; then
+                echo \"Error: Bin directory not found: \$BIN_PATH\"
+                exit 1
+              fi
+              for shim in node npm npx; do
+                if [ ! -f \"\$BIN_PATH/\$shim\" ]; then
+                  echo \"Error: Shim not found: \$BIN_PATH/\$shim\"
+                  exit 1
+                fi
+                echo \"Found shim: \$BIN_PATH/\$shim\"
+              done
+              vp env doctor
+
+              export VITE_LOG=trace
+              vp env run --node 24 -- node -p \"process.versions\"
+
+              # Verify self-update
+              vp self-update --check
+              vp self-update 0.0.0-b356849c.20260207-0631
+              vp --version
+              vp self-update --rollback
+              vp --version
+
+              # FIXME: qemu: uncaught target signal 11 (Segmentation fault) - core dumped
+              # vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+              # cd hello && vp run build
+            "
+
+  test-install-ps1:
+    name: Test install.ps1 (Windows x64)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Run install.ps1
+        shell: pwsh
+        env:
+          VITE_PLUS_VERSION: test
+        run: |
+          & ./packages/global/install.ps1
+
+      - name: Set PATH
+        shell: bash
+        run: |
+          echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
+
+      - name: Verify self-update
+        shell: pwsh
+        run: |
+          # --check queries npm registry and prints update status
+          vp self-update --check
+          vp self-update 0.0.0-b356849c.20260207-0631
+          vp --version
+          # rollback to the previous version (should succeed after a real update)
+          vp self-update --rollback
+          vp --version
+
+      - name: Verify installation on powershell
+        shell: pwsh
+        working-directory: ${{ runner.temp }}
+        run: |
+          # Print PATH from environment
+          echo "PATH: $env:Path"
+          vp --version
+          vp --help
+          # $env:VITE_LOG = "trace"
+          # test new command
+          vp new create-vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          cd hello && vp run build
+
+      - name: Verify bin setup on powershell
+        shell: pwsh
+        run: |
+          # Verify bin directory was created by vp env --setup
+          $binPath = "$env:USERPROFILE\.vite-plus\bin"
+          Get-ChildItem -Force $binPath
+          if (-not (Test-Path $binPath)) {
+            Write-Error "Bin directory not found: $binPath"
+            exit 1
+          }
+
+          # Verify shim executables exist (all use .cmd wrappers on Windows)
+          $expectedShims = @("node.cmd", "npm.cmd", "npx.cmd")
+          foreach ($shim in $expectedShims) {
+            $shimFile = Join-Path $binPath $shim
+            if (-not (Test-Path $shimFile)) {
+              Write-Error "Shim not found: $shimFile"
+              exit 1
+            }
+            Write-Host "Found shim: $shimFile"
+          }
+          where.exe node
+          where.exe npm
+          where.exe npx
+          where.exe vp
+
+          # Verify vp env doctor works
+          $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
+          vp env doctor
+          vp env run --node 24 -- node -p "process.versions"
+
+      - name: Verify installation on cmd
+        shell: cmd
+        working-directory: ${{ runner.temp }}
+        run: |
+          echo PATH: %PATH%
+          dir "%USERPROFILE%\.vite-plus"
+          dir "%USERPROFILE%\.vite-plus\bin"
+
+          REM test new command
+          vp new create-vite --no-interactive --no-agent -- hello-cmd --no-interactive -t vanilla
+          cd hello-cmd && vp run build
+
+      - name: Verify bin setup on cmd
+        shell: cmd
+        run: |
+          REM Verify bin directory was created by vp env --setup
+          set "BIN_PATH=%USERPROFILE%\.vite-plus\bin"
+          dir "%BIN_PATH%"
+
+          REM Verify shim executables exist (Windows uses .cmd wrappers)
+          for %%s in (node.cmd npm.cmd npx.cmd vp.cmd) do (
+            if not exist "%BIN_PATH%\%%s" (
+              echo Error: Shim not found: %BIN_PATH%\%%s
+              exit /b 1
+            )
+            echo Found shim: %BIN_PATH%\%%s
+          )
+
+          where node
+          where npm
+          where npx
+          where vp
+
+          REM Verify vp env doctor works
+          vp env doctor
+          vp env run --node 24 -- node -p "process.versions"
+
+      - name: Verify installation on bash
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          echo "PATH: $PATH"
+          ls -al ~/.vite-plus
+          ls -al ~/.vite-plus/bin
+
+          vp --version
+          vp --help
+          # test new command
+          vp new create-vite --no-interactive --no-agent -- hello-bash --no-interactive -t vanilla
+          cd hello-bash && vp run build
+
+      - name: Verify bin setup on bash
+        shell: bash
+        run: |
+          # Verify bin directory was created by vp env --setup
+          BIN_PATH="$HOME/.vite-plus/bin"
+          ls -al "$BIN_PATH"
+          if [ ! -d "$BIN_PATH" ]; then
+            echo "Error: Bin directory not found: $BIN_PATH"
+            exit 1
+          fi
+
+          # Verify .cmd wrappers exist (for cmd.exe/PowerShell)
+          for shim in node.cmd npm.cmd npx.cmd vp.cmd; do
+            if [ ! -f "$BIN_PATH/$shim" ]; then
+              echo "Error: .cmd wrapper not found: $BIN_PATH/$shim"
+              exit 1
+            fi
+            echo "Found .cmd wrapper: $BIN_PATH/$shim"
+          done
+
+          # Verify shell scripts exist (for Git Bash)
+          for shim in node npm npx vp; do
+            if [ ! -f "$BIN_PATH/$shim" ]; then
+              echo "Error: Shell script not found: $BIN_PATH/$shim"
+              exit 1
+            fi
+            echo "Found shell script: $BIN_PATH/$shim"
+          done
+
+          # Verify vp env doctor works
+          vp env doctor
+          vp env run --node 24 -- node -p "process.versions"
+
+          which node
+          which npm
+          which npx
+          which vp

@@ -1,0 +1,7 @@
+{
+  "ignoredPlatforms": ["linux"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": ["vp -h # vp should show help same as vite", "vp run -h # vp run should show help"]
+}

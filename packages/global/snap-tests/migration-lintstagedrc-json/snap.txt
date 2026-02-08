@@ -1,7 +1,7 @@
-> vite migrate -h # migration help message
+> vp migrate -h # migration help message
 VITE+(⚡︎) - The Unified Toolchain for the Web
 
-USAGE: vite migrate [PATH] [OPTIONS]
+USAGE: vp migrate [PATH] [OPTIONS]
 
 Migrate standalone Vite, Vitest, Oxlint, and Oxfmt projects to unified Vite+.
 
@@ -17,17 +17,17 @@ OPTIONS:
 
 EXAMPLES:
   # Migrate current package
-  vite migrate
+  vp migrate
 
   # Migrate specific directory
-  vite migrate my-app
+  vp migrate my-app
 
   # Non-interactive mode
-  vite migrate --no-interactive
+  vp migrate --no-interactive
 
 
 
-> vite migrate --no-interactive # migration work with lintstagedrc.json
+> vp migrate --no-interactive # migration work with lintstagedrc.json
 ┌  VITE+(⚡︎) - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm

@@ -67,7 +67,8 @@ jobs:
         env:
           RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
 
-      - run: cargo test -p vite_command -p vite_install -p vite_migration
+      # Test all crates/* packages. New crates are automatically included.
+      - run: cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done)
 
   lint:
     name: Lint
@@ -132,17 +133,19 @@ jobs:
           target: x86_64-unknown-linux-gnu
 
       - name: Build CLI
-        run: pnpm bootstrap-cli:ci
+        run: |
+          pnpm bootstrap-cli:ci
+          echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
 
       - name: Print help for built-in commands
         run: |
-          which vite
-          vite -h
-          vite run -h
-          vite lint -h
-          vite test -h
-          vite build -h
-          vite fmt -h
+          which vp
+          vp -h
+          vp run -h
+          vp lint -h
+          vp test -h
+          vp build -h
+          vp fmt -h
 
   cli-e2e-test:
     name: CLI E2E test
@@ -194,31 +197,363 @@ jobs:
       - name: Build CLI
         run: |
           pnpm bootstrap-cli:ci
-          which vite
-          vite --version
-          vite -h
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
+          else
+            echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Verify CLI installation
+        run: |
+          which vp
+          vp --version
+          vp -h
+
+      - name: Check CLI JS execution on Windows rust binary
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          ls -al packages/global/bin
+          VITE_LOG=trace ./packages/global/bin/vp.exe -V
+          VITE_LOG=trace ./packages/global/bin/vp.exe pm cache dir
 
       - name: Run CLI fmt
-        run: vite fmt --check
+        run: vp fmt --check
 
       - name: Run CLI lint
-        run: vite run lint
+        run: vp run lint
+
+      - name: Test global package install (powershell)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          echo "PATH: $env:Path"
+          where.exe node
+          where.exe npm
+          where.exe npx
+          where.exe vp
+          vp env doctor
+
+          # Test 1: Install a JS-based CLI (typescript)
+          vp install -g typescript
+          tsc --version
+          where.exe tsc
+
+          # Test 2: Verify the package was installed correctly
+          Get-ChildItem "$env:USERPROFILE\.vite-plus\packages\typescript\"
+          Get-ChildItem "$env:USERPROFILE\.vite-plus\bin\"
+
+          # Test 3: Uninstall
+          vp uninstall -g typescript
+
+          # Test 4: Verify uninstall removed shim
+          Write-Host "Checking bin dir after uninstall:"
+          Get-ChildItem "$env:USERPROFILE\.vite-plus\bin\"
+          $shimPath = "$env:USERPROFILE\.vite-plus\bin\tsc.cmd"
+          if (Test-Path $shimPath) {
+            Write-Error "tsc shim file still exists at $shimPath"
+            exit 1
+          }
+          Write-Host "tsc shim removed successfully"
+
+          # Test 5: use session
+          vp env use 18
+          node --version
+          vp env doctor
+          vp env use --unset
+          node --version
+
+      - name: Test global package install (cmd)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: cmd
+        run: |
+          echo "PATH: %PATH%"
+          where.exe node
+          where.exe npm
+          where.exe npx
+          where.exe vp
+
+          vp env use 18
+          node --version
+          vp env use --unset
+          node --version
+
+          vp env doctor
+
+          REM Test 1: Install a JS-based CLI (typescript)
+          vp install -g typescript
+          tsc --version
+          where.exe tsc
+
+          REM Test 2: Verify the package was installed correctly
+          dir "%USERPROFILE%\.vite-plus\packages\typescript\"
+          dir "%USERPROFILE%\.vite-plus\bin\"
+
+          REM Test 3: Uninstall
+          vp uninstall -g typescript
+
+          REM Test 4: Verify uninstall removed shim (.cmd wrapper)
+          echo Checking bin dir after uninstall:
+          dir "%USERPROFILE%\.vite-plus\bin\"
+          if exist "%USERPROFILE%\.vite-plus\bin\tsc.cmd" (
+            echo Error: tsc.cmd shim file still exists
+            exit /b 1
+          )
+          echo tsc.cmd shim removed successfully
+
+          REM Test 5: Verify shell script was also removed (for Git Bash)
+          if exist "%USERPROFILE%\.vite-plus\bin\tsc" (
+            echo Error: tsc shell script still exists
+            exit /b 1
+          )
+          echo tsc shell script removed successfully
+
+          REM Test 6: use session
+          vp env use 18
+          node --version
+          vp env doctor
+          vp env use --unset
+          node --version
+
+      - name: Test global package install (bash)
+        run: |
+          echo "PATH: $PATH"
+          ls -la ~/.vite-plus/
+          ls -la ~/.vite-plus/bin/
+          which node
+          which npm
+          which npx
+          which vp
+          vp env doctor
+
+          # Test 1: Install a JS-based CLI (typescript)
+          vp install -g typescript
+          tsc --version
+          which tsc
+
+          # Test 2: Verify the package was installed correctly
+          ls -la ~/.vite-plus/packages/typescript/
+          ls -la ~/.vite-plus/bin/
+
+          # Test 3: Uninstall
+          vp uninstall -g typescript
+
+          # Test 4: Verify uninstall removed shim
+          echo "Checking bin dir after uninstall:"
+          ls -la ~/.vite-plus/bin/
+          if [ -f ~/.vite-plus/bin/tsc ]; then
+            echo "Error: tsc shim file still exists at ~/.vite-plus/bin/tsc"
+            exit 1
+          fi
+          echo "tsc shim removed successfully"
+
+          # Test 5: use session
+          vp env use 18
+          node --version
+          vp env doctor
+          vp env use --unset
+          node --version
 
       - name: Install Playwright browsers
         run: pnpx playwright install chromium
-
-      - name: Create vite.cmd shim file for Windows
-        if: ${{ matrix.os == 'windows-latest' }}
-        run: |
-          printf '@echo off\nnode "%%~dp0vite" %%*\n' > packages/global/bin/vite.cmd
 
       - name: Run CLI snapshot tests
         run: |
           RUST_BACKTRACE=1 pnpm test
           git diff --exit-code
 
+  cli-self-update:
+    name: CLI self-update test
+    needs:
+      - download-previous-rolldown-binaries
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: namespace-profile-mac-default
+          - os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: ./.github/actions/clone
+
+      - name: Configure Git for access to vite-task
+        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
+
+      - run: |
+          brew install rustup
+          rustup install stable
+          echo "PATH=/opt/homebrew/opt/rustup/bin:$PATH" >> $GITHUB_ENV
+        if: ${{ matrix.os == 'namespace-profile-mac-default' }}
+
+      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: cli-self-update
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
+
+      - name: Build with upstream
+        uses: ./.github/actions/build-upstream
+        with:
+          target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' ||  matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'aarch64-apple-darwin' }}
+
+      - name: Build CLI
+        run: |
+          pnpm bootstrap-cli:ci
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
+          else
+            echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Verify CLI installation
+        run: |
+          which vp
+          vp --version
+
+      - name: Test self-update (bash)
+        shell: bash
+        run: |
+          # Helper to read the installed CLI version from package.json
+          get_cli_version() {
+            node -p "require(require('path').resolve(process.env.USERPROFILE || process.env.HOME, '.vite-plus', 'current', 'package.json')).version"
+          }
+
+          # Save initial (dev build) version
+          INITIAL_VERSION=$(get_cli_version)
+          echo "Initial version: $INITIAL_VERSION"
+
+          # --check queries npm registry and prints update status
+          vp self-update --check
+          # upgrade alias should also work
+          vp upgrade --check
+
+          # full self-update: download, extract, swap
+          vp self-update --tag test --force
+          vp --version
+          vp env doctor
+
+          ls -la ~/.vite-plus/
+
+          # Verify version changed after update
+          UPDATED_VERSION=$(get_cli_version)
+          echo "Updated version: $UPDATED_VERSION"
+          if [ "$UPDATED_VERSION" == "$INITIAL_VERSION" ]; then
+            echo "Error: version should have changed after self-update (still $INITIAL_VERSION)"
+            exit 1
+          fi
+
+          # rollback to the previous version
+          vp self-update --rollback
+          vp --version
+          vp env doctor
+
+          # Verify version restored after rollback
+          ROLLBACK_VERSION=$(get_cli_version)
+          echo "Rollback version: $ROLLBACK_VERSION"
+          if [ "$ROLLBACK_VERSION" != "$INITIAL_VERSION" ]; then
+            echo "Error: version should have been restored after rollback (expected $INITIAL_VERSION, got $ROLLBACK_VERSION)"
+            exit 1
+          fi
+
+      - name: Test self-update (powershell)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Get-ChildItem "$env:USERPROFILE\.vite-plus\"
+
+          # Helper to read the installed CLI version from package.json
+          function Get-CliVersion {
+            node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'package.json')).version"
+          }
+
+          # Save initial (dev build) version
+          $initialVersion = Get-CliVersion
+          Write-Host "Initial version: $initialVersion"
+
+          # --check queries npm registry and prints update status
+          vp self-update --check
+          # upgrade alias should also work
+          vp upgrade --check
+
+          # full self-update: download, extract, swap
+          vp self-update --tag test --force
+          vp --version
+          vp env doctor
+
+          Get-ChildItem "$env:USERPROFILE\.vite-plus\"
+
+          # Verify version changed after update
+          $updatedVersion = Get-CliVersion
+          Write-Host "Updated version: $updatedVersion"
+          if ($updatedVersion -eq $initialVersion) {
+            Write-Error "Error: version should have changed after self-update (still $initialVersion)"
+            exit 1
+          }
+
+          # rollback to the previous version
+          vp self-update --rollback
+          vp --version
+          vp env doctor
+
+          # Verify version restored after rollback
+          $rollbackVersion = Get-CliVersion
+          Write-Host "Rollback version: $rollbackVersion"
+          if ($rollbackVersion -ne $initialVersion) {
+            Write-Error "Error: version should have been restored after rollback (expected $initialVersion, got $rollbackVersion)"
+            exit 1
+          }
+
+      - name: Test self-update (cmd)
+        if: matrix.os == 'windows-latest'
+        shell: cmd
+        run: |
+          REM Save initial (dev build) version
+          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'package.json')).version"`) do set INITIAL_VERSION=%%v
+          echo Initial version: %INITIAL_VERSION%
+
+          REM --check queries npm registry and prints update status
+          vp self-update --check
+          REM upgrade alias should also work
+          vp upgrade --check
+
+          REM full self-update: download, extract, swap
+          vp self-update --tag test --force
+          vp --version
+          vp env doctor
+
+          dir "%USERPROFILE%\.vite-plus\"
+
+          REM Verify version changed after update
+          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'package.json')).version"`) do set UPDATED_VERSION=%%v
+          echo Updated version: %UPDATED_VERSION%
+          if "%UPDATED_VERSION%"=="%INITIAL_VERSION%" (
+            echo Error: version should have changed after self-update, still %INITIAL_VERSION%
+            exit /b 1
+          )
+
+          REM rollback to the previous version
+          vp self-update --rollback
+          vp --version
+          vp env doctor
+
+          REM Verify version restored after rollback
+          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'package.json')).version"`) do set ROLLBACK_VERSION=%%v
+          echo Rollback version: %ROLLBACK_VERSION%
+          if not "%ROLLBACK_VERSION%"=="%INITIAL_VERSION%" (
+            echo Error: version should have been restored after rollback, expected %INITIAL_VERSION%, got %ROLLBACK_VERSION%
+            exit /b 1
+          )
+
   install-e2e-test:
-    name: vite install E2E test
+    name: Local CLI `vite install` E2E test
     needs:
       - download-previous-rolldown-binaries
     runs-on: ubuntu-latest
@@ -252,9 +587,11 @@ jobs:
           target: x86_64-unknown-linux-gnu
 
       - name: Build CLI
-        run: pnpm bootstrap-cli:ci
+        run: |
+          pnpm bootstrap-cli:ci
+          echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
 
-      - name: Run local CLI vite install
+      - name: Run local CLI `vite install`
         run: |
           export PATH=$PWD/node_modules/.bin:$PATH
           vite -h
@@ -294,6 +631,7 @@ jobs:
       - lint
       - run
       - cli-e2e-test
+      - cli-self-update
     steps:
       - run: exit 1
         # Thank you, next https://github.com/vercel/next.js/blob/canary/.github/workflows/build_and_test.yml#L379

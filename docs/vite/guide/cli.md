@@ -1,21 +1,21 @@
 # Command Line Interface
 
-## `vite` CLI
+## `vp` CLI
 
-The `vite` command is the main entry point for Vite+ (vite-plus), a monorepo task runner with intelligent caching and dependency resolution.
+The `vp` command is the main entry point for Vite+ (vite-plus), a monorepo task runner with intelligent caching and dependency resolution.
 
-**Type:** `vite <COMMAND> [ARGS] [OPTIONS]`
+**Type:** `vp <COMMAND> [ARGS] [OPTIONS]`
 
 ## Dev Server
 
-### `vite dev`
+### `vp dev`
 
-Start Vite dev server in the current directory. `vite serve` is an alias for `vite dev`.
+Start Vite dev server in the current directory. `vp serve` is an alias for `vp dev`.
 
 #### Usage
 
 ```bash
-vite dev [root] [OPTIONS]
+vp dev [root] [OPTIONS]
 ```
 
 #### Arguments
@@ -48,21 +48,21 @@ vite dev [root] [OPTIONS]
 #### Examples
 
 ```bash
-vite dev
-vite dev ./apps/website
-vite dev --port 3000
+vp dev
+vp dev ./apps/website
+vp dev --port 3000
 ```
 
 ## Build Application
 
-### `vite build`
+### `vp build`
 
 Build for production.
 
 #### Usage
 
 ```bash
-vite build [root] [OPTIONS]
+vp build [root] [OPTIONS]
 ```
 
 #### Arguments
@@ -100,130 +100,130 @@ vite build [root] [OPTIONS]
 
 ## Build Library
 
-### `vite lib`
+### `vp lib`
 
 Build a library using tsdown.
 
 #### Usage
 
 ```bash
-vite lib [<ARGS>...]
+vp lib [<ARGS>...]
 ```
 
 #### Examples
 
 ```bash
-vite lib
-vite lib --watch
-vite lib --outdir dist
+vp lib
+vp lib --watch
+vp lib --outdir dist
 ```
 
 ## Build Documentation
 
-### `vite doc`
+### `vp doc`
 
 Build documentation using VitePress.
 
 #### Usage
 
 ```bash
-vite doc [<ARGS>...]
+vp doc [<ARGS>...]
 ```
 
 #### Examples
 
 ```bash
-vite doc build
-vite doc dev
-vite doc dev --host 0.0.0.0
+vp doc build
+vp doc dev
+vp doc dev --host 0.0.0.0
 ```
 
 ## Lint
 
-### `vite lint`
+### `vp lint`
 
 Lint code using oxlint.
 
 #### Usage
 
 ```bash
-vite lint [<ARGS>...]
+vp lint [<ARGS>...]
 ```
 
 #### Examples
 
 ```bash
-vite lint
-vite lint --fix
-vite lint --quiet
+vp lint
+vp lint --fix
+vp lint --quiet
 ```
 
 ## Format
 
-### `vite fmt`
+### `vp fmt`
 
 Format code using oxfmt.
 
 #### Usage
 
 ```bash
-vite fmt [<ARGS>...]
+vp fmt [<ARGS>...]
 ```
 
 #### Examples
 
 ```bash
-vite fmt
-vite fmt --check
-vite fmt --ignore-path .gitignore
+vp fmt
+vp fmt --check
+vp fmt --ignore-path .gitignore
 ```
 
 ## Testing
 
-### `vite test`
+### `vp test`
 
 Run tests using Vitest.
 
 #### Usage
 
 ```bash
-vite test [<ARGS>...]
+vp test [<ARGS>...]
 ```
 
 #### Examples
 
 ```bash
-vite test
-vite test --watch
-vite test run --coverage
+vp test
+vp test --watch
+vp test run --coverage
 ```
 
 ## Task Runner
 
-### `vite run`
+### `vp run`
 
 Run tasks across monorepo packages with automatic dependency ordering.
 
 #### Usage
 
 ```bash
-vite run <TASKS>... [OPTIONS] [-- <TASK_ARGS>...]
+vp run <TASKS>... [OPTIONS] [-- <TASK_ARGS>...]
 ```
 
 #### Examples
 
 ```bash
 # Run build in specific packages
-vite run app#build web#build
+vp run app#build web#build
 
 # Run build recursively across all packages
-vite run build --recursive
+vp run build --recursive
 
 # Run without topological ordering
-vite run build --recursive --no-topological
+vp run build --recursive --no-topological
 
 # Pass arguments to tasks
-vite run test -- --watch --coverage
+vp run test -- --watch --coverage
 ```
 
 #### Options
@@ -331,11 +331,11 @@ Vite+ uses intelligent caching to speed up task execution:
 
 ```bash
 # First run - executes task
-vite run build
+vp run build
 # → Cache miss: no previous cache entry found
 
 # Second run - replays from cache
-vite run build
+vp run build
 # → Cache hit - output replayed
 
 # Modify source file
@@ -356,13 +356,13 @@ echo "modified" > node_modules/pkg/index.js
 
 ```bash
 # View cache entries
-vite cache view
+vp cache view
 
 # Enable cache debug output
-vite run build --debug
+vp run build --debug
 
 # Clean cache
-vite cache clean
+vp cache clean
 ```
 
 ### Environment Variables
@@ -381,7 +381,7 @@ vite cache clean
 Run specific tasks:
 
 ```bash
-vite run app#build web#build
+vp run app#build web#build
 ```
 
 #### Recursive Mode
@@ -389,8 +389,8 @@ vite run app#build web#build
 Run task in all packages:
 
 ```bash
-vite run build --recursive
-vite run build -r
+vp run build --recursive
+vp run build -r
 ```
 
 **Behavior:**
@@ -405,11 +405,11 @@ Controls implicit dependencies based on package relationships:
 
 ```bash
 # With topological (default for recursive)
-vite run build -r
+vp run build -r
 # → If A depends on B, A#build waits for B#build
 
 # Without topological
-vite run build -r --no-topological
+vp run build -r --no-topological
 # → Only explicit dependencies, no implicit ordering
 ```
 
@@ -419,11 +419,11 @@ Pass arguments to tasks using `--`:
 
 ```bash
 # Arguments go to all tasks
-vite run build test -- --watch
+vp run build test -- --watch
 
 # For built-in commands
-vite test -- --coverage --run
-vite lint -- --fix
+vp test -- --coverage --run
+vp lint -- --fix
 ```
 
 ### Examples
@@ -432,51 +432,51 @@ vite lint -- --fix
 
 ```bash
 # Install dependencies
-vite install
+vp install
 
 # Lint and fix issues
-vite lint -- --fix
+vp lint -- --fix
 
 # Format code
-vite fmt
+vp fmt
 
 # Run build recursively
-vite run build -r
+vp run build -r
 
 # Run tests in watch mode
-vite test -- --watch
+vp test -- --watch
 
 # Build for production
-vite build
+vp build
 
 # Start dev server
-vite dev
+vp dev
 
 # Build library
-vite lib
+vp lib
 
 # Build docs
-vite doc build
+vp doc build
 
 # Preview docs
-vite doc dev
+vp doc dev
 ```
 
 #### Monorepo Workflows
 
 ```bash
 # Build all packages in dependency order
-vite run build --recursive
+vp run build --recursive
 
 # Build specific packages
-vite run app#build utils#build
+vp run app#build utils#build
 
 # Run tests without topological ordering
-vite run test -r --no-topological
+vp run test -r --no-topological
 
 # Clean cache and rebuild
-vite cache clean
-vite run build -r
+vp cache clean
+vp run build -r
 ```
 
 ### Exit Codes
@@ -492,34 +492,34 @@ Enable verbose logging:
 
 ```bash
 # Debug mode - shows cache operations
-vite run build --debug
+vp run build --debug
 
 # Trace logging
-VITE_LOG=debug vite run build
+VITE_LOG=debug vp run build
 
 # View cache contents
-vite cache view
+vp cache view
 ```
 
 ## Package Management
 
-### `vite install`
+### `vp install`
 
-Aliases: `vite i`
+Aliases: `vp i`
 
 Install dependencies using the detected package manager.
 
 #### Usage
 
 ```bash
-vite install [ARGS] [OPTIONS]
+vp install [ARGS] [OPTIONS]
 ```
 
 #### Examples
 
 ```bash
-vite install
-vite install --loglevel debug
+vp install
+vp install --loglevel debug
 ```
 
 #### Note
@@ -527,122 +527,122 @@ vite install --loglevel debug
 - Auto-detects package manager (pnpm/yarn/npm)
 - Prompts for selection if none package manager detected
 
-### `vite update`
+### `vp update`
 
-Aliases: `vite up`
+Aliases: `vp up`
 
 Updates packages to their latest version based on the specified range.
 
 #### Usage
 
 ```bash
-vite update [-g] [<pkg>...]
+vp update [-g] [<pkg>...]
 ```
 
 #### Examples
 
 ```bash
-vite update
-vite update @types/node
+vp update
+vp update @types/node
 ```
 
-### `vite add`
+### `vp add`
 
 Installs packages.
 
 #### Usage
 
 ```bash
-vite add [OPTIONS] <package>[@version]...
+vp add [OPTIONS] <package>[@version]...
 ```
 
 #### Examples
 
 ```bash
-vite add -D @types/node
+vp add -D @types/node
 ```
 
-### `vite remove`
+### `vp remove`
 
-Aliases: `vite rm`, `vite uninstall`, `vite un`
+Aliases: `vp rm`, `vp uninstall`, `vp un`
 
 Removes packages.
 
 #### Usage
 
 ```bash
-vite remove <package>[@version]...
+vp remove <package>[@version]...
 ```
 
 ```bash
-vite remove @types/node
+vp remove @types/node
 ```
 
-### `vite link`
+### `vp link`
 
-Aliases: `vite ln`
+Aliases: `vp ln`
 
 Makes the current local package accessible system-wide, or in another location.
 
-### `vite unlink`
+### `vp unlink`
 
-Unlinks a system-wide package (inverse of `vite link`).
+Unlinks a system-wide package (inverse of `vp link`).
 
 If called without arguments, all linked dependencies will be unlinked inside the current project.
 
-### `vite dedupe`
+### `vp dedupe`
 
 Perform an install removing older dependencies in the lockfile if a newer version can be used.
 
-### `vite outdated`
+### `vp outdated`
 
 Shows outdated packages.
 
-### `vite why`
+### `vp why`
 
-Aliases: `vite explain`
+Aliases: `vp explain`
 
 Shows all packages that depend on the specified package.
 
-### `vite pm <subcommand>`
+### `vp pm <subcommand>`
 
-The `vite pm` command group provides a set of utilities for working with package manager.
+The `vp pm` command group provides a set of utilities for working with package manager.
 
 > package manager commands with low usage frequency will under this command group.
 
-#### `vite pm prune`
+#### `vp pm prune`
 
 Removes unnecessary packages.
 
-#### `vite pm pack`
+#### `vp pm pack`
 
 Pack the current package into a tarball.
 
-#### `vite pm list`
+#### `vp pm list`
 
-Aliases: `vite pm ls`
+Aliases: `vp pm ls`
 
 List installed packages.
 
-#### `vite pm view`
+#### `vp pm view`
 
 View a package info from the registry.
 
-#### `vite pm publish`
+#### `vp pm publish`
 
 Publishes a package to the registry.
 
-#### `vite pm owner`
+#### `vp pm owner`
 
 Manage package owners.
 
-#### `vite pm cache`
+#### `vp pm cache`
 
 Manage the packages metadata cache.
 
 ## Others
 
-### `vite optimize`
+### `vp optimize`
 
 Pre-bundle dependencies.
 
@@ -651,7 +651,7 @@ Pre-bundle dependencies.
 #### Usage
 
 ```bash
-vite optimize [root]
+vp optimize [root]
 ```
 
 #### Options
@@ -669,16 +669,16 @@ vite optimize [root]
 | `-m, --mode <mode>`       | Set env mode (`string`)                                                                                                |
 | `-h, --help`              | Display available CLI options                                                                                          |
 
-### `vite preview`
+### `vp preview`
 
 Locally preview the production build. Do not use this as a production server as it's not designed for it.
 
-This command starts a server in the build directory (by default `dist`). Run `vite build` beforehand to ensure that the build directory is up-to-date. Depending on the project's configured [`appType`](../../config/shared-options.md#apptype), it makes use of certain middleware.
+This command starts a server in the build directory (by default `dist`). Run `vp build` beforehand to ensure that the build directory is up-to-date. Depending on the project's configured [`appType`](../../config/shared-options.md#apptype), it makes use of certain middleware.
 
 #### Usage
 
 ```bash
-vite preview [root]
+vp preview [root]
 ```
 
 #### Options
@@ -700,30 +700,30 @@ vite preview [root]
 | `-m, --mode <mode>`       | Set env mode (`string`)                                                                                                |
 | `-h, --help`              | Display available CLI options                                                                                          |
 
-### `vite cache`
+### `vp cache`
 
 Manage the task cache.
 
 #### Usage
 
 ```bash
-vite cache <clean|view>
+vp cache <clean|view>
 ```
 
-#### `vite cache clean`
+#### `vp cache clean`
 
 Clean up all cached task results.
 
 ```bash
-vite cache clean
+vp cache clean
 ```
 
-#### `vite cache view`
+#### `vp cache view`
 
 View cache entries in JSON format for debugging.
 
 ```bash
-vite cache view
+vp cache view
 ```
 
 ## See Also

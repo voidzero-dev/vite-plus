@@ -12,6 +12,7 @@ pub mod pack;
 pub mod prune;
 pub mod publish;
 pub mod remove;
+pub mod run;
 pub mod unlink;
 pub mod update;
 pub mod view;

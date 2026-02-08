@@ -17,20 +17,6 @@ export interface BatchRewriteResult {
 }
 
 /**
- * Configuration options passed from JavaScript to Rust.
- *
- * Each field (except `cwd`) is a JavaScript function wrapped in a `ThreadsafeFunction`.
- * These functions are called by Rust to resolve tool binary paths when needed.
- *
- * The `ThreadsafeFunction` wrapper ensures the JavaScript functions can be
- * safely called from Rust's async runtime without blocking or race conditions.
- */
-export interface CliOptions {
-  /** Optional working directory override */
-  cwd?: string;
-}
-
-/**
  * Detect the workspace root and package manager type and version
  *
  * ## Parameters
@@ -250,29 +236,6 @@ export declare function rewriteImportsInDirectory(root: string): BatchRewriteRes
  * ```
  */
 export declare function rewriteScripts(scriptsJson: string, rulesYaml: string): string | null;
-
-/**
- * Main entry point for the CLI, called from JavaScript.
- *
- * This function:
- * 1. Parses command-line arguments
- * 2. Sets up the working directory
- * 3. Creates Rust-callable wrappers for JavaScript resolver functions
- * 4. Passes control to the Rust core (`cli::main`)
- *
- * ## JavaScript-to-Rust Bridge
- *
- * The resolver functions are wrapped to:
- * - Call the JavaScript function asynchronously
- * - Handle errors and convert them to Rust error types
- * - Convert the JavaScript result to Rust's expected format
- *
- * ## Error Handling
- *
- * Errors from JavaScript resolvers are converted to specific error types
- * (e.g., `LintFailed`, `ViteError`) to provide better error messages.
- */
-export declare function run(options: CliOptions): Promise<number>;
 
 /**
  * Run a command with fspy tracking, callable from JavaScript.

@@ -6,7 +6,7 @@ use crate::Error;
 
 /// Get the cache directory for JavaScript runtimes.
 ///
-/// Returns `$CACHE_DIR/vite/js_runtime`.
+/// Returns `$VITE_PLUS_HOME/js_runtime`.
 pub(crate) fn get_cache_dir() -> Result<AbsolutePathBuf, Error> {
-    Ok(vite_shared::get_cache_dir()?.join("js_runtime"))
+    Ok(vite_shared::get_vite_plus_home()?.join("js_runtime"))
 }

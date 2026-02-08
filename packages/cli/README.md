@@ -20,13 +20,21 @@ Vite+ is built to scale with your codebase while reducing your devtools to a sin
 
 ## Getting Started
 
-Vite+ requires Node.js 22+. Install `vite-plus-cli` globally as `vite`:
+Install Vite+ globally as `vp`:
+
+For Linux or macOS:
 
 ```bash
-npm install -g vite-plus-cli
+curl -fsSL https://viteplus.dev/install.sh | bash
 ```
 
-`vite` handles the full development lifecycle such as package management, development servers, linting, formatting, testing and building for production.
+For Windows:
+
+```bash
+irm https://viteplus.dev/install.ps1 | iex
+```
+
+`vp` handles the full development lifecycle such as package management, development servers, linting, formatting, testing and building for production.
 
 ### Vite+ Commands
 
@@ -58,20 +66,20 @@ Vite+ automatically detects and wraps the underlying package manager such as pnp
 
 ### Scaffolding your first Vite+ project
 
-Use `vite new` to create a new project:
+Use `vp new` to create a new project:
 
 ```bash
-vite new
+vp new
 ```
 
-You can run `vite new` inside of a project to add new apps or libraries to your project.
+You can run `vp new` inside of a project to add new apps or libraries to your project.
 
 ### Migrating an existing project
 
 You can migrate an existing project to Vite+:
 
 ```bash
-vite migrate
+vp migrate
 ```
 
 #### Manual Installation & Migration

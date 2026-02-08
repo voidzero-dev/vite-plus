@@ -1,0 +1,12 @@
+[1]> vp install -g voidzero-nonexistent-pkg-xyz-12345 # Install non-existent package
+  Installing voidzero-nonexistent-pkg-xyz-12345 globally...
+  Running npm install...
+npm error code E404
+npm error 404 Not Found - GET https://registry.<domain>/voidzero-nonexistent-pkg-xyz-12345 - Not found
+npm error 404
+npm error 404  The requested resource 'voidzero-nonexistent-pkg-xyz-12345@*' could not be found or you do not have permission to access it.
+npm error 404
+npm error 404 Note that you can also install from a
+npm error 404 tarball, folder, http url, or git url.
+npm error A complete log of this run can be found in: <homedir>/.npm/_logs/<timestamp>-debug.log
+Failed to install voidzero-nonexistent-pkg-xyz-12345: Configuration error: npm install failed with exit code: Some(1)

@@ -1,15 +1,15 @@
-> vite pm prune --help # should show help
+> vp pm prune --help # should show help
 Remove unnecessary packages
 
-Usage: vite pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+Usage: vp pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+  [PASS_THROUGH_ARGS]...  Additional arguments
 
 Options:
       --prod         Remove devDependencies
       --no-optional  Remove optional dependencies
   -h, --help         Print help
 
-> vite pm prune # should show warning that yarn does not support prune command
+> vp pm prune # should show warning that yarn does not support prune command
 Warning: yarn does not have 'prune' command. yarn install will prune extraneous packages automatically.

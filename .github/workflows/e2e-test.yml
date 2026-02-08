@@ -16,7 +16,7 @@ on:
     types: [opened, synchronize, labeled]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.sha }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 defaults:
@@ -103,7 +103,7 @@ jobs:
 
       - name: Pack packages into tgz
         run: |
-          pnpm bootstrap-cli:ci
+          pnpm copy-cli-binding
           mkdir -p tmp/tgz
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/test && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
@@ -142,46 +142,46 @@ jobs:
             command: |
               npx playwright install chromium
               # FIXME: Failed to load JS plugin: ./plugins/debugger.js
-              # vite run ready
-              vite fmt
-              vite test
-              vite run build
+              # vp run ready
+              vp fmt
+              vp test
+              vp run build
           # FIXME: TypeError: Failed to fetch dynamically imported module
           # - name: skeleton
           #   node-version: 24
           #   command: |
-          #     vite run format
-          #     vite run lint:check
-          #     vite run check
+          #     vp run format
+          #     vp run lint:check
+          #     vp run check
           #     npx playwright install chromium
-          #     vite run test
+          #     vp run test
           - name: rollipop
             node-version: 22
             command: |
-              vite run -r build
+              vp run -r build
               # FIXME: typescript-eslint(no-redundant-type-constituents): 'rolldownExperimental.DevEngine' is an 'error' type that acts as 'any' and overrides all other types in this union type.
-              vite run lint || true
+              vp run lint || true
               # FIXME: src/bundler-pool.ts(8,8): error TS2307: Cannot find module '@rollipop/core' or its corresponding type declarations.
-              vite run -r typecheck || true
-              vite run format
-              vite run @rollipop/common#test
-              vite run @rollipop/core#test
-              vite run @rollipop/dev-server#test
+              vp run -r typecheck || true
+              vp run format
+              vp run @rollipop/common#test
+              vp run @rollipop/core#test
+              vp run @rollipop/dev-server#test
           - name: frm-stack
             node-version: 24
             command: |
-              vite run lint:check
-              vite run format:check
-              vite run typecheck
-              vite run @yourcompany/api#test
-              vite run @yourcompany/backend-core#test
+              vp run lint:check
+              vp run format:check
+              vp run typecheck
+              vp run @yourcompany/api#test
+              vp run @yourcompany/backend-core#test
           - name: vue-mini
             node-version: 24
             command: |
-              vite run format
-              vite run lint
-              vite run type
-              vite run test -- --coverage
+              vp run format
+              vp run lint
+              vp run type
+              vp run test -- --coverage
           # SKIP: vite-plugin-react - vite-task config loading incompatibility
           # vite-task needs to load vite.config.js for all workspace packages to build the task graph,
           # but the vite-plus process starts with workspace root as cwd.
@@ -199,43 +199,43 @@ jobs:
           # - name: vite-plugin-react
           #   node-version: 22
           #   command: |
-          #     vite run format
-          #     vite run lint -- --fix
+          #     vp run format
+          #     vp run lint -- --fix
           #     # TODO(fengmk2): run all builds and tests after tsdown version upgrade
-          #     vite run @vitejs/plugin-rsc#build
-          #     vite run @vitejs/plugin-rsc#test
+          #     vp run @vitejs/plugin-rsc#build
+          #     vp run @vitejs/plugin-rsc#test
           - name: vitepress
             node-version: 24
             command: |
               npx playwright install chromium
-              vite run format
-              vite run build
-              vite test run -r __tests__/unit
-              vite run tests-e2e#test
-              VITE_TEST_BUILD=1 vite run tests-e2e#test
-              vite run tests-init#test
+              vp run format
+              vp run build
+              vp test run -r __tests__/unit
+              vp run tests-e2e#test
+              VITE_TEST_BUILD=1 vp run tests-e2e#test
+              vp run tests-init#test
           - name: tanstack-start-helloworld
             node-version: 24
             command: |
               npx playwright install chromium
-              vite run test
-              vite run build
+              vp run test
+              vp run build
           - name: oxlint-plugin-complexity
             node-version: 22
             command: |
-              vite run format
-              vite run format:check
-              vite run build
-              vite run lint
-              vite run test:run
+              vp run format
+              vp run format:check
+              vp run build
+              vp run lint
+              vp run test:run
               npx tsc --noEmit
           - name: dify
             node-version: 24
             directory: web
             command: |
-              vite run type-check:tsgo
-              vite run build
-              vite run test navigation-utils.test.ts real-browser-flicker.test.tsx workflow-parallel-limit.test.tsx
+              vp run type-check:tsgo
+              vp run build
+              vp run test navigation-utils.test.ts real-browser-flicker.test.tsx workflow-parallel-limit.test.tsx
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: windows-latest
@@ -263,13 +263,17 @@ jobs:
           name: vite-plus-packages-${{ matrix.os }}
           path: tmp/tgz
 
-      - name: Install vite-plus from tgz in ${{ matrix.project.name }}
+      - name: Install vp CLI
+        shell: bash
+        run: |
+          node $GITHUB_WORKSPACE/packages/tools/src/install-global-cli.ts --tgz $GITHUB_WORKSPACE/tmp/tgz/vite-plus-cli-0.0.0.tgz
+          echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
+
+      - name: Migrate in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
         run: |
-          # install global CLI first
-          npm install -g $GITHUB_WORKSPACE/tmp/tgz/vite-plus-cli-0.0.0.tgz
           node $GITHUB_WORKSPACE/ecosystem-ci/patch-project.ts ${{ matrix.project.name }}
-          vite install --no-frozen-lockfile
+          vp install --no-frozen-lockfile
 
       - name: Run vite-plus commands in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}

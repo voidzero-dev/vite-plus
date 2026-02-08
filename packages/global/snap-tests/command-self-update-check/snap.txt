@@ -1,0 +1,11 @@
+> vp self-update --check # check for updates without installing
+info: checking for updates...
+info: found vite-plus-cli@<semver>
+Update available: <semver> → <semver>
+Run `vp self-update` to update.
+
+> vp upgrade --check # check using upgrade alias
+info: checking for updates...
+info: found vite-plus-cli@<semver>
+Update available: <semver> → <semver>
+Run `vp self-update` to update.

@@ -1,0 +1,36 @@
+> vp -h # vp should show help same as vite
+Vite+/<semver>
+
+[1;4mUsage:[0m [1mvite[0m <COMMAND>
+
+[1;4mVite+ Commands:[0m
+  [1mdev[0m        Run the development server
+  [1mbuild[0m      Build for production
+  [1mpreview[0m    Preview production build
+  [1mlint[0m       Lint code
+  [1mtest[0m       Run tests
+  [1mfmt[0m        Format code
+  [1mlib[0m        Build library
+  [1mrun[0m        Run tasks
+  [1mcache[0m      Manage the task cache
+
+[1;4mPackage Manager Commands:[0m
+  [1minstall[0m    Install all dependencies
+
+Options:
+  -h, --help  Print help
+
+> vp run -h # vp run should show help
+Run tasks
+
+Usage: vite run [OPTIONS] <TASK_SPECIFIER> [ADDITIONAL_ARGS]...
+
+Arguments:
+  <TASK_SPECIFIER>      `packageName#taskName` or `taskName`
+  [ADDITIONAL_ARGS]...  Additional arguments to pass to the tasks
+
+Options:
+  -r, --recursive          Run tasks found in all packages in the workspace, in topological order based on package dependencies
+  -t, --transitive         Run tasks found in the current package and all its transitive dependencies, in topological order based on package dependencies
+      --ignore-depends-on  Do not run dependencies specified in `dependsOn` fields
+  -h, --help               Print help

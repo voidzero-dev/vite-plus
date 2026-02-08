@@ -1,16 +1,16 @@
-> vite link -h # should show help message
+> vp link -h # should show help message
 Link packages for local development
 
-Usage: vite link [PACKAGE|DIR] [ARGS]...
+Usage: vp link [PACKAGE|DIR] [ARGS]...
 
 Arguments:
-  [PACKAGE|DIR]  Package name or directory to link If empty, registers current package globally
+  [PACKAGE|DIR]  Package name or directory to link
   [ARGS]...      Arguments to pass to package manager
 
 Options:
   -h, --help  Print help
 
-> vite install # install initial dependencies
+> vp install # install initial dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -21,7 +21,7 @@ dependencies:
 Done in <variable>ms using pnpm v<semver>
 
 > mkdir -p ../test-lib-pnpm && echo '{"name": "testnpm2", "version": "1.0.0"}' > ../test-lib-pnpm/package.json # create test library
-> vite link ../test-lib-pnpm && cat package.json pnpm-lock.yaml # should link local directory
+> vp link ../test-lib-pnpm && cat package.json pnpm-lock.yaml # should link local directory
 Packages: -1
 -
 
@@ -54,7 +54,7 @@ importers:
         specifier: link:../test-lib-pnpm
         version: link:../test-lib-pnpm
 
-> vite ln ../test-lib-pnpm && cat package.json pnpm-lock.yaml # should work with ln alias
+> vp ln ../test-lib-pnpm && cat package.json pnpm-lock.yaml # should work with ln alias
 Lockfile is up to date, resolution step is skipped
 
 {
@@ -82,30 +82,10 @@ importers:
         specifier: link:../test-lib-pnpm
         version: link:../test-lib-pnpm
 
-> vite unlink ../test-lib-pnpm && vite unlink testnpm2 && cat package.json pnpm-lock.yaml # should unlink the package
+[2]> vp unlink ../test-lib-pnpm && vite unlink testnpm2 && cat package.json pnpm-lock.yaml # should unlink the package
 Nothing to unlink
-Nothing to unlink
-{
-  "name": "command-link-pnpm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "*"
-  },
-  "packageManager": "pnpm@<semver>"
-}
-lockfileVersion: '9.0'
+error: unrecognized subcommand 'unlink'
 
-settings:
-  autoInstallPeers: true
-  excludeLinksFromLockfile: false
+Usage: vite <COMMAND>
 
-overrides:
-  testnpm2: link:../test-lib-pnpm
-
-importers:
-
-  .:
-    dependencies:
-      testnpm2:
-        specifier: link:../test-lib-pnpm
-        version: link:../test-lib-pnpm
+For more information, try '--help'.

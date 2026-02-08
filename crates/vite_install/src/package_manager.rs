@@ -24,7 +24,7 @@ use vite_workspace::find_package_root;
 use vite_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root, load_package_graph};
 
 use crate::{
-    config::{get_cache_dir, get_npm_package_tgz_url, get_npm_package_version_url},
+    config::{get_npm_package_tgz_url, get_npm_package_version_url},
     request::{HttpClient, download_and_extract_tgz_with_hash},
     shim,
 };
@@ -349,8 +349,8 @@ async fn get_latest_version(package_manager_type: PackageManagerType) -> Result<
     Ok(package_json.version)
 }
 
-/// Download the package manager and extract it to the cache directory.
-/// Return the install directory, e.g. $`CACHE_DIR/vite/package_manager/pnpm/10.0.0/pnpm`
+/// Download the package manager and extract it to the vite-plus home directory.
+/// Return the install directory, e.g. `$VITE_PLUS_HOME/package_manager/pnpm/10.0.0/pnpm`
 pub async fn download_package_manager(
     package_manager_type: PackageManagerType,
     version_or_latest: &str,
@@ -373,14 +373,14 @@ pub async fn download_package_manager(
     }
 
     let tgz_url = get_npm_package_tgz_url(&package_name, &version);
-    let cache_dir = get_cache_dir()?;
+    let home_dir = vite_shared::get_vite_plus_home()?;
     let bin_name = package_manager_type.to_string();
-    // $CACHE_DIR/vite/package_manager/pnpm/10.0.0
-    let target_dir = cache_dir.join("package_manager").join(&bin_name).join(&version);
+    // $VITE_PLUS_HOME/package_manager/pnpm/10.0.0
+    let target_dir = home_dir.join("package_manager").join(&bin_name).join(&version);
     let install_dir = target_dir.join(&bin_name);
 
-    // If all shims are already exists, return the target directory
-    // $CACHE_DIR/vite/package_manager/pnpm/10.0.0/pnpm/bin/(pnpm|pnpm.cmd|pnpm.ps1)
+    // If all shims already exist, return the target directory
+    // $VITE_PLUS_HOME/package_manager/pnpm/10.0.0/pnpm/bin/(pnpm|pnpm.cmd|pnpm.ps1)
     let bin_prefix = install_dir.join("bin");
     let bin_file = bin_prefix.join(&bin_name);
     if is_exists_file(&bin_file)?
@@ -390,7 +390,7 @@ pub async fn download_package_manager(
         return Ok((install_dir, package_name, version));
     }
 
-    // $CACHE_DIR/vite/package_manager/pnpm/{tmp_name}
+    // $VITE_PLUS_HOME/package_manager/pnpm/{tmp_name}
     // Use tempfile::TempDir for robust temporary directory creation
     let parent_dir = target_dir.parent().unwrap();
     tokio::fs::create_dir_all(parent_dir).await?;
@@ -542,11 +542,7 @@ async fn set_package_manager_field(
     Ok(())
 }
 
-pub fn format_path_env(bin_prefix: impl AsRef<Path>) -> String {
-    let mut paths = env::split_paths(&env::var_os("PATH").unwrap_or_default()).collect::<Vec<_>>();
-    paths.insert(0, bin_prefix.as_ref().to_path_buf());
-    env::join_paths(paths).unwrap().to_string_lossy().to_string()
-}
+pub(crate) use vite_shared::format_path_prepended as format_path_env;
 
 /// Common CI environment variables
 const CI_ENV_VARS: &[&str] = &[
@@ -708,13 +704,13 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
 fn prompt_package_manager_selection() -> Result<PackageManagerType, Error> {
     // In CI environment, automatically use pnpm without prompting
     if is_ci_environment() {
-        println!("CI environment detected. Using default package manager: pnpm");
+        tracing::info!("CI environment detected. Using default package manager: pnpm");
         return Ok(PackageManagerType::Pnpm);
     }
 
     // Check if stdin is a TTY (terminal) - if not, use default
     if !io::stdin().is_terminal() {
-        println!("Non-interactive environment detected. Using default package manager: pnpm");
+        tracing::info!("Non-interactive environment detected. Using default package manager: pnpm");
         return Ok(PackageManagerType::Pnpm);
     }
 

@@ -1,0 +1,45 @@
+[package]
+name = "vite_global_cli"
+version = "0.0.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+rust-version.workspace = true
+
+[[bin]]
+name = "vp"
+path = "src/main.rs"
+
+[dependencies]
+base64-simd = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+flate2 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+node-semver = { workspace = true }
+sha2 = { workspace = true }
+tar = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+owo-colors = { workspace = true }
+vite_error = { workspace = true }
+vite_install = { workspace = true }
+vite_js_runtime = { workspace = true }
+vite_path = { workspace = true }
+vite_shared = { workspace = true }
+vite_str = { workspace = true }
+vite_workspace = { workspace = true }
+which = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+junction = { workspace = true }
+
+[dev-dependencies]
+serial_test = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,2 +1,2 @@
-> vite pm publish --dry-run -- --loglevel error # should preview publish without actually publishing (uses npm publish --dry-run)
+> vp pm publish --dry-run -- --loglevel error # should preview publish without actually publishing (uses npm publish --dry-run)
 + command-publish-yarn4@<semver>

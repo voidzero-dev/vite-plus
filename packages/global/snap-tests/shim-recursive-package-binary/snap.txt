@@ -1,0 +1,15 @@
+> vp install -g ./recursive-cli-pkg # Install test package
+  Installing ./recursive-cli-pkg globally...
+  Running npm install...
+
+added 1 package in <variable>ms
+  Installed ./recursive-cli-pkg v<semver>
+  Binaries: recursive-cli
+
+> recursive-cli # Outer call triggers recursive inner call through shim
+outer call
+inner call succeeded
+
+> vp remove -g recursive-cli-pkg # Cleanup
+  Uninstalling recursive-cli-pkg...
+  Uninstalled recursive-cli-pkg

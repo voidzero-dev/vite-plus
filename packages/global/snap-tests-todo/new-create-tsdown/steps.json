@@ -1,0 +1,22 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    {
+      "command": "vp new vite:library || vite new vite:library # create vite library with default values (retry if failed)",
+      "ignoreOutput": true
+    },
+    "ls vite-plus-library/package.json # check package.json",
+    {
+      "command": "vp new vite:library --directory my-vue -- --template vue # create vite library with custom template",
+      "ignoreOutput": true
+    },
+    "ls my-vue/package.json # check package.json",
+    {
+      "command": "vp new vite:library --no-interactive --directory @my-scope/my-library-with-scope # create vite library with scope name",
+      "ignoreOutput": true
+    },
+    "ls my-library-with-scope/package.json # check package.json"
+  ]
+}

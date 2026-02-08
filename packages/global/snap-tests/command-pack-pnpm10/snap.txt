@@ -1,30 +1,24 @@
-> vite pm pack --help # should show help
+> vp pm pack --help # should show help
 Create a tarball of the package
 
-Usage: vite pm pack [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+Usage: vp pm pack [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+  [PASS_THROUGH_ARGS]...  Additional arguments
 
 Options:
-  -r, --recursive
-          Pack all workspace packages
-      --filter <PATTERN>
-          Filter packages to pack (can be used multiple times)
-      --out <OUT>
-          Customizes the output path for the tarball. Use %s and %v to include the package name and version (pnpm and yarn@2+ only), e.g., %s.tgz or some-dir/%s-%v.tgz
-      --pack-destination <PACK_DESTINATION>
-          Directory where the tarball will be saved (pnpm and npm only)
-      --pack-gzip-level <PACK_GZIP_LEVEL>
-          Gzip compression level (0-9)
-      --json
-          Output in JSON format
-  -h, --help
-          Print help
+  -r, --recursive                            Pack all workspace packages
+      --filter <PATTERN>                     Filter packages to pack
+      --out <OUT>                            Output path for the tarball
+      --pack-destination <PACK_DESTINATION>  Directory where the tarball will be saved
+      --pack-gzip-level <PACK_GZIP_LEVEL>    Gzip compression level (0-9)
+      --json                                 Output in JSON format
+  -h, --help                                 Print help
 
-> vite pm pack && rm -rf *.tgz # should pack current package
+> vp pm pack && rm -rf *.tgz # should pack current package
 📦  command-pack-pnpm10@<semver>
 Tarball Contents
+.node-version
 output.log
 package.json
 snap.txt
@@ -32,9 +26,10 @@ steps.json
 Tarball Details
 command-pack-pnpm10-1.0.0.tgz
 
-> vite pm pack --out ./dist/package.tgz && rm -rf ./dist # should pack with output file
+> vp pm pack --out ./dist/package.tgz && rm -rf ./dist # should pack with output file
 📦  command-pack-pnpm10@<semver>
 Tarball Contents
+.node-version
 command-pack-pnpm10-1.0.0.tgz
 output.log
 package.json
@@ -43,9 +38,10 @@ steps.json
 Tarball Details
 <cwd>/dist/package.tgz
 
-> vite pm pack --pack-destination ./dist && rm -rf ./dist # should pack with destination
+> vp pm pack --pack-destination ./dist && rm -rf ./dist # should pack with destination
 📦  command-pack-pnpm10@<semver>
 Tarball Contents
+.node-version
 command-pack-pnpm10-1.0.0.tgz
 output.log
 package.json
@@ -54,12 +50,15 @@ steps.json
 Tarball Details
 <cwd>/dist/command-pack-pnpm10-1.0.0.tgz
 
-> vite pm pack --json --pack-gzip-level 9 && rm -rf *.tgz # should pack with gzip compression level
+> vp pm pack --json --pack-gzip-level 9 && rm -rf *.tgz # should pack with gzip compression level
 {
   "name": "command-pack-pnpm10",
   "version": "1.0.0",
   "filename": "command-pack-pnpm10-1.0.0.tgz",
   "files": [
+    {
+      "path": ".node-version"
+    },
     {
       "path": "command-pack-pnpm10-1.0.0.tgz"
     },
@@ -78,12 +77,15 @@ Tarball Details
   ]
 }
 
-> vite pm pack --json && rm -rf *.tgz # should pack with json output
+> vp pm pack --json && rm -rf *.tgz # should pack with json output
 {
   "name": "command-pack-pnpm10",
   "version": "1.0.0",
   "filename": "command-pack-pnpm10-1.0.0.tgz",
   "files": [
+    {
+      "path": ".node-version"
+    },
     {
       "path": "command-pack-pnpm10-1.0.0.tgz"
     },
@@ -102,9 +104,10 @@ Tarball Details
   ]
 }
 
-> vite pm pack -- --loglevel=warn && rm -rf *.tgz # should support pass through arguments
+> vp pm pack -- --loglevel=warn && rm -rf *.tgz # should support pass through arguments
 📦  command-pack-pnpm10@<semver>
 Tarball Contents
+.node-version
 command-pack-pnpm10-1.0.0.tgz
 output.log
 package.json

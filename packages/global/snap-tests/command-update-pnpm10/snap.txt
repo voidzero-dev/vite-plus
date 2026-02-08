@@ -1,7 +1,7 @@
-> vite update --help # should show help
+> vp update --help # should show help
 Update packages to their latest versions
 
-Usage: vite update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   [PACKAGES]...           Packages to update (optional - updates all if omitted)
@@ -15,13 +15,13 @@ Options:
   -w, --workspace-root    Include workspace root
   -D, --dev               Update only devDependencies
   -P, --prod              Update only dependencies (production)
-  -i, --interactive       Interactive mode - show outdated packages and choose which to update
+  -i, --interactive       Interactive mode
       --no-optional       Don't update optionalDependencies
       --no-save           Update lockfile only, don't modify package.json
       --workspace         Only update if package exists in workspace (pnpm-specific)
   -h, --help              Print help
 
-> vite update testnpm2 && cat package.json # should update package within semver range
+> vp update testnpm2 && cat package.json # should update package within semver range
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -51,7 +51,7 @@ Done in <variable>ms using pnpm v<semver>
   "packageManager": "pnpm@<semver>"
 }
 
-> vite up testnpm2 --latest && cat package.json # should to absolute latest version
+> vp up testnpm2 --latest && cat package.json # should to absolute latest version
 Already up to date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
@@ -71,7 +71,7 @@ Done in <variable>ms using pnpm v<semver>
   "packageManager": "pnpm@<semver>"
 }
 
-> vite update -D && cat package.json # should update only dev dependencies
+> vp update -D && cat package.json # should update only dev dependencies
 Already up to date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
@@ -95,7 +95,7 @@ Done in <variable>ms using pnpm v<semver>
   "packageManager": "pnpm@<semver>"
 }
 
-> vite update -P --no-save && cat package.json # should update only dependencies and optionalDependencies without saving
+> vp update -P --no-save && cat package.json # should update only dependencies and optionalDependencies without saving
 Already up to date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
@@ -117,8 +117,8 @@ Done in <variable>ms using pnpm v<semver>
   "packageManager": "pnpm@<semver>"
 }
 
-> vite rm testnpm2 # should remove package from dependencies for the next test
-> vite add testnpm2@1.0.0 -O && vite update --no-optional --latest && cat package.json # should skip optional dependencies
+> vp rm testnpm2 # should remove package from dependencies for the next test
+> vp add testnpm2@1.0.0 -O && vp update --no-optional --latest && cat package.json # should skip optional dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -149,7 +149,7 @@ Done in <variable>ms using pnpm v<semver>
   "packageManager": "pnpm@<semver>"
 }
 
-> vite update && vite update --recursive && cat package.json # should update all packages and change the package.json
+> vp update && vp update --recursive && cat package.json # should update all packages and change the package.json
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done

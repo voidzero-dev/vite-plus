@@ -1,0 +1,9 @@
+{
+  "name": "command-run-without-vite-plus",
+  "version": "1.0.0",
+  "scripts": {
+    "hello": "echo hello from script",
+    "greet": "echo greet"
+  },
+  "packageManager": "pnpm@10.19.0"
+}

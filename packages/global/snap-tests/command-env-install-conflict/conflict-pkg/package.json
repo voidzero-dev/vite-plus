@@ -1,0 +1,9 @@
+{
+  "name": "conflict-pkg",
+  "version": "1.0.0",
+  "description": "Test package with conflicting binary names",
+  "bin": {
+    "conflict-cli": "./cli.js",
+    "node": "./cli.js"
+  }
+}

@@ -277,6 +277,9 @@ importers:
 
   .:
     devDependencies:
+      '@napi-rs/cli':
+        specifier: 'catalog:'
+        version: 3.4.1(@emnapi/runtime@1.7.1)(@types/node@24.10.3)(node-addon-api@7.1.1)
       '@oxc-node/cli':
         specifier: 'catalog:'
         version: 0.0.35
@@ -379,7 +382,7 @@ importers:
         version: 0.11.4
     devDependencies:
       '@napi-rs/cli':
-        specifier: ^3.4.1
+        specifier: 'catalog:'
         version: 3.4.1(@emnapi/runtime@1.7.1)(@types/node@24.10.3)(node-addon-api@7.1.1)
       '@oxc-node/core':
         specifier: ^0.0.32

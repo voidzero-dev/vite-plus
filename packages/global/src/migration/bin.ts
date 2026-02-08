@@ -31,7 +31,7 @@ const { green } = colors;
 
 // prettier-ignore
 const helpMessage = `\
-${headline(`Usage:`)} ${styleText('bold', `vite migrate [PATH] [OPTIONS]`)}
+${headline(`Usage:`)} ${styleText('bold', `vp migrate [PATH] [OPTIONS]`)}
 
 Migrate standalone Vite, Vitest, Oxlint, and Oxfmt projects to unified Vite+.
 
@@ -47,13 +47,13 @@ ${headline(`Options:`)}
 
 ${headline(`Examples:`)}
   ${muted('# Migrate current package')}
-  ${accent(`vite migrate`)}
+  ${accent(`vp migrate`)}
 
   ${muted('# Migrate specific directory')}
-  ${accent(`vite migrate my-app`)}
+  ${accent(`vp migrate my-app`)}
 
   ${muted('# Non-interactive mode')}
-  ${accent(`vite migrate --no-interactive`)}
+  ${accent(`vp migrate --no-interactive`)}
 
 `;
 

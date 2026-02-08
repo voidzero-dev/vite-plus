@@ -56,9 +56,9 @@ export async function runViteInstall(cwd: string, interactive?: boolean) {
   }
 
   const spinner = getSpinner(interactive);
-  spinner.start(`Running vite install...`);
+  spinner.start(`Installing dependencies...`);
   const { exitCode, stderr, stdout } = await runCommandSilently({
-    command: 'vite',
+    command: process.env.VITE_PLUS_CLI_BIN ?? 'vp',
     args: ['install'],
     cwd,
     envs: process.env,
@@ -69,7 +69,7 @@ export async function runViteInstall(cwd: string, interactive?: boolean) {
     spinner.stop(`Install failed`);
     prompts.log.info(stdout.toString());
     prompts.log.error(stderr.toString());
-    prompts.log.info(`You may need to run "vite install" manually in ${cwd}`);
+    prompts.log.info(`You may need to run "vp install" manually in ${cwd}`);
   }
 }
 

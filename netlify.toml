@@ -1,0 +1,4 @@
+[build]
+base = "rfcs/" # avoid pnpm install fails on root
+command = "cd ../docs && npm i --force && npm run build"
+publish = "../docs/.vitepress/dist"

@@ -1,27 +1,27 @@
-> vite outdated --help # should show help
+> vp outdated --help # should show help
 Check for outdated packages
 
-Usage: vite outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
-  [PACKAGES]...           Package name(s) to check (supports glob patterns in pnpm)
+  [PACKAGES]...           Package name(s) to check
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
       --long              Show extended information
       --format <FORMAT>   Output format: table (default), list, or json
   -r, --recursive         Check recursively across all workspaces
-      --filter <PATTERN>  Filter packages in monorepo (can be used multiple times)
+      --filter <PATTERN>  Filter packages in monorepo
   -w, --workspace-root    Include workspace root
-  -P, --prod              Only production and optional dependencies (pnpm-specific)
-  -D, --dev               Only dev dependencies (pnpm-specific)
-      --no-optional       Exclude optional dependencies (pnpm-specific)
-      --compatible        Only show compatible versions (pnpm-specific)
-      --sort-by <FIELD>   Sort results by field (pnpm-specific)
+  -P, --prod              Only production and optional dependencies
+  -D, --dev               Only dev dependencies
+      --no-optional       Exclude optional dependencies
+      --compatible        Only show compatible versions
+      --sort-by <FIELD>   Sort results by field
   -g, --global            Check globally installed packages
   -h, --help              Print help
 
-> vite install # should install packages first
+> vp install # should install packages first
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -37,14 +37,14 @@ devDependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
-[1]> vite outdated testnpm2 # should outdated package
+[1]> vp outdated testnpm2 # should outdated package
 ┌──────────┬─────────┬────────┐
 │ Package  │ Current │ Latest │
 ├──────────┼─────────┼────────┤
 │ testnpm2 │ <semver>   │ <semver>  │
 └──────────┴─────────┴────────┘
 
-[1]> vite outdated test-vite* # should outdated with one glob pattern
+[1]> vp outdated test-vite* # should outdated with one glob pattern
 ┌──────────────────────────────────────────┬─────────┬────────┐
 │ Package                                  │ Current │ Latest │
 ├──────────────────────────────────────────┼─────────┼────────┤
@@ -53,7 +53,7 @@ Done in <variable>ms using pnpm v<semver>
 │ test-vite-plus-top-package (dev)         │ <semver>   │ <semver>  │
 └──────────────────────────────────────────┴─────────┴────────┘
 
-[1]> vite outdated test-vite* '*npm*' # should outdated with multiple glob patterns
+[1]> vp outdated test-vite* '*npm*' # should outdated with multiple glob patterns
 ┌──────────────────────────────────────────┬─────────┬────────┐
 │ Package                                  │ Current │ Latest │
 ├──────────────────────────────────────────┼─────────┼────────┤
@@ -64,7 +64,7 @@ Done in <variable>ms using pnpm v<semver>
 │ test-vite-plus-top-package (dev)         │ <semver>   │ <semver>  │
 └──────────────────────────────────────────┴─────────┴────────┘
 
-[1]> vite outdated --format json # should support json output
+[1]> vp outdated --format json # should support json output
 {
   "testnpm2": {
     "current": "1.0.0",
@@ -89,7 +89,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-[1]> vite outdated --format list # should support list output
+[1]> vp outdated --format list # should support list output
 testnpm2
 <semver> => <semver>
 
@@ -99,7 +99,7 @@ test-vite-plus-other-optional (optional)
 test-vite-plus-top-package (dev)
 <semver> => <semver>
 
-[1]> vite outdated --format table # should support table output
+[1]> vp outdated --format table # should support table output
 ┌──────────────────────────────────────────┬─────────┬────────┐
 │ Package                                  │ Current │ Latest │
 ├──────────────────────────────────────────┼─────────┼────────┤
@@ -110,11 +110,11 @@ test-vite-plus-top-package (dev)
 │ test-vite-plus-top-package (dev)         │ <semver>   │ <semver>  │
 └──────────────────────────────────────────┴─────────┴────────┘
 
-[1]> vite outdated testnpm2 --long --format list # should support --long
+[1]> vp outdated testnpm2 --long --format list # should support --long
 testnpm2
 <semver> => <semver>
 
-[1]> vite outdated -r # should support recursive output
+[1]> vp outdated -r # should support recursive output
 ┌──────────────────────────────────────────┬─────────┬────────┬─────────────────────────┐
 │ Package                                  │ Current │ Latest │ Dependents              │
 ├──────────────────────────────────────────┼─────────┼────────┼─────────────────────────┤
@@ -125,7 +125,7 @@ testnpm2
 │ test-vite-plus-top-package (dev)         │ <semver>   │ <semver>  │ command-outdated-pnpm10 │
 └──────────────────────────────────────────┴─────────┴────────┴─────────────────────────┘
 
-[1]> vite outdated -P # should support prod output
+[1]> vp outdated -P # should support prod output
 ┌──────────────────────────────────────────┬─────────┬────────┐
 │ Package                                  │ Current │ Latest │
 ├──────────────────────────────────────────┼─────────┼────────┤
@@ -134,14 +134,14 @@ testnpm2
 │ test-vite-plus-other-optional (optional) │ <semver>   │ <semver>  │
 └──────────────────────────────────────────┴─────────┴────────┘
 
-[1]> vite outdated -D # should support dev output
+[1]> vp outdated -D # should support dev output
 ┌──────────────────────────────────┬─────────┬────────┐
 │ Package                          │ Current │ Latest │
 ├──────────────────────────────────┼─────────┼────────┤
 │ test-vite-plus-top-package (dev) │ <semver>   │ <semver>  │
 └──────────────────────────────────┴─────────┴────────┘
 
-[1]> vite outdated --no-optional # should support no-optional output
+[1]> vp outdated --no-optional # should support no-optional output
 ┌──────────────────────────────────┬─────────┬────────┐
 │ Package                          │ Current │ Latest │
 ├──────────────────────────────────┼─────────┼────────┤
@@ -150,15 +150,15 @@ testnpm2
 │ test-vite-plus-top-package (dev) │ <semver>   │ <semver>  │
 └──────────────────────────────────┴─────────┴────────┘
 
-> vite outdated --compatible # should compatible output nothing
-[1]> json-edit package.json '_.optionalDependencies["test-vite-plus-other-optional"] = "^1.0.0"' && vite outdated --compatible # should support compatible output with optional dependencies
+> vp outdated --compatible # should compatible output nothing
+[1]> json-edit package.json '_.optionalDependencies["test-vite-plus-other-optional"] = "^1.0.0"' && vp outdated --compatible # should support compatible output with optional dependencies
 ┌──────────────────────────────────────────┬─────────┬────────┐
 │ Package                                  │ Current │ Latest │
 ├──────────────────────────────────────────┼─────────┼────────┤
 │ test-vite-plus-other-optional (optional) │ <semver>   │ <semver>  │
 └──────────────────────────────────────────┴─────────┴────────┘
 
-[1]> vite outdated --sort-by name # should support sort-by output
+[1]> vp outdated --sort-by name # should support sort-by output
 ┌──────────────────────────────────────────┬─────────┬────────┐
 │ Package                                  │ Current │ Latest │
 ├──────────────────────────────────────────┼─────────┼────────┤
@@ -169,5 +169,5 @@ testnpm2
 │ testnpm2                                 │ <semver>   │ <semver>  │
 └──────────────────────────────────────────┴─────────┴────────┘
 
-> vite outdated testnpm2 -g --format json # should support global output
+> vp outdated testnpm2 -g --format json # should support global output
 {}

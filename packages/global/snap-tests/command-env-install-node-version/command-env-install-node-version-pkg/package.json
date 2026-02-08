@@ -1,0 +1,7 @@
+{
+  "name": "command-env-install-node-version-pkg",
+  "version": "1.0.0",
+  "bin": {
+    "command-env-install-node-version-pkg-cli": "./cli.js"
+  }
+}

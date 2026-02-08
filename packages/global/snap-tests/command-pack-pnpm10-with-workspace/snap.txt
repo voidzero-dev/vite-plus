@@ -1,6 +1,7 @@
-> vite pm pack && rm -rf *.tgz # should pack current workspace root
+> vp pm pack && rm -rf *.tgz # should pack current workspace root
 📦  command-pack-pnpm10-with-workspace@<semver>
 Tarball Contents
+.node-version
 output.log
 package.json
 packages/app/package.json
@@ -11,7 +12,7 @@ steps.json
 Tarball Details
 command-pack-pnpm10-with-workspace-1.0.0.tgz
 
-> vite pm pack --recursive --json > out.json && tool json-sort out.json '_.name' && cat out.json && rm -rf *.tgz # should pack all packages in workspace
+> vp pm pack --recursive --json > out.json && tool json-sort out.json '_.name' && cat out.json && rm -rf *.tgz # should pack all packages in workspace
 [
   {
     "name": "@vite-plus-test/utils",
@@ -38,6 +39,9 @@ command-pack-pnpm10-with-workspace-1.0.0.tgz
     "version": "1.0.0",
     "filename": "command-pack-pnpm10-with-workspace-1.0.0.tgz",
     "files": [
+      {
+        "path": ".node-version"
+      },
       {
         "path": "command-pack-pnpm10-with-workspace-1.0.0.tgz"
       },
@@ -69,14 +73,14 @@ command-pack-pnpm10-with-workspace-1.0.0.tgz
   }
 ]
 
-> vite pm pack --filter app && rm -rf *.tgz # should pack specific package (uses --filter app pack)
+> vp pm pack --filter app && rm -rf *.tgz # should pack specific package (uses --filter app pack)
 📦  app@<semver>
 Tarball Contents
 package.json
 Tarball Details
 <cwd>/app-1.0.0.tgz
 
-> vite pm pack --filter app --filter @vite-plus-test/utils --json > out.json && tool json-sort out.json '_.name' && cat out.json && rm -rf *.tgz # should pack multiple packages
+> vp pm pack --filter app --filter @vite-plus-test/utils --json > out.json && tool json-sort out.json '_.name' && cat out.json && rm -rf *.tgz # should pack multiple packages
 [
   {
     "name": "@vite-plus-test/utils",
@@ -100,9 +104,10 @@ Tarball Details
   }
 ]
 
-> vite pm pack --out ./dist/package.tgz && rm -rf ./dist # should pack with output file
+> vp pm pack --out ./dist/package.tgz && rm -rf ./dist # should pack with output file
 📦  command-pack-pnpm10-with-workspace@<semver>
 Tarball Contents
+.node-version
 app-1.0.0.tgz
 command-pack-pnpm10-with-workspace-1.0.0.tgz
 out.json
@@ -117,9 +122,10 @@ vite-plus-test-utils-1.0.0.tgz
 Tarball Details
 <cwd>/dist/package.tgz
 
-> vite pm pack --pack-destination ./dist && rm -rf ./dist # should pack with destination
+> vp pm pack --pack-destination ./dist && rm -rf ./dist # should pack with destination
 📦  command-pack-pnpm10-with-workspace@<semver>
 Tarball Contents
+.node-version
 app-1.0.0.tgz
 command-pack-pnpm10-with-workspace-1.0.0.tgz
 out.json
@@ -134,9 +140,10 @@ vite-plus-test-utils-1.0.0.tgz
 Tarball Details
 <cwd>/dist/command-pack-pnpm10-with-workspace-1.0.0.tgz
 
-> vite pm pack --pack-gzip-level 9 && rm -rf *.tgz # should pack with gzip compression level
+> vp pm pack --pack-gzip-level 9 && rm -rf *.tgz # should pack with gzip compression level
 📦  command-pack-pnpm10-with-workspace@<semver>
 Tarball Contents
+.node-version
 app-1.0.0.tgz
 command-pack-pnpm10-with-workspace-1.0.0.tgz
 out.json
@@ -151,12 +158,15 @@ vite-plus-test-utils-1.0.0.tgz
 Tarball Details
 command-pack-pnpm10-with-workspace-1.0.0.tgz
 
-> vite pm pack --json --out 'foo-%s-%v.tgz' && rm -rf *.tgz # should pack with json output
+> vp pm pack --json --out 'foo-%s-%v.tgz' && rm -rf *.tgz # should pack with json output
 {
   "name": "command-pack-pnpm10-with-workspace",
   "version": "1.0.0",
   "filename": "foo-command-pack-pnpm10-with-workspace-1.0.0.tgz",
   "files": [
+    {
+      "path": ".node-version"
+    },
     {
       "path": "app-1.0.0.tgz"
     },

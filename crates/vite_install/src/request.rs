@@ -40,6 +40,22 @@ impl HttpClient {
         Self { max_times, min_delay }
     }
 
+    /// Get raw bytes from a URL
+    ///
+    /// # Arguments
+    ///
+    /// * `url` - The URL to fetch bytes from
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Vec<u8>)` - The raw bytes from the response
+    /// * `Err(e)` - If the request fails
+    pub async fn get_bytes(&self, url: &str) -> Result<Vec<u8>, Error> {
+        tracing::debug!("Fetching bytes from: {}", url);
+        let response = self.get(url).await?;
+        Ok(response.bytes().await?.to_vec())
+    }
+
     async fn get(&self, url: &str) -> Result<Response, Error> {
         let response = (|| async { reqwest::get(url).await?.error_for_status() })
             .retry(

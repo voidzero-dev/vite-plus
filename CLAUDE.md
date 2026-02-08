@@ -8,17 +8,17 @@ A monorepo task runner (like nx/turbo) with intelligent caching and dependency r
 
 ```bash
 # Built-in commands
-vite build                           # Run Vite build (dedicated command)
-vite test                            # Run Vite test (dedicated command)
-vite lint                            # Run oxlint (dedicated command)
+vp build                           # Run Vite build (dedicated command)
+vp test                            # Run Vite test (dedicated command)
+vp lint                            # Run oxlint (dedicated command)
 
 # Run tasks across packages (explicit mode)
-vite run build -r                    # recursive with topological ordering
-vite run app#build web#build         # specific packages
-vite run build -r --no-topological   # recursive without implicit deps
+vp run build -r                    # recursive with topological ordering
+vp run app#build web#build         # specific packages
+vp run build -r --no-topological   # recursive without implicit deps
 
 # Run task in current package (implicit mode - for non-built-in tasks)
-vite dev                             # runs dev script from package.json
+vp run dev                         # runs dev script from package.json
 ```
 
 ## Key Architecture
@@ -80,7 +80,7 @@ vite dev                             # runs dev script from package.json
 
 ## Git Workflow
 
-- Run `vite fmt` before committing to format code
+- Run `vp fmt` before committing to format code
 
 ## Quick Reference
 

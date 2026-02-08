@@ -1,0 +1,8 @@
+{
+  "env": {},
+  "ignoredPlatforms": [],
+  "commands": [
+    "vp env exec --node 20.19 node -v # Run node with specific major version",
+    "vp env exec --node 20.19 node -e \"console.log('Hello from Node ' + process.version)\" # Run inline script"
+  ]
+}

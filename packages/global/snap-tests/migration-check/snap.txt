@@ -1,7 +1,7 @@
-> vite migrate --help # show help
+> vp migrate --help # show help
 VITE+(⚡︎) - The Unified Toolchain for the Web
 
-USAGE: vite migrate [PATH] [OPTIONS]
+USAGE: vp migrate [PATH] [OPTIONS]
 
 Migrate standalone Vite, Vitest, Oxlint, and Oxfmt projects to unified Vite+.
 
@@ -17,12 +17,12 @@ OPTIONS:
 
 EXAMPLES:
   # Migrate current package
-  vite migrate
+  vp migrate
 
   # Migrate specific directory
-  vite migrate my-app
+  vp migrate my-app
 
   # Non-interactive mode
-  vite migrate --no-interactive
+  vp migrate --no-interactive
 
 

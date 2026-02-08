@@ -42,11 +42,15 @@ mod provider;
 mod providers;
 mod runtime;
 
+pub use dev_engines::{
+    parse_node_version_content, read_node_version_file, write_node_version_file,
+};
 pub use error::Error;
 pub use platform::{Arch, Os, Platform};
 pub use provider::{ArchiveFormat, DownloadInfo, HashVerification, JsRuntimeProvider};
-pub use providers::NodeProvider;
+pub use providers::{LtsInfo, NodeProvider, NodeVersionEntry};
 pub use runtime::{
-    JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project,
-    download_runtime_with_provider,
+    JsRuntime, JsRuntimeType, VersionResolution, VersionSource, download_runtime,
+    download_runtime_for_project, download_runtime_with_provider, normalize_version,
+    read_package_json, resolve_node_version,
 };

@@ -1,7 +1,7 @@
-> vite add --help # should show help
+> vp add --help # should show help
 Add packages to dependencies
 
-Usage: vite add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   <PACKAGES>...           Packages to add
@@ -17,9 +17,9 @@ Options:
   -O, --save-optional
           Save to `optionalDependencies`
   -E, --save-exact
-          Save exact version rather than semver range (e.g., `^1.0.0` -> `1.0.0`)
+          Save exact version rather than semver range
       --save-catalog-name <CATALOG_NAME>
-          Save the new dependency to the specified catalog name. Example: `vite add vue --save-catalog-name vue3`
+          Save the new dependency to the specified catalog name
       --save-catalog
           Save the new dependency to the default catalog
       --allow-build <NAMES>
@@ -27,15 +27,17 @@ Options:
       --filter <PATTERN>
           Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root
-          Add to workspace root (ignore-workspace-root-check)
+          Add to workspace root
       --workspace
           Only add if package exists in workspace (pnpm-specific)
   -g, --global
           Install globally
+      --node <NODE>
+          Node.js version to use for global installation (only with -g)
   -h, --help
           Print help
 
-> vite add testnpm2 -D && cat package.json # should add package as dev dependencies
+> vp add testnpm2 -D && cat package.json # should add package as dev dependencies
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + testnpm2@npm:1.0.1
@@ -54,7 +56,7 @@ Options:
   }
 }
 
-> vite add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies
+> vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-install@npm:1.0.0
@@ -76,7 +78,7 @@ Options:
   }
 }
 
-> vite install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
+> vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -100,7 +102,7 @@ Options:
   }
 }
 
-> vite add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
+> vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0
@@ -128,7 +130,7 @@ Options:
   }
 }
 
-> vite add test-vite-plus-package-optional -- --tilde && cat package.json # support pass through arguments
+> vp add test-vite-plus-package-optional -- --tilde && cat package.json # support pass through arguments
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed

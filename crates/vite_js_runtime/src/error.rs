@@ -40,6 +40,20 @@ pub enum Error {
     #[error("No version matching '{version_req}' found")]
     NoMatchingVersion { version_req: Str },
 
+    /// Invalid LTS alias format
+    #[error("Invalid LTS alias format: '{alias}'")]
+    InvalidLtsAlias { alias: Str },
+
+    /// Unknown LTS codename
+    #[error(
+        "Unknown LTS codename: '{codename}'. Valid codenames include: hydrogen (18.x), iron (20.x), jod (22.x)"
+    )]
+    UnknownLtsCodename { codename: Str },
+
+    /// Invalid LTS offset (too large)
+    #[error("Invalid LTS offset: {offset}. Only {available} LTS lines are available")]
+    InvalidLtsOffset { offset: i32, available: usize },
+
     /// IO error
     #[error(transparent)]
     Io(#[from] std::io::Error),

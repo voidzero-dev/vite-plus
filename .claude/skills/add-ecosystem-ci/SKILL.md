@@ -41,7 +41,7 @@ Look for common patterns in workflow files:
 
 - `pnpm run <command>` / `npm run <command>` / `yarn <command>`
 - Commands like: `lint`, `build`, `test`, `type-check`, `typecheck`, `format`, `format:check`
-- Map detected commands to vite equivalents: `vite run lint`, `vite run build`, etc.
+- Map detected commands to `vp` equivalents: `vp run lint`, `vp run build`, etc.
 
 ### 2.3 Ask User to Confirm
 
@@ -73,8 +73,8 @@ Present the auto-detected configuration and ask user to confirm or modify:
      node-version: 24
      directory: web # only if subdirectory is needed
      command: |
-       vite run lint
-       vite run build
+       vp run lint
+       vp run build
    ```
 
 ## Step 4: Verify
@@ -109,5 +109,5 @@ node ecosystem-ci/clone.ts project-name
 
 - The `directory` field is optional - only add it if the package.json is not in the project root
 - If `directory` is specified in repo.json, it must also be specified in the workflow matrix
-- `patch-project.ts` automatically handles running `vite migrate` in the correct directory
+- `patch-project.ts` automatically handles running `vp migrate` in the correct directory
 - OS exclusions are added to the existing `exclude` section in the workflow matrix

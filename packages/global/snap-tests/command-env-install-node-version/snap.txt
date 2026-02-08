@@ -1,0 +1,29 @@
+> vp install -g --node 22 ./command-env-install-node-version-pkg # Install with Node.js 22
+  Installing ./command-env-install-node-version-pkg globally...
+  Running npm install...
+
+added 1 package in <variable>ms
+  Installed ./command-env-install-node-version-pkg v<semver>
+  Binaries: command-env-install-node-version-pkg-cli
+
+> cat $VITE_PLUS_HOME/bins/command-env-install-node-version-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d.nodeVersion.split('.')[0])" # Verify Node 22
+Node major: 22
+
+> vp remove -g command-env-install-node-version-pkg # Cleanup
+  Uninstalling command-env-install-node-version-pkg...
+  Uninstalled command-env-install-node-version-pkg
+
+> vp install -g --node 20 ./command-env-install-node-version-pkg # Install with Node.js 20
+  Installing ./command-env-install-node-version-pkg globally...
+  Running npm install...
+
+added 1 package in <variable>ms
+  Installed ./command-env-install-node-version-pkg v<semver>
+  Binaries: command-env-install-node-version-pkg-cli
+
+> cat $VITE_PLUS_HOME/bins/command-env-install-node-version-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d.nodeVersion.split('.')[0])" # Verify Node 20
+Node major: 20
+
+> vp remove -g command-env-install-node-version-pkg # Cleanup
+  Uninstalling command-env-install-node-version-pkg...
+  Uninstalled command-env-install-node-version-pkg

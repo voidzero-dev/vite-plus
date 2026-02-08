@@ -1,0 +1,55 @@
+> vp install -g ./env-binary-conflict-pkg-a # Install pkg-a which provides env-binary-conflict-cli binary
+  Installing ./env-binary-conflict-pkg-a globally...
+  Running npm install...
+
+added 1 package in <variable>ms
+  Installed ./env-binary-conflict-pkg-a v<semver>
+  Binaries: env-binary-conflict-cli
+
+> cat $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json # Bin config should point to pkg-a
+{
+  "name": "env-binary-conflict-cli",
+  "package": "./env-binary-conflict-pkg-a",
+  "version": "1.0.0",
+  "nodeVersion": "22.22.0"
+}
+[1]> vp install -g ./env-binary-conflict-pkg-b # Try to install pkg-b without force - should fail
+  Installing ./env-binary-conflict-pkg-b globally...
+  Running npm install...
+
+added 1 package in <variable>ms
+Failed to install ./env-binary-conflict-pkg-b: Executable 'env-binary-conflict-cli' is already installed by ./env-binary-conflict-pkg-a
+
+Please remove ./env-binary-conflict-pkg-a before installing ./env-binary-conflict-pkg-b, or use --force to auto-replace
+
+> cat $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json # Bin config should still point to pkg-a
+{
+  "name": "env-binary-conflict-cli",
+  "package": "./env-binary-conflict-pkg-a",
+  "version": "1.0.0",
+  "nodeVersion": "22.22.0"
+}
+> vp install -g --force ./env-binary-conflict-pkg-b # Force install pkg-b - should auto-uninstall pkg-a
+  Installing ./env-binary-conflict-pkg-b globally...
+  Running npm install...
+
+added 1 package in <variable>ms
+  Uninstalling ./env-binary-conflict-pkg-a (conflicts with ./env-binary-conflict-pkg-b)...
+  Uninstalling ./env-binary-conflict-pkg-a...
+  Uninstalled ./env-binary-conflict-pkg-a
+  Installed ./env-binary-conflict-pkg-b v<semver>
+  Binaries: env-binary-conflict-cli
+
+> cat $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json # Bin config should now point to pkg-b
+{
+  "name": "env-binary-conflict-cli",
+  "package": "./env-binary-conflict-pkg-b",
+  "version": "2.0.0",
+  "nodeVersion": "22.22.0"
+}
+> vp remove -g env-binary-conflict-pkg-b # Cleanup
+  Uninstalling env-binary-conflict-pkg-b...
+  Uninstalled env-binary-conflict-pkg-b
+
+> test ! -f $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json && echo 'bin config removed' # Bin config should be deleted
+bin config removed

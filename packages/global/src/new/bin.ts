@@ -40,12 +40,12 @@ import { BuiltinTemplate, TemplateType } from './templates/types.js';
 import { formatTargetDir } from './utils.js';
 
 const helpMessage = `\
-${headline(`Usage:`)} ${styleText('bold', `vite new [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]`)}
+${headline(`Usage:`)} ${styleText('bold', `vp new [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]`)}
 
 Use any builtin, local or remote template with Vite+.
 
 ${headline(`Arguments:`)}
-  TEMPLATE            Template name. Run \`vite new --list\` to see available templates.
+  TEMPLATE            Template name. Run \`vp new --list\` to see available templates.
                       - Default: vite:monorepo, vite:application, vite:library, vite:generator
                       - Remote: create-vite, @tanstack/create-start, create-next-app,
                         create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
@@ -63,23 +63,23 @@ ${headline(`Template options:`)}
 
 ${headline(`Examples:`)}
   ${muted('# Interactive mode')}
-  ${accent(`vite new`)}
+  ${accent(`vp new`)}
 
   ${muted('# Use existing templates')}
-  ${accent(`vite new create-vite`)}
-  ${accent(`vite new create-next-app`)}
-  ${accent(`vite new @tanstack/create-start`)}
-  ${accent(`vite new create-vite -- --template react-ts`)}
+  ${accent(`vp new create-vite`)}
+  ${accent(`vp new create-next-app`)}
+  ${accent(`vp new @tanstack/create-start`)}
+  ${accent(`vp new create-vite -- --template react-ts`)}
 
   ${muted('# Create Vite+ monorepo, application, library, or generator scaffolds')}
-  ${accent(`vite new vite:monorepo`)}
-  ${accent(`vite new vite:application`)}
-  ${accent(`vite new vite:library`)}
-  ${accent(`vite new vite:generator`)}
+  ${accent(`vp new vite:monorepo`)}
+  ${accent(`vp new vite:application`)}
+  ${accent(`vp new vite:library`)}
+  ${accent(`vp new vite:generator`)}
 
   ${muted('# Use templates from GitHub (via degit)')}
-  ${accent(`vite new github:user/repo`)}
-  ${accent(`vite new https://github.com/user/template-repo`)}
+  ${accent(`vp new github:user/repo`)}
+  ${accent(`vp new https://github.com/user/template-repo`)}
 `;
 
 export interface Options {
@@ -152,13 +152,13 @@ async function main() {
     console.error(`
 A template name is required when running in non-interactive mode
 
-Usage: vite new [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
+Usage: vp new [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
 
 Example: 
   ${muted('# Create a new application in non-interactive mode with a custom target directory')}
-  vite new vite:application --no-interactive --directory=apps/my-app
+  vp new vite:application --no-interactive --directory=apps/my-app
 
-Use \`vite new --list\` to list all available templates, or run \`vite new --help\` for more information.
+Use \`vp new --list\` to list all available templates, or run \`vp new --help\` for more information.
 `);
     process.exit(1);
   }
@@ -436,7 +436,7 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
     prompts.outro(`✔ Created ${accent(projectDir)}!`);
     log(`${styleText('bold', 'Next steps:')}`);
     log(`  ${accent(`cd ${projectDir}`)}`);
-    log(`  ${accent(`vite dev ${InitialMonorepoAppDir}`)}`);
+    log(`  ${accent(`vp dev ${InitialMonorepoAppDir}`)}`);
     return;
   }
   // #endregion
@@ -532,7 +532,7 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
           }
 
           if (selectedDeps.length > 0) {
-            // FIXME: should use `vite add` command instead
+            // FIXME: should use `vp add` command instead
             updatePackageJsonWithDeps(
               workspaceInfo.rootDir,
               projectDir,
@@ -560,10 +560,10 @@ Use \`vite new --list\` to list all available templates, or run \`vite new --hel
 function showNextSteps(projectDir: string, isMonorepo: boolean) {
   log(`${styleText('bold', 'Next steps:')}`);
   if (isMonorepo) {
-    log(`  ${accent(`vite dev ${projectDir}`)}`);
+    log(`  ${accent(`vp dev ${projectDir}`)}`);
   } else {
     log(`  ${accent(`cd ${projectDir}`)}`);
-    log(`  ${accent('vite dev')}`);
+    log(`  ${accent('vp dev')}`);
   }
   log('');
 }
@@ -587,12 +587,10 @@ async function showAvailableTemplates() {
   log(`  create-vue               ${muted('Vue application')}`);
   log('');
   log(headline(`Examples:`));
-  log(`  ${accent('vite new')} ${muted('# interactive mode')}`);
-  log(`  ${accent('vite new <template>')} ${muted('# use any template')}`);
-  log(
-    `  ${accent('vite new <template> -- <options>')} ${muted('# pass options to the template')}\n`,
-  );
-  log(`✨ Tip: You can use any npm template or git repo with ${accent('vite new')}!\n`);
+  log(`  ${accent('vp new')} ${muted('# interactive mode')}`);
+  log(`  ${accent('vp new <template>')} ${muted('# use any template')}`);
+  log(`  ${accent('vp new <template> -- <options>')} ${muted('# pass options to the template')}\n`);
+  log(`✨ Tip: You can use any npm template or git repo with ${accent('vp new')}!\n`);
 }
 
 main().catch((err) => {

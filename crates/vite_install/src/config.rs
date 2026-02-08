@@ -1,8 +1,5 @@
 use std::{env, sync::LazyLock};
 
-use vite_error::Error;
-use vite_path::AbsolutePathBuf;
-
 pub static NPM_REGISTRY: LazyLock<String> = LazyLock::new(|| {
     env::var("npm_config_registry")
         .or_else(|_| env::var("NPM_CONFIG_REGISTRY"))
@@ -18,14 +15,6 @@ pub fn get_npm_package_tgz_url(name: &str, version: &str) -> String {
 
 pub fn get_npm_package_version_url(name: &str, version_or_tag: &str) -> String {
     format!("{}/{}/{}", NPM_REGISTRY.clone(), name, version_or_tag)
-}
-
-/// Cache directory
-///
-/// It will use the cache directory of the operating system if available,
-/// otherwise it will use the current directory.
-pub fn get_cache_dir() -> Result<AbsolutePathBuf, Error> {
-    Ok(vite_shared::get_cache_dir()?)
 }
 
 #[cfg(test)]

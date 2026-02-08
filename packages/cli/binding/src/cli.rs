@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use tokio::fs::write;
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_shared::{PrependOptions, prepend_to_path_env};
 use vite_str::Str;
 use vite_task::{
     Command, CommandHandler, ExitStatus, HandledCommand, ScriptCommand, Session, SessionCallbacks,
@@ -752,9 +753,8 @@ async fn execute_vite_task_command(
 
     // Update PATH to include package manager bin directory BEFORE session init
     if let Ok(pm) = vite_install::PackageManager::builder(&cwd).build().await {
-        let new_path = vite_install::format_path_env(&pm.get_bin_prefix());
-        // SAFETY: Single-threaded context before session init
-        unsafe { env::set_var("PATH", new_path) };
+        let bin_prefix = pm.get_bin_prefix();
+        prepend_to_path_env(&bin_prefix, PrependOptions::default());
     }
 
     let session = Session::init(SessionCallbacks {
@@ -869,34 +869,7 @@ Options:
     );
 }
 
-pub fn init_tracing() {
-    use std::sync::OnceLock;
-
-    use tracing_subscriber::{
-        filter::{LevelFilter, Targets},
-        prelude::__tracing_subscriber_SubscriberExt,
-        util::SubscriberInitExt,
-    };
-
-    static TRACING: OnceLock<()> = OnceLock::new();
-    TRACING.get_or_init(|| {
-        tracing_subscriber::registry()
-            .with(
-                std::env::var("VITE_LOG")
-                    .map_or_else(
-                        |_| Targets::new(),
-                        |env_var| {
-                            use std::str::FromStr;
-                            Targets::from_str(&env_var).unwrap_or_default()
-                        },
-                    )
-                    // disable brush-parser tracing
-                    .with_targets([("tokenize", LevelFilter::OFF), ("parse", LevelFilter::OFF)]),
-            )
-            .with(tracing_subscriber::fmt::layer())
-            .init();
-    });
-}
+pub use vite_shared::init_tracing;
 
 #[cfg(test)]
 mod tests {

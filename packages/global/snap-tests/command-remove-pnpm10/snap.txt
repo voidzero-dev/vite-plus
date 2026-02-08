@@ -1,7 +1,7 @@
-> vite remove --help # should show help
+> vp remove --help # should show help
 Remove packages from dependencies
 
-Usage: vite remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
   <PACKAGES>...           Packages to remove
@@ -13,22 +13,23 @@ Options:
   -P, --save-prod         Only remove from `dependencies` (pnpm-specific)
       --filter <PATTERN>  Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root    Remove from workspace root
-  -r, --recursive         Remove recursively from all workspace packages, including workspace root
+  -r, --recursive         Remove recursively from all workspace packages
   -g, --global            Remove global packages
+      --dry-run           Preview what would be removed without actually removing (only with -g)
   -h, --help              Print help
 
-[2]> vite remove # should error because no packages specified
+[2]> vp remove # should error because no packages specified
 error: the following required arguments were not provided:
   <PACKAGES>...
 
-Usage: vite remove <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp remove <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 For more information, try '--help'.
 
-[1]> vite remove testnpm2 -D && cat package.json # should error when remove not exists package from dev dependencies
+[1]> vp remove testnpm2 -D && cat package.json # should error when remove not exists package from dev dependencies
  ERR_PNPM_CANNOT_REMOVE_MISSING_DEPS  Cannot remove 'testnpm2': project has no 'devDependencies'
 
-> vite add testnpm2 && vite add -D test-vite-plus-install && vite add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies
+> vp add testnpm2 && vp add -D test-vite-plus-install && vp add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -68,7 +69,7 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vite remove testnpm2 test-vite-plus-install && cat package.json # should remove packages from dependencies
+> vp remove testnpm2 test-vite-plus-install && cat package.json # should remove packages from dependencies
 Packages: -2
 --
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -89,27 +90,21 @@ Done in <variable>ms using pnpm v<semver>
   }
 }
 
-> vite remove -O test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support remove package from optional dependencies and pass through arguments
+> vp remove -O test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support remove package from optional dependencies and pass through arguments
 {
   "name": "command-remove-pnpm10",
   "version": "1.0.0",
   "packageManager": "pnpm@<semver>"
 }
 
-> vite remove -g testnpm2 -- --dry-run && cat package.json # support remove global package with dry-run
+[1]> vp remove -g --dry-run testnpm2 && cat package.json # support remove global package with dry-run
+Failed to uninstall testnpm2: Configuration error: Package testnpm2 is not installed
 
-up to date in <variable>ms
-{
-  "name": "command-remove-pnpm10",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>"
-}
-
-[2]> vite rm --stream foo && should show tips to use pass through arguments when options are not supported
+[2]> vp rm --stream foo && should show tips to use pass through arguments when options are not supported
 error: unexpected argument '--stream' found
 
   tip: to pass '--stream' as a value, use '-- --stream'
 
-Usage: vite remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 For more information, try '--help'.

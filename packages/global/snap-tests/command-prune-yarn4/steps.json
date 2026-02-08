@@ -3,7 +3,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite pm prune --help # should show help",
-    "vite pm prune # should show warning that yarn does not support prune command"
+    "vp pm prune --help # should show help",
+    "vp pm prune # should show warning that yarn does not support prune command"
   ]
 }

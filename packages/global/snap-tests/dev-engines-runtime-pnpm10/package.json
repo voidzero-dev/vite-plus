@@ -1,0 +1,11 @@
+{
+  "name": "dev-engines-runtime-pnpm10",
+  "version": "1.0.0",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "22.11.0"
+    }
+  },
+  "packageManager": "pnpm@10.19.0"
+}

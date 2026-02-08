@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev",
-    "build": "vitepress build",
+    "build": "cp ../packages/global/install.sh ../packages/global/install.ps1 public/ && vitepress build",
     "preview": "vitepress preview"
   },
   "dependencies": {

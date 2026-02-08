@@ -1,0 +1,5 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {},
+  "commands": ["vp env install # Install version from .node-version (22.x)"]
+}
