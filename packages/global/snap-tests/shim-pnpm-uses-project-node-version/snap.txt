@@ -1,3 +1,4 @@
+> vp install -g pnpm > /dev/null # Ensure pnpm is globally installed
 > vp env exec node -v # Node version resolved from .node-version
 v22.12.0
 
