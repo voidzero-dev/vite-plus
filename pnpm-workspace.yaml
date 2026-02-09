@@ -12,6 +12,7 @@ catalog:
   '@clack/prompts': ^0.11.0
   '@napi-rs/cli': ^3.4.1
   '@napi-rs/wasm-runtime': ^1.0.0
+  '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.0.35
   '@oxc-node/core': ^0.0.35
   '@oxc-project/runtime': =0.112.0
@@ -124,18 +125,19 @@ ignoreScripts: true
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@napi-rs/*'
-  - '@oxc-project/*'
-  - '@rolldown/*'
-  - '@vitest/*'
-  - '@vitejs/*'
-  - '@types/*'
-  - '@oxlint/*'
+  - '@nkzw/*'
   - '@oxc-minify/*'
   - '@oxc-parser/*'
+  - '@oxc-project/*'
   - '@oxc-resolver/*'
   - '@oxc-transform/*'
   - '@oxfmt/*'
   - '@oxlint-tsgolint/*'
+  - '@oxlint/*'
+  - '@rolldown/*'
+  - '@types/*'
+  - '@vitejs/*'
+  - '@vitest/*'
   - oxc-minify
   - oxc-parser
   - oxc-transform
@@ -146,10 +148,10 @@ minimumReleaseAgeExclude:
   - rolldown-plugin-dts
   - rolldown-vite
   - tsdown
+  - unrun
   - vite
   - vitepress
   - vitest
-  - unrun
 overrides:
   '@rolldown/pluginutils': 'workspace:@rolldown/pluginutils@*'
   rolldown: 'workspace:rolldown@*'

@@ -30,6 +30,7 @@ import {
 import type { ExecutionResult } from './command.js';
 import { discoverTemplate, inferParentDir } from './discovery.js';
 import { cancelAndExit, checkProjectDirExists, promptPackageNameAndTargetDir } from './prompts.js';
+import { getRandomProjectName } from './random-name.js';
 import {
   executeBuiltinTemplate,
   executeMonorepoTemplate,
@@ -344,16 +345,16 @@ Use \`vp new --list\` to list all available templates, or run \`vp new --help\` 
   if (isBuiltinTemplate && !targetDir) {
     if (selectedTemplateName === BuiltinTemplate.monorepo) {
       const selected = await promptPackageNameAndTargetDir(
-        'vite-plus-monorepo',
+        getRandomProjectName({ fallbackName: 'vite-plus-monorepo' }),
         options.interactive,
       );
       packageName = selected.packageName;
       targetDir = selected.targetDir;
     } else {
-      let defaultPackageName = `vite-plus-${selectedTemplateName.split(':')[1]}`;
-      if (workspaceInfoOptional.monorepoScope) {
-        defaultPackageName = `${workspaceInfoOptional.monorepoScope}/${defaultPackageName}`;
-      }
+      const defaultPackageName = getRandomProjectName({
+        scope: workspaceInfoOptional.monorepoScope,
+        fallbackName: `vite-plus-${selectedTemplateName.split(':')[1]}`,
+      });
       const selected = await promptPackageNameAndTargetDir(defaultPackageName, options.interactive);
       packageName = selected.packageName;
       targetDir = selectedParentDir
@@ -447,10 +448,10 @@ Use \`vp new --list\` to list all available templates, or run \`vp new --help\` 
   if (templateInfo.type === TemplateType.builtin) {
     // prompt for package name if not provided
     if (!targetDir) {
-      let defaultPackageName = `vite-plus-${templateInfo.command.split(':')[1]}`;
-      if (workspaceInfo.monorepoScope) {
-        defaultPackageName = `${workspaceInfo.monorepoScope}/${defaultPackageName}`;
-      }
+      const defaultPackageName = getRandomProjectName({
+        scope: workspaceInfo.monorepoScope,
+        fallbackName: `vite-plus-${templateInfo.command.split(':')[1]}`,
+      });
       const selected = await promptPackageNameAndTargetDir(defaultPackageName, options.interactive);
       packageName = selected.packageName;
       targetDir = templateInfo.parentDir

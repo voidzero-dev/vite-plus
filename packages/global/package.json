@@ -31,6 +31,7 @@
   "devDependencies": {
     "@clack/prompts": "catalog:",
     "@napi-rs/cli": "catalog:",
+    "@nkzw/safe-word-list": "catalog:",
     "@oxc-node/core": "catalog:",
     "@types/cross-spawn": "catalog:",
     "@types/semver": "catalog:",
