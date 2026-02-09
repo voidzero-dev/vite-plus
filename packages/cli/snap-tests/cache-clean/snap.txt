@@ -1,5 +1,5 @@
 > vite run hello # create the cache for 'echo hello'
-$ vite fmt
+$ vp fmt
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -11,12 +11,12 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello: $ vite fmt ✓
+  [1] hello: $ vp fmt ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite run hello # hit the cache
-$ vite fmt ✓ cache hit, replaying
+$ vp fmt ✓ cache hit, replaying
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -28,13 +28,13 @@ Performance:  100% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello: $ vite fmt ✓
+  [1] hello: $ vp fmt ✓
       → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > vite cache clean # clean the cache
 > vite run hello # cache miss after clean
-$ vite fmt
+$ vp fmt
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -46,13 +46,13 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello: $ vite fmt ✓
+  [1] hello: $ vp fmt ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > cd subfolder && vite cache clean # cache can be located and cleaned from subfolder
 > vite run hello # cache miss after clean
-$ vite fmt
+$ vp fmt
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -64,6 +64,6 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] hello: $ vite fmt ✓
+  [1] hello: $ vp fmt ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

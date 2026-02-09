@@ -1,44 +1,51 @@
-use std::{
-    collections::HashMap, convert::Infallible, ffi::OsStr, hint::black_box, path::PathBuf,
-    sync::Arc,
-};
+use std::{collections::HashMap, ffi::OsStr, hint::black_box, path::PathBuf, sync::Arc};
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use tokio::runtime::Runtime;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_task::{Session, SessionCallbacks, plan_request::SyntheticPlanRequest};
+use vite_task::{
+    CommandHandler, HandledCommand, Session, SessionCallbacks, plan_request::ScriptCommand,
+};
 
-/// A no-op task synthesizer for benchmarking purposes.
+/// A no-op command handler for benchmarking purposes.
 #[derive(Debug, Default)]
-struct NoOpTaskSynthesizer;
+struct NoOpCommandHandler;
 
 #[async_trait::async_trait(?Send)]
-impl vite_task::TaskSynthesizer<Infallible> for NoOpTaskSynthesizer {
-    fn should_synthesize_for_program(&self, _program: &str) -> bool {
-        false
-    }
-
-    async fn synthesize_task(
+impl CommandHandler for NoOpCommandHandler {
+    async fn handle_command(
         &mut self,
-        subcommand: Infallible,
-        _envs: &Arc<HashMap<Arc<OsStr>, Arc<OsStr>>>,
-        _cwd: &Arc<AbsolutePath>,
-    ) -> anyhow::Result<SyntheticPlanRequest> {
-        match subcommand {}
+        _command: &mut ScriptCommand,
+    ) -> anyhow::Result<HandledCommand> {
+        Ok(HandledCommand::Verbatim)
+    }
+}
+
+/// A no-op user config loader for benchmarking.
+#[derive(Debug, Default)]
+struct NoOpUserConfigLoader;
+
+#[async_trait::async_trait(?Send)]
+impl vite_task::loader::UserConfigLoader for NoOpUserConfigLoader {
+    async fn load_user_config_file(
+        &self,
+        _package_path: &AbsolutePath,
+    ) -> anyhow::Result<Option<vite_task::config::UserRunConfig>> {
+        Ok(None)
     }
 }
 
 /// Owned session callbacks for benchmarking.
 #[derive(Default)]
 struct BenchSessionCallbacks {
-    task_synthesizer: NoOpTaskSynthesizer,
-    user_config_loader: vite_task::loader::JsonUserConfigLoader,
+    command_handler: NoOpCommandHandler,
+    user_config_loader: NoOpUserConfigLoader,
 }
 
 impl BenchSessionCallbacks {
-    fn as_callbacks(&mut self) -> SessionCallbacks<'_, Infallible> {
+    fn as_callbacks(&mut self) -> SessionCallbacks<'_> {
         SessionCallbacks {
-            task_synthesizer: &mut self.task_synthesizer,
+            command_handler: &mut self.command_handler,
             user_config_loader: &mut self.user_config_loader,
         }
     }

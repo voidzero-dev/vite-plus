@@ -1,0 +1,7 @@
+{
+  "name": "vp-run-expansion-test",
+  "private": true,
+  "scripts": {
+    "hello": "vp run greet"
+  }
+}

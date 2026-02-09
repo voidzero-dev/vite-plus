@@ -20,6 +20,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }
+vite_command = { workspace = true }
 vite_error = { workspace = true }
 vite_install = { workspace = true }
 vite_path = { workspace = true }
@@ -27,6 +28,7 @@ vite_shared = { workspace = true }
 vite_str = { workspace = true }
 vite_task = { workspace = true }
 vite_workspace = { workspace = true }
+which = { workspace = true }
 
 rolldown_binding = { workspace = true, optional = true }
 
