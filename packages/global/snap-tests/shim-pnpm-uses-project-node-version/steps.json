@@ -1,0 +1,7 @@
+{
+  "env": {},
+  "commands": [
+    "vp env exec node -v # Node version resolved from .node-version",
+    "vp env exec pnpm exec node -v # pnpm should use same project Node version"
+  ]
+}

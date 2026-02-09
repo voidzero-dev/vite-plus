@@ -1,0 +1,5 @@
+> vp env exec node -v # Node version resolved from .node-version
+v22.12.0
+
+> vp env exec pnpm exec node -v # pnpm should use same project Node version
+v22.12.0
