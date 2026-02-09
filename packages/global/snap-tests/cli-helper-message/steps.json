@@ -14,6 +14,6 @@
     "vp info -h # show info help message",
     "vp pm -h # show pm help message",
     "vp env # show env help message",
-    "vp self-update -h # show self-update help message"
+    "vp upgrade -h # show upgrade help message"
   ]
 }

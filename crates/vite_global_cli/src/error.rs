@@ -52,8 +52,8 @@ pub enum Error {
     )]
     BinaryConflict { bin_name: String, existing_package: String, new_package: String },
 
-    #[error("Self-update error: {0}")]
-    SelfUpdate(Str),
+    #[error("Upgrade error: {0}")]
+    Upgrade(Str),
 
     #[error("Integrity mismatch: expected {expected}, got {actual}")]
     IntegrityMismatch { expected: Str, actual: Str },

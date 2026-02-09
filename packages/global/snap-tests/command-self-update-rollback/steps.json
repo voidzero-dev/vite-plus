@@ -1,4 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": ["vp self-update --rollback # should fail with no previous version"]
-}

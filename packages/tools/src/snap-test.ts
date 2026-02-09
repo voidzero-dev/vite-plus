@@ -87,7 +87,7 @@ export async function snapTest() {
 
   const vitePlusHome = path.join(homedir(), '.vite-plus');
 
-  // Remove .previous-version so command-self-update-rollback snap test is stable
+  // Remove .previous-version so command-upgrade-rollback snap test is stable
   const previousVersionPath = path.join(vitePlusHome, '.previous-version');
   if (fs.existsSync(previousVersionPath)) {
     fs.rmSync(previousVersionPath);

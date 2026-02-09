@@ -58,7 +58,7 @@ pub async fn resolve_version(
     tracing::debug!("Fetching main package metadata: {}", main_url);
 
     let main_meta: PackageVersionMetadata = client.get_json(&main_url).await.map_err(|e| {
-        Error::SelfUpdate(format!("Failed to fetch package metadata from {main_url}: {e}").into())
+        Error::Upgrade(format!("Failed to fetch package metadata from {main_url}: {e}").into())
     })?;
 
     // Step 2: Determine platform package name from optionalDependencies
@@ -66,7 +66,7 @@ pub async fn resolve_version(
         format!("{PLATFORM_PACKAGE_SCOPE}/{MAIN_PACKAGE_NAME}-{platform_suffix}");
 
     if !main_meta.optional_dependencies.contains_key(&platform_package_name) {
-        return Err(Error::SelfUpdate(
+        return Err(Error::Upgrade(
             format!(
                 "Platform package '{platform_package_name}' not found in optionalDependencies of {MAIN_PACKAGE_NAME}@{}. \
                  Your platform ({platform_suffix}) may not be supported.",
@@ -82,7 +82,7 @@ pub async fn resolve_version(
 
     let platform_meta: PackageVersionMetadata =
         client.get_json(&platform_url).await.map_err(|e| {
-            Error::SelfUpdate(
+            Error::Upgrade(
                 format!("Failed to fetch platform package metadata from {platform_url}: {e}")
                     .into(),
             )

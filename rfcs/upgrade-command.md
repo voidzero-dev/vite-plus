@@ -8,7 +8,7 @@ Draft
 
 Vite+ is distributed as a standalone Rust binary via bash installation (`curl -fsSL https://viteplus.dev/install.sh | bash`). Currently, users must re-run the full install script to update to a new version. This is friction-heavy and unfamiliar to users who expect a built-in update mechanism (like `rustup update`, `volta fetch`, or `brew upgrade`).
 
-A native `vp self-update` command would allow users to update the CLI in-place with a single command, improving the upgrade experience significantly.
+A native `vp upgrade` command would allow users to update the CLI in-place with a single command, improving the upgrade experience significantly.
 
 ### Current Installation Structure
 
@@ -35,7 +35,7 @@ Key invariant: `~/.vite-plus/bin/vp` is a symlink to `../current/bin/vp` (Unix) 
 
 ## Goals
 
-1. Provide a fast, reliable `vp self-update` command that upgrades the CLI to the latest (or specified) version
+1. Provide a fast, reliable `vp upgrade` command that upgrades the CLI to the latest (or specified) version
 2. Reuse the same npm-based distribution channel (no new infrastructure)
 3. Support atomic upgrades with automatic rollback on failure
 4. Keep the last 5 versions for manual rollback
@@ -55,7 +55,7 @@ Key invariant: `~/.vite-plus/bin/vp` is a symlink to `../current/bin/vp` (Unix) 
 A developer sees that a new version of Vite+ is available and wants to update.
 
 ```bash
-$ vp self-update
+$ vp upgrade
 info: checking for updates...
 info: found vite-plus-cli@0.2.0 (current: 0.1.0)
 info: downloading vite-plus-cli@0.2.0 for darwin-arm64...
@@ -69,7 +69,7 @@ info: installing...
 ### Story 2: Already Up to Date
 
 ```bash
-$ vp self-update
+$ vp upgrade
 info: checking for updates...
 
 ✔ Already up to date (0.2.0)
@@ -78,7 +78,7 @@ info: checking for updates...
 ### Story 3: Update to a Specific Version
 
 ```bash
-$ vp self-update 0.1.5
+$ vp upgrade 0.1.5
 info: checking for updates...
 info: found vite-plus-cli@0.1.5 (current: 0.2.0)
 info: downloading vite-plus-cli@0.1.5 for darwin-arm64...
@@ -90,7 +90,7 @@ info: installing...
 ### Story 4: Install a Test Channel Build
 
 ```bash
-$ vp self-update --tag test
+$ vp upgrade --tag test
 info: checking for updates...
 info: found vite-plus-cli@0.3.0-beta.1 (current: 0.2.0)
 info: downloading vite-plus-cli@0.3.0-beta.1 for darwin-arm64...
@@ -102,7 +102,7 @@ info: installing...
 ### Story 5: Rollback to Previous Version
 
 ```bash
-$ vp self-update --rollback
+$ vp upgrade --rollback
 info: rolling back to previous version...
 info: switching from 0.2.0 → 0.1.0
 
@@ -112,17 +112,17 @@ info: switching from 0.2.0 → 0.1.0
 ### Story 6: Check for Updates Without Installing
 
 ```bash
-$ vp self-update --check
+$ vp upgrade --check
 info: checking for updates...
 Update available: 0.2.0 → 0.3.0
-Run `vp self-update` to update.
+Run `vp upgrade` to update.
 ```
 
 ### Story 7: CI Environment — Non-interactive
 
 ```bash
 # In CI, just update silently
-$ vp self-update --silent
+$ vp upgrade --silent
 ```
 
 ## Technical Design
@@ -130,7 +130,7 @@ $ vp self-update --silent
 ### Command Interface
 
 ```
-vp self-update [VERSION] [OPTIONS]
+vp upgrade [VERSION] [OPTIONS]
 vp upgrade [VERSION] [OPTIONS]       # alias
 
 Arguments:
@@ -147,11 +147,11 @@ Options:
 
 ### Architecture
 
-The self-update command is implemented entirely in Rust within the `vite_global_cli` crate, mirroring the logic of `install.sh` but running as a native subprocess workflow.
+The upgrade command is implemented entirely in Rust within the `vite_global_cli` crate, mirroring the logic of `install.sh` but running as a native subprocess workflow.
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                vp self-update                   │
+│                vp upgrade                   │
 ├─────────────────────────────────────────────────┤
 │  1. Resolve version (npm registry query)        │
 │  2. Check if already installed                  │
@@ -295,7 +295,7 @@ Key differences on Windows:
 - **Junctions** (`mklink /J`) are used instead of symlinks — junctions don't require admin privileges
 - Junctions only work for directories (which `current` is), and use absolute paths internally
 - The swap is **not atomic** — there's a brief window (~milliseconds) where `current` doesn't exist
-- `bin/vp` is a `.cmd` wrapper (not a symlink), so it doesn't need updating during self-update
+- `bin/vp` is a `.cmd` wrapper (not a symlink), so it doesn't need updating during upgrade
 - This matches the existing `install.ps1` behavior exactly
 
 #### Step 6: Post-Update (Non-Fatal)
@@ -358,15 +358,15 @@ Key principle: **The `current` symlink is only swapped after all pre-swap steps 
 crates/vite_global_cli/
 ├── src/
 │   ├── commands/
-│   │   ├── self_update/
+│   │   ├── upgrade/
 │   │   │   ├── mod.rs        # Module root, public execute() function
 │   │   │   ├── registry.rs   # npm registry client (version resolution, tarball URLs)
 │   │   │   ├── platform.rs   # Platform detection (os, arch, libc)
 │   │   │   ├── download.rs   # HTTP download + tarball extraction
 │   │   │   └── install.rs    # Extract, dependency install, symlink swap, cleanup
-│   │   ├── mod.rs            # Add self_update module
+│   │   ├── mod.rs            # Add upgrade module
 │   │   └── ...
-│   └── cli.rs                # Add SelfUpdate command variant
+│   └── cli.rs                # Add Upgrade command variant
 ```
 
 ### Platform Detection
@@ -414,12 +414,12 @@ async fn resolve_version(registry: &str, version_or_tag: &str) -> Result<Package
 
 ### CLI Integration
 
-Add `SelfUpdate` to the `Commands` enum in `cli.rs`:
+Add `Upgrade` to the `Commands` enum in `cli.rs`:
 
 ```rust
 /// Update vp itself to the latest version
-#[command(name = "self-update", visible_alias = "upgrade")]
-SelfUpdate {
+#[command(name = "upgrade", visible_alias = "upgrade")]
+Upgrade {
     /// Target version (default: latest)
     version: Option<String>,
 
@@ -451,9 +451,9 @@ SelfUpdate {
 
 ## Design Decisions
 
-### 1. Command Name: `self-update`
+### 1. Command Name: `upgrade`
 
-**Decision**: Use `vp self-update` (with hyphen).
+**Decision**: Use `vp upgrade` (with hyphen).
 
 **Alternatives considered**:
 
@@ -462,10 +462,10 @@ SelfUpdate {
 
 **Rationale**:
 
-- Matches pnpm (`pnpm self-update`) and mise (`mise self-update`) conventions
+- Matches pnpm (`pnpm upgrade`) and mise (`mise upgrade`) conventions
 - Zero ambiguity with `vp update` (which updates npm packages)
 - The hyphen is consistent with `list-remote` in `vp env`
-- Tools without self-update (fnm, volta, nvm) require re-running install scripts — worse UX
+- Tools without upgrade (fnm, volta, nvm) require re-running install scripts — worse UX
 - `upgrade` is registered as a visible alias, so `vp upgrade` also works (matches Deno/Bun/proto users' expectations)
 
 ### 2. Pure Rust Implementation (No Shell Script Re-execution)
@@ -518,8 +518,8 @@ SelfUpdate {
 
 **Scope:**
 
-- `vp self-update` — downloads and installs the latest version
-- `vp self-update <version>` — installs a specific version
+- `vp upgrade` — downloads and installs the latest version
+- `vp upgrade <version>` — installs a specific version
 - `--tag`, `--force`, `--silent` flags
 - Platform detection, npm registry query, download, extract, symlink swap
 - Version cleanup (keep 5)
@@ -527,18 +527,18 @@ SelfUpdate {
 
 **Files to create/modify:**
 
-- `crates/vite_global_cli/src/commands/self_update/mod.rs` (new)
-- `crates/vite_global_cli/src/commands/self_update/registry.rs` (new)
-- `crates/vite_global_cli/src/commands/self_update/platform.rs` (new)
-- `crates/vite_global_cli/src/commands/self_update/download.rs` (new)
-- `crates/vite_global_cli/src/commands/self_update/install.rs` (new)
+- `crates/vite_global_cli/src/commands/upgrade/mod.rs` (new)
+- `crates/vite_global_cli/src/commands/upgrade/registry.rs` (new)
+- `crates/vite_global_cli/src/commands/upgrade/platform.rs` (new)
+- `crates/vite_global_cli/src/commands/upgrade/download.rs` (new)
+- `crates/vite_global_cli/src/commands/upgrade/install.rs` (new)
 - `crates/vite_global_cli/src/commands/mod.rs` (add module)
 - `crates/vite_global_cli/src/cli.rs` (add command variant + routing)
 
 **Success Criteria:**
 
-- [ ] `vp self-update` downloads and installs the latest version
-- [ ] `vp self-update 0.x.y` installs a specific version
+- [ ] `vp upgrade` downloads and installs the latest version
+- [ ] `vp upgrade 0.x.y` installs a specific version
 - [ ] Downloaded tarballs are verified against npm registry `integrity` (SHA-512)
 - [ ] Running binary is not affected during update
 - [ ] Failed update leaves the current installation untouched
@@ -554,8 +554,8 @@ SelfUpdate {
 
 **Success Criteria:**
 
-- [ ] `vp self-update --rollback` reverts to previous version
-- [ ] `vp self-update --check` shows available update without installing
+- [ ] `vp upgrade --rollback` reverts to previous version
+- [ ] `vp upgrade --check` shows available update without installing
 
 ### Phase 2 (P2): Enhanced UX
 
@@ -589,11 +589,11 @@ SelfUpdate {
 ### Snap Tests
 
 ```bash
-# Test: self-update check (mock registry response)
-pnpm -F vite-plus-cli snap-test self-update-check
+# Test: upgrade check (mock registry response)
+pnpm -F vite-plus-cli snap-test upgrade-check
 
-# Test: self-update to specific version
-pnpm -F vite-plus-cli snap-test self-update-version
+# Test: upgrade to specific version
+pnpm -F vite-plus-cli snap-test upgrade-version
 ```
 
 ### Manual Testing
@@ -602,14 +602,14 @@ pnpm -F vite-plus-cli snap-test self-update-version
 # Build and install current version
 pnpm bootstrap-cli
 
-# Run self-update to latest published version
-vp self-update
+# Run upgrade to latest published version
+vp upgrade
 
 # Verify version changed
 vp -V
 
 # Test rollback
-vp self-update --rollback
+vp upgrade --rollback
 vp -V
 ```
 

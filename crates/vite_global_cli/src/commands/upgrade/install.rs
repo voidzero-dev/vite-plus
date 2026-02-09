@@ -1,4 +1,4 @@
-//! Installation logic for self-update.
+//! Installation logic for upgrade.
 //!
 //! Handles tarball extraction, dependency installation, symlink swapping,
 //! and version cleanup.
@@ -92,7 +92,7 @@ pub async fn extract_platform_package(
         Ok::<(), Error>(())
     })
     .await
-    .map_err(|e| Error::SelfUpdate(format!("Task join error: {e}").into()))??;
+    .map_err(|e| Error::Upgrade(format!("Task join error: {e}").into()))??;
 
     Ok(())
 }
@@ -159,7 +159,7 @@ pub async fn extract_main_package(
         Ok::<(), Error>(())
     })
     .await
-    .map_err(|e| Error::SelfUpdate(format!("Task join error: {e}").into()))??;
+    .map_err(|e| Error::Upgrade(format!("Task join error: {e}").into()))??;
 
     Ok(())
 }
@@ -193,7 +193,7 @@ pub async fn install_production_deps(version_dir: &AbsolutePath) -> Result<(), E
     let vp_binary = version_dir.join("bin").join(if cfg!(windows) { "vp.exe" } else { "vp" });
 
     if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
-        return Err(Error::SelfUpdate(
+        return Err(Error::Upgrade(
             format!("New binary not found at {}", vp_binary.as_path().display()).into(),
         ));
     }
@@ -209,7 +209,7 @@ pub async fn install_production_deps(version_dir: &AbsolutePath) -> Result<(), E
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(Error::SelfUpdate(
+        return Err(Error::Upgrade(
             format!(
                 "Failed to install production dependencies (exit code: {})\n{}",
                 output.status.code().unwrap_or(-1),
@@ -254,7 +254,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
 
     // Verify the version directory exists
     if !tokio::fs::try_exists(&version_dir).await.unwrap_or(false) {
-        return Err(Error::SelfUpdate(
+        return Err(Error::Upgrade(
             format!("Version directory does not exist: {}", version_dir.as_path().display()).into(),
         ));
     }
@@ -282,7 +282,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
             if let Err(e) = std::fs::remove_dir(&current_link) {
                 tracing::debug!("remove_dir failed ({}), trying junction::delete", e);
                 junction::delete(&current_link).map_err(|e| {
-                    Error::SelfUpdate(
+                    Error::Upgrade(
                         format!(
                             "Failed to remove existing junction at {}: {e}",
                             current_link.as_path().display()
@@ -294,7 +294,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
         }
 
         junction::create(&version_dir, &current_link).map_err(|e| {
-            Error::SelfUpdate(
+            Error::Upgrade(
                 format!(
                     "Failed to create junction at {}: {e}\nTry removing it manually and run again.",
                     current_link.as_path().display()
@@ -365,9 +365,7 @@ pub async fn cleanup_old_versions(
                 metadata.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH)
             });
             let path = AbsolutePathBuf::new(entry.path()).ok_or_else(|| {
-                Error::SelfUpdate(
-                    format!("Invalid absolute path: {}", entry.path().display()).into(),
-                )
+                Error::Upgrade(format!("Invalid absolute path: {}", entry.path().display()).into())
             })?;
             versions.push((time, path));
         }
@@ -496,7 +494,7 @@ mod tests {
         // Verifies that cleanup_old_versions propagates errors on non-existent dir.
         // In the real flow, such errors from post-swap operations should be non-fatal.
         let non_existent =
-            AbsolutePathBuf::new(std::env::temp_dir().join("non-existent-self-update-test-dir"))
+            AbsolutePathBuf::new(std::env::temp_dir().join("non-existent-upgrade-test-dir"))
                 .unwrap();
         let result = cleanup_old_versions(&non_existent, 5, &[]).await;
         assert!(result.is_err(), "cleanup_old_versions should error on non-existent dir");

@@ -1,4 +1,4 @@
-//! Self-update command for the vp CLI.
+//! Upgrade command for the vp CLI.
 //!
 //! Downloads and installs a new version of the CLI from the npm registry
 //! with SHA-512 integrity verification.
@@ -16,8 +16,8 @@ use vite_path::AbsolutePathBuf;
 
 use crate::{commands::env::config::get_vite_plus_home, error::Error};
 
-/// Options for the self-update command.
-pub struct SelfUpdateOptions {
+/// Options for the upgrade command.
+pub struct UpgradeOptions {
     /// Target version (e.g., "0.2.0"). None means use the tag.
     pub version: Option<String>,
     /// npm dist-tag (default: "latest")
@@ -37,9 +37,9 @@ pub struct SelfUpdateOptions {
 /// Maximum number of old versions to keep.
 const MAX_VERSIONS_KEEP: usize = 5;
 
-/// Execute the self-update command.
+/// Execute the upgrade command.
 #[allow(clippy::print_stdout, clippy::print_stderr)]
-pub async fn execute(options: SelfUpdateOptions) -> Result<ExitStatus, Error> {
+pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     let install_dir = get_vite_plus_home()?;
 
     // Handle --rollback
@@ -75,7 +75,7 @@ pub async fn execute(options: SelfUpdateOptions) -> Result<ExitStatus, Error> {
             println!("\n{} Already up to date ({})", "\u{2714}".green(), current_version);
         } else {
             println!("Update available: {} \u{2192} {}", current_version, resolved.version);
-            println!("Run `vp self-update` to update.");
+            println!("Run `vp upgrade` to update.");
         }
         return Ok(ExitStatus::default());
     }
@@ -101,13 +101,14 @@ pub async fn execute(options: SelfUpdateOptions) -> Result<ExitStatus, Error> {
     let (platform_data, main_data) = tokio::try_join!(
         async {
             client.get_bytes(&resolved.platform_tarball_url).await.map_err(|e| {
-                Error::SelfUpdate(format!("Failed to download platform package: {e}").into())
+                Error::Upgrade(format!("Failed to download platform package: {e}").into())
             })
         },
         async {
-            client.get_bytes(&resolved.main_tarball_url).await.map_err(|e| {
-                Error::SelfUpdate(format!("Failed to download main package: {e}").into())
-            })
+            client
+                .get_bytes(&resolved.main_tarball_url)
+                .await
+                .map_err(|e| Error::Upgrade(format!("Failed to download main package: {e}").into()))
         },
     )?;
 
@@ -165,13 +166,13 @@ async fn install_platform_and_main(
     let binary_name = if cfg!(windows) { "vp.exe" } else { "vp" };
     let binary_path = version_dir.join("bin").join(binary_name);
     if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-        return Err(Error::SelfUpdate(
+        return Err(Error::Upgrade(
             "Binary not found after extraction. The download may be corrupted.".into(),
         ));
     }
     let package_json_path = version_dir.join("package.json");
     if !tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
-        return Err(Error::SelfUpdate(
+        return Err(Error::Upgrade(
             "package.json not found after extraction. The download may be corrupted.".into(),
         ));
     }
@@ -227,12 +228,12 @@ async fn execute_rollback(
 ) -> Result<ExitStatus, Error> {
     let previous = install::read_previous_version(install_dir)
         .await?
-        .ok_or_else(|| Error::SelfUpdate("No previous version found. Cannot rollback.".into()))?;
+        .ok_or_else(|| Error::Upgrade("No previous version found. Cannot rollback.".into()))?;
 
     // Verify the version directory still exists
     let prev_dir = install_dir.join(&previous);
     if !tokio::fs::try_exists(&prev_dir).await.unwrap_or(false) {
-        return Err(Error::SelfUpdate(
+        return Err(Error::Upgrade(
             format!("Previous version directory ({}) no longer exists. Cannot rollback.", previous)
                 .into(),
         ));
