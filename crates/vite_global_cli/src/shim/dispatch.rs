@@ -24,6 +24,14 @@ use crate::commands::env::{
 /// directly using the current PATH (passthrough mode).
 const RECURSION_ENV_VAR: &str = "VITE_PLUS_TOOL_RECURSION";
 
+/// Package manager tools that should resolve Node.js version from the project context
+/// rather than using the install-time version.
+const PACKAGE_MANAGER_TOOLS: &[&str] = &["pnpm", "yarn"];
+
+fn is_package_manager_tool(tool: &str) -> bool {
+    PACKAGE_MANAGER_TOOLS.contains(&tool)
+}
+
 /// Main shim dispatch entry point.
 ///
 /// Called when the binary is invoked as node, npm, npx, or a package binary.
@@ -156,11 +164,31 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
         }
     };
 
-    // Get the Node.js version that was used to install this package
-    let node_version = &package_metadata.platform.node;
+    // Determine Node.js version to use:
+    // - Package managers (pnpm, yarn): resolve from project context so they respect
+    //   the project's engines.node / .node-version, falling back to install-time version
+    // - Other package binaries: use the install-time version (original behavior)
+    let node_version = if is_package_manager_tool(tool) {
+        let cwd = match current_dir() {
+            Ok(path) => path,
+            Err(e) => {
+                eprintln!("vp: Failed to get current directory: {e}");
+                return 1;
+            }
+        };
+        match resolve_with_cache(&cwd).await {
+            Ok(resolution) => resolution.version,
+            Err(_) => {
+                // Fall back to install-time version if project resolution fails
+                package_metadata.platform.node.clone()
+            }
+        }
+    } else {
+        package_metadata.platform.node.clone()
+    };
 
     // Ensure Node.js is installed
-    if let Err(e) = ensure_installed(node_version).await {
+    if let Err(e) = ensure_installed(&node_version).await {
         eprintln!("vp: Failed to install Node {}: {e}", node_version);
         return 1;
     }
@@ -175,7 +203,7 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
     };
 
     // Locate node binary for this version
-    let node_path = match locate_tool(node_version, "node") {
+    let node_path = match locate_tool(&node_version, "node") {
         Ok(p) => p,
         Err(e) => {
             eprintln!("vp: Node not found: {e}");
