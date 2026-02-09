@@ -1,0 +1,4 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": ["vp upgrade --check # check for updates without installing"]
+}

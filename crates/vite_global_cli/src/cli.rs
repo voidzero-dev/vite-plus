@@ -593,8 +593,8 @@ pub enum Commands {
     // Self-Management
     // =========================================================================
     /// Update vp itself to the latest version
-    #[command(name = "self-update", visible_alias = "upgrade")]
-    SelfUpdate {
+    #[command(name = "upgrade")]
+    Upgrade {
         /// Target version (e.g., "0.2.0"). Defaults to latest.
         version: Option<String>,
 
@@ -1548,8 +1548,8 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
         Commands::Env(args) => commands::env::execute(cwd, args).await,
 
         // Self-Management
-        Commands::SelfUpdate { version, tag, check, rollback, force, silent, registry } => {
-            commands::self_update::execute(commands::self_update::SelfUpdateOptions {
+        Commands::Upgrade { version, tag, check, rollback, force, silent, registry } => {
+            commands::upgrade::execute(commands::upgrade::UpgradeOptions {
                 version,
                 tag,
                 check,
@@ -1619,7 +1619,7 @@ fn apply_custom_help(cmd: clap::Command) -> clap::Command {
   {bold}why, explain{reset}                   Show why a package is installed
 
 {bold_underline}Maintenance Commands:{reset}
-  {bold}self-update, upgrade{reset}           Update vp itself to the latest version
+  {bold}upgrade{reset}                        Update vp itself to the latest version
 "
     );
     let help_template = format!(

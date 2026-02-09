@@ -32,7 +32,7 @@ Package Manager Commands:
   why, explain                   Show why a package is installed
 
 Maintenance Commands:
-  self-update, upgrade           Update vp itself to the latest version
+  upgrade                        Update vp itself to the latest version
 
 Options:
   -V, --version  Print version
@@ -340,10 +340,10 @@ Global Packages:
   vp update -g [package]        # Update global package(s)
   vp list -g [package]          # List installed global packages
 
-> vp self-update -h # show self-update help message
+> vp upgrade -h # show upgrade help message
 Update vp itself to the latest version
 
-Usage: vp self-update [OPTIONS] [VERSION]
+Usage: vp upgrade [OPTIONS] [VERSION]
 
 Arguments:
   [VERSION]  Target version (e.g., "0.2.0"). Defaults to latest

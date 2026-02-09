@@ -361,8 +361,8 @@ jobs:
           RUST_BACKTRACE=1 pnpm test
           git diff --exit-code
 
-      # Self-update tests (merged from separate job to avoid duplicate build)
-      - name: Test self-update (bash)
+      # Upgrade tests (merged from separate job to avoid duplicate build)
+      - name: Test upgrade (bash)
         shell: bash
         run: |
           # Helper to read the installed CLI version from package.json
@@ -375,12 +375,10 @@ jobs:
           echo "Initial version: $INITIAL_VERSION"
 
           # --check queries npm registry and prints update status
-          vp self-update --check
-          # upgrade alias should also work
           vp upgrade --check
 
-          # full self-update: download, extract, swap
-          vp self-update --tag test --force
+          # full upgrade: download, extract, swap
+          vp upgrade --tag test --force
           vp --version
           vp env doctor
 
@@ -390,12 +388,12 @@ jobs:
           UPDATED_VERSION=$(get_cli_version)
           echo "Updated version: $UPDATED_VERSION"
           if [ "$UPDATED_VERSION" == "$INITIAL_VERSION" ]; then
-            echo "Error: version should have changed after self-update (still $INITIAL_VERSION)"
+            echo "Error: version should have changed after upgrade (still $INITIAL_VERSION)"
             exit 1
           fi
 
           # rollback to the previous version
-          vp self-update --rollback
+          vp upgrade --rollback
           vp --version
           vp env doctor
 
@@ -407,7 +405,7 @@ jobs:
             exit 1
           fi
 
-      - name: Test self-update (powershell)
+      - name: Test upgrade (powershell)
         if: ${{ matrix.os == 'windows-latest' }}
         shell: pwsh
         run: |
@@ -423,12 +421,10 @@ jobs:
           Write-Host "Initial version: $initialVersion"
 
           # --check queries npm registry and prints update status
-          vp self-update --check
-          # upgrade alias should also work
           vp upgrade --check
 
-          # full self-update: download, extract, swap
-          vp self-update --tag test --force
+          # full upgrade: download, extract, swap
+          vp upgrade --tag test --force
           vp --version
           vp env doctor
 
@@ -438,12 +434,12 @@ jobs:
           $updatedVersion = Get-CliVersion
           Write-Host "Updated version: $updatedVersion"
           if ($updatedVersion -eq $initialVersion) {
-            Write-Error "Error: version should have changed after self-update (still $initialVersion)"
+            Write-Error "Error: version should have changed after upgrade (still $initialVersion)"
             exit 1
           }
 
           # rollback to the previous version
-          vp self-update --rollback
+          vp upgrade --rollback
           vp --version
           vp env doctor
 
@@ -455,7 +451,7 @@ jobs:
             exit 1
           }
 
-      - name: Test self-update (cmd)
+      - name: Test upgrade (cmd)
         if: ${{ matrix.os == 'windows-latest' }}
         shell: cmd
         run: |
@@ -464,12 +460,10 @@ jobs:
           echo Initial version: %INITIAL_VERSION%
 
           REM --check queries npm registry and prints update status
-          vp self-update --check
-          REM upgrade alias should also work
           vp upgrade --check
 
-          REM full self-update: download, extract, swap
-          vp self-update --tag test --force
+          REM full upgrade: download, extract, swap
+          vp upgrade --tag test --force
           vp --version
           vp env doctor
 
@@ -479,12 +473,12 @@ jobs:
           for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'package.json')).version"`) do set UPDATED_VERSION=%%v
           echo Updated version: %UPDATED_VERSION%
           if "%UPDATED_VERSION%"=="%INITIAL_VERSION%" (
-            echo Error: version should have changed after self-update, still %INITIAL_VERSION%
+            echo Error: version should have changed after upgrade, still %INITIAL_VERSION%
             exit /b 1
           )
 
           REM rollback to the previous version
-          vp self-update --rollback
+          vp upgrade --rollback
           vp --version
           vp env doctor
 

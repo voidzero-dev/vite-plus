@@ -103,14 +103,14 @@ jobs:
           which npx
           which vp
 
-      - name: Verify self-update
+      - name: Verify upgrade
         run: |
           # --check queries npm registry and prints update status
-          vp self-update --check
-          vp self-update 0.0.0-b356849c.20260207-0631
+          vp upgrade --check
+          vp upgrade 0.0.0-b356849c.20260207-0631
           vp --version
           # rollback to the previous version (should succeed after a real update)
-          vp self-update --rollback
+          vp upgrade --rollback
           vp --version
 
   test-install-sh-arm64:
@@ -165,11 +165,11 @@ jobs:
               export VITE_LOG=trace
               vp env run --node 24 -- node -p \"process.versions\"
 
-              # Verify self-update
-              vp self-update --check
-              vp self-update 0.0.0-b356849c.20260207-0631
+              # Verify upgrade
+              vp upgrade --check
+              vp upgrade 0.0.0-b356849c.20260207-0631
               vp --version
-              vp self-update --rollback
+              vp upgrade --rollback
               vp --version
 
               # FIXME: qemu: uncaught target signal 11 (Segmentation fault) - core dumped
@@ -197,15 +197,15 @@ jobs:
         run: |
           echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
 
-      - name: Verify self-update
+      - name: Verify upgrade
         shell: pwsh
         run: |
           # --check queries npm registry and prints update status
-          vp self-update --check
-          vp self-update 0.0.0-b356849c.20260207-0631
+          vp upgrade --check
+          vp upgrade 0.0.0-b356849c.20260207-0631
           vp --version
           # rollback to the previous version (should succeed after a real update)
-          vp self-update --rollback
+          vp upgrade --rollback
           vp --version
 
       - name: Verify installation on powershell

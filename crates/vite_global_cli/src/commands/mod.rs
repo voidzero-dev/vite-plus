@@ -140,7 +140,7 @@ pub mod version;
 pub mod env;
 
 // Self-Management
-pub mod self_update;
+pub mod upgrade;
 
 // Category C: Local CLI Delegation
 pub mod delegate;
