@@ -4,7 +4,7 @@
 //! constant. Using these constants instead of string literals ensures:
 //!
 //! - **Single source of truth** — each name defined once.
-//! - **Compile-time typo detection** — `env_vars::VITE_PLUS_BYPAS` won't compile.
+//! - **Compile-time typo detection** — a misspelled constant name won't compile.
 //! - **Easy discoverability** — grep this file to see all env vars.
 //!
 //! Standard system variables (`PATH`, `HOME`, `CI`, etc.) are intentionally
