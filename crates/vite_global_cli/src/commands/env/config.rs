@@ -147,7 +147,7 @@ pub async fn save_config(config: &Config) -> Result<(), Error> {
 
 /// Environment variable for per-shell session Node.js version override.
 /// Set by `vp env use` command.
-pub const VERSION_ENV_VAR: &str = "VITE_PLUS_NODE_VERSION";
+pub const VERSION_ENV_VAR: &str = vite_shared::env_vars::VITE_PLUS_NODE_VERSION;
 
 /// Session version file name, written by `vp env use` so shims work without the shell eval wrapper.
 pub const SESSION_VERSION_FILE: &str = ".session-node-version";

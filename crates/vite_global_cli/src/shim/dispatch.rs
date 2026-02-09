@@ -6,7 +6,7 @@
 //! 3. Tool execution (core tools and package binaries)
 
 use vite_path::{AbsolutePathBuf, current_dir};
-use vite_shared::{PrependOptions, prepend_to_path_env};
+use vite_shared::{PrependOptions, env_vars, prepend_to_path_env};
 
 use super::{
     cache::{self, ResolveCache, ResolveCacheEntry},
@@ -22,7 +22,7 @@ use crate::commands::env::{
 ///
 /// When set, the shim will skip version resolution and execute the tool
 /// directly using the current PATH (passthrough mode).
-const RECURSION_ENV_VAR: &str = "VITE_PLUS_TOOL_RECURSION";
+const RECURSION_ENV_VAR: &str = env_vars::VITE_PLUS_TOOL_RECURSION;
 
 /// Package manager tools that should resolve Node.js version from the project context
 /// rather than using the install-time version.
@@ -47,7 +47,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     }
 
     // Check bypass mode (explicit environment variable)
-    if std::env::var("VITE_PLUS_BYPASS").is_ok() {
+    if std::env::var(env_vars::VITE_PLUS_BYPASS).is_ok() {
         tracing::debug!("bypass mode enabled");
         return bypass_to_system(tool, args);
     }
@@ -62,7 +62,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
             // when multiple vite-plus installations exist in PATH.
             // The next installation will filter all accumulated paths.
             if let Ok(bin_dir) = config::get_bin_dir() {
-                let bypass_val = match std::env::var_os("VITE_PLUS_BYPASS") {
+                let bypass_val = match std::env::var_os(env_vars::VITE_PLUS_BYPASS) {
                     Some(existing) => {
                         let mut paths: Vec<_> = std::env::split_paths(&existing).collect();
                         paths.push(bin_dir.as_path().to_path_buf());
@@ -72,7 +72,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
                 };
                 // SAFETY: Setting env vars before exec (which replaces the process) is safe
                 unsafe {
-                    std::env::set_var("VITE_PLUS_BYPASS", bypass_val);
+                    std::env::set_var(env_vars::VITE_PLUS_BYPASS, bypass_val);
                 }
             }
             return exec::exec_tool(&system_path, args);
@@ -126,11 +126,11 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     prepend_to_path_env(node_bin_dir, PrependOptions::default());
 
     // Optional debug env vars
-    if std::env::var("VITE_PLUS_DEBUG_SHIM").is_ok() {
+    if std::env::var(env_vars::VITE_PLUS_DEBUG_SHIM).is_ok() {
         // SAFETY: Setting env vars at this point before exec is safe
         unsafe {
-            std::env::set_var("VITE_PLUS_ACTIVE_NODE", &resolution.version);
-            std::env::set_var("VITE_PLUS_RESOLVE_SOURCE", &resolution.source);
+            std::env::set_var(env_vars::VITE_PLUS_ACTIVE_NODE, &resolution.version);
+            std::env::set_var(env_vars::VITE_PLUS_RESOLVE_SOURCE, &resolution.source);
         }
     }
 
@@ -469,7 +469,7 @@ fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
 
     // Parse VITE_PLUS_BYPASS as a PATH-style list of additional directories to skip.
     // This prevents infinite loops when multiple vite-plus installations exist in PATH.
-    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os("VITE_PLUS_BYPASS")
+    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os(env_vars::VITE_PLUS_BYPASS)
         .map(|v| std::env::split_paths(&v).collect())
         .unwrap_or_default();
     tracing::debug!("bypass_paths: {:?}", bypass_paths);
@@ -528,7 +528,7 @@ mod tests {
         fn new() -> Self {
             Self {
                 original_path: std::env::var_os("PATH"),
-                original_bypass: std::env::var_os("VITE_PLUS_BYPASS"),
+                original_bypass: std::env::var_os(env_vars::VITE_PLUS_BYPASS),
             }
         }
     }
@@ -541,8 +541,8 @@ mod tests {
                     None => std::env::remove_var("PATH"),
                 }
                 match &self.original_bypass {
-                    Some(v) => std::env::set_var("VITE_PLUS_BYPASS", v),
-                    None => std::env::remove_var("VITE_PLUS_BYPASS"),
+                    Some(v) => std::env::set_var(env_vars::VITE_PLUS_BYPASS, v),
+                    None => std::env::remove_var(env_vars::VITE_PLUS_BYPASS),
                 }
             }
         }
@@ -560,7 +560,7 @@ mod tests {
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
             std::env::set_var("PATH", &dir);
-            std::env::remove_var("VITE_PLUS_BYPASS");
+            std::env::remove_var(env_vars::VITE_PLUS_BYPASS);
         }
 
         let result = find_system_tool("mytesttool");
@@ -585,7 +585,7 @@ mod tests {
         unsafe {
             std::env::set_var("PATH", &path);
             // Bypass dir_a — should skip it and find dir_b's tool
-            std::env::set_var("VITE_PLUS_BYPASS", dir_a.as_os_str());
+            std::env::set_var(env_vars::VITE_PLUS_BYPASS, dir_a.as_os_str());
         }
 
         let result = find_system_tool("mytesttool");
@@ -618,7 +618,7 @@ mod tests {
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
             std::env::set_var("PATH", &path);
-            std::env::set_var("VITE_PLUS_BYPASS", &bypass);
+            std::env::set_var(env_vars::VITE_PLUS_BYPASS, &bypass);
         }
 
         let result = find_system_tool("mytesttool");
@@ -641,7 +641,7 @@ mod tests {
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
             std::env::set_var("PATH", dir_a.as_os_str());
-            std::env::set_var("VITE_PLUS_BYPASS", dir_a.as_os_str());
+            std::env::set_var(env_vars::VITE_PLUS_BYPASS, dir_a.as_os_str());
         }
 
         let result = find_system_tool("mytesttool");
@@ -685,7 +685,7 @@ mod tests {
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
             std::env::set_var("PATH", &path);
-            std::env::set_var("VITE_PLUS_BYPASS", &bypass);
+            std::env::set_var(env_vars::VITE_PLUS_BYPASS, &bypass);
         }
 
         let result = find_system_tool("mytesttool");
@@ -717,7 +717,7 @@ mod tests {
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
             std::env::set_var("PATH", &path);
-            std::env::set_var("VITE_PLUS_BYPASS", &bypass);
+            std::env::set_var(env_vars::VITE_PLUS_BYPASS, &bypass);
         }
 
         let result = find_system_tool("mytesttool");

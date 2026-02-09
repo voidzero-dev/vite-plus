@@ -1,6 +1,7 @@
 //! Shared utilities for vite-plus crates
 
 mod env_config;
+pub mod env_vars;
 mod home;
 mod package_json;
 mod path_env;

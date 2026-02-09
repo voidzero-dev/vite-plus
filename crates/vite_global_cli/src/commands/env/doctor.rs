@@ -4,6 +4,7 @@ use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
 use vite_path::{AbsolutePathBuf, current_dir};
+use vite_shared::env_vars;
 
 use super::config::{
     self, ShimMode, get_bin_dir, get_vite_plus_home, load_config, resolve_version,
@@ -111,7 +112,7 @@ async fn check_vite_plus_home() -> bool {
         Err(e) => {
             print_check(
                 &"\u{2717}".red().to_string(),
-                "VITE_PLUS_HOME",
+                env_vars::VITE_PLUS_HOME,
                 &format!("{e}").red().to_string(),
             );
             return false;
@@ -121,12 +122,12 @@ async fn check_vite_plus_home() -> bool {
     let display = abbreviate_home(&home.as_path().display().to_string());
 
     if tokio::fs::try_exists(&home).await.unwrap_or(false) {
-        print_check(&"\u{2713}".green().to_string(), "VITE_PLUS_HOME", &display);
+        print_check(&"\u{2713}".green().to_string(), env_vars::VITE_PLUS_HOME, &display);
         true
     } else {
         print_check(
             &"\u{2717}".red().to_string(),
-            "VITE_PLUS_HOME",
+            env_vars::VITE_PLUS_HOME,
             &"does not exist".red().to_string(),
         );
         print_hint("Run 'vp env setup' to create it.");
@@ -278,7 +279,7 @@ fn find_system_node() -> Option<std::path::PathBuf> {
     let path_var = std::env::var_os("PATH")?;
 
     // Parse VITE_PLUS_BYPASS as a PATH-style list of additional directories to skip
-    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os("VITE_PLUS_BYPASS")
+    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os(env_vars::VITE_PLUS_BYPASS)
         .map(|v| std::env::split_paths(&v).collect())
         .unwrap_or_default();
 
@@ -309,7 +310,7 @@ fn check_session_override() {
             print_check(
                 &"\u{26A0}".yellow().to_string(),
                 "Session override",
-                &format!("VITE_PLUS_NODE_VERSION={version}").yellow().to_string(),
+                &format!("{}={version}", env_vars::VITE_PLUS_NODE_VERSION).yellow().to_string(),
             );
             print_hint("Overrides all file-based resolution.");
             print_hint("Run 'vp env use --unset' to remove.");
@@ -685,7 +686,7 @@ mod tests {
         fn new() -> Self {
             Self {
                 original_path: std::env::var_os("PATH"),
-                original_bypass: std::env::var_os("VITE_PLUS_BYPASS"),
+                original_bypass: std::env::var_os(env_vars::VITE_PLUS_BYPASS),
             }
         }
     }
@@ -698,8 +699,8 @@ mod tests {
                     None => std::env::remove_var("PATH"),
                 }
                 match &self.original_bypass {
-                    Some(v) => std::env::set_var("VITE_PLUS_BYPASS", v),
-                    None => std::env::remove_var("VITE_PLUS_BYPASS"),
+                    Some(v) => std::env::set_var(env_vars::VITE_PLUS_BYPASS, v),
+                    None => std::env::remove_var(env_vars::VITE_PLUS_BYPASS),
                 }
             }
         }
@@ -721,7 +722,7 @@ mod tests {
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
             std::env::set_var("PATH", &path);
-            std::env::set_var("VITE_PLUS_BYPASS", dir_a.as_os_str());
+            std::env::set_var(env_vars::VITE_PLUS_BYPASS, dir_a.as_os_str());
         }
 
         let result = find_system_node();
@@ -741,7 +742,7 @@ mod tests {
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
             std::env::set_var("PATH", dir_a.as_os_str());
-            std::env::set_var("VITE_PLUS_BYPASS", dir_a.as_os_str());
+            std::env::set_var(env_vars::VITE_PLUS_BYPASS, dir_a.as_os_str());
         }
 
         let result = find_system_node();

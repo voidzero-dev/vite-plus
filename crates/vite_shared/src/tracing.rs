@@ -7,6 +7,8 @@ use tracing_subscriber::{
     prelude::*,
 };
 
+use crate::env_vars;
+
 /// Initialize tracing with VITE_LOG environment variable.
 ///
 /// Uses `OnceLock` to ensure tracing is only initialized once,
@@ -19,7 +21,7 @@ pub fn init_tracing() {
     TRACING.get_or_init(|| {
         tracing_subscriber::registry()
             .with(
-                std::env::var("VITE_LOG")
+                std::env::var(env_vars::VITE_LOG)
                     .map_or_else(
                         |_| Targets::new(),
                         |env_var| {

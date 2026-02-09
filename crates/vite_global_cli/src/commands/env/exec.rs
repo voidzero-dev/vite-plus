@@ -10,7 +10,7 @@
 use std::process::ExitStatus;
 
 use vite_js_runtime::NodeProvider;
-use vite_shared::format_path_prepended;
+use vite_shared::{env_vars, format_path_prepended};
 
 use crate::{
     error::Error,
@@ -52,7 +52,7 @@ pub async fn execute(
         // SAFETY: This is safe because we're about to spawn a child process and we want
         // fresh version resolution, not passthrough behavior.
         unsafe {
-            std::env::remove_var("VITE_PLUS_TOOL_RECURSION");
+            std::env::remove_var(env_vars::VITE_PLUS_TOOL_RECURSION);
         }
 
         // Use the SAME shim dispatch as Unix symlinks - this ensures:
@@ -102,7 +102,7 @@ async fn execute_with_version(
     // to ensure the env var is not inherited. We're not reading this env var in other
     // threads at this point.
     unsafe {
-        std::env::remove_var("VITE_PLUS_TOOL_RECURSION");
+        std::env::remove_var(env_vars::VITE_PLUS_TOOL_RECURSION);
     }
 
     // 4. Build PATH with node bin dir first (uses platform-specific separator)

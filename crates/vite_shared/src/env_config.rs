@@ -35,6 +35,8 @@
 
 use std::{cell::RefCell, path::PathBuf, sync::OnceLock};
 
+use crate::env_vars;
+
 /// Global config initialized once in `main()`.
 static ENV_CONFIG: OnceLock<EnvConfig> = OnceLock::new();
 
@@ -128,19 +130,19 @@ impl EnvConfig {
     /// Called once in `main()` via `EnvConfig::init()`.
     pub fn from_env() -> Self {
         Self {
-            vite_plus_home: std::env::var("VITE_PLUS_HOME").ok().map(PathBuf::from),
-            npm_registry: std::env::var("npm_config_registry")
-                .or_else(|_| std::env::var("NPM_CONFIG_REGISTRY"))
+            vite_plus_home: std::env::var(env_vars::VITE_PLUS_HOME).ok().map(PathBuf::from),
+            npm_registry: std::env::var(env_vars::NPM_CONFIG_REGISTRY)
+                .or_else(|_| std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER))
                 .unwrap_or_else(|_| "https://registry.npmjs.org".into()),
-            node_dist_mirror: std::env::var("VITE_NODE_DIST_MIRROR").ok(),
+            node_dist_mirror: std::env::var(env_vars::VITE_NODE_DIST_MIRROR).ok(),
             is_ci: std::env::var("CI").is_ok(),
-            bypass_shim: std::env::var("VITE_PLUS_BYPASS").is_ok(),
-            debug_shim: std::env::var("VITE_PLUS_DEBUG_SHIM").is_ok(),
-            env_use_eval_enable: std::env::var("VITE_PLUS_ENV_USE_EVAL_ENABLE").is_ok(),
-            tool_recursion: std::env::var("VITE_PLUS_TOOL_RECURSION").ok(),
-            js_scripts_dir: std::env::var("VITE_GLOBAL_CLI_JS_SCRIPTS_DIR").ok(),
-            update_task_types: std::env::var("VITE_UPDATE_TASK_TYPES").ok(),
-            node_version: std::env::var("VITE_PLUS_NODE_VERSION").ok(),
+            bypass_shim: std::env::var(env_vars::VITE_PLUS_BYPASS).is_ok(),
+            debug_shim: std::env::var(env_vars::VITE_PLUS_DEBUG_SHIM).is_ok(),
+            env_use_eval_enable: std::env::var(env_vars::VITE_PLUS_ENV_USE_EVAL_ENABLE).is_ok(),
+            tool_recursion: std::env::var(env_vars::VITE_PLUS_TOOL_RECURSION).ok(),
+            js_scripts_dir: std::env::var(env_vars::VITE_GLOBAL_CLI_JS_SCRIPTS_DIR).ok(),
+            update_task_types: std::env::var(env_vars::VITE_UPDATE_TASK_TYPES).ok(),
+            node_version: std::env::var(env_vars::VITE_PLUS_NODE_VERSION).ok(),
             user_home: std::env::var("HOME")
                 .or_else(|_| std::env::var("USERPROFILE"))
                 .ok()

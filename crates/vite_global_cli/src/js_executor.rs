@@ -8,7 +8,7 @@ use std::process::ExitStatus;
 use tokio::process::Command;
 use vite_js_runtime::{JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_shared::{PrependOptions, PrependResult, format_path_with_prepend};
+use vite_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepend};
 
 use crate::error::Error;
 
@@ -50,7 +50,7 @@ impl JsExecutor {
         }
 
         // 2. Check environment variable
-        if let Ok(dir) = std::env::var("VITE_GLOBAL_CLI_JS_SCRIPTS_DIR") {
+        if let Ok(dir) = std::env::var(env_vars::VITE_GLOBAL_CLI_JS_SCRIPTS_DIR) {
             return AbsolutePathBuf::new(dir.into()).ok_or(Error::JsScriptsDirNotFound);
         }
 
@@ -90,7 +90,7 @@ impl JsExecutor {
         let mut cmd = Command::new(runtime_binary.as_path());
         if let Ok(bin_path) = Self::get_bin_path() {
             tracing::debug!("Set VITE_PLUS_CLI_BIN to {:?}", bin_path);
-            cmd.env("VITE_PLUS_CLI_BIN", bin_path.as_path());
+            cmd.env(env_vars::VITE_PLUS_CLI_BIN, bin_path.as_path());
         }
 
         // Prepend runtime bin to PATH so child processes can find the JS runtime

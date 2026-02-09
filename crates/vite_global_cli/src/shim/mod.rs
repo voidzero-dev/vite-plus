@@ -13,6 +13,7 @@ mod dispatch;
 mod exec;
 
 pub use dispatch::dispatch;
+use vite_shared::env_vars;
 
 /// Core shim tools (node, npm, npx)
 pub const CORE_SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
@@ -83,7 +84,7 @@ fn is_potential_package_binary(tool: &str) -> bool {
 }
 
 /// Environment variable used for shim tool detection via shell wrapper scripts.
-const SHIM_TOOL_ENV_VAR: &str = "VITE_PLUS_SHIM_TOOL";
+const SHIM_TOOL_ENV_VAR: &str = env_vars::VITE_PLUS_SHIM_TOOL;
 
 /// Detect the shim tool from environment and argv.
 ///
