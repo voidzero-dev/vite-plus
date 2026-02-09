@@ -24,6 +24,9 @@ catalogs:
     '@napi-rs/wasm-runtime':
       specifier: ^1.0.0
       version: 1.1.1
+    '@nkzw/safe-word-list':
+      specifier: ^3.1.0
+      version: 3.1.0
     '@oxc-node/cli':
       specifier: ^0.0.35
       version: 0.0.35
@@ -558,6 +561,9 @@ importers:
       '@napi-rs/cli':
         specifier: 'catalog:'
         version: 3.4.1(@emnapi/runtime@1.7.1)(@types/node@24.10.3)(node-addon-api@7.1.1)
+      '@nkzw/safe-word-list':
+        specifier: 'catalog:'
+        version: 3.1.0
       '@oxc-node/core':
         specifier: 'catalog:'
         version: 0.0.35
@@ -2910,6 +2916,9 @@ packages:
   '@napi-rs/wasm-tools@1.0.1':
     resolution: {integrity: sha512-enkZYyuCdo+9jneCPE/0fjIta4wWnvVN9hBo2HuiMpRF0q3lzv1J6b/cl7i0mxZUKhBrV3aCKDBQnCOhwKbPmQ==}
     engines: {node: '>= 10'}
+
+  '@nkzw/safe-word-list@3.1.0':
+    resolution: {integrity: sha512-yU6NAne/aU8n4BnYwlOu451PD/FH9AVKsOsQbITxAPYg4HEcBMv7v13woPOpxAS0lC87N2TOQdBZ7OjiK+5sIA==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -10372,6 +10381,8 @@ snapshots:
       '@napi-rs/wasm-tools-win32-arm64-msvc': 1.0.1
       '@napi-rs/wasm-tools-win32-ia32-msvc': 1.0.1
       '@napi-rs/wasm-tools-win32-x64-msvc': 1.0.1
+
+  '@nkzw/safe-word-list@3.1.0': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
