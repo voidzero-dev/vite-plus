@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { styleText } from 'node:util';
 
-import * as prompts from '@clack/prompts';
+import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import mri from 'mri';
 import colors from 'picocolors';
 import semver from 'semver';

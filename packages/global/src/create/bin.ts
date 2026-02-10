@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { styleText } from 'node:util';
 
-import * as prompts from '@clack/prompts';
+import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import mri from 'mri';
 
 import {
@@ -325,7 +325,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
         message: 'Where should the new package be added to the monorepo:',
         placeholder: 'e.g., packages/',
         validate: (value) => {
-          return formatTargetDir(value).error;
+          return value ? formatTargetDir(value).error : 'Target directory is required';
         },
       });
 

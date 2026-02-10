@@ -1,4 +1,4 @@
-import * as prompts from '@clack/prompts';
+import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import colors from 'picocolors';
 
 import type { WorkspaceInfo } from '../../types/index.js';
