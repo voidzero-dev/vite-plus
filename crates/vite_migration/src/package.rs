@@ -148,6 +148,14 @@ fix: vp pack
     #[test]
     fn test_rewrite_script() {
         let rules = ast_grep::load_rules(RULES_YAML).unwrap();
+        // vp commands should not be rewritten
+        assert_eq!(rewrite_script("vp dev", &rules), "vp dev");
+        assert_eq!(rewrite_script("vp build", &rules), "vp build");
+        assert_eq!(rewrite_script("vp test", &rules), "vp test");
+        assert_eq!(rewrite_script("vp lint", &rules), "vp lint");
+        assert_eq!(rewrite_script("vp fmt", &rules), "vp fmt");
+        assert_eq!(rewrite_script("vp pack", &rules), "vp pack");
+        assert_eq!(rewrite_script("vp dev --port 3000", &rules), "vp dev --port 3000");
         // vite commands
         assert_eq!(rewrite_script("vite", &rules), "vp dev");
         assert_eq!(rewrite_script("vite dev", &rules), "vp dev");
