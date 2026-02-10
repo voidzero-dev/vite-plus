@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vpx` command that runs a command from a local or remote npm package (like `npx`), with local `node_modules/.bin` lookup before falling back to remote download.
+Add `vpx` command that runs a command from a local, globally installed, or remote npm package (like `npx`), with a multi-step resolution chain before falling back to remote download.
 
 The existing `vp dlx` command remains unchanged — it always downloads from the registry without checking local packages (like `pnpm dlx`).
 
@@ -141,19 +141,15 @@ In `shim/mod.rs`, when `argv[0]` resolves to `vpx`:
 ```rust
 let argv0_tool = extract_tool_name(argv0);
 if argv0_tool == "vpx" {
-    // Handle vpx: local lookup + dlx fallback
     return Some("vpx".to_string());
 }
 ```
 
-In `shim/dispatch.rs`, handle the `vpx` tool:
+In `shim/dispatch.rs`, `vpx` is handled early and delegates to `commands/vpx.rs`:
 
 ```rust
 if tool == "vpx" {
-    // 1. Parse vpx flags (--package, -c, -s) and positional args
-    // 2. Try local node_modules/.bin lookup
-    // 3. If not found, delegate to DlxCommand
-    return handle_vpx(remaining_args, cwd).await;
+    return crate::commands::vpx::execute_vpx(args, &cwd).await;
 }
 ```
 
@@ -182,14 +178,16 @@ The `vp env setup` command creates the `vpx` symlink/wrapper alongside existing 
 
 ## Comparison with npx
 
-| Behavior            | `npx`                                      | `vpx`                                      |
-| ------------------- | ------------------------------------------ | ------------------------------------------ |
-| Local lookup        | Walk up `node_modules/.bin`                | Walk up `node_modules/.bin`                |
-| Remote fallback     | Download to npm cache                      | Delegate to `vp dlx` (uses detected PM)    |
-| Confirmation prompt | Prompts before installing unknown packages | Auto-confirms (like `vp dlx` with `--yes`) |
-| `--package` flag    | Specifies additional packages              | Same                                       |
-| Shell mode (`-c`)   | Runs in shell with packages in PATH        | Same                                       |
-| Cache               | npm cache                                  | Package manager's cache (via `vp dlx`)     |
+| Behavior            | `npx`                                      | `vpx`                                              |
+| ------------------- | ------------------------------------------ | -------------------------------------------------- |
+| Local lookup        | Walk up `node_modules/.bin`                | Walk up `node_modules/.bin`                        |
+| Global lookup       | Checks npm global installs                 | Checks vp global packages (`vp install -g`)        |
+| PATH lookup         | Checks system PATH                         | Checks system PATH (excluding `~/.vite-plus/bin/`) |
+| Remote fallback     | Download to npm cache                      | Delegate to `vp dlx` (uses detected PM)            |
+| Confirmation prompt | Prompts before installing unknown packages | Auto-confirms (like `vp dlx` with `--yes`)         |
+| `--package` flag    | Specifies additional packages              | Same                                               |
+| Shell mode (`-c`)   | Runs in shell with packages in PATH        | Same                                               |
+| Cache               | npm cache                                  | Package manager's cache (via `vp dlx`)             |
 
 ### Key Difference: Auto-confirm
 
@@ -199,7 +197,7 @@ The `vp env setup` command creates the `vpx` symlink/wrapper alongside existing 
 
 ### 1. Why Walk Up Directories
 
-**Decision**: Walk up from cwd to project root looking for `node_modules/.bin`, like `npx`.
+**Decision**: Walk up from cwd to filesystem root looking for `node_modules/.bin`, like `npx`.
 
 **Rationale**:
 
@@ -254,11 +252,13 @@ monorepo/
 └── package.json
 ```
 
-The walker stops at the workspace root (detected by the presence of a workspace-defining `package.json`).
+The walker continues up from cwd until it finds the binary or reaches the filesystem root.
 
 ### Native vs JS Binaries
 
 Both native (compiled) and JS binaries in `node_modules/.bin` are supported. The lookup only checks for file existence and executability, not file type.
+
+For globally installed packages, the metadata tracks whether a binary is JavaScript (`js_bins` field in `PackageMetadata`). JS binaries are executed via `node <path>`, while native binaries are executed directly.
 
 ### Platform Differences
 
@@ -270,10 +270,10 @@ Both native (compiled) and JS binaries in `node_modules/.bin` are supported. The
 ```bash
 # Local eslint is v8, but user wants v9
 vpx eslint@9 .
-# → Version specified, so local lookup is skipped → delegates to vp dlx
+# → Version specified, so local/global/PATH lookup is skipped → delegates to vp dlx
 ```
 
-When a version is explicitly specified in the package spec, the command skips local lookup and always uses remote download.
+When a version is explicitly specified in the package spec, the command skips all local resolution and always uses remote download.
 
 ## Implementation Architecture
 
@@ -388,11 +388,12 @@ Examples:
   vpx create-vue my-app
 ```
 
-### Local Binary Not Found (Falls Back to Remote)
+### Not Found Locally or Globally (Falls Back to Remote)
 
 ```bash
 $ vpx some-tool --version
-# No local binary found, downloading via vp dlx...
+# Not found in node_modules/.bin, global packages, or PATH
+# Falls back to remote download via vp dlx
 Running: pnpm dlx some-tool --version
 some-tool v1.2.3
 ```
@@ -401,7 +402,7 @@ some-tool v1.2.3
 
 ```bash
 $ vpx non-existent-package-xyz
-# No local binary found, downloading via vp dlx...
+# Not found anywhere, remote download also fails
 Running: pnpm dlx non-existent-package-xyz
  ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND  No package.json was found
 Exit code: 1
@@ -411,9 +412,13 @@ Exit code: 1
 
 1. **Local-first is safer**: `vpx` prefers local binaries, reducing the risk of running unexpected remote code for packages that are already project dependencies.
 
-2. **Auto-confirm for remote**: When falling back to remote download, `vpx` auto-confirms (like `vp dlx`). This means unknown packages are downloaded without prompting — consistent with `vp dlx` behavior.
+2. **Global packages are trusted**: Globally installed packages (via `vp install -g`) were explicitly installed by the user, so executing them is safe.
 
-3. **Version pinning**: Specifying an explicit version (e.g., `vpx eslint@9`) bypasses local lookup and always downloads from the registry, ensuring the exact requested version is used.
+3. **PATH lookup excludes vite-plus shims**: The PATH search filters out `~/.vite-plus/bin/` to prevent `vpx` from finding itself or other managed shims.
+
+4. **Auto-confirm for remote**: When falling back to remote download, `vpx` auto-confirms (like `vp dlx`). This means unknown packages are downloaded without prompting — consistent with `vp dlx` behavior.
+
+5. **Version pinning**: Specifying an explicit version (e.g., `vpx eslint@9`) bypasses all local resolution and always downloads from the registry, ensuring the exact requested version is used.
 
 ## Backward Compatibility
 
@@ -423,68 +428,6 @@ This is a new feature with no breaking changes:
 - `vpx` binary is a new symlink created by `vp env setup`
 - Existing `node`/`npm`/`npx` shims are unaffected
 - No changes to configuration format
-
-## Implementation Plan
-
-### Phase 1: Local Binary Lookup
-
-1. Implement `find_local_binary()` — walk up directories checking `node_modules/.bin`
-2. Implement `has_version_spec()` — detect version in package spec
-3. Implement `run_local_binary()` — execute the found binary with args
-
-### Phase 2: `vpx` Dispatch
-
-1. Add `vpx` detection in `shim/mod.rs` (`detect_shim_tool`)
-2. Add `vpx` flag parsing and dispatch in `shim/dispatch.rs`
-3. Create `commands/vpx.rs` with local lookup + dlx fallback logic
-
-### Phase 3: Setup
-
-1. Add `vpx` symlink/wrapper creation in `commands/env/setup.rs`
-
-### Phase 4: Testing
-
-1. Unit tests for local binary lookup (walk-up behavior)
-2. Unit tests for version spec detection
-3. Unit tests for `vpx` flag parsing
-4. Integration tests with mock `node_modules/.bin` directories
-5. Snap tests for `vpx` CLI output
-
-## Testing Strategy
-
-### Unit Tests
-
-```rust
-#[test]
-fn test_find_local_binary_in_cwd() {
-    // Create temp dir with node_modules/.bin/eslint
-    // Assert find_local_binary returns the path
-}
-
-#[test]
-fn test_find_local_binary_walks_up() {
-    // Create temp dir structure:
-    //   root/node_modules/.bin/eslint
-    //   root/packages/app/
-    // Run from root/packages/app/
-    // Assert find_local_binary returns root's binary
-}
-
-#[test]
-fn test_find_local_binary_not_found() {
-    // Create temp dir with no node_modules
-    // Assert find_local_binary returns None
-}
-
-#[test]
-fn test_has_version_spec() {
-    assert!(!has_version_spec("eslint"));
-    assert!(has_version_spec("eslint@9"));
-    assert!(has_version_spec("typescript@5.5.4"));
-    assert!(!has_version_spec("@vue/cli")); // scoped package, not version
-    assert!(has_version_spec("@vue/cli@5.0.0")); // scoped with version
-}
-```
 
 ## Future Enhancements
 
@@ -510,7 +453,7 @@ vpx --prefer-remote eslint .    # Always download, ignore local
 This RFC proposes adding `vpx` to complete the package execution story in Vite+:
 
 - `vp dlx` — always remote (like `pnpm dlx`)
-- `vpx` — local-first with remote fallback (like `npx`)
+- `vpx` — local-first with global and PATH fallback, then remote (like `npx`)
 
 The design:
 
