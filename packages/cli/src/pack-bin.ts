@@ -9,14 +9,14 @@ import {
   enableDebug,
   type InlineConfig,
   type ResolvedConfig,
-} from '@voidzero-dev/vite-plus-core/lib';
+} from '@voidzero-dev/vite-plus-core/pack';
 import { cac } from 'cac';
 
-const cli = cac('vite lib');
+const cli = cac('vite pack');
 cli.help();
 
 // support `TSDOWN_` for migration compatibility
-const DEFAULT_ENV_PREFIXES = ['VITE_LIB_', 'TSDOWN_'];
+const DEFAULT_ENV_PREFIXES = ['VITE_PACK_', 'TSDOWN_'];
 
 cli
   .command('[...files]', 'Bundle files', {
@@ -87,9 +87,11 @@ cli
       if (viteConfig.configFile) configFiles.push(viteConfig.configFile);
 
       const configs: ResolvedConfig[] = [];
-      const libConfigs = Array.isArray(viteConfig.lib) ? viteConfig.lib : [viteConfig.lib ?? {}];
-      for (const libConfig of libConfigs) {
-        const resolvedConfig = await resolveUserConfig({ ...libConfig, ...flags }, flags);
+      const packConfigs = Array.isArray(viteConfig.pack)
+        ? viteConfig.pack
+        : [viteConfig.pack ?? {}];
+      for (const packConfig of packConfigs) {
+        const resolvedConfig = await resolveUserConfig({ ...packConfig, ...flags }, flags);
         configs.push(...resolvedConfig);
       }
 

@@ -100,22 +100,22 @@ vp build [root] [OPTIONS]
 
 ## Build Library
 
-### `vp lib`
+### `vp pack`
 
 Build a library using tsdown.
 
 #### Usage
 
 ```bash
-vp lib [<ARGS>...]
+vp pack [<ARGS>...]
 ```
 
 #### Examples
 
 ```bash
-vp lib
-vp lib --watch
-vp lib --outdir dist
+vp pack
+vp pack --watch
+vp pack --outdir dist
 ```
 
 ## Build Documentation
@@ -453,7 +453,7 @@ vp build
 vp dev
 
 # Build library
-vp lib
+vp pack
 
 # Build docs
 vp doc build

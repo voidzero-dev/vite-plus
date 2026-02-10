@@ -4,7 +4,7 @@
   },
   "commands": [
     "vite -h # help message",
-    "vite lib -h # lib help message",
+    "vite pack -h # pack help message",
     "vite fmt -h # fmt help message",
     "vite lint -h # lint help message",
     "vite build -h # build help message",

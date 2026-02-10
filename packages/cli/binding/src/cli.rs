@@ -71,7 +71,7 @@ pub enum SynthesizableSubcommand {
     },
     /// Build library
     #[command(disable_help_flag = true)]
-    Lib {
+    Pack {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
@@ -133,7 +133,7 @@ pub struct CliOptions {
     pub fmt: BoxedResolverFn,
     pub vite: BoxedResolverFn,
     pub test: BoxedResolverFn,
-    pub lib: BoxedResolverFn,
+    pub pack: BoxedResolverFn,
     pub doc: BoxedResolverFn,
     pub resolve_universal_vite_config: ViteConfigResolverFn,
 }
@@ -407,16 +407,16 @@ impl SubcommandResolver {
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
-            SynthesizableSubcommand::Lib { args } => {
+            SynthesizableSubcommand::Pack { args } => {
                 let cli_options = self
                     .cli_options
                     .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("CLI options required for lib command"))?;
-                let resolved = (cli_options.lib)().await?;
+                    .ok_or_else(|| anyhow::anyhow!("CLI options required for pack command"))?;
+                let resolved = (cli_options.pack)().await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
-                    .ok_or_else(|| anyhow::anyhow!("lib JS path is not valid UTF-8"))?;
+                    .ok_or_else(|| anyhow::anyhow!("pack JS path is not valid UTF-8"))?;
 
                 Ok(ResolvedSubcommand {
                     program: Arc::from(OsStr::new("node")),
@@ -857,7 +857,7 @@ fn print_help() {
   {bold}lint{reset}       Lint code
   {bold}test{reset}       Run tests
   {bold}fmt{reset}        Format code
-  {bold}lib{reset}        Build library
+  {bold}pack{reset}       Build library
   {bold}run{reset}        Run tasks
   {bold}cache{reset}      Manage the task cache
 

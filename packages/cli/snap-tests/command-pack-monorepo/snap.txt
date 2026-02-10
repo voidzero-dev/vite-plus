@@ -3,7 +3,7 @@
 index.cjs
 
 > vite run hello#build | grep 'cache hit' # should hit cache
-~/packages/hello$ vp lib ✓ cache hit, replaying
+~/packages/hello$ vp pack ✓ cache hit, replaying
 Statistics:   1 tasks • 1 cache hits • 0 cache misses 
 Performance:  100% cache hit rate, <variable>ms saved in total
 
@@ -13,7 +13,7 @@ index.d.mts
 index.mjs
 
 > vite run array-config#build | grep 'cache hit' # should hit cache
-~/packages/array-config$ vp lib ✓ cache hit, replaying
+~/packages/array-config$ vp pack ✓ cache hit, replaying
 Statistics:   1 tasks • 1 cache hits • 0 cache misses 
 Performance:  100% cache hit rate, <variable>ms saved in total
 
@@ -22,6 +22,6 @@ Performance:  100% cache hit rate, <variable>ms saved in total
 index.mjs
 
 > vite run default-config#build | grep 'cache hit' # should hit cache
-~/packages/default-config$ vp lib ✓ cache hit, replaying
+~/packages/default-config$ vp pack ✓ cache hit, replaying
 Statistics:   1 tasks • 1 cache hits • 0 cache misses 
 Performance:  100% cache hit rate, <variable>ms saved in total

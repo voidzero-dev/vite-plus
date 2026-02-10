@@ -1,8 +1,8 @@
 export default {
   run: {
     tasks: {
-      lib: {
-        command: 'vp lib src/index.ts',
+      pack: {
+        command: 'vp pack src/index.ts',
       },
     },
   },

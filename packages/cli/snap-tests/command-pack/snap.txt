@@ -1,14 +1,14 @@
-> vite lib -h # should print the help message
-vite lib
+> vite pack -h # should print the help message
+vite pack
 
 Usage:
-  $ vite lib [...files]
+  $ vite pack [...files]
 
 Commands:
   [...files]  Bundle files
 
 For more info, run any command with the `--help` flag:
-  $ vite lib --help
+  $ vite pack --help
 
 Options:
   --config-loader <loader>  Config loader to use: auto, native, unrun (default: auto)
@@ -38,7 +38,7 @@ Options:
   --report                  Size report (default: true)
   --env.* <value>           Define compile-time env variables 
   --env-file <file>         Load environment variables from a file, when used together with --env, variables in --env take precedence 
-  --env-prefix <prefix>     Prefix for env variables to inject into the bundle (default: VITE_LIB_,TSDOWN_)
+  --env-prefix <prefix>     Prefix for env variables to inject into the bundle (default: VITE_PACK_,TSDOWN_)
   --on-success <command>    Command to run on success 
   --copy <dir>              Copy files to output dir 
   --public-dir <dir>        Alias for --copy, deprecated 
@@ -49,8 +49,8 @@ Options:
   --exports                 Generate export-related metadata for package.json (experimental) 
   -h, --help                Display this message 
 
-> vite run lib # should build the library
-$ vp lib src/index.ts
+> vite run pack # should build the library
+$ vp pack src/index.ts
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
@@ -67,15 +67,15 @@ Performance:  0% cache hit rate
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] command-lib#lib: $ vp lib src/index.ts ✓
+  [1] command-pack#pack: $ vp pack src/index.ts ✓
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > ls dist # should have the library
 index.mjs
 
-> vite run lib # should hit cache
-$ vp lib src/index.ts ✓ cache hit, replaying
+> vite run pack # should hit cache
+$ vp pack src/index.ts ✓ cache hit, replaying
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
@@ -92,6 +92,6 @@ Performance:  100% cache hit rate, <variable>ms saved in total
 
 Task Details:
 ────────────────────────────────────────────────
-  [1] command-lib#lib: $ vp lib src/index.ts ✓
+  [1] command-pack#pack: $ vp pack src/index.ts ✓
       → Cache hit - output replayed - <variable>ms saved
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

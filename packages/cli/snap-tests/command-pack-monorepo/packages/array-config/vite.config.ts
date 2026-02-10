@@ -1,5 +1,5 @@
 export default {
-  lib: [
+  pack: [
     {
       entry: ['./src/sub/index.ts'],
       clean: true,

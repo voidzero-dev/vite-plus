@@ -1,9 +1,9 @@
 {
-  "name": "hello",
+  "name": "default-config",
   "version": "1.0.0",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "build": "vp lib"
+    "build": "vp pack"
   }
 }

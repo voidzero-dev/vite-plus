@@ -1,9 +1,9 @@
 import { type Plugin as VitestPlugin } from '@voidzero-dev/vite-plus-test/config';
 
 import { defineConfig } from './define-config.js';
-import type { LibUserConfig } from './lib';
 import type { FormatOptions } from './oxfmt-config';
 import type { OxlintConfig } from './oxlint-config';
+import type { PackUserConfig } from './pack';
 import type { RunConfig } from './run-config';
 
 declare module '@voidzero-dev/vite-plus-core' {
@@ -15,7 +15,7 @@ declare module '@voidzero-dev/vite-plus-core' {
 
     fmt?: FormatOptions;
 
-    lib?: LibUserConfig | LibUserConfig[];
+    pack?: PackUserConfig | PackUserConfig[];
 
     run?: RunConfig;
 

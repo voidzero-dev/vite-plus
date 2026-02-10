@@ -12,8 +12,8 @@
 import { run } from '../binding/index.js';
 import { doc } from './resolve-doc.js';
 import { fmt } from './resolve-fmt.js';
-import { lib } from './resolve-lib.js';
 import { lint } from './resolve-lint.js';
+import { pack } from './resolve-pack.js';
 import { test } from './resolve-test.js';
 import { resolveUniversalViteConfig } from './resolve-vite-config.js';
 import { vite } from './resolve-vite.js';
@@ -22,7 +22,7 @@ import { vite } from './resolve-vite.js';
 // These functions will be called from Rust when needed
 run({
   lint, // Resolves oxlint binary for linting
-  lib, // Resolves tsdown binary for lib bundling
+  pack, // Resolves tsdown binary for pack bundling
   fmt, // Resolves oxfmt binary for formatting
   vite, // Resolves vite binary for build/dev commands
   test, // Resolves vitest binary for test commands

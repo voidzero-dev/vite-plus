@@ -545,7 +545,7 @@ export default defineConfig({});
 
 /**
  * Merge tsdown.config.* into vite.config.ts
- * - For JSON files: merge content directly into `lib` field and delete the JSON file
+ * - For JSON files: merge content directly into `pack` field and delete the JSON file
  * - For TS/JS files: import the config file
  */
 function mergeTsdownConfigFile(projectPath: string): void {
@@ -560,7 +560,7 @@ function mergeTsdownConfigFile(projectPath: string): void {
 
   // For JSON files, merge content directly and delete the file
   if (configs.tsdownConfig.endsWith('.json')) {
-    mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.tsdownConfig, 'lib');
+    mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.tsdownConfig, 'pack');
     return;
   }
 

@@ -269,7 +269,7 @@ fn indent_multiline(s: &str, spaces: usize) -> String {
 /// Merge tsdown config into vite.config.ts by importing it
 ///
 /// This function adds an import statement for the tsdown config file
-/// and adds `lib: tsdownConfig` to the defineConfig.
+/// and adds `pack: tsdownConfig` to the defineConfig.
 ///
 /// # Arguments
 ///
@@ -291,7 +291,7 @@ pub fn merge_tsdown_config(
 ///
 /// This adds:
 /// 1. An import statement: `import tsdownConfig from './tsdown.config.ts'`
-/// 2. The lib config in defineConfig: `lib: tsdownConfig`
+/// 2. The pack config in defineConfig: `pack: tsdownConfig`
 ///
 /// This function is idempotent - running it multiple times will not create duplicates.
 fn merge_tsdown_config_content(
@@ -324,9 +324,9 @@ fn merge_tsdown_config_content(
     let content_with_import =
         format!("import tsdownConfig from '{import_path}';\n\n{vite_config_content}");
 
-    // Step 2: Add lib: tsdownConfig to defineConfig
-    let lib_rule = generate_merge_rule("tsdownConfig", "lib");
-    let (final_content, _) = ast_grep::apply_rules(&content_with_import, &lib_rule)?;
+    // Step 2: Add pack: tsdownConfig to defineConfig
+    let pack_rule = generate_merge_rule("tsdownConfig", "pack");
+    let (final_content, _) = ast_grep::apply_rules(&content_with_import, &pack_rule)?;
 
     Ok(MergeResult { content: final_content, updated: true, uses_function_callback })
 }
@@ -966,7 +966,7 @@ export default defineConfig({
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  lib: tsdownConfig,
+  pack: tsdownConfig,
   plugins: [],
 });"#
         );
@@ -992,7 +992,7 @@ import { defineConfig } from 'vite-plus';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  lib: tsdownConfig,
+  pack: tsdownConfig,
   plugins: [react()],
 });"#
         );
@@ -1016,7 +1016,7 @@ export default defineConfig((env) => ({
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig((env) => ({
-  lib: tsdownConfig,
+  pack: tsdownConfig,
   plugins: [],
 }));"#
         );
@@ -1030,7 +1030,7 @@ export default defineConfig((env) => ({
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  lib: tsdownConfig,
+  pack: tsdownConfig,
   plugins: [],
 });"#;
 
@@ -1050,7 +1050,7 @@ export default defineConfig({
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  lib: tsdownConfig,
+  pack: tsdownConfig,
   plugins: [],
 });"#;
 
@@ -1080,7 +1080,7 @@ export default defineConfig({
             r#"import tsdownConfig from './tsdown.config.js';
 
 export default {
-  lib: tsdownConfig,
+  pack: tsdownConfig,
   server: { port: 3000 }
 }"#
         );
@@ -1088,7 +1088,7 @@ export default {
 
     #[test]
     fn test_merge_tsdown_config_content_no_false_positive_stdlib() {
-        // "stdlib:" should not be detected as "lib:" key
+        // "stdlib:" should not be detected as "pack:" key
         let vite_config = r#"import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
@@ -1098,7 +1098,7 @@ export default defineConfig({
         let result = merge_tsdown_config_content(vite_config, "./tsdown.config.ts").unwrap();
         assert!(result.updated);
         assert!(result.content.contains("import tsdownConfig from './tsdown.config.js'"));
-        assert!(result.content.contains("lib: tsdownConfig"));
+        assert!(result.content.contains("pack: tsdownConfig"));
         assert!(result.content.contains("stdlib: 'some-value'"));
     }
 

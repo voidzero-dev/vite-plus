@@ -105,7 +105,7 @@ pub struct BatchRewriteResult {
 /// Merge tsdown config into vite config by importing it
 ///
 /// This function adds an import statement for the tsdown config file
-/// and adds `lib: libConfig` to the defineConfig.
+/// and adds `pack: packConfig` to the defineConfig.
 ///
 /// # Arguments
 ///

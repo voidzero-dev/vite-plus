@@ -46,11 +46,11 @@ rule:
 fix: vite test
 
 
-# tsdown => vite lib
+# tsdown => vite pack
 ---
 id: replace-tsdown
 language: bash
 rule:
   kind: command_name
   regex: '^tsdown$'
-fix: vite lib
+fix: vite pack

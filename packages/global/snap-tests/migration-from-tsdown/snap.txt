@@ -23,7 +23,7 @@
 
 
 > cat tsdown.config.ts # check tsdown.config.ts
-import { defineConfig } from 'vite-plus/lib';
+import { defineConfig } from 'vite-plus/pack';
 
 export default defineConfig({
   entry: 'src/index.ts',
@@ -38,7 +38,7 @@ import tsdownConfig from './tsdown.config.js';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  lib: tsdownConfig,
+  pack: tsdownConfig,
   
 });
 
@@ -46,9 +46,9 @@ export default defineConfig({
 {
   "name": "migration-from-tsdown",
   "scripts": {
-    "build": "vite lib",
-    "build:watch": "vite lib --watch",
-    "build:dts": "vite lib --dts"
+    "build": "vite pack",
+    "build:watch": "vite pack --watch",
+    "build:dts": "vite pack --dts"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -70,7 +70,7 @@ export default defineConfig({
 
 
 > cat tsdown.config.ts # check tsdown.config.ts
-import { defineConfig } from 'vite-plus/lib';
+import { defineConfig } from 'vite-plus/pack';
 
 export default defineConfig({
   entry: 'src/index.ts',
@@ -85,7 +85,7 @@ import tsdownConfig from './tsdown.config.js';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  lib: tsdownConfig,
+  pack: tsdownConfig,
   
 });
 
@@ -93,9 +93,9 @@ export default defineConfig({
 {
   "name": "migration-from-tsdown",
   "scripts": {
-    "build": "vite lib",
-    "build:watch": "vite lib --watch",
-    "build:dts": "vite lib --dts"
+    "build": "vite pack",
+    "build:watch": "vite pack --watch",
+    "build:dts": "vite pack --dts"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",

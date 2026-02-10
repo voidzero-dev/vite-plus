@@ -10,7 +10,7 @@ Vite+/<semver>
   [1mlint[0m       Lint code
   [1mtest[0m       Run tests
   [1mfmt[0m        Format code
-  [1mlib[0m        Build library
+  [1mpack[0m       Build library
   [1mrun[0m        Run tasks
   [1mcache[0m      Manage the task cache
 

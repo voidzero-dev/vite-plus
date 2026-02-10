@@ -565,6 +565,13 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// Build library
+    Pack {
+        /// Additional arguments
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
     /// Run tasks
     Run {
         /// Additional arguments
@@ -1539,6 +1546,8 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
 
         Commands::Fmt { args } => commands::delegate::execute(cwd, "fmt", &args).await,
 
+        Commands::Pack { args } => commands::delegate::execute(cwd, "pack", &args).await,
+
         Commands::Run { args } => commands::run_or_delegate::execute(cwd, &args).await,
 
         Commands::Preview { args } => commands::delegate::execute(cwd, "preview", &args).await,
@@ -1591,17 +1600,18 @@ fn apply_custom_help(cmd: clap::Command) -> clap::Command {
 
     let after_help = format!(
         "{bold_underline}Core Commands:{reset}
-  {bold}create{reset}     Create a new project from a template
-  {bold}dev{reset}        Run the development server
-  {bold}build{reset}      Build for production
-  {bold}test{reset}       Run tests
-  {bold}lint{reset}       Lint code
-  {bold}fmt{reset}        Format code
-  {bold}run{reset}        Run tasks
-  {bold}preview{reset}    Preview production build
-  {bold}env{reset}        Manage Node.js versions
-  {bold}migrate{reset}    Migrate an existing project to Vite+
-  {bold}cache{reset}      Manage the task cache
+  {bold}create{reset}                         Create a new project from a template
+  {bold}dev{reset}                            Run the development server
+  {bold}build{reset}                          Build for production
+  {bold}test{reset}                           Run tests
+  {bold}lint{reset}                           Lint code
+  {bold}fmt{reset}                            Format code
+  {bold}pack{reset}                           Build library
+  {bold}run{reset}                            Run tasks
+  {bold}preview{reset}                        Preview production build
+  {bold}env{reset}                            Manage Node.js versions
+  {bold}migrate{reset}                        Migrate an existing project to Vite+
+  {bold}cache{reset}                          Manage the task cache
 
 {bold_underline}Package Manager Commands:{reset}
   {bold}install, i{reset}                     Install all dependencies, or add packages if package names are provided

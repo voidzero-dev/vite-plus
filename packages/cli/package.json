@@ -50,9 +50,9 @@
       "require": "./binding/index.cjs"
     },
     "./package.json": "./package.json",
-    "./lib": {
-      "types": "./dist/lib.d.ts",
-      "import": "./dist/lib.js"
+    "./pack": {
+      "types": "./dist/pack.d.ts",
+      "import": "./dist/pack.js"
     },
     "./test": {
       "import": {

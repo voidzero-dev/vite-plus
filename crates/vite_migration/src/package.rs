@@ -125,7 +125,7 @@ fix: vite test
         assert_eq!(rewrite_script("vite test", &rules), "vite test");
         assert_eq!(rewrite_script("vite lint", &rules), "vite lint");
         assert_eq!(rewrite_script("vite fmt", &rules), "vite fmt");
-        assert_eq!(rewrite_script("vite lib", &rules), "vite lib");
+        assert_eq!(rewrite_script("vite pack", &rules), "vite pack");
         assert_eq!(rewrite_script("vite preview", &rules), "vite preview");
         assert_eq!(rewrite_script("vite optimize", &rules), "vite optimize");
         assert_eq!(rewrite_script("vite build -r", &rules), "vite build -r");

@@ -238,8 +238,8 @@ fix: $NEW_IMPORT
 /// ast-grep rules for rewriting tsdown imports and declare module statements
 ///
 /// This rewrites:
-/// - `import { ... } from 'tsdown'` → `import { ... } from 'vite-plus/lib'`
-/// - `declare module 'tsdown' { ... }` → `declare module 'vite-plus/lib' { ... }`
+/// - `import { ... } from 'tsdown'` → `import { ... } from 'vite-plus/pack'`
+/// - `declare module 'tsdown' { ... }` → `declare module 'vite-plus/pack' { ... }`
 const REWRITE_TSDOWN_RULES: &str = r#"---
 id: rewrite-tsdown-import
 language: TypeScript
@@ -254,7 +254,7 @@ transform:
     replace:
       source: $STR
       replace: tsdown
-      by: "vite-plus/lib"
+      by: "vite-plus/pack"
 fix: $NEW_IMPORT
 ---
 id: rewrite-declare-module-tsdown
@@ -270,7 +270,7 @@ transform:
     replace:
       source: $STR
       replace: tsdown
-      by: "vite-plus/lib"
+      by: "vite-plus/pack"
 fix: $NEW_IMPORT
 "#;
 
@@ -1569,7 +1569,7 @@ export default defineConfig({
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { defineConfig } from 'vite-plus/lib';
+            r#"import { defineConfig } from 'vite-plus/pack';
 
 export default defineConfig({
   entry: 'src/index.ts',
@@ -1589,7 +1589,7 @@ export default defineConfig({
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { defineConfig } from "vite-plus/lib";
+            r#"import { defineConfig } from "vite-plus/pack";
 
 export default defineConfig({
   entry: "src/index.ts",
@@ -1609,7 +1609,7 @@ export default defineConfig({
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module 'vite-plus/lib' {
+            r#"declare module 'vite-plus/pack' {
   interface BuildConfig {
     custom?: boolean;
   }
@@ -1629,7 +1629,7 @@ export default defineConfig({
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"declare module "vite-plus/lib" {
+            r#"declare module "vite-plus/pack" {
   interface BuildConfig {
     custom?: boolean;
   }

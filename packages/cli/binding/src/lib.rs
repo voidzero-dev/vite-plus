@@ -32,7 +32,7 @@ pub struct CliOptions {
     pub fmt: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     pub vite: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     pub test: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub lib: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    pub pack: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     pub doc: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     pub cwd: Option<String>,
     /// CLI arguments (should be process.argv.slice(2) from JavaScript)
@@ -120,7 +120,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     let fmt_tsf = options.fmt;
     let vite_tsf = options.vite;
     let test_tsf = options.test;
-    let lib_tsf = options.lib;
+    let pack_tsf = options.pack;
     let doc_tsf = options.doc;
     let resolve_universal_vite_config_tsf = options.resolve_universal_vite_config;
     let args = options.args;
@@ -138,7 +138,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
             fmt: create_resolver(fmt_tsf, "Failed to resolve fmt command"),
             vite: create_resolver(vite_tsf, "Failed to resolve vite command"),
             test: create_resolver(test_tsf, "Failed to resolve test command"),
-            lib: create_resolver(lib_tsf, "Failed to resolve lib command"),
+            pack: create_resolver(pack_tsf, "Failed to resolve pack command"),
             doc: create_resolver(doc_tsf, "Failed to resolve doc command"),
             resolve_universal_vite_config: create_vite_config_resolver(
                 resolve_universal_vite_config_tsf,

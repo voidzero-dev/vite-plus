@@ -21,7 +21,7 @@ cat: tsdown.config.json: No such file or directory
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  lib: {
+  pack: {
     "entry": "src/index.ts",
     "outDir": "dist",
     "format": ["esm", "cjs"],
@@ -39,9 +39,9 @@ export default defineConfig({
 {
   "name": "migration-from-tsdown-json-config",
   "scripts": {
-    "build": "vite lib",
-    "build:watch": "vite lib --watch",
-    "build:dts": "vite lib --dts"
+    "build": "vite pack",
+    "build:watch": "vite pack --watch",
+    "build:dts": "vite pack --dts"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -66,7 +66,7 @@ export default defineConfig({
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  lib: {
+  pack: {
     "entry": "src/index.ts",
     "outDir": "dist",
     "format": ["esm", "cjs"],
@@ -84,9 +84,9 @@ export default defineConfig({
 {
   "name": "migration-from-tsdown-json-config",
   "scripts": {
-    "build": "vite lib",
-    "build:watch": "vite lib --watch",
-    "build:dts": "vite lib --dts"
+    "build": "vite pack",
+    "build:watch": "vite pack --watch",
+    "build:dts": "vite pack --dts"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",

@@ -29,7 +29,7 @@
     },
     "./dist/client/*": "./dist/vite/client/*",
     "./internal": "./dist/vite/node/internal.js",
-    "./lib": {
+    "./pack": {
       "types": "./dist/tsdown/index-types.d.ts",
       "default": "./dist/tsdown/index.js"
     },

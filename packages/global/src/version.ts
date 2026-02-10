@@ -146,7 +146,7 @@ export async function printVersion(cwd: string) {
       packageName: 'oxlint-tsgolint',
     },
     {
-      command: 'lib',
+      command: 'pack',
       displayName: 'tsdown',
       packageName: '@voidzero-dev/vite-plus-core',
       bundledVersionKey: 'tsdown',

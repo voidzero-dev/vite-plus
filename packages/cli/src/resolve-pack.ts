@@ -3,9 +3,9 @@
  *
  * This module exports a function that resolves the Tsdown binary path
  * using Node.js module resolution. The resolved path is passed back
- * to the Rust core, which then executes Tsdown for running lib.
+ * to the Rust core, which then executes Tsdown for running pack.
  *
- * Used for: `vite-plus lib` command
+ * Used for: `vite-plus pack` command
  */
 
 import { join } from 'node:path';
@@ -21,12 +21,12 @@ import { DEFAULT_ENVS } from './utils.js';
  *
  * Tsdown is a tool that provides a library for building JavaScript/TypeScript libraries.
  */
-export async function lib(): Promise<{
+export async function pack(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
   // Resolve the bundled Tsdown CLI
-  const binPath = join(import.meta.dirname, 'lib-bin.js');
+  const binPath = join(import.meta.dirname, 'pack-bin.js');
 
   return {
     binPath,

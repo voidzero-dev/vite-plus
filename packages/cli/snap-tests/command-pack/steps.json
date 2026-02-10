@@ -4,9 +4,9 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vite lib -h # should print the help message",
-    "vite run lib # should build the library",
+    "vite pack -h # should print the help message",
+    "vite run pack # should build the library",
     "ls dist # should have the library",
-    "vite run lib # should hit cache"
+    "vite run pack # should hit cache"
   ]
 }

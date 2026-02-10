@@ -6,7 +6,7 @@ export interface CliOptions {
   fmt: (err: Error | null) => Promise<JsCommandResolvedResult>;
   vite: (err: Error | null) => Promise<JsCommandResolvedResult>;
   test: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  lib: (err: Error | null) => Promise<JsCommandResolvedResult>;
+  pack: (err: Error | null) => Promise<JsCommandResolvedResult>;
   doc: (err: Error | null) => Promise<JsCommandResolvedResult>;
   cwd?: string;
   /** CLI arguments (should be process.argv.slice(2) from JavaScript) */
