@@ -510,7 +510,7 @@ cleanup_old_versions() {
 
 main() {
   echo ""
-  echo -e "Setting up VITE+(⚡︎)..."
+  echo -e "Setting up VITE+..."
 
   check_requirements
 
@@ -668,7 +668,7 @@ main() {
 
   # Print success message
   echo ""
-  echo -e "${GREEN}✔${NC} ${BOLD_BRIGHT_BLUE}VITE+(⚡︎)${NC} successfully installed!"
+  echo -e "${GREEN}✔${NC} ${BOLD_BRIGHT_BLUE}VITE+${NC} successfully installed!"
   echo ""
   echo "  The Unified Toolchain for the Web."
   echo ""

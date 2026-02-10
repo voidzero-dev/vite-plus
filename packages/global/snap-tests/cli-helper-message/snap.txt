@@ -39,7 +39,7 @@ Options:
   -h, --help     Print help
 
 > vp -V # show version
-VITE+(⚡︎) - The Unified Toolchain for the Web
+VITE+ - The Unified Toolchain for the Web
 
 PACKAGE VERSIONS:
   vite-plus-cli: v<semver>

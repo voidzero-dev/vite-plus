@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # migration should check each package's peerDependencies
-┌  VITE+(⚡︎) - The Unified Toolchain for the Web
+┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  pnpm@latest installing...
 │
