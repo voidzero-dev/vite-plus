@@ -5,7 +5,7 @@ Finished in <variable>ms on 1 file with <variable> rules using <variable> thread
 
 $ vp lint
 Found 0 warnings and 0 errors.
-Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
+Finished in <variable>ms on 3 files with <variable> rules using <variable> threads.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -32,7 +32,7 @@ Finished in <variable>ms on 1 file with <variable> rules using <variable> thread
 
 $ vp lint ✗ cache miss: content of input 'a.ts' changed, executing
 Found 0 warnings and 0 errors.
-Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
+Finished in <variable>ms on 3 files with <variable> rules using <variable> threads.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

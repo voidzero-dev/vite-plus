@@ -507,7 +507,10 @@ impl SubcommandResolver {
                         OsStr::new(&resolve_command.bin_path).to_os_string(),
                     ),
                     args: resolve_command.args.into_iter().map(Str::from).collect(),
-                    cache_config: UserCacheConfig::disabled(),
+                    cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
+                        envs: None,
+                        pass_through_envs: None,
+                    }),
                     envs: merged_envs,
                 })
             }
@@ -638,7 +641,10 @@ async fn create_install_synthetic_request(
     Ok(SyntheticPlanRequest {
         program: Arc::<OsStr>::from(OsStr::new(&resolve_command.bin_path).to_os_string()),
         args: resolve_command.args.into_iter().map(Str::from).collect(),
-        cache_config: UserCacheConfig::disabled(),
+        cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
+            envs: None,
+            pass_through_envs: None,
+        }),
         envs: Arc::new(envs),
     })
 }
