@@ -74,5 +74,4 @@ if (!localCliMetadata) {
   prompts.outro(`Using local Vite+ CLI`);
 }
 
-// delegate to local CLI
-import(pathToFileURL(join(localCliMetadata.path, 'dist', 'bin.js')).href);
+await import(pathToFileURL(join(localCliMetadata.path, 'dist', 'bin.js')).href);

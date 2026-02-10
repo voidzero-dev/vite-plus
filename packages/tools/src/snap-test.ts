@@ -44,6 +44,7 @@ async function runWithConcurrencyLimit(
         console.error('Task failed:', error);
       })
       .finally(() => {
+        // oxlint-disable-next-line typescript/no-floating-promises
         executing.splice(executing.indexOf(promise), 1);
       });
 
@@ -209,7 +210,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
   env['PATH'] = [
     // Extend PATH to include the package's bin directory
     path.resolve('bin'),
-    ...env['PATH']!.split(path.delimiter),
+    ...env['PATH'].split(path.delimiter),
   ].join(path.delimiter);
 
   const newSnap: string[] = [];

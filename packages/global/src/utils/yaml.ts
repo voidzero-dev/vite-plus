@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 
-import { type Document, type ParsedNode, parseDocument, parse as parseYaml, Scalar } from 'yaml';
+import { type Document, parseDocument, parse as parseYaml, Scalar } from 'yaml';
 
 export function readYamlFile<T = Record<string, unknown>>(file: string): T {
   const content = fs.readFileSync(file, 'utf-8');
   return parseYaml(content) as T;
 }
 
-export type YamlDocument = Document.Parsed<ParsedNode, true>;
+export type YamlDocument = Document.Parsed;
 
 export function editYamlFile(file: string, callback: (doc: YamlDocument) => void) {
   const content = fs.readFileSync(file, 'utf-8');

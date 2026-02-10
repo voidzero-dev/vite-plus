@@ -17,6 +17,7 @@ if (!filename || !script) {
 }
 
 const json = JSON.parse(readFileSync(filename, 'utf-8'));
+// oxlint-disable-next-line typescript/no-implied-eval
 const func = new Function('_', script + '; return _;');
 const result = func(json);
 

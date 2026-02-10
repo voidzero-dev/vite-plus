@@ -80,7 +80,7 @@ Done in 171ms using pnpm v10.16.1
 
   test.skipIf(process.platform === 'win32')('replace unstable cwd', () => {
     const cwd = tmpdir();
-    const output = `${path.join(cwd, 'foo.txt')}`;
+    const output = path.join(cwd, 'foo.txt');
     expect(replaceUnstableOutput(output.trim(), cwd)).toMatchSnapshot();
   });
 

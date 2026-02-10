@@ -111,7 +111,7 @@ async function buildNapiBinding() {
 }
 
 async function buildCli() {
-  const tsconfig = readJsonConfigFile(join(projectDir, 'tsconfig.json'), sys.readFile);
+  const tsconfig = readJsonConfigFile(join(projectDir, 'tsconfig.json'), sys.readFile.bind(sys));
 
   const { options: initialOptions } = parseJsonSourceFileConfigFileContent(
     tsconfig,
@@ -544,7 +544,7 @@ async function createConditionalShim(
         importResult.default = `./dist/test/${shimBaseName}.js`;
       }
 
-      (result as Record<string, unknown>).import = importResult;
+      result.import = importResult;
     }
   }
 
@@ -555,7 +555,7 @@ async function createConditionalShim(
     if (typeof requireValue === 'string') {
       const cjsPath = join(shimDir, `${baseFileName}.cjs`);
       await writeFile(cjsPath, `module.exports = require('${testImportSpecifier}');\n`);
-      (result as Record<string, unknown>).require = `./dist/test/${shimBaseName}.cjs`;
+      result.require = `./dist/test/${shimBaseName}.cjs`;
     } else if (typeof requireValue === 'object' && requireValue !== null) {
       const requireResult: Record<string, string> = {};
 
@@ -575,7 +575,7 @@ async function createConditionalShim(
         requireResult.default = `./dist/test/${shimBaseName}.cjs`;
       }
 
-      (result as Record<string, unknown>).require = requireResult;
+      result.require = requireResult;
     }
   }
 

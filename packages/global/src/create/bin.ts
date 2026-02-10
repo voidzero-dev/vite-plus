@@ -438,7 +438,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     rewriteMonorepo(workspaceInfo);
     await runViteInstall(fullPath, options.interactive);
     prompts.outro(`✔ Created ${accent(projectDir)}!`);
-    log(`${styleText('bold', 'Next steps:')}`);
+    log(styleText('bold', 'Next steps:'));
     log(`  ${accent(`cd ${projectDir}`)}`);
     log(`  ${accent(`vp dev ${InitialMonorepoAppDir}`)}`);
     return;
@@ -562,7 +562,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 }
 
 function showNextSteps(projectDir: string, isMonorepo: boolean) {
-  log(`${styleText('bold', 'Next steps:')}`);
+  log(styleText('bold', 'Next steps:'));
   if (isMonorepo) {
     log(`  ${accent(`vp dev ${projectDir}`)}`);
   } else {

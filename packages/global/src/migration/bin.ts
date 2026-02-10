@@ -80,7 +80,7 @@ function parseArgs() {
   const nonInteractive = parsed['non-interactive'] ?? parsed.nonInteractive;
   const interactive = nonInteractive ? false : parsed.interactive;
 
-  let projectPath = parsed._[0] as string;
+  let projectPath = parsed._[0];
   if (projectPath) {
     projectPath = path.resolve(process.cwd(), projectPath);
   } else {

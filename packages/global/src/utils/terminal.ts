@@ -63,19 +63,18 @@ function gradient(count: number, startRgb: RGB, endRgb: RGB) {
 }
 
 function colorize(text: string, colors: Array<RGB>) {
-  const chars = [...text];
-  if (chars.length === 0) {
+  if (text.length === 0) {
     return '';
   }
 
-  const denom = Math.max(chars.length - 1, 1);
+  const denom = Math.max(text.length - 1, 1);
   const maxIdx = colors.length - 1;
 
   let out = '';
-  for (let i = 0; i < chars.length; i++) {
+  for (let i = 0; i < text.length; i++) {
     const idx = Math.round((i / denom) * maxIdx);
     const [r, g, b] = colors[idx];
-    out += fgRgb(r, g, b) + chars[i];
+    out += fgRgb(r, g, b) + text[i];
   }
   return out + RESET;
 }
@@ -213,10 +212,7 @@ export async function getVitePlusHeader() {
     return `VITE+ - ${textA}${textB}`;
   }
 
-  return `${styleText(
-    'bold',
-    `VITE+ - ${textA}${colorize(textB, await getGradientColors(textB))}`,
-  )}`;
+  return styleText('bold', `VITE+ - ${textA}${colorize(textB, await getGradientColors(textB))}`);
 }
 
 export function log(message: string) {

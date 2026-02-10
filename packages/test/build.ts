@@ -2218,7 +2218,7 @@ async function validateExternalDeps() {
   }
 
   console.log(`\n  ⚠ Found ${byPackage.size} undeclared external dependencies:\n`);
-  for (const [packageName, specifiers] of [...byPackage.entries()].toSorted()) {
+  for (const [packageName, specifiers] of byPackage.entries()) {
     const files = externalSpecifiers.get([...specifiers][0])!;
     console.log(`    ${packageName}`);
     for (const specifier of specifiers) {

@@ -57,7 +57,7 @@ function execCommand(command: string, cwd?: string): string {
     }).trim();
   } catch (error) {
     throw new Error(
-      `Failed to execute: ${command}\n${error instanceof Error ? error.message : error}`,
+      `Failed to execute: ${command}\n${error instanceof Error ? error.message : String(error)}`,
       { cause: error },
     );
   }
@@ -122,7 +122,7 @@ function cloneOrResetRepo(repoUrl: string, dir: string, branch: string = 'main',
       }
     } catch (error) {
       log(
-        `Failed to reset ${dir} (${error instanceof Error ? error.message : error}), removing and re-cloning...`,
+        `Failed to reset ${dir} (${error instanceof Error ? error.message : String(error)}), removing and re-cloning...`,
       );
       rmSync(dir, { recursive: true, force: true });
       cloneRepo(repoUrl, dir, branch, hash);
