@@ -82,7 +82,7 @@ catalog:
   oxc-transform: =0.112.0
   oxfmt: ^0.28.0
   oxlint: ^1.43.0
-  oxlint-tsgolint: ^0.11.4
+  oxlint-tsgolint: ^0.11.5
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -103,7 +103,7 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.20.2
+  tsdown: ^0.20.3
   tsx: ^4.20.6
   typescript: ^5.9.3
   unified: ^11.0.5
