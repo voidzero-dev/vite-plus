@@ -311,7 +311,6 @@ pub enum Commands {
     },
 
     /// Deduplicate dependencies
-    #[command(visible_alias = "ddp")]
     Dedupe {
         /// Check if deduplication would make changes
         #[arg(long)]
@@ -1617,7 +1616,7 @@ fn apply_custom_help(cmd: clap::Command) -> clap::Command {
   {bold}install, i{reset}                     Install all dependencies, or add packages if package names are provided
   {bold}add{reset}                            Add packages to dependencies
   {bold}remove, rm, un, uninstall{reset}      Remove packages from dependencies
-  {bold}dedupe, ddp{reset}                    Deduplicate dependencies by removing older versions
+  {bold}dedupe{reset}                         Deduplicate dependencies by removing older versions
   {bold}dlx{reset}                            Execute a package binary without installing it as a dependency
   {bold}info, view, show{reset}               View package information from the registry
   {bold}link, ln{reset}                       Link packages for local development

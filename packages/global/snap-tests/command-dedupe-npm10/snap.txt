@@ -34,7 +34,7 @@ up to date in <variable>ms
   "packageManager": "npm@<semver>"
 }
 
-> vp ddp -- --loglevel=warn && cat package.json # support pass through arguments
+> vp dedupe -- --loglevel=warn && cat package.json # support pass through arguments
 
 up to date in <variable>ms
 {

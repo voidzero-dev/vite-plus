@@ -393,7 +393,7 @@ impl JsExecutor {
   - `remove <packages>` / `rm`, `un`, `uninstall` - Remove packages
   - `update [packages]` / `up` - Update packages
   - `outdated [packages]` - Check for outdated packages
-  - `dedupe` / `ddp` - Deduplicate dependencies
+  - `dedupe` - Deduplicate dependencies
   - `why <package>` / `explain` - Explain why a package is installed
   - `info <package>` / `view`, `show` - View package info from registry
   - `link [package|dir]` / `ln` - Link packages

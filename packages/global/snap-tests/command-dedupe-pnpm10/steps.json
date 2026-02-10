@@ -6,7 +6,7 @@
     "vp dedupe --help # should show help",
     "vp dedupe && cat package.json # should dedupe dependencies",
     "vp dedupe --check && cat package.json # should check if deduplication would make changes",
-    "vp ddp -- --loglevel=warn && cat package.json # support pass through arguments",
+    "vp dedupe -- --loglevel=warn && cat package.json # support pass through arguments",
     "json-edit package.json '_.dependencies = {}' && cat package.json && vp dedupe --check # should check fails because no dependencies",
     "vp dedupe && cat package.json && vp dedupe --check # should dedupe fix the change by removing the dependencies"
   ]

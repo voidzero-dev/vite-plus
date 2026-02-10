@@ -5,6 +5,6 @@
   "commands": [
     "vp dedupe && cat package.json # should dedupe dependencies",
     "vp dedupe --check && cat package.json # should check if deduplication would make changes",
-    "vp ddp -- --json && cat package.json # support pass through arguments"
+    "vp dedupe -- --json && cat package.json # support pass through arguments"
   ]
 }

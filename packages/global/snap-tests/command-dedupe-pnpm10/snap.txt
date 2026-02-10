@@ -56,7 +56,7 @@ Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <
   "packageManager": "pnpm@<semver>"
 }
 
-> vp ddp -- --loglevel=warn && cat package.json # support pass through arguments
+> vp dedupe -- --loglevel=warn && cat package.json # support pass through arguments
 {
   "name": "command-dedupe-pnpm10",
   "version": "1.0.0",

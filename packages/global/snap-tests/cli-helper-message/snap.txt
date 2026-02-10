@@ -21,7 +21,7 @@ Package Manager Commands:
   install, i                     Install all dependencies, or add packages if package names are provided
   add                            Add packages to dependencies
   remove, rm, un, uninstall      Remove packages from dependencies
-  dedupe, ddp                    Deduplicate dependencies by removing older versions
+  dedupe                         Deduplicate dependencies by removing older versions
   dlx                            Execute a package binary without installing it as a dependency
   info, view, show               View package information from the registry
   link, ln                       Link packages for local development

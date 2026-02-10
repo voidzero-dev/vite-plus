@@ -45,7 +45,7 @@
   "packageManager": "yarn@<semver>"
 }
 
-> vp ddp -- --json && cat package.json # support pass through arguments
+> vp dedupe -- --json && cat package.json # support pass through arguments
 {
   "name": "command-dedupe-yarn4",
   "version": "1.0.0",

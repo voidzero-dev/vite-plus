@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vite dedupe` (alias: `vite ddp`) command that automatically adapts to the detected package manager (pnpm/npm/yarn) for optimizing dependency trees by removing duplicate packages and upgrading older dependencies to newer compatible versions in the lockfile. This helps reduce redundancy and improve project efficiency.
+Add `vite dedupe` command that automatically adapts to the detected package manager (pnpm/npm/yarn) for optimizing dependency trees by removing duplicate packages and upgrading older dependencies to newer compatible versions in the lockfile. This helps reduce redundancy and improve project efficiency.
 
 ## Motivation
 
@@ -40,7 +40,6 @@ yarn dedupe --check            # yarn@2+ - check without modifying
 ```bash
 # Works for all package managers
 vite dedupe                    # Deduplicate dependencies
-vite ddp                       # Alias
 
 # Check mode (dry-run)
 vite dedupe --check            # Check if deduplication would make changes
@@ -54,7 +53,6 @@ vite dedupe --check            # Check if deduplication would make changes
 
 ```bash
 vite dedupe [OPTIONS]
-vite ddp [OPTIONS]        # Alias
 ```
 
 **Examples:**
@@ -62,7 +60,6 @@ vite ddp [OPTIONS]        # Alias
 ```bash
 # Basic deduplication
 vite dedupe
-vite ddp
 
 # Check mode (preview changes without modifying)
 vite dedupe --check
@@ -96,10 +93,6 @@ vite dedupe --check
 
 - pnpm uses `--check` for dry-run, npm uses `--dry-run`, yarn@2+ uses `--check`
 - yarn@1 does not have dedupe command and is not supported
-
-**Aliases:**
-
-- `vite ddp` = `vite dedupe` (matches npm's `ddp` alias)
 
 ### Dedupe Behavior Differences Across Package Managers
 
@@ -164,7 +157,7 @@ pub enum Commands {
     // ... existing commands
 
     /// Deduplicate dependencies by removing older versions
-    #[command(disable_help_flag = true, alias = "ddp")]
+    #[command(disable_help_flag = true)]
     Dedupe {
         /// Check if deduplication would make changes (pnpm: --check, npm: --dry-run)
         #[arg(long)]
@@ -662,8 +655,6 @@ Deduplicate dependencies by removing older versions
 
 Usage: vite dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
-Aliases: ddp
-
 Options:
   --check                    Check if deduplication would make changes
                              (pnpm: --check, npm: --dry-run, yarn@2+: --check)
@@ -677,7 +668,6 @@ Note: yarn@1 does not have a dedupe command and is not supported
 
 Examples:
   vite dedupe                          # Deduplicate all dependencies
-  vite ddp                             # Same as above (alias)
   vite dedupe --check                  # Check if changes would occur
   vite dedupe -- --some-flag           # Pass custom flags to package manager
 ```
