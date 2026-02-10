@@ -759,8 +759,8 @@ export async function syncRemote() {
     pluginutilsPackage,
   );
 
-  // additional tsdown exports
-  mergedExports['./lib'] = {
+  // additional tsdown exports (vp pack)
+  mergedExports['./pack'] = {
     default: './dist/tsdown/index.js',
     types: './dist/tsdown/index-types.d.ts',
   };
