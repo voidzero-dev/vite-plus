@@ -38,6 +38,19 @@ fn is_package_manager_tool(tool: &str) -> bool {
 /// Returns an exit code to be used with std::process::exit.
 pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     tracing::debug!("dispatch: tool: {tool}, args: {:?}", args);
+
+    // Handle vpx — standalone command, doesn't need recursion/bypass/shim-mode checks
+    if tool == "vpx" {
+        let cwd = match current_dir() {
+            Ok(path) => path,
+            Err(e) => {
+                eprintln!("vp: Failed to get current directory: {e}");
+                return 1;
+            }
+        };
+        return crate::commands::vpx::execute_vpx(args, &cwd).await;
+    }
+
     // Check recursion prevention - if already in a shim context, passthrough directly
     // Only applies to core tools (node/npm/npx) whose bin dir is prepended to PATH.
     // Package binaries are always resolved via metadata lookup, so they can't loop.

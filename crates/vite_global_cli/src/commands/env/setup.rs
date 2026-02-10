@@ -18,8 +18,8 @@ use std::process::ExitStatus;
 use super::config::{get_bin_dir, get_vite_plus_home};
 use crate::error::Error;
 
-/// Tools to create shims for (node, npm, npx)
-const SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
+/// Tools to create shims for (node, npm, npx, vpx)
+const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "vpx"];
 
 /// Execute the setup command.
 pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
@@ -222,7 +222,7 @@ async fn create_unix_shim(
 
 /// Create Windows shims using .cmd wrappers that call `vp env exec <tool>`.
 ///
-/// All tools (node, npm, npx) get .cmd wrappers that invoke `vp env exec`.
+/// All tools (node, npm, npx, vpx) get .cmd wrappers that invoke `vp env exec`.
 /// Also creates shell scripts (without extension) for Git Bash compatibility.
 /// This is consistent with Volta's Windows approach.
 #[cfg(windows)]

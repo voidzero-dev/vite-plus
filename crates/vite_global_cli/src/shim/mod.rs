@@ -10,7 +10,7 @@
 
 mod cache;
 mod dispatch;
-mod exec;
+pub(crate) mod exec;
 
 pub use dispatch::dispatch;
 use vite_shared::env_vars;
@@ -112,6 +112,9 @@ pub fn detect_shim_tool(argv0: &str) -> Option<String> {
     if argv0_tool == "vp" {
         return None; // Direct vp invocation, not shim mode
     }
+    if argv0_tool == "vpx" {
+        return Some("vpx".to_string());
+    }
 
     // Check VITE_PLUS_SHIM_TOOL env var (set by shell wrapper scripts)
     if let Some(tool) = env_tool {
@@ -185,5 +188,25 @@ mod tests {
         // non-existent tools.
         assert!(!is_potential_package_binary("nonexistent-tool-12345"));
         assert!(!is_potential_package_binary("another-fake-tool"));
+    }
+
+    #[test]
+    fn test_detect_shim_tool_vpx() {
+        // vpx should be detected via the argv0 check, before the env var check
+        // and before is_shim_tool (which would incorrectly match it as a package binary)
+        // SAFETY: We're in a test
+        unsafe {
+            std::env::remove_var(SHIM_TOOL_ENV_VAR);
+        }
+        let result = detect_shim_tool("vpx");
+        assert_eq!(result, Some("vpx".to_string()));
+
+        // Also works with full path
+        let result = detect_shim_tool("/home/user/.vite-plus/bin/vpx");
+        assert_eq!(result, Some("vpx".to_string()));
+
+        // Also works with .exe extension (Windows)
+        let result = detect_shim_tool("vpx.exe");
+        assert_eq!(result, Some("vpx".to_string()));
     }
 }

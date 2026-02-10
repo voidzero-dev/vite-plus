@@ -139,6 +139,9 @@ pub mod version;
 // Category D: Environment Management
 pub mod env;
 
+// Standalone binary command
+pub mod vpx;
+
 // Self-Management
 pub mod upgrade;
 
