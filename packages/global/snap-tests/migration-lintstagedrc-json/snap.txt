@@ -45,7 +45,7 @@ EXAMPLES:
 
 > cat .lintstagedrc.json # check lintstagedrc.json
 {
-  "*.js": "vite lint --fix"
+  "*.js": "vp lint --fix"
 }
 
 > cat package.json # check package.json
@@ -53,11 +53,11 @@ EXAMPLES:
   "name": "migration-lintstagedrc",
   "lint-staged": {
     "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
-      "vite fmt --staged",
+      "vp fmt --staged",
       "eslint --fix"
     ],
     "*.@(js|ts|tsx)": [
-      "vite lint --fix"
+      "vp lint --fix"
     ]
   },
   "pnpm": {

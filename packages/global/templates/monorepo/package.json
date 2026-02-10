@@ -9,8 +9,8 @@
   ],
   "type": "module",
   "scripts": {
-    "ready": "vite fmt && vite lint --type-aware && vite run test -r && vite run build -r",
-    "dev": "vite run website#dev"
+    "ready": "vp fmt && vp lint --type-aware && vp run test -r && vp run build -r",
+    "dev": "vp run website#dev"
   },
   "engines": {
     "node": ">=22.12.0"

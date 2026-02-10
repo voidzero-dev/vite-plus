@@ -62,20 +62,20 @@ cat: .oxfmtrc.json: No such file or directory
 > cat package.json # check package.json
 {
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "test:run": "vite test run",
-    "test:ui": "vite test --ui",
-    "test:coverage": "vite test run --coverage",
-    "test:watch": "vite test --watch",
-    "test": "vite test",
-    "lint": "vite lint",
-    "lint:fix": "vite lint --fix",
-    "lint:type-aware": "vite lint --type-aware",
-    "fmt": "vite fmt",
-    "fmt:fix": "vite fmt --fix",
-    "fmt:staged": "vite fmt --staged",
-    "fmt:staged:fix": "vite fmt --staged --fix"
+    "dev": "vp dev",
+    "build": "vp build",
+    "test:run": "vp test run",
+    "test:ui": "vp test --ui",
+    "test:coverage": "vp test run --coverage",
+    "test:watch": "vp test --watch",
+    "test": "vp test",
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
+    "lint:type-aware": "vp lint --type-aware",
+    "fmt": "vp fmt",
+    "fmt:fix": "vp fmt --fix",
+    "fmt:staged": "vp fmt --staged",
+    "fmt:staged:fix": "vp fmt --staged --fix"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",

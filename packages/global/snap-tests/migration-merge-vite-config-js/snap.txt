@@ -32,9 +32,9 @@ cat: .oxlintrc.json: No such file or directory
 > cat package.json # check package.json
 {
   "scripts": {
-    "dev": "vite dev --port 3000",
-    "build": "vite build",
-    "lint": "vite lint"
+    "dev": "vp dev --port 3000",
+    "build": "vp build",
+    "lint": "vp lint"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",

@@ -27,7 +27,7 @@ export default defineConfig({
   "name": "migration-monorepo-pnpm-overrides-dependency-selector",
   "version": "1.0.0",
   "scripts": {
-    "dev": "vite dev"
+    "dev": "vp dev"
   },
   "devDependencies": {
     "vite": "catalog:",
@@ -68,8 +68,8 @@ peerDependencyRules:
 {
   "name": "app",
   "scripts": {
-    "dev": "vite dev --port 3000",
-    "build": "vite build"
+    "dev": "vp dev --port 3000",
+    "build": "vp build"
   },
   "devDependencies": {
     "vite": "catalog:",

@@ -20,11 +20,11 @@
 {
   "name": "migration-from-vitest-files",
   "scripts": {
-    "test:run": "vite test run",
-    "test:ui": "vite test --ui",
-    "test:coverage": "vite test run --coverage",
-    "test:watch": "vite test --watch",
-    "test": "vite test"
+    "test:run": "vp test run",
+    "test:ui": "vp test --ui",
+    "test:coverage": "vp test run --coverage",
+    "test:watch": "vp test --watch",
+    "test": "vp test"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",

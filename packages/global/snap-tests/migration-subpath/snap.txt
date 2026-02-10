@@ -17,11 +17,11 @@
   "name": "migration-subpath",
   "lint-staged": {
     "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
-      "vite fmt --staged",
+      "vp fmt --staged",
       "eslint --fix"
     ],
     "*.@(js|ts|tsx)": [
-      "vite lint --fix"
+      "vp lint --fix"
     ]
   },
   "pnpm": {

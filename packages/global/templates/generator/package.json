@@ -10,7 +10,7 @@
   "bin": "./bin/index.ts",
   "type": "module",
   "scripts": {
-    "test": "vite test",
+    "test": "vp test",
     "dev": "node bin/index.ts"
   },
   "dependencies": {

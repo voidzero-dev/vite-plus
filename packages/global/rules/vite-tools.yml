@@ -1,4 +1,4 @@
-# vite => vite dev (handles all cases: with/without env var prefix and flag args)
+# vite => vp dev (handles all cases: with/without env var prefix and flag args)
 # Match command_name to preserve env var prefix and arguments
 # Excludes subcommands like "vite build", "vite test", etc.
 ---
@@ -12,10 +12,24 @@ rule:
     not:
       # ignore non-flag arguments (subcommands like build, test, etc.)
       regex: 'vite\s+[^-]'
-fix: vite dev
+fix: vp dev
 
 
-# oxlint => vite lint (handles all cases: with/without env var prefix and args)
+# vite <subcommand> => vp <subcommand> (handles vite build, vite test, vite dev, etc.)
+# Match command_name when followed by a subcommand, replace only the command name
+---
+id: replace-vite-subcommand
+language: bash
+rule:
+  kind: command_name
+  regex: '^vite$'
+  inside:
+    kind: command
+    regex: 'vite\s+[^-]'
+fix: vp
+
+
+# oxlint => vp lint (handles all cases: with/without env var prefix and args)
 # Match command_name to preserve env var prefix and arguments
 ---
 id: replace-oxlint
@@ -23,34 +37,34 @@ language: bash
 rule:
   kind: command_name
   regex: '^oxlint$'
-fix: vite lint
+fix: vp lint
 
 
-# oxfmt => vite fmt
+# oxfmt => vp fmt
 ---
 id: replace-oxfmt
 language: bash
 rule:
   kind: command_name
   regex: '^oxfmt$'
-fix: vite fmt
+fix: vp fmt
 
 
-# vitest => vite test
+# vitest => vp test
 ---
 id: replace-vitest
 language: bash
 rule:
   kind: command_name
   regex: '^vitest$'
-fix: vite test
+fix: vp test
 
 
-# tsdown => vite pack
+# tsdown => vp pack
 ---
 id: replace-tsdown
 language: bash
 rule:
   kind: command_name
   regex: '^tsdown$'
-fix: vite pack
+fix: vp pack

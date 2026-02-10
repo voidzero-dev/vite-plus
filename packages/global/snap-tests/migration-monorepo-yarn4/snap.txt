@@ -40,15 +40,15 @@ cat: .oxlintrc.json: No such file or directory
     "packages/*"
   ],
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "test:run": "vite test run",
-    "test:ui": "vite test --ui",
-    "test:coverage": "vite test run --coverage",
-    "test:watch": "vite test --watch",
-    "test": "vite test",
-    "lint": "vite lint",
-    "fmt": "vite fmt"
+    "dev": "vp dev",
+    "build": "vp build",
+    "test:run": "vp test run",
+    "test:ui": "vp test --ui",
+    "test:coverage": "vp test run --coverage",
+    "test:watch": "vp test --watch",
+    "test": "vp test",
+    "lint": "vp lint",
+    "fmt": "vp fmt"
   },
   "dependencies": {
     "testnpm2": "1.0.0"
@@ -75,9 +75,9 @@ catalog:
 {
   "name": "app",
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "test": "vite test"
+    "dev": "vp dev",
+    "build": "vp build",
+    "test": "vp test"
   },
   "dependencies": {
     "@vite-plus-test/utils": "workspace:*",
@@ -99,9 +99,9 @@ catalog:
 {
   "name": "@vite-plus-test/utils",
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "test": "vite test"
+    "dev": "vp dev",
+    "build": "vp build",
+    "test": "vp test"
   },
   "dependencies": {
     "testnpm2": "1.0.0"

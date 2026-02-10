@@ -39,9 +39,9 @@ export default defineConfig({
 {
   "name": "migration-from-tsdown-json-config",
   "scripts": {
-    "build": "vite pack",
-    "build:watch": "vite pack --watch",
-    "build:dts": "vite pack --dts"
+    "build": "vp pack",
+    "build:watch": "vp pack --watch",
+    "build:dts": "vp pack --dts"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -84,9 +84,9 @@ export default defineConfig({
 {
   "name": "migration-from-tsdown-json-config",
   "scripts": {
-    "build": "vite pack",
-    "build:watch": "vite pack --watch",
-    "build:dts": "vite pack --dts"
+    "build": "vp pack",
+    "build:watch": "vp pack --watch",
+    "build:dts": "vp pack --dts"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",

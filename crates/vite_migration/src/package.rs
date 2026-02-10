@@ -78,7 +78,7 @@ mod tests {
     use super::*;
 
     const RULES_YAML: &str = r#"
-# vite => vite dev (handles all cases: with/without env var prefix and flag args)
+# vite => vp dev (handles all cases: with/without env var prefix and flag args)
 # Match command_name to preserve env var prefix and arguments
 # Excludes subcommands like "vite build", "vite test", etc.
 ---
@@ -92,9 +92,22 @@ rule:
     not:
       # ignore non-flag arguments (subcommands like build, test, etc.)
       regex: 'vite\s+[^-]'
-fix: vite dev
+fix: vp dev
 
-# oxlint => vite lint (handles all cases: with/without env var prefix and args)
+# vite <subcommand> => vp <subcommand> (handles vite build, vite test, vite dev, etc.)
+# Match command_name when followed by a subcommand, replace only the command name
+---
+id: replace-vite-subcommand
+language: bash
+rule:
+  kind: command_name
+  regex: '^vite$'
+  inside:
+    kind: command
+    regex: 'vite\s+[^-]'
+fix: vp
+
+# oxlint => vp lint (handles all cases: with/without env var prefix and args)
 # Match command_name to preserve env var prefix and arguments
 ---
 id: replace-oxlint
@@ -102,61 +115,79 @@ language: bash
 rule:
   kind: command_name
   regex: '^oxlint$'
-fix: vite lint
+fix: vp lint
 
-# vitest => vite test
+# oxfmt => vp fmt
+---
+id: replace-oxfmt
+language: bash
+rule:
+  kind: command_name
+  regex: '^oxfmt$'
+fix: vp fmt
+
+# vitest => vp test
 ---
 id: replace-vitest
 language: bash
 rule:
   kind: command_name
   regex: '^vitest$'
-fix: vite test
+fix: vp test
+
+# tsdown => vp pack
+---
+id: replace-tsdown
+language: bash
+rule:
+  kind: command_name
+  regex: '^tsdown$'
+fix: vp pack
     "#;
 
     #[test]
     fn test_rewrite_script() {
         let rules = ast_grep::load_rules(RULES_YAML).unwrap();
         // vite commands
-        assert_eq!(rewrite_script("vite", &rules), "vite dev");
-        assert_eq!(rewrite_script("vite dev", &rules), "vite dev");
-        assert_eq!(rewrite_script("vite i", &rules), "vite i");
-        assert_eq!(rewrite_script("vite install", &rules), "vite install");
-        assert_eq!(rewrite_script("vite test", &rules), "vite test");
-        assert_eq!(rewrite_script("vite lint", &rules), "vite lint");
-        assert_eq!(rewrite_script("vite fmt", &rules), "vite fmt");
-        assert_eq!(rewrite_script("vite pack", &rules), "vite pack");
-        assert_eq!(rewrite_script("vite preview", &rules), "vite preview");
-        assert_eq!(rewrite_script("vite optimize", &rules), "vite optimize");
-        assert_eq!(rewrite_script("vite build -r", &rules), "vite build -r");
-        assert_eq!(rewrite_script("vite --port 3000", &rules), "vite dev --port 3000");
+        assert_eq!(rewrite_script("vite", &rules), "vp dev");
+        assert_eq!(rewrite_script("vite dev", &rules), "vp dev");
+        assert_eq!(rewrite_script("vite i", &rules), "vp i");
+        assert_eq!(rewrite_script("vite install", &rules), "vp install");
+        assert_eq!(rewrite_script("vite test", &rules), "vp test");
+        assert_eq!(rewrite_script("vite lint", &rules), "vp lint");
+        assert_eq!(rewrite_script("vite fmt", &rules), "vp fmt");
+        assert_eq!(rewrite_script("vite pack", &rules), "vp pack");
+        assert_eq!(rewrite_script("vite preview", &rules), "vp preview");
+        assert_eq!(rewrite_script("vite optimize", &rules), "vp optimize");
+        assert_eq!(rewrite_script("vite build -r", &rules), "vp build -r");
+        assert_eq!(rewrite_script("vite --port 3000", &rules), "vp dev --port 3000");
         assert_eq!(
             rewrite_script("vite --port 3000 --host 0.0.0.0 --open", &rules),
-            "vite dev --port 3000 --host 0.0.0.0 --open"
+            "vp dev --port 3000 --host 0.0.0.0 --open"
         );
         assert_eq!(
             rewrite_script("vite --port 3000 || vite --port 3001", &rules),
-            "vite dev --port 3000 || vite dev --port 3001"
+            "vp dev --port 3000 || vp dev --port 3001"
         );
         assert_eq!(
             rewrite_script("npm run lint && vite --port 3000", &rules),
-            "npm run lint && vite dev --port 3000"
+            "npm run lint && vp dev --port 3000"
         );
         assert_eq!(
             rewrite_script("vite --port 3000 && npm run lint", &rules),
-            "vite dev --port 3000 && npm run lint"
+            "vp dev --port 3000 && npm run lint"
         );
         assert_eq!(
             rewrite_script("vite && tsc --check && vite run -r build", &rules),
-            "vite dev && tsc --check && vite run -r build"
+            "vp dev && tsc --check && vp run -r build"
         );
         assert_eq!(
             rewrite_script("vite && tsc --check && vite run test", &rules),
-            "vite dev && tsc --check && vite run test"
+            "vp dev && tsc --check && vp run test"
         );
         assert_eq!(
             rewrite_script("vite && tsc --check && vite test", &rules),
-            "vite dev && tsc --check && vite test"
+            "vp dev && tsc --check && vp test"
         );
         assert_eq!(
             rewrite_script("prettier --write src/** vite", &rules),
@@ -165,49 +196,49 @@ fix: vite test
         // complex examples
         assert_eq!(
             rewrite_script("if [ -f file.txt ]; then vite; fi", &rules),
-            "if [ -f file.txt ]; then vite dev; fi"
+            "if [ -f file.txt ]; then vp dev; fi"
         );
         assert_eq!(
             rewrite_script("if [ -f file.txt ]; then vite --port 3000; fi", &rules),
-            "if [ -f file.txt ]; then vite dev --port 3000; fi"
+            "if [ -f file.txt ]; then vp dev --port 3000; fi"
         );
         assert_eq!(
             rewrite_script("if [ -f file.txt ]; then vite --port 3000 && npm run lint; fi", &rules),
-            "if [ -f file.txt ]; then vite dev --port 3000 && npm run lint; fi"
+            "if [ -f file.txt ]; then vp dev --port 3000 && npm run lint; fi"
         );
         assert_eq!(
             rewrite_script(
                 "if [ -f file.txt ]; then vite dev --port 3000 && npm run lint; fi",
                 &rules
             ),
-            "if [ -f file.txt ]; then vite dev --port 3000 && npm run lint; fi"
+            "if [ -f file.txt ]; then vp dev --port 3000 && npm run lint; fi"
         );
         // env variable commands
         assert_eq!(
             rewrite_script("NODE_ENV=test VITE_CJS_IGNORE_WARNING=true vite", &rules),
-            "NODE_ENV=test VITE_CJS_IGNORE_WARNING=true vite dev"
+            "NODE_ENV=test VITE_CJS_IGNORE_WARNING=true vp dev"
         );
         assert_eq!(
             rewrite_script("FOO=bar vite --port 3000", &rules),
-            "FOO=bar vite dev --port 3000"
+            "FOO=bar vp dev --port 3000"
         );
         // env variable with oxlint commands
-        assert_eq!(rewrite_script("DEBUG=1 oxlint", &rules), "DEBUG=1 vite lint");
+        assert_eq!(rewrite_script("DEBUG=1 oxlint", &rules), "DEBUG=1 vp lint");
         assert_eq!(
             rewrite_script("NODE_ENV=test oxlint --type-aware", &rules),
-            "NODE_ENV=test vite lint --type-aware"
+            "NODE_ENV=test vp lint --type-aware"
         );
         // oxlint commands
-        assert_eq!(rewrite_script("oxlint", &rules), "vite lint");
-        assert_eq!(rewrite_script("oxlint --type-aware", &rules), "vite lint --type-aware");
+        assert_eq!(rewrite_script("oxlint", &rules), "vp lint");
+        assert_eq!(rewrite_script("oxlint --type-aware", &rules), "vp lint --type-aware");
         assert_eq!(
             rewrite_script("oxlint --type-aware --config .oxlintrc", &rules),
-            "vite lint --type-aware --config .oxlintrc"
+            "vp lint --type-aware --config .oxlintrc"
         );
-        assert_eq!(rewrite_script("oxlint && vite dev", &rules), "vite lint && vite dev");
+        assert_eq!(rewrite_script("oxlint && vite dev", &rules), "vp lint && vp dev");
         assert_eq!(
             rewrite_script("npm run type-check && oxlint --type-aware", &rules),
-            "npm run type-check && vite lint --type-aware"
+            "npm run type-check && vp lint --type-aware"
         );
     }
 
@@ -225,7 +256,7 @@ fix: vite test
             updated.unwrap(),
             r#"
 {
-  "dev": "vite dev"
+  "dev": "vp dev"
 }
         "#
             .trim()
@@ -247,8 +278,8 @@ fix: vite test
             updated.unwrap(),
             r#"
 {
-  "dev:cjs": "VITE_CJS_IGNORE_WARNING=true vite dev",
-  "lint": "VITE_CJS_IGNORE_WARNING=true FOO=bar vite lint --fix"
+  "dev:cjs": "VITE_CJS_IGNORE_WARNING=true vp dev",
+  "lint": "VITE_CJS_IGNORE_WARNING=true FOO=bar vp lint --fix"
 }
         "#
             .trim()
@@ -271,9 +302,9 @@ fix: vite test
             updated.unwrap(),
             r#"
 {
-  "dev:cjs": "cross-env VITE_CJS_IGNORE_WARNING=true vite dev && cross-env FOO=bar vite test run",
-  "lint": "cross-env VITE_CJS_IGNORE_WARNING=true FOO=bar vite lint --fix",
-  "test": "vite build && cross-env FOO=bar vite test run && echo ' cross-env test done ' || echo ' cross-env test failed '"
+  "dev:cjs": "cross-env VITE_CJS_IGNORE_WARNING=true vp dev && cross-env FOO=bar vp test run",
+  "lint": "cross-env VITE_CJS_IGNORE_WARNING=true FOO=bar vp lint --fix",
+  "test": "vp build && cross-env FOO=bar vp test run && echo ' cross-env test done ' || echo ' cross-env test failed '"
 }
         "#
             .trim()
@@ -296,10 +327,10 @@ fix: vite test
             r#"
 {
   "*.js": [
-    "vite lint --fix --type-aware",
-    "oxfmt --fix"
+    "vp lint --fix --type-aware",
+    "vp fmt --fix"
   ],
-  "*.ts": "oxfmt --fix"
+  "*.ts": "vp fmt --fix"
 }
         "#
             .trim()
