@@ -87,12 +87,12 @@ jobs:
               - If `Cargo.toml` has been modified, you need to run `cargo shear` to ensure there is nothing wrong with our dependencies.
               - Run `cargo check --all-targets --all-features` to ensure everything works fine if any Rust related codes are modified.
             - Run the following commands to ensure everything works fine:
-              vite -h
-              vite run -h
-              vite lint -h
-              vite test -h
-              vite build -h
-              vite fmt -h
+              vp -h
+              vp run -h
+              vp lint -h
+              vp test -h
+              vp build -h
+              vp fmt -h
 
             Help me fix the errors in `build-upstream` steps, no need to commit changes after your fixing.
           claude_args: |

@@ -11,10 +11,10 @@
     "copy-cli-binding": "pnpm --filter=vite-plus-cli copy-binding",
     "install-global-cli": "pnpm copy-cli-binding && tool install-global-cli",
     "tsgo": "tsgo -b tsconfig.json",
-    "lint": "vite lint --type-aware --threads 4",
-    "test": "vite test run && pnpm -r snap-test",
-    "fmt": "vite fmt",
-    "test:unit": "vite test run",
+    "lint": "vp lint --type-aware --threads 4",
+    "test": "vp test run && pnpm -r snap-test",
+    "fmt": "vp fmt",
+    "test:unit": "vp test run",
     "docs:dev": "pnpm --filter=./docs dev",
     "docs:build": "pnpm --filter=./docs build",
     "prepare": "husky"
@@ -40,8 +40,8 @@
   },
   "lint-staged": {
     "*.@(js|ts|tsx)": [
-      "vite run lint --fix",
-      "vite fmt --no-error-on-unmatched-pattern"
+      "vp run lint --fix",
+      "vp fmt --no-error-on-unmatched-pattern"
     ],
     "*.rs": [
       "cargo fmt --"

@@ -75,14 +75,14 @@ export default defineConfig({
     tasks: {
       'build:src': {
         command: [
-          'vite run @rolldown/pluginutils#build',
-          'vite run rolldown#build-binding:release',
-          'vite run rolldown#build-node',
-          'vite run vite#build-types',
-          'vite run @voidzero-dev/vite-plus-core#build',
-          'vite run @voidzero-dev/vite-plus-test#build',
-          'vite run vite-plus#build',
-          'vite run vite-plus-cli#build',
+          'vp run @rolldown/pluginutils#build',
+          'vp run rolldown#build-binding:release',
+          'vp run rolldown#build-node',
+          'vp run vite#build-types',
+          'vp run @voidzero-dev/vite-plus-core#build',
+          'vp run @voidzero-dev/vite-plus-test#build',
+          'vp run vite-plus#build',
+          'vp run vite-plus-cli#build',
         ].join(' && '),
       },
     },
