@@ -1,0 +1,24 @@
+> vite run build # synthetic build (vp build) should have cache disabled without cacheScripts
+$ vp build ⊘ cache disabled: no cache config
+vite v<semver>
+[2Ktransforming...✓ <variable> modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                <variable> kB │ gzip: <variable> kB
+dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
+
+✓ built in <variable>ms
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] synthetic-build-cache-disabled-test#build: $ vp build ✓
+      → Cache disabled in task configuration
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

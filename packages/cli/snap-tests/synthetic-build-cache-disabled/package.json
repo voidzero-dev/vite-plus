@@ -1,0 +1,6 @@
+{
+  "name": "synthetic-build-cache-disabled-test",
+  "scripts": {
+    "build": "vp build"
+  }
+}

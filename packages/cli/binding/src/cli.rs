@@ -4,11 +4,11 @@
 //! It handles argument parsing, command dispatching, and orchestration of the task execution.
 
 use std::{
-    collections::HashMap, env, ffi::OsStr, future::Future, iter, path::PathBuf, pin::Pin,
-    process::Stdio, sync::Arc,
+    env, ffi::OsStr, future::Future, iter, path::PathBuf, pin::Pin, process::Stdio, sync::Arc,
 };
 
 use clap::{Parser, Subcommand};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use tokio::fs::write;
 use vite_error::Error;
@@ -19,7 +19,7 @@ use vite_task::{
     Command, CommandHandler, ExitStatus, HandledCommand, ScriptCommand, Session, SessionCallbacks,
     config::{
         UserRunConfig,
-        user::{EnabledCacheConfig, UserCacheConfig, UserTaskOptions},
+        user::{EnabledCacheConfig, UserCacheConfig},
     },
     loader::UserConfigLoader,
     plan_request::SyntheticPlanRequest,
@@ -142,8 +142,8 @@ pub struct CliOptions {
 struct ResolvedSubcommand {
     program: Arc<OsStr>,
     args: Arc<[Str]>,
-    task_options: UserTaskOptions,
-    envs: Arc<HashMap<Arc<OsStr>, Arc<OsStr>>>,
+    cache_config: UserCacheConfig,
+    envs: Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
 }
 
 impl ResolvedSubcommand {
@@ -151,7 +151,7 @@ impl ResolvedSubcommand {
         SyntheticPlanRequest {
             program: self.program,
             args: self.args,
-            task_options: self.task_options,
+            cache_config: self.cache_config,
             envs: self.envs,
         }
     }
@@ -250,11 +250,11 @@ impl SubcommandResolver {
         Ok(())
     }
 
-    /// Resolve a synthesizable subcommand to a concrete program, args, options, and envs.
+    /// Resolve a synthesizable subcommand to a concrete program, args, cache config, and envs.
     async fn resolve(
         &mut self,
         subcommand: SynthesizableSubcommand,
-        envs: &Arc<HashMap<Arc<OsStr>, Arc<OsStr>>>,
+        envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
         cwd: &Arc<AbsolutePath>,
     ) -> anyhow::Result<ResolvedSubcommand> {
         match subcommand {
@@ -299,16 +299,10 @@ impl SubcommandResolver {
                     args: iter::once(Str::from(js_path_str))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    task_options: UserTaskOptions {
-                        cache_config: UserCacheConfig::Enabled {
-                            cache: None,
-                            enabled_cache_config: EnabledCacheConfig {
-                                envs: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
-                                pass_through_envs: None,
-                            },
-                        },
-                        ..Default::default()
-                    },
+                    cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
+                        envs: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
+                        pass_through_envs: None,
+                    }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
@@ -353,7 +347,10 @@ impl SubcommandResolver {
                     args: iter::once(Str::from(js_path_str))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    task_options: Default::default(),
+                    cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
+                        envs: None,
+                        pass_through_envs: None,
+                    }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
@@ -374,16 +371,10 @@ impl SubcommandResolver {
                         .chain(iter::once(Str::from("build")))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    task_options: UserTaskOptions {
-                        cache_config: UserCacheConfig::Enabled {
-                            cache: None,
-                            enabled_cache_config: EnabledCacheConfig {
-                                envs: Some(Box::new([Str::from("VITE_*")])),
-                                pass_through_envs: None,
-                            },
-                        },
-                        ..Default::default()
-                    },
+                    cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
+                        envs: Some(Box::new([Str::from("VITE_*")])),
+                        pass_through_envs: None,
+                    }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
@@ -403,7 +394,10 @@ impl SubcommandResolver {
                     args: iter::once(Str::from(js_path_str))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    task_options: Default::default(),
+                    cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
+                        envs: None,
+                        pass_through_envs: None,
+                    }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
@@ -423,7 +417,10 @@ impl SubcommandResolver {
                     args: iter::once(Str::from(js_path_str))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    task_options: Default::default(),
+                    cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
+                        envs: None,
+                        pass_through_envs: None,
+                    }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
@@ -444,16 +441,7 @@ impl SubcommandResolver {
                         .chain(iter::once(Str::from("dev")))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    task_options: UserTaskOptions {
-                        cache_config: UserCacheConfig::Enabled {
-                            cache: None,
-                            enabled_cache_config: EnabledCacheConfig {
-                                envs: Some(Box::new([Str::from("VITE_*")])),
-                                pass_through_envs: None,
-                            },
-                        },
-                        ..Default::default()
-                    },
+                    cache_config: UserCacheConfig::disabled(),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
@@ -474,7 +462,7 @@ impl SubcommandResolver {
                         .chain(iter::once(Str::from("preview")))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    task_options: Default::default(),
+                    cache_config: UserCacheConfig::disabled(),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
@@ -494,7 +482,10 @@ impl SubcommandResolver {
                     args: iter::once(Str::from(js_path_str))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    task_options: Default::default(),
+                    cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
+                        envs: None,
+                        pass_through_envs: None,
+                    }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
@@ -504,7 +495,7 @@ impl SubcommandResolver {
                 let resolve_command = package_manager.resolve_install_command(&args);
 
                 let merged_envs = {
-                    let mut env_map = HashMap::clone(envs);
+                    let mut env_map = FxHashMap::clone(envs);
                     for (k, v) in resolve_command.envs {
                         env_map.insert(Arc::from(OsStr::new(&k)), Arc::from(OsStr::new(&v)));
                     }
@@ -516,7 +507,7 @@ impl SubcommandResolver {
                         OsStr::new(&resolve_command.bin_path).to_os_string(),
                     ),
                     args: resolve_command.args.into_iter().map(Str::from).collect(),
-                    task_options: Default::default(),
+                    cache_config: UserCacheConfig::disabled(),
                     envs: merged_envs,
                 })
             }
@@ -527,10 +518,10 @@ impl SubcommandResolver {
 /// Merge resolved environment variables from JS resolver into existing envs.
 /// Does not override existing entries.
 fn merge_resolved_envs(
-    envs: &Arc<HashMap<Arc<OsStr>, Arc<OsStr>>>,
+    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     resolved_envs: Vec<(String, String)>,
-) -> Arc<HashMap<Arc<OsStr>, Arc<OsStr>>> {
-    let mut envs = HashMap::clone(envs);
+) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
+    let mut envs = FxHashMap::clone(envs);
     for (k, v) in resolved_envs {
         envs.entry(Arc::from(OsStr::new(&k))).or_insert_with(|| Arc::from(OsStr::new(&v)));
     }
@@ -636,7 +627,7 @@ async fn create_install_synthetic_request(
     let package_manager = vite_install::PackageManager::builder(cwd).build_with_default().await?;
     let resolve_command = package_manager.resolve_install_command(&vec![]);
 
-    let mut envs: HashMap<Arc<OsStr>, Arc<OsStr>> = std::env::vars_os()
+    let mut envs: FxHashMap<Arc<OsStr>, Arc<OsStr>> = std::env::vars_os()
         .map(|(k, v)| (Arc::from(k.as_os_str()), Arc::from(v.as_os_str())))
         .collect();
 
@@ -647,7 +638,7 @@ async fn create_install_synthetic_request(
     Ok(SyntheticPlanRequest {
         program: Arc::<OsStr>::from(OsStr::new(&resolve_command.bin_path).to_os_string()),
         args: resolve_command.args.into_iter().map(Str::from).collect(),
-        task_options: Default::default(),
+        cache_config: UserCacheConfig::disabled(),
         envs: Arc::new(envs),
     })
 }
@@ -668,7 +659,7 @@ async fn execute_direct_subcommand(
         SubcommandResolver::new(Arc::clone(&workspace_path))
     };
 
-    let envs: Arc<HashMap<Arc<OsStr>, Arc<OsStr>>> = Arc::new(
+    let envs: Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> = Arc::new(
         std::env::vars_os()
             .map(|(k, v)| (Arc::from(k.as_os_str()), Arc::from(v.as_os_str())))
             .collect(),

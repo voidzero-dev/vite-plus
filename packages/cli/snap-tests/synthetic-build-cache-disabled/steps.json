@@ -1,0 +1,9 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vite run build # synthetic build (vp build) should have cache disabled without cacheScripts"
+  ]
+}
