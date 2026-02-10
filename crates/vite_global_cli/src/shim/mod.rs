@@ -9,7 +9,7 @@
 //! - Legacy: VITE_PLUS_SHIM_TOOL env var (kept for backward compatibility)
 
 mod cache;
-mod dispatch;
+pub(crate) mod dispatch;
 pub(crate) mod exec;
 
 pub use dispatch::dispatch;

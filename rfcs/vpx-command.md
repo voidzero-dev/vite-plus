@@ -91,22 +91,30 @@ When `vpx` is invoked:
 1. **Walk up from cwd** looking for `node_modules/.bin/<cmd>`
    - Check `./node_modules/.bin/<cmd>`
    - Check `../node_modules/.bin/<cmd>`
-   - Continue until reaching the workspace/project root (directory containing `package.json` with no parent workspace)
-2. **If found locally**: Execute the binary directly
-3. **If not found locally**: Delegate to `vp dlx` behavior (remote download via detected package manager)
+   - Continue until reaching the filesystem root
+2. **Check vp global packages** (installed via `vp install -g`)
+   - Uses `BinConfig` for O(1) lookup of which package provides the binary
+   - Executes with the Node.js version used at install time
+3. **Check system PATH** (excluding vite-plus bin directory)
+   - Filters out `~/.vite-plus/bin/` to avoid finding vite-plus shims
+   - Finds commands like `git`, `cargo`, etc. without downloading
+4. **Fall back to remote download** via `vp dlx` behavior (remote download via detected package manager)
+
+Before executing any found binary, `vpx` prepends all `node_modules/.bin` directories (from cwd upward) to PATH so that sub-processes also resolve local binaries first.
 
 ### Special Cases
 
-- When a version is specified (e.g., `vpx eslint@9`), local lookup is skipped — always use remote
+- When a version is specified (e.g., `vpx eslint@9`), local/global/PATH lookup is skipped — always use remote
 - When only a package name is specified without a version (e.g., `vpx eslint`), prefer local if available
-- Shell mode (`-c`) prepends local `node_modules/.bin` to PATH, then falls back to remote for missing packages
+- Shell mode (`-c`) skips local/global/PATH lookup and delegates directly to `vp dlx`
+- `--package` flag skips local/global/PATH lookup and delegates directly to `vp dlx`
 
 ## Relationship Between Commands
 
-| Command | Local lookup | Remote download | Use case |
-|---------|-------------|-----------------|----------|
-| `vpx` | Yes (first) | Yes (fallback) | Run local or remote package binary |
-| `vp dlx` | No | Always | Always fetch latest from registry |
+| Command  | Local lookup | Global lookup | PATH lookup | Remote download | Use case                                          |
+| -------- | ------------ | ------------- | ----------- | --------------- | ------------------------------------------------- |
+| `vpx`    | Yes (1st)    | Yes (2nd)     | Yes (3rd)   | Yes (fallback)  | Run local, global, PATH, or remote package binary |
+| `vp dlx` | No           | No            | No          | Always          | Always fetch latest from registry                 |
 
 ### When to use which
 
@@ -174,14 +182,14 @@ The `vp env setup` command creates the `vpx` symlink/wrapper alongside existing 
 
 ## Comparison with npx
 
-| Behavior | `npx` | `vpx` |
-|----------|-------|-------|
-| Local lookup | Walk up `node_modules/.bin` | Walk up `node_modules/.bin` |
-| Remote fallback | Download to npm cache | Delegate to `vp dlx` (uses detected PM) |
+| Behavior            | `npx`                                      | `vpx`                                      |
+| ------------------- | ------------------------------------------ | ------------------------------------------ |
+| Local lookup        | Walk up `node_modules/.bin`                | Walk up `node_modules/.bin`                |
+| Remote fallback     | Download to npm cache                      | Delegate to `vp dlx` (uses detected PM)    |
 | Confirmation prompt | Prompts before installing unknown packages | Auto-confirms (like `vp dlx` with `--yes`) |
-| `--package` flag | Specifies additional packages | Same |
-| Shell mode (`-c`) | Runs in shell with packages in PATH | Same |
-| Cache | npm cache | Package manager's cache (via `vp dlx`) |
+| `--package` flag    | Specifies additional packages              | Same                                       |
+| Shell mode (`-c`)   | Runs in shell with packages in PATH        | Same                                       |
+| Cache               | npm cache                                  | Package manager's cache (via `vp dlx`)     |
 
 ### Key Difference: Auto-confirm
 
@@ -194,6 +202,7 @@ The `vp env setup` command creates the `vpx` symlink/wrapper alongside existing 
 **Decision**: Walk up from cwd to project root looking for `node_modules/.bin`, like `npx`.
 
 **Rationale**:
+
 - In monorepos, a command may be installed at the workspace root, not the current package
 - `npx` walks up directories — matching this behavior meets developer expectations
 - `pnpm exec` only looks in `./node_modules/.bin` — too restrictive for monorepos
@@ -203,6 +212,7 @@ The `vp env setup` command creates the `vpx` symlink/wrapper alongside existing 
 **Decision**: Keep `vpx` (local-first) and `vp dlx` (remote-only) as separate commands.
 
 **Rationale**:
+
 - Different mental models: "run what I have" vs "download and run"
 - `vp dlx` already exists with well-defined remote-only behavior — changing it would break expectations
 - Explicit is better than implicit — developers should choose their intent
@@ -212,6 +222,7 @@ The `vp env setup` command creates the `vpx` symlink/wrapper alongside existing 
 **Decision**: `vpx` is a symlink to `vp`, not a separate binary.
 
 **Rationale**:
+
 - Zero additional binary size
 - Same pattern used for `node`/`npm`/`npx` shims — proven approach
 - `argv[0]` detection is already implemented in `shim/mod.rs`
@@ -222,6 +233,7 @@ The `vp env setup` command creates the `vpx` symlink/wrapper alongside existing 
 **Decision**: Only provide `vpx` as a standalone command, no `vp exec` subcommand for now.
 
 **Rationale**:
+
 - `vpx` covers the primary use case — quick execution of local/remote binaries
 - Adding `vp exec` introduces complexity (argument parsing with `--` separator, potential confusion with `vp env exec`)
 - `vp exec` can be added later as a follow-up if needed
@@ -285,69 +297,41 @@ if argv0_tool == "vpx" {
 
 **File**: `crates/vite_global_cli/src/shim/dispatch.rs`
 
-Handle `vpx` in the dispatch logic:
+Handle `vpx` in the dispatch logic (delegates to `commands/vpx.rs`):
 
 ```rust
 if tool == "vpx" {
-    return handle_vpx(remaining_args, cwd).await;
-}
-
-async fn handle_vpx(args: Vec<String>, cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
-    // 1. Parse flags: --package/-p, --shell-mode/-c, --silent/-s
-    let (flags, positional) = parse_vpx_flags(args);
-
-    // 2. Extract command name from first positional arg
-    let cmd_name = extract_command_name(&positional)?;
-
-    // 3. If no version specified, try local lookup
-    if !has_version_spec(&positional[0]) {
-        if let Some(local_bin) = find_local_binary(&cwd, &cmd_name) {
-            return run_local_binary(local_bin, &positional[1..]).await;
-        }
-    }
-
-    // 4. Fall back to vp dlx
-    DlxCommand::new(cwd)
-        .execute(flags.packages, flags.shell_mode, flags.silent, positional)
-        .await
+    return crate::commands::vpx::execute_vpx(args, &cwd).await;
 }
 ```
 
-### 3. Local Binary Lookup
+The dispatch module also exposes helper functions as `pub(crate)` for vpx to reuse:
 
-**File**: `crates/vite_global_cli/src/commands/vpx.rs` (new file)
+- `find_package_for_binary()` — looks up which globally installed package provides a binary
+- `locate_package_binary()` — locates the actual binary path inside a package
+- `ensure_installed()` — ensures a Node.js version is downloaded
+- `locate_tool()` — locates a tool binary within a Node.js installation
+
+### 3. Binary Resolution (`commands/vpx.rs`)
+
+**File**: `crates/vite_global_cli/src/commands/vpx.rs`
+
+Resolution order (when no version spec, no --package flag, and not shell mode):
 
 ```rust
-/// Walk up from cwd looking for node_modules/.bin/<cmd>.
-/// Stops at the project/workspace root.
-fn find_local_binary(cwd: &AbsolutePath, cmd: &str) -> Option<AbsolutePathBuf> {
-    let mut dir = cwd.to_path_buf();
-    loop {
-        let bin_path = dir.join("node_modules").join(".bin").join(cmd);
-        if bin_path.exists() {
-            return Some(bin_path);
-        }
-        // Stop if this directory has a workspace-root package.json
-        // or if we've reached the filesystem root
-        if !dir.pop() {
-            return None;
-        }
-    }
-}
+// 1. Local node_modules/.bin — walk up from cwd
+if let Some(local_bin) = find_local_binary(cwd, &cmd_name) { ... }
 
-/// Check if a package spec includes a version (e.g., "eslint@9").
-/// Scoped packages like "@vue/cli" are not version specs.
-fn has_version_spec(spec: &str) -> bool {
-    if spec.starts_with('@') {
-        // Scoped: @scope/pkg@version
-        if let Some(slash_pos) = spec.find('/') {
-            return spec[slash_pos + 1..].contains('@');
-        }
-        return false;
-    }
-    spec.contains('@')
-}
+// 2. Global vp packages — uses dispatch::find_package_for_binary()
+if let Some(global_bin) = find_global_binary(&cmd_name).await { ... }
+
+// 3. System PATH — uses which::which_in() with filtered PATH
+if let Some(path_bin) = find_on_path(&cmd_name) { ... }
+
+// 4. Remote download — delegates to DlxCommand
 ```
+
+Before executing any found binary, `prepend_node_modules_bin_to_path()` walks up from cwd and prepends all existing `node_modules/.bin` directories to PATH.
 
 ### 4. Setup
 
