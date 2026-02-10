@@ -18,7 +18,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm build-ts && pnpm build-native",
-    "build-ts": "rolldown -c rolldown.config.ts",
+    "build-ts": "pnpm --filter=@voidzero-dev/vite-plus-prompts build && rolldown -c rolldown.config.ts",
     "build-native": "oxnode -C dev ./build.ts",
     "copy-binding": "cp ./binding/*.node ./dist",
     "snap-test": "tool snap-test",
