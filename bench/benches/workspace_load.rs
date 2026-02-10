@@ -1,6 +1,7 @@
-use std::{collections::HashMap, ffi::OsStr, hint::black_box, path::PathBuf, sync::Arc};
+use std::{ffi::OsStr, hint::black_box, path::PathBuf, sync::Arc};
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use rustc_hash::FxHashMap;
 use tokio::runtime::Runtime;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_task::{
@@ -67,7 +68,7 @@ fn bench_workspace_load(c: &mut Criterion) {
         b.iter(|| {
             runtime.block_on(async {
                 let mut owned_callbacks = BenchSessionCallbacks::default();
-                let envs: HashMap<Arc<OsStr>, Arc<OsStr>> = HashMap::new();
+                let envs: FxHashMap<Arc<OsStr>, Arc<OsStr>> = FxHashMap::default();
                 let mut session = Session::init_with(
                     envs,
                     fixture_path.clone().into(),
@@ -85,7 +86,7 @@ fn bench_workspace_load(c: &mut Criterion) {
         b.iter(|| {
             runtime.block_on(async {
                 let mut owned_callbacks = BenchSessionCallbacks::default();
-                let envs: HashMap<Arc<OsStr>, Arc<OsStr>> = HashMap::new();
+                let envs: FxHashMap<Arc<OsStr>, Arc<OsStr>> = FxHashMap::default();
                 let mut session =
                     Session::init_with(envs, path.clone().into(), owned_callbacks.as_callbacks())
                         .expect("Failed to create session");
