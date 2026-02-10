@@ -29,11 +29,11 @@
     },
     "./dist/client/*": "./dist/vite/client/*",
     "./internal": "./dist/vite/node/internal.js",
+    "./module-runner": "./dist/vite/node/module-runner.js",
     "./pack": {
       "types": "./dist/tsdown/index-types.d.ts",
       "default": "./dist/tsdown/index.js"
     },
-    "./module-runner": "./dist/vite/node/module-runner.js",
     "./package.json": "./package.json",
     "./rolldown": {
       "types": "./dist/rolldown/index.d.mts",
@@ -99,7 +99,7 @@
     "@babel/types": "^7.28.5",
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
-    "@vitejs/devtools": "^0.0.0-alpha.26",
+    "@vitejs/devtools": "^0.0.0-alpha.31",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
     "magic-string": "^0.30.21",
@@ -121,7 +121,7 @@
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
     "@types/node": "^20.19.0 || >=22.12.0",
-    "@vitejs/devtools": "*",
+    "@vitejs/devtools": "^0.0.0-alpha.24",
     "esbuild": "^0.27.0",
     "jiti": ">=1.21.0",
     "less": "^4.0.0",
@@ -197,8 +197,8 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "bundledVersions": {
-    "vite": "8.0.0-beta.12",
+    "vite": "8.0.0-beta.13",
     "rolldown": "1.0.0-rc.3",
-    "tsdown": "0.20.2"
+    "tsdown": "0.20.3"
   }
 }
