@@ -1,5 +1,5 @@
 [1]> vp migrate --no-interactive # migration should fail because npm version is not supported
-┌  VITE+(⚡︎) - The Unified Toolchain for the Web
+┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  npm@<semver> installing...
 │

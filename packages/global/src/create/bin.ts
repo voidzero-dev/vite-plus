@@ -46,8 +46,8 @@ ${headline(`Usage:`)} ${styleText('bold', `vp create [TEMPLATE] [OPTIONS] [-- TE
 Use any builtin, local or remote template with Vite+.
 
 ${headline(`Arguments:`)}
-  TEMPLATE            Template name. Run \`vp create --list\` to see available templates.
-                      - Default: vite:monorepo, vite:application, vite:library, vite:generator
+  TEMPLATE            Template name. Run \`${accent(`vp create --list`)}\` to see available templates.
+                      - Default: ${accent(`vite:monorepo`)}, ${accent(`vite:application`)}, ${accent(`vite:library`)}, ${accent(`vite:generator`)}
                       - Remote: vite, @tanstack/start, create-next-app,
                         create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
                       - Local: @company/generator-*, ./tools/create-ui-component

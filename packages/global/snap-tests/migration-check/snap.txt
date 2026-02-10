@@ -1,5 +1,5 @@
 > vp migrate --help # show help
-VITE+(⚡︎) - The Unified Toolchain for the Web
+VITE+ - The Unified Toolchain for the Web
 
 USAGE: vp migrate [PATH] [OPTIONS]
 

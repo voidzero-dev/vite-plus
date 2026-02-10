@@ -1,5 +1,5 @@
 > vp create --help # show help
-VITE+(⚡︎) - The Unified Toolchain for the Web
+VITE+ - The Unified Toolchain for the Web
 
 USAGE: vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
 
@@ -47,7 +47,7 @@ EXAMPLES:
 
 
 > vp create --list # list templates
-VITE+(⚡︎) - The Unified Toolchain for the Web
+VITE+ - The Unified Toolchain for the Web
 
 VITE+ BUILT-IN TEMPLATES:
   vite:monorepo            Create a new monorepo

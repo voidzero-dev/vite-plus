@@ -868,17 +868,17 @@ The global CLI installation script (`packages/global/install.sh`) will be update
 ```bash
 $ curl -fsSL https://viteplus.dev/install.sh | sh
 
-Setting up VITE+(⚡︎)...
+Setting up VITE+...
 
 Would you want Vite+ to manage Node.js versions?
 Press Enter to accept (Y/n):
 
-✔ VITE+(⚡︎) successfully installed!
+✔ VITE+ successfully installed!
 
   The Unified Toolchain for the Web.
 
   Get started:
-    vp create          Create a new project
+    vp create       Create a new project
     vp env          Manage Node.js versions
     vp install      Install dependencies
     vp dev          Start dev server

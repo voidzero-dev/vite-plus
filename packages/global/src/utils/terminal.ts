@@ -179,12 +179,27 @@ async function getForegroundColor(): Promise<null | RGB> {
   });
 }
 
-const purple = [101, 63, 246] as const;
+const purpleLight = [101, 63, 246] as const;
+const purpleDark = [187, 116, 247] as const;
+
 let gradientColors: Array<RGB> | null = null;
+
+function srgbToLinear(v: number): number {
+  const s = v / 255;
+  return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+}
+
+const isLightColor = ([r, g, b]: RGB) => {
+  const R = srgbToLinear(r);
+  const G = srgbToLinear(g);
+  const B = srgbToLinear(b);
+  return 0.2126 * R + 0.7152 * G + 0.0722 * B >= 0.49999;
+};
 
 async function getGradientColors(text: string) {
   if (!gradientColors) {
     const fg = await getForegroundColor();
+    const purple = fg ? (isLightColor(fg) ? purpleDark : purpleLight) : purpleDark;
     gradientColors = fg ? gradient(text.length, fg, purple) : fadeToColor(text.length, purple);
   }
   return gradientColors;
@@ -195,12 +210,12 @@ export async function getVitePlusHeader() {
   const textB = 'Toolchain for the Web';
 
   if (!shouldColorize(process.stdout) || !supportsTrueColor(process.stdout)) {
-    return `VITE+(⚡︎) - ${textA}${textB}`;
+    return `VITE+ - ${textA}${textB}`;
   }
 
   return `${styleText(
     'bold',
-    `VITE+(${accent('⚡︎')}) - ${textA}${colorize(textB, await getGradientColors(textB))}`,
+    `VITE+ - ${textA}${colorize(textB, await getGradientColors(textB))}`,
   )}`;
 }
 

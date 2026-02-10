@@ -1,5 +1,5 @@
 > vp migrate -h # migration help message
-VITE+(⚡︎) - The Unified Toolchain for the Web
+VITE+ - The Unified Toolchain for the Web
 
 USAGE: vp migrate [PATH] [OPTIONS]
 
@@ -28,7 +28,7 @@ EXAMPLES:
 
 
 > vp migrate --no-interactive # migration work with lintstagedrc.json
-┌  VITE+(⚡︎) - The Unified Toolchain for the Web
+┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
 │

@@ -1,5 +1,5 @@
 > vp migrate foo --no-interactive # migration work with subpath
-┌  VITE+(⚡︎) - The Unified Toolchain for the Web
+┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
 │
