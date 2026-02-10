@@ -121,4 +121,5 @@ export async function runCLI(): Promise<void> {
 if (module.enableCompileCache) {
   module.enableCompileCache();
 }
-runCLI();
+
+await runCLI();

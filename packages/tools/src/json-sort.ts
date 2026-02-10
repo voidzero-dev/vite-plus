@@ -22,6 +22,7 @@ export function jsonSort() {
   const data = JSON.parse(readFileSync(filename, 'utf-8'));
   assert(Array.isArray(data), 'json data must be an array');
   // sort json by script
+  // oxlint-disable-next-line typescript/no-implied-eval
   const func = new Function('_', `return ${script};`);
   const sortedJson = data.toSorted((a: unknown, b: unknown) => {
     const aValue = func(a);

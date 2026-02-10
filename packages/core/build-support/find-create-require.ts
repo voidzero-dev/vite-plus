@@ -164,7 +164,7 @@ function findCreateRequireInStaticImports(
       if (!node.init || node.init.type !== 'CallExpression') {
         return;
       }
-      const call = node.init as CallExpression;
+      const call = node.init;
       if (call.callee.type === 'Identifier' && call.callee.name === createRequireLocalName) {
         if (node.id.type === 'Identifier') {
           requireVarName = node.id.name;
@@ -207,7 +207,7 @@ function isGetBuiltinModuleCall(expr: Expression): boolean {
   if (expr.type !== 'CallExpression') {
     return false;
   }
-  const call = expr as CallExpression;
+  const call = expr;
 
   // Check callee is a member expression with property `getBuiltinModule`
   if (call.callee.type !== 'MemberExpression' || call.callee.computed) {
@@ -251,7 +251,7 @@ function findCreateRequireInGlobalModule(
         return;
       }
 
-      const call = node.init as CallExpression;
+      const call = node.init;
 
       // Check if callee is a MemberExpression with property `createRequire`
       if (call.callee.type !== 'MemberExpression' || call.callee.computed) {

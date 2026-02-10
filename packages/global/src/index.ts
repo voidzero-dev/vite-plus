@@ -11,12 +11,12 @@ if (args[0] === 'help' && args[1]) {
 const command = args[0];
 
 if (command === 'create') {
-  import('./create/bin.js');
+  await import('./create/bin.js');
 } else if (command === 'migrate') {
-  import('./migration/bin.js');
+  await import('./migration/bin.js');
 } else if (command === '--version' || command === '-V') {
-  import('./version.js');
+  await import('./version.js');
 } else {
   // Delegate all other commands to local CLI
-  import('./local/bin.js');
+  await import('./local/bin.js');
 }

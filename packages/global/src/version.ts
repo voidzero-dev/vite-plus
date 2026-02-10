@@ -180,4 +180,4 @@ export async function printVersion(cwd: string) {
   }
 }
 
-printVersion(process.cwd());
+await printVersion(process.cwd());
