@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import * as prompts from '@clack/prompts';
+import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import validateNpmPackageName from 'validate-npm-package-name';
 
 import { accent } from '../utils/terminal.js';
@@ -20,15 +20,15 @@ export async function promptPackageNameAndTargetDir(
       placeholder: defaultPackageName,
       defaultValue: defaultPackageName,
       validate: (value) => {
-        if (value.length === 0) {
+        if (value != null && value.length === 0) {
           return;
         }
 
-        const result = validateNpmPackageName(value);
-        if (result.validForNewPackages) {
+        const result = value ? validateNpmPackageName(value) : null;
+        if (result?.validForNewPackages) {
           return;
         }
-        return result.errors?.[0] ?? result.warnings?.[0] ?? 'Invalid package name';
+        return result?.errors?.[0] ?? result?.warnings?.[0] ?? 'Invalid package name';
       },
     });
     if (prompts.isCancel(selected)) {

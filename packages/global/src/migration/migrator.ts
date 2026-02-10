@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import * as prompts from '@clack/prompts';
+import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import semver from 'semver';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 

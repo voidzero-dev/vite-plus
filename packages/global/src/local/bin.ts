@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import * as prompts from '@clack/prompts';
+import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { detectWorkspace as detectWorkspaceBinding } from '../../binding/index.js';
 import { runCommand } from '../utils/command.js';
