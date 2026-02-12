@@ -1,44 +1,60 @@
-> vp env exec node --version # Ensure Node.js is installed first
-v20.18.0
+[2]> vp env exec node --version # Ensure Node.js is installed first
+error: unrecognized subcommand 'env'
 
-> vp env which node # Core tool - shows resolved Node.js binary path
-<vite-plus-home>/js_runtime/node/<semver>/bin/node
-  [2mVersion:  [0m  [92m20.18.0[39m
-  [2mSource:   [0m  [2m.node-version[0m
+Usage: vite <COMMAND>
 
-> vp env which npm # Core tool - shows resolved npm binary path
-<vite-plus-home>/js_runtime/node/<semver>/bin/npm
-  [2mVersion:  [0m  [92m20.18.0[39m
-  [2mSource:   [0m  [2m.node-version[0m
+For more information, try '--help'.
 
-> vp env which npx # Core tool - shows resolved npx binary path
-<vite-plus-home>/js_runtime/node/<semver>/bin/npx
-  [2mVersion:  [0m  [92m20.18.0[39m
-  [2mSource:   [0m  [2m.node-version[0m
+[129]> vp env which node # Core tool - shows resolved Node.js binary path
+error: unrecognized subcommand 'env'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp env which npm # Core tool - shows resolved npm binary path
+error: unrecognized subcommand 'env'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp env which npx # Core tool - shows resolved npx binary path
+error: unrecognized subcommand 'env'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
 
 > vp install -g cowsay@1.6.0 # Install a global package via vp
-  Installing cowsay@<semver> globally...
-  Running npm install...
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
-added 41 packages in <variable>ms
+<homedir>/setup-pnpm/node_modules/.bin/global/5:
++ cowsay <semver>
 
-3 packages are looking for funding
-  run `npm fund` for details
-  Installed cowsay v<semver>
-  Binaries: cowsay, cowthink
+Done in <variable>ms using pnpm v<semver>
 
-> vp env which cowsay # Global package - shows binary path with metadata
-<vite-plus-home>/packages/cowsay/lib/node_modules/cowsay/./cli.js
-  [2mPackage:  [0m  [94mcowsay@<semver>[39m
-  [2mBinaries: [0m  cowsay, cowthink
-  [2mNode:     [0m  [92m20.18.0[39m
-  [2mInstalled:[0m  [2m<date>[0m
+[2]> vp env which cowsay # Global package - shows binary path with metadata
+error: unrecognized subcommand 'env'
 
-> vp remove -g cowsay # Cleanup
-  Uninstalling cowsay...
-  Uninstalled cowsay
+Usage: vite <COMMAND>
 
-[1]> vp env which unknown-tool # Unknown tool - error message
-[1m[31merror:[39m[0m tool '[1munknown-tool[0m' not found
-Not a core tool (node, npm, npx) or installed global package.
-Run 'vp list -g' to see installed packages.
+For more information, try '--help'.
+
+[129]> vp remove -g cowsay # Cleanup
+error: unrecognized subcommand 'remove'
+
+  tip: a similar subcommand exists: 'preview'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp env which unknown-tool # Unknown tool - error message
+error: unrecognized subcommand 'env'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

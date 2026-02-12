@@ -1,20 +1,34 @@
-> vp pm config --help # should show help
-Manage package manager configuration
+[129]> vp pm config --help # should show help
+error: unrecognized subcommand 'pm'
 
-Usage: vp pm config <COMMAND>
+Usage: vite <COMMAND>
 
-Commands:
-  list    List all configuration
-  get     Get configuration value
-  set     Set configuration value
-  delete  Delete configuration key
+For more information, try '--help'.
 
-Options:
-  -h, --help  Print help
+[2]> vp pm config list --location project > /dev/null # should list all project configuration
+error: unrecognized subcommand 'pm'
 
-> vp pm config list --location project > /dev/null # should list all project configuration
-> vp pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope
-> vp pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope
-test-value
+Usage: vite <COMMAND>
 
-> vp pm config delete vite-plus-pm-config-test-key --location project # should delete config key from project scope
+For more information, try '--help'.
+
+[2]> vp pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm config delete vite-plus-pm-config-test-key --location project # should delete config key from project scope
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

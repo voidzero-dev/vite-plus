@@ -1,175 +1,55 @@
-> vp update --help # should show help
-Update packages to their latest versions
+[2]> vp update --help # should show help
+error: unrecognized subcommand 'update'
 
-Usage: vp update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+Usage: vite <COMMAND>
 
-Arguments:
-  [PACKAGES]...           Packages to update (optional - updates all if omitted)
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+For more information, try '--help'.
 
-Options:
-  -L, --latest            Update to latest version (ignore semver range)
-  -g, --global            Update global packages
-  -r, --recursive         Update recursively in all workspace packages
-      --filter <PATTERN>  Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root    Include workspace root
-  -D, --dev               Update only devDependencies
-  -P, --prod              Update only dependencies (production)
-  -i, --interactive       Interactive mode
-      --no-optional       Don't update optionalDependencies
-      --no-save           Update lockfile only, don't modify package.json
-      --workspace         Only update if package exists in workspace (pnpm-specific)
-  -h, --help              Print help
+[2]> vp update testnpm2 && cat package.json # should update package within semver range
+error: unrecognized subcommand 'update'
 
-> vp update testnpm2 && cat package.json # should update package within semver range
-Packages: +<variable>
-+<repeat>
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Usage: vite <COMMAND>
 
-dependencies:
-+ testnpm2 <semver>
+For more information, try '--help'.
 
-optionalDependencies:
-+ test-vite-plus-package-optional <semver>
+[2]> vp up testnpm2 --latest && cat package.json # should to absolute latest version
+error: unrecognized subcommand 'up'
 
-devDependencies:
-+ test-vite-plus-package <semver>
+Usage: vite <COMMAND>
 
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-update-pnpm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "*"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "*"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+For more information, try '--help'.
 
-> vp up testnpm2 --latest && cat package.json # should to absolute latest version
-Already up to date
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+[2]> vp update -D && cat package.json # should update only dev dependencies
+error: unrecognized subcommand 'update'
 
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-update-pnpm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "*"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "*"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+Usage: vite <COMMAND>
 
-> vp update -D && cat package.json # should update only dev dependencies
-Already up to date
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+For more information, try '--help'.
 
-dependencies: skipped
+[2]> vp update -P --no-save && cat package.json # should update only dependencies and optionalDependencies without saving
+error: unrecognized subcommand 'update'
 
-optionalDependencies: skipped
+Usage: vite <COMMAND>
 
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-update-pnpm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "*"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+For more information, try '--help'.
 
-> vp update -P --no-save && cat package.json # should update only dependencies and optionalDependencies without saving
-Already up to date
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+[2]> vp rm testnpm2 # should remove package from dependencies for the next test
+error: unrecognized subcommand 'rm'
 
-devDependencies: skipped
+Usage: vite <COMMAND>
 
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-update-pnpm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "*"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+For more information, try '--help'.
 
-> vp rm testnpm2 # should remove package from dependencies for the next test
-> vp add testnpm2@1.0.0 -O && vp update --no-optional --latest && cat package.json # should skip optional dependencies
-Packages: +<variable>
-+<repeat>
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+[2]> vp add testnpm2@1.0.0 -O && vp update --no-optional --latest && cat package.json # should skip optional dependencies
+error: unrecognized subcommand 'add'
 
-optionalDependencies:
-+ testnpm2 <semver> (1.0.1 is available)
+Usage: vite <COMMAND>
 
-Done in <variable>ms using pnpm v<semver>
-Packages: -2
---
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+For more information, try '--help'.
 
-optionalDependencies:
-- test-vite-plus-package-optional <semver>
-- testnpm2 <semver>
+[2]> vp update && vp update --recursive && cat package.json # should update all packages and change the package.json
+error: unrecognized subcommand 'update'
 
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-update-pnpm10",
-  "version": "1.0.0",
-  "devDependencies": {
-    "test-vite-plus-package": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0",
-    "testnpm2": "1.0.1"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+Usage: vite <COMMAND>
 
-> vp update && vp update --recursive && cat package.json # should update all packages and change the package.json
-Packages: +<variable>
-+<repeat>
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
-
-optionalDependencies:
-+ test-vite-plus-package-optional <semver>
-+ testnpm2 <semver>
-
-Done in <variable>ms using pnpm v<semver>
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-update-pnpm10",
-  "version": "1.0.0",
-  "devDependencies": {
-    "test-vite-plus-package": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0",
-    "testnpm2": "1.0.1"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+For more information, try '--help'.

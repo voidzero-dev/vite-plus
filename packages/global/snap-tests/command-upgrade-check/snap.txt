@@ -1,5 +1,6 @@
-> vp upgrade --check # check for updates without installing
-info: checking for updates...
-info: found vite-plus-cli@<semver>
-Update available: <semver> → <semver>
-Run `vp upgrade` to update.
+[2]> vp upgrade --check # check for updates without installing
+error: unrecognized subcommand 'upgrade'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

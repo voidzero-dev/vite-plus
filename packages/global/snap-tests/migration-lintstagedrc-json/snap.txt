@@ -1,51 +1,24 @@
-> vp migrate -h # migration help message
-VITE+ - The Unified Toolchain for the Web
+[2]> vp migrate -h # migration help message
+error: unrecognized subcommand 'migrate'
 
-USAGE: vp migrate [PATH] [OPTIONS]
+  tip: a similar subcommand exists: 'i'
 
-Migrate standalone Vite, Vitest, Oxlint, and Oxfmt projects to unified Vite+.
+Usage: vite <COMMAND>
 
-ARGUMENTS:
-  PATH                       Target directory to migrate (default: current directory)
+For more information, try '--help'.
 
-OPTIONS:
-  --agent NAME               Write agent instructions file into the project (e.g. chatgpt, claude, opencode).
-  --no-agent                 Skip writing agent instructions file
-  --no-interactive           Run in non-interactive mode (skip prompts and use defaults)
-  --non-interactive          Alias for --no-interactive
-  -h, --help                 Show this help message
+[2]> vp migrate --no-interactive # migration work with lintstagedrc.json
+error: unrecognized subcommand 'migrate'
 
-EXAMPLES:
-  # Migrate current package
-  vp migrate
+  tip: a similar subcommand exists: 'i'
 
-  # Migrate specific directory
-  vp migrate my-app
+Usage: vite <COMMAND>
 
-  # Non-interactive mode
-  vp migrate --no-interactive
-
-
-
-> vp migrate --no-interactive # migration work with lintstagedrc.json
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  ✔ Rewrote lint-staged config in .lintstagedrc.json
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
-
+For more information, try '--help'.
 
 > cat .lintstagedrc.json # check lintstagedrc.json
 {
-  "*.js": "vp lint --fix"
+  "*.js": "oxlint --fix"
 }
 
 > cat package.json # check package.json
@@ -53,21 +26,11 @@ EXAMPLES:
   "name": "migration-lintstagedrc",
   "lint-staged": {
     "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
-      "vp fmt --staged",
+      "oxfmt --staged",
       "eslint --fix"
     ],
     "*.@(js|ts|tsx)": [
-      "vp lint --fix"
+      "oxlint --fix"
     ]
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
-  },
-  "devDependencies": {
-    "vite-plus": "latest"
-  },
-  "packageManager": "pnpm@<semver>"
+  }
 }

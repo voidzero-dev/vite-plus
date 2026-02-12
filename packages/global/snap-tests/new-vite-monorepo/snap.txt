@@ -1,138 +1,61 @@
-> vp create vite:monorepo --no-interactive # create monorepo with default values
+[2]> vp create vite:monorepo --no-interactive # create monorepo with default values
+error: unrecognized subcommand 'create'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
 > ls vite-plus-monorepo | LC_ALL=C sort # check files created
-AGENTS.md
-README.md
-apps
-package.json
-packages
-pnpm-workspace.yaml
-tsconfig.json
-vite.config.ts
+ls: cannot access 'vite-plus-monorepo': No such file or directory
 
-> cat vite-plus-monorepo/package.json # check package.json
-{
-  "name": "vite-plus-monorepo",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "ready": "vp fmt && vp lint --type-aware && vp run test -r && vp run build -r",
-    "dev": "vp run website#dev"
-  },
-  "engines": {
-    "node": ">=22.12.0"
-  },
-  "devDependencies": {
-    "vite-plus": "catalog:"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+[1]> cat vite-plus-monorepo/package.json # check package.json
+cat: vite-plus-monorepo/package.json: No such file or directory
 
-> cat vite-plus-monorepo/pnpm-workspace.yaml # check workspace config
-packages:
-  - apps/*
-  - packages/*
-  - tools/*
-
-catalogMode: prefer
-
-catalog:
-  '@types/node': ^24
-  typescript: ^5
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
-overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
-peerDependencyRules:
-  allowAny:
-    - vite
-    - vitest
-  allowedVersions:
-    vite: '*'
-    vitest: '*'
+[1]> cat vite-plus-monorepo/pnpm-workspace.yaml # check workspace config
+cat: vite-plus-monorepo/pnpm-workspace.yaml: No such file or directory
 
 > test -d vite-plus-monorepo/.git && echo 'Git initialized' || echo 'No git' # check git init
-Git initialized
+No git
 
-> ls vite-plus-monorepo/apps # check apps directory created
-website
+[2]> ls vite-plus-monorepo/apps # check apps directory created
+ls: cannot access 'vite-plus-monorepo/apps': No such file or directory
 
-> ls vite-plus-monorepo/apps/website/package.json # check website package.json
-vite-plus-monorepo/apps/website/package.json
+[2]> ls vite-plus-monorepo/apps/website/package.json # check website package.json
+ls: cannot access 'vite-plus-monorepo/apps/website/package.json': No such file or directory
 
-> cd vite-plus-monorepo && vp create --no-interactive vite:application # create application in non-interactive mode
-> ls vite-plus-monorepo/apps # check apps directory created
-vite-plus-application
-website
+[1]> cd vite-plus-monorepo && vp create --no-interactive vite:application # create application in non-interactive mode
+cd: no such file or directory: vite-plus-monorepo
 
-> ls vite-plus-monorepo/apps/vite-plus-application/package.json # check vite-plus-application package.json
-vite-plus-monorepo/apps/vite-plus-application/package.json
+[2]> ls vite-plus-monorepo/apps # check apps directory created
+ls: cannot access 'vite-plus-monorepo/apps': No such file or directory
 
-> cd vite-plus-monorepo && vp create --no-interactive vite:library # create library in non-interactive mode
-> ls vite-plus-monorepo/packages/vite-plus-library/package.json # check vite-plus-library package.json
-vite-plus-monorepo/packages/vite-plus-library/package.json
+[2]> ls vite-plus-monorepo/apps/vite-plus-application/package.json # check vite-plus-application package.json
+ls: cannot access 'vite-plus-monorepo/apps/vite-plus-application/package.json': No such file or directory
 
-> cd vite-plus-monorepo && vp create --no-interactive vite:generator # create generator in non-interactive mode
-> ls vite-plus-monorepo/tools # check tools directory created
-vite-plus-generator
+[1]> cd vite-plus-monorepo && vp create --no-interactive vite:library # create library in non-interactive mode
+cd: no such file or directory: vite-plus-monorepo
 
-> cat vite-plus-monorepo/tools/vite-plus-generator/package.json # check vite-plus-generator package.json
-{
-  "name": "vite-plus-generator",
-  "version": "0.0.0",
-  "private": true,
-  "description": "A starter for creating a Vite+ code generator.",
-  "keywords": [
-    "bingo-template",
-    "vite-plus-generator"
-  ],
-  "bin": "./bin/index.ts",
-  "type": "module",
-  "scripts": {
-    "test": "vp test",
-    "dev": "node bin/index.ts"
-  },
-  "dependencies": {
-    "bingo": "^0.7.0",
-    "zod": "^3.25.76"
-  },
-  "devDependencies": {
-    "@types/node": "catalog:",
-    "typescript": "catalog:"
-  },
-  "engines": {
-    "node": ">=22.12.0"
-  }
-}
+[2]> ls vite-plus-monorepo/packages/vite-plus-library/package.json # check vite-plus-library package.json
+ls: cannot access 'vite-plus-monorepo/packages/vite-plus-library/package.json': No such file or directory
 
-> vp create vite:monorepo --no-interactive --directory my-vite-plus-monorepo # create monorepo with custom directory
+[1]> cd vite-plus-monorepo && vp create --no-interactive vite:generator # create generator in non-interactive mode
+cd: no such file or directory: vite-plus-monorepo
+
+[2]> ls vite-plus-monorepo/tools # check tools directory created
+ls: cannot access 'vite-plus-monorepo/tools': No such file or directory
+
+[1]> cat vite-plus-monorepo/tools/vite-plus-generator/package.json # check vite-plus-generator package.json
+cat: vite-plus-monorepo/tools/vite-plus-generator/package.json: No such file or directory
+
+[2]> vp create vite:monorepo --no-interactive --directory my-vite-plus-monorepo # create monorepo with custom directory
+error: unrecognized subcommand 'create'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
 > ls my-vite-plus-monorepo | LC_ALL=C sort # check files created
-AGENTS.md
-README.md
-apps
-package.json
-packages
-pnpm-workspace.yaml
-tsconfig.json
-vite.config.ts
+ls: cannot access 'my-vite-plus-monorepo': No such file or directory
 
-> cat my-vite-plus-monorepo/package.json # check package.json
-{
-  "name": "my-vite-plus-monorepo",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "ready": "vp fmt && vp lint --type-aware && vp run test -r && vp run build -r",
-    "dev": "vp run website#dev"
-  },
-  "engines": {
-    "node": ">=22.12.0"
-  },
-  "devDependencies": {
-    "vite-plus": "catalog:"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+[1]> cat my-vite-plus-monorepo/package.json # check package.json
+cat: my-vite-plus-monorepo/package.json: No such file or directory

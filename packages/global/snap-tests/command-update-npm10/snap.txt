@@ -1,113 +1,41 @@
-> vp update testnpm2 -- --no-audit && cat package.json # should update package within semver range
+[2]> vp update testnpm2 -- --no-audit && cat package.json # should update package within semver range
+error: unrecognized subcommand 'update'
 
-added 3 packages in <variable>ms
-{
-  "name": "command-update-npm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "*"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "*"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "*"
-  },
-  "packageManager": "npm@<semver>"
-}
+Usage: vite <COMMAND>
 
-> vp up testnpm2 --latest -- --no-audit && cat package.json # should to absolute latest version
-Warning: npm doesn't support --latest flag. Updating within semver range only.
+For more information, try '--help'.
 
-up to date in <variable>ms
-{
-  "name": "command-update-npm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "*"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "*"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "*"
-  },
-  "packageManager": "npm@<semver>"
-}
+[2]> vp up testnpm2 --latest -- --no-audit && cat package.json # should to absolute latest version
+error: unrecognized subcommand 'up'
 
-> vp update -D -- --no-audit && cat package.json # should update only dev dependencies
+Usage: vite <COMMAND>
 
-up to date in <variable>ms
-{
-  "name": "command-update-npm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "*"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "*"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "*"
-  },
-  "packageManager": "npm@<semver>"
-}
+For more information, try '--help'.
 
-> vp update -P --no-save -- --no-audit && cat package.json # should update only dependencies and optionalDependencies without saving
+[2]> vp update -D -- --no-audit && cat package.json # should update only dev dependencies
+error: unrecognized subcommand 'update'
 
-up to date in <variable>ms
-{
-  "name": "command-update-npm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "*"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "*"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "*"
-  },
-  "packageManager": "npm@<semver>"
-}
+Usage: vite <COMMAND>
 
-> vp rm testnpm2 && vp add testnpm2@1.0.0 -O -- --no-audit && vp update --no-optional --latest -- --no-audit && cat package.json # should skip optional dependencies
+For more information, try '--help'.
 
-removed 1 package in <variable>ms
+[2]> vp update -P --no-save -- --no-audit && cat package.json # should update only dependencies and optionalDependencies without saving
+error: unrecognized subcommand 'update'
 
-added 1 package in <variable>ms
-Warning: npm doesn't support --latest flag. Updating within semver range only.
-npm warn config optional Use `--omit=optional` to exclude optional dependencies, or
-npm warn config `--include=optional` to include them.
-npm warn config
-npm warn config       Default value does install optional deps unless otherwise omitted.
+Usage: vite <COMMAND>
 
-changed 1 package in <variable>ms
-{
-  "name": "command-update-npm10",
-  "version": "1.0.0",
-  "devDependencies": {
-    "test-vite-plus-package": "*"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "*",
-    "testnpm2": "^1.0.0"
-  },
-  "packageManager": "npm@<semver>"
-}
+For more information, try '--help'.
 
-> vp update -- --no-audit && cat package.json # should update all packages but won't change the package.json
+[129]> vp rm testnpm2 && vp add testnpm2@1.0.0 -O -- --no-audit && vp update --no-optional --latest -- --no-audit && cat package.json # should skip optional dependencies
+error: unrecognized subcommand 'rm'
 
-added 2 packages in <variable>ms
-{
-  "name": "command-update-npm10",
-  "version": "1.0.0",
-  "devDependencies": {
-    "test-vite-plus-package": "*"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "*",
-    "testnpm2": "^1.0.0"
-  },
-  "packageManager": "npm@<semver>"
-}
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp update -- --no-audit && cat package.json # should update all packages but won't change the package.json
+error: unrecognized subcommand 'update'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

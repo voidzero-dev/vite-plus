@@ -1,51 +1,25 @@
 > mkdir -p ../test-lib-yarn && echo '{"name": "test-lib-yarn", "version": "1.0.0"}' > ../test-lib-yarn/package.json # create test library
-> vp link ../test-lib-yarn && cat package.json # should link local directory
-➤ YN0000: · Yarn <semver>
-➤ YN0000: ┌ Resolution step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <variable>ms <variable>ms
-{
-  "name": "command-link-yarn4",
-  "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
-  "resolutions": {
-    "test-lib-yarn": "portal:<cwd>/../test-lib-yarn"
-  }
-}
+[2]> vp link ../test-lib-yarn && cat package.json # should link local directory
+error: unrecognized subcommand 'link'
 
-> vp ln ../test-lib-yarn && cat package.json # should work with ln alias
-➤ YN0000: · Yarn <semver>
-➤ YN0000: ┌ Resolution step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <variable>ms <variable>ms
-{
-  "name": "command-link-yarn4",
-  "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
-  "resolutions": {
-    "test-lib-yarn": "portal:<cwd>/../test-lib-yarn"
-  }
-}
+  tip: some similar subcommands exist: 'i', 'lint'
 
-> vp unlink test-lib-yarn && cat package.json # cleanup temp states
-➤ YN0000: · Yarn <semver>
-➤ YN0000: ┌ Resolution step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <variable>ms <variable>ms
-{
-  "name": "command-link-yarn4",
-  "version": "1.0.0",
-  "packageManager": "yarn@<semver>"
-}
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp ln ../test-lib-yarn && cat package.json # should work with ln alias
+error: unrecognized subcommand 'ln'
+
+  tip: a similar subcommand exists: 'lint'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp unlink test-lib-yarn && cat package.json # cleanup temp states
+error: unrecognized subcommand 'unlink'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

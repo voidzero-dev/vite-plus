@@ -78,6 +78,10 @@
       "types": "./dist/pluginutils/filter/index.d.ts",
       "default": "./dist/pluginutils/filter/index.js"
     },
+    "./rolldown/utils": {
+      "types": "./dist/rolldown/utils-index.d.mts",
+      "default": "./dist/rolldown/utils-index.mjs"
+    },
     "./types/*": {
       "types": "./dist/vite/types/*"
     },
@@ -198,7 +202,7 @@
   },
   "bundledVersions": {
     "vite": "8.0.0-beta.13",
-    "rolldown": "1.0.0-rc.3",
+    "rolldown": "1.0.0-rc.4",
     "tsdown": "0.20.3"
   }
 }
