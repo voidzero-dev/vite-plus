@@ -1,204 +1,55 @@
-> vp pm pack && rm -rf *.tgz # should pack current workspace root
-📦  command-pack-pnpm10-with-workspace@<semver>
-Tarball Contents
-.node-version
-output.log
-package.json
-packages/app/package.json
-packages/utils/package.json
-pnpm-workspace.yaml
-snap.txt
-steps.json
-Tarball Details
-command-pack-pnpm10-with-workspace-1.0.0.tgz
+[2]> vp pm pack && rm -rf *.tgz # should pack current workspace root
+error: unrecognized subcommand 'pm'
 
-> vp pm pack --recursive --json > out.json && tool json-sort out.json '_.name' && cat out.json && rm -rf *.tgz # should pack all packages in workspace
-[
-  {
-    "name": "@vite-plus-test/utils",
-    "version": "1.0.0",
-    "filename": "<cwd>/vite-plus-test-utils-1.0.0.tgz",
-    "files": [
-      {
-        "path": "package.json"
-      }
-    ]
-  },
-  {
-    "name": "app",
-    "version": "1.0.0",
-    "filename": "<cwd>/app-1.0.0.tgz",
-    "files": [
-      {
-        "path": "package.json"
-      }
-    ]
-  },
-  {
-    "name": "command-pack-pnpm10-with-workspace",
-    "version": "1.0.0",
-    "filename": "command-pack-pnpm10-with-workspace-1.0.0.tgz",
-    "files": [
-      {
-        "path": ".node-version"
-      },
-      {
-        "path": "command-pack-pnpm10-with-workspace-1.0.0.tgz"
-      },
-      {
-        "path": "out.json"
-      },
-      {
-        "path": "output.log"
-      },
-      {
-        "path": "package.json"
-      },
-      {
-        "path": "packages/app/package.json"
-      },
-      {
-        "path": "packages/utils/package.json"
-      },
-      {
-        "path": "pnpm-workspace.yaml"
-      },
-      {
-        "path": "snap.txt"
-      },
-      {
-        "path": "steps.json"
-      }
-    ]
-  }
-]
+Usage: vite <COMMAND>
 
-> vp pm pack --filter app && rm -rf *.tgz # should pack specific package (uses --filter app pack)
-📦  app@<semver>
-Tarball Contents
-package.json
-Tarball Details
-<cwd>/app-1.0.0.tgz
+For more information, try '--help'.
 
-> vp pm pack --filter app --filter @vite-plus-test/utils --json > out.json && tool json-sort out.json '_.name' && cat out.json && rm -rf *.tgz # should pack multiple packages
-[
-  {
-    "name": "@vite-plus-test/utils",
-    "version": "1.0.0",
-    "filename": "<cwd>/vite-plus-test-utils-1.0.0.tgz",
-    "files": [
-      {
-        "path": "package.json"
-      }
-    ]
-  },
-  {
-    "name": "app",
-    "version": "1.0.0",
-    "filename": "<cwd>/app-1.0.0.tgz",
-    "files": [
-      {
-        "path": "package.json"
-      }
-    ]
-  }
-]
+[2]> vp pm pack --recursive --json > out.json && tool json-sort out.json '_.name' && cat out.json && rm -rf *.tgz # should pack all packages in workspace
+error: unrecognized subcommand 'pm'
 
-> vp pm pack --out ./dist/package.tgz && rm -rf ./dist # should pack with output file
-📦  command-pack-pnpm10-with-workspace@<semver>
-Tarball Contents
-.node-version
-app-1.0.0.tgz
-command-pack-pnpm10-with-workspace-1.0.0.tgz
-out.json
-output.log
-package.json
-packages/app/package.json
-packages/utils/package.json
-pnpm-workspace.yaml
-snap.txt
-steps.json
-vite-plus-test-utils-1.0.0.tgz
-Tarball Details
-<cwd>/dist/package.tgz
+Usage: vite <COMMAND>
 
-> vp pm pack --pack-destination ./dist && rm -rf ./dist # should pack with destination
-📦  command-pack-pnpm10-with-workspace@<semver>
-Tarball Contents
-.node-version
-app-1.0.0.tgz
-command-pack-pnpm10-with-workspace-1.0.0.tgz
-out.json
-output.log
-package.json
-packages/app/package.json
-packages/utils/package.json
-pnpm-workspace.yaml
-snap.txt
-steps.json
-vite-plus-test-utils-1.0.0.tgz
-Tarball Details
-<cwd>/dist/command-pack-pnpm10-with-workspace-1.0.0.tgz
+For more information, try '--help'.
 
-> vp pm pack --pack-gzip-level 9 && rm -rf *.tgz # should pack with gzip compression level
-📦  command-pack-pnpm10-with-workspace@<semver>
-Tarball Contents
-.node-version
-app-1.0.0.tgz
-command-pack-pnpm10-with-workspace-1.0.0.tgz
-out.json
-output.log
-package.json
-packages/app/package.json
-packages/utils/package.json
-pnpm-workspace.yaml
-snap.txt
-steps.json
-vite-plus-test-utils-1.0.0.tgz
-Tarball Details
-command-pack-pnpm10-with-workspace-1.0.0.tgz
+[2]> vp pm pack --filter app && rm -rf *.tgz # should pack specific package (uses --filter app pack)
+error: unrecognized subcommand 'pm'
 
-> vp pm pack --json --out 'foo-%s-%v.tgz' && rm -rf *.tgz # should pack with json output
-{
-  "name": "command-pack-pnpm10-with-workspace",
-  "version": "1.0.0",
-  "filename": "foo-command-pack-pnpm10-with-workspace-1.0.0.tgz",
-  "files": [
-    {
-      "path": ".node-version"
-    },
-    {
-      "path": "app-1.0.0.tgz"
-    },
-    {
-      "path": "command-pack-pnpm10-with-workspace-1.0.0.tgz"
-    },
-    {
-      "path": "out.json"
-    },
-    {
-      "path": "output.log"
-    },
-    {
-      "path": "package.json"
-    },
-    {
-      "path": "packages/app/package.json"
-    },
-    {
-      "path": "packages/utils/package.json"
-    },
-    {
-      "path": "pnpm-workspace.yaml"
-    },
-    {
-      "path": "snap.txt"
-    },
-    {
-      "path": "steps.json"
-    },
-    {
-      "path": "vite-plus-test-utils-1.0.0.tgz"
-    }
-  ]
-}
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm pack --filter app --filter @vite-plus-test/utils --json > out.json && tool json-sort out.json '_.name' && cat out.json && rm -rf *.tgz # should pack multiple packages
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm pack --out ./dist/package.tgz && rm -rf ./dist # should pack with output file
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm pack --pack-destination ./dist && rm -rf ./dist # should pack with destination
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm pack --pack-gzip-level 9 && rm -rf *.tgz # should pack with gzip compression level
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm pack --json --out 'foo-%s-%v.tgz' && rm -rf *.tgz # should pack with json output
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

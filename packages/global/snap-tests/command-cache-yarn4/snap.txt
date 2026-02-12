@@ -1,5 +1,13 @@
-> vp pm cache dir # should show cache directory (uses yarn config get cacheFolder)
-<homedir>/.yarn/berry/cache
+[2]> vp pm cache dir # should show cache directory (uses yarn config get cacheFolder)
+error: unrecognized subcommand 'pm'
 
-> vp pm cache path # should show cache path (alias for dir, uses yarn config get cacheFolder)
-<homedir>/.yarn/berry/cache
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm cache path # should show cache path (alias for dir, uses yarn config get cacheFolder)
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

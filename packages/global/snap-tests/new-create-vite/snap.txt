@@ -1,7 +1,19 @@
-> vp create vite:application --no-interactive # create vite app with default values
-> ls vite-plus-application/package.json # check package.json
-vite-plus-application/package.json
+[2]> vp create vite:application --no-interactive # create vite app with default values
+error: unrecognized subcommand 'create'
 
-> vp create vite:application --no-interactive --directory my-react-ts -- --template react-ts # create vite app with react-ts template
-> ls my-react-ts/package.json # check package.json
-my-react-ts/package.json
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> ls vite-plus-application/package.json # check package.json
+ls: cannot access 'vite-plus-application/package.json': No such file or directory
+
+[2]> vp create vite:application --no-interactive --directory my-react-ts -- --template react-ts # create vite app with react-ts template
+error: unrecognized subcommand 'create'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> ls my-react-ts/package.json # check package.json
+ls: cannot access 'my-react-ts/package.json': No such file or directory

@@ -49,6 +49,8 @@ export default defineConfig({
       '**/snap-tests-todo/**',
       'packages/core/rollupLicensePlugin.ts',
       'packages/core/vite-rolldown.config.ts',
+      'packages/*/binding/index.d.cts',
+      'packages/*/binding/index.d.ts',
     ],
   },
   test: {

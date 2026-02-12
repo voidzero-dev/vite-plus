@@ -1,86 +1,20 @@
-> vp create --help # show help
-VITE+ - The Unified Toolchain for the Web
+[2]> vp create --help # show help
+error: unrecognized subcommand 'create'
 
-USAGE: vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
+Usage: vite <COMMAND>
 
-Use any builtin, local or remote template with Vite+.
+For more information, try '--help'.
 
-ARGUMENTS:
-  TEMPLATE            Template name. Run `vp create --list` to see available templates.
-                      - Default: vite:monorepo, vite:application, vite:library, vite:generator
-                      - Remote: vite, @tanstack/start, create-next-app,
-                        create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
-                      - Local: @company/generator-*, ./tools/create-ui-component
+[2]> vp create --list # list templates
+error: unrecognized subcommand 'create'
 
-OPTIONS:
-  --directory DIR     Target directory for the generated project.
-  --agent NAME        Create an agent instructions file for the specified agent.
-  --no-interactive    Run in non-interactive mode
-  --list              List all available templates
-  -h, --help          Show this help message
+Usage: vite <COMMAND>
 
-TEMPLATE OPTIONS:
-  Any arguments after -- are passed directly to the template.
+For more information, try '--help'.
 
-EXAMPLES:
-  # Interactive mode
-  vp create
+[129]> vp create --no-interactive # run in non-interactive mode without template name will show error
+error: unrecognized subcommand 'create'
 
-  # Use existing templates (shorthand expands to create-* packages)
-  vp create vite
-  vp create @tanstack/start
-  vp create vite -- --template react-ts
+Usage: vite <COMMAND>
 
-  # Full package names also work
-  vp create create-vite
-  vp create create-next-app
-
-  # Create Vite+ monorepo, application, library, or generator scaffolds
-  vp create vite:monorepo
-  vp create vite:application
-  vp create vite:library
-  vp create vite:generator
-
-  # Use templates from GitHub (via degit)
-  vp create github:user/repo
-  vp create https://github.com/user/template-repo
-
-
-> vp create --list # list templates
-VITE+ - The Unified Toolchain for the Web
-
-VITE+ BUILT-IN TEMPLATES:
-  vite:monorepo            Create a new monorepo
-  vite:application         Create a new application
-  vite:library             Create a new library
-  vite:generator           Scaffold a new code generator
-
-POPULAR TEMPLATES (SHORTHAND):
-  vite                     Official Vite templates (create-vite)
-  @tanstack/start          TanStack applications (@tanstack/create-start)
-  next-app                 Next.js application (create-next-app)
-  nuxt                     Nuxt application (create-nuxt)
-  react-router             React Router application (create-react-router)
-  vue                      Vue application (create-vue)
-
-EXAMPLES:
-  vp create # interactive mode
-  vp create vite # shorthand for create-vite
-  vp create @tanstack/start # shorthand for @tanstack/create-start
-  vp create <template> -- <options> # pass options to the template
-
-✨ Tip: You can use any npm template or git repo with vp create!
-
-
-[1]> vp create --no-interactive # run in non-interactive mode without template name will show error
-
-A template name is required when running in non-interactive mode
-
-Usage: vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
-
-Example:
-  # Create a new application in non-interactive mode with a custom target directory
-  vp create vite:application --no-interactive --directory=apps/my-app
-
-Use `vp create --list` to list all available templates, or run `vp create --help` for more information.
-
+For more information, try '--help'.

@@ -1,29 +1,63 @@
-> vp install -g --node lts ./command-env-install-version-alias-pkg # Install with LTS alias
-  Installing ./command-env-install-version-alias-pkg globally...
-  Running npm install...
+[1]> vp install -g --node lts ./command-env-install-version-alias-pkg # Install with LTS alias
+[Vite+] run error: [Error: Package not found in workspace: `AbsolutePathBuf("<cwd>")`] {
+  code: 'GenericFailure'
+}
 
-added 1 package in <variable>ms
-  Installed ./command-env-install-version-alias-pkg v<semver>
-  Binaries: command-env-install-version-alias-pkg-cli
+[1]> cat $VITE_PLUS_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('LTS major >= 20:', v >= 20)" # Verify LTS version
+cat: <vite-plus-home>/bins/command-env-install-version-alias-pkg-cli.json: No such file or directory
+<anonymous_script>:1
 
-> cat $VITE_PLUS_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('LTS major >= 20:', v >= 20)" # Verify LTS version
-LTS major >= 20: true
 
-> vp remove -g command-env-install-version-alias-pkg # Cleanup
-  Uninstalling command-env-install-version-alias-pkg...
-  Uninstalled command-env-install-version-alias-pkg
+SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>)
+    at [eval]:1:14
+    at runScriptInThisContext (node:internal/vm:209:10)
+    at node:internal/process/execution:446:12
+    at [eval]-wrapper:6:24
+    at runScriptInContext (node:internal/process/execution:444:60)
+    at evalFunction (node:internal/process/execution:279:30)
+    at evalTypeScript (node:internal/process/execution:291:3)
+    at node:internal/main/eval_string:74:3
 
-> vp install -g --node latest ./command-env-install-version-alias-pkg # Install with latest alias
-  Installing ./command-env-install-version-alias-pkg globally...
-  Running npm install...
+Node.js v<semver>
 
-added 1 package in <variable>ms
-  Installed ./command-env-install-version-alias-pkg v<semver>
-  Binaries: command-env-install-version-alias-pkg-cli
+[2]> vp remove -g command-env-install-version-alias-pkg # Cleanup
+error: unrecognized subcommand 'remove'
 
-> cat $VITE_PLUS_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('Latest major >= 20:', v >= 20)" # Verify latest version
-Latest major >= 20: true
+  tip: a similar subcommand exists: 'preview'
 
-> vp remove -g command-env-install-version-alias-pkg # Cleanup
-  Uninstalling command-env-install-version-alias-pkg...
-  Uninstalled command-env-install-version-alias-pkg
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[1]> vp install -g --node latest ./command-env-install-version-alias-pkg # Install with latest alias
+[Vite+] run error: [Error: Package not found in workspace: `AbsolutePathBuf("<cwd>")`] {
+  code: 'GenericFailure'
+}
+
+[1]> cat $VITE_PLUS_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('Latest major >= 20:', v >= 20)" # Verify latest version
+cat: <vite-plus-home>/bins/command-env-install-version-alias-pkg-cli.json: No such file or directory
+<anonymous_script>:1
+
+
+SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>)
+    at [eval]:1:14
+    at runScriptInThisContext (node:internal/vm:209:10)
+    at node:internal/process/execution:446:12
+    at [eval]-wrapper:6:24
+    at runScriptInContext (node:internal/process/execution:444:60)
+    at evalFunction (node:internal/process/execution:279:30)
+    at evalTypeScript (node:internal/process/execution:291:3)
+    at node:internal/main/eval_string:74:3
+
+Node.js v<semver>
+
+[2]> vp remove -g command-env-install-version-alias-pkg # Cleanup
+error: unrecognized subcommand 'remove'
+
+  tip: a similar subcommand exists: 'preview'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

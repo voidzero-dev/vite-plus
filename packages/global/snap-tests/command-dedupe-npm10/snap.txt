@@ -1,53 +1,20 @@
-> vp dedupe && cat package.json # should dedupe dependencies
+[2]> vp dedupe && cat package.json # should dedupe dependencies
+error: unrecognized subcommand 'dedupe'
 
-added 3 packages in <variable>ms
-{
-  "name": "command-dedupe-npm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "1.0.0"
-  },
-  "packageManager": "npm@<semver>"
-}
+Usage: vite <COMMAND>
 
-> vp dedupe --check && cat package.json # should check if deduplication would make changes
+For more information, try '--help'.
 
-up to date in <variable>ms
-{
-  "name": "command-dedupe-npm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "1.0.0"
-  },
-  "packageManager": "npm@<semver>"
-}
+[2]> vp dedupe --check && cat package.json # should check if deduplication would make changes
+error: unrecognized subcommand 'dedupe'
 
-> vp dedupe -- --loglevel=warn && cat package.json # support pass through arguments
+Usage: vite <COMMAND>
 
-up to date in <variable>ms
-{
-  "name": "command-dedupe-npm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "1.0.0"
-  },
-  "packageManager": "npm@<semver>"
-}
+For more information, try '--help'.
+
+[2]> vp dedupe -- --loglevel=warn && cat package.json # support pass through arguments
+error: unrecognized subcommand 'dedupe'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

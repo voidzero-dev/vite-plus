@@ -1,160 +1,42 @@
-> vp add testnpm2 -D -w --filter=* -- --no-audit && vp add test-vite-plus-install -w --filter=* -- --no-audit && vp add test-vite-plus-package-optional -O --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # prepare packages
+[2]> vp add testnpm2 -D -w --filter=* -- --no-audit && vp add test-vite-plus-install -w --filter=* -- --no-audit && vp add test-vite-plus-package-optional -O --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # prepare packages
+error: unrecognized subcommand 'add'
 
-added 3 packages in <variable>ms
+Usage: vite <COMMAND>
 
-added 1 package in <variable>ms
+For more information, try '--help'.
 
-added 1 package in <variable>ms
-{
-  "name": "command-remove-npm10-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
-}
-{
-  "name": "app",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true,
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
+[2]> vp remove testnpm2 -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package from all workspaces and root
+error: unrecognized subcommand 'remove'
 
-> vp remove testnpm2 -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package from all workspaces and root
+  tip: a similar subcommand exists: 'preview'
 
-removed 1 package in <variable>ms
-{
-  "name": "command-remove-npm10-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
-}
-{
-  "name": "app",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
+Usage: vite <COMMAND>
 
-> vp remove -O test-vite-plus-package-optional -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove optional package from all workspaces
+For more information, try '--help'.
 
-removed 1 package in <variable>ms
-{
-  "name": "command-remove-npm10-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
-}
-{
-  "name": "app",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
-}
+[2]> vp remove -O test-vite-plus-package-optional -r -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove optional package from all workspaces
+error: unrecognized subcommand 'remove'
 
-> vp remove test-vite-plus-install --filter=app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=app
+  tip: a similar subcommand exists: 'preview'
 
-up to date in <variable>ms
-{
-  "name": "command-remove-npm10-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
-}
-{
-  "name": "app"
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
-}
+Usage: vite <COMMAND>
 
-> vp remove test-vite-plus-install --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=*
+For more information, try '--help'.
 
-up to date in <variable>ms
-{
-  "name": "command-remove-npm10-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
-}
-{
-  "name": "app"
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true
-}
+[2]> vp remove test-vite-plus-install --filter=app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=app
+error: unrecognized subcommand 'remove'
+
+  tip: a similar subcommand exists: 'preview'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[129]> vp remove test-vite-plus-install --filter=* -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=*
+error: unrecognized subcommand 'remove'
+
+  tip: a similar subcommand exists: 'preview'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

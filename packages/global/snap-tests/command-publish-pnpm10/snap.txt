@@ -1,25 +1,13 @@
-> vp pm publish --help # should show help
-Publish package to registry
+[2]> vp pm publish --help # should show help
+error: unrecognized subcommand 'pm'
 
-Usage: vp pm publish [OPTIONS] [TARBALL|FOLDER] [-- <PASS_THROUGH_ARGS>...]
+Usage: vite <COMMAND>
 
-Arguments:
-  [TARBALL|FOLDER]        Tarball or folder to publish
-  [PASS_THROUGH_ARGS]...  Additional arguments
+For more information, try '--help'.
 
-Options:
-      --dry-run                  Preview without publishing
-      --tag <TAG>                Publish tag
-      --access <ACCESS>          Access level (public/restricted)
-      --otp <OTP>                One-time password for authentication
-      --no-git-checks            Skip git checks
-      --publish-branch <BRANCH>  Set the branch name to publish from
-      --report-summary           Save publish summary
-      --force                    Force publish
-      --json                     Output in JSON format
-  -r, --recursive                Publish all workspace packages
-      --filter <PATTERN>         Filter packages in monorepo
-  -h, --help                     Print help
+[2]> vp pm publish --dry-run -- --loglevel error # should preview publish without actually publishing (uses pnpm publish --dry-run)
+error: unrecognized subcommand 'pm'
 
-> vp pm publish --dry-run -- --loglevel error # should preview publish without actually publishing (uses pnpm publish --dry-run)
-+ command-publish-pnpm10@<semver>
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

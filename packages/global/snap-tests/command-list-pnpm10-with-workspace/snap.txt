@@ -6,133 +6,65 @@ Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <
 
 Done in <variable>ms using pnpm v<semver>
 
-> vp pm list # should list current workspace root dependencies
-> vp pm list --recursive # should list all packages in workspace recursively
-Legend: production dependency, optional only, dev only
+[129]> vp pm list # should list current workspace root dependencies
+error: unrecognized subcommand 'pm'
 
-app@<semver> <cwd>/packages/app
+Usage: vite <COMMAND>
 
-dependencies:
-@vite-plus-test/utils link:../utils
-test-vite-plus-package-optional <semver>
+For more information, try '--help'.
 
-@vite-plus-test/utils@<semver> <cwd>/packages/utils (PRIVATE)
+[2]> vp pm list --recursive # should list all packages in workspace recursively
+error: unrecognized subcommand 'pm'
 
-dependencies:
-testnpm2 <semver>
+Usage: vite <COMMAND>
 
-> vp pm list --filter app # should list specific workspace package (uses --filter app list)
-Legend: production dependency, optional only, dev only
+For more information, try '--help'.
 
-app@<semver> <cwd>/packages/app
+[2]> vp pm list --filter app # should list specific workspace package (uses --filter app list)
+error: unrecognized subcommand 'pm'
 
-dependencies:
-@vite-plus-test/utils link:../utils
-test-vite-plus-package-optional <semver>
+Usage: vite <COMMAND>
 
-> vp pm list --filter app --filter @vite-plus-test/utils # should list multiple workspace packages
-Legend: production dependency, optional only, dev only
+For more information, try '--help'.
 
-app@<semver> <cwd>/packages/app
+[2]> vp pm list --filter app --filter @vite-plus-test/utils # should list multiple workspace packages
+error: unrecognized subcommand 'pm'
 
-dependencies:
-@vite-plus-test/utils link:../utils
-test-vite-plus-package-optional <semver>
+Usage: vite <COMMAND>
 
-@vite-plus-test/utils@<semver> <cwd>/packages/utils (PRIVATE)
+For more information, try '--help'.
 
-dependencies:
-testnpm2 <semver>
+[2]> vp pm list --recursive --json # should list all workspace packages in JSON format
+error: unrecognized subcommand 'pm'
 
-> vp pm list --recursive --json # should list all workspace packages in JSON format
-[
-  {
-    "name": "command-list-pnpm10-with-workspace",
-    "version": "1.0.0",
-    "path": "<cwd>",
-    "private": false
-  },
-  {
-    "name": "app",
-    "version": "1.0.0",
-    "path": "<cwd>/packages/app",
-    "private": false,
-    "dependencies": {
-      "@vite-plus-test/utils": {
-        "from": "@vite-plus-test/utils",
-        "version": "link:../utils",
-        "path": "<cwd>/packages/utils"
-      },
-      "test-vite-plus-package-optional": {
-        "from": "test-vite-plus-package-optional",
-        "version": "1.0.0",
-        "resolved": "https://registry.<domain>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
-        "path": "<cwd>/node_modules/.pnpm/test-vite-plus-package-optional@<semver>/node_modules/test-vite-plus-package-optional"
-      }
-    }
-  },
-  {
-    "name": "@vite-plus-test/utils",
-    "version": "1.0.0",
-    "path": "<cwd>/packages/utils",
-    "private": true,
-    "dependencies": {
-      "testnpm2": {
-        "from": "testnpm2",
-        "version": "1.0.1",
-        "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz",
-        "path": "<cwd>/node_modules/.pnpm/testnpm2@<semver>/node_modules/testnpm2"
-      }
-    }
-  }
-]
+Usage: vite <COMMAND>
 
-> vp pm list --recursive --depth 0 # should list workspace packages with depth limit
-Legend: production dependency, optional only, dev only
+For more information, try '--help'.
 
-app@<semver> <cwd>/packages/app
+[2]> vp pm list --recursive --depth 0 # should list workspace packages with depth limit
+error: unrecognized subcommand 'pm'
 
-dependencies:
-@vite-plus-test/utils link:../utils
-test-vite-plus-package-optional <semver>
+Usage: vite <COMMAND>
 
-@vite-plus-test/utils@<semver> <cwd>/packages/utils (PRIVATE)
+For more information, try '--help'.
 
-dependencies:
-testnpm2 <semver>
+[2]> vp pm list --recursive --only-projects # should list only workspace projects (pnpm-specific)
+error: unrecognized subcommand 'pm'
 
-> vp pm list --recursive --only-projects # should list only workspace projects (pnpm-specific)
-Legend: production dependency, optional only, dev only
+Usage: vite <COMMAND>
 
-app@<semver> <cwd>/packages/app
+For more information, try '--help'.
 
-dependencies:
-@vite-plus-test/utils link:../utils
+[2]> vp pm list --recursive --exclude-peers # should exclude peer dependencies in workspace
+error: unrecognized subcommand 'pm'
 
-> vp pm list --recursive --exclude-peers # should exclude peer dependencies in workspace
-Legend: production dependency, optional only, dev only
+Usage: vite <COMMAND>
 
-app@<semver> <cwd>/packages/app
+For more information, try '--help'.
 
-dependencies:
-@vite-plus-test/utils link:../utils
-test-vite-plus-package-optional <semver>
+[2]> vp pm list --recursive --prod # should list production dependencies in workspace
+error: unrecognized subcommand 'pm'
 
-@vite-plus-test/utils@<semver> <cwd>/packages/utils (PRIVATE)
+Usage: vite <COMMAND>
 
-dependencies:
-testnpm2 <semver>
-
-> vp pm list --recursive --prod # should list production dependencies in workspace
-Legend: production dependency, optional only, dev only
-
-app@<semver> <cwd>/packages/app
-
-dependencies:
-@vite-plus-test/utils link:../utils
-test-vite-plus-package-optional <semver>
-
-@vite-plus-test/utils@<semver> <cwd>/packages/utils (PRIVATE)
-
-dependencies:
-testnpm2 <semver>
+For more information, try '--help'.

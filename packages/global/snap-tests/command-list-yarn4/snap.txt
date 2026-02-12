@@ -1,2 +1,6 @@
-> vp pm list # should show warning that yarn@2+ does not support list command
-Warning: yarn@2+ does not support 'list' command
+[2]> vp pm list # should show warning that yarn@2+ does not support list command
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
