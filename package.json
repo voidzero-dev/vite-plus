@@ -11,7 +11,7 @@
     "copy-cli-binding": "pnpm --filter=vite-plus-cli copy-binding",
     "install-global-cli": "pnpm copy-cli-binding && tool install-global-cli",
     "tsgo": "tsgo -b tsconfig.json",
-    "lint": "vp lint --type-aware --threads 4",
+    "lint": "vp lint --type-aware --threads 4 --ignore-pattern '**/binding/*.d.cts' --ignore-pattern '**/binding/*.d.ts'",
     "test": "vp test run && pnpm -r snap-test",
     "fmt": "vp fmt",
     "test:unit": "vp test run",

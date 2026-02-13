@@ -88,6 +88,17 @@ export async function snapTest() {
 
   const vitePlusHome = path.join(homedir(), '.vite-plus');
 
+  // Set up ~/.vite-plus/current/bin/vp so global package shims work
+  // Global package shims (e.g., recursive-cli) are symlinks to ../current/bin/vp
+  const currentBinDir = path.join(vitePlusHome, 'current', 'bin');
+  const vpBinarySource = path.resolve('bin', 'vp');
+  const vpBinaryDest = path.join(currentBinDir, 'vp');
+  if (fs.existsSync(vpBinarySource) && !fs.existsSync(vpBinaryDest)) {
+    fs.mkdirSync(currentBinDir, { recursive: true });
+    fs.copyFileSync(vpBinarySource, vpBinaryDest);
+    fs.chmodSync(vpBinaryDest, 0o755);
+  }
+
   // Remove .previous-version so command-upgrade-rollback snap test is stable
   const previousVersionPath = path.join(vitePlusHome, '.previous-version');
   if (fs.existsSync(previousVersionPath)) {
@@ -210,6 +221,8 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
   env['PATH'] = [
     // Extend PATH to include the package's bin directory
     path.resolve('bin'),
+    // Include vite-plus global bin directory for global package commands
+    path.join(homedir(), '.vite-plus', 'bin'),
     ...env['PATH'].split(path.delimiter),
   ].join(path.delimiter);
 
