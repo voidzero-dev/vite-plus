@@ -212,11 +212,7 @@ jobs:
               vp run build
               vp test run -r __tests__/unit
               vp run tests-e2e#test
-              # FIXME: VITE_TEST_BUILD=1 mode has a pre-existing bug where the module runner
-              # mishandles file: URLs during SSR build-time page rendering, causing
-              # "Failed to load url /root/file:/root/..." errors. This test was never
-              # actually executing before (it was always served from vp task cache).
-              # VITE_TEST_BUILD=1 vp run tests-e2e#test
+              VITE_TEST_BUILD=1 vp run tests-e2e#test
               vp run tests-init#test
           - name: tanstack-start-helloworld
             node-version: 24
