@@ -28,7 +28,17 @@ runs:
           export TARGET="darwin-arm64"
         fi
 
-        export VERSION=$(npm view --json rolldown | jq -r '.version')
+        # Pin to the version from checked-out rolldown source to avoid mismatch
+        # between JS code (built from source) and native binary (downloaded from npm).
+        # Falls back to npm latest only when rolldown source isn't cloned yet
+        # (e.g., the standalone download-previous-rolldown-binaries job).
+        if [ -f "./rolldown/packages/rolldown/package.json" ]; then
+          export VERSION=$(node -p "require('./rolldown/packages/rolldown/package.json').version")
+          echo "Using rolldown version from source: ${VERSION}"
+        else
+          export VERSION=$(npm view --json rolldown | jq -r '.version')
+          echo "Warning: rolldown source not found, using npm latest: ${VERSION}"
+        fi
         npm pack "@rolldown/binding-${TARGET}@${VERSION}"
         tar -xzf "rolldown-binding-${TARGET}-${VERSION}.tgz"
         if [ -d "./rolldown/packages/rolldown/src" ]; then
