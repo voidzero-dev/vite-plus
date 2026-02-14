@@ -94,6 +94,31 @@ async function buildVite() {
         // Add RewriteImportsPlugin to handle vite/rolldown import rewrites
         RewriteImportsPlugin,
         {
+          name: 'fix-module-runner-dynamic-request-url',
+          transform(_, id, meta) {
+            if (id.endsWith(join('vite', 'src', 'module-runner', 'runner.ts'))) {
+              const { magicString } = meta;
+              if (magicString) {
+                // Fix dynamicRequest to use the server-normalized module URL
+                // (mod.url) instead of the raw URL parameter for relative path
+                // resolution. The raw `url` can be a file:// URL (e.g. from
+                // VitePress's `import(pathToFileURL(entryPath).href)`) which
+                // pathe.resolve cannot handle as an absolute path, producing
+                // malformed paths like "<cwd>/file:<path>".
+                // mod.url is always a server-normalized URL (e.g. /@fs/...)
+                // that posixResolve handles correctly.
+                magicString.replace(
+                  `if (dep[0] === '.') {\n        dep = posixResolve(posixDirname(url), dep)\n      }`,
+                  `if (dep[0] === '.') {\n        dep = posixResolve(posixDirname(mod.url), dep)\n      }`,
+                );
+                return {
+                  code: magicString,
+                };
+              }
+            }
+          },
+        },
+        {
           name: 'rewrite-static-paths',
           transform(_, id, meta) {
             if (id.endsWith(join('vite', 'src', 'node', 'constants.ts'))) {
