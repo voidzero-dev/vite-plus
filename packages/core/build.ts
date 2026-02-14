@@ -94,6 +94,27 @@ async function buildVite() {
         // Add RewriteImportsPlugin to handle vite/rolldown import rewrites
         RewriteImportsPlugin,
         {
+          name: 'fix-module-runner-file-url',
+          transform(_, id, meta) {
+            if (id.endsWith(join('vite', 'src', 'module-runner', 'runner.ts'))) {
+              const { magicString } = meta;
+              if (magicString) {
+                // Fix dynamicRequest to handle file:// URLs properly.
+                // pathe.resolve doesn't recognize file:// URLs as absolute,
+                // producing malformed paths like "<cwd>/file:<path>".
+                // Use URL resolution instead when the parent URL is file://.
+                magicString.replace(
+                  `if (dep[0] === '.') {\n        dep = posixResolve(posixDirname(url), dep)\n      }`,
+                  `if (dep[0] === '.') {\n        dep = url.startsWith('file://') ? new URL(dep, url).href : posixResolve(posixDirname(url), dep)\n      }`,
+                );
+                return {
+                  code: magicString,
+                };
+              }
+            }
+          },
+        },
+        {
           name: 'rewrite-static-paths',
           transform(_, id, meta) {
             if (id.endsWith(join('vite', 'src', 'node', 'constants.ts'))) {
