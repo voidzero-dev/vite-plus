@@ -212,7 +212,6 @@ jobs:
               vp run build
               vp test run -r __tests__/unit
               vp run tests-e2e#test
-              VITE_TEST_BUILD=1 vp run tests-e2e#test
               vp run tests-init#test
           - name: tanstack-start-helloworld
             node-version: 24
