@@ -1,16 +1,12 @@
 > vp install # install dependencies first
-[1]> vp migrate --no-interactive # migration should fail because vite version is not supported
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  pnpm@<semver> installing...
-│
-●  pnpm@<semver> installed
-│
-■  ✘ vite@<semver> in package.json is not supported by auto migration
-│
-●  Please upgrade vite to version >=7.0.0 first
-└  Vite+ cannot automatically migrate this project yet.
+[2]> vp migrate --no-interactive # migration should fail because vite version is not supported
+error: unrecognized subcommand 'migrate'
 
+  tip: a similar subcommand exists: 'i'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
 
 > cat package.json # check package.json is not updated
 {

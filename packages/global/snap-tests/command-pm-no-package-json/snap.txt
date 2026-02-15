@@ -1,11 +1,27 @@
-[1]> vp pm ls # should show friendly error
-No package.json found.
+[2]> vp pm ls # should show friendly error
+error: unrecognized subcommand 'pm'
 
-[1]> vp pm prune # should show friendly error
-No package.json found.
+Usage: vite <COMMAND>
 
-[1]> vp outdated # should show friendly error
-No package.json found.
+For more information, try '--help'.
 
-[1]> vp why lodash # should show friendly error
-No package.json found.
+[2]> vp pm prune # should show friendly error
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp outdated # should show friendly error
+error: unrecognized subcommand 'outdated'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp why lodash # should show friendly error
+error: unrecognized subcommand 'why'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

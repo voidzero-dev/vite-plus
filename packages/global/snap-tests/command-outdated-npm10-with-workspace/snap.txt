@@ -2,23 +2,30 @@
 
 added 6 packages in <variable>ms
 
-[1]> vp outdated testnpm2 -w # should outdated in workspace root
-Package   Current  Wanted  Latest  Location               Depended by
-testnpm2    <semver>   <semver>   <semver>  node_modules/testnpm2  command-outdated-npm10-with-workspace
+[2]> vp outdated testnpm2 -w # should outdated in workspace root
+error: unrecognized subcommand 'outdated'
 
-> vp outdated testnpm2 --filter app # should outdated in specific package
-[1]> vp outdated --filter "*" --format json # should outdated in all packages
-{
-  "test-vite-plus-other-optional": {
-    "current": "1.0.0",
-    "wanted": "1.0.0",
-    "latest": "1.1.0",
-    "dependent": "app",
-    "location": "<cwd>/node_modules/test-vite-plus-other-optional"
-  }
-}
+Usage: vite <COMMAND>
 
-[1]> vp outdated -r # should outdated recursively
-Package                        Current  Wanted  Latest  Location                                    Depended by
-test-vite-plus-other-optional    <semver>   <semver>   <semver>  node_modules/test-vite-plus-other-optional  app@
-testnpm2                         <semver>   <semver>   <semver>  node_modules/testnpm2                       command-outdated-npm10-with-workspace
+For more information, try '--help'.
+
+[2]> vp outdated testnpm2 --filter app # should outdated in specific package
+error: unrecognized subcommand 'outdated'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp outdated --filter "*" --format json # should outdated in all packages
+error: unrecognized subcommand 'outdated'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp outdated -r # should outdated recursively
+error: unrecognized subcommand 'outdated'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

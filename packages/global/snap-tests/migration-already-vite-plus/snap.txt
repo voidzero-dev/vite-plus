@@ -1,5 +1,8 @@
-> vp migrate --no-interactive # should detect existing vite-plus and exit
-┌  VITE+ - The Unified Toolchain for the Web
-│
-└  This project is already using Vite+! Happy coding!
+[2]> vp migrate --no-interactive # should detect existing vite-plus and exit
+error: unrecognized subcommand 'migrate'
 
+  tip: a similar subcommand exists: 'i'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

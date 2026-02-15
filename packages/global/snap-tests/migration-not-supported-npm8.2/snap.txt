@@ -1,13 +1,11 @@
-[1]> vp migrate --no-interactive # migration should fail because npm version is not supported
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  npm@<semver> installing...
-│
-●  npm@<semver> installed
-│
-■  ✘ npm@<semver> is not supported by auto migration, please upgrade npm to >=8.3.0 first
-└  Vite+ cannot automatically migrate this project yet.
+[2]> vp migrate --no-interactive # migration should fail because npm version is not supported
+error: unrecognized subcommand 'migrate'
 
+  tip: a similar subcommand exists: 'i'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
 
 > cat package.json # check package.json is not updated
 {

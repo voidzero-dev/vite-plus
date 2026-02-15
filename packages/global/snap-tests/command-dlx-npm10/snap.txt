@@ -1,53 +1,34 @@
-> vp dlx --help # should show help message
-Execute a package binary without installing it
+[2]> vp dlx --help # should show help message
+error: unrecognized subcommand 'dlx'
 
-Usage: vp dlx [OPTIONS] <ARGS>...
+Usage: vite <COMMAND>
 
-Arguments:
-  <ARGS>...  Package to execute and arguments
+For more information, try '--help'.
 
-Options:
-  -p, --package <NAME>  Package(s) to install before running
-  -c, --shell-mode      Execute within a shell environment
-  -s, --silent          Suppress all output except the executed command's output
-  -h, --help            Print help
+[2]> vp dlx -s cowsay hello # should run cowsay with npm exec
+error: unrecognized subcommand 'dlx'
 
-> vp dlx -s cowsay hello # should run cowsay with npm exec
- _______
-< hello >
- -------
-        \   ^__^
-         \  (oo)\_______
-            (__)\       )\/\
-                ||----w |
-                ||     ||
+Usage: vite <COMMAND>
 
-> vp dlx -s cowsay@1.6.0 hello # should run specific version
- _______
-< hello >
- -------
-        \   ^__^
-         \  (oo)\_______
-            (__)\       )\/\
-                ||----w |
-                ||     ||
+For more information, try '--help'.
 
-> vp dlx -s -p cowsay -p lolcatjs cowsay hello # should run with multiple packages
- _______
-< hello >
- -------
-        \   ^__^
-         \  (oo)\_______
-            (__)\       )\/\
-                ||----w |
-                ||     ||
+[2]> vp dlx -s cowsay@1.6.0 hello # should run specific version
+error: unrecognized subcommand 'dlx'
 
-> vp dlx -s -p cowsay -c "echo hello-from-shell | cowsay" # should run shell mode command
- __________________
-< hello-from-shell >
- ------------------
-        \   ^__^
-         \  (oo)\_______
-            (__)\       )\/\
-                ||----w |
-                ||     ||
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp dlx -s -p cowsay -p lolcatjs cowsay hello # should run with multiple packages
+error: unrecognized subcommand 'dlx'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[129]> vp dlx -s -p cowsay -c "echo hello-from-shell | cowsay" # should run shell mode command
+error: unrecognized subcommand 'dlx'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

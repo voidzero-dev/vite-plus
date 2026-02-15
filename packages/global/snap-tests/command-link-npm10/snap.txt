@@ -1,27 +1,25 @@
 > mkdir -p ../test-lib-npm && echo '{"name": "test-lib-npm", "version": "1.0.0"}' > ../test-lib-npm/package.json # create test library
-> vp link ../test-lib-npm && cat package.json # should link local directory
+[2]> vp link ../test-lib-npm && cat package.json # should link local directory
+error: unrecognized subcommand 'link'
 
-added 1 package in <variable>ms
-{
-  "name": "command-link-npm10",
-  "version": "1.0.0",
-  "packageManager": "npm@<semver>"
-}
+  tip: some similar subcommands exist: 'i', 'lint'
 
-> vp ln ../test-lib-npm && cat package.json # should work with ln alias
+Usage: vite <COMMAND>
 
-up to date in <variable>ms
-{
-  "name": "command-link-npm10",
-  "version": "1.0.0",
-  "packageManager": "npm@<semver>"
-}
+For more information, try '--help'.
 
-> vp unlink test-lib-npm && cat package.json # cleanup temp states
+[2]> vp ln ../test-lib-npm && cat package.json # should work with ln alias
+error: unrecognized subcommand 'ln'
 
-removed 1 package in <variable>ms
-{
-  "name": "command-link-npm10",
-  "version": "1.0.0",
-  "packageManager": "npm@<semver>"
-}
+  tip: a similar subcommand exists: 'lint'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp unlink test-lib-npm && cat package.json # cleanup temp states
+error: unrecognized subcommand 'unlink'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

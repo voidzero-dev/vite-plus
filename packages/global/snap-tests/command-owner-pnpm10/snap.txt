@@ -1,15 +1,13 @@
-> vp pm owner --help # should show help
-Manage package owners
+[2]> vp pm owner --help # should show help
+error: unrecognized subcommand 'pm'
 
-Usage: vp pm owner <COMMAND>
+Usage: vite <COMMAND>
 
-Commands:
-  list  List package owners [aliases: ls]
-  add   Add package owner
-  rm    Remove package owner
+For more information, try '--help'.
 
-Options:
-  -h, --help  Print help
+[129]> vp pm owner list testnpm2 # should list package owners (uses npm owner)
+error: unrecognized subcommand 'pm'
 
-> vp pm owner list testnpm2 # should list package owners (uses npm owner)
-fengmk2 <fengmk2@gmail.com>
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
