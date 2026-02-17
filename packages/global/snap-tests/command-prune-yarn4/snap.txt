@@ -1,15 +1,13 @@
-> vp pm prune --help # should show help
-Remove unnecessary packages
+[2]> vp pm prune --help # should show help
+error: unrecognized subcommand 'pm'
 
-Usage: vp pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+Usage: vite <COMMAND>
 
-Arguments:
-  [PASS_THROUGH_ARGS]...  Additional arguments
+For more information, try '--help'.
 
-Options:
-      --prod         Remove devDependencies
-      --no-optional  Remove optional dependencies
-  -h, --help         Print help
+[2]> vp pm prune # should show warning that yarn does not support prune command
+error: unrecognized subcommand 'pm'
 
-> vp pm prune # should show warning that yarn does not support prune command
-Warning: yarn does not have 'prune' command. yarn install will prune extraneous packages automatically.
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

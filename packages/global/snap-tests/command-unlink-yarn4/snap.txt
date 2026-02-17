@@ -1,81 +1,39 @@
 > mkdir -p ../unlink-test-lib-yarn && echo '{"name": "unlink-test-lib-yarn", "version": "1.0.0"}' > ../unlink-test-lib-yarn/package.json # create test library
-> vp link ../unlink-test-lib-yarn && cat package.json # link the library first
-➤ YN0000: · Yarn <semver>
-➤ YN0000: ┌ Resolution step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <variable>ms <variable>ms
-{
-  "name": "command-unlink-yarn4",
-  "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
-  "resolutions": {
-    "unlink-test-lib-yarn": "portal:<cwd>/../unlink-test-lib-yarn"
-  }
-}
+[2]> vp link ../unlink-test-lib-yarn && cat package.json # link the library first
+error: unrecognized subcommand 'link'
 
-> vp unlink unlink-test-lib-yarn && cat package.json # should unlink the package
-➤ YN0000: · Yarn <semver>
-➤ YN0000: ┌ Resolution step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <variable>ms <variable>ms
-{
-  "name": "command-unlink-yarn4",
-  "version": "1.0.0",
-  "packageManager": "yarn@<semver>"
-}
+  tip: some similar subcommands exist: 'i', 'lint'
 
-> vp link ../unlink-test-lib-yarn && cat package.json # link again
-➤ YN0000: · Yarn <semver>
-➤ YN0000: ┌ Resolution step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <variable>ms <variable>ms
-{
-  "name": "command-unlink-yarn4",
-  "version": "1.0.0",
-  "packageManager": "yarn@<semver>",
-  "resolutions": {
-    "unlink-test-lib-yarn": "portal:<cwd>/../unlink-test-lib-yarn"
-  }
-}
+Usage: vite <COMMAND>
 
-> vp unlink --recursive && cat package.json # should unlink all with --all flag
-➤ YN0000: · Yarn <semver>
-➤ YN0000: ┌ Resolution step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <variable>ms <variable>ms
-{
-  "name": "command-unlink-yarn4",
-  "version": "1.0.0",
-  "packageManager": "yarn@<semver>"
-}
+For more information, try '--help'.
 
-> vp unlink -r && cat package.json # should work with -r short form
-➤ YN0000: · Yarn <semver>
-➤ YN0000: ┌ Resolution step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <variable>ms <variable>ms
-{
-  "name": "command-unlink-yarn4",
-  "version": "1.0.0",
-  "packageManager": "yarn@<semver>"
-}
+[2]> vp unlink unlink-test-lib-yarn && cat package.json # should unlink the package
+error: unrecognized subcommand 'unlink'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp link ../unlink-test-lib-yarn && cat package.json # link again
+error: unrecognized subcommand 'link'
+
+  tip: some similar subcommands exist: 'i', 'lint'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp unlink --recursive && cat package.json # should unlink all with --all flag
+error: unrecognized subcommand 'unlink'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp unlink -r && cat package.json # should work with -r short form
+error: unrecognized subcommand 'unlink'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

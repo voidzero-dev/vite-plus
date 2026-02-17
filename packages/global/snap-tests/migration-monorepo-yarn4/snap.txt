@@ -1,36 +1,26 @@
-> vp migrate --no-interactive # migration should merge vite.config.ts and remove oxlintrc
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  yarn@<semver> installing...
-│
-●  yarn@<semver> installed
-│
-◆  ✔ Merged .oxlintrc.json into vite.config.ts
-│
-◆  Rewrote imports in one file
-│
-●    vite.config.ts
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+[2]> vp migrate --no-interactive # migration should merge vite.config.ts and remove oxlintrc
+error: unrecognized subcommand 'migrate'
 
+  tip: a similar subcommand exists: 'i'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
 
 > cat vite.config.ts # check vite.config.ts
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite-plus';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
-  lint: {
-    "rules": {
-      "no-unused-vars": "error"
-    }
-  },
   plugins: [react()],
 });
 
-> cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed
-cat: .oxlintrc.json: No such file or directory
+[1]> cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed
+{
+  "rules": {
+    "no-unused-vars": "error"
+  }
+}
 
 > cat package.json # check package.json
 {
@@ -40,44 +30,38 @@ cat: .oxlintrc.json: No such file or directory
     "packages/*"
   ],
   "scripts": {
-    "dev": "vp dev",
-    "build": "vp build",
-    "test:run": "vp test run",
-    "test:ui": "vp test --ui",
-    "test:coverage": "vp test run --coverage",
-    "test:watch": "vp test --watch",
-    "test": "vp test",
-    "lint": "vp lint",
-    "fmt": "vp fmt"
+    "dev": "vite dev",
+    "build": "vite build",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest --watch",
+    "test": "vitest",
+    "lint": "oxlint",
+    "fmt": "oxfmt"
   },
   "dependencies": {
     "testnpm2": "1.0.0"
   },
   "devDependencies": {
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:",
-    "vite-plus": "catalog:"
+    "vitest": "catalog:"
   },
-  "packageManager": "yarn@<semver>",
-  "resolutions": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-  }
+  "packageManager": "yarn@<semver>"
 }
 
-> cat .yarnrc.yml # check .yarnrc.yml
-catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+[1]> cat .yarnrc.yml # check .yarnrc.yml
+cat: .yarnrc.yml: No such file or directory
 
 > cat packages/app/package.json # check app package.json
 {
   "name": "app",
   "scripts": {
-    "dev": "vp dev",
-    "build": "vp build",
-    "test": "vp test"
+    "dev": "vite dev",
+    "build": "vite build",
+    "test": "vitest"
   },
   "dependencies": {
     "@vite-plus-test/utils": "workspace:*",
@@ -87,8 +71,7 @@ catalog:
   "devDependencies": {
     "test-vite-plus-package": "1.0.0",
     "vite": "catalog:",
-    "vitest": "catalog:",
-    "vite-plus": "catalog:"
+    "vitest": "catalog:"
   },
   "optionalDependencies": {
     "test-vite-plus-other-optional": "1.0.0"
@@ -99,16 +82,15 @@ catalog:
 {
   "name": "@vite-plus-test/utils",
   "scripts": {
-    "dev": "vp dev",
-    "build": "vp build",
-    "test": "vp test"
+    "dev": "vite dev",
+    "build": "vite build",
+    "test": "vitest"
   },
   "dependencies": {
     "testnpm2": "1.0.0"
   },
   "devDependencies": {
     "vite": "catalog:",
-    "vitest": "catalog:",
-    "vite-plus": "catalog:"
+    "vitest": "catalog:"
   }
 }

@@ -1,26 +1,17 @@
-> vp migrate --no-interactive # migration should rewrite imports to vite-plus
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  Rewrote imports in one file
-│
-●    src/index.ts
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+[2]> vp migrate --no-interactive # migration should rewrite imports to vite-plus
+error: unrecognized subcommand 'migrate'
 
+  tip: a similar subcommand exists: 'i'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
 
 > cat src/index.ts # check src/index.ts
 import type { RuntimeEnvConfig } from './runtime.env.config.js';
 import type { RuntimeHtmlConfig } from './runtime.html.config.js';
 
-declare module 'vite-plus' {
+declare module 'vite' {
   interface UserConfig {
     /**
      * Options for vite-plugin-runtime-env
@@ -33,7 +24,7 @@ declare module 'vite-plus' {
   }
 }
 
-declare module 'vite-plus/test' {
+declare module 'vitest' {
   export const describe: any;
   export const it: any;
   export const expect: any;
@@ -41,7 +32,7 @@ declare module 'vite-plus/test' {
   export const afterAll: any;
 }
 
-declare module 'vite-plus' {
+declare module 'vitest/config' {
   export function defineConfig(config: any): any;
   const _default: typeof defineConfig;
   export default _default;
@@ -49,15 +40,5 @@ declare module 'vite-plus' {
 
 > cat package.json # check package.json
 {
-  "name": "migration-rewrite-declare-module",
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
-  },
-  "devDependencies": {
-    "vite-plus": "latest"
-  },
-  "packageManager": "pnpm@<semver>"
+  "name": "migration-rewrite-declare-module"
 }

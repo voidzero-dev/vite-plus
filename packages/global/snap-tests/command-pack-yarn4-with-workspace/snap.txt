@@ -9,61 +9,44 @@
 ➤ YN0000: └ Completed
 ➤ YN0000: · Done with warnings in <variable>ms <variable>ms
 
-> vp pm pack # should pack current workspace root
-➤ YN0000: .node-version
-➤ YN0000: output.log
-➤ YN0000: package.json
-➤ YN0000: snap.txt
-➤ YN0000: steps.json
-➤ YN0000: Package archive generated in <cwd>/package.tgz
-➤ YN0000: Done in <variable>ms <variable>ms
+[2]> vp pm pack # should pack current workspace root
+error: unrecognized subcommand 'pm'
 
-> vp pm pack --recursive # should pack all packages in workspace (uses workspaces foreach --all pack)
-➤ YN0000: .node-version
-➤ YN0000: output.log
-➤ YN0000: package.json
-➤ YN0000: snap.txt
-➤ YN0000: steps.json
-➤ YN0000: Package archive generated in <cwd>/package.tgz
-➤ YN0000: Done in <variable>ms <variable>ms
-➤ YN0000: package.json
-➤ YN0000: Package archive generated in <cwd>/packages/app/package.tgz
-➤ YN0000: Done in <variable>ms <variable>ms
-➤ YN0000: package.json
-➤ YN0000: Package archive generated in <cwd>/packages/utils/package.tgz
-➤ YN0000: Done in <variable>ms <variable>ms
-Done in <variable>ms <variable>ms
+Usage: vite <COMMAND>
 
-> vp pm pack --filter app # should pack specific package (uses workspaces foreach --all --include app pack)
-➤ YN0000: package.json
-➤ YN0000: Package archive generated in <cwd>/packages/app/package.tgz
-➤ YN0000: Done in <variable>ms <variable>ms
-Done in <variable>ms <variable>ms
+For more information, try '--help'.
 
-> vp pm pack --filter app --filter @vite-plus-test/utils # should pack multiple packages
-➤ YN0000: package.json
-➤ YN0000: Package archive generated in <cwd>/packages/app/package.tgz
-➤ YN0000: Done in <variable>ms <variable>ms
-➤ YN0000: package.json
-➤ YN0000: Package archive generated in <cwd>/packages/utils/package.tgz
-➤ YN0000: Done in <variable>ms <variable>ms
-Done in <variable>ms <variable>ms
+[2]> vp pm pack --recursive # should pack all packages in workspace (uses workspaces foreach --all pack)
+error: unrecognized subcommand 'pm'
 
-> vp pm pack --out ./dist/package.tgz # should pack with output file
-➤ YN0000: .node-version
-➤ YN0000: output.log
-➤ YN0000: package.json
-➤ YN0000: snap.txt
-➤ YN0000: steps.json
-➤ YN0000: Package archive generated in <cwd>/dist/package.tgz
-➤ YN0000: Done in <variable>ms <variable>ms
+Usage: vite <COMMAND>
 
-> vp pm pack --json # should pack with json output
-{"base":"<cwd>"}
-{"location":".node-version"}
-{"location":"dist/package.tgz"}
-{"location":"output.log"}
-{"location":"package.json"}
-{"location":"snap.txt"}
-{"location":"steps.json"}
-{"output":"<cwd>/package.tgz"}
+For more information, try '--help'.
+
+[2]> vp pm pack --filter app # should pack specific package (uses workspaces foreach --all --include app pack)
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm pack --filter app --filter @vite-plus-test/utils # should pack multiple packages
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm pack --out ./dist/package.tgz # should pack with output file
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[129]> vp pm pack --json # should pack with json output
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

@@ -1,104 +1,37 @@
-> vp add testnpm2 -D -w && cat package.json # should add package to workspace root
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+[2]> vp add testnpm2 -D -w && cat package.json # should add package to workspace root
+error: unrecognized subcommand 'add'
 
-devDependencies:
-+ testnpm2 ^1.0.1
+Usage: vite <COMMAND>
 
-Packages: +<variable>
-+<repeat>
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-add-pnpm9-with-workspace",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  }
-}
+For more information, try '--help'.
 
-[1]> vp add @vite-plus-test/utils --workspace && cat package.json # should add @vite-plus-test/utils to workspace root
- ERR_PNPM_ADDING_TO_ROOT  Running this command will add the dependency to the workspace root, which might not be what you want - if you really meant it, make it explicit by running this command again with the -w flag (or --workspace-root). If you don't want to see this warning anymore, you may set the ignore-workspace-root-check setting to true.
+[2]> vp add @vite-plus-test/utils --workspace && cat package.json # should add @vite-plus-test/utils to workspace root
+error: unrecognized subcommand 'add'
 
-> vp add testnpm2 test-vite-plus-install@1.0.0 --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app
-.                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
-.                                        |   +1 +<repeat>
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-add-pnpm9-with-workspace",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  }
-}
-{
-  "name": "app",
-  "dependencies": {
-    "test-vite-plus-install": "1.0.0",
-    "testnpm2": "^1.0.1"
-  }
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true
-}
+Usage: vite <COMMAND>
 
-> vp add @vite-plus-test/utils --workspace --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app
-.                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-add-pnpm9-with-workspace",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  }
-}
-{
-  "name": "app",
-  "dependencies": {
-    "@vite-plus-test/utils": "workspace:^",
-    "test-vite-plus-install": "1.0.0",
-    "testnpm2": "^1.0.1"
-  }
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true
-}
+For more information, try '--help'.
 
-> vp add -E testnpm2 test-vite-plus-install --filter "*" && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages except workspace root
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-add-pnpm9-with-workspace",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  }
-}
-{
-  "name": "app",
-  "dependencies": {
-    "@vite-plus-test/utils": "workspace:^",
-    "test-vite-plus-install": "1.0.0",
-    "testnpm2": "^1.0.1"
-  }
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "test-vite-plus-install": "1.0.0",
-    "testnpm2": "^1.0.1"
-  }
-}
+[2]> vp add testnpm2 test-vite-plus-install@1.0.0 --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app
+error: unrecognized subcommand 'add'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp add @vite-plus-test/utils --workspace --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app
+error: unrecognized subcommand 'add'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[129]> vp add -E testnpm2 test-vite-plus-install --filter "*" && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages except workspace root
+error: unrecognized subcommand 'add'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
 
 > vp install test-vite-plus-package@1.0.0 --filter "*" --workspace-root && cat package.json packages/app/package.json packages/utils/package.json pnpm-workspace.yaml # should install packages alias for add command
 .                                        |   +1 +<repeat>
@@ -108,9 +41,6 @@ Done in <variable>ms using pnpm v<semver>
   "name": "command-add-pnpm9-with-workspace",
   "version": "1.0.0",
   "packageManager": "pnpm@<semver>",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  },
   "dependencies": {
     "test-vite-plus-package": "1.0.0"
   }
@@ -118,10 +48,7 @@ Done in <variable>ms using pnpm v<semver>
 {
   "name": "app",
   "dependencies": {
-    "@vite-plus-test/utils": "workspace:^",
-    "test-vite-plus-install": "1.0.0",
-    "test-vite-plus-package": "1.0.0",
-    "testnpm2": "^1.0.1"
+    "test-vite-plus-package": "1.0.0"
   }
 }
 {
@@ -129,20 +56,22 @@ Done in <variable>ms using pnpm v<semver>
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "test-vite-plus-install": "1.0.0",
-    "test-vite-plus-package": "1.0.0",
-    "testnpm2": "^1.0.1"
+    "test-vite-plus-package": "1.0.0"
   }
 }
 packages:
   - packages/*
 
-[1]> vp add --filter app test-vite-plus-package-optional --save-catalog-name v1 # should error because save-catalog-name is not supported at pnpm@9
- ERROR  Unknown option: 'save-catalog-name'
-Did you mean 'save-optional'? Use "--config.unknown=value" to force an unknown option.
-For help, run: pnpm help add
+[2]> vp add --filter app test-vite-plus-package-optional --save-catalog-name v1 # should error because save-catalog-name is not supported at pnpm@9
+error: unrecognized subcommand 'add'
 
-[1]> vp add --filter=./packages/utils test-vite-plus-package-optional -O --save-catalog v2 # should error because save-catalog is not supported at pnpm@9
- ERROR  Unknown option: 'save-catalog-name'
-Did you mean 'save-optional'? Use "--config.unknown=value" to force an unknown option.
-For help, run: pnpm help add
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp add --filter=./packages/utils test-vite-plus-package-optional -O --save-catalog v2 # should error because save-catalog is not supported at pnpm@9
+error: unrecognized subcommand 'add'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

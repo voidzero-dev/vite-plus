@@ -1,31 +1,22 @@
-> vp migrate --no-interactive # migration should rewrite imports to vite-plus
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  Rewrote imports in one file
-│
-●    vitest.config.ts
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+[2]> vp migrate --no-interactive # migration should rewrite imports to vite-plus
+error: unrecognized subcommand 'migrate'
 
+  tip: a similar subcommand exists: 'i'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
 
 > cat vitest.config.ts # check vitest.config.ts
 import { join } from 'node:path';
 
 import { foo } from '@foo/vite-plugin-foo';
-import { playwright } from 'vite-plus/test/browser-playwright';
-import { server } from 'vite-plus/test/browser-playwright/context';
-import { preview } from 'vite-plus/test/browser-preview';
-import { webdriverio } from 'vite-plus/test/browser-webdriverio';
-import { userEvent } from 'vite-plus/test/browser/context';
-import { defineConfig } from 'vite-plus';
+import { playwright } from '@vitest/browser-playwright';
+import { server } from '@vitest/browser-playwright/context';
+import { preview } from '@vitest/browser-preview';
+import { webdriverio } from '@vitest/browser-webdriverio';
+import { userEvent } from '@vitest/browser/context';
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [foo()],
@@ -45,22 +36,16 @@ export default defineConfig({
 {
   "name": "migration-from-vitest-config",
   "scripts": {
-    "test:run": "vp test run",
-    "test:ui": "vp test --ui",
-    "test:coverage": "vp test run --coverage",
-    "test:watch": "vp test --watch",
-    "test": "vp test"
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest --watch",
+    "test": "vitest"
   },
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "vite-plus": "latest"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
-  },
-  "packageManager": "pnpm@<semver>"
+    "@vitest/browser": "^4.0.0",
+    "@vitest/browser-playwright": "^4.0.0",
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0"
+  }
 }

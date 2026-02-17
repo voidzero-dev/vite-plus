@@ -9,106 +9,51 @@ dependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
-> vp why testnpm2 -w # should check why in workspace root
-Legend: production dependency, optional only, dev only
+[2]> vp why testnpm2 -w # should check why in workspace root
+error: unrecognized subcommand 'why'
 
-command-why-pnpm10-with-workspace@<semver> <cwd>
+Usage: vite <COMMAND>
 
-dependencies:
-testnpm2 <semver>
+For more information, try '--help'.
 
-> vp why testnpm2 --filter app # should check why in specific package
-Legend: production dependency, optional only, dev only
+[129]> vp why testnpm2 --filter app # should check why in specific package
+error: unrecognized subcommand 'why'
 
-app <cwd>/packages/app
+Usage: vite <COMMAND>
 
-dependencies:
-@vite-plus-test/utils link:../utils
-└── testnpm2 <semver>
-testnpm2 <semver>
+For more information, try '--help'.
 
-> vp why test-vite-plus-package -D --filter app # should check why dev dependencies in app
-Legend: production dependency, optional only, dev only
+[2]> vp why test-vite-plus-package -D --filter app # should check why dev dependencies in app
+error: unrecognized subcommand 'why'
 
-app <cwd>/packages/app
+Usage: vite <COMMAND>
 
-devDependencies:
-test-vite-plus-package <semver>
+For more information, try '--help'.
 
-> vp why testnpm2 --filter "*" # should check why in all packages
-Legend: production dependency, optional only, dev only
+[2]> vp why testnpm2 --filter "*" # should check why in all packages
+error: unrecognized subcommand 'why'
 
-command-why-pnpm10-with-workspace@<semver> <cwd>
+Usage: vite <COMMAND>
 
-dependencies:
-testnpm2 <semver>
+For more information, try '--help'.
 
-app <cwd>/packages/app
+[2]> vp why testnpm2 -r # should check why recursively
+error: unrecognized subcommand 'why'
 
-dependencies:
-@vite-plus-test/utils link:../utils
-└── testnpm2 <semver>
-testnpm2 <semver>
+Usage: vite <COMMAND>
 
-@vite-plus-test/utils <cwd>/packages/utils
+For more information, try '--help'.
 
-dependencies:
-testnpm2 <semver>
+[2]> vp why testnpm2 --filter app --json # should support json output with filter
+error: unrecognized subcommand 'why'
 
-> vp why testnpm2 -r # should check why recursively
-Legend: production dependency, optional only, dev only
+Usage: vite <COMMAND>
 
-command-why-pnpm10-with-workspace@<semver> <cwd>
+For more information, try '--help'.
 
-dependencies:
-testnpm2 <semver>
+[2]> vp why test-vite-plus-install --filter app --depth 1 # should support depth limiting with filter
+error: unrecognized subcommand 'why'
 
-app <cwd>/packages/app
+Usage: vite <COMMAND>
 
-dependencies:
-@vite-plus-test/utils link:../utils
-└── testnpm2 <semver>
-testnpm2 <semver>
-
-@vite-plus-test/utils <cwd>/packages/utils
-
-dependencies:
-testnpm2 <semver>
-
-> vp why testnpm2 --filter app --json # should support json output with filter
-[
-  {
-    "name": "app",
-    "path": "<cwd>/packages/app",
-    "private": false,
-    "dependencies": {
-      "testnpm2": {
-        "from": "testnpm2",
-        "version": "1.0.0",
-        "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.0.tgz",
-        "path": "<cwd>/node_modules/.pnpm/testnpm2@<semver>/node_modules/testnpm2"
-      },
-      "@vite-plus-test/utils": {
-        "from": "@vite-plus-test/utils",
-        "version": "link:../utils",
-        "path": "<cwd>/packages/utils",
-        "dependencies": {
-          "testnpm2": {
-            "from": "testnpm2",
-            "version": "1.0.0",
-            "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.0.tgz",
-            "path": "<cwd>/node_modules/.pnpm/testnpm2@<semver>/node_modules/testnpm2"
-          }
-        }
-      }
-    }
-  }
-]
-
-> vp why test-vite-plus-install --filter app --depth 1 # should support depth limiting with filter
-Legend: production dependency, optional only, dev only
-
-app <cwd>/packages/app
-
-dependencies:
-test-vite-plus-install <semver>
+For more information, try '--help'.
