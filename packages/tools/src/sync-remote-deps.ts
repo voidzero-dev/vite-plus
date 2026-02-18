@@ -55,10 +55,10 @@ function execCommand(command: string, cwd?: string): string {
       encoding: 'utf-8',
       stdio: 'pipe',
     }).trim();
-  } catch (error) {
+  } catch (err) {
     throw new Error(
-      `Failed to execute: ${command}\n${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
+      `Failed to execute: ${command}\n${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
     );
   }
 }

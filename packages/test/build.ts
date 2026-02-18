@@ -55,7 +55,7 @@ import { format } from 'oxfmt';
 import { build } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
 
-import pkg from './package.json' with { type: 'json' };
+import pkgJson from './package.json' with { type: 'json' };
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
 const vitestSourceDir = resolve(projectDir, 'node_modules/vitest-dev');
@@ -2106,12 +2106,12 @@ async function validateExternalDeps() {
 
   // Collect all declared dependencies
   const declaredDeps = new Set<string>([
-    ...Object.keys(pkg.dependencies || {}),
-    ...Object.keys(pkg.peerDependencies || {}),
+    ...Object.keys(pkgJson.dependencies || {}),
+    ...Object.keys(pkgJson.peerDependencies || {}),
   ]);
 
   // Also include self-references
-  declaredDeps.add(pkg.name);
+  declaredDeps.add(pkgJson.name);
   declaredDeps.add('vitest'); // Self-reference via vitest name
 
   // Collect all external specifiers from ALL dist files (including vendor)

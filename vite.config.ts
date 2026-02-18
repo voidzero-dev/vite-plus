@@ -28,13 +28,20 @@ export default defineConfig({
         ],
         rules: {
           'no-console': 'off',
+          // Allow variable shadowing in build scripts where it's common and intentional
+          'no-shadow': 'off',
         },
       },
       {
-        files: ['packages/cli/src/oxlint-config.ts'],
+        files: [
+          'packages/cli/src/oxlint-config.ts',
+          // Allow no-shadow in prompts package as it's common pattern in callback-heavy UI code
+          'packages/prompts/src/*.ts',
+        ],
         rules: {
           'typescript/no-explicit-any': 'off',
           'typescript/no-extraneous-class': 'off',
+          'no-shadow': 'off',
         },
       },
       {
@@ -49,6 +56,8 @@ export default defineConfig({
       '**/snap-tests-todo/**',
       'packages/core/rollupLicensePlugin.ts',
       'packages/core/vite-rolldown.config.ts',
+      'packages/*/binding/index.d.cts',
+      'packages/*/binding/index.d.ts',
     ],
   },
   test: {
@@ -92,7 +101,6 @@ export default defineConfig({
           'value-sibling',
           'value-index',
         ],
-        ['ts-equals-import'],
         ['unknown'],
       ],
       newlinesBetween: true,

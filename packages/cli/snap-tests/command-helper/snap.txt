@@ -100,9 +100,10 @@ Runtime Options
         --threads=INT        Number of threads to use. Set to 1 for using only 1 CPU core.
 
 Available positional items:
-    PATH                     Single file, single path or list of paths. If not provided, current
-                             working directory is used. Glob is supported only for exclude patterns
-                             like `'!**/fixtures/*.js'`.
+    PATH                     Single file, path or list of paths. Glob patterns are also supported.
+                             (Be sure to quote them, otherwise your shell may expand them before
+                             passing.) Exclude patterns with `!` prefix like `'!**/fixtures/*.js'`
+                             are also supported. If not provided, current working directory is used.
 
 Available options:
     -h, --help               Prints help information
@@ -114,7 +115,9 @@ Usage: [-c=<./.oxlintrc.json>] [PATH]...
 
 Basic Configuration
     -c, --config=<./.oxlintrc.json>  Oxlint configuration file
-                              * only `.json` extension is supported
+                              * `.json` config files are supported in all runtimes
+                              * JavaScript/TypeScript config files are experimental and require
+                              running via Node.js
                               * you can use comments in configuration files.
                               * tries to be compatible with ESLint v8's format
         --tsconfig=<./tsconfig.json>  TypeScript `tsconfig.json` path for reading path alias and

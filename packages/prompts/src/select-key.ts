@@ -48,7 +48,7 @@ export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) =
         case 'submit': {
           const submitPrefix = hasGuide ? `${color.gray(S_BAR)}  ` : '';
           const selectedOption =
-            this.options.find((opt) => opt.value === this.value) ?? opts.options[0];
+            this.options.find((o) => o.value === this.value) ?? opts.options[0];
           const wrapped = wrapTextWithPrefix(
             opts.output,
             opt(selectedOption, 'selected'),
