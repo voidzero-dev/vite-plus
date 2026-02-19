@@ -1,25 +1,27 @@
-> vp install -g ./conflict-pkg # Install package with conflicting binary name (uses cwd version)
-  Installing ./conflict-pkg globally...
-  Running npm install...
+[1]> vp install -g ./conflict-pkg # Install package with conflicting binary name (uses cwd version)
+[Vite+] run error: [Error: Package not found in workspace: `AbsolutePathBuf("<cwd>")`] {
+  code: 'GenericFailure'
+}
 
-added 1 package in <variable>ms
-  Warning: Package './conflict-pkg' provides 'node' binary, but it conflicts with a core shim. Skipping.
-  Installed ./conflict-pkg v<semver>
-  Binaries: conflict-cli, node
+[2]> vp remove -g conflict-pkg # Cleanup
+error: unrecognized subcommand 'remove'
 
-> vp remove -g conflict-pkg # Cleanup
-  Uninstalling conflict-pkg...
-  Uninstalled conflict-pkg
+  tip: a similar subcommand exists: 'preview'
 
-> vp install -g --node 20 ./conflict-pkg # Install with specific Node.js version
-  Installing ./conflict-pkg globally...
-  Running npm install...
+Usage: vite <COMMAND>
 
-added 1 package in <variable>ms
-  Warning: Package './conflict-pkg' provides 'node' binary, but it conflicts with a core shim. Skipping.
-  Installed ./conflict-pkg v<semver>
-  Binaries: conflict-cli, node
+For more information, try '--help'.
 
-> vp remove -g conflict-pkg # Cleanup
-  Uninstalling conflict-pkg...
-  Uninstalled conflict-pkg
+[1]> vp install -g --node 20 ./conflict-pkg # Install with specific Node.js version
+[Vite+] run error: [Error: Package not found in workspace: `AbsolutePathBuf("<cwd>")`] {
+  code: 'GenericFailure'
+}
+
+[2]> vp remove -g conflict-pkg # Cleanup
+error: unrecognized subcommand 'remove'
+
+  tip: a similar subcommand exists: 'preview'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

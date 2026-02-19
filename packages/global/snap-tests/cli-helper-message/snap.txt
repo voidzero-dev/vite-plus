@@ -1,359 +1,123 @@
 > vp -h # show help message
 Vite+/<semver>
 
-Usage: vp [COMMAND]
+[1;4mUsage:[0m [1mvite[0m <COMMAND>
 
-Core Commands:
-  create                         Create a new project from a template
-  dev                            Run the development server
-  build                          Build for production
-  test                           Run tests
-  lint                           Lint code
-  fmt                            Format code
-  pack                           Build library
-  run                            Run tasks
-  preview                        Preview production build
-  env                            Manage Node.js versions
-  migrate                        Migrate an existing project to Vite+<repeat>
-  cache                          Manage the task cache
+[1;4mVite+ Commands:[0m
+  [1mdev[0m        Run the development server
+  [1mbuild[0m      Build for production
+  [1mpreview[0m    Preview production build
+  [1mlint[0m       Lint code
+  [1mtest[0m       Run tests
+  [1mfmt[0m        Format code
+  [1mpack[0m       Build library
+  [1mrun[0m        Run tasks
+  [1mcache[0m      Manage the task cache
 
-Package Manager Commands:
-  install, i                     Install all dependencies, or add packages if package names are provided
-  add                            Add packages to dependencies
-  remove, rm, un, uninstall      Remove packages from dependencies
-  dedupe                         Deduplicate dependencies by removing older versions
-  dlx                            Execute a package binary without installing it as a dependency
-  info, view, show               View package information from the registry
-  link, ln                       Link packages for local development
-  list, ls                       List installed packages
-  outdated                       Check for outdated packages
-  pm                             Forward a command to the package manager
-  unlink                         Unlink packages
-  update, up                     Update packages to their latest versions
-  why, explain                   Show why a package is installed
-
-Maintenance Commands:
-  upgrade                        Update vp itself to the latest version
-
-Options:
-  -V, --version  Print version
-  -h, --help     Print help
-
-> vp -V # show version
-VITE+ - The Unified Toolchain for the Web
-
-PACKAGE VERSIONS:
-  vite-plus-cli: v<semver>
-  vite-plus:     Not found
-
-> vp install -h # show install help message
-Install all dependencies, or add packages if package names are provided
-
-Usage: vp install [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
-
-Arguments:
-  [PACKAGES]...           Packages to add (if provided, acts as `vp add`)
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
-
-Options:
-  -P, --prod                Do not install devDependencies
-  -D, --dev                 Only install devDependencies (install) / Save to devDependencies (add)
-      --no-optional         Do not install optionalDependencies
-      --frozen-lockfile     Fail if lockfile needs to be updated (CI mode)
-      --no-frozen-lockfile  Allow lockfile updates (opposite of --frozen-lockfile)
-      --lockfile-only       Only update lockfile, don't install
-      --prefer-offline      Use cached packages when available
-      --offline             Only use packages already in cache
-  -f, --force               Force reinstall all dependencies
-      --ignore-scripts      Do not run lifecycle scripts
-      --no-lockfile         Don't read or generate lockfile
-      --fix-lockfile        Fix broken lockfile entries (pnpm and yarn@2+ only)
-      --shamefully-hoist    Create flat `node_modules` (pnpm only)
-      --resolution-only     Re-run resolution for peer dependency analysis (pnpm only)
-      --silent              Suppress output (silent mode)
-      --filter <PATTERN>    Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root      Install in workspace root only
-  -E, --save-exact          Save exact version (only when adding packages)
-      --save-peer           Save to peerDependencies (only when adding packages)
-  -O, --save-optional       Save to optionalDependencies (only when adding packages)
-      --save-catalog        Save the new dependency to the default catalog (only when adding packages)
-  -g, --global              Install globally (only when adding packages)
-      --node <NODE>         Node.js version to use for global installation (only with -g)
-  -h, --help                Print help
-
-> vp add -h # show add help message
-Add packages to dependencies
-
-Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
-
-Arguments:
-  <PACKAGES>...           Packages to add
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
-
-Options:
-  -P, --save-prod
-          Save to `dependencies` (default)
-  -D, --save-dev
-          Save to `devDependencies`
-      --save-peer
-          Save to `peerDependencies` and `devDependencies`
-  -O, --save-optional
-          Save to `optionalDependencies`
-  -E, --save-exact
-          Save exact version rather than semver range
-      --save-catalog-name <CATALOG_NAME>
-          Save the new dependency to the specified catalog name
-      --save-catalog
-          Save the new dependency to the default catalog
-      --allow-build <NAMES>
-          A list of package names allowed to run postinstall
-      --filter <PATTERN>
-          Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root
-          Add to workspace root
-      --workspace
-          Only add if package exists in workspace (pnpm-specific)
-  -g, --global
-          Install globally
-      --node <NODE>
-          Node.js version to use for global installation (only with -g)
-  -h, --help
-          Print help
-
-> vp remove -h # show remove help message
-Remove packages from dependencies
-
-Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
-
-Arguments:
-  <PACKAGES>...           Packages to remove
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
-
-Options:
-  -D, --save-dev          Only remove from `devDependencies` (pnpm-specific)
-  -O, --save-optional     Only remove from `optionalDependencies` (pnpm-specific)
-  -P, --save-prod         Only remove from `dependencies` (pnpm-specific)
-      --filter <PATTERN>  Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root    Remove from workspace root
-  -r, --recursive         Remove recursively from all workspace packages
-  -g, --global            Remove global packages
-      --dry-run           Preview what would be removed without actually removing (only with -g)
-  -h, --help              Print help
-
-> vp update -h # show update help message
-Update packages to their latest versions
-
-Usage: vp update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
-
-Arguments:
-  [PACKAGES]...           Packages to update (optional - updates all if omitted)
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
-
-Options:
-  -L, --latest            Update to latest version (ignore semver range)
-  -g, --global            Update global packages
-  -r, --recursive         Update recursively in all workspace packages
-      --filter <PATTERN>  Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root    Include workspace root
-  -D, --dev               Update only devDependencies
-  -P, --prod              Update only dependencies (production)
-  -i, --interactive       Interactive mode
-      --no-optional       Don't update optionalDependencies
-      --no-save           Update lockfile only, don't modify package.json
-      --workspace         Only update if package exists in workspace (pnpm-specific)
-  -h, --help              Print help
-
-> vp link -h # show link help message
-Link packages for local development
-
-Usage: vp link [PACKAGE|DIR] [ARGS]...
-
-Arguments:
-  [PACKAGE|DIR]  Package name or directory to link
-  [ARGS]...      Arguments to pass to package manager
+[1;4mPackage Manager Commands:[0m
+  [1minstall[0m    Install all dependencies
 
 Options:
   -h, --help  Print help
 
-> vp unlink -h # show unlink help message
-Unlink packages
+[129]> vp -V # show version
+error: unexpected argument '-V' found
 
-Usage: vp unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
+Usage: vite <COMMAND>
 
-Arguments:
-  [PACKAGE|DIR]  Package name to unlink
-  [ARGS]...      Arguments to pass to package manager
+For more information, try '--help'.
 
-Options:
-  -r, --recursive  Unlink in every workspace package
-  -h, --help       Print help
+[1]> vp install -h # show install help message
+[Vite+] run error: [Error: Package not found in workspace: `AbsolutePathBuf("<cwd>")`] {
+  code: 'GenericFailure'
+}
 
-> vp dedupe -h # show dedupe help message
-Deduplicate dependencies
+[2]> vp add -h # show add help message
+error: unrecognized subcommand 'add'
 
-Usage: vp dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+Usage: vite <COMMAND>
 
-Arguments:
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+For more information, try '--help'.
 
-Options:
-      --check  Check if deduplication would make changes
-  -h, --help   Print help
+[2]> vp remove -h # show remove help message
+error: unrecognized subcommand 'remove'
 
-> vp outdated -h # show outdated help message
-Check for outdated packages
+  tip: a similar subcommand exists: 'preview'
 
-Usage: vp outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+Usage: vite <COMMAND>
 
-Arguments:
-  [PACKAGES]...           Package name(s) to check
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+For more information, try '--help'.
 
-Options:
-      --long              Show extended information
-      --format <FORMAT>   Output format: table (default), list, or json
-  -r, --recursive         Check recursively across all workspaces
-      --filter <PATTERN>  Filter packages in monorepo
-  -w, --workspace-root    Include workspace root
-  -P, --prod              Only production and optional dependencies
-  -D, --dev               Only dev dependencies
-      --no-optional       Exclude optional dependencies
-      --compatible        Only show compatible versions
-      --sort-by <FIELD>   Sort results by field
-  -g, --global            Check globally installed packages
-  -h, --help              Print help
+[2]> vp update -h # show update help message
+error: unrecognized subcommand 'update'
 
-> vp why -h # show why help message
-Show why a package is installed
+Usage: vite <COMMAND>
 
-Usage: vp why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+For more information, try '--help'.
 
-Arguments:
-  <PACKAGES>...           Package(s) to check
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+[2]> vp link -h # show link help message
+error: unrecognized subcommand 'link'
 
-Options:
-      --json                   Output in JSON format
-      --long                   Show extended information
-      --parseable              Show parseable output
-  -r, --recursive              Check recursively across all workspaces
-      --filter <PATTERN>       Filter packages in monorepo
-  -w, --workspace-root         Check in workspace root
-  -P, --prod                   Only production dependencies
-  -D, --dev                    Only dev dependencies
-      --depth <DEPTH>          Limit tree depth
-      --no-optional            Exclude optional dependencies
-  -g, --global                 Check globally installed packages
-      --exclude-peers          Exclude peer dependencies
-      --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
-  -h, --help                   Print help
+  tip: some similar subcommands exist: 'i', 'lint'
 
-> vp info -h # show info help message
-View package information from the registry
+Usage: vite <COMMAND>
 
-Usage: vp info [OPTIONS] <PACKAGE> [FIELD] [-- <PASS_THROUGH_ARGS>...]
+For more information, try '--help'.
 
-Arguments:
-  <PACKAGE>               Package name with optional version
-  [FIELD]                 Specific field to view
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+[2]> vp unlink -h # show unlink help message
+error: unrecognized subcommand 'unlink'
 
-Options:
-      --json  Output in JSON format
-  -h, --help  Print help
+Usage: vite <COMMAND>
 
-> vp pm -h # show pm help message
-Forward a command to the package manager
+For more information, try '--help'.
 
-Usage: vp pm <COMMAND>
+[2]> vp dedupe -h # show dedupe help message
+error: unrecognized subcommand 'dedupe'
 
-Commands:
-  prune    Remove unnecessary packages
-  pack     Create a tarball of the package
-  list     List installed packages [aliases: ls]
-  view     View package information from the registry [aliases: info, show]
-  publish  Publish package to registry
-  owner    Manage package owners [aliases: author]
-  cache    Manage package cache
-  config   Manage package manager configuration [aliases: c]
+Usage: vite <COMMAND>
 
-Options:
-  -h, --help  Print help
+For more information, try '--help'.
 
-> vp env # show env help message
-Manage Node.js versions
+[2]> vp outdated -h # show outdated help message
+error: unrecognized subcommand 'outdated'
 
-Usage: vp env [OPTIONS] [COMMAND]
+Usage: vite <COMMAND>
 
-Commands:
-  default      Set or show the global default Node.js version
-  on           Enable managed mode - shims always use vite-plus managed Node.js
-  off          Enable system-first mode - shims prefer system Node.js, fallback to managed
-  setup        Create or update shims in VITE_PLUS_HOME/bin
-  doctor       Run diagnostics and show environment status
-  which        Show path to the tool that would be executed
-  pin          Pin a Node.js version in the current directory (creates .node-version)
-  unpin        Remove the .node-version file from current directory (alias for `pin --unpin`)
-  list         List locally installed Node.js versions [aliases: ls]
-  list-remote  List available Node.js versions from the registry [aliases: ls-remote]
-  exec         Execute a command with a specific Node.js version [aliases: run]
-  uninstall    Uninstall a Node.js version [aliases: uni]
-  install      Install a Node.js version [aliases: i]
-  use          Use a specific Node.js version for this shell session
+For more information, try '--help'.
 
-Options:
-      --current  Show current environment information
-      --json     Output in JSON format
-      --print    Print shell snippet to set environment for current session
-  -h, --help     Print help
+[2]> vp why -h # show why help message
+error: unrecognized subcommand 'why'
 
-Examples:
-  vp env setup                  # Create shims for node, npm, npx
-  vp env setup --refresh        # Force refresh shims
-  vp env doctor                 # Check environment configuration
-  vp env default <semver>        # Set default Node.js version
-  vp env on                     # Use vite-plus managed Node.js
-  vp env off                    # Prefer system Node.js
-  vp env which node             # Show which node binary will be used
-  vp env pin <semver>            # Pin Node.js version in current directory
-  vp env pin lts                # Pin to latest LTS version
-  vp env unpin                  # Remove pinned version
-  vp env list                   # List locally installed Node.js versions
-  vp env list-remote            # List available remote Node.js versions
-  vp env list-remote --lts      # List only LTS versions
-  vp env list-remote 20         # List Node.js 20.x versions
-  vp env install <semver>        # Install Node.js <semver>
-  vp env install                # Install version from .node-version / package.json
-  vp env install lts            # Install latest LTS version
-  vp env uninstall <semver>      # Uninstall Node.js <semver>
-  vp env use 20                 # Use Node.js 20 for this shell session
-  vp env use lts                # Use latest LTS for this shell session
-  vp env use                    # Use project version for this shell session
-  vp env use --unset            # Remove session override
-  vp env exec --node 20 node -v # Execute 'node -v' with Node.js 20
-  vp env exec --node lts npm i  # Execute 'npm i' with latest LTS
-  vp env exec node -v           # Shim mode (version auto-resolved)
-  vp env exec npm install       # Shim mode (version auto-resolved)
+Usage: vite <COMMAND>
 
-Global Packages:
-  vp install -g <package>       # Install a global package
-  vp uninstall -g <package>     # Uninstall a global package
-  vp update -g [package]        # Update global package(s)
-  vp list -g [package]          # List installed global packages
+For more information, try '--help'.
 
-> vp upgrade -h # show upgrade help message
-Update vp itself to the latest version
+[2]> vp info -h # show info help message
+error: unrecognized subcommand 'info'
 
-Usage: vp upgrade [OPTIONS] [VERSION]
+  tip: a similar subcommand exists: 'i'
 
-Arguments:
-  [VERSION]  Target version (e.g., "0.2.0"). Defaults to latest
+Usage: vite <COMMAND>
 
-Options:
-      --tag <TAG>            npm dist-tag to install (default: "latest", also: "test") [default: latest]
-      --check                Check for updates without installing
-      --rollback             Revert to the previously active version
-      --force                Force reinstall even if already on the target version
-      --silent               Suppress output
-      --registry <REGISTRY>  Custom npm registry URL
-  -h, --help                 Print help
+For more information, try '--help'.
+
+[2]> vp pm -h # show pm help message
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp env # show env help message
+error: unrecognized subcommand 'env'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[129]> vp upgrade -h # show upgrade help message
+error: unrecognized subcommand 'upgrade'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

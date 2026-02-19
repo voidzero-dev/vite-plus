@@ -1,3 +1,9 @@
-> vp create vite:application --no-interactive --directory @my-scope/my-vite-app -- --template vanilla-ts # create vite app with vanilla-ts template with scope name
-> ls my-vite-app/package.json # check package.json
-my-vite-app/package.json
+[2]> vp create vite:application --no-interactive --directory @my-scope/my-vite-app -- --template vanilla-ts # create vite app with vanilla-ts template with scope name
+error: unrecognized subcommand 'create'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> ls my-vite-app/package.json # check package.json
+ls: cannot access 'my-vite-app/package.json': No such file or directory

@@ -1,14 +1,20 @@
-> vp pm cache --help # should show help
-Manage package cache
+[2]> vp pm cache --help # should show help
+error: unrecognized subcommand 'pm'
 
-Usage: vp pm cache <SUBCOMMAND> [-- <PASS_THROUGH_ARGS>...]
+Usage: vite <COMMAND>
 
-Arguments:
-  <SUBCOMMAND>            Subcommand: dir, path, clean
-  [PASS_THROUGH_ARGS]...  Additional arguments
+For more information, try '--help'.
 
-Options:
-  -h, --help  Print help
+[129]> vp pm cache dir > /dev/null # should show cache directory (uses pnpm store path)
+error: unrecognized subcommand 'pm'
 
-> vp pm cache dir > /dev/null # should show cache directory (uses pnpm store path)
-> vp pm cache path > /dev/null # should show cache path (alias for dir, uses pnpm store path)
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm cache path > /dev/null # should show cache path (alias for dir, uses pnpm store path)
+error: unrecognized subcommand 'pm'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

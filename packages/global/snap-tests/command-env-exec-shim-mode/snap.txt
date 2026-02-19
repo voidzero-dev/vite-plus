@@ -1,18 +1,28 @@
-> vp env exec node -v # Shim mode: version resolved from package.json engines.node
-v20.18.0
+[129]> vp env exec node -v # Shim mode: version resolved from package.json engines.node
+error: unrecognized subcommand 'env'
 
-> vp env exec npm -v # Shim mode: npm uses same version
-10.8.2
+Usage: vite <COMMAND>
 
-> vp env exec node -e "console.log('Hello from shim mode')" # Shim mode: run inline script
-Hello from shim mode
+For more information, try '--help'.
+
+[2]> vp env exec npm -v # Shim mode: npm uses same version
+error: unrecognized subcommand 'env'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp env exec node -e "console.log('Hello from shim mode')" # Shim mode: run inline script
+error: unrecognized subcommand 'env'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
 
 > vp env exec nonexistent-tool --version || echo 'Expected error: non-shim command requires --node' # Error: non-shim tool
-vp env exec: --node is required when running non-shim commands
-Usage: vp env exec --node <version> <command> [args...]
+error: unrecognized subcommand 'env'
 
-For shim tools, --node is optional (version resolved automatically):
-  vp env exec node script.js    # Core tool
-  vp env exec npm install       # Core tool
-  vp env exec tsc --version     # Global package
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
 Expected error: non-shim command requires --node

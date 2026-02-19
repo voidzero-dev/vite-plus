@@ -1,12 +1,6 @@
 > VITE_MY_VAR=1 vite run build
 $ vp build
 vite v<semver>
-[2Ktransforming...✓ <variable> modules transformed.
-rendering chunks...
-computing gzip size...
-dist/index.html                <variable> kB │ gzip: <variable> kB
-dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
-
 ✓ built in <variable>ms
 
 
@@ -26,12 +20,6 @@ Task Details:
 > VITE_MY_VAR=1 vite run build # should hit cache
 $ vp build ✓ cache hit, replaying
 vite v<semver>
-[2Ktransforming...✓ <variable> modules transformed.
-rendering chunks...
-computing gzip size...
-dist/index.html                <variable> kB │ gzip: <variable> kB
-dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
-
 ✓ built in <variable>ms
 
 
@@ -51,12 +39,6 @@ Task Details:
 > VITE_MY_VAR=2 vite run build # env changed, should miss cache
 $ vp build ✗ cache miss: envs changed, executing
 vite v<semver>
-[2Ktransforming...✓ <variable> modules transformed.
-rendering chunks...
-computing gzip size...
-dist/index.html                <variable> kB │ gzip: <variable> kB
-dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
-
 ✓ built in <variable>ms
 
 

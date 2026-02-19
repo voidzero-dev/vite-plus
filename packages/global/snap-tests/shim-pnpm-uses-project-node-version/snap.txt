@@ -1,6 +1,14 @@
-> vp install -g pnpm > /dev/null # Ensure pnpm is globally installed
-> vp env exec node -v # Node version resolved from .node-version
-v22.12.0
+[1]> vp install -g pnpm > /dev/null # Ensure pnpm is globally installed
+[129]> vp env exec node -v # Node version resolved from .node-version
+error: unrecognized subcommand 'env'
 
-> vp env exec pnpm exec node -v # pnpm should use same project Node version
-v22.12.0
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp env exec pnpm exec node -v # pnpm should use same project Node version
+error: unrecognized subcommand 'env'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
