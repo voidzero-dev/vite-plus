@@ -1,18 +1,45 @@
 > vp run hello # should fall back to pnpm run when no vite-plus dependency
-
-> command-run-without-vite-plus@<semver> hello <cwd>
-> echo hello from script
-
+$ echo hello from script ⊘ cache disabled: built-in command
 hello from script
 
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] command-run-without-vite-plus#hello: $ echo hello from script ✓
+      → Cache disabled for built-in command
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 > vp run greet --arg1 value1 # should pass through args to pnpm run
-
-> command-run-without-vite-plus@<semver> greet <cwd>
-> echo greet --arg1 value1
-
+$ echo greet --arg1 value1 ⊘ cache disabled: built-in command
 greet --arg1 value1
 
-[1]> vp run nonexistent # should show pnpm missing script error
- ERR_PNPM_NO_SCRIPT  Missing script: nonexistent
 
-Command "nonexistent" not found.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled 
+Performance:  0% cache hit rate
+
+Task Details:
+────────────────────────────────────────────────
+  [1] command-run-without-vite-plus#greet: $ echo greet --arg1 value1 ✓
+      → Cache disabled for built-in command
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[1]> vp run nonexistent # should show pnpm missing script error
+[Vite+] run error: [Error: Failed to plan execution
+
+Caused by:
+    0: Failed to query tasks from task graph
+    1: Failed to look up task from specifier: nonexistent
+    2: Task 'nonexistent' not found in package command-run-without-vite-plus] {
+  code: 'GenericFailure'
+}

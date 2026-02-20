@@ -13,9 +13,9 @@ if (!projects.includes(project)) {
   process.exit(1);
 }
 
-async function migrateProject(project: string) {
-  const repoRoot = join(ecosystemCiDir, project);
-  const repoConfig = repos[project as keyof typeof repos];
+async function migrateProject(projectName: string) {
+  const repoRoot = join(ecosystemCiDir, projectName);
+  const repoConfig = repos[projectName as keyof typeof repos];
   const directory = 'directory' in repoConfig ? repoConfig.directory : undefined;
   const cwd = directory ? join(repoRoot, directory) : repoRoot;
   // run vp migrate

@@ -1,48 +1,33 @@
-> vp migrate --no-interactive # migration should rewrite imports to vite-plus
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  Rewrote imports in one file
-│
-●    test/hello.ts
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+[2]> vp migrate --no-interactive # migration should rewrite imports to vite-plus
+error: unrecognized subcommand 'migrate'
 
+  tip: a similar subcommand exists: 'i'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
 
 > cat package.json # check package.json
 {
   "name": "migration-from-vitest-files",
   "scripts": {
-    "test:run": "vp test run",
-    "test:ui": "vp test --ui",
-    "test:coverage": "vp test run --coverage",
-    "test:watch": "vp test --watch",
-    "test": "vp test"
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest --watch",
+    "test": "vitest"
   },
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "vite-plus": "latest"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
-  },
-  "packageManager": "pnpm@<semver>"
+    "@vitest/browser": "^4.0.0",
+    "@vitest/browser-playwright": "^4.0.0",
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0"
+  }
 }
 
 > cat test/hello.ts # check test/hello.ts
-import { server } from 'vite-plus/test/browser-playwright/context';
-import { test, describe, expect, it } from 'vite-plus/test';
+import { server } from '@vitest/browser-playwright/context';
+import { test, describe, expect, it } from 'vitest';
 
 const { readFile } = server.commands;
 

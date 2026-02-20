@@ -78,6 +78,10 @@
       "types": "./dist/pluginutils/filter/index.d.ts",
       "default": "./dist/pluginutils/filter/index.js"
     },
+    "./rolldown/utils": {
+      "types": "./dist/rolldown/utils-index.d.mts",
+      "default": "./dist/rolldown/utils-index.mjs"
+    },
     "./types/*": {
       "types": "./dist/vite/types/*"
     },
@@ -99,7 +103,7 @@
     "@babel/types": "^7.28.5",
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
-    "@vitejs/devtools": "^0.0.0-alpha.31",
+    "@vitejs/devtools": "^0.0.0-alpha.32",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
     "magic-string": "^0.30.21",
@@ -121,7 +125,7 @@
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
     "@types/node": "^20.19.0 || >=22.12.0",
-    "@vitejs/devtools": "^0.0.0-alpha.24",
+    "@vitejs/devtools": "^0.0.0-alpha.31",
     "esbuild": "^0.27.0",
     "jiti": ">=1.21.0",
     "less": "^4.0.0",
@@ -197,8 +201,8 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "bundledVersions": {
-    "vite": "8.0.0-beta.13",
-    "rolldown": "1.0.0-rc.3",
+    "vite": "8.0.0-beta.15",
+    "rolldown": "1.0.0-rc.5",
     "tsdown": "0.20.3"
   }
 }

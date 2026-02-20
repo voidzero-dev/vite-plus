@@ -1,80 +1,27 @@
-> vp migrate --no-interactive # migration should rewrite imports to vite-plus
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  ✔ Merged tsdown.config.json into vite.config.ts
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+[2]> vp migrate --no-interactive # migration should rewrite imports to vite-plus
+error: unrecognized subcommand 'migrate'
 
+  tip: a similar subcommand exists: 'i'
 
-> cat tsdown.config.json && exit 1 || true # check tsdown.config.json should be removed
-cat: tsdown.config.json: No such file or directory
+Usage: vite <COMMAND>
 
-> cat vite.config.ts # check vite.config.ts
-import { defineConfig } from 'vite-plus';
+For more information, try '--help'.
 
-export default defineConfig({
-  pack: {
-    "entry": "src/index.ts",
-    "outDir": "dist",
-    "format": ["esm", "cjs"],
-    "dts": true,
-    "inputOptions": {
-      "cwd": "./src"
-    }
-  },
-  server: {
-    port: 3000,
-  },
-});
-
-> cat package.json # check package.json
+[1]> cat tsdown.config.json && exit 1 || true # check tsdown.config.json should be removed
 {
-  "name": "migration-from-tsdown-json-config",
-  "scripts": {
-    "build": "vp pack",
-    "build:watch": "vp pack --watch",
-    "build:dts": "vp pack --dts"
-  },
-  "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
-  },
-  "packageManager": "pnpm@<semver>"
+  "entry": "src/index.ts",
+  "outDir": "dist",
+  "format": ["esm", "cjs"],
+  "dts": true,
+  "inputOptions": {
+    "cwd": "./src"
+  }
 }
 
-> vp migrate --no-interactive # run migration again to check if it is idempotent
-┌  VITE+ - The Unified Toolchain for the Web
-│
-└  This project is already using Vite+! Happy coding!
-
-
 > cat vite.config.ts # check vite.config.ts
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  pack: {
-    "entry": "src/index.ts",
-    "outDir": "dist",
-    "format": ["esm", "cjs"],
-    "dts": true,
-    "inputOptions": {
-      "cwd": "./src"
-    }
-  },
   server: {
     port: 3000,
   },
@@ -84,19 +31,44 @@ export default defineConfig({
 {
   "name": "migration-from-tsdown-json-config",
   "scripts": {
-    "build": "vp pack",
-    "build:watch": "vp pack --watch",
-    "build:dts": "vp pack --dts"
+    "build": "tsdown",
+    "build:watch": "tsdown --watch",
+    "build:dts": "tsdown --dts"
   },
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest"
+    "tsdown": "^0.5.0",
+    "vite": "^7.0.0"
+  }
+}
+
+[2]> vp migrate --no-interactive # run migration again to check if it is idempotent
+error: unrecognized subcommand 'migrate'
+
+  tip: a similar subcommand exists: 'i'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+> cat vite.config.ts # check vite.config.ts
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  server: {
+    port: 3000,
   },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
+});
+
+> cat package.json # check package.json
+{
+  "name": "migration-from-tsdown-json-config",
+  "scripts": {
+    "build": "tsdown",
+    "build:watch": "tsdown --watch",
+    "build:dts": "tsdown --dts"
   },
-  "packageManager": "pnpm@<semver>"
+  "devDependencies": {
+    "tsdown": "^0.5.0",
+    "vite": "^7.0.0"
+  }
 }
