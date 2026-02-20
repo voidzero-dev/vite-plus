@@ -98,13 +98,13 @@ vp run dev                         # runs dev script from package.json
 ## Build
 
 - Run `pnpm bootstrap-cli` from the project root to build all packages and install the global CLI
-  - This builds all `@voidzero-dev/*`, `vite-plus` and `vite-plus-cli` packages
-  - Compiles the Rust NAPI bindings
-  - Installs the CLI globally via npm
+  - This builds all `@voidzero-dev/*` and `vite-plus` packages
+  - Compiles the Rust NAPI bindings and the `vp` Rust binary
+  - Installs the CLI globally to `~/.vite-plus/`
 
 ## Snap Tests
 
-Snap tests are located in `packages/global/snap-tests/` and `packages/cli/snap-tests/`. Each test case is a directory containing:
+Snap tests are located in `packages/cli/snap-tests/` (local CLI) and `packages/cli/snap-tests-global/` (global CLI). Each test case is a directory containing:
 
 - `package.json` - Package configuration for the test
 - `steps.json` - Commands to run and environment variables
@@ -112,11 +112,14 @@ Snap tests are located in `packages/global/snap-tests/` and `packages/cli/snap-t
 - `snap.txt` - Expected output (generated/updated by running the test)
 
 ```bash
-# Run all global snap tests (for local cli, the package name would be vite-plus)
-pnpm -F vite-plus-cli snap-test
+# Run all snap tests (local + global)
+pnpm -F vite-plus snap-test
 
-# Run a specific snap test by name filter
-pnpm -F vite-plus-cli snap-test migration-skip-vite-peer-dependency
+# Run only local CLI snap tests
+pnpm -F vite-plus snap-test <name-filter>
+
+# Run only global CLI snap tests
+pnpm -F vite-plus snap-test-global <name-filter>
 ```
 
 The snap test will automatically generate/update the `snap.txt` file with the command outputs. It exits with zero status even if there are output differences; you need to manually check the diffs(`git diff`) to verify correctness.

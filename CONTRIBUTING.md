@@ -36,7 +36,7 @@ pnpm bootstrap-cli
 vp --version
 ```
 
-This installs the CLI to `~/.vite-plus` and creates the `vp` binary.
+This builds all packages, compiles the Rust `vp` binary, and installs the CLI to `~/.vite-plus`.
 
 ## Workflow for build and test
 
@@ -45,6 +45,23 @@ You can run this command to build, test and check if there are any snapshot chan
 ```
 pnpm bootstrap-cli && pnpm test && git status
 ```
+
+## Running Snap Tests
+
+Snap tests verify CLI output. They are located in `packages/cli/snap-tests/` (local CLI) and `packages/cli/snap-tests-global/` (global CLI).
+
+```bash
+# Run all snap tests (local + global)
+pnpm -F vite-plus snap-test
+
+# Run a specific test by name filter
+pnpm -F vite-plus snap-test <name-filter>
+
+# Run only global CLI snap tests
+pnpm -F vite-plus snap-test-global <name-filter>
+```
+
+Snap tests auto-generate `snap.txt` files. Check `git diff` to verify output changes are correct.
 
 ## Pull upstream dependencies
 
