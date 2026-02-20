@@ -1,0 +1,11 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp build -h # should fall back to global vite-plus and show build help",
+    "vp dev -h # should fall back to global vite-plus and show dev help",
+    "vp test -h # should fall back to global vite-plus and show test help"
+  ]
+}

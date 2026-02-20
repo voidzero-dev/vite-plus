@@ -1,0 +1,5 @@
+{
+  "name": "global-cli-fallback",
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.19.0"
+}

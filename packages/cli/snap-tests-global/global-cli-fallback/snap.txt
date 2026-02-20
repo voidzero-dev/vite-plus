@@ -1,0 +1,32 @@
+> vp build -h # should fall back to global vite-plus and show build help
+Build application
+
+Usage: vp build [ARGS]...
+
+Arguments:
+  [ARGS]...  Additional arguments
+
+Options:
+  -h, --help  Print help
+
+> vp dev -h # should fall back to global vite-plus and show dev help
+Run the development server
+
+Usage: vp dev [ARGS]...
+
+Arguments:
+  [ARGS]...  Additional arguments
+
+Options:
+  -h, --help  Print help
+
+> vp test -h # should fall back to global vite-plus and show test help
+Run tests
+
+Usage: vp test [ARGS]...
+
+Arguments:
+  [ARGS]...  Additional arguments
+
+Options:
+  -h, --help  Print help
