@@ -406,6 +406,11 @@ function Main {
     $pkg.PSObject.Properties.Remove("optionalDependencies")
     $pkg | ConvertTo-Json -Depth 10 | Set-Content $pkgFile
 
+    # Remove stale lockfile and node_modules to avoid frozen-lockfile conflicts
+    # when package.json changes between installs
+    Remove-Item -Path "$VersionDir\pnpm-lock.yaml" -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "$VersionDir\node_modules" -Recurse -Force -ErrorAction SilentlyContinue
+
     # Install production dependencies
     Push-Location $VersionDir
     try {

@@ -640,6 +640,11 @@ main() {
     { print }
   ' "$pkg_file" > "$pkg_file.tmp" && mv "$pkg_file.tmp" "$pkg_file"
 
+  # Remove stale lockfile and node_modules to avoid frozen-lockfile conflicts
+  # when package.json changes between installs
+  rm -f "$VERSION_DIR/pnpm-lock.yaml"
+  rm -rf "$VERSION_DIR/node_modules"
+
   # Install production dependencies
   (cd "$VERSION_DIR" && CI=true "$BIN_DIR/vp" install --silent)
 

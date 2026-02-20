@@ -38,8 +38,6 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Run install.sh
-        env:
-          VITE_PLUS_VERSION: test
         run: cat packages/global/install.sh | bash
 
       - name: Verify installation
@@ -130,7 +128,6 @@ jobs:
         run: |
           docker run --rm --platform linux/arm64 \
             -v "${{ github.workspace }}:/workspace" \
-            -e VITE_PLUS_VERSION=test \
             ubuntu:20.04 bash -c "
               ls -al ~/
               apt-get update && apt-get install -y curl ca-certificates
@@ -187,8 +184,6 @@ jobs:
 
       - name: Run install.ps1
         shell: pwsh
-        env:
-          VITE_PLUS_VERSION: test
         run: |
           & ./packages/global/install.ps1
 
