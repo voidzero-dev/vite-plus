@@ -12,10 +12,14 @@ mod commands;
 mod error;
 mod js_executor;
 mod shim;
+mod tips;
 
 use std::process::ExitCode;
 
-use crate::cli::{parse_args_from, run_command};
+use owo_colors::OwoColorize;
+
+use crate::cli::run_command;
+pub use crate::cli::try_parse_args_from;
 
 /// Normalize CLI arguments:
 /// - `vp list ...` / `vp ls ...` → `vp pm list ...`
@@ -73,29 +77,60 @@ async fn main() -> ExitCode {
         }
     };
 
+    let mut tip_context = tips::TipContext {
+        // Capture user args (excluding argv0) before normalization
+        raw_args: args[1..].to_vec(),
+        ..Default::default()
+    };
+
     // Normalize arguments (list/ls aliases, help rewriting)
     let normalized_args = normalize_args(args);
 
     // Parse CLI arguments (using custom help formatting)
-    let args = parse_args_from(normalized_args);
+    let exit_code = match try_parse_args_from(normalized_args) {
+        Err(e) => {
+            use clap::error::ErrorKind;
+            // Print the clap error/help/version
+            e.print().ok();
 
-    match run_command(cwd, args).await {
-        Ok(exit_status) => {
-            if exit_status.success() {
+            // --help and --version are "errors" in clap but should exit successfully
+            if matches!(e.kind(), ErrorKind::DisplayHelp | ErrorKind::DisplayVersion) {
                 ExitCode::SUCCESS
             } else {
-                // Exit codes are typically 0-255 on Unix systems
-                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                exit_status.code().map_or(ExitCode::FAILURE, |c| ExitCode::from(c as u8))
+                let code = e.exit_code();
+                tip_context.clap_error = Some(e);
+                #[allow(clippy::cast_sign_loss)]
+                ExitCode::from(code as u8)
             }
         }
-        Err(e) => {
-            if matches!(&e, error::Error::UserMessage(_)) {
-                eprintln!("{e}");
-            } else {
-                eprintln!("Error: {e}");
+        Ok(args) => {
+            match run_command(cwd.clone(), args).await {
+                Ok(exit_status) => {
+                    if exit_status.success() {
+                        ExitCode::SUCCESS
+                    } else {
+                        // Exit codes are typically 0-255 on Unix systems
+                        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                        exit_status.code().map_or(ExitCode::FAILURE, |c| ExitCode::from(c as u8))
+                    }
+                }
+                Err(e) => {
+                    if matches!(&e, error::Error::UserMessage(_)) {
+                        eprintln!("{e}");
+                    } else {
+                        eprintln!("Error: {e}");
+                    }
+                    ExitCode::FAILURE
+                }
             }
-            ExitCode::FAILURE
         }
+    };
+
+    tip_context.exit_code = if exit_code == ExitCode::SUCCESS { 0 } else { 1 };
+
+    if let Some(tip) = tips::get_tip(&tip_context) {
+        eprintln!("\n{}", format!("Tip: {tip}").bright_black());
     }
+
+    exit_code
 }

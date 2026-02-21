@@ -187,6 +187,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string) {
   const env: Record<string, string> = {
     ...passThroughEnvs,
     // Indicate CLI is running in test mode, so that it prints more detailed outputs.
+    // Also disables tips for stable snapshots.
     VITE_PLUS_CLI_TEST: '1',
     NO_COLOR: 'true',
     // set CI=true make sure snap-tests are stable on GitHub Actions

@@ -1644,7 +1644,11 @@ fn apply_custom_help(cmd: clap::Command) -> clap::Command {
 }
 
 /// Parse CLI arguments from a custom args iterator with custom help formatting.
-pub fn parse_args_from(args: impl IntoIterator<Item = String>) -> Args {
+/// Returns `Err` with the clap error if parsing fails (e.g., unknown command).
+pub fn try_parse_args_from(
+    args: impl IntoIterator<Item = String>,
+) -> Result<Args, clap::error::Error> {
     let cmd = apply_custom_help(Args::command());
-    Args::from_arg_matches(&cmd.get_matches_from(args)).expect("Failed to parse CLI arguments")
+    let matches = cmd.try_get_matches_from(args)?;
+    Args::from_arg_matches(&matches).map_err(|e| e.into())
 }
