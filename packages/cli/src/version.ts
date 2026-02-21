@@ -5,6 +5,7 @@ import { styleText } from 'node:util';
 
 import { VITE_PLUS_NAME } from './global-utils/constants.js';
 import { detectPackageMetadata } from './global-utils/package.js';
+import { pkgRoot } from './global-utils/path.js';
 import { getVitePlusHeader, headline, log } from './global-utils/terminal.js';
 
 const require = createRequire(import.meta.url);
@@ -32,7 +33,7 @@ interface ToolVersionSpec {
  * Get the global CLI version from package.json
  */
 function getGlobalVersion(): string {
-  const pkg: PackageJson = require('../package.json');
+  const pkg: PackageJson = require(path.join(pkgRoot, 'package.json'));
   return pkg.version;
 }
 

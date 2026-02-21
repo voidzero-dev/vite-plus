@@ -2,10 +2,11 @@
  * Build script for vite-plus CLI package
  *
  * This script performs five main tasks:
- * 1. buildCli() - Compiles TypeScript sources (local + global CLI)
- * 2. buildNapiBinding() - Builds the native Rust binding via NAPI
- * 3. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
- * 4. syncTestPackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-test
+ * 1. buildCli() - Compiles TypeScript sources (local CLI) via tsc
+ * 2. buildGlobalModules() - Bundles global CLI modules (create, migrate, version) via rolldown
+ * 3. buildNapiBinding() - Builds the native Rust binding via NAPI
+ * 4. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
+ * 5. syncTestPackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-test
  *
  * The sync functions allow this package to be a drop-in replacement for 'vite' by
  * re-exporting all the same subpaths (./client, ./types/*, etc.) while delegating
@@ -54,6 +55,7 @@ const napiArgs = process.argv
 
 if (!skipTs) {
   await buildCli();
+  await buildGlobalModules();
 }
 // Build native first - TypeScript may depend on the generated binding types
 if (!skipNative) {
@@ -155,7 +157,16 @@ async function buildCli() {
   const program = createProgram({
     rootNames: globSync('src/**/*.{ts,cts}', {
       cwd: projectDir,
-      exclude: ['**/*/__tests__'],
+      exclude: [
+        '**/*/__tests__',
+        // Global CLI modules — bundled by rolldown instead of tsc
+        'src/create/**',
+        'src/migration/**',
+        'src/local/**',
+        'src/version.ts',
+        'src/global-utils/**',
+        'src/global-types/**',
+      ],
     }),
     options,
     host,
@@ -167,6 +178,14 @@ async function buildCli() {
     console.error(formatDiagnostics(diagnostics, host));
     process.exit(1);
   }
+}
+
+async function buildGlobalModules() {
+  const { execFileSync } = await import('node:child_process');
+  execFileSync('npx', ['rolldown', '-c', 'rolldown.config.ts'], {
+    cwd: projectDir,
+    stdio: 'inherit',
+  });
 }
 
 /**
