@@ -1,11 +1,12 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 // Get the package root directory (packages/cli)
-// Bundled files are in dist/global/, so we walk up until we find package.json
+// Works from both source (src/global-utils/) and bundled (dist/global/) locations
 function findPkgRoot(): string {
   let dir = import.meta.dirname;
   while (dir !== path.dirname(dir)) {
-    if (path.basename(dir) !== 'dist' && path.basename(dir) !== 'global') {
+    if (fs.existsSync(path.join(dir, 'package.json'))) {
       return dir;
     }
     dir = path.dirname(dir);
