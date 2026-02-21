@@ -29,17 +29,13 @@ interface ToolVersionSpec {
   fallbackPackageJson?: string;
 }
 
-/**
- * Get the global CLI version from package.json
- */
 function getGlobalVersion(): string {
   const pkg: PackageJson = require(path.join(pkgRoot, 'package.json'));
   return pkg.version;
 }
 
 function getLocalMetadata(cwd: string): LocalPackageMetadata | null {
-  const metadata = detectPackageMetadata(cwd, VITE_PLUS_NAME);
-  return metadata ?? null;
+  return detectPackageMetadata(cwd, VITE_PLUS_NAME) ?? null;
 }
 
 function readPackageJsonFromPath(packageJsonPath: string): PackageJson | null {
@@ -48,10 +44,6 @@ function readPackageJsonFromPath(packageJsonPath: string): PackageJson | null {
   } catch {
     return null;
   }
-}
-
-function readPackageVersionFromPath(packageJsonPath: string): string | null {
-  return readPackageJsonFromPath(packageJsonPath)?.version ?? null;
 }
 
 function resolvePackageJson(packageName: string, baseDir: string): PackageJson | null {
@@ -79,7 +71,7 @@ function resolveToolVersion(tool: ToolVersionSpec, localPackagePath: string): st
   }
   if (tool.fallbackPackageJson) {
     const fallbackPath = path.join(localPackagePath, tool.fallbackPackageJson);
-    return readPackageVersionFromPath(fallbackPath);
+    return readPackageJsonFromPath(fallbackPath)?.version ?? null;
   }
   return null;
 }
@@ -88,13 +80,11 @@ function formatToolVersion(tool: ToolVersionSpec, version: string | null): strin
   return `${tool.displayName} ${version ? `v${version}` : `Not found`}`;
 }
 
-const cliLabel = 'vite-plus-cli';
-const localLabel = 'vite-plus';
-const columnWidth = cliLabel.length + 1;
-const getColumnWidth = (label: string) => Math.max(0, columnWidth - label.length);
+const columnWidth = 15;
+const getColumnWidth = (label: string) => Math.max(1, columnWidth - label.length);
 
 /**
- * Print version information for both local and global CLI
+ * Print version information
  */
 export async function printVersion(cwd: string) {
   const globalVersion = getGlobalVersion();
@@ -102,13 +92,13 @@ export async function printVersion(cwd: string) {
   const localVersion = localMetadata?.version ?? null;
 
   log((await getVitePlusHeader()) + '\n');
-  log(headline('Package Versions:'));
-  log(`  ${styleText('bold', `${cliLabel}:`)} v${globalVersion}`);
-  log(
-    `  ${styleText('bold', `${localLabel}:`)}${' '.repeat(
-      getColumnWidth(localLabel),
-    )}${localVersion ? `v${localVersion}` : 'Not found'}`,
-  );
+  log(headline('vp Versions:'));
+  log(`  ${styleText('bold', 'Global:')}${' '.repeat(getColumnWidth('Global:'))}v${globalVersion}`);
+  if (localVersion) {
+    log(`  ${styleText('bold', 'Local:')}${' '.repeat(getColumnWidth('Local:'))}v${localVersion}`);
+  } else {
+    log(`  ${styleText('bold', 'Local:')}${' '.repeat(getColumnWidth('Local:'))}Not installed`);
+  }
 
   if (!localMetadata) {
     return;
@@ -154,12 +144,6 @@ export async function printVersion(cwd: string) {
       packageName: '@voidzero-dev/vite-plus-core',
       bundledVersionKey: 'tsdown',
     },
-    /*{
-      command: 'doc',
-      displayName: 'vitepress',
-      packageName: 'vitepress',
-      fallbackPackageJson: path.join('dist', 'vitepress', 'package.json'),
-    },*/
   ];
 
   const resolvedTools = tools.map((tool) => ({

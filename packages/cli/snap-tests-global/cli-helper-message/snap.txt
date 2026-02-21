@@ -42,18 +42,9 @@ Options:
 > vp -V # show version
 VITE+ - The Unified Toolchain for the Web
 
-PACKAGE VERSIONS:
-  vite-plus-cli: v<semver>
-  vite-plus:     v<semver>
-
-BUNDLED WITH VITE-PLUS:
-  vite:          vite v<semver>
-  rolldown:      rolldown v<semver>
-  test:          vitest v<semver>
-  fmt:           oxfmt v<semver>
-  lint:          oxlint Not found
-  tsgolint:      oxlint-tsgolint v<semver>
-  pack:          tsdown v<semver>
+VP VERSIONS:
+  Global:        v<semver>
+  Local:         Not installed
 
 > vp install -h # show install help message
 Install all dependencies, or add packages if package names are provided

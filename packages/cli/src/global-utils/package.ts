@@ -12,8 +12,6 @@ export function getScopeFromPackageName(packageName: string): string {
   return '';
 }
 
-const require = createRequire(import.meta.url);
-
 interface PackageMetadata {
   name: string;
   version: string;
@@ -25,7 +23,10 @@ export function detectPackageMetadata(
   packageName: string,
 ): PackageMetadata | void {
   try {
-    const pkgFilePath = require.resolve(`${packageName}/package.json`, { paths: [projectPath] });
+    // Create require from the project path so resolution only searches
+    // the project's node_modules, not the global installation's
+    const require = createRequire(path.join(projectPath, 'noop.js'));
+    const pkgFilePath = require.resolve(`${packageName}/package.json`);
     const pkg = JSON.parse(fs.readFileSync(pkgFilePath, 'utf8'));
     return {
       name: pkg.name,
