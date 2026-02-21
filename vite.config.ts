@@ -10,6 +10,7 @@ export default defineConfig({
     },
     rules: {
       'eslint/no-await-in-loop': 'off',
+      'eslint/no-shadow': 'off',
       'no-console': ['error', { allow: ['error'] }],
       'typescript/no-unnecessary-boolean-literal-compare': 'off',
       'typescript/no-unsafe-type-assertion': 'off',
@@ -49,6 +50,11 @@ export default defineConfig({
       '**/snap-tests-todo/**',
       'packages/core/rollupLicensePlugin.ts',
       'packages/core/vite-rolldown.config.ts',
+      // Auto-generated NAPI binding files
+      'packages/*/binding/index.d.ts',
+      'packages/*/binding/index.d.cts',
+      'packages/*/binding/index.js',
+      'packages/*/binding/index.cjs',
     ],
   },
   test: {
@@ -92,7 +98,6 @@ export default defineConfig({
           'value-sibling',
           'value-index',
         ],
-        ['ts-equals-import'],
         ['unknown'],
       ],
       newlinesBetween: true,

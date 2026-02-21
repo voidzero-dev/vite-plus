@@ -54,17 +54,17 @@ export const path = (opts: PathOptions) => {
 
         const items = readdirSync(searchPath)
           .map((item) => {
-            const path = join(searchPath, item);
-            const stats = lstatSync(path);
+            const itemPath = join(searchPath, item);
+            const stats = lstatSync(itemPath);
             return {
               name: item,
-              path,
+              path: itemPath,
               isDirectory: stats.isDirectory(),
             };
           })
           .filter(
-            ({ path, isDirectory }) =>
-              path.startsWith(userInput) && (opts.directory || !isDirectory),
+            ({ path: itemPath, isDirectory }) =>
+              itemPath.startsWith(userInput) && (opts.directory || !isDirectory),
           );
         return items.map((item) => ({
           value: item.path,

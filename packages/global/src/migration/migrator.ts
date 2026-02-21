@@ -273,9 +273,9 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
       if (!minimumReleaseAgeExclude) {
         minimumReleaseAgeExclude = new YAMLSeq();
       }
-      const existing = new Set(minimumReleaseAgeExclude.items.map((n) => n.value));
+      const existingExcludes = new Set(minimumReleaseAgeExclude.items.map((n) => n.value));
       for (const exclude of excludes) {
-        if (!existing.has(exclude)) {
+        if (!existingExcludes.has(exclude)) {
           minimumReleaseAgeExclude.add(scalarString(exclude));
         }
       }
