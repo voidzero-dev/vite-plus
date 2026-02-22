@@ -109,8 +109,11 @@ pub async fn generate_wrapper_package_json(
 
 /// Install production dependencies using the new version's binary.
 ///
-/// Spawns: `{version_dir}/bin/vp install --silent` with `CI=true`.
-pub async fn install_production_deps(version_dir: &AbsolutePath) -> Result<(), Error> {
+/// Spawns: `{version_dir}/bin/vp install --silent [--registry <url>]` with `CI=true`.
+pub async fn install_production_deps(
+    version_dir: &AbsolutePath,
+    registry: Option<&str>,
+) -> Result<(), Error> {
     let vp_binary = version_dir.join("bin").join(if cfg!(windows) { "vp.exe" } else { "vp" });
 
     if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
@@ -121,8 +124,14 @@ pub async fn install_production_deps(version_dir: &AbsolutePath) -> Result<(), E
 
     tracing::debug!("Running vp install in {}", version_dir.as_path().display());
 
+    let mut args = vec!["install", "--silent"];
+    if let Some(registry_url) = registry {
+        args.push("--registry");
+        args.push(registry_url);
+    }
+
     let output = tokio::process::Command::new(vp_binary.as_path())
-        .args(["install", "--silent"])
+        .args(&args)
         .current_dir(version_dir)
         .env("CI", "true")
         .output()
