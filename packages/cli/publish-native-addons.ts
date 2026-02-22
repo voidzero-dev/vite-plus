@@ -55,7 +55,7 @@ const platformDirs = await readdir(npmDir);
 // Publish each NAPI platform package (without vp binary)
 const npmTag = process.env.NPM_TAG || 'latest';
 for (const file of platformDirs) {
-  execSync(`npm publish --tag ${npmTag} --access public --no-git-checks`, {
+  execSync(`npm publish --tag ${npmTag} --access public`, {
     cwd: join(currentDir, 'npm', file),
     env: process.env,
     stdio: 'inherit',
@@ -120,7 +120,7 @@ for (const [platform, rustTarget] of Object.entries(RUST_TARGETS)) {
   writeFileSync(join(platformCliDir, 'package.json'), JSON.stringify(cliPackage, null, 2) + '\n');
 
   // Publish CLI package
-  execSync(`npm publish --tag ${npmTag} --access public --no-git-checks`, {
+  execSync(`npm publish --tag ${npmTag} --access public`, {
     cwd: platformCliDir,
     env: process.env,
     stdio: 'inherit',
