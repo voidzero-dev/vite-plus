@@ -126,6 +126,7 @@ pub async fn install_production_deps(
 
     let mut args = vec!["install", "--silent"];
     if let Some(registry_url) = registry {
+        args.push("--");
         args.push("--registry");
         args.push(registry_url);
     }
