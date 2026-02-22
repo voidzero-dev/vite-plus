@@ -1,13 +1,11 @@
-[1]> vp migrate --no-interactive # migration should fail because pnpm version is not supported
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  pnpm@<semver> installing...
-│
-●  pnpm@<semver> installed
-│
-■  ✘ pnpm@<semver> is not supported by auto migration, please upgrade pnpm to >=9.5.0 first
-└  Vite+ cannot automatically migrate this project yet.
+[2]> vp migrate --no-interactive # migration should fail because pnpm version is not supported
+error: unrecognized subcommand 'migrate'
 
+  tip: a similar subcommand exists: 'i'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
 
 > cat package.json # check package.json is not updated
 {

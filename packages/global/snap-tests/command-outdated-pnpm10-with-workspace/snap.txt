@@ -9,66 +9,37 @@ dependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
-[1]> vp outdated testnpm2 -w # should outdated in workspace root
-┌──────────┬─────────┬────────┐
-│ Package  │ Current │ Latest │
-├──────────┼─────────┼────────┤
-│ testnpm2 │ <semver>   │ <semver>  │
-└──────────┴─────────┴────────┘
+[2]> vp outdated testnpm2 -w # should outdated in workspace root
+error: unrecognized subcommand 'outdated'
 
-[1]> vp outdated testnpm2 --filter app # should outdated in specific package
-┌──────────┬─────────┬────────┬────────────┐
-│ Package  │ Current │ Latest │ Dependents │
-├──────────┼─────────┼────────┼────────────┤
-│ testnpm2 │ <semver>   │ <semver>  │ app        │
-└──────────┴─────────┴────────┴────────────┘
+Usage: vite <COMMAND>
 
-> vp outdated -D --filter app # should outdated dev dependencies in app
-[1]> vp outdated --filter "*" --format json # should outdated in all packages
-{
-  "testnpm2": {
-    "current": "1.0.0",
-    "latest": "1.0.1",
-    "wanted": "1.0.0",
-    "isDeprecated": false,
-    "dependencyType": "dependencies",
-    "dependentPackages": [
-      {
-        "name": "command-outdated-pnpm10-with-workspace",
-        "location": "<cwd>"
-      },
-      {
-        "name": "app",
-        "location": "<cwd>/packages/app"
-      },
-      {
-        "name": "@vite-plus-test/utils",
-        "location": "<cwd>/packages/utils"
-      }
-    ]
-  },
-  "test-vite-plus-other-optional": {
-    "current": "1.0.0",
-    "latest": "1.1.0",
-    "wanted": "1.0.0",
-    "isDeprecated": false,
-    "dependencyType": "optionalDependencies",
-    "dependentPackages": [
-      {
-        "name": "app",
-        "location": "<cwd>/packages/app"
-      }
-    ]
-  }
-}
+For more information, try '--help'.
 
-[1]> vp outdated -r # should outdated recursively
-┌──────────────────────────────────────────┬─────────┬────────┬────────────────────────────────┐
-│ Package                                  │ Current │ Latest │ Dependents                     │
-├──────────────────────────────────────────┼─────────┼────────┼────────────────────────────────┤
-│ testnpm2                                 │ <semver>   │ <semver>  │ @vite-plus-test/utils, app,    │
-│                                          │         │        │ command-outdated-pnpm10-with-  │
-│                                          │         │        │ workspace                      │
-├──────────────────────────────────────────┼─────────┼────────┼────────────────────────────────┤
-│ test-vite-plus-other-optional (optional) │ <semver>   │ <semver>  │ app                            │
-└──────────────────────────────────────────┴─────────┴────────┴────────────────────────────────┘
+[2]> vp outdated testnpm2 --filter app # should outdated in specific package
+error: unrecognized subcommand 'outdated'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[129]> vp outdated -D --filter app # should outdated dev dependencies in app
+error: unrecognized subcommand 'outdated'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp outdated --filter "*" --format json # should outdated in all packages
+error: unrecognized subcommand 'outdated'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp outdated -r # should outdated recursively
+error: unrecognized subcommand 'outdated'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

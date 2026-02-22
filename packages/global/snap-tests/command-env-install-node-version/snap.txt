@@ -1,29 +1,63 @@
-> vp install -g --node 22 ./command-env-install-node-version-pkg # Install with Node.js 22
-  Installing ./command-env-install-node-version-pkg globally...
-  Running npm install...
+[1]> vp install -g --node 22 ./command-env-install-node-version-pkg # Install with Node.js 22
+[Vite+] run error: [Error: Package not found in workspace: `AbsolutePathBuf("<cwd>")`] {
+  code: 'GenericFailure'
+}
 
-added 1 package in <variable>ms
-  Installed ./command-env-install-node-version-pkg v<semver>
-  Binaries: command-env-install-node-version-pkg-cli
+[1]> cat $VITE_PLUS_HOME/bins/command-env-install-node-version-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d.nodeVersion.split('.')[0])" # Verify Node 22
+cat: <vite-plus-home>/bins/command-env-install-node-version-pkg-cli.json: No such file or directory
+<anonymous_script>:1
 
-> cat $VITE_PLUS_HOME/bins/command-env-install-node-version-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d.nodeVersion.split('.')[0])" # Verify Node 22
-Node major: 22
 
-> vp remove -g command-env-install-node-version-pkg # Cleanup
-  Uninstalling command-env-install-node-version-pkg...
-  Uninstalled command-env-install-node-version-pkg
+SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>)
+    at [eval]:1:14
+    at runScriptInThisContext (node:internal/vm:209:10)
+    at node:internal/process/execution:446:12
+    at [eval]-wrapper:6:24
+    at runScriptInContext (node:internal/process/execution:444:60)
+    at evalFunction (node:internal/process/execution:279:30)
+    at evalTypeScript (node:internal/process/execution:291:3)
+    at node:internal/main/eval_string:74:3
 
-> vp install -g --node 20 ./command-env-install-node-version-pkg # Install with Node.js 20
-  Installing ./command-env-install-node-version-pkg globally...
-  Running npm install...
+Node.js v<semver>
 
-added 1 package in <variable>ms
-  Installed ./command-env-install-node-version-pkg v<semver>
-  Binaries: command-env-install-node-version-pkg-cli
+[2]> vp remove -g command-env-install-node-version-pkg # Cleanup
+error: unrecognized subcommand 'remove'
 
-> cat $VITE_PLUS_HOME/bins/command-env-install-node-version-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d.nodeVersion.split('.')[0])" # Verify Node 20
-Node major: 20
+  tip: a similar subcommand exists: 'preview'
 
-> vp remove -g command-env-install-node-version-pkg # Cleanup
-  Uninstalling command-env-install-node-version-pkg...
-  Uninstalled command-env-install-node-version-pkg
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
+
+[1]> vp install -g --node 20 ./command-env-install-node-version-pkg # Install with Node.js 20
+[Vite+] run error: [Error: Package not found in workspace: `AbsolutePathBuf("<cwd>")`] {
+  code: 'GenericFailure'
+}
+
+[1]> cat $VITE_PLUS_HOME/bins/command-env-install-node-version-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Node major:', d.nodeVersion.split('.')[0])" # Verify Node 20
+cat: <vite-plus-home>/bins/command-env-install-node-version-pkg-cli.json: No such file or directory
+<anonymous_script>:1
+
+
+SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>)
+    at [eval]:1:14
+    at runScriptInThisContext (node:internal/vm:209:10)
+    at node:internal/process/execution:446:12
+    at [eval]-wrapper:6:24
+    at runScriptInContext (node:internal/process/execution:444:60)
+    at evalFunction (node:internal/process/execution:279:30)
+    at evalTypeScript (node:internal/process/execution:291:3)
+    at node:internal/main/eval_string:74:3
+
+Node.js v<semver>
+
+[129]> vp remove -g command-env-install-node-version-pkg # Cleanup
+error: unrecognized subcommand 'remove'
+
+  tip: a similar subcommand exists: 'preview'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.

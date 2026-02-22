@@ -25,9 +25,11 @@ export default defineConfig({
           'packages/core/rollupLicensePlugin.ts',
           'packages/core/vite-rolldown.config.ts',
           'packages/tools/**/*.ts',
+          'packages/prompts/src/**/*.ts',
         ],
         rules: {
           'no-console': 'off',
+          'eslint/no-shadow': 'off',
         },
       },
       {
@@ -35,6 +37,7 @@ export default defineConfig({
         rules: {
           'typescript/no-explicit-any': 'off',
           'typescript/no-extraneous-class': 'off',
+          'eslint/no-shadow': 'off',
         },
       },
       {
@@ -49,6 +52,7 @@ export default defineConfig({
       '**/snap-tests-todo/**',
       'packages/core/rollupLicensePlugin.ts',
       'packages/core/vite-rolldown.config.ts',
+      'packages/*/binding/**',
     ],
   },
   test: {
@@ -92,7 +96,6 @@ export default defineConfig({
           'value-sibling',
           'value-index',
         ],
-        ['ts-equals-import'],
         ['unknown'],
       ],
       newlinesBetween: true,

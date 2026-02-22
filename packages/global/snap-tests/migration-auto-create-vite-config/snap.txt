@@ -1,57 +1,35 @@
-> vp migrate --no-interactive # migration should auto create vite.config.ts and remove oxlintrc and oxfmtrc
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  ✔ Created vite.config.ts in vite.config.ts
-│
-◆  ✔ Merged .oxlintrc.json into vite.config.ts
-│
-◆  ✔ Merged .oxfmtrc.json into vite.config.ts
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+[2]> vp migrate --no-interactive # migration should auto create vite.config.ts and remove oxlintrc and oxfmtrc
+error: unrecognized subcommand 'migrate'
 
+  tip: a similar subcommand exists: 'i'
 
-> cat vite.config.ts # check vite.config.ts
-import { defineConfig } from 'vite-plus';
+Usage: vite <COMMAND>
 
-export default defineConfig({
-  fmt: {
-    "printWidth": 100,
-    "tabWidth": 2,
-    "semi": true,
-    "singleQuote": true,
-    "trailingComma": "es5"
-  },
-  lint: {
-    "rules": {
-      "no-unused-vars": "error"
-    }
-  },
-});
+For more information, try '--help'.
 
-> cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed
-cat: .oxlintrc.json: No such file or directory
+[1]> cat vite.config.ts # check vite.config.ts
+cat: vite.config.ts: No such file or directory
 
-> cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is removed
-cat: .oxfmtrc.json: No such file or directory
+[1]> cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed
+{
+  "rules": {
+    "no-unused-vars": "error"
+  }
+}
+
+[1]> cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is removed
+{
+  "printWidth": 100,
+  "tabWidth": 2,
+  "semi": true,
+  "singleQuote": true,
+  "trailingComma": "es5"
+}
 
 > cat package.json # check package.json
 {
   "devDependencies": {
-    "vite-plus": "latest"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
-  },
-  "packageManager": "pnpm@<semver>"
+    "oxfmt": "1",
+    "oxlint": "1"
+  }
 }

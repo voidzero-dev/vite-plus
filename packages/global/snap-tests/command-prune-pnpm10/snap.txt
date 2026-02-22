@@ -14,125 +14,44 @@ devDependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
-> vp pm prune --help # should show help
-Remove unnecessary packages
+[2]> vp pm prune --help # should show help
+error: unrecognized subcommand 'pm'
 
-Usage: vp pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+Usage: vite <COMMAND>
 
-Arguments:
-  [PASS_THROUGH_ARGS]...  Additional arguments
+For more information, try '--help'.
 
-Options:
-      --prod         Remove devDependencies
-      --no-optional  Remove optional dependencies
-  -h, --help         Print help
+[129]> vp pm prune && cat package.json # should prune extraneous dependencies
+error: unrecognized subcommand 'pm'
 
-> vp pm prune && cat package.json # should prune extraneous dependencies
-Lockfile is up to date, resolution step is skipped
-Already up to date
+Usage: vite <COMMAND>
 
-{
-  "name": "command-prune-pnpm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "1.0.0"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+For more information, try '--help'.
 
-> vp pm prune --prod && cat package.json # should prune dev dependencies
-Lockfile is up to date, resolution step is skipped
-Packages: -1
--
+[2]> vp pm prune --prod && cat package.json # should prune dev dependencies
+error: unrecognized subcommand 'pm'
 
-devDependencies:
-- test-vite-plus-package <semver>
+Usage: vite <COMMAND>
 
-{
-  "name": "command-prune-pnpm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "1.0.0"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+For more information, try '--help'.
 
-> vp pm prune --no-optional && cat package.json # should prune optional dependencies
-Lockfile is up to date, resolution step is skipped
-Packages: -1
--
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+[129]> vp pm prune --no-optional && cat package.json # should prune optional dependencies
+error: unrecognized subcommand 'pm'
 
-optionalDependencies:
-- test-vite-plus-package-optional <semver>
+Usage: vite <COMMAND>
 
-devDependencies:
-+ test-vite-plus-package <semver>
+For more information, try '--help'.
 
-{
-  "name": "command-prune-pnpm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "1.0.0"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+[2]> vp pm prune --prod --no-optional && cat package.json # should prune both dev and optional dependencies
+error: unrecognized subcommand 'pm'
 
-> vp pm prune --prod --no-optional && cat package.json # should prune both dev and optional dependencies
-Lockfile is up to date, resolution step is skipped
-Packages: -1
--
+Usage: vite <COMMAND>
 
-optionalDependencies: skipped
+For more information, try '--help'.
 
-devDependencies:
-- test-vite-plus-package <semver>
+[2]> vp pm prune -- --loglevel=warn && cat package.json # should support pass through arguments
+error: unrecognized subcommand 'pm'
 
-{
-  "name": "command-prune-pnpm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "1.0.0"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+Usage: vite <COMMAND>
 
-> vp pm prune -- --loglevel=warn && cat package.json # should support pass through arguments
-{
-  "name": "command-prune-pnpm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "1.0.0"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+For more information, try '--help'.

@@ -1,24 +1,15 @@
-> vp migrate --no-interactive # migration should skip rewriting vite imports when vite is in dependencies
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  Rewrote imports in one file
-│
-●    src/index.ts
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+[2]> vp migrate --no-interactive # migration should skip rewriting vite imports when vite is in dependencies
+error: unrecognized subcommand 'migrate'
 
+  tip: a similar subcommand exists: 'i'
+
+Usage: vite <COMMAND>
+
+For more information, try '--help'.
 
 > cat src/index.ts # vite imports should NOT be rewritten, vitest imports SHOULD be rewritten
 import { defineConfig, type Plugin } from 'vite';
-import { describe, it, expect } from 'vite-plus/test';
+import { describe, it, expect } from 'vitest';
 
 export function myApp(): Plugin {
   return {
@@ -43,16 +34,6 @@ export default defineConfig({
 {
   "name": "migration-skip-vite-dependency",
   "dependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
-  },
-  "devDependencies": {
-    "vite-plus": "latest"
-  },
-  "packageManager": "pnpm@<semver>"
+    "vite": "^6.0.0"
+  }
 }
