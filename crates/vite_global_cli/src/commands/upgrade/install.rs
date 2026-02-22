@@ -26,27 +26,22 @@ fn is_safe_tar_path(path: &Path) -> bool {
         && !path.components().any(|c| matches!(c, std::path::Component::ParentDir))
 }
 
-/// Files/directories to extract from the main package tarball.
-const MAIN_PACKAGE_ENTRIES: &[&str] =
-    &["binding/", "dist/", "templates/", "rules/", "AGENTS.md", "package.json"];
-
-/// Extract the platform-specific package (binary + .node files).
+/// Extract the platform-specific package (binary only).
 ///
 /// From the platform tarball, extracts:
 /// - The `vp` binary → `{version_dir}/bin/vp`
-/// - Any `.node` files → `{version_dir}/binding/`
+///
+/// `.node` files are no longer extracted here — npm installs them
+/// via the platform package's optionalDependencies.
 pub async fn extract_platform_package(
     tgz_data: &[u8],
     version_dir: &AbsolutePath,
 ) -> Result<(), Error> {
     let bin_dir = version_dir.join("bin");
-    let binding_dir = version_dir.join("binding");
     tokio::fs::create_dir_all(&bin_dir).await?;
-    tokio::fs::create_dir_all(&binding_dir).await?;
 
     let data = tgz_data.to_vec();
     let bin_dir_clone = bin_dir.clone();
-    let binding_dir_clone = binding_dir.clone();
 
     tokio::task::spawn_blocking(move || {
         let cursor = Cursor::new(data);
@@ -80,12 +75,6 @@ pub async fn extract_platform_package(
                     use std::os::unix::fs::PermissionsExt;
                     std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755))?;
                 }
-            } else if file_name.ends_with(".node") {
-                // .node NAPI files go to binding/ (alongside index.cjs loader)
-                let target = binding_dir_clone.join(file_name);
-                let mut buf = Vec::new();
-                entry.read_to_end(&mut buf)?;
-                std::fs::write(&target, &buf)?;
             }
         }
 
@@ -97,92 +86,24 @@ pub async fn extract_platform_package(
     Ok(())
 }
 
-/// Extract the main package (JS bundles, templates, rules, package.json).
+/// Generate a wrapper `package.json` that declares `vite-plus` as a dependency.
 ///
-/// Copies specific directories and files from the tarball to the version directory.
-pub async fn extract_main_package(
-    tgz_data: &[u8],
+/// This replaces the old approach of extracting the main package tarball.
+/// npm will install `vite-plus` and all its transitive deps via `vp install`.
+pub async fn generate_wrapper_package_json(
     version_dir: &AbsolutePath,
+    version: &str,
 ) -> Result<(), Error> {
-    let version_dir_owned = version_dir.as_path().to_path_buf();
-    let data = tgz_data.to_vec();
-
-    tokio::task::spawn_blocking(move || {
-        let cursor = Cursor::new(data);
-        let decoder = GzDecoder::new(cursor);
-        let mut archive = Archive::new(decoder);
-
-        for entry_result in archive.entries()? {
-            let mut entry = entry_result?;
-            let path = entry.path()?.to_path_buf();
-
-            // Strip the leading `package/` prefix
-            let relative = path.strip_prefix("package").unwrap_or(&path).to_path_buf();
-
-            // Reject paths with traversal components (security)
-            if !is_safe_tar_path(&relative) {
-                continue;
-            }
-
-            let relative_str = relative.to_string_lossy();
-
-            // Check if this entry matches our allowed list
-            let should_extract = MAIN_PACKAGE_ENTRIES.iter().any(|allowed| {
-                if allowed.ends_with('/') {
-                    // Directory prefix match
-                    relative_str.starts_with(allowed)
-                } else {
-                    // Exact file match
-                    relative_str == *allowed
-                }
-            });
-
-            if !should_extract {
-                continue;
-            }
-
-            let target = version_dir_owned.join(&*relative_str);
-
-            if entry.header().entry_type().is_dir() {
-                std::fs::create_dir_all(&target)?;
-            } else {
-                // Ensure parent directory exists
-                if let Some(parent) = target.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                let mut buf = Vec::new();
-                entry.read_to_end(&mut buf)?;
-                std::fs::write(&target, &buf)?;
-            }
+    let json = serde_json::json!({
+        "name": "vp-global",
+        "version": version,
+        "private": true,
+        "dependencies": {
+            "vite-plus": version
         }
-
-        Ok::<(), Error>(())
-    })
-    .await
-    .map_err(|e| Error::Upgrade(format!("Task join error: {e}").into()))??;
-
-    Ok(())
-}
-
-/// Strip devDependencies and optionalDependencies from package.json.
-pub async fn strip_dev_dependencies(version_dir: &AbsolutePath) -> Result<(), Error> {
-    let package_json_path = version_dir.join("package.json");
-
-    if !tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
-        return Ok(());
-    }
-
-    let content = tokio::fs::read_to_string(&package_json_path).await?;
-    let mut json: serde_json::Value = serde_json::from_str(&content)?;
-
-    if let Some(obj) = json.as_object_mut() {
-        obj.remove("devDependencies");
-        obj.remove("optionalDependencies");
-    }
-
-    let updated = serde_json::to_string_pretty(&json)?;
-    tokio::fs::write(&package_json_path, format!("{updated}\n")).await?;
-
+    });
+    let content = serde_json::to_string_pretty(&json)? + "\n";
+    tokio::fs::write(version_dir.join("package.json"), content).await?;
     Ok(())
 }
 

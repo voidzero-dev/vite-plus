@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -149,35 +150,54 @@ function findVpBinary(binaryName: string) {
 }
 
 /**
- * Install dependencies for CI by rewriting @voidzero-dev/* deps to file: protocol
- * pointing at sibling tgz files, then running npm install.
+ * Install dependencies for CI by generating a wrapper package.json with file: protocol
+ * references to the main tgz and sibling @voidzero-dev/* tgz files, then running npm install.
  */
 function installCiDeps(versionDir: string, mainTgzPath: string) {
-  const pkgJsonPath = path.join(versionDir, 'package.json');
-  const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
-  const deps: Record<string, string> = pkg.dependencies ?? {};
   const tgzDir = path.dirname(mainTgzPath);
 
-  let modified = false;
-  for (const [name, version] of Object.entries(deps)) {
+  // Extract vite-plus's package.json from the tgz to find @voidzero-dev/* deps
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'vp-deps-'));
+  try {
+    execSync(`tar xzf "${mainTgzPath}" -C "${tempDir}" --strip-components=1 package.json`, {
+      stdio: 'pipe',
+    });
+  } catch {
+    // If extracting just package.json fails, extract everything
+    execSync(`tar xzf "${mainTgzPath}" -C "${tempDir}" --strip-components=1`, { stdio: 'pipe' });
+  }
+  const vitePlusPkg = JSON.parse(readFileSync(path.join(tempDir, 'package.json'), 'utf-8'));
+  rmSync(tempDir, { recursive: true, force: true });
+
+  // Build wrapper deps: vite-plus from tgz + @voidzero-dev/* from sibling tgz files
+  const wrapperDeps: Record<string, string> = {
+    'vite-plus': `file:${mainTgzPath}`,
+  };
+
+  const vitePlusDeps: Record<string, string> = vitePlusPkg.dependencies ?? {};
+  for (const [name, version] of Object.entries(vitePlusDeps)) {
     if (!name.startsWith('@voidzero-dev/')) {
       continue;
     }
     // @voidzero-dev/vite-plus-core@0.0.0 -> voidzero-dev-vite-plus-core-0.0.0.tgz
     const tgzName = name.replace('@', '').replace('/', '-') + `-${version}.tgz`;
     const tgzFilePath = path.join(tgzDir, tgzName);
-    if (!existsSync(tgzFilePath)) {
+    if (existsSync(tgzFilePath)) {
+      wrapperDeps[name] = `file:${tgzFilePath}`;
+      console.log(`  ${name}: ${version} -> file:${tgzFilePath}`);
+    } else {
       console.warn(`Warning: tgz not found for ${name}@${version}: ${tgzFilePath}`);
-      continue;
     }
-    deps[name] = `file:${tgzFilePath}`;
-    modified = true;
-    console.log(`  ${name}: ${version} -> file:${tgzFilePath}`);
   }
 
-  if (modified) {
-    writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n');
-  }
+  const wrapperPkg = {
+    name: 'vp-global',
+    version: '0.0.0',
+    private: true,
+    dependencies: wrapperDeps,
+  };
+
+  writeFileSync(path.join(versionDir, 'package.json'), JSON.stringify(wrapperPkg, null, 2) + '\n');
 
   execSync('npm install --no-audit --no-fund --legacy-peer-deps', {
     cwd: versionDir,
@@ -186,17 +206,44 @@ function installCiDeps(versionDir: string, mainTgzPath: string) {
 }
 
 /**
- * Set up dependencies for local dev by symlinking the monorepo's node_modules.
- * This avoids issues with workspace:* protocol deps that don't exist on npm at 0.0.0.
+ * Set up dependencies for local dev by symlinking into node_modules.
+ *
+ * Creates node_modules/vite-plus → packages/cli (source) and symlinks
+ * transitive deps from packages/cli/node_modules into version_dir/node_modules.
  */
 function setupLocalDevDeps(versionDir: string) {
-  const nodeModulesLink = path.join(versionDir, 'node_modules');
-  // Use packages/cli/node_modules which has the cli's resolved deps (not root,
-  // since pnpm doesn't hoist workspace packages' deps to root node_modules)
-  const cliNodeModules = path.join(repoRoot, 'packages', 'cli', 'node_modules');
+  const nodeModulesDir = path.join(versionDir, 'node_modules');
+  rmSync(nodeModulesDir, { recursive: true, force: true });
+  mkdirSync(nodeModulesDir, { recursive: true });
 
-  rmSync(nodeModulesLink, { recursive: true, force: true });
-  symlinkSync(cliNodeModules, nodeModulesLink, 'dir');
+  // Symlink node_modules/vite-plus → packages/cli (source)
+  const cliDir = path.join(repoRoot, 'packages', 'cli');
+  symlinkSync(cliDir, path.join(nodeModulesDir, 'vite-plus'), 'dir');
+
+  // Symlink transitive deps from packages/cli/node_modules
+  const cliNodeModules = path.join(cliDir, 'node_modules');
+  if (!existsSync(cliNodeModules)) {
+    return;
+  }
+
+  for (const entry of readdirSync(cliNodeModules)) {
+    if (entry === '.pnpm' || entry === '.modules.yaml') {
+      continue;
+    }
+    const src = path.join(cliNodeModules, entry);
+    const dest = path.join(nodeModulesDir, entry);
+    if (!existsSync(dest)) {
+      // Handle scoped packages (@scope/) by creating parent dir
+      if (entry.startsWith('@')) {
+        mkdirSync(dest, { recursive: true });
+        for (const sub of readdirSync(src)) {
+          symlinkSync(path.join(src, sub), path.join(dest, sub), 'dir');
+        }
+      } else {
+        symlinkSync(src, dest, 'dir');
+      }
+    }
+  }
 }
 
 // Allow running directly via: npx tsx install-global-cli.ts <args>

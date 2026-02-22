@@ -361,7 +361,7 @@ jobs:
         run: |
           # Helper to read the installed CLI version from package.json
           get_cli_version() {
-            node -p "require(require('path').resolve(process.env.USERPROFILE || process.env.HOME, '.vite-plus', 'current', 'package.json')).version"
+            node -p "require(require('path').resolve(process.env.USERPROFILE || process.env.HOME, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"
           }
 
           # Save initial (dev build) version
@@ -407,7 +407,7 @@ jobs:
 
           # Helper to read the installed CLI version from package.json
           function Get-CliVersion {
-            node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'package.json')).version"
+            node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"
           }
 
           # Save initial (dev build) version
@@ -450,7 +450,7 @@ jobs:
         shell: cmd
         run: |
           REM Save initial (dev build) version
-          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'package.json')).version"`) do set INITIAL_VERSION=%%v
+          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"`) do set INITIAL_VERSION=%%v
           echo Initial version: %INITIAL_VERSION%
 
           REM --check queries npm registry and prints update status
@@ -464,7 +464,7 @@ jobs:
           dir "%USERPROFILE%\.vite-plus\"
 
           REM Verify version changed after update
-          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'package.json')).version"`) do set UPDATED_VERSION=%%v
+          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"`) do set UPDATED_VERSION=%%v
           echo Updated version: %UPDATED_VERSION%
           if "%UPDATED_VERSION%"=="%INITIAL_VERSION%" (
             echo Error: version should have changed after upgrade, still %INITIAL_VERSION%
@@ -477,7 +477,7 @@ jobs:
           vp env doctor
 
           REM Verify version restored after rollback
-          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'package.json')).version"`) do set ROLLBACK_VERSION=%%v
+          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"`) do set ROLLBACK_VERSION=%%v
           echo Rollback version: %ROLLBACK_VERSION%
           if not "%ROLLBACK_VERSION%"=="%INITIAL_VERSION%" (
             echo Error: version should have been restored after rollback, expected %INITIAL_VERSION%, got %ROLLBACK_VERSION%

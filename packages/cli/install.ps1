@@ -284,31 +284,16 @@ function Main {
     # Set up version-specific directories
     $VersionDir = "$InstallDir\$ViteVersion"
     $BinDir = "$VersionDir\bin"
-    $DistDir = "$VersionDir\dist"
-    $BindingDir = "$VersionDir\binding"
     $CurrentLink = "$InstallDir\current"
 
     $binaryName = "vp.exe"
 
-    # Create directories
+    # Create bin directory
     New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
-    New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
-    New-Item -ItemType Directory -Force -Path $BindingDir | Out-Null
-
-    # Download and extract native binary and .node files from platform package
-    # Also copy JS bundle and assets
-    $itemsToCopy = @("binding", "dist", "templates", "rules", "AGENTS.md", "package.json")
 
     if ($LocalTgz) {
-        # Use local tarball for development/testing
+        # Local development mode: only need the binary
         Write-Info "Using local tarball: $LocalTgz"
-
-        # Create temp extraction directory
-        $tempExtract = Join-Path $env:TEMP "vite-local-$(Get-Random)"
-        New-Item -ItemType Directory -Force -Path $tempExtract | Out-Null
-
-        # Extract the tgz
-        & "$env:SystemRoot\System32\tar.exe" -xzf $LocalTgz -C $tempExtract
 
         # Copy binary from LOCAL_BINARY env var (set by install-global-cli.ts)
         if ($LocalBinary -and (Test-Path $LocalBinary)) {
@@ -316,29 +301,8 @@ function Main {
         } else {
             Write-Error-Exit "VITE_PLUS_LOCAL_BINARY must be set when using VITE_PLUS_LOCAL_TGZ"
         }
-
-        # Copy .node files if present (NAPI bindings go to binding/ alongside index.cjs loader)
-        $nodeFilesPath = Join-Path $tempExtract "package" "binding"
-        Get-ChildItem -Path $nodeFilesPath -Filter "*.node" -ErrorAction SilentlyContinue | ForEach-Object {
-            $destFile = Join-Path $BindingDir $_.Name
-            if (Test-Path $destFile) {
-                Remove-Item -Path $destFile -Force
-            }
-            Copy-Item -Path $_.FullName -Destination $BindingDir -Force
-        }
-
-        # Copy JS assets
-        foreach ($item in $itemsToCopy) {
-            $itemSource = Join-Path $tempExtract "package" $item
-            if (Test-Path $itemSource) {
-                Copy-Item -Path $itemSource -Destination $VersionDir -Recurse -Force
-            }
-        }
-
-        Remove-Item -Recurse -Force $tempExtract
     } else {
-        # Download from npm registry
-        # Get package suffix from optionalDependencies (dynamic lookup)
+        # Download from npm registry — extract only the vp binary from platform package
         $packageSuffix = Get-PackageSuffix -Platform $platform
         $packageName = "@voidzero-dev/vite-plus-$packageSuffix"
         $platformUrl = "$NpmRegistry/$packageName/-/vite-plus-$packageSuffix-$ViteVersion.tgz"
@@ -360,61 +324,23 @@ function Main {
                 Copy-Item -Path $binarySource -Destination $BinDir -Force
             }
 
-            # Copy .node files to BindingDir (delete existing first to avoid system cache issues)
-            $nodeFilesPath = Join-Path $platformTempExtract "package"
-            Get-ChildItem -Path $nodeFilesPath -Filter "*.node" -ErrorAction SilentlyContinue | ForEach-Object {
-                $destFile = Join-Path $BindingDir $_.Name
-                if (Test-Path $destFile) {
-                    Remove-Item -Path $destFile -Force
-                }
-                Copy-Item -Path $_.FullName -Destination $BindingDir -Force
-            }
-
             Remove-Item -Recurse -Force $platformTempExtract
         } finally {
             Remove-Item $platformTempFile -ErrorAction SilentlyContinue
         }
-
-        # Download and extract JS bundle from npm
-        $mainUrl = "$NpmRegistry/vite-plus/-/vite-plus-$ViteVersion.tgz"
-
-        $mainTempFile = New-TemporaryFile
-        try {
-            Invoke-WebRequest -Uri $mainUrl -OutFile $mainTempFile
-
-            # Create temp extraction directory
-            $mainTempExtract = Join-Path $env:TEMP "vite-main-$(Get-Random)"
-            New-Item -ItemType Directory -Force -Path $mainTempExtract | Out-Null
-
-            # Extract the package
-            & "$env:SystemRoot\System32\tar.exe" -xzf $mainTempFile -C $mainTempExtract
-
-            # Copy directories and files to VersionDir
-            foreach ($item in $itemsToCopy) {
-                $itemSource = Join-Path $mainTempExtract "package" $item
-                if (Test-Path $itemSource) {
-                    Copy-Item -Path $itemSource -Destination $VersionDir -Recurse -Force
-                }
-            }
-
-            Remove-Item -Recurse -Force $mainTempExtract
-        } finally {
-            Remove-Item $mainTempFile -ErrorAction SilentlyContinue
-        }
     }
 
-    # Strip devDependencies and optionalDependencies from package.json
-    # Keep production dependencies so the global install has the full vite-plus runtime
-    $pkgFile = Join-Path $VersionDir "package.json"
-    $pkg = Get-Content $pkgFile -Raw | ConvertFrom-Json
-    $pkg.PSObject.Properties.Remove("devDependencies")
-    $pkg.PSObject.Properties.Remove("optionalDependencies")
-    $pkg | ConvertTo-Json -Depth 10 | Set-Content $pkgFile
-
-    # Remove stale lockfile and node_modules to avoid frozen-lockfile conflicts
-    # when package.json changes between installs
-    Remove-Item -Path "$VersionDir\pnpm-lock.yaml" -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "$VersionDir\node_modules" -Recurse -Force -ErrorAction SilentlyContinue
+    # Generate wrapper package.json that declares vite-plus as a dependency.
+    # npm will install vite-plus and all transitive deps via `vp install`.
+    $wrapperJson = @{
+        name = "vp-global"
+        version = $ViteVersion
+        private = $true
+        dependencies = @{
+            "vite-plus" = $ViteVersion
+        }
+    } | ConvertTo-Json -Depth 10
+    Set-Content -Path (Join-Path $VersionDir "package.json") -Value $wrapperJson
 
     # Install production dependencies (skip if VITE_PLUS_SKIP_DEPS_INSTALL is set,
     # e.g. during local dev where install-global-cli.ts handles deps separately)

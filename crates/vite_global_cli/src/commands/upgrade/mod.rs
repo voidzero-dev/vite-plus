@@ -92,26 +92,16 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         eprintln!("info: downloading vite-plus@{} for {}...", resolved.version, platform_suffix);
     }
 
-    // Step 6: Download both tarballs
+    // Step 6: Download platform tarball (main package is installed via npm)
     let client = HttpClient::new();
 
-    let (platform_data, main_data) = tokio::try_join!(
-        async {
-            client.get_bytes(&resolved.platform_tarball_url).await.map_err(|e| {
-                Error::Upgrade(format!("Failed to download platform package: {e}").into())
-            })
-        },
-        async {
-            client
-                .get_bytes(&resolved.main_tarball_url)
-                .await
-                .map_err(|e| Error::Upgrade(format!("Failed to download main package: {e}").into()))
-        },
-    )?;
+    let platform_data = client
+        .get_bytes(&resolved.platform_tarball_url)
+        .await
+        .map_err(|e| Error::Upgrade(format!("Failed to download platform package: {e}").into()))?;
 
     // Step 7: Verify integrity
     integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
-    integrity::verify_integrity(&main_data, &resolved.main_integrity)?;
 
     if !options.silent {
         eprintln!("info: installing...");
@@ -121,10 +111,9 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     let version_dir = install_dir.join(&resolved.version);
     tokio::fs::create_dir_all(&version_dir).await?;
 
-    // Step 9: Extract platform package (binary + .node files)
+    // Step 9: Extract platform binary and install via npm
     let result = install_platform_and_main(
         &platform_data,
-        &main_data,
         &version_dir,
         &install_dir,
         &resolved.version,
@@ -146,20 +135,16 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
 #[allow(clippy::print_stdout, clippy::print_stderr)]
 async fn install_platform_and_main(
     platform_data: &[u8],
-    main_data: &[u8],
     version_dir: &AbsolutePathBuf,
     install_dir: &AbsolutePathBuf,
     new_version: &str,
     current_version: &str,
     silent: bool,
 ) -> Result<ExitStatus, Error> {
-    // Extract platform package
+    // Extract platform package (binary only; .node files installed via npm optionalDeps)
     install::extract_platform_package(platform_data, version_dir).await?;
 
-    // Extract main package
-    install::extract_main_package(main_data, version_dir).await?;
-
-    // Verify critical files were extracted
+    // Verify binary was extracted
     let binary_name = if cfg!(windows) { "vp.exe" } else { "vp" };
     let binary_path = version_dir.join("bin").join(binary_name);
     if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
@@ -167,17 +152,11 @@ async fn install_platform_and_main(
             "Binary not found after extraction. The download may be corrupted.".into(),
         ));
     }
-    let package_json_path = version_dir.join("package.json");
-    if !tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
-        return Err(Error::Upgrade(
-            "package.json not found after extraction. The download may be corrupted.".into(),
-        ));
-    }
 
-    // Strip dev dependencies from package.json
-    install::strip_dev_dependencies(version_dir).await?;
+    // Generate wrapper package.json that declares vite-plus as a dependency
+    install::generate_wrapper_package_json(version_dir, new_version).await?;
 
-    // Install production dependencies
+    // Install production dependencies (npm installs vite-plus + all transitive deps)
     install::install_production_deps(version_dir).await?;
 
     // Save previous version for rollback

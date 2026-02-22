@@ -55,16 +55,16 @@ impl JsExecutor {
         }
 
         // 3. Auto-detect from binary location
-        // JS scripts are at ../dist relative to the binary directory
-        // e.g., ~/.vite-plus/<version>/bin/vp -> ~/.vite-plus/<version>/dist/
+        // JS scripts are at ../node_modules/vite-plus/dist relative to the binary directory
+        // e.g., ~/.vite-plus/<version>/bin/vp -> ~/.vite-plus/<version>/node_modules/vite-plus/dist/
         let exe_path = std::env::current_exe().map_err(|_| Error::JsScriptsDirNotFound)?;
         // Resolve symlinks to get the real binary path (Unix only)
         // Skip on Windows to avoid path resolution issues
         #[cfg(unix)]
         let exe_path = std::fs::canonicalize(&exe_path).map_err(|_| Error::JsScriptsDirNotFound)?;
         let bin_dir = exe_path.parent().ok_or(Error::JsScriptsDirNotFound)?;
-        let package_dir = bin_dir.parent().ok_or(Error::JsScriptsDirNotFound)?;
-        let scripts_dir = package_dir.join("dist");
+        let version_dir = bin_dir.parent().ok_or(Error::JsScriptsDirNotFound)?;
+        let scripts_dir = version_dir.join("node_modules").join("vite-plus").join("dist");
 
         AbsolutePathBuf::new(scripts_dir).ok_or(Error::JsScriptsDirNotFound)
     }

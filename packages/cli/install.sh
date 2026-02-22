@@ -538,8 +538,6 @@ main() {
   # Set up version-specific directories
   VERSION_DIR="$INSTALL_DIR/$VITE_PLUS_VERSION"
   BIN_DIR="$VERSION_DIR/bin"
-  DIST_DIR="$VERSION_DIR/dist"
-  BINDING_DIR="$VERSION_DIR/binding"
   CURRENT_LINK="$INSTALL_DIR/current"
 
   local binary_name="vp"
@@ -547,21 +545,12 @@ main() {
     binary_name="vp.exe"
   fi
 
-  # Create directories
-  mkdir -p "$BIN_DIR" "$DIST_DIR" "$BINDING_DIR"
-
-  # Download and extract native binary and .node files from platform package
-  # Also copy JS bundle and assets
-  local items_to_copy=("binding" "dist" "templates" "rules" "AGENTS.md" "package.json")
+  # Create bin directory
+  mkdir -p "$BIN_DIR"
 
   if [ -n "$LOCAL_TGZ" ]; then
-    # Use local tarball for development/testing
+    # Local development mode: only need the binary
     info "Using local tarball: $LOCAL_TGZ"
-
-    # Extract everything from tgz
-    local temp_dir
-    temp_dir=$(mktemp -d)
-    tar xzf "$LOCAL_TGZ" -C "$temp_dir" --strip-components=1
 
     # Copy binary from LOCAL_BINARY env var (set by install-global-cli.ts)
     if [ -n "$LOCAL_BINARY" ]; then
@@ -570,26 +559,8 @@ main() {
       error "VITE_PLUS_LOCAL_BINARY must be set when using VITE_PLUS_LOCAL_TGZ"
     fi
     chmod +x "$BIN_DIR/$binary_name"
-
-    # Copy .node files if present (NAPI bindings go to binding/ alongside index.cjs loader)
-    for node_file in "$temp_dir"/binding/*.node; do
-      if [ -f "$node_file" ]; then
-        rm -f "$BINDING_DIR/$(basename "$node_file")"
-        cp "$node_file" "$BINDING_DIR/"
-      fi
-    done
-
-    # Copy JS assets
-    for item in "${items_to_copy[@]}"; do
-      if [ -e "$temp_dir/$item" ]; then
-        cp -r "$temp_dir/$item" "$VERSION_DIR/"
-      fi
-    done
-
-    rm -rf "$temp_dir"
   else
-    # Download from npm registry
-    # Get package suffix from optionalDependencies (dynamic lookup)
+    # Download from npm registry — extract only the vp binary from platform package
     get_package_suffix "$platform"
     local package_name="@voidzero-dev/vite-plus-${PACKAGE_SUFFIX}"
     local platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-${PACKAGE_SUFFIX}-${VITE_PLUS_VERSION}.tgz"
@@ -602,55 +573,21 @@ main() {
     # Copy binary to BIN_DIR
     cp "$platform_temp_dir/$binary_name" "$BIN_DIR/"
     chmod +x "$BIN_DIR/$binary_name"
-
-    # Copy .node files to BINDING_DIR (delete existing first to avoid system cache issues)
-    for node_file in "$platform_temp_dir"/*.node; do
-      rm -f "$BINDING_DIR/$(basename "$node_file")"
-      cp "$node_file" "$BINDING_DIR/"
-    done
     rm -rf "$platform_temp_dir"
-
-    # Download and extract JS bundle and assets from npm
-    local main_url="${NPM_REGISTRY}/vite-plus/-/vite-plus-${VITE_PLUS_VERSION}.tgz"
-
-    # Create temp directory for extraction
-    local temp_dir
-    temp_dir=$(mktemp -d)
-    download_and_extract "$main_url" "$temp_dir" 1
-
-    for item in "${items_to_copy[@]}"; do
-      if [ -e "$temp_dir/$item" ]; then
-        cp -r "$temp_dir/$item" "$VERSION_DIR/"
-      fi
-    done
-    rm -rf "$temp_dir"
   fi
 
-  # Strip devDependencies and optionalDependencies from package.json
-  # Keep production dependencies so the global install has the full vite-plus runtime
-  local pkg_file="$VERSION_DIR/package.json"
-  awk '
-    /"(devDependencies|optionalDependencies)"[[:space:]]*:[[:space:]]*\{/ {
-      skip = 1
-      depth = 1
-      next
-    }
-    skip {
-      for (i = 1; i <= length($0); i++) {
-        c = substr($0, i, 1)
-        if (c == "{") depth++
-        else if (c == "}") depth--
-      }
-      if (depth <= 0) skip = 0
-      next
-    }
-    { print }
-  ' "$pkg_file" > "$pkg_file.tmp" && mv "$pkg_file.tmp" "$pkg_file"
-
-  # Remove stale lockfile and node_modules to avoid frozen-lockfile conflicts
-  # when package.json changes between installs
-  rm -f "$VERSION_DIR/pnpm-lock.yaml"
-  rm -rf "$VERSION_DIR/node_modules"
+  # Generate wrapper package.json that declares vite-plus as a dependency.
+  # npm will install vite-plus and all transitive deps via `vp install`.
+  cat > "$VERSION_DIR/package.json" <<WRAPPER_EOF
+{
+  "name": "vp-global",
+  "version": "$VITE_PLUS_VERSION",
+  "private": true,
+  "dependencies": {
+    "vite-plus": "$VITE_PLUS_VERSION"
+  }
+}
+WRAPPER_EOF
 
   # Install production dependencies (skip if VITE_PLUS_SKIP_DEPS_INSTALL is set,
   # e.g. during local dev where install-global-cli.ts handles deps separately)

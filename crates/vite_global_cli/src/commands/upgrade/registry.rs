@@ -26,12 +26,10 @@ pub struct DistInfo {
     pub integrity: String,
 }
 
-/// Resolved version info with URLs and integrity for both packages.
+/// Resolved version info with URLs and integrity for the platform package.
 #[derive(Debug)]
 pub struct ResolvedVersion {
     pub version: String,
-    pub main_tarball_url: String,
-    pub main_integrity: String,
     pub platform_tarball_url: String,
     pub platform_integrity: String,
 }
@@ -42,7 +40,7 @@ const PLATFORM_PACKAGE_SCOPE: &str = "@voidzero-dev";
 /// Resolve a version from the npm registry.
 ///
 /// Makes two HTTP calls:
-/// 1. Main package metadata to get version, tarball URL, integrity, and optional deps
+/// 1. Main package metadata to get version and optional deps (to find platform package)
 /// 2. Platform package metadata to get platform-specific tarball URL and integrity
 pub async fn resolve_version(
     version_or_tag: &str,
@@ -90,8 +88,6 @@ pub async fn resolve_version(
 
     Ok(ResolvedVersion {
         version: main_meta.version,
-        main_tarball_url: main_meta.dist.tarball,
-        main_integrity: main_meta.dist.integrity,
         platform_tarball_url: platform_meta.dist.tarball,
         platform_integrity: platform_meta.dist.integrity,
     })
