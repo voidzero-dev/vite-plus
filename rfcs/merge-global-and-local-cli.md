@@ -70,7 +70,7 @@ This decouples the `vp` binary from vite-plus's internal file layout.
 ├── current -> <version>/             # Symlink to active version
 ├── <version>/
 │   ├── bin/
-│   │   └── vp                        # Rust binary (from platform package)
+│   │   └── vp                        # Rust binary (from CLI platform package)
 │   ├── package.json                  # Wrapper: { "dependencies": { "vite-plus": "<version>" } }
 │   └── node_modules/
 │       ├── vite-plus/                # Installed as npm dependency
@@ -90,12 +90,12 @@ This decouples the `vp` binary from vite-plus's internal file layout.
 **Install flows:**
 
 - **Production** (`curl -fsSL https://viteplus.dev/install.sh | bash`):
-  Downloads platform tarball (extracts only `vp` binary), generates wrapper `package.json`,
-  runs `vp install --silent` which installs `vite-plus` + all transitive deps via npm.
+  Downloads CLI platform tarball from `@voidzero-dev/vite-plus-cli-{platform}` (extracts only `vp` binary),
+  generates wrapper `package.json`, runs `vp install --silent` which installs `vite-plus` + all transitive deps via npm.
 
 - **Upgrade** (`vp upgrade`):
-  Downloads platform tarball (binary only), generates wrapper `package.json`,
-  runs `vp install --silent`. No main tarball download needed.
+  Downloads CLI platform tarball from `@voidzero-dev/vite-plus-cli-{platform}` (binary only),
+  generates wrapper `package.json`, runs `vp install --silent`. No main tarball download needed.
 
 - **Local dev** (`pnpm bootstrap-cli`):
   Copies `vp` binary, generates wrapper `package.json`, symlinks
@@ -253,6 +253,14 @@ if (command === 'create') {
    - Added `files` entries: `AGENTS.md`, `rules`, `templates`
 
 9. **Updated documentation**: `CLAUDE.md`, `CONTRIBUTING.md`
+
+10. **Separated `vp` binary into dedicated CLI platform packages**:
+    - `@voidzero-dev/vite-plus-{platform}` packages now contain only the `.node` NAPI binding (~20MB)
+    - `@voidzero-dev/vite-plus-cli-{platform}` packages contain only the `vp` Rust binary (~5MB)
+    - `publish-native-addons.ts` creates and publishes both NAPI and CLI packages separately
+    - Install scripts (`install.sh`, `install.ps1`) construct CLI package suffix directly instead of querying optionalDependencies
+    - Upgrade registry (`registry.rs`) queries CLI packages directly instead of looking up optionalDependencies
+    - Reduces download size for `npm install vite-plus` (no longer includes unused `vp` binary)
 
 ## Verification
 
