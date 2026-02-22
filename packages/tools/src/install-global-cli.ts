@@ -157,19 +157,18 @@ function installCiDeps(versionDir: string, mainTgzPath: string) {
   const tgzDir = path.dirname(mainTgzPath);
 
   // Extract vite-plus's package.json from the tgz to find @voidzero-dev/* deps
-  // --force-local prevents GNU tar on Windows from interpreting drive letters (D:) as remote hosts
-  const forceLocal = isWindows ? ' --force-local' : '';
+  // On Windows, use the system tar (bsdtar) which handles Windows paths natively.
+  // Git Bash's GNU tar misinterprets drive letters (D:, C:) as remote host references,
+  // affecting both the archive path and the -C directory argument.
+  const tar = isWindows ? `"${process.env.SystemRoot}\\System32\\tar.exe"` : 'tar';
   const tempDir = mkdtempSync(path.join(os.tmpdir(), 'vp-deps-'));
   try {
-    execSync(
-      `tar xzf "${mainTgzPath}" -C "${tempDir}" --strip-components=1${forceLocal} package.json`,
-      {
-        stdio: 'pipe',
-      },
-    );
+    execSync(`${tar} xzf "${mainTgzPath}" -C "${tempDir}" --strip-components=1 package.json`, {
+      stdio: 'pipe',
+    });
   } catch {
     // If extracting just package.json fails, extract everything
-    execSync(`tar xzf "${mainTgzPath}" -C "${tempDir}" --strip-components=1${forceLocal}`, {
+    execSync(`${tar} xzf "${mainTgzPath}" -C "${tempDir}" --strip-components=1`, {
       stdio: 'pipe',
     });
   }
