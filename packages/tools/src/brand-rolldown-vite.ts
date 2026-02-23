@@ -22,15 +22,41 @@ function log(message: string) {
   console.log(`[brand-rolldown-vite] ${message}`);
 }
 
-function replaceInFile(filePath: string, search: string, replacement: string): boolean {
+/**
+ * Replace a string in a file.
+ * Returns 'patched' if the replacement was applied, 'already' if the replacement
+ * text is already present, or throws an error if neither the search nor the
+ * replacement text is found (upstream code changed).
+ */
+function replaceInFile(
+  filePath: string,
+  search: string,
+  replacement: string,
+): 'patched' | 'already' {
   const content = readFileSync(filePath, 'utf-8');
-  if (!content.includes(search)) {
-    // Already patched or search string not found
-    return false;
+  // Check replacement first: the search string may be a substring of the replacement
+  // (e.g. constants.ts where the replacement appends lines after the search string).
+  if (content.includes(replacement)) {
+    return 'already';
   }
-  const newContent = content.replace(search, replacement);
-  writeFileSync(filePath, newContent, 'utf-8');
-  return true;
+  if (content.includes(search)) {
+    const newContent = content.replace(search, replacement);
+    writeFileSync(filePath, newContent, 'utf-8');
+    return 'patched';
+  }
+  throw new Error(
+    `[brand-rolldown-vite] Patch failed in ${filePath}:\n` +
+      `  Could not find search string: ${JSON.stringify(search)}\n` +
+      `  The upstream code may have changed. Please update the search string in brand-rolldown-vite.ts.`,
+  );
+}
+
+function logPatch(file: string, desc: string, result: 'patched' | 'already') {
+  if (result === 'patched') {
+    log(`  ✓ ${file}: ${desc}`);
+  } else {
+    log(`  - ${file}: Already patched`);
+  }
 }
 
 export function brandRolldownVite(rootDir: string = process.cwd()) {
@@ -40,78 +66,60 @@ export function brandRolldownVite(rootDir: string = process.cwd()) {
 
   // 1. constants.ts: Add VITE_PLUS_VERSION constant after VERSION
   const constantsFile = join(nodeDir, 'constants.ts');
-  if (
+  logPatch(
+    'constants.ts',
+    'Added VITE_PLUS_VERSION',
     replaceInFile(
       constantsFile,
       'export const VERSION = version as string',
       'export const VERSION = version as string\n\nexport const VITE_PLUS_VERSION = process.env.VITE_PLUS_VERSION || VERSION',
-    )
-  ) {
-    log('  ✓ constants.ts: Added VITE_PLUS_VERSION');
-  } else {
-    log('  - constants.ts: Already patched or unchanged');
-  }
+    ),
+  );
 
   // 2. cli.ts: Import VITE_PLUS_VERSION and change dev banner
   const cliFile = join(nodeDir, 'cli.ts');
-  let cliPatched = false;
-
-  if (
+  const cliResults = [
     replaceInFile(
       cliFile,
       "import { VERSION } from './constants'",
       "import { VERSION, VITE_PLUS_VERSION } from './constants'",
-    )
-  ) {
-    cliPatched = true;
-  }
-  if (
+    ),
     replaceInFile(
       cliFile,
       "`${colors.bold('VITE')} v${VERSION}`",
       "`${colors.bold('VITE+')} v${VITE_PLUS_VERSION}`",
-    )
-  ) {
-    cliPatched = true;
-  }
-  log(
-    cliPatched
-      ? '  ✓ cli.ts: Updated imports and banner'
-      : '  - cli.ts: Already patched or unchanged',
+    ),
+  ];
+  logPatch(
+    'cli.ts',
+    'Updated imports and banner',
+    cliResults.includes('patched') ? 'patched' : 'already',
   );
 
   // 3. build.ts: Import VITE_PLUS_VERSION, change build banner and error prefix
   const buildFile = join(nodeDir, 'build.ts');
-  let buildPatched = false;
-
-  if (
+  const buildResults = [
     replaceInFile(
       buildFile,
       "  ROLLUP_HOOKS,\n  VERSION,\n} from './constants'",
       "  ROLLUP_HOOKS,\n  VERSION,\n  VITE_PLUS_VERSION,\n} from './constants'",
-    )
-  ) {
-    buildPatched = true;
-  }
-  if (replaceInFile(buildFile, '`vite v${VERSION} ', '`vite+ v${VITE_PLUS_VERSION} ')) {
-    buildPatched = true;
-  }
-  if (replaceInFile(buildFile, '`[vite]: Rolldown failed', '`[vite+]: Rolldown failed')) {
-    buildPatched = true;
-  }
-  log(
-    buildPatched
-      ? '  ✓ build.ts: Updated imports, banner, and error prefix'
-      : '  - build.ts: Already patched or unchanged',
+    ),
+    replaceInFile(buildFile, '`vite v${VERSION} ', '`vite+ v${VITE_PLUS_VERSION} '),
+    replaceInFile(buildFile, '`[vite]: Rolldown failed', '`[vite+]: Rolldown failed'),
+  ];
+  logPatch(
+    'build.ts',
+    'Updated imports, banner, and error prefix',
+    buildResults.includes('patched') ? 'patched' : 'already',
   );
 
   // 4. logger.ts: Change default prefix
   const loggerFile = join(nodeDir, 'logger.ts');
-  if (replaceInFile(loggerFile, "prefix = '[vite]'", "prefix = '[vite+]'")) {
-    log("  ✓ logger.ts: Changed prefix to '[vite+]'");
-  } else {
-    log('  - logger.ts: Already patched or unchanged');
-  }
+  logPatch(
+    'logger.ts',
+    "Changed prefix to '[vite+]'",
+    replaceInFile(loggerFile, "prefix = '[vite]'", "prefix = '[vite+]'"),
+  );
 
   log('Done!');
 }
