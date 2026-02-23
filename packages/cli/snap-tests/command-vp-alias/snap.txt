@@ -23,7 +23,7 @@ Options:
 > vp run -h # vp run should show help
 Run tasks
 
-Usage: vite run [OPTIONS] <TASK_SPECIFIER> [ADDITIONAL_ARGS]...
+Usage: vp run [OPTIONS] <TASK_SPECIFIER> [ADDITIONAL_ARGS]...
 
 Arguments:
   <TASK_SPECIFIER>      `packageName#taskName` or `taskName`

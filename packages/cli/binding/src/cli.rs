@@ -103,7 +103,7 @@ pub enum SynthesizableSubcommand {
 
 /// Top-level CLI argument parser for vite-plus.
 #[derive(Debug, Parser)]
-#[command(name = "vite", disable_help_subcommand = true)]
+#[command(name = "vp", disable_help_subcommand = true)]
 enum CLIArgs {
     /// vite-task commands (run, cache)
     #[command(flatten)]
@@ -579,10 +579,10 @@ impl CommandHandler for VitePlusCommandHandler {
         if program != "vp" && program != "vite" {
             return Ok(HandledCommand::Verbatim);
         }
-        // Parse "vp <args>" using CLIArgs
-        let cli_args = CLIArgs::try_parse_from(
-            iter::once(command.program.as_str()).chain(command.args.iter().map(Str::as_str)),
-        )?;
+        // Parse "vp <args>" using CLIArgs — always use "vp" as the program name
+        // so clap shows "Usage: vp ..." even if the original command was "vite ..."
+        let cli_args =
+            CLIArgs::try_parse_from(iter::once("vp").chain(command.args.iter().map(Str::as_str)))?;
         match cli_args {
             CLIArgs::Synthesizable(subcmd) => {
                 let resolved = self.resolver.resolve(subcmd, &command.envs, &command.cwd).await?;
@@ -814,7 +814,7 @@ pub async fn main(
         return Ok(ExitStatus::SUCCESS);
     }
 
-    let args_with_program = std::iter::once("vite".to_string()).chain(args_vec.iter().cloned());
+    let args_with_program = std::iter::once("vp".to_string()).chain(args_vec.iter().cloned());
     let cli_args = match CLIArgs::try_parse_from(args_with_program) {
         Ok(args) => args,
         Err(err) => {
