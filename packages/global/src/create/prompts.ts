@@ -90,8 +90,8 @@ export function cancelAndExit(message = 'Operation cancelled', exitCode = 0): ne
   process.exit(exitCode);
 }
 
-function isEmpty(path: string) {
-  const files = fs.readdirSync(path);
+function isEmpty(dirPath: string) {
+  const files = fs.readdirSync(dirPath);
   return files.length === 0 || (files.length === 1 && files[0] === '.git');
 }
 

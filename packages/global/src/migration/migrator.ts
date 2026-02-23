@@ -273,9 +273,9 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
       if (!minimumReleaseAgeExclude) {
         minimumReleaseAgeExclude = new YAMLSeq();
       }
-      const existing = new Set(minimumReleaseAgeExclude.items.map((n) => n.value));
+      const existingExcludes = new Set(minimumReleaseAgeExclude.items.map((n) => n.value));
       for (const exclude of excludes) {
-        if (!existing.has(exclude)) {
+        if (!existingExcludes.has(exclude)) {
           minimumReleaseAgeExclude.add(scalarString(exclude));
         }
       }
@@ -317,9 +317,9 @@ function rewriteCatalog(doc: YamlDocument): void {
     doc.setIn(['catalog', VITE_PLUS_NAME], scalarString(VITE_PLUS_VERSION));
   }
   for (const name of REMOVE_PACKAGES) {
-    const path = ['catalog', name];
-    if (doc.hasIn(path)) {
-      doc.deleteIn(path);
+    const catalogPath = ['catalog', name];
+    if (doc.hasIn(catalogPath)) {
+      doc.deleteIn(catalogPath);
     }
   }
 

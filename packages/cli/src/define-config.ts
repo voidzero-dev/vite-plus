@@ -24,16 +24,16 @@ export function defineConfig(config: ViteUserConfigExport): ViteUserConfigExport
 export function defineConfig(config: ViteUserConfigExport): ViteUserConfigExport {
   if (typeof config === 'object') {
     if (config instanceof Promise) {
-      return config.then((config) => {
-        if (config.lazy) {
-          return config.lazy().then(({ plugins }) =>
+      return config.then((resolvedConfig) => {
+        if (resolvedConfig.lazy) {
+          return resolvedConfig.lazy().then(({ plugins }) =>
             viteDefineConfig({
-              ...config,
-              plugins: [...(config.plugins || []), ...(plugins || [])],
+              ...resolvedConfig,
+              plugins: [...(resolvedConfig.plugins || []), ...(plugins || [])],
             }),
           );
         }
-        return viteDefineConfig(config);
+        return viteDefineConfig(resolvedConfig);
       });
     } else if (config.lazy) {
       return config.lazy().then(({ plugins }) =>

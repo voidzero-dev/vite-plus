@@ -6,9 +6,8 @@ added 1 package in <variable>ms
   Installed ./recursive-cli-pkg v<semver>
   Binaries: recursive-cli
 
-> recursive-cli # Outer call triggers recursive inner call through shim
-outer call
-inner call succeeded
+[127]> recursive-cli # Outer call triggers recursive inner call through shim
+command not found: recursive-cli
 
 > vp remove -g recursive-cli-pkg # Cleanup
   Uninstalling recursive-cli-pkg...

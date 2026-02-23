@@ -14,8 +14,8 @@ export async function resolveUniversalViteConfig(err: null | Error, viteConfigCw
         run: config.run,
       }),
     );
-  } catch (err) {
-    console.error('[Vite+] resolve universal vite config error:', err);
-    throw err;
+  } catch (error) {
+    console.error('[Vite+] resolve universal vite config error:', error);
+    throw error;
   }
 }

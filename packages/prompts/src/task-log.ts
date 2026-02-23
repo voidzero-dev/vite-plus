@@ -193,24 +193,24 @@ export const taskLog = (opts: TaskLogOptions) => {
         message(msg: string, mopts?: TaskLogMessageOptions) {
           message(buffer, msg, mopts);
         },
-        error(message: string) {
+        error(msg: string) {
           completeBuffer(buffer, {
             status: 'error',
-            message,
+            message: msg,
           });
         },
-        success(message: string) {
+        success(msg: string) {
           completeBuffer(buffer, {
             status: 'success',
-            message,
+            message: msg,
           });
         },
       };
     },
-    error(message: string, opts?: TaskLogCompletionOptions): void {
+    error(msg: string, completionOpts?: TaskLogCompletionOptions): void {
       clear(true);
-      log.error(message, { output, secondarySymbol, spacing: 1 });
-      if (opts?.showLog !== false) {
+      log.error(msg, { output, secondarySymbol, spacing: 1 });
+      if (completionOpts?.showLog !== false) {
         renderBuffer();
       }
       // clear buffer since error is an end state
@@ -218,10 +218,10 @@ export const taskLog = (opts: TaskLogOptions) => {
       buffers[0].value = '';
       buffers[0].full = '';
     },
-    success(message: string, opts?: TaskLogCompletionOptions): void {
+    success(msg: string, completionOpts?: TaskLogCompletionOptions): void {
       clear(true);
-      log.success(message, { output, secondarySymbol, spacing: 1 });
-      if (opts?.showLog === true) {
+      log.success(msg, { output, secondarySymbol, spacing: 1 });
+      if (completionOpts?.showLog === true) {
         renderBuffer();
       }
       // clear buffer since success is an end state
