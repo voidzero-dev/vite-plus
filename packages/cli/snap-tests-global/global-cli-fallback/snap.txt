@@ -65,11 +65,11 @@ Options:
   -v, --version            Display version number 
 
 > vp test -h # should fall back to global vite-plus and show test help
-vitest/<semver>
+vp test/<semver>
  WARN: no options were found for your subcommands so we printed the whole output
 
 Usage:
-  $ vitest [...filters]
+  $ vp test [...filters]
 
 Commands:
   run [...filters]      
@@ -82,15 +82,15 @@ Commands:
   [...filters]          
 
 For more info, run any command with the `--help` flag:
-  $ vitest run --help
-  $ vitest related --help
-  $ vitest watch --help
-  $ vitest dev --help
-  $ vitest bench --help
-  $ vitest init --help
-  $ vitest list --help
-  $ vitest --help
-  $ vitest --help --expand-help
+  $ vp test run --help
+  $ vp test related --help
+  $ vp test watch --help
+  $ vp test dev --help
+  $ vp test bench --help
+  $ vp test init --help
+  $ vp test list --help
+  $ vp test --help
+  $ vp test --help --expand-help
 
 Options:
   -v, --version                                         Display version number 

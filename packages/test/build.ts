@@ -175,6 +175,9 @@ const NODE_BUILTINS = new Set([...builtinModules, ...builtinModules.map((m) => `
 // Step 1: Copy vitest-dev dist files (rewriting vite -> core package)
 await bundleVitest();
 
+// Step 1.5: Rebrand vitest CLI output as "vp test" with vite-plus version
+await brandVitest();
+
 // Step 2: Copy @vitest/* packages from node_modules to dist/@vitest/
 // This preserves the original file structure to maintain browser/Node.js separation
 await copyVitestPackages();
@@ -445,6 +448,56 @@ async function bundleVitest() {
     } else {
       await copyFile(file, destPath);
     }
+  }
+}
+
+/**
+ * Rebrand vitest CLI output as "vp test" with vite-plus version.
+ * Patches the bundled cac chunk to replace vitest branding with vp test branding.
+ */
+async function brandVitest() {
+  const chunksDir = resolve(projectDir, 'dist/chunks');
+  const cacFiles: string[] = [];
+  for await (const file of fsGlob(join(chunksDir, 'cac.*.js'))) {
+    cacFiles.push(file);
+  }
+  if (cacFiles.length === 0) {
+    throw new Error('brandVitest: no cac chunk found in dist/chunks/');
+  }
+  for (const cacFile of cacFiles) {
+    let content = await readFile(cacFile, 'utf-8');
+
+    function patchString(label: string, search: string | RegExp, replacement: string) {
+      const before = content;
+      content =
+        typeof search === 'string'
+          ? content.replace(search, replacement)
+          : content.replace(search, replacement);
+      if (content === before) {
+        throw new Error(
+          `brandVitest: failed to patch "${label}" — pattern not found in ${cacFile}`,
+        );
+      }
+    }
+
+    // 1. CLI name: cac("vitest") → cac("vp test")
+    patchString('cac name', 'cac("vitest")', 'cac("vp test")');
+
+    // 2. Version: var version = "<semver>" → use VITE_PLUS_VERSION env var with fallback
+    patchString(
+      'version',
+      /var version = "(\d+\.\d+\.\d+[^"]*)"/,
+      'var version = process.env.VITE_PLUS_VERSION || "$1"',
+    );
+
+    // 3. Banner regex: /^vitest\/\d+\.\d+\.\d+$/ → /^vp test\/[\d.]+$/
+    patchString('banner regex', '/^vitest\\/\\d+\\.\\d+\\.\\d+$/', '/^vp test\\/[\\d.]+$/');
+
+    // 4. Help text: $ vitest --help → $ vp test --help
+    patchString('help text', '$ vitest --help --expand-help', '$ vp test --help --expand-help');
+
+    await writeFile(cacFile, content, 'utf-8');
+    console.log(`Branded vitest → vp test in ${cacFile}`);
   }
 }
 

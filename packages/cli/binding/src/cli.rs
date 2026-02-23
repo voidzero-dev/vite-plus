@@ -398,7 +398,7 @@ impl SubcommandResolver {
                         envs: None,
                         pass_through_envs: None,
                     }),
-                    envs: merge_resolved_envs(envs, resolved.envs),
+                    envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
             SynthesizableSubcommand::Pack { args } => {

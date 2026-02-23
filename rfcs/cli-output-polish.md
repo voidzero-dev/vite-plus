@@ -296,36 +296,24 @@ Commands to update (representative, not exhaustive):
 
 The `vite_install` crate also has `Warning:` and `Note:` messages across multiple command files (`list.rs`, `why.rs`, `outdated.rs`, `pack.rs`, `publish.rs`, `cache.rs`, `config.rs`, `audit.rs`, `dlx.rs`, `unlink.rs`, `update.rs`, `rebuild.rs`, `whoami.rs`). All should be migrated.
 
-### Phase 3: Sub-tool Banners (vitest, oxlint, oxfmt)
+### Phase 3: Rebrand vitest Output
 
-For sub-tools where we don't yet control the source, print a leading banner line before spawning the child process.
+Vitest is bundled (not cloned source) via `@voidzero-dev/vite-plus-test`. Its build script (`packages/test/build.ts`) copies and rewrites vitest's dist files. We patch the bundled cac chunk during the build to rebrand CLI output.
 
-#### 3.1 Approach: Pre-spawn banner
+#### 3.1 Approach: Build-time patching of bundled cac chunk
 
-Before the Rust NAPI binding spawns the sub-tool process, print a single header line:
+After `bundleVitest()` copies vitest files to `dist/`, a `brandVitest()` step patches the cac chunk (`dist/chunks/cac.*.js`) with string replacements:
 
-```
-vite+ v0.3.0 — test
-```
+1. `cac("vitest")` → `cac("vp test")` — CLI name shown in banner and help output
+2. `var version = "<semver>"` → `var version = process.env.VITE_PLUS_VERSION || "<semver>"` — runtime version injection via env var
+3. `/^vitest\/\d+\.\d+\.\d+$/` regex → `/^vp test\/[\d.]+$/` — so the help callback can still find the banner line
+4. `$ vitest --help --expand-help` → `$ vp test --help --expand-help` — hardcoded help text
 
-```
-vite+ v0.3.0 — lint
-```
+The Rust NAPI binding injects `VITE_PLUS_VERSION` env var (same mechanism used for rolldown-vite build/dev/preview commands), so `vp test -h` shows `vp test/<vite-plus-version>`.
 
-```
-vite+ v0.3.0 — fmt
-```
+#### 3.2 Future: oxlint, oxfmt
 
-This adds Vite+ context without modifying the sub-tool's own output. The banner should only appear when stdout is a TTY (not in piped/CI contexts).
-
-**Implementation:** Add a `print_banner()` call in `packages/cli/binding/src/cli.rs` before the `ResolvedSubcommand` return for `Test`, `Lint`, and `Fmt` synthesizable subcommands.
-
-#### 3.2 Future: Direct source modification
-
-Once vitest, oxlint, and oxfmt sources are cloned into the repo (following the same pattern as rolldown-vite), apply the same direct modification approach:
-
-- Change their banner/version strings to show "Vite+" branding
-- Change their logger prefixes where applicable
+For oxlint and oxfmt, pre-spawn banners or build-time patching can follow the same pattern once their source/dist is bundled.
 
 ### Phase 4: JS-Side Output Consistency
 
@@ -480,7 +468,6 @@ Many existing snap tests will need updates due to prefix and branding changes:
 
 ## Future Enhancements
 
-- Clone vitest source and apply the same direct modification approach for `vp test` branding
-- Clone oxlint/oxfmt source for `vp lint` / `vp fmt` branding
+- Clone oxlint/oxfmt source for `vp lint` / `vp fmt` branding (or apply build-time patching)
 - Unified progress indicator style (spinner, progress bar) across long-running operations
 - Structured JSON output mode (`--json`) for machine-readable output across all commands
