@@ -7,7 +7,7 @@
  *
  * Changes applied:
  * 1. constants.ts: Add VITE_PLUS_VERSION constant
- * 2. cli.ts: Import VITE_PLUS_VERSION, change banner from 'VITE' to 'VITE+'
+ * 2. cli.ts: Import VITE_PLUS_VERSION, change CLI name, version, and banner
  * 3. build.ts: Import VITE_PLUS_VERSION, change build banner and error prefix
  * 4. logger.ts: Change default prefix from '[vite]' to '[vite+]'
  */
@@ -76,7 +76,7 @@ export function brandRolldownVite(rootDir: string = process.cwd()) {
     ),
   );
 
-  // 2. cli.ts: Import VITE_PLUS_VERSION and change dev banner
+  // 2. cli.ts: Import VITE_PLUS_VERSION, change CLI name, version, and dev banner
   const cliFile = join(nodeDir, 'cli.ts');
   const cliResults = [
     replaceInFile(
@@ -84,6 +84,8 @@ export function brandRolldownVite(rootDir: string = process.cwd()) {
       "import { VERSION } from './constants'",
       "import { VERSION, VITE_PLUS_VERSION } from './constants'",
     ),
+    replaceInFile(cliFile, "cac('vite')", "cac('vp')"),
+    replaceInFile(cliFile, 'cli.version(VERSION)', 'cli.version(VITE_PLUS_VERSION)'),
     replaceInFile(
       cliFile,
       "`${colors.bold('VITE')} v${VERSION}`",
@@ -92,7 +94,7 @@ export function brandRolldownVite(rootDir: string = process.cwd()) {
   ];
   logPatch(
     'cli.ts',
-    'Updated imports and banner',
+    'Updated imports, CLI name, version, and banner',
     cliResults.includes('patched') ? 'patched' : 'already',
   );
 
