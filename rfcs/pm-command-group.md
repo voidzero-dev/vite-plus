@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vite pm` command group that provides a set of utilities for working with package managers. The `pm` command group offers direct access to package manager utilities like cache management, package publishing, configuration, and more. These are pass-through commands that delegate to the detected package manager (pnpm/npm/yarn) with minimal processing, providing a unified interface across different package managers.
+Add `vp pm` command group that provides a set of utilities for working with package managers. The `pm` command group offers direct access to package manager utilities like cache management, package publishing, configuration, and more. These are pass-through commands that delegate to the detected package manager (pnpm/npm/yarn) with minimal processing, providing a unified interface across different package managers.
 
 ## Motivation
 
@@ -65,15 +65,15 @@ yarn cache clean                      # yarn
 
 ```bash
 # Works for all package managers
-vite pm cache                         # Show cache directory
-vite pm cache clean                   # Clean cache
-vite pm list                          # List installed packages
-vite pm config get registry           # Get config value
-vite pm publish                       # Publish package
-vite pm pack                          # Create package tarball
-vite pm prune                         # Remove unnecessary packages
-vite pm owner list <pkg>              # List package owners
-vite pm view <pkg>                    # View package information
+vp pm cache                         # Show cache directory
+vp pm cache clean                   # Clean cache
+vp pm list                          # List installed packages
+vp pm config get registry           # Get config value
+vp pm publish                       # Publish package
+vp pm pack                          # Create package tarball
+vp pm prune                         # Remove unnecessary packages
+vp pm owner list <pkg>              # List package owners
+vp pm view <pkg>                    # View package information
 ```
 
 ## Proposed Solution
@@ -81,7 +81,7 @@ vite pm view <pkg>                    # View package information
 ### Command Syntax
 
 ```bash
-vite pm <subcommand> [OPTIONS] [ARGS...]
+vp pm <subcommand> [OPTIONS] [ARGS...]
 ```
 
 **Subcommands:**
@@ -94,28 +94,39 @@ vite pm <subcommand> [OPTIONS] [ARGS...]
 6. **owner**: Manage package owners
 7. **cache**: Manage package cache
 8. **config**: Manage package manager configuration
+9. **login**: Log in to the registry
+10. **logout**: Log out from the registry
+11. **whoami**: Show the currently logged-in user
+12. **token**: Manage registry authentication tokens
+13. **audit**: Run a security audit on installed packages
+14. **dist-tag**: Manage distribution tags on packages
+15. **deprecate**: Deprecate a version of a package
+16. **search**: Search the registry for packages
+17. **rebuild**: Rebuild native addons
+18. **fund**: Show funding information for installed packages
+19. **ping**: Ping the registry
 
 ### Subcommand Details
 
-#### 1. vite pm prune
+#### 1. vp pm prune
 
 Remove unnecessary packages from node_modules.
 
 ```bash
-vite pm prune [OPTIONS]
+vp pm prune [OPTIONS]
 ```
 
 **Examples:**
 
 ```bash
 # Remove all extraneous packages
-vite pm prune
+vp pm prune
 
 # Remove devDependencies (production only)
-vite pm prune --prod
+vp pm prune --prod
 
 # Remove optional dependencies
-vite pm prune --no-optional
+vp pm prune --no-optional
 ```
 
 **Options:**
@@ -123,37 +134,37 @@ vite pm prune --no-optional
 - `--prod`: Remove devDependencies
 - `--no-optional`: Remove optional dependencies
 
-#### 2. vite pm pack
+#### 2. vp pm pack
 
 Create a tarball archive of the package.
 
 ```bash
-vite pm pack [OPTIONS]
+vp pm pack [OPTIONS]
 ```
 
 **Examples:**
 
 ```bash
 # Create tarball in current directory
-vite pm pack
+vp pm pack
 
 # Specify output file path
-vite pm pack --out ./dist/package.tgz
+vp pm pack --out ./dist/package.tgz
 
 # Use placeholders for package name and version (pnpm/yarn@2+ only)
-vite pm pack --out ./dist/%s-%v.tgz
+vp pm pack --out ./dist/%s-%v.tgz
 
 # Specify output directory
-vite pm pack --pack-destination ./dist
+vp pm pack --pack-destination ./dist
 
 # Custom gzip compression level
-vite pm pack --pack-gzip-level 9
+vp pm pack --pack-gzip-level 9
 
 # Pack all workspace packages
-vite pm pack -r
+vp pm pack -r
 
 # Pack specific workspace packages
-vite pm pack --filter app --filter web
+vp pm pack --filter app --filter web
 ```
 
 **Options:**
@@ -165,41 +176,41 @@ vite pm pack --filter app --filter web
 - `--pack-gzip-level <level>`: Gzip compression level 0-9 (pnpm only)
 - `--json`: Output in JSON format
 
-#### 3. vite pm list / vite pm ls
+#### 3. vp pm list / vp pm ls
 
 List installed packages.
 
 ```bash
-vite pm list [PATTERN] [OPTIONS]
-vite pm ls [PATTERN] [OPTIONS]
+vp pm list [PATTERN] [OPTIONS]
+vp pm ls [PATTERN] [OPTIONS]
 ```
 
 **Examples:**
 
 ```bash
 # List all direct dependencies
-vite pm list
+vp pm list
 
 # List dependencies matching pattern
-vite pm list react
+vp pm list react
 
 # Show dependency tree
-vite pm list --depth 2
+vp pm list --depth 2
 
 # JSON output
-vite pm list --json
+vp pm list --json
 
 # List in specific workspace
-vite pm list --filter app
+vp pm list --filter app
 
 # List across all workspaces
-vite pm list -r
+vp pm list -r
 
 # List only production dependencies
-vite pm list --prod
+vp pm list --prod
 
 # List globally installed packages
-vite pm list -g
+vp pm list -g
 ```
 
 **Options:**
@@ -214,75 +225,75 @@ vite pm list -g
 - `--filter <pattern>`: Filter by workspace (can be used multiple times)
 - `-g, --global`: List global packages
 
-#### 4. vite pm view / vite pm info / vite pm show
+#### 4. vp pm view / vp pm info / vp pm show
 
 View package information from the registry.
 
 ```bash
-vite pm view [<package-spec>] [<field>[.subfield]...] [OPTIONS]
-vite pm info [<package-spec>] [<field>[.subfield]...] [OPTIONS]
-vite pm show [<package-spec>] [<field>[.subfield]...] [OPTIONS]
+vp pm view [<package-spec>] [<field>[.subfield]...] [OPTIONS]
+vp pm info [<package-spec>] [<field>[.subfield]...] [OPTIONS]
+vp pm show [<package-spec>] [<field>[.subfield]...] [OPTIONS]
 ```
 
 **Examples:**
 
 ```bash
 # View package information
-vite pm view react
+vp pm view react
 
 # View specific version
-vite pm view react@18.3.1
+vp pm view react@18.3.1
 
 # View specific field
-vite pm view react version
-vite pm view react dist.tarball
+vp pm view react version
+vp pm view react dist.tarball
 
 # View nested field
-vite pm view react dependencies.prop-types
+vp pm view react dependencies.prop-types
 
 # JSON output
-vite pm view react --json
+vp pm view react --json
 
 # Use aliases
-vite pm info lodash
-vite pm show express
+vp pm info lodash
+vp pm show express
 ```
 
 **Options:**
 
 - `--json`: JSON output format
 
-#### 5. vite pm publish
+#### 5. vp pm publish
 
 Publish package to the registry.
 
 ```bash
-vite pm publish [TARBALL|FOLDER] [OPTIONS]
+vp pm publish [TARBALL|FOLDER] [OPTIONS]
 ```
 
 **Examples:**
 
 ```bash
 # Publish current package
-vite pm publish
+vp pm publish
 
 # Publish specific tarball
-vite pm publish package.tgz
+vp pm publish package.tgz
 
 # Dry run
-vite pm publish --dry-run
+vp pm publish --dry-run
 
 # Set tag
-vite pm publish --tag beta
+vp pm publish --tag beta
 
 # Set access level
-vite pm publish --access public
+vp pm publish --access public
 
 # Recursive publish in monorepo
-vite pm publish -r
+vp pm publish -r
 
 # Publish with filter
-vite pm publish --filter app
+vp pm publish --filter app
 ```
 
 **Options:**
@@ -296,12 +307,12 @@ vite pm publish --filter app
 - `--filter <pattern>`: Filter workspaces (pnpm)
 - `--workspace <name>`: Specific workspace (npm)
 
-#### 6. vite pm owner
+#### 6. vp pm owner
 
 Manage package owners.
 
 ```bash
-vite pm owner <subcommand> <package>
+vp pm owner <subcommand> <package>
 ```
 
 **Subcommands:**
@@ -314,21 +325,21 @@ vite pm owner <subcommand> <package>
 
 ```bash
 # List package owners
-vite pm owner list my-package
+vp pm owner list my-package
 
 # Add owner
-vite pm owner add username my-package
+vp pm owner add username my-package
 
 # Remove owner
-vite pm owner rm username my-package
+vp pm owner rm username my-package
 ```
 
-#### 7. vite pm cache
+#### 7. vp pm cache
 
 Manage package cache.
 
 ```bash
-vite pm cache [SUBCOMMAND] [OPTIONS]
+vp pm cache [SUBCOMMAND] [OPTIONS]
 ```
 
 **Subcommands:**
@@ -342,34 +353,34 @@ vite pm cache [SUBCOMMAND] [OPTIONS]
 
 ```bash
 # Show cache directory
-vite pm cache dir
-vite pm cache path
+vp pm cache dir
+vp pm cache path
 
 # Clean cache
-vite pm cache clean
-vite pm cache clear
+vp pm cache clean
+vp pm cache clear
 
 # Force clean (npm)
-vite pm cache clean --force
+vp pm cache clean --force
 
 # Verify cache (npm)
-vite pm cache verify
+vp pm cache verify
 
 # List cached packages (pnpm)
-vite pm cache list
+vp pm cache list
 ```
 
 **Options:**
 
 - `--force`: Force cache clean (npm)
 
-#### 8. vite pm config / vite pm c
+#### 8. vp pm config / vp pm c
 
 Manage package manager configuration.
 
 ```bash
-vite pm config <subcommand> [key] [value] [OPTIONS]
-vite pm c <subcommand> [key] [value] [OPTIONS]
+vp pm config <subcommand> [key] [value] [OPTIONS]
+vp pm c <subcommand> [key] [value] [OPTIONS]
 ```
 
 **Subcommands:**
@@ -383,28 +394,28 @@ vite pm c <subcommand> [key] [value] [OPTIONS]
 
 ```bash
 # List all config
-vite pm config list
+vp pm config list
 
 # Get config value
-vite pm config get registry
+vp pm config get registry
 
 # Set config value
-vite pm config set registry https://registry.npmjs.org
+vp pm config set registry https://registry.npmjs.org
 
 # Set with JSON format (pnpm/yarn@2+)
-vite pm config set registry https://registry.npmjs.org --json
+vp pm config set registry https://registry.npmjs.org --json
 
 # Set global config
-vite pm config set registry https://registry.npmjs.org --global
+vp pm config set registry https://registry.npmjs.org --global
 
 # Set global config with location parameter (alternative)
-vite pm config set registry https://registry.npmjs.org --location global
+vp pm config set registry https://registry.npmjs.org --location global
 
 # Delete config key
-vite pm config delete registry
+vp pm config delete registry
 
 # Use alias
-vite pm c get registry
+vp pm c get registry
 ```
 
 **Options:**
@@ -412,6 +423,312 @@ vite pm c get registry
 - `--json`: JSON output format (pnpm/yarn@2+)
 - `-g, --global`: Use global config (shorthand for `--location global`)
 - `--location <location>`: Config location: project (default) or global
+
+#### 9. vp pm login
+
+Log in to the registry to authenticate for publishing and other protected operations.
+
+```bash
+vp pm login [OPTIONS]
+```
+
+**Examples:**
+
+```bash
+# Log in to the default registry
+vp pm login
+
+# Log in to a custom registry
+vp pm login --registry https://custom-registry.com
+
+# Log in with scope
+vp pm login --scope @myorg
+```
+
+**Options:**
+
+- `--registry <url>`: Registry URL to log in to
+- `--scope <scope>`: Associate the login with a scope
+
+#### 10. vp pm logout
+
+Log out from the registry, removing stored credentials.
+
+```bash
+vp pm logout [OPTIONS]
+```
+
+**Examples:**
+
+```bash
+# Log out from the default registry
+vp pm logout
+
+# Log out from a custom registry
+vp pm logout --registry https://custom-registry.com
+
+# Log out with scope
+vp pm logout --scope @myorg
+```
+
+**Options:**
+
+- `--registry <url>`: Registry URL to log out from
+- `--scope <scope>`: Log out from a scoped registry
+
+#### 11. vp pm whoami
+
+Display the username of the currently logged-in user.
+
+```bash
+vp pm whoami [OPTIONS]
+```
+
+**Examples:**
+
+```bash
+# Show logged-in user
+vp pm whoami
+
+# Show logged-in user for a custom registry
+vp pm whoami --registry https://custom-registry.com
+```
+
+**Options:**
+
+- `--registry <url>`: Registry URL to check
+
+#### 12. vp pm token
+
+Manage registry authentication tokens. This command always delegates to `npm token` regardless of the detected package manager.
+
+```bash
+vp pm token <subcommand> [OPTIONS]
+```
+
+**Subcommands:**
+
+- `list`: List all known tokens
+- `create`: Create a new authentication token
+- `revoke <token|id>`: Revoke a token
+
+**Examples:**
+
+```bash
+# List all tokens
+vp pm token list
+
+# Create a new read-only token
+vp pm token create --read-only
+
+# Create a CIDR-whitelisted token
+vp pm token create --cidr 192.168.1.0/24
+
+# Revoke a token
+vp pm token revoke a1b2c3d4
+```
+
+**Options:**
+
+- `--read-only`: Create a read-only token
+- `--cidr <cidr>`: CIDR range for token restriction
+- `--registry <url>`: Registry URL
+
+#### 13. vp pm audit
+
+Run a security audit on installed packages to identify known vulnerabilities.
+
+```bash
+vp pm audit [OPTIONS]
+```
+
+**Examples:**
+
+```bash
+# Run security audit
+vp pm audit
+
+# JSON output
+vp pm audit --json
+
+# Audit only production dependencies
+vp pm audit --prod
+
+# Fix vulnerabilities automatically
+vp pm audit fix
+
+# Set minimum severity level
+vp pm audit --audit-level high
+```
+
+**Options:**
+
+- `--json`: JSON output format
+- `--prod`: Audit only production dependencies
+- `--audit-level <level>`: Minimum severity to report (low, moderate, high, critical)
+- `fix`: Attempt to automatically fix vulnerabilities
+
+#### 14. vp pm dist-tag
+
+Manage distribution tags on packages, allowing you to label specific versions with meaningful names.
+
+```bash
+vp pm dist-tag <subcommand> <pkg> [OPTIONS]
+```
+
+**Subcommands:**
+
+- `list [<pkg>]`: List distribution tags for a package
+- `add <pkg>@<version> <tag>`: Add a tag to a specific version
+- `rm <pkg> <tag>`: Remove a tag from a package
+
+**Examples:**
+
+```bash
+# List distribution tags
+vp pm dist-tag list my-package
+
+# Tag a specific version as beta
+vp pm dist-tag add my-package@1.0.0 beta
+
+# Remove a tag
+vp pm dist-tag rm my-package beta
+```
+
+**Options:**
+
+- `--registry <url>`: Registry URL
+- `--otp <otp>`: One-time password for authentication
+
+#### 15. vp pm deprecate
+
+Deprecate a version or range of versions of a package. This command always delegates to `npm deprecate` regardless of the detected package manager.
+
+```bash
+vp pm deprecate <package-spec> <message>
+```
+
+**Examples:**
+
+```bash
+# Deprecate a specific version
+vp pm deprecate my-package@1.0.0 "Use v2 instead"
+
+# Deprecate a range of versions
+vp pm deprecate "my-package@<2.0.0" "Upgrade to v2 for security fixes"
+
+# Un-deprecate by passing empty message
+vp pm deprecate my-package@1.0.0 ""
+```
+
+**Options:**
+
+- `--registry <url>`: Registry URL
+- `--otp <otp>`: One-time password for authentication
+
+#### 16. vp pm search
+
+Search the registry for packages matching a query. This command always delegates to `npm search` regardless of the detected package manager.
+
+```bash
+vp pm search [OPTIONS] <search-terms...>
+```
+
+**Examples:**
+
+```bash
+# Search for packages
+vp pm search vite plugin
+
+# JSON output
+vp pm search vite plugin --json
+
+# Long format with description
+vp pm search vite plugin --long
+
+# Search with registry
+vp pm search vite plugin --registry https://custom-registry.com
+```
+
+**Options:**
+
+- `--json`: JSON output format
+- `--long`: Show extended information
+- `--registry <url>`: Registry URL
+- `--searchlimit <number>`: Limit number of results
+
+#### 17. vp pm rebuild
+
+Rebuild native addons (e.g., node-gyp compiled modules) in the current project.
+
+```bash
+vp pm rebuild [OPTIONS] [<packages...>]
+```
+
+**Examples:**
+
+```bash
+# Rebuild all native addons
+vp pm rebuild
+
+# Rebuild specific packages
+vp pm rebuild node-sass sharp
+```
+
+**Options:**
+
+- Packages to rebuild can be specified as positional arguments
+
+#### 18. vp pm fund
+
+Show funding information for installed packages. This command always delegates to `npm fund` regardless of the detected package manager.
+
+```bash
+vp pm fund [OPTIONS] [<package>]
+```
+
+**Examples:**
+
+```bash
+# Show funding info for all dependencies
+vp pm fund
+
+# Show funding info for a specific package
+vp pm fund lodash
+
+# JSON output
+vp pm fund --json
+
+# Limit depth of dependency tree
+vp pm fund --depth 1
+```
+
+**Options:**
+
+- `--json`: JSON output format
+- `--depth <n>`: Maximum depth of dependency tree
+
+#### 19. vp pm ping
+
+Ping the configured or specified registry to verify connectivity. This command always delegates to `npm ping` regardless of the detected package manager.
+
+```bash
+vp pm ping [OPTIONS]
+```
+
+**Examples:**
+
+```bash
+# Ping the default registry
+vp pm ping
+
+# Ping a custom registry
+vp pm ping --registry https://custom-registry.com
+```
+
+**Options:**
+
+- `--registry <url>`: Registry URL to ping
 
 ### Command Mapping
 
@@ -432,7 +749,7 @@ vite pm c get registry
 
 | Vite+ Flag      | pnpm            | npm               | yarn | Description                 |
 | --------------- | --------------- | ----------------- | ---- | --------------------------- |
-| `vite pm prune` | `pnpm prune`    | `npm prune`       | N/A  | Remove unnecessary packages |
+| `vp pm prune`   | `pnpm prune`    | `npm prune`       | N/A  | Remove unnecessary packages |
 | `--prod`        | `--prod`        | `--omit=dev`      | N/A  | Remove devDependencies      |
 | `--no-optional` | `--no-optional` | `--omit=optional` | N/A  | Remove optional deps        |
 
@@ -459,7 +776,7 @@ vite pm c get registry
 
 | Vite+ Flag                  | pnpm                 | npm                  | yarn@1       | yarn@2+                                       | Description                       |
 | --------------------------- | -------------------- | -------------------- | ------------ | --------------------------------------------- | --------------------------------- |
-| `vite pm pack`              | `pnpm pack`          | `npm pack`           | `yarn pack`  | `yarn pack`                                   | Create package tarball            |
+| `vp pm pack`                | `pnpm pack`          | `npm pack`           | `yarn pack`  | `yarn pack`                                   | Create package tarball            |
 | `-r, --recursive`           | `--recursive`        | `--workspaces`       | N/A          | `workspaces foreach --all pack`               | Pack all workspace packages       |
 | `--filter <pattern>`        | `--filter`           | `--workspace`        | N/A          | `workspaces foreach --include <pattern> pack` | Filter packages to pack           |
 | `--out <path>`              | `--out`              | N/A                  | `--filename` | `--out`                                       | Output file path (supports %s/%v) |
@@ -506,7 +823,7 @@ vite pm c get registry
 
 | Vite+ Flag           | pnpm              | npm                             | yarn@1        | yarn@2+       | Description                                   |
 | -------------------- | ----------------- | ------------------------------- | ------------- | ------------- | --------------------------------------------- |
-| `vite pm list`       | `pnpm list`       | `npm list`                      | `yarn list`   | N/A           | List installed packages                       |
+| `vp pm list`         | `pnpm list`       | `npm list`                      | `yarn list`   | N/A           | List installed packages                       |
 | `--depth <n>`        | `--depth <n>`     | `--depth <n>`                   | `--depth <n>` | N/A           | Limit tree depth                              |
 | `--json`             | `--json`          | `--json`                        | `--json`      | N/A           | JSON output                                   |
 | `--long`             | `--long`          | `--long`                        | N/A           | N/A           | Extended info                                 |
@@ -583,16 +900,16 @@ vite pm c get registry
 - https://classic.yarnpkg.com/en/docs/cli/info (delegates to npm view)
 - https://yarnpkg.com/cli/npm/info (delegates to npm view)
 
-| Vite+ Flag     | pnpm       | npm        | yarn@1     | yarn@2+    | Description       |
-| -------------- | ---------- | ---------- | ---------- | ---------- | ----------------- |
-| `vite pm view` | `npm view` | `npm view` | `npm view` | `npm view` | View package info |
-| `--json`       | `--json`   | `--json`   | `--json`   | `--json`   | JSON output       |
+| Vite+ Flag   | pnpm       | npm        | yarn@1     | yarn@2+    | Description       |
+| ------------ | ---------- | ---------- | ---------- | ---------- | ----------------- |
+| `vp pm view` | `npm view` | `npm view` | `npm view` | `npm view` | View package info |
+| `--json`     | `--json`   | `--json`   | `--json`   | `--json`   | JSON output       |
 
 **Note:**
 
 - All package managers delegate to `npm view` for viewing package information
 - pnpm and yarn both use npm's view/info functionality internally
-- Aliases: `vite pm info` and `vite pm show` work the same as `vite pm view`
+- Aliases: `vp pm info` and `vp pm show` work the same as `vp pm view`
 
 #### Publish Command
 
@@ -611,7 +928,7 @@ vite pm c get registry
 
 | Vite+ Flag                  | pnpm               | npm                | yarn@1             | yarn@2+            | Description                 |
 | --------------------------- | ------------------ | ------------------ | ------------------ | ------------------ | --------------------------- |
-| `vite pm publish`           | `pnpm publish`     | `npm publish`      | `npm publish`      | `npm publish`      | Publish package             |
+| `vp pm publish`             | `pnpm publish`     | `npm publish`      | `npm publish`      | `npm publish`      | Publish package             |
 | `--dry-run`                 | `--dry-run`        | `--dry-run`        | `--dry-run`        | `--dry-run`        | Preview without publishing  |
 | `--tag <tag>`               | `--tag <tag>`      | `--tag <tag>`      | `--tag <tag>`      | `--tag <tag>`      | Publish tag                 |
 | `--access <level>`          | `--access <level>` | `--access <level>` | `--access <level>` | `--access <level>` | Public/restricted           |
@@ -669,18 +986,18 @@ vite pm c get registry
 - https://classic.yarnpkg.com/en/docs/cli/owner (delegates to npm owner)
 - https://yarnpkg.com/cli/npm/owner (delegates to npm owner)
 
-| Vite+ Flag                  | pnpm             | npm              | yarn@1           | yarn@2+          | Description         |
-| --------------------------- | ---------------- | ---------------- | ---------------- | ---------------- | ------------------- |
-| `vite pm owner list <pkg>`  | `npm owner list` | `npm owner list` | `npm owner list` | `npm owner list` | List package owners |
-| `vite pm owner add <u> <p>` | `npm owner add`  | `npm owner add`  | `npm owner add`  | `npm owner add`  | Add owner           |
-| `vite pm owner rm <u> <p>`  | `npm owner rm`   | `npm owner rm`   | `npm owner rm`   | `npm owner rm`   | Remove owner        |
-| `--otp <otp>`               | `--otp`          | `--otp`          | `--otp`          | `--otp`          | One-time password   |
+| Vite+ Flag                | pnpm             | npm              | yarn@1           | yarn@2+          | Description         |
+| ------------------------- | ---------------- | ---------------- | ---------------- | ---------------- | ------------------- |
+| `vp pm owner list <pkg>`  | `npm owner list` | `npm owner list` | `npm owner list` | `npm owner list` | List package owners |
+| `vp pm owner add <u> <p>` | `npm owner add`  | `npm owner add`  | `npm owner add`  | `npm owner add`  | Add owner           |
+| `vp pm owner rm <u> <p>`  | `npm owner rm`   | `npm owner rm`   | `npm owner rm`   | `npm owner rm`   | Remove owner        |
+| `--otp <otp>`             | `--otp`          | `--otp`          | `--otp`          | `--otp`          | One-time password   |
 
 **Note:**
 
 - All package managers delegate to `npm owner` for managing package ownership
 - pnpm and yarn both use npm's owner functionality internally
-- Alias: `vite pm author` works the same as `vite pm owner`
+- Alias: `vp pm author` works the same as `vp pm owner`
 
 #### Cache Command
 
@@ -697,11 +1014,11 @@ vite pm c get registry
 - https://classic.yarnpkg.com/en/docs/cli/cache
 - https://yarnpkg.com/cli/cache
 
-| Vite+ Flag            | pnpm               | npm                    | yarn@1             | yarn@2+                       | Description          |
-| --------------------- | ------------------ | ---------------------- | ------------------ | ----------------------------- | -------------------- |
-| `vite pm cache dir`   | `pnpm store path`  | `npm config get cache` | `yarn cache dir`   | `yarn config get cacheFolder` | Show cache directory |
-| `vite pm cache path`  | Alias for `dir`    | Alias for `dir`        | Alias for `dir`    | Alias for `dir`               | Alias for dir        |
-| `vite pm cache clean` | `pnpm store prune` | `npm cache clean`      | `yarn cache clean` | `yarn cache clean`            | Clean cache          |
+| Vite+ Flag          | pnpm               | npm                    | yarn@1             | yarn@2+                       | Description          |
+| ------------------- | ------------------ | ---------------------- | ------------------ | ----------------------------- | -------------------- |
+| `vp pm cache dir`   | `pnpm store path`  | `npm config get cache` | `yarn cache dir`   | `yarn config get cacheFolder` | Show cache directory |
+| `vp pm cache path`  | Alias for `dir`    | Alias for `dir`        | Alias for `dir`    | Alias for `dir`               | Alias for dir        |
+| `vp pm cache clean` | `pnpm store prune` | `npm cache clean`      | `yarn cache clean` | `yarn cache clean`            | Clean cache          |
 
 **Note:**
 
@@ -727,19 +1044,19 @@ vite pm c get registry
 - https://classic.yarnpkg.com/en/docs/cli/config
 - https://yarnpkg.com/cli/config
 
-| Vite+ Flag                    | pnpm                 | npm                 | yarn@1               | yarn@2+                     | Description        |
-| ----------------------------- | -------------------- | ------------------- | -------------------- | --------------------------- | ------------------ |
-| `vite pm config list`         | `pnpm config list`   | `npm config list`   | `yarn config list`   | `yarn config`               | List configuration |
-| `vite pm config get <key>`    | `pnpm config get`    | `npm config get`    | `yarn config get`    | `yarn config get`           | Get config value   |
-| `vite pm config set <k> <v>`  | `pnpm config set`    | `npm config set`    | `yarn config set`    | `yarn config set`           | Set config value   |
-| `vite pm config delete <key>` | `pnpm config delete` | `npm config delete` | `yarn config delete` | `yarn config unset`         | Delete config key  |
-| `--json`                      | `--json`             | `--json`            | `--json`             | `--json`                    | JSON output        |
-| `-g, --global`                | `--global`           | `--global`          | `--global`           | `--home`                    | Global config      |
-| `--location <location>`       | `--location`         | `--location`        | N/A                  | Maps to `--home` for global | Config location    |
+| Vite+ Flag                  | pnpm                 | npm                 | yarn@1               | yarn@2+                     | Description        |
+| --------------------------- | -------------------- | ------------------- | -------------------- | --------------------------- | ------------------ |
+| `vp pm config list`         | `pnpm config list`   | `npm config list`   | `yarn config list`   | `yarn config`               | List configuration |
+| `vp pm config get <key>`    | `pnpm config get`    | `npm config get`    | `yarn config get`    | `yarn config get`           | Get config value   |
+| `vp pm config set <k> <v>`  | `pnpm config set`    | `npm config set`    | `yarn config set`    | `yarn config set`           | Set config value   |
+| `vp pm config delete <key>` | `pnpm config delete` | `npm config delete` | `yarn config delete` | `yarn config unset`         | Delete config key  |
+| `--json`                    | `--json`             | `--json`            | `--json`             | `--json`                    | JSON output        |
+| `-g, --global`              | `--global`           | `--global`          | `--global`           | `--home`                    | Global config      |
+| `--location <location>`     | `--location`         | `--location`        | N/A                  | Maps to `--home` for global | Config location    |
 
 **Note:**
 
-- Alias: `vite pm c` works the same as `vite pm config`
+- Alias: `vp pm c` works the same as `vp pm config`
 - `-g, --global`: Shorthand for setting global configuration
   - pnpm uses `--global`
   - npm uses `--global`
@@ -754,6 +1071,252 @@ vite pm c get registry
 - `--json`: JSON output format
   - Supported by all package managers for output formatting (list/get commands)
   - For `set` command with JSON value: pnpm, npm, yarn@2+ support; yarn@1 does not support
+
+#### Login Command
+
+**npm references:**
+
+- https://docs.npmjs.com/cli/v11/commands/npm-login
+
+**pnpm references:**
+
+- https://pnpm.io/cli/login (delegates to npm login)
+
+**yarn references:**
+
+- https://classic.yarnpkg.com/en/docs/cli/login
+- https://yarnpkg.com/cli/npm/login
+
+| Vite+ Flag         | pnpm         | npm          | yarn@1       | yarn@2+          | Description          |
+| ------------------ | ------------ | ------------ | ------------ | ---------------- | -------------------- |
+| `vp pm login`      | `npm login`  | `npm login`  | `yarn login` | `yarn npm login` | Log in to registry   |
+| `--registry <url>` | `--registry` | `--registry` | `--registry` | `--registry`     | Registry URL         |
+| `--scope <scope>`  | `--scope`    | `--scope`    | `--scope`    | `--scope`        | Associate with scope |
+
+**Note:**
+
+- pnpm delegates to `npm login` for authentication
+- yarn@1 uses its own `yarn login` command
+- yarn@2+ uses `yarn npm login` via the npm plugin
+
+#### Logout Command
+
+**npm references:**
+
+- https://docs.npmjs.com/cli/v11/commands/npm-logout
+
+**pnpm references:**
+
+- https://pnpm.io/cli/logout (delegates to npm logout)
+
+**yarn references:**
+
+- https://classic.yarnpkg.com/en/docs/cli/logout
+- https://yarnpkg.com/cli/npm/logout
+
+| Vite+ Flag         | pnpm         | npm          | yarn@1        | yarn@2+           | Description           |
+| ------------------ | ------------ | ------------ | ------------- | ----------------- | --------------------- |
+| `vp pm logout`     | `npm logout` | `npm logout` | `yarn logout` | `yarn npm logout` | Log out from registry |
+| `--registry <url>` | `--registry` | `--registry` | `--registry`  | `--registry`      | Registry URL          |
+| `--scope <scope>`  | `--scope`    | `--scope`    | `--scope`     | `--scope`         | Scoped registry       |
+
+**Note:**
+
+- pnpm delegates to `npm logout` for authentication
+- yarn@1 uses its own `yarn logout` command
+- yarn@2+ uses `yarn npm logout` via the npm plugin
+
+#### Whoami Command
+
+**npm references:**
+
+- https://docs.npmjs.com/cli/v11/commands/npm-whoami
+
+**pnpm references:**
+
+- https://pnpm.io/cli/whoami (delegates to npm whoami)
+
+**yarn references:**
+
+- https://yarnpkg.com/cli/npm/whoami
+
+| Vite+ Flag         | pnpm         | npm          | yarn@1     | yarn@2+           | Description         |
+| ------------------ | ------------ | ------------ | ---------- | ----------------- | ------------------- |
+| `vp pm whoami`     | `npm whoami` | `npm whoami` | N/A (warn) | `yarn npm whoami` | Show logged-in user |
+| `--registry <url>` | `--registry` | `--registry` | N/A        | `--registry`      | Registry URL        |
+
+**Note:**
+
+- pnpm delegates to `npm whoami` for authentication
+- yarn@1 does not have a `whoami` command (prints warning and ignores)
+- yarn@2+ uses `yarn npm whoami` via the npm plugin
+
+#### Token Command
+
+**npm references:**
+
+- https://docs.npmjs.com/cli/v11/commands/npm-token
+
+| Vite+ Flag           | pnpm               | npm                | yarn@1     | yarn@2+    | Description      |
+| -------------------- | ------------------ | ------------------ | ---------- | ---------- | ---------------- |
+| `vp pm token list`   | `npm token list`   | `npm token list`   | N/A (warn) | N/A (warn) | List tokens      |
+| `vp pm token create` | `npm token create` | `npm token create` | N/A (warn) | N/A (warn) | Create token     |
+| `vp pm token revoke` | `npm token revoke` | `npm token revoke` | N/A (warn) | N/A (warn) | Revoke token     |
+| `--read-only`        | `--read-only`      | `--read-only`      | N/A        | N/A        | Read-only token  |
+| `--cidr <cidr>`      | `--cidr`           | `--cidr`           | N/A        | N/A        | CIDR restriction |
+
+**Note:**
+
+- All package managers delegate to `npm token` since token management is npm-specific
+- yarn@1 and yarn@2+ do not have a `token` command (prints warning and ignores)
+
+#### Audit Command
+
+**pnpm references:**
+
+- https://pnpm.io/cli/audit
+
+**npm references:**
+
+- https://docs.npmjs.com/cli/v11/commands/npm-audit
+
+**yarn references:**
+
+- https://classic.yarnpkg.com/en/docs/cli/audit
+- https://yarnpkg.com/cli/npm/audit
+
+| Vite+ Flag              | pnpm            | npm             | yarn@1          | yarn@2+                    | Description        |
+| ----------------------- | --------------- | --------------- | --------------- | -------------------------- | ------------------ |
+| `vp pm audit`           | `pnpm audit`    | `npm audit`     | `yarn audit`    | `yarn npm audit`           | Run security audit |
+| `--json`                | `--json`        | `--json`        | `--json`        | `--json`                   | JSON output        |
+| `--prod`                | `--prod`        | `--omit=dev`    | `--groups prod` | `--environment production` | Production only    |
+| `--audit-level <level>` | `--audit-level` | `--audit-level` | `--level`       | `--severity`               | Minimum severity   |
+| `fix`                   | `--fix`         | `npm audit fix` | N/A             | N/A                        | Auto-fix           |
+
+**Note:**
+
+- pnpm uses `pnpm audit` natively
+- npm uses `npm audit` natively
+- yarn@1 uses `yarn audit` natively
+- yarn@2+ uses `yarn npm audit` via the npm plugin
+- `--prod` flag is mapped differently: pnpm uses `--prod`, npm uses `--omit=dev`, yarn@1 uses `--groups prod`, yarn@2+ uses `--environment production`
+- `audit fix` is only supported by pnpm (via `--fix`) and npm (via `npm audit fix`); yarn does not support it
+
+#### Dist-Tag Command
+
+**npm references:**
+
+- https://docs.npmjs.com/cli/v11/commands/npm-dist-tag
+
+**yarn references:**
+
+- https://classic.yarnpkg.com/en/docs/cli/tag
+- https://yarnpkg.com/cli/npm/tag
+
+| Vite+ Flag                       | pnpm                | npm                 | yarn@1          | yarn@2+             | Description       |
+| -------------------------------- | ------------------- | ------------------- | --------------- | ------------------- | ----------------- |
+| `vp pm dist-tag list <pkg>`      | `npm dist-tag list` | `npm dist-tag list` | `yarn tag list` | `yarn npm tag list` | List tags         |
+| `vp pm dist-tag add <pkg> <tag>` | `npm dist-tag add`  | `npm dist-tag add`  | `yarn tag add`  | `yarn npm tag add`  | Add tag           |
+| `vp pm dist-tag rm <pkg> <tag>`  | `npm dist-tag rm`   | `npm dist-tag rm`   | `yarn tag rm`   | `yarn npm tag rm`   | Remove tag        |
+| `--otp <otp>`                    | `--otp`             | `--otp`             | `--otp`         | `--otp`             | One-time password |
+
+**Note:**
+
+- pnpm delegates to `npm dist-tag` for tag management
+- npm uses `npm dist-tag` natively
+- yarn@1 uses `yarn tag` instead of `dist-tag`
+- yarn@2+ uses `yarn npm tag` via the npm plugin
+
+#### Deprecate Command
+
+**npm references:**
+
+- https://docs.npmjs.com/cli/v11/commands/npm-deprecate
+
+| Vite+ Flag                    | pnpm            | npm             | yarn@1          | yarn@2+         | Description         |
+| ----------------------------- | --------------- | --------------- | --------------- | --------------- | ------------------- |
+| `vp pm deprecate <pkg> <msg>` | `npm deprecate` | `npm deprecate` | `npm deprecate` | `npm deprecate` | Deprecate a package |
+| `--otp <otp>`                 | `--otp`         | `--otp`         | `--otp`         | `--otp`         | One-time password   |
+| `--registry <url>`            | `--registry`    | `--registry`    | `--registry`    | `--registry`    | Registry URL        |
+
+**Note:**
+
+- All package managers delegate to `npm deprecate` since deprecation is an npm registry feature
+- Pass an empty message to un-deprecate a package version
+
+#### Search Command
+
+**npm references:**
+
+- https://docs.npmjs.com/cli/v11/commands/npm-search
+
+| Vite+ Flag             | pnpm            | npm             | yarn@1          | yarn@2+         | Description         |
+| ---------------------- | --------------- | --------------- | --------------- | --------------- | ------------------- |
+| `vp pm search <terms>` | `npm search`    | `npm search`    | `npm search`    | `npm search`    | Search for packages |
+| `--json`               | `--json`        | `--json`        | `--json`        | `--json`        | JSON output         |
+| `--long`               | `--long`        | `--long`        | `--long`        | `--long`        | Extended info       |
+| `--searchlimit <n>`    | `--searchlimit` | `--searchlimit` | `--searchlimit` | `--searchlimit` | Limit results       |
+
+**Note:**
+
+- All package managers delegate to `npm search` since search is an npm registry feature
+
+#### Rebuild Command
+
+**pnpm references:**
+
+- https://pnpm.io/cli/rebuild
+
+**npm references:**
+
+- https://docs.npmjs.com/cli/v11/commands/npm-rebuild
+
+| Vite+ Flag               | pnpm                 | npm                 | yarn@1     | yarn@2+    | Description           |
+| ------------------------ | -------------------- | ------------------- | ---------- | ---------- | --------------------- |
+| `vp pm rebuild`          | `pnpm rebuild`       | `npm rebuild`       | N/A (warn) | N/A (warn) | Rebuild native addons |
+| `vp pm rebuild <pkg...>` | `pnpm rebuild <pkg>` | `npm rebuild <pkg>` | N/A (warn) | N/A (warn) | Rebuild specific pkgs |
+
+**Note:**
+
+- pnpm uses `pnpm rebuild` natively
+- npm uses `npm rebuild` natively
+- yarn@1 does not have a `rebuild` command (prints warning and ignores)
+- yarn@2+ does not have a `rebuild` command (prints warning and ignores)
+- Packages to rebuild can be specified as positional arguments
+
+#### Fund Command
+
+**npm references:**
+
+- https://docs.npmjs.com/cli/v11/commands/npm-fund
+
+| Vite+ Flag         | pnpm       | npm        | yarn@1     | yarn@2+    | Description           |
+| ------------------ | ---------- | ---------- | ---------- | ---------- | --------------------- |
+| `vp pm fund`       | `npm fund` | `npm fund` | N/A (warn) | N/A (warn) | Show funding info     |
+| `vp pm fund <pkg>` | `npm fund` | `npm fund` | N/A (warn) | N/A (warn) | Fund for specific pkg |
+| `--json`           | `--json`   | `--json`   | N/A        | N/A        | JSON output           |
+| `--depth <n>`      | `--depth`  | `--depth`  | N/A        | N/A        | Limit depth           |
+
+**Note:**
+
+- All package managers delegate to `npm fund` since funding is an npm-specific feature
+- yarn@1 does not have a `fund` command (prints warning and ignores)
+- yarn@2+ does not have a `fund` command (prints warning and ignores)
+
+#### Ping Command
+
+**npm references:**
+
+- https://docs.npmjs.com/cli/v11/commands/npm-ping
+
+| Vite+ Flag         | pnpm         | npm          | yarn@1       | yarn@2+      | Description   |
+| ------------------ | ------------ | ------------ | ------------ | ------------ | ------------- |
+| `vp pm ping`       | `npm ping`   | `npm ping`   | `npm ping`   | `npm ping`   | Ping registry |
+| `--registry <url>` | `--registry` | `--registry` | `--registry` | `--registry` | Registry URL  |
+
+**Note:**
+
+- All package managers delegate to `npm ping` since registry ping is an npm-specific feature
 
 ### Implementation Architecture
 
@@ -1035,7 +1598,7 @@ impl PackageManager {
             PackageManagerType::Pnpm => {
                 bin_name = "pnpm".into();
 
-                // Map vite pm commands to pnpm commands
+                // Map vp pm commands to pnpm commands
                 match subcommand {
                     "prune" => cmd_args.push("prune".into()),
                     "pack" => cmd_args.push("pack".into()),
@@ -1075,7 +1638,7 @@ impl PackageManager {
 
                 match subcommand {
                     "prune" => {
-                        eprintln!("Warning: npm removed 'prune' command in v6. Use 'vite install --prod' instead.");
+                        eprintln!("Warning: npm removed 'prune' command in v6. Use 'vp install --prod' instead.");
                         return ResolveCommandResult {
                             bin_path: "echo".into(),
                             args: vec!["npm prune is deprecated".into()],
@@ -1329,17 +1892,17 @@ impl PmCommand {
 ### No Package Manager Detected
 
 ```bash
-$ vite pm list
+$ vp pm list
 Error: No package manager detected
 Please run one of:
-  - vite install (to set up package manager)
+  - vp install (to set up package manager)
   - Add packageManager field to package.json
 ```
 
 ### Unsupported Command
 
 ```bash
-$ vite pm prune
+$ vp pm prune
 Detected package manager: yarn@4.0.0
 Warning: yarn does not have 'prune' command. yarn install will prune extraneous packages automatically.
 $ echo $?
@@ -1349,7 +1912,7 @@ $ echo $?
 ### Command Failed
 
 ```bash
-$ vite pm publish
+$ vp pm publish
 Detected package manager: pnpm@10.15.0
 Running: pnpm publish
 Error: You must be logged in to publish packages
@@ -1361,12 +1924,12 @@ Exit code: 1
 ### Prune Packages
 
 ```bash
-$ vite pm prune
+$ vp pm prune
 Detected package manager: pnpm@10.15.0
 Running: pnpm prune
 Packages: -12
 
-$ vite pm prune --prod
+$ vp pm prune --prod
 Detected package manager: npm@11.0.0
 Running: npm prune --omit=dev
 removed 45 packages
@@ -1375,12 +1938,12 @@ removed 45 packages
 ### Cache Management
 
 ```bash
-$ vite pm cache dir
+$ vp pm cache dir
 Detected package manager: pnpm@10.15.0
 Running: pnpm store path
 /Users/user/Library/pnpm/store
 
-$ vite pm cache clean
+$ vp pm cache clean
 Detected package manager: pnpm@10.15.0
 Running: pnpm store prune
 Removed 145 packages
@@ -1389,7 +1952,7 @@ Removed 145 packages
 ### List Packages
 
 ```bash
-$ vite pm list --depth 0
+$ vp pm list --depth 0
 Detected package manager: pnpm@10.15.0
 Running: pnpm list --depth 0
 
@@ -1402,7 +1965,7 @@ my-app@1.0.0
 ### View Package
 
 ```bash
-$ vite pm view react version
+$ vp pm view react version
 Detected package manager: npm@11.0.0
 Running: npm view react version
 18.3.1
@@ -1411,7 +1974,7 @@ Running: npm view react version
 ### Publish Package
 
 ```bash
-$ vite pm publish --dry-run
+$ vp pm publish --dry-run
 Detected package manager: pnpm@10.15.0
 Running: pnpm publish --dry-run
 
@@ -1428,12 +1991,12 @@ npm notice version:       1.0.0
 ### Configuration
 
 ```bash
-$ vite pm config get registry
+$ vp pm config get registry
 Detected package manager: pnpm@10.15.0
 Running: pnpm config get registry
 https://registry.npmjs.org
 
-$ vite pm config set registry https://custom-registry.com
+$ vp pm config set registry https://custom-registry.com
 Detected package manager: pnpm@10.15.0
 Running: pnpm config set registry https://custom-registry.com
 ```
@@ -1443,9 +2006,9 @@ Running: pnpm config set registry https://custom-registry.com
 ### Alternative 1: Individual Top-Level Commands
 
 ```bash
-vite cache dir
-vite publish
-vite pack
+vp cache dir
+vp publish
+vp pack
 ```
 
 **Rejected because**:
@@ -1459,7 +2022,7 @@ vite pack
 
 ```bash
 # Try to map all package manager flags
-vite pm list --production  # Map to --prod (pnpm), --production (npm)
+vp pm list --production  # Map to --prod (pnpm), --production (npm)
 ```
 
 **Rejected because**:
@@ -1472,8 +2035,8 @@ vite pm list --production  # Map to --prod (pnpm), --production (npm)
 ### Alternative 3: Single Pass-Through Command
 
 ```bash
-vite pm -- pnpm store path
-vite pm -- npm cache dir
+vp pm -- pnpm store path
+vp pm -- npm cache dir
 ```
 
 **Rejected because**:
@@ -1556,29 +2119,40 @@ fn test_pass_through_args() {
 ## CLI Help Output
 
 ```bash
-$ vite pm --help
+$ vp pm --help
 Package manager utilities
 
-Usage: vite pm <COMMAND>
+Usage: vp pm <COMMAND>
 
 Commands:
-  prune    Remove unnecessary packages
-  pack     Create a tarball of the package
-  list     List installed packages (alias: ls)
-  view     View package information from the registry
-  publish  Publish package to registry
-  owner    Manage package owners
-  cache    Manage package cache
-  config   Manage package manager configuration
-  help     Print this message or the help of the given subcommand(s)
+  prune      Remove unnecessary packages
+  pack       Create a tarball of the package
+  list       List installed packages (alias: ls)
+  view       View package information from the registry
+  publish    Publish package to registry
+  owner      Manage package owners
+  cache      Manage package cache
+  config     Manage package manager configuration
+  login      Log in to the registry
+  logout     Log out from the registry
+  whoami     Show the currently logged-in user
+  token      Manage registry authentication tokens
+  audit      Run a security audit on installed packages
+  dist-tag   Manage distribution tags on packages
+  deprecate  Deprecate a version of a package
+  search     Search the registry for packages
+  rebuild    Rebuild native addons
+  fund       Show funding information for installed packages
+  ping       Ping the registry
+  help       Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help
 
-$ vite pm cache --help
+$ vp pm cache --help
 Manage package cache
 
-Usage: vite pm cache [SUBCOMMAND] [OPTIONS]
+Usage: vp pm cache [SUBCOMMAND] [OPTIONS]
 
 Subcommands:
   dir      Show cache directory (alias: path)
@@ -1593,11 +2167,11 @@ Options:
   -h, --help           Print help
 
 Examples:
-  vite pm cache dir              # Show cache directory
-  vite pm cache clean            # Clean cache
-  vite pm cache clean --force    # Force clean (npm)
-  vite pm cache verify           # Verify cache (npm)
-  vite pm cache list             # List cached packages (pnpm)
+  vp pm cache dir              # Show cache directory
+  vp pm cache clean            # Clean cache
+  vp pm cache clean --force    # Force clean (npm)
+  vp pm cache verify           # Verify cache (npm)
+  vp pm cache list             # List cached packages (pnpm)
 ```
 
 ## Package Manager Compatibility
@@ -1612,41 +2186,52 @@ Examples:
 | owner      | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ `npm owner`   | yarn@2+ uses npm plugin                 |
 | cache      | ⚠️ `store` | ✅ Full | ✅ Full    | ✅ Full          | pnpm uses different command             |
 | config     | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ Different     | yarn@2+ has different API               |
+| login      | ✅ `npm`   | ✅ Full | ✅ Full    | ⚠️ `npm login`   | pnpm delegates to npm                   |
+| logout     | ✅ `npm`   | ✅ Full | ✅ Full    | ⚠️ `npm logout`  | pnpm delegates to npm                   |
+| whoami     | ✅ `npm`   | ✅ Full | ❌ N/A     | ⚠️ `npm whoami`  | yarn@1 not supported                    |
+| token      | ✅ `npm`   | ✅ Full | ❌ N/A     | ❌ N/A           | Always delegates to npm                 |
+| audit      | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ `npm audit`   | yarn@2+ uses npm plugin                 |
+| dist-tag   | ✅ `npm`   | ✅ Full | ⚠️ `tag`   | ⚠️ `npm tag`     | Different command names                 |
+| deprecate  | ✅ `npm`   | ✅ Full | ✅ `npm`   | ✅ `npm`         | Always delegates to npm                 |
+| search     | ✅ `npm`   | ✅ Full | ✅ `npm`   | ✅ `npm`         | Always delegates to npm                 |
+| rebuild    | ✅ Full    | ✅ Full | ❌ N/A     | ❌ N/A           | yarn does not support                   |
+| fund       | ✅ `npm`   | ✅ Full | ❌ N/A     | ❌ N/A           | Always delegates to npm                 |
+| ping       | ✅ `npm`   | ✅ Full | ✅ `npm`   | ✅ `npm`         | Always delegates to npm                 |
 
 ## Future Enhancements
 
 ### 1. Interactive Cache Management
 
 ```bash
-vite pm cache --interactive
+vp pm cache --interactive
 # Shows cache size, allows selective cleaning
 ```
 
 ### 2. Publish Dry-Run Summary
 
 ```bash
-vite pm publish --dry-run --summary
+vp pm publish --dry-run --summary
 # Shows what would be published with sizes
 ```
 
 ### 3. Config Validation
 
 ```bash
-vite pm config validate
+vp pm config validate
 # Checks configuration for issues
 ```
 
 ### 4. Owner Management UI
 
 ```bash
-vite pm owner --interactive my-package
+vp pm owner --interactive my-package
 # Interactive UI for adding/removing owners
 ```
 
 ### 5. Cache Analytics
 
 ```bash
-vite pm cache stats
+vp pm cache stats
 # Shows cache usage statistics, size breakdown
 ```
 
@@ -1673,57 +2258,57 @@ This is a new feature with no breaking changes:
 
 ```yaml
 # Clean cache before build
-- run: vite pm cache clean --force
+- run: vp pm cache clean --force
 
 # Show cache location for debugging
-- run: vite pm cache dir
+- run: vp pm cache dir
 ```
 
 ### Publishing Workflow
 
 ```bash
 # Build packages
-vite build -r
+vp build -r
 
 # Dry run to verify
-vite pm publish --dry-run -r
+vp pm publish --dry-run -r
 
 # Publish with beta tag
-vite pm publish --tag beta -r
+vp pm publish --tag beta -r
 
 # Publish only specific packages
-vite pm publish --filter app
+vp pm publish --filter app
 ```
 
 ### Configuration Management
 
 ```bash
 # Set custom registry
-vite pm config set registry https://custom-registry.com
+vp pm config set registry https://custom-registry.com
 
 # Verify configuration
-vite pm config get registry
+vp pm config get registry
 
 # List all configuration
-vite pm config list
+vp pm config list
 ```
 
 ### Dependency Auditing
 
 ```bash
 # List dependencies to JSON file
-vite pm list --json > deps.json
+vp pm list --json > deps.json
 
 # List production dependencies
-vite pm list --prod
+vp pm list --prod
 
 # List specific workspace
-vite pm list --filter app
+vp pm list --filter app
 ```
 
 ## Conclusion
 
-This RFC proposes adding `vite pm` command group to provide unified access to package manager utilities across pnpm/npm/yarn. The design:
+This RFC proposes adding `vp pm` command group to provide unified access to package manager utilities across pnpm/npm/yarn. The design:
 
 - ✅ Pass-through architecture for maximum flexibility
 - ✅ Command name translation for common operations

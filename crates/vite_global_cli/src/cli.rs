@@ -1040,6 +1040,153 @@ pub enum PmCommands {
     /// Manage package manager configuration
     #[command(subcommand, visible_alias = "c")]
     Config(ConfigCommands),
+
+    /// Log in to a registry
+    #[command(visible_alias = "adduser")]
+    Login {
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// Scope for the login
+        #[arg(long, value_name = "SCOPE")]
+        scope: Option<String>,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Log out from a registry
+    Logout {
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// Scope for the logout
+        #[arg(long, value_name = "SCOPE")]
+        scope: Option<String>,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Show the current logged-in user
+    Whoami {
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Manage authentication tokens
+    #[command(subcommand)]
+    Token(TokenCommands),
+
+    /// Run a security audit
+    Audit {
+        /// Automatically fix vulnerabilities
+        #[arg(long)]
+        fix: bool,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Minimum vulnerability level to report
+        #[arg(long, value_name = "LEVEL")]
+        level: Option<String>,
+
+        /// Only audit production dependencies
+        #[arg(long)]
+        production: bool,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Manage distribution tags
+    #[command(name = "dist-tag", subcommand)]
+    DistTag(DistTagCommands),
+
+    /// Deprecate a package version
+    Deprecate {
+        /// Package name with version (e.g., "my-pkg@1.0.0")
+        package: String,
+
+        /// Deprecation message
+        message: String,
+
+        /// One-time password for authentication
+        #[arg(long, value_name = "OTP")]
+        otp: Option<String>,
+
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Search for packages in the registry
+    Search {
+        /// Search terms
+        #[arg(required = true, num_args = 1..)]
+        terms: Vec<String>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Show extended information
+        #[arg(long)]
+        long: bool,
+
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Rebuild native modules
+    #[command(visible_alias = "rb")]
+    Rebuild {
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Show funding information for installed packages
+    Fund {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Ping the registry
+    Ping {
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
 }
 
 /// Configuration subcommands
@@ -1150,6 +1297,92 @@ pub enum OwnerCommands {
         /// One-time password for authentication
         #[arg(long, value_name = "OTP")]
         otp: Option<String>,
+    },
+}
+
+/// Token subcommands
+#[derive(Subcommand, Debug, Clone)]
+pub enum TokenCommands {
+    /// List all known tokens
+    #[command(visible_alias = "ls")]
+    List {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Create a new authentication token
+    Create {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// CIDR ranges to restrict the token to
+        #[arg(long, value_name = "CIDR")]
+        cidr: Option<Vec<String>>,
+
+        /// Create a read-only token
+        #[arg(long)]
+        readonly: bool,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Revoke an authentication token
+    Revoke {
+        /// Token or token ID to revoke
+        token: String,
+
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+}
+
+/// Distribution tag subcommands
+#[derive(Subcommand, Debug, Clone)]
+pub enum DistTagCommands {
+    /// List distribution tags for a package
+    #[command(visible_alias = "ls")]
+    List {
+        /// Package name
+        package: Option<String>,
+    },
+
+    /// Add a distribution tag
+    Add {
+        /// Package name with version (e.g., "my-pkg@1.0.0")
+        package_at_version: String,
+
+        /// Tag name
+        tag: String,
+    },
+
+    /// Remove a distribution tag
+    Rm {
+        /// Package name
+        package: String,
+
+        /// Tag name
+        tag: String,
     },
 }
 

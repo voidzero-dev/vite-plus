@@ -268,14 +268,25 @@ Forward a command to the package manager
 Usage: vp pm <COMMAND>
 
 Commands:
-  prune    Remove unnecessary packages
-  pack     Create a tarball of the package
-  list     List installed packages [aliases: ls]
-  view     View package information from the registry [aliases: info, show]
-  publish  Publish package to registry
-  owner    Manage package owners [aliases: author]
-  cache    Manage package cache
-  config   Manage package manager configuration [aliases: c]
+  prune      Remove unnecessary packages
+  pack       Create a tarball of the package
+  list       List installed packages [aliases: ls]
+  view       View package information from the registry [aliases: info, show]
+  publish    Publish package to registry
+  owner      Manage package owners [aliases: author]
+  cache      Manage package cache
+  config     Manage package manager configuration [aliases: c]
+  login      Log in to a registry [aliases: adduser]
+  logout     Log out from a registry
+  whoami     Show the current logged-in user
+  token      Manage authentication tokens
+  audit      Run a security audit
+  dist-tag   Manage distribution tags
+  deprecate  Deprecate a package version
+  search     Search for packages in the registry
+  rebuild    Rebuild native modules [aliases: rb]
+  fund       Show funding information for installed packages
+  ping       Ping the registry
 
 Options:
   -h, --help  Print help

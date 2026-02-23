@@ -7,15 +7,31 @@
 use std::process::ExitStatus;
 
 use vite_install::commands::{
-    cache::CacheCommandOptions, config::ConfigCommandOptions, list::ListCommandOptions,
-    owner::OwnerSubcommand, pack::PackCommandOptions, prune::PruneCommandOptions,
-    publish::PublishCommandOptions, view::ViewCommandOptions,
+    audit::AuditCommandOptions,
+    cache::CacheCommandOptions,
+    config::ConfigCommandOptions,
+    deprecate::DeprecateCommandOptions,
+    dist_tag::{DistTagCommandOptions, DistTagSubcommand},
+    fund::FundCommandOptions,
+    list::ListCommandOptions,
+    login::LoginCommandOptions,
+    logout::LogoutCommandOptions,
+    owner::OwnerSubcommand,
+    pack::PackCommandOptions,
+    ping::PingCommandOptions,
+    prune::PruneCommandOptions,
+    publish::PublishCommandOptions,
+    rebuild::RebuildCommandOptions,
+    search::SearchCommandOptions,
+    token::TokenSubcommand,
+    view::ViewCommandOptions,
+    whoami::WhoamiCommandOptions,
 };
 use vite_path::AbsolutePathBuf;
 
 use super::{build_package_manager, prepend_js_runtime_to_path_env};
 use crate::{
-    cli::{ConfigCommands, OwnerCommands, PmCommands},
+    cli::{ConfigCommands, DistTagCommands, OwnerCommands, PmCommands, TokenCommands},
     error::Error,
 };
 
@@ -228,6 +244,111 @@ pub async fn execute_pm_subcommand(
                 Ok(package_manager.run_config_command(&options, &cwd).await?)
             }
         },
+
+        PmCommands::Login { registry, scope, pass_through_args } => {
+            let options = LoginCommandOptions {
+                registry: registry.as_deref(),
+                scope: scope.as_deref(),
+                pass_through_args: pass_through_args.as_deref(),
+            };
+            Ok(package_manager.run_login_command(&options, &cwd).await?)
+        }
+
+        PmCommands::Logout { registry, scope, pass_through_args } => {
+            let options = LogoutCommandOptions {
+                registry: registry.as_deref(),
+                scope: scope.as_deref(),
+                pass_through_args: pass_through_args.as_deref(),
+            };
+            Ok(package_manager.run_logout_command(&options, &cwd).await?)
+        }
+
+        PmCommands::Whoami { registry, pass_through_args } => {
+            let options = WhoamiCommandOptions {
+                registry: registry.as_deref(),
+                pass_through_args: pass_through_args.as_deref(),
+            };
+            Ok(package_manager.run_whoami_command(&options, &cwd).await?)
+        }
+
+        PmCommands::Token(token_command) => {
+            let subcommand = match token_command {
+                TokenCommands::List { json, registry, pass_through_args } => {
+                    TokenSubcommand::List { json, registry, pass_through_args }
+                }
+                TokenCommands::Create { json, registry, cidr, readonly, pass_through_args } => {
+                    TokenSubcommand::Create { json, registry, cidr, readonly, pass_through_args }
+                }
+                TokenCommands::Revoke { token, registry, pass_through_args } => {
+                    TokenSubcommand::Revoke { token, registry, pass_through_args }
+                }
+            };
+            Ok(package_manager.run_token_command(&subcommand, &cwd).await?)
+        }
+
+        PmCommands::Audit { fix, json, level, production, pass_through_args } => {
+            let options = AuditCommandOptions {
+                fix,
+                json,
+                level: level.as_deref(),
+                production,
+                pass_through_args: pass_through_args.as_deref(),
+            };
+            Ok(package_manager.run_audit_command(&options, &cwd).await?)
+        }
+
+        PmCommands::DistTag(dist_tag_command) => {
+            let subcommand = match dist_tag_command {
+                DistTagCommands::List { package } => DistTagSubcommand::List { package },
+                DistTagCommands::Add { package_at_version, tag } => {
+                    DistTagSubcommand::Add { package_at_version, tag }
+                }
+                DistTagCommands::Rm { package, tag } => DistTagSubcommand::Rm { package, tag },
+            };
+            let options = DistTagCommandOptions { subcommand, pass_through_args: None };
+            Ok(package_manager.run_dist_tag_command(&options, &cwd).await?)
+        }
+
+        PmCommands::Deprecate { package, message, otp, registry, pass_through_args } => {
+            let options = DeprecateCommandOptions {
+                package: &package,
+                message: &message,
+                otp: otp.as_deref(),
+                registry: registry.as_deref(),
+                pass_through_args: pass_through_args.as_deref(),
+            };
+            Ok(package_manager.run_deprecate_command(&options, &cwd).await?)
+        }
+
+        PmCommands::Search { terms, json, long, registry, pass_through_args } => {
+            let options = SearchCommandOptions {
+                terms: &terms,
+                json,
+                long,
+                registry: registry.as_deref(),
+                pass_through_args: pass_through_args.as_deref(),
+            };
+            Ok(package_manager.run_search_command(&options, &cwd).await?)
+        }
+
+        PmCommands::Rebuild { pass_through_args } => {
+            let options = RebuildCommandOptions { pass_through_args: pass_through_args.as_deref() };
+            Ok(package_manager.run_rebuild_command(&options, &cwd).await?)
+        }
+
+        PmCommands::Fund { json, pass_through_args } => {
+            let options =
+                FundCommandOptions { json, pass_through_args: pass_through_args.as_deref() };
+            Ok(package_manager.run_fund_command(&options, &cwd).await?)
+        }
+
+        PmCommands::Ping { registry, pass_through_args } => {
+            let options = PingCommandOptions {
+                registry: registry.as_deref(),
+                pass_through_args: pass_through_args.as_deref(),
+            };
+            Ok(package_manager.run_ping_command(&options, &cwd).await?)
+        }
     }
 }
 
