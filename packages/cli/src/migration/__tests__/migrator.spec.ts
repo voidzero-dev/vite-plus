@@ -1,7 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { PackageManager } from '../../types/index.js';
-import { rewritePackageJson } from '../migrator.js';
+
+// Mock VITE_PLUS_VERSION to a stable value for snapshot tests.
+// When tests run via `vp test`, the env var is injected with the actual version,
+// which would cause snapshot mismatches.
+vi.mock('../../utils/constants.js', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../../utils/constants.js')>();
+  return { ...mod, VITE_PLUS_VERSION: 'latest' };
+});
+
+const { rewritePackageJson } = await import('../migrator.js');
 
 describe('rewritePackageJson', () => {
   it('should rewrite package.json scripts', async () => {
