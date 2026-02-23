@@ -530,6 +530,7 @@ pub enum Commands {
     // Category C: Local CLI Delegation (stubs for now)
     // =========================================================================
     /// Run the development server
+    #[command(disable_help_flag = true)]
     Dev {
         /// Additional arguments
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -537,6 +538,7 @@ pub enum Commands {
     },
 
     /// Build application
+    #[command(disable_help_flag = true)]
     Build {
         /// Additional arguments
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -544,6 +546,7 @@ pub enum Commands {
     },
 
     /// Run tests
+    #[command(disable_help_flag = true)]
     Test {
         /// Additional arguments
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -551,6 +554,7 @@ pub enum Commands {
     },
 
     /// Lint code
+    #[command(disable_help_flag = true)]
     Lint {
         /// Additional arguments
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -558,6 +562,7 @@ pub enum Commands {
     },
 
     /// Format code
+    #[command(disable_help_flag = true)]
     Fmt {
         /// Additional arguments
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -565,6 +570,7 @@ pub enum Commands {
     },
 
     /// Build library
+    #[command(disable_help_flag = true)]
     Pack {
         /// Additional arguments
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -572,6 +578,7 @@ pub enum Commands {
     },
 
     /// Run tasks
+    #[command(disable_help_flag = true)]
     Run {
         /// Additional arguments
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -579,6 +586,7 @@ pub enum Commands {
     },
 
     /// Preview production build
+    #[command(disable_help_flag = true)]
     Preview {
         /// Additional arguments
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -586,6 +594,7 @@ pub enum Commands {
     },
 
     /// Manage the task cache
+    #[command(disable_help_flag = true)]
     Cache {
         /// Additional arguments
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
