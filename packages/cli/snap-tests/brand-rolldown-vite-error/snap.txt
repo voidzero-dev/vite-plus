@@ -1,4 +1,4 @@
-> cp -r fixtures rolldown-vite
+> sh setup.sh
 [1]> tool brand-rolldown-vite # should fail: constants.ts upstream changed
 [brand-rolldown-vite] Applying Vite+ branding patches...
 <homedir>/git/github.com/voidzero-dev/vite-plus/packages/tools/src/brand-rolldown-vite.ts:47

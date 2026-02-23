@@ -1,4 +1,4 @@
-> cp -r fixtures rolldown-vite
+> sh setup.sh
 > tool brand-rolldown-vite # first run: should apply all patches
 [brand-rolldown-vite] Applying Vite+ branding patches...
 [brand-rolldown-vite]   ✓ constants.ts: Added VITE_PLUS_VERSION

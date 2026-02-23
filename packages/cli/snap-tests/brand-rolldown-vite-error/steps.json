@@ -2,7 +2,7 @@
   "ignoredPlatforms": ["win32"],
   "env": {},
   "commands": [
-    { "command": "cp -r fixtures rolldown-vite", "ignoreOutput": true },
+    { "command": "sh setup.sh", "ignoreOutput": true },
     "tool brand-rolldown-vite # should fail: constants.ts upstream changed"
   ]
 }
