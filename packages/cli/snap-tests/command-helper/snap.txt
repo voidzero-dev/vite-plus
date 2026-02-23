@@ -211,10 +211,10 @@ Available options:
 
 
 > vp build -h # build help message
-vite/<semver>
+vp/<semver>
 
 Usage:
-  $ vite build [root]
+  $ vp build [root]
 
 Options:
   --target <target>             [string] transpile target (default: 'baseline-widely-available') 
@@ -332,10 +332,10 @@ Options:
   -h, --help                                            Display this message 
 
 > vp preview -h # preview help message
-vite/<semver>
+vp/<semver>
 
 Usage:
-  $ vite preview [root]
+  $ vp preview [root]
 
 Options:
   --host [host]            [string] specify hostname 
@@ -354,10 +354,10 @@ Options:
   -h, --help               Display this message 
 
 > vp dev -h # dev help message
-vite/<semver>
+vp/<semver>
 
 Usage:
-  $ vite [root]
+  $ vp [root]
 
 Commands:
   [root]           start dev server
@@ -366,10 +366,10 @@ Commands:
   preview [root]   locally preview production build
 
 For more info, run any command with the `--help` flag:
-  $ vite --help
-  $ vite build --help
-  $ vite optimize --help
-  $ vite preview --help
+  $ vp --help
+  $ vp build --help
+  $ vp optimize --help
+  $ vp preview --help
 
 Options:
   --host [host]            [string] specify hostname 

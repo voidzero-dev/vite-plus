@@ -661,18 +661,6 @@ async fn create_install_synthetic_request(
     })
 }
 
-/// Print a sub-tool banner line to stderr (only when stderr is a TTY).
-///
-/// Format: `vite+ v0.3.0 — test`
-#[allow(clippy::print_stderr)]
-fn print_subtool_banner(label: &str) {
-    use std::io::IsTerminal;
-    if std::io::stderr().is_terminal() {
-        let version = env!("CARGO_PKG_VERSION");
-        eprintln!("vite+ v{version} \u{2014} {label}");
-    }
-}
-
 /// Execute a synthesizable subcommand directly (not through vite-task Session).
 /// No caching, no task graph, no dependency resolution.
 async fn execute_direct_subcommand(
@@ -680,14 +668,6 @@ async fn execute_direct_subcommand(
     cwd: &AbsolutePathBuf,
     options: Option<CliOptions>,
 ) -> Result<ExitStatus, Error> {
-    // Print sub-tool banner for tools whose source we don't control
-    match &subcommand {
-        SynthesizableSubcommand::Test { .. } => print_subtool_banner("test"),
-        SynthesizableSubcommand::Lint { .. } => print_subtool_banner("lint"),
-        SynthesizableSubcommand::Fmt { .. } => print_subtool_banner("fmt"),
-        _ => {}
-    }
-
     let (workspace_root, _) = vite_workspace::find_workspace_root(cwd)?;
     let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 
