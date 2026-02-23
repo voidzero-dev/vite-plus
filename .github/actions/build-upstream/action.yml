@@ -38,6 +38,12 @@ runs:
           target/${{ inputs.target }}/release/vp.exe
         key: ${{ steps.cache-key.outputs.key }}
 
+    # Apply Vite+ branding patches to rolldown-vite source (CI checks out
+    # upstream rolldown-vite which doesn't have branding patches)
+    - name: Brand rolldown-vite
+      shell: bash
+      run: pnpm exec tool brand-rolldown-vite
+
     # Build upstream TypeScript packages first (don't depend on native bindings)
     - name: Build upstream TypeScript packages
       shell: bash
