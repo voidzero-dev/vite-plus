@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -168,16 +169,14 @@ impl PackageManager {
                 // npm doesn't have --latest flag
                 // Warn user or handle differently
                 if options.latest {
-                    println!(
-                        "Warning: npm doesn't support --latest flag. Updating within semver range only."
+                    output::warn(
+                        "npm doesn't support --latest flag. Updating within semver range only.",
                     );
                 }
 
                 // npm doesn't support interactive mode
                 if options.interactive {
-                    println!(
-                        "Warning: npm doesn't support interactive mode. Running standard update."
-                    );
+                    output::warn("npm doesn't support interactive mode. Running standard update.");
                 }
             }
         }

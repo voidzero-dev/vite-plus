@@ -4,7 +4,7 @@ use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
 use vite_path::{AbsolutePathBuf, current_dir};
-use vite_shared::env_vars;
+use vite_shared::{env_vars, output};
 
 use super::config::{
     self, ShimMode, get_bin_dir, get_vite_plus_home, load_config, resolve_version,
@@ -111,7 +111,7 @@ async fn check_vite_plus_home() -> bool {
         Ok(h) => h,
         Err(e) => {
             print_check(
-                &"\u{2717}".red().to_string(),
+                &output::CROSS.red().to_string(),
                 env_vars::VITE_PLUS_HOME,
                 &format!("{e}").red().to_string(),
             );
@@ -122,11 +122,11 @@ async fn check_vite_plus_home() -> bool {
     let display = abbreviate_home(&home.as_path().display().to_string());
 
     if tokio::fs::try_exists(&home).await.unwrap_or(false) {
-        print_check(&"\u{2713}".green().to_string(), env_vars::VITE_PLUS_HOME, &display);
+        print_check(&output::CHECK.green().to_string(), env_vars::VITE_PLUS_HOME, &display);
         true
     } else {
         print_check(
-            &"\u{2717}".red().to_string(),
+            &output::CROSS.red().to_string(),
             env_vars::VITE_PLUS_HOME,
             &"does not exist".red().to_string(),
         );
@@ -144,7 +144,7 @@ async fn check_bin_dir() -> bool {
 
     if !tokio::fs::try_exists(&bin_dir).await.unwrap_or(false) {
         print_check(
-            &"\u{2717}".red().to_string(),
+            &output::CROSS.red().to_string(),
             "Bin directory",
             &"does not exist".red().to_string(),
         );
@@ -152,7 +152,7 @@ async fn check_bin_dir() -> bool {
         return false;
     }
 
-    print_check(&"\u{2713}".green().to_string(), "Bin directory", "exists");
+    print_check(&output::CHECK.green().to_string(), "Bin directory", "exists");
 
     let mut missing = Vec::new();
 
@@ -164,11 +164,11 @@ async fn check_bin_dir() -> bool {
     }
 
     if missing.is_empty() {
-        print_check(&"\u{2713}".green().to_string(), "Shims", &SHIM_TOOLS.join(", "));
+        print_check(&output::CHECK.green().to_string(), "Shims", &SHIM_TOOLS.join(", "));
         true
     } else {
         print_check(
-            &"\u{2717}".red().to_string(),
+            &output::CROSS.red().to_string(),
             "Missing shims",
             &missing.join(", ").red().to_string(),
         );
@@ -197,7 +197,7 @@ async fn check_shim_mode() {
         Ok(c) => c,
         Err(e) => {
             print_check(
-                &"\u{26A0}".yellow().to_string(),
+                &output::WARN_SIGN.yellow().to_string(),
                 "Shim mode",
                 &format!("config error: {e}").yellow().to_string(),
             );
@@ -207,11 +207,11 @@ async fn check_shim_mode() {
 
     match config.shim_mode {
         ShimMode::Managed => {
-            print_check(&"\u{2713}".green().to_string(), "Shim mode", "managed");
+            print_check(&output::CHECK.green().to_string(), "Shim mode", "managed");
         }
         ShimMode::SystemFirst => {
             print_check(
-                &"\u{2713}".green().to_string(),
+                &output::CHECK.green().to_string(),
                 "Shim mode",
                 &"system-first".cyan().to_string(),
             );
@@ -221,7 +221,7 @@ async fn check_shim_mode() {
                 print_check(" ", "System Node.js", &system_node.display().to_string());
             } else {
                 print_check(
-                    &"\u{26A0}".yellow().to_string(),
+                    &output::WARN_SIGN.yellow().to_string(),
                     "System Node.js",
                     &"not found (will use managed)".yellow().to_string(),
                 );
@@ -261,7 +261,7 @@ fn check_ide_integration() -> bool {
 
         if let Some(file) = check_profile_files(&home_path) {
             print_check(
-                &"\u{2713}".green().to_string(),
+                &output::CHECK.green().to_string(),
                 "IDE integration",
                 &format!("env sourced in {file}"),
             );
@@ -308,7 +308,7 @@ fn check_session_override() {
         let version = version.trim();
         if !version.is_empty() {
             print_check(
-                &"\u{26A0}".yellow().to_string(),
+                &output::WARN_SIGN.yellow().to_string(),
                 "Session override",
                 &format!("{}={version}", env_vars::VITE_PLUS_NODE_VERSION).yellow().to_string(),
             );
@@ -320,7 +320,7 @@ fn check_session_override() {
     // Also check session version file
     if let Some(version) = config::read_session_version_sync() {
         print_check(
-            &"\u{26A0}".yellow().to_string(),
+            &output::WARN_SIGN.yellow().to_string(),
             "Session override (file)",
             &format!("{}={version}", config::SESSION_VERSION_FILE).yellow().to_string(),
         );
@@ -346,18 +346,18 @@ async fn check_path() -> bool {
 
     match bin_position {
         Some(0) => {
-            print_check(&"\u{2713}".green().to_string(), "vp", "first in PATH");
+            print_check(&output::CHECK.green().to_string(), "vp", "first in PATH");
         }
         Some(pos) => {
             print_check(
-                &"\u{26A0}".yellow().to_string(),
+                &output::WARN_SIGN.yellow().to_string(),
                 "vp",
                 &format!("in PATH at position {pos}").yellow().to_string(),
             );
             print_hint("For best results, bin should be first in PATH.");
         }
         None => {
-            print_check(&"\u{2717}".red().to_string(), "vp", &"not in PATH".red().to_string());
+            print_check(&output::CROSS.red().to_string(), "vp", &"not in PATH".red().to_string());
             print_hint(&format!("Expected: {bin_display}"));
             println!();
             print_path_fix(&bin_dir);
@@ -372,13 +372,13 @@ async fn check_path() -> bool {
             let display = abbreviate_home(&tool_path.display().to_string());
             if tool_path == expected.as_path() {
                 print_check(
-                    &"\u{2713}".green().to_string(),
+                    &output::CHECK.green().to_string(),
                     tool,
                     &format!("{display} {}", "(vp shim)".dimmed()),
                 );
             } else {
                 print_check(
-                    &"\u{26A0}".yellow().to_string(),
+                    &output::WARN_SIGN.yellow().to_string(),
                     tool,
                     &format!("{} {}", display.yellow(), "(not vp shim)".dimmed()),
                 );
@@ -501,7 +501,7 @@ fn print_ide_setup_guidance(bin_dir: &vite_path::AbsolutePath) {
 
         print_section("IDE Setup");
         print_check(
-            &"\u{26A0}".yellow().to_string(),
+            &output::WARN_SIGN.yellow().to_string(),
             "",
             &"GUI applications may not see shell PATH changes.".yellow().to_string(),
         );
@@ -557,10 +557,10 @@ async fn check_current_resolution(cwd: &AbsolutePathBuf) {
             let binary_path = home_dir.join("bin").join("node");
 
             if tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-                print_check(&"\u{2713}".green().to_string(), "Node binary", "installed");
+                print_check(&output::CHECK.green().to_string(), "Node binary", "installed");
             } else {
                 print_check(
-                    &"\u{26A0}".yellow().to_string(),
+                    &output::WARN_SIGN.yellow().to_string(),
                     "Node binary",
                     &"not installed".yellow().to_string(),
                 );
@@ -569,7 +569,7 @@ async fn check_current_resolution(cwd: &AbsolutePathBuf) {
         }
         Err(e) => {
             print_check(
-                &"\u{2717}".red().to_string(),
+                &output::CROSS.red().to_string(),
                 "Resolution",
                 &format!("failed: {e}").red().to_string(),
             );
@@ -609,7 +609,7 @@ fn check_conflicts() {
         print_section("Conflicts");
         for manager in &conflicts {
             print_check(
-                &"\u{26A0}".yellow().to_string(),
+                &output::WARN_SIGN.yellow().to_string(),
                 manager,
                 &format!(
                     "detected ({} is set)",

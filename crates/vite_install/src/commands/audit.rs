@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -96,7 +97,7 @@ impl PackageManager {
 
                 if is_yarn1 {
                     if options.fix {
-                        println!("Warning: yarn v1 audit does not support --fix");
+                        output::warn("yarn v1 audit does not support --fix");
                         return None;
                     }
 
@@ -118,7 +119,7 @@ impl PackageManager {
                     }
                 } else {
                     if options.fix {
-                        println!("Warning: yarn berry audit does not support --fix");
+                        output::warn("yarn berry audit does not support --fix");
                         return None;
                     }
 

@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -121,7 +122,7 @@ impl PackageManager {
                         if location == "global" {
                             args.push("--global".into());
                         } else {
-                            println!("Warning: yarn@1 does not support --location, ignoring flag");
+                            output::warn("yarn@1 does not support --location, ignoring flag");
                         }
                     }
                 }

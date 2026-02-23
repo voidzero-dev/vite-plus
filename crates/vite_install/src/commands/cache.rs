@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -57,10 +58,10 @@ impl PackageManager {
                         args.push("prune".into());
                     }
                     _ => {
-                        println!(
-                            "Warning: pnpm cache subcommand '{}' not supported",
+                        output::warn(&format!(
+                            "pnpm cache subcommand '{}' not supported",
                             options.subcommand
-                        );
+                        ));
                         return None;
                     }
                 }
@@ -80,10 +81,10 @@ impl PackageManager {
                         args.push("clean".into());
                     }
                     _ => {
-                        println!(
-                            "Warning: npm cache subcommand '{}' not supported",
+                        output::warn(&format!(
+                            "npm cache subcommand '{}' not supported",
                             options.subcommand
-                        );
+                        ));
                         return None;
                     }
                 }
@@ -108,10 +109,10 @@ impl PackageManager {
                         args.push("clean".into());
                     }
                     _ => {
-                        println!(
-                            "Warning: yarn cache subcommand '{}' not supported",
+                        output::warn(&format!(
+                            "yarn cache subcommand '{}' not supported",
                             options.subcommand
-                        );
+                        ));
                         return None;
                     }
                 }

@@ -17,6 +17,7 @@ mod tips;
 use std::process::ExitCode;
 
 use owo_colors::OwoColorize;
+use vite_shared::output;
 
 use crate::cli::run_command;
 pub use crate::cli::try_parse_args_from;
@@ -72,7 +73,7 @@ async fn main() -> ExitCode {
     let cwd = match vite_path::current_dir() {
         Ok(path) => path,
         Err(e) => {
-            eprintln!("Error: Failed to get current directory: {e}");
+            output::error(&format!("Failed to get current directory: {e}"));
             return ExitCode::FAILURE;
         }
     };
@@ -118,7 +119,7 @@ async fn main() -> ExitCode {
                     if matches!(&e, error::Error::UserMessage(_)) {
                         eprintln!("{e}");
                     } else {
-                        eprintln!("Error: {e}");
+                        output::error(&format!("{e}"));
                     }
                     ExitCode::FAILURE
                 }

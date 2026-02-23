@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -69,8 +70,8 @@ impl PackageManager {
                 }
             }
             PackageManagerType::Yarn => {
-                println!(
-                    "Warning: yarn does not have 'prune' command. yarn install will prune extraneous packages automatically."
+                output::warn(
+                    "yarn does not have 'prune' command. yarn install will prune extraneous packages automatically.",
                 );
                 return None;
             }

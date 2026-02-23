@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -164,7 +165,7 @@ impl PackageManager {
 
         // Warn about unsupported shell mode
         if options.shell_mode {
-            eprintln!("Warning: yarn dlx does not support shell mode (-c)");
+            output::warn("yarn dlx does not support shell mode (-c)");
         }
 
         // Add package spec
@@ -181,7 +182,7 @@ impl PackageManager {
         options: &DlxCommandOptions,
         envs: HashMap<String, String>,
     ) -> ResolveCommandResult {
-        eprintln!("Note: yarn@1 does not have dlx command, falling back to npx");
+        output::note("yarn@1 does not have dlx command, falling back to npx");
 
         let mut args = Vec::new();
 

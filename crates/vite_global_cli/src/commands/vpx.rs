@@ -8,7 +8,7 @@
 //! 4. Remote download via `vp dlx`
 
 use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_shared::{PrependOptions, prepend_to_path_env};
+use vite_shared::{PrependOptions, output, prepend_to_path_env};
 
 use super::DlxCommand;
 use crate::{commands::env::config, shim::dispatch};
@@ -69,7 +69,7 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
 
     // No command specified
     if positional.is_empty() {
-        eprintln!("Error: vpx requires a command to run");
+        output::error("vpx requires a command to run");
         eprintln!();
         eprintln!("Usage: vpx <pkg[@version]> [args...]");
         eprintln!();
@@ -117,7 +117,7 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
     {
         Ok(status) => status.code().unwrap_or(1),
         Err(e) => {
-            eprintln!("vpx: {e}");
+            output::error(&format!("vpx: {e}"));
             1
         }
     }
@@ -151,7 +151,7 @@ async fn find_global_binary(cmd: &str) -> Option<GlobalBinary> {
 async fn execute_global_binary(bin: GlobalBinary, args: &[String], cwd: &AbsolutePath) -> i32 {
     // Ensure Node.js is installed
     if let Err(e) = dispatch::ensure_installed(&bin.node_version).await {
-        eprintln!("vpx: Failed to install Node {}: {e}", bin.node_version);
+        output::error(&format!("vpx: Failed to install Node {}: {e}", bin.node_version));
         return 1;
     }
 
@@ -159,7 +159,7 @@ async fn execute_global_binary(bin: GlobalBinary, args: &[String], cwd: &Absolut
     let node_path = match dispatch::locate_tool(&bin.node_version, "node") {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("vpx: Node not found: {e}");
+            output::error(&format!("vpx: Node not found: {e}"));
             return 1;
         }
     };

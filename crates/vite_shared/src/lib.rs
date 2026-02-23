@@ -3,6 +3,7 @@
 mod env_config;
 pub mod env_vars;
 mod home;
+pub mod output;
 mod package_json;
 mod path_env;
 mod tracing;

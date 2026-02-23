@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus, str::FromStr};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -158,14 +159,14 @@ impl PackageManager {
 
                     // Check if yarn@2+ (uses upgrade-interactive)
                     if !self.version.starts_with("1.") {
-                        println!(
-                            "Note: yarn@2+ uses 'yarn upgrade-interactive' for checking outdated packages"
+                        output::note(
+                            "yarn@2+ uses 'yarn upgrade-interactive' for checking outdated packages",
                         );
                         args.push("upgrade-interactive".into());
 
                         // Warn about unsupported flags
                         if options.format.is_some() {
-                            println!("Warning: --format not supported by yarn@2+");
+                            output::warn("--format not supported by yarn@2+");
                         }
                     } else {
                         // yarn@1
@@ -179,7 +180,7 @@ impl PackageManager {
                             match format {
                                 Format::Json => args.push("--json".into()),
                                 Format::List => {
-                                    println!("Warning: yarn@1 not support list format");
+                                    output::warn("yarn@1 not support list format");
                                 }
                                 Format::Table => {} // Default, no flag needed
                             }
@@ -188,30 +189,30 @@ impl PackageManager {
 
                     // Common warnings
                     if options.long {
-                        println!("Warning: --long not supported by yarn");
+                        output::warn("--long not supported by yarn");
                     }
                     if options.workspace_root {
-                        println!("Warning: --workspace-root not supported by yarn");
+                        output::warn("--workspace-root not supported by yarn");
                     }
                     if options.recursive {
-                        println!("Warning: --recursive not supported by yarn");
+                        output::warn("--recursive not supported by yarn");
                     }
                     if let Some(filters) = options.filters {
                         if !filters.is_empty() {
-                            println!("Warning: --filter not supported by yarn");
+                            output::warn("--filter not supported by yarn");
                         }
                     }
                     if options.prod || options.dev {
-                        println!("Warning: --prod/--dev not supported by yarn");
+                        output::warn("--prod/--dev not supported by yarn");
                     }
                     if options.no_optional {
-                        println!("Warning: --no-optional not supported by yarn");
+                        output::warn("--no-optional not supported by yarn");
                     }
                     if options.compatible {
-                        println!("Warning: --compatible not supported by yarn");
+                        output::warn("--compatible not supported by yarn");
                     }
                     if options.sort_by.is_some() {
-                        println!("Warning: --sort-by not supported by yarn");
+                        output::warn("--sort-by not supported by yarn");
                     }
                 }
                 PackageManagerType::Npm => {
@@ -268,16 +269,16 @@ impl PackageManager {
 
         // Warn about pnpm-specific flags
         if options.prod || options.dev {
-            println!("Warning: --prod/--dev not supported by npm");
+            output::warn("--prod/--dev not supported by npm");
         }
         if options.no_optional {
-            println!("Warning: --no-optional not supported by npm");
+            output::warn("--no-optional not supported by npm");
         }
         if options.compatible {
-            println!("Warning: --compatible not supported by npm");
+            output::warn("--compatible not supported by npm");
         }
         if options.sort_by.is_some() {
-            println!("Warning: --sort-by not supported by npm");
+            output::warn("--sort-by not supported by npm");
         }
     }
 }

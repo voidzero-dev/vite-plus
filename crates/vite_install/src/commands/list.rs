@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -54,7 +55,7 @@ impl PackageManager {
     ) -> Option<ResolveCommandResult> {
         // yarn@2+ does not support list command
         if self.client == PackageManagerType::Yarn && !self.version.starts_with("1.") {
-            println!("Warning: yarn@2+ does not support 'list' command");
+            output::warn("yarn@2+ does not support 'list' command");
             return None;
         }
 
@@ -161,43 +162,39 @@ impl PackageManager {
                 }
 
                 if options.prod {
-                    println!("Warning: yarn@1 does not support --prod, ignoring --prod flag");
+                    output::warn("yarn@1 does not support --prod, ignoring --prod flag");
                 }
 
                 if options.dev {
-                    println!("Warning: yarn@1 does not support --dev, ignoring --dev flag");
+                    output::warn("yarn@1 does not support --dev, ignoring --dev flag");
                 }
 
                 if options.no_optional {
-                    println!(
-                        "Warning: yarn@1 does not support --no-optional, ignoring --no-optional flag"
+                    output::warn(
+                        "yarn@1 does not support --no-optional, ignoring --no-optional flag",
                     );
                 }
 
                 if options.exclude_peers {
-                    println!("Warning: yarn@1 does not support --exclude-peers, ignoring flag");
+                    output::warn("yarn@1 does not support --exclude-peers, ignoring flag");
                 }
 
                 if options.only_projects {
-                    println!("Warning: yarn@1 does not support --only-projects, ignoring flag");
+                    output::warn("yarn@1 does not support --only-projects, ignoring flag");
                 }
 
                 if options.find_by.is_some() {
-                    println!("Warning: yarn@1 does not support --find-by, ignoring flag");
+                    output::warn("yarn@1 does not support --find-by, ignoring flag");
                 }
 
                 if options.recursive {
-                    println!(
-                        "Warning: yarn@1 does not support --recursive, ignoring --recursive flag"
-                    );
+                    output::warn("yarn@1 does not support --recursive, ignoring --recursive flag");
                 }
 
                 // Check for filters (not supported by yarn@1)
                 if let Some(filters) = options.filters {
                     if !filters.is_empty() {
-                        println!(
-                            "Warning: yarn@1 does not support --filter, ignoring --filter flag"
-                        );
+                        output::warn("yarn@1 does not support --filter, ignoring --filter flag");
                     }
                 }
             }
@@ -258,11 +255,11 @@ impl PackageManager {
         }
 
         if options.only_projects {
-            println!("Warning: --only-projects not supported by npm, ignoring flag");
+            output::warn("--only-projects not supported by npm, ignoring flag");
         }
 
         if options.find_by.is_some() {
-            println!("Warning: --find-by not supported by npm, ignoring flag");
+            output::warn("--find-by not supported by npm, ignoring flag");
         }
 
         if options.recursive {

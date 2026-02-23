@@ -4,6 +4,7 @@ use tokio::fs::create_dir_all;
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -104,7 +105,7 @@ impl PackageManager {
                 }
 
                 if options.out.is_some() {
-                    println!("Warning: --out not supported by npm");
+                    output::warn("--out not supported by npm");
                 }
 
                 if let Some(dest) = options.pack_destination {
@@ -113,7 +114,7 @@ impl PackageManager {
                 }
 
                 if options.pack_gzip_level.is_some() {
-                    println!("Warning: --pack-gzip-level not supported by npm");
+                    output::warn("--pack-gzip-level not supported by npm");
                 }
                 if options.json {
                     args.push("--json".into());
@@ -141,14 +142,12 @@ impl PackageManager {
                 } else {
                     // yarn@1 or single package pack
                     if options.recursive && is_yarn1 {
-                        println!(
-                            "Warning: yarn@1 does not support recursive pack, ignoring --recursive flag"
+                        output::warn(
+                            "yarn@1 does not support recursive pack, ignoring --recursive flag",
                         );
                     }
                     if has_filters && is_yarn1 {
-                        println!(
-                            "Warning: yarn@1 does not support --filter, ignoring --filter flag"
-                        );
+                        output::warn("yarn@1 does not support --filter, ignoring --filter flag");
                     }
                     args.push("pack".into());
                 }
@@ -163,11 +162,11 @@ impl PackageManager {
                 }
 
                 if options.pack_destination.is_some() {
-                    println!("Warning: --pack-destination not supported by yarn");
+                    output::warn("--pack-destination not supported by yarn");
                 }
 
                 if options.pack_gzip_level.is_some() {
-                    println!("Warning: --pack-gzip-level not supported by yarn");
+                    output::warn("--pack-gzip-level not supported by yarn");
                 }
 
                 if options.json {

@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -156,15 +157,15 @@ impl PackageManager {
                 }
 
                 if options.publish_branch.is_some() {
-                    println!("Warning: --publish-branch not supported by npm, ignoring flag");
+                    output::warn("--publish-branch not supported by npm, ignoring flag");
                 }
 
                 if options.report_summary {
-                    println!("Warning: --report-summary not supported by npm, ignoring flag");
+                    output::warn("--report-summary not supported by npm, ignoring flag");
                 }
 
                 if options.json {
-                    println!("Warning: --json not supported by npm, ignoring flag");
+                    output::warn("--json not supported by npm, ignoring flag");
                 }
             }
         }

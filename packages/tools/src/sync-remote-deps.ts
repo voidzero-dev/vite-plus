@@ -771,5 +771,10 @@ export async function syncRemote() {
   writeFileSync(corePackagePath, JSON.stringify(corePackage, null, 2) + '\n', 'utf-8');
 
   log('✓ package.json exports updated successfully!');
+
+  // Apply Vite+ branding patches to rolldown-vite source
+  const { brandRolldownVite } = await import('./brand-rolldown-vite.ts');
+  brandRolldownVite(rootDir);
+
   log('✓ Done!');
 }

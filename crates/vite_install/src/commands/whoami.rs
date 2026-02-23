@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -53,7 +54,7 @@ impl PackageManager {
                 let is_yarn1 = self.version.starts_with("1.");
 
                 if is_yarn1 {
-                    println!("Warning: yarn v1 does not support the whoami command");
+                    output::warn("yarn v1 does not support the whoami command");
                     return None;
                 }
 

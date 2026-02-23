@@ -375,7 +375,7 @@ impl SubcommandResolver {
                         envs: Some(Box::new([Str::from("VITE_*")])),
                         pass_through_envs: None,
                     }),
-                    envs: merge_resolved_envs(envs, resolved.envs),
+                    envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
             SynthesizableSubcommand::Test { args } => {
@@ -442,7 +442,7 @@ impl SubcommandResolver {
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::disabled(),
-                    envs: merge_resolved_envs(envs, resolved.envs),
+                    envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
             SynthesizableSubcommand::Preview { args } => {
@@ -463,7 +463,7 @@ impl SubcommandResolver {
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::disabled(),
-                    envs: merge_resolved_envs(envs, resolved.envs),
+                    envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
             SynthesizableSubcommand::Doc { args } => {
@@ -529,6 +529,18 @@ fn merge_resolved_envs(
         envs.entry(Arc::from(OsStr::new(&k))).or_insert_with(|| Arc::from(OsStr::new(&v)));
     }
     Arc::new(envs)
+}
+
+/// Merge resolved envs and inject VITE_PLUS_VERSION for rolldown-vite branding.
+fn merge_resolved_envs_with_version(
+    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
+    resolved_envs: Vec<(String, String)>,
+) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
+    let mut merged = merge_resolved_envs(envs, resolved_envs);
+    let map = Arc::make_mut(&mut merged);
+    map.entry(Arc::from(OsStr::new("VITE_PLUS_VERSION")))
+        .or_insert_with(|| Arc::from(OsStr::new(env!("CARGO_PKG_VERSION"))));
+    merged
 }
 
 /// CommandHandler implementation for vite-plus.
@@ -649,6 +661,18 @@ async fn create_install_synthetic_request(
     })
 }
 
+/// Print a sub-tool banner line to stderr (only when stderr is a TTY).
+///
+/// Format: `vite+ v0.3.0 — test`
+#[allow(clippy::print_stderr)]
+fn print_subtool_banner(label: &str) {
+    use std::io::IsTerminal;
+    if std::io::stderr().is_terminal() {
+        let version = env!("CARGO_PKG_VERSION");
+        eprintln!("vite+ v{version} \u{2014} {label}");
+    }
+}
+
 /// Execute a synthesizable subcommand directly (not through vite-task Session).
 /// No caching, no task graph, no dependency resolution.
 async fn execute_direct_subcommand(
@@ -656,6 +680,14 @@ async fn execute_direct_subcommand(
     cwd: &AbsolutePathBuf,
     options: Option<CliOptions>,
 ) -> Result<ExitStatus, Error> {
+    // Print sub-tool banner for tools whose source we don't control
+    match &subcommand {
+        SynthesizableSubcommand::Test { .. } => print_subtool_banner("test"),
+        SynthesizableSubcommand::Lint { .. } => print_subtool_banner("lint"),
+        SynthesizableSubcommand::Fmt { .. } => print_subtool_banner("fmt"),
+        _ => {}
+    }
+
     let (workspace_root, _) = vite_workspace::find_workspace_root(cwd)?;
     let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 

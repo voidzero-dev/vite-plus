@@ -7,6 +7,7 @@ use std::{io::Write, process::ExitStatus};
 
 use vite_js_runtime::NodeProvider;
 use vite_path::AbsolutePathBuf;
+use vite_shared::output;
 
 use super::config::{get_config_path, load_config};
 use crate::error::Error;
@@ -131,15 +132,17 @@ async fn do_pin(
 
     // Print success message
     if was_alias {
-        println!("\u{2713} Pinned Node.js version to {resolved_version} (resolved from {version})");
+        output::success(&format!(
+            "Pinned Node.js version to {resolved_version} (resolved from {version})"
+        ));
     } else {
-        println!("\u{2713} Pinned Node.js version to {resolved_version}");
+        output::success(&format!("Pinned Node.js version to {resolved_version}"));
     }
     println!("  Created {} in {}", NODE_VERSION_FILE, cwd.as_path().display());
 
     // Pre-download the version unless --no-install is specified
     if no_install {
-        println!("  Note: Version will be downloaded on first use.");
+        output::note("Version will be downloaded on first use.");
     } else {
         // Download the runtime
         match vite_js_runtime::download_runtime(
@@ -149,11 +152,11 @@ async fn do_pin(
         .await
         {
             Ok(_) => {
-                println!("\u{2713} Node.js {resolved_version} installed");
+                output::success(&format!("Node.js {resolved_version} installed"));
             }
             Err(e) => {
-                eprintln!("Warning: Failed to download Node.js {resolved_version}: {e}");
-                eprintln!("  Version will be downloaded on first use.");
+                output::warn(&format!("Failed to download Node.js {resolved_version}: {e}"));
+                output::note("Version will be downloaded on first use.");
             }
         }
     }
@@ -204,7 +207,7 @@ pub async fn do_unpin(cwd: &AbsolutePathBuf) -> Result<ExitStatus, Error> {
     }
 
     tokio::fs::remove_file(&node_version_path).await?;
-    println!("\u{2713} Removed {} from {}", NODE_VERSION_FILE, cwd.as_path().display());
+    output::success(&format!("Removed {} from {}", NODE_VERSION_FILE, cwd.as_path().display()));
 
     Ok(ExitStatus::default())
 }

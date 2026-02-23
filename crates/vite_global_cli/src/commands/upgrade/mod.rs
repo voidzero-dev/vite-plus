@@ -13,6 +13,7 @@ use std::process::ExitStatus;
 use owo_colors::OwoColorize;
 use vite_install::request::HttpClient;
 use vite_path::AbsolutePathBuf;
+use vite_shared::output;
 
 use crate::{commands::env::config::get_vite_plus_home, error::Error};
 
@@ -55,7 +56,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     let version_or_tag = options.version.as_deref().unwrap_or(&options.tag);
 
     if !options.silent {
-        eprintln!("info: checking for updates...");
+        output::info("checking for updates...");
     }
 
     // Step 3: Resolve version from npm registry
@@ -66,13 +67,16 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     let current_version = env!("CARGO_PKG_VERSION");
 
     if !options.silent {
-        eprintln!("info: found vite-plus@{} (current: {})", resolved.version, current_version);
+        output::info(&format!(
+            "found vite-plus@{} (current: {})",
+            resolved.version, current_version
+        ));
     }
 
     // Step 4: Handle --check (report and exit)
     if options.check {
         if resolved.version == current_version {
-            println!("\n{} Already up to date ({})", "\u{2714}".green(), current_version);
+            println!("\n{} Already up to date ({})", output::CHECK.green(), current_version);
         } else {
             println!("Update available: {} \u{2192} {}", current_version, resolved.version);
             println!("Run `vp upgrade` to update.");
@@ -83,13 +87,16 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // Step 5: Handle already up-to-date
     if resolved.version == current_version && !options.force {
         if !options.silent {
-            println!("\n{} Already up to date ({})", "\u{2714}".green(), current_version);
+            println!("\n{} Already up to date ({})", output::CHECK.green(), current_version);
         }
         return Ok(ExitStatus::default());
     }
 
     if !options.silent {
-        eprintln!("info: downloading vite-plus@{} for {}...", resolved.version, platform_suffix);
+        output::info(&format!(
+            "downloading vite-plus@{} for {}...",
+            resolved.version, platform_suffix
+        ));
     }
 
     // Step 6: Download platform tarball (main package is installed via npm)
@@ -104,7 +111,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
 
     if !options.silent {
-        eprintln!("info: installing...");
+        output::info("installing...");
     }
 
     // Step 8: Create version directory
@@ -170,7 +177,7 @@ async fn install_platform_and_main(
 
     // Post-swap operations: non-fatal (the update already succeeded)
     if let Err(e) = install::refresh_shims(install_dir).await {
-        eprintln!("warn: Shim refresh failed (non-fatal): {e}");
+        output::warn(&format!("Shim refresh failed (non-fatal): {e}"));
     }
 
     let mut protected = vec![new_version];
@@ -179,14 +186,15 @@ async fn install_platform_and_main(
     }
     if let Err(e) = install::cleanup_old_versions(install_dir, MAX_VERSIONS_KEEP, &protected).await
     {
-        eprintln!("warn: Old version cleanup failed (non-fatal): {e}");
+        output::warn(&format!("Old version cleanup failed (non-fatal): {e}"));
     }
 
     if !silent {
         println!(
-            "\n{} Updated vite-plus from {} \u{2192} {}",
-            "\u{2714}".green(),
+            "\n{} Updated vite-plus from {} {} {}",
+            output::CHECK.green(),
             current_version,
+            output::ARROW,
             new_version
         );
         println!(
@@ -219,8 +227,8 @@ async fn execute_rollback(
 
     if !silent {
         let current_version = env!("CARGO_PKG_VERSION");
-        eprintln!("info: rolling back to previous version...");
-        eprintln!("info: switching from {} \u{2192} {}", current_version, previous);
+        output::info("rolling back to previous version...");
+        output::info(&format!("switching from {} {} {}", current_version, output::ARROW, previous));
     }
 
     // Save the current version as the new "previous" before swapping
@@ -233,7 +241,7 @@ async fn execute_rollback(
     install::refresh_shims(install_dir).await?;
 
     if !silent {
-        println!("\n{} Rolled back to {}", "\u{2714}".green(), previous);
+        println!("\n{} Rolled back to {}", output::CHECK.green(), previous);
     }
 
     Ok(ExitStatus::default())

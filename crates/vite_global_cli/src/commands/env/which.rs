@@ -11,6 +11,7 @@ use std::process::ExitStatus;
 use chrono::Local;
 use owo_colors::OwoColorize;
 use vite_path::AbsolutePathBuf;
+use vite_shared::output;
 
 use super::{
     config::{VERSION_ENV_VAR, get_node_modules_dir, get_packages_dir, resolve_version},
@@ -37,7 +38,7 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     }
 
     // Unknown tool
-    eprintln!("{} tool '{}' not found", "error:".red().bold(), tool.bold());
+    output::error(&format!("tool '{}' not found", tool.bold()));
     eprintln!("Not a core tool (node, npm, npx) or installed global package.");
     eprintln!("Run 'vp list -g' to see installed packages.");
     Ok(exit_status(1))
@@ -66,7 +67,7 @@ async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatu
 
     // Check if the tool exists
     if !tokio::fs::try_exists(&tool_path).await.unwrap_or(false) {
-        eprintln!("{} {} not found", "error:".red().bold(), tool.bold());
+        output::error(&format!("{} not found", tool.bold()));
         eprintln!("Node.js {} is not installed.", resolution.version);
         eprintln!("Run 'vp env install {}' to install it.", resolution.version);
         return Ok(exit_status(1));
@@ -102,7 +103,7 @@ async fn execute_package_binary(
 
     // Check if binary exists
     if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-        eprintln!("{} binary '{}' not found", "error:".red().bold(), tool.bold());
+        output::error(&format!("binary '{}' not found", tool.bold()));
         eprintln!("Package {} may need to be reinstalled.", metadata.name);
         eprintln!("Run 'vp install -g {}' to reinstall.", metadata.name);
         return Ok(exit_status(1));

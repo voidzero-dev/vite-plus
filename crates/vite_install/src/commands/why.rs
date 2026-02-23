@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -123,8 +124,8 @@ impl PackageManager {
 
                 // yarn only supports single package
                 if options.packages.len() > 1 {
-                    println!(
-                        "Warning: yarn only supports checking one package at a time, using first package"
+                    output::warn(
+                        "yarn only supports checking one package at a time, using first package",
                     );
                 }
                 args.push(options.packages[0].clone());
@@ -141,24 +142,24 @@ impl PackageManager {
 
                 // Warn about unsupported flags
                 if options.json {
-                    println!("Warning: --json not supported by yarn");
+                    output::warn("--json not supported by yarn");
                 }
                 if options.long {
-                    println!("Warning: --long not supported by yarn");
+                    output::warn("--long not supported by yarn");
                 }
                 if options.parseable {
-                    println!("Warning: --parseable not supported by yarn");
+                    output::warn("--parseable not supported by yarn");
                 }
                 if let Some(filters) = options.filters {
                     if !filters.is_empty() {
-                        println!("Warning: --filter not supported by yarn");
+                        output::warn("--filter not supported by yarn");
                     }
                 }
                 if options.prod || options.dev {
-                    println!("Warning: --prod/--dev not supported by yarn");
+                    output::warn("--prod/--dev not supported by yarn");
                 }
                 if options.find_by.is_some() {
-                    println!("Warning: --find-by not supported by yarn");
+                    output::warn("--find-by not supported by yarn");
                 }
             }
             PackageManagerType::Npm => {
@@ -184,19 +185,19 @@ impl PackageManager {
 
                 // Warn about pnpm-specific flags
                 if options.long {
-                    println!("Warning: --long not supported by npm");
+                    output::warn("--long not supported by npm");
                 }
                 if options.parseable {
-                    println!("Warning: --parseable not supported by npm");
+                    output::warn("--parseable not supported by npm");
                 }
                 if options.prod || options.dev {
-                    println!("Warning: --prod/--dev not supported by npm");
+                    output::warn("--prod/--dev not supported by npm");
                 }
                 if options.depth.is_some() {
-                    println!("Warning: --depth not supported by npm");
+                    output::warn("--depth not supported by npm");
                 }
                 if options.find_by.is_some() {
-                    println!("Warning: --find-by not supported by npm");
+                    output::warn("--find-by not supported by npm");
                 }
             }
         }

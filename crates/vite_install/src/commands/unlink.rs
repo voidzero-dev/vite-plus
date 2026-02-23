@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -59,7 +60,7 @@ impl PackageManager {
                 args.push("unlink".into());
 
                 if options.recursive {
-                    println!("Warning: npm doesn't support --recursive for unlink command");
+                    output::warn("npm doesn't support --recursive for unlink command");
                 }
             }
         }
