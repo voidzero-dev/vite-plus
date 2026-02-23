@@ -1,8 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "env": {},
-  "commands": [
-    { "command": "sh setup.sh", "ignoreOutput": true },
-    "tool brand-rolldown-vite # should fail: constants.ts upstream changed"
-  ]
-}

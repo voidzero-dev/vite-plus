@@ -30,33 +30,33 @@ Neither identifies the experience as "Vite+". Users who installed `vite-plus` se
 
 **2. Message prefix styles are inconsistent across Rust commands**
 
-| File | Prefix | Example |
-|------|--------|---------|
-| `upgrade/mod.rs` | `info: ` (lowercase) | `info: checking for updates...` |
-| `upgrade/mod.rs` | `warn: ` (lowercase) | `warn: Shim refresh failed (non-fatal): ...` |
-| `vpx.rs` | `Error: ` (Title case) | `Error: vpx requires a command to run` |
-| `which.rs` | `error:` (lowercase, bold red) | `error: tool 'foo' not found` |
-| `main.rs` | `Error: ` (Title case) | `Error: Failed to get current directory` |
-| `pin.rs` | `Warning: ` (Title case) | `Warning: Failed to download Node.js ...` |
-| `pin.rs` | `Note: ` | `Note: Version will be downloaded on first use.` |
-| `dlx.rs` | `Warning: ` (Title case) | `Warning: yarn dlx does not support shell mode` |
-| `dlx.rs` | `Note: ` | `Note: yarn@1 does not have dlx command...` |
+| File             | Prefix                         | Example                                          |
+| ---------------- | ------------------------------ | ------------------------------------------------ |
+| `upgrade/mod.rs` | `info: ` (lowercase)           | `info: checking for updates...`                  |
+| `upgrade/mod.rs` | `warn: ` (lowercase)           | `warn: Shim refresh failed (non-fatal): ...`     |
+| `vpx.rs`         | `Error: ` (Title case)         | `Error: vpx requires a command to run`           |
+| `which.rs`       | `error:` (lowercase, bold red) | `error: tool 'foo' not found`                    |
+| `main.rs`        | `Error: ` (Title case)         | `Error: Failed to get current directory`         |
+| `pin.rs`         | `Warning: ` (Title case)       | `Warning: Failed to download Node.js ...`        |
+| `pin.rs`         | `Note: `                       | `Note: Version will be downloaded on first use.` |
+| `dlx.rs`         | `Warning: ` (Title case)       | `Warning: yarn dlx does not support shell mode`  |
+| `dlx.rs`         | `Note: `                       | `Note: yarn@1 does not have dlx command...`      |
 
 **3. Status indicator symbols vary**
 
-| Context | Success | Failure | Warning |
-|---------|---------|---------|---------|
-| `doctor.rs` | `✓` (`\u{2713}`) green | `✗` (`\u{2717}`) red | `⚠` (`\u{26A0}`) yellow |
-| `upgrade/mod.rs` | `✔` (`\u{2714}`) green | — | — |
-| Task runner | `✓` | `✗` | — |
+| Context          | Success                | Failure              | Warning                 |
+| ---------------- | ---------------------- | -------------------- | ----------------------- |
+| `doctor.rs`      | `✓` (`\u{2713}`) green | `✗` (`\u{2717}`) red | `⚠` (`\u{26A0}`) yellow |
+| `upgrade/mod.rs` | `✔` (`\u{2714}`) green | —                    | —                       |
+| Task runner      | `✓`                    | `✗`                  | —                       |
 
 **4. Color libraries differ (but this is acceptable)**
 
-| Layer | Library |
-|-------|---------|
-| Rust (global CLI) | `owo_colors` |
+| Layer              | Library                 |
+| ------------------ | ----------------------- |
+| Rust (global CLI)  | `owo_colors`            |
 | JS (vite-plus CLI) | `node:util styleText()` |
-| rolldown-vite | `picocolors` |
+| rolldown-vite      | `picocolors`            |
 
 **5. The `[vite]` logger prefix in rolldown-vite**
 
@@ -115,30 +115,33 @@ Other sub-tools (vitest, oxlint, oxfmt) can follow the same pattern once their s
 **File:** `rolldown-vite/packages/vite/src/node/cli.ts` (line 256)
 
 **Current:**
+
 ```javascript
 info(
   `\n  ${colors.green(
     `${colors.bold('VITE')} v${VERSION}`,
   )}${modeString}  ${startupDurationString}\n`,
   { clear: !hasExistingLogs },
-)
+);
 ```
 
 **Output:** `VITE v8.0.0-beta.13  ready in 312 ms`
 
 **Proposed change:**
+
 ```javascript
 info(
   `\n  ${colors.green(
     `${colors.bold('VITE+')} v${VITE_PLUS_VERSION}`,
   )}${modeString}  ${startupDurationString}\n`,
   { clear: !hasExistingLogs },
-)
+);
 ```
 
 **Output:** `VITE+ v0.3.0  ready in 312 ms`
 
 Where `VITE_PLUS_VERSION` is the vite-plus package version, injected via:
+
 - A new constant in `rolldown-vite/packages/vite/src/node/constants.ts`, or
 - Read from an environment variable set by the Rust CLI before spawning vite (e.g., `VITE_PLUS_VERSION`)
 
@@ -155,6 +158,7 @@ This is clean: the rolldown-vite source change is minimal (reads an env var with
 **File:** `rolldown-vite/packages/vite/src/node/build.ts` (line 789)
 
 **Current:**
+
 ```javascript
 logger.info(
   colors.cyan(
@@ -162,12 +166,13 @@ logger.info(
       `building ${environment.name} environment for ${environment.config.mode}...`,
     )}`,
   ),
-)
+);
 ```
 
 **Output:** `vite v8.0.0-beta.13 building client environment for production...`
 
 **Proposed change:**
+
 ```javascript
 logger.info(
   colors.cyan(
@@ -175,7 +180,7 @@ logger.info(
       `building ${environment.name} environment for ${environment.config.mode}...`,
     )}`,
   ),
-)
+);
 ```
 
 **Output:** `vite+ v0.3.0 building client environment for production...`
@@ -185,11 +190,13 @@ logger.info(
 **File:** `rolldown-vite/packages/vite/src/node/logger.ts` (line 78)
 
 **Current:**
+
 ```javascript
 prefix = '[vite]',
 ```
 
 **Proposed:**
+
 ```javascript
 prefix = '[vite+]',
 ```
@@ -198,17 +205,17 @@ prefix = '[vite+]',
 
 A full audit of rolldown-vite source for user-visible "vite" strings:
 
-| Location | String | Action |
-|----------|--------|--------|
-| `cli.ts:256` | `'VITE'` in banner | Change to `'VITE+'` |
-| `build.ts:789` | `` `vite v${VERSION}` `` | Change to `` `vite+ v${VITE_PLUS_VERSION}` `` |
-| `logger.ts:78` | `'[vite]'` | Change to `'[vite+]'` |
-| `build.ts:674` | `"This is deprecated and will override all Vite.js default output options."` | Leave — refers to the Vite project name, not branding |
-| `build.ts:680` | `"Vite does not support..."` | Leave — project name reference |
-| `build.ts:1079` | `"[vite]: Rolldown failed to resolve..."` | Change to `"[vite+]: ..."` |
-| Config error messages | `"Vite requires Node.js..."` | Leave — project name reference |
-| `vite:*` plugin name prefixes | `'vite:esbuild-banner-footer-compat'` etc. | Leave — internal plugin IDs, not user-facing |
-| `VITE_*` env var detection | `import.meta.env.VITE_*` | Leave — user API, not branding |
+| Location                      | String                                                                       | Action                                                |
+| ----------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `cli.ts:256`                  | `'VITE'` in banner                                                           | Change to `'VITE+'`                                   |
+| `build.ts:789`                | `` `vite v${VERSION}` ``                                                     | Change to `` `vite+ v${VITE_PLUS_VERSION}` ``         |
+| `logger.ts:78`                | `'[vite]'`                                                                   | Change to `'[vite+]'`                                 |
+| `build.ts:674`                | `"This is deprecated and will override all Vite.js default output options."` | Leave — refers to the Vite project name, not branding |
+| `build.ts:680`                | `"Vite does not support..."`                                                 | Leave — project name reference                        |
+| `build.ts:1079`               | `"[vite]: Rolldown failed to resolve..."`                                    | Change to `"[vite+]: ..."`                            |
+| Config error messages         | `"Vite requires Node.js..."`                                                 | Leave — project name reference                        |
+| `vite:*` plugin name prefixes | `'vite:esbuild-banner-footer-compat'` etc.                                   | Leave — internal plugin IDs, not user-facing          |
+| `VITE_*` env var detection    | `import.meta.env.VITE_*`                                                     | Leave — user API, not branding                        |
 
 **Principle:** Change branding text that appears in terminal output. Leave references to "Vite" as a project/software name in error descriptions, and leave all internal identifiers.
 
@@ -259,12 +266,12 @@ pub fn success(msg: &str) {
 
 Adopt a single set everywhere:
 
-| Symbol | Unicode | Usage | Color |
-|--------|---------|-------|-------|
-| `✓` (`\u{2713}`) | Check mark | Success | green |
-| `✗` (`\u{2717}`) | Ballot X | Failure | red |
+| Symbol           | Unicode      | Usage           | Color  |
+| ---------------- | ------------ | --------------- | ------ |
+| `✓` (`\u{2713}`) | Check mark   | Success         | green  |
+| `✗` (`\u{2717}`) | Ballot X     | Failure         | red    |
 | `⚠` (`\u{26A0}`) | Warning sign | Warning/caution | yellow |
-| `→` (`\u{2192}`) | Right arrow | Transitions | none |
+| `→` (`\u{2192}`) | Right arrow  | Transitions     | none   |
 
 **Change:** Replace `\u{2714}` (heavy check mark ✔) in `upgrade/mod.rs` with `\u{2713}` (check mark ✓) for consistency with `doctor.rs` and the task runner.
 
@@ -272,20 +279,20 @@ Adopt a single set everywhere:
 
 Commands to update (representative, not exhaustive):
 
-| File | Current | New |
-|------|---------|-----|
-| `upgrade/mod.rs:58` | `eprintln!("info: checking...")` | `output::info("checking...")` |
-| `upgrade/mod.rs:69` | `eprintln!("info: found...")` | `output::info("found...")` |
-| `upgrade/mod.rs:173` | `eprintln!("warn: Shim refresh...")` | `output::warn("Shim refresh...")` |
-| `upgrade/mod.rs:75` | `"\u{2714}".green()` | `output::CHECK.green()` |
-| `main.rs:75` | `eprintln!("Error: Failed...")` | `output::error("Failed...")` |
-| `main.rs:121` | `eprintln!("Error: {e}")` | `output::error(...)` |
-| `vpx.rs:72` | `eprintln!("Error: vpx requires...")` | `output::error("vpx requires...")` |
-| `which.rs:40` | `"error:".red().bold()` | `output::error(...)` |
-| `pin.rs:142` | `println!("  Note: Version...")` | `output::note("Version...")` |
-| `pin.rs:155` | `eprintln!("Warning: Failed...")` | `output::warn("Failed...")` |
-| `dlx.rs:167` | `eprintln!("Warning: yarn dlx...")` | `output::warn("yarn dlx...")` |
-| `dlx.rs:184` | `eprintln!("Note: yarn@1...")` | `output::note("yarn@1...")` |
+| File                 | Current                               | New                                |
+| -------------------- | ------------------------------------- | ---------------------------------- |
+| `upgrade/mod.rs:58`  | `eprintln!("info: checking...")`      | `output::info("checking...")`      |
+| `upgrade/mod.rs:69`  | `eprintln!("info: found...")`         | `output::info("found...")`         |
+| `upgrade/mod.rs:173` | `eprintln!("warn: Shim refresh...")`  | `output::warn("Shim refresh...")`  |
+| `upgrade/mod.rs:75`  | `"\u{2714}".green()`                  | `output::CHECK.green()`            |
+| `main.rs:75`         | `eprintln!("Error: Failed...")`       | `output::error("Failed...")`       |
+| `main.rs:121`        | `eprintln!("Error: {e}")`             | `output::error(...)`               |
+| `vpx.rs:72`          | `eprintln!("Error: vpx requires...")` | `output::error("vpx requires...")` |
+| `which.rs:40`        | `"error:".red().bold()`               | `output::error(...)`               |
+| `pin.rs:142`         | `println!("  Note: Version...")`      | `output::note("Version...")`       |
+| `pin.rs:155`         | `eprintln!("Warning: Failed...")`     | `output::warn("Failed...")`        |
+| `dlx.rs:167`         | `eprintln!("Warning: yarn dlx...")`   | `output::warn("yarn dlx...")`      |
+| `dlx.rs:184`         | `eprintln!("Note: yarn@1...")`        | `output::note("yarn@1...")`        |
 
 The `vite_install` crate also has `Warning:` and `Note:` messages across multiple command files (`list.rs`, `why.rs`, `outdated.rs`, `pack.rs`, `publish.rs`, `cache.rs`, `config.rs`, `audit.rs`, `dlx.rs`, `unlink.rs`, `update.rs`, `rebuild.rs`, `whoami.rs`). All should be migrated.
 
@@ -316,6 +323,7 @@ This adds Vite+ context without modifying the sub-tool's own output. The banner 
 #### 3.2 Future: Direct source modification
 
 Once vitest, oxlint, and oxfmt sources are cloned into the repo (following the same pattern as rolldown-vite), apply the same direct modification approach:
+
 - Change their banner/version strings to show "Vite+" branding
 - Change their logger prefixes where applicable
 
