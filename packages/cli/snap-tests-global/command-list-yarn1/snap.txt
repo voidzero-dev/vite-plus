@@ -32,56 +32,56 @@ Done in <variable>ms.
 {"type":"tree","data":{"type":"list","trees":[{"name":"testnpm2@<semver>","children":[],"hint":null,"color":"bold","depth":0},{"name":"test-vite-plus-package@<semver>","children":[],"hint":null,"color":"bold","depth":0}]}}
 
 > vp pm list --prod # should show warning that --prod not supported by yarn@1
-Warning: yarn@1 does not support --prod, ignoring --prod flag
+[1m[33mwarn:[39m[0m yarn@1 does not support --prod, ignoring --prod flag
 yarn list v<semver>
 ├─ test-vite-plus-package@<semver>
 └─ testnpm2@<semver>
 Done in <variable>ms.
 
 > vp pm list --dev # should show warning that --dev not supported by yarn@1
-Warning: yarn@1 does not support --dev, ignoring --dev flag
+[1m[33mwarn:[39m[0m yarn@1 does not support --dev, ignoring --dev flag
 yarn list v<semver>
 ├─ test-vite-plus-package@<semver>
 └─ testnpm2@<semver>
 Done in <variable>ms.
 
 > vp pm list --no-optional # should show warning that --no-optional not supported by yarn@1
-Warning: yarn@1 does not support --no-optional, ignoring --no-optional flag
+[1m[33mwarn:[39m[0m yarn@1 does not support --no-optional, ignoring --no-optional flag
 yarn list v<semver>
 ├─ test-vite-plus-package@<semver>
 └─ testnpm2@<semver>
 Done in <variable>ms.
 
 > vp pm list --exclude-peers # should show warning that --exclude-peers not supported by yarn@1
-Warning: yarn@1 does not support --exclude-peers, ignoring flag
+[1m[33mwarn:[39m[0m yarn@1 does not support --exclude-peers, ignoring flag
 yarn list v<semver>
 ├─ test-vite-plus-package@<semver>
 └─ testnpm2@<semver>
 Done in <variable>ms.
 
 > vp pm list --only-projects # should show warning that --only-projects not supported by yarn@1
-Warning: yarn@1 does not support --only-projects, ignoring flag
+[1m[33mwarn:[39m[0m yarn@1 does not support --only-projects, ignoring flag
 yarn list v<semver>
 ├─ test-vite-plus-package@<semver>
 └─ testnpm2@<semver>
 Done in <variable>ms.
 
 > vp pm list --find-by customFinder # should show warning that --find-by not supported by yarn@1
-Warning: yarn@1 does not support --find-by, ignoring flag
+[1m[33mwarn:[39m[0m yarn@1 does not support --find-by, ignoring flag
 yarn list v<semver>
 ├─ test-vite-plus-package@<semver>
 └─ testnpm2@<semver>
 Done in <variable>ms.
 
 > vp pm list --recursive # should show warning that --recursive not supported by yarn@1
-Warning: yarn@1 does not support --recursive, ignoring --recursive flag
+[1m[33mwarn:[39m[0m yarn@1 does not support --recursive, ignoring --recursive flag
 yarn list v<semver>
 ├─ test-vite-plus-package@<semver>
 └─ testnpm2@<semver>
 Done in <variable>ms.
 
 > vp pm list --filter app # should show warning that --filter not supported by yarn@1
-Warning: yarn@1 does not support --filter, ignoring --filter flag
+[1m[33mwarn:[39m[0m yarn@1 does not support --filter, ignoring --filter flag
 yarn list v<semver>
 ├─ test-vite-plus-package@<semver>
 └─ testnpm2@<semver>

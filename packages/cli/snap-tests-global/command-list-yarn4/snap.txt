@@ -1,2 +1,2 @@
 > vp pm list # should show warning that yarn@2+ does not support list command
-Warning: yarn@2+ does not support 'list' command
+[1m[33mwarn:[39m[0m yarn@2+ does not support 'list' command

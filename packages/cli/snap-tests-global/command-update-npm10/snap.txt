@@ -17,7 +17,7 @@ added 3 packages in <variable>ms
 }
 
 > vp up testnpm2 --latest -- --no-audit && cat package.json # should to absolute latest version
-Warning: npm doesn't support --latest flag. Updating within semver range only.
+[1m[33mwarn:[39m[0m npm doesn't support --latest flag. Updating within semver range only.
 
 up to date in <variable>ms
 {
@@ -76,7 +76,7 @@ up to date in <variable>ms
 removed 1 package in <variable>ms
 
 added 1 package in <variable>ms
-Warning: npm doesn't support --latest flag. Updating within semver range only.
+[1m[33mwarn:[39m[0m npm doesn't support --latest flag. Updating within semver range only.
 npm warn config optional Use `--omit=optional` to exclude optional dependencies, or
 npm warn config `--include=optional` to include them.
 npm warn config

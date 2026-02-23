@@ -21,7 +21,7 @@ unset VITE_PLUS_NODE_VERSION
 Reverted to file-based Node.js version resolution
 
 [1]> vp env use d # should show friendly error for invalid version
-Error: Invalid Node.js version: "d"
+[1m[31merror:[39m[0m Invalid Node.js version: "d"
 
 Valid examples:
   vp env use 20          # Latest Node.js 20.x
@@ -30,7 +30,7 @@ Valid examples:
   vp env use latest      # Latest version
 
 [1]> vp env use abc # should show friendly error for invalid version
-Error: Invalid Node.js version: "abc"
+[1m[31merror:[39m[0m Invalid Node.js version: "abc"
 
 Valid examples:
   vp env use 20          # Latest Node.js 20.x

@@ -53,25 +53,25 @@ node_modules/test-vite-plus-package
   dev test-vite-plus-package@"1.0.0" from the root project
 
 > vp why testnpm2 --long # should warn that --long not supported by npm
-Warning: --long not supported by npm
+[1m[33mwarn:[39m[0m --long not supported by npm
 testnpm2@<semver>
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project
 
 > vp why testnpm2 --parseable # should warn that --parseable not supported by npm
-Warning: --parseable not supported by npm
+[1m[33mwarn:[39m[0m --parseable not supported by npm
 testnpm2@<semver>
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project
 
 > vp why testnpm2 -P # should warn that --prod not supported by npm
-Warning: --prod/--dev not supported by npm
+[1m[33mwarn:[39m[0m --prod/--dev not supported by npm
 testnpm2@<semver>
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project
 
 > vp why testnpm2 --find-by customFinder # should warn that --find-by not supported by npm
-Warning: --find-by not supported by npm
+[1m[33mwarn:[39m[0m --find-by not supported by npm
 testnpm2@<semver>
 node_modules/testnpm2
   testnpm2@"1.0.1" from the root project

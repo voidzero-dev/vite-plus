@@ -1,5 +1,5 @@
 > vp upgrade --check # check for updates without installing
-info: checking for updates...
-info: found vite-plus@<semver>
+[1m[94minfo:[39m[0m checking for updates...
+[1m[94minfo:[39m[0m found vite-plus@<semver>
 Update available: <semver> → <semver>
 Run `vp upgrade` to update.

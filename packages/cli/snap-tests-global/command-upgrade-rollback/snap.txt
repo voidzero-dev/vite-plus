@@ -1,2 +1,2 @@
 [1]> vp upgrade --rollback # should fail with no previous version
-Error: Upgrade error: No previous version found. Cannot rollback.
+[1m[31merror:[39m[0m Upgrade error: No previous version found. Cannot rollback.

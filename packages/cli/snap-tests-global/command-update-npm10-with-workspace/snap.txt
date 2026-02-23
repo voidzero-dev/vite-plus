@@ -14,7 +14,7 @@ added 5 packages in <variable>ms
 }
 
 > vp update testnpm2 --latest --filter app -- --no-audit && cat packages/app/package.json # should update in specific package
-Warning: npm doesn't support --latest flag. Updating within semver range only.
+[1m[33mwarn:[39m[0m npm doesn't support --latest flag. Updating within semver range only.
 
 up to date in <variable>ms
 {

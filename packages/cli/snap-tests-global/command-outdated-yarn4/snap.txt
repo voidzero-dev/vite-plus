@@ -1,5 +1,5 @@
 > vp outdated -- -h # should show yarn upgrade-interactive help
-Note: yarn@2+ uses 'yarn upgrade-interactive' for checking outdated packages
+[1m[2mnote:[0m[0m yarn@2+ uses 'yarn upgrade-interactive' for checking outdated packages
 Open the upgrade interface
 
 Usage
