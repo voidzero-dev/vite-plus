@@ -843,10 +843,7 @@ fn normalize_help_args(args: Vec<String>) -> Vec<String> {
 }
 
 fn should_print_help(args: &[String]) -> bool {
-    matches!(
-        args,
-        [arg] if arg == "-h" || arg == "--help"
-    )
+    args.is_empty() || matches!(args, [arg] if arg == "-h" || arg == "--help")
 }
 
 fn print_help() {
@@ -857,21 +854,21 @@ fn print_help() {
     println!(
         "Vite+/{version}
 
-{bold_underline}Usage:{reset} {bold}vite{reset} <COMMAND>
+{bold_underline}Usage:{reset} {bold}vp{reset} <COMMAND>
 
-{bold_underline}Vite+ Commands:{reset}
+{bold_underline}Core Commands:{reset}
   {bold}dev{reset}        Run the development server
   {bold}build{reset}      Build for production
-  {bold}preview{reset}    Preview production build
-  {bold}lint{reset}       Lint code
   {bold}test{reset}       Run tests
+  {bold}lint{reset}       Lint code
   {bold}fmt{reset}        Format code
   {bold}pack{reset}       Build library
   {bold}run{reset}        Run tasks
+  {bold}preview{reset}    Preview production build
   {bold}cache{reset}      Manage the task cache
 
 {bold_underline}Package Manager Commands:{reset}
-  {bold}install{reset}    Install all dependencies
+  {bold}install{reset}    Install all dependencies, or add packages if package names are provided
 
 Options:
   -h, --help  Print help"

@@ -12,7 +12,7 @@ import {
 } from '@voidzero-dev/vite-plus-core/pack';
 import { cac } from 'cac';
 
-const cli = cac('vite pack');
+const cli = cac('vp pack');
 cli.help();
 
 // support `TSDOWN_` for migration compatibility

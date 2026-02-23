@@ -311,7 +311,17 @@ After `bundleVitest()` copies vitest files to `dist/`, a `brandVitest()` step pa
 
 The Rust NAPI binding injects `VITE_PLUS_VERSION` env var (same mechanism used for rolldown-vite build/dev/preview commands), so `vp test -h` shows `vp test/<vite-plus-version>`.
 
-#### 3.2 Future: oxlint, oxfmt
+#### 3.3 Remaining `vite` → `vp` branding in CLI output
+
+Several user-visible strings still show `vite` instead of `vp`:
+
+1. **Local CLI help usage line** (`packages/cli/binding/src/cli.rs`): `Usage: vite <COMMAND>` → `Usage: vp <COMMAND>`
+2. **Pack CLI cac name** (`packages/cli/src/pack-bin.ts`): `cac('vite pack')` → `cac('vp pack')`
+3. **Migration message** (`packages/cli/src/migration/bin.ts`): `vite install` → `vp install`
+
+These are straightforward string replacements in the source, verified by snap test updates.
+
+#### 3.4 Future: oxlint, oxfmt
 
 For oxlint and oxfmt, pre-spawn banners or build-time patching can follow the same pattern once their source/dist is bundled.
 

@@ -123,7 +123,7 @@ async function main() {
       [
         styleText('bold', 'Migration plan:'),
         '- Inspect workspace and package manager',
-        `- Run ${accent('vite install')} to prepare dependencies`,
+        `- Run ${accent('vp install')} to prepare dependencies`,
         '- Rewrite configs and dependencies for Vite+',
       ].join('\n'),
     );
