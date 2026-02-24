@@ -3,7 +3,7 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp run hello # cache should be disabled by default for package.json scripts",
-    "vp run hello # second run should also show cache disabled"
+    "vp run hello 2>&1 | grep 'cache disabled' # cache should be disabled by default for package.json scripts",
+    "vp run hello 2>&1 | grep 'cache disabled' # second run should also show cache disabled"
   ]
 }

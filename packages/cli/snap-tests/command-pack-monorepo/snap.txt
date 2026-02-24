@@ -2,7 +2,7 @@
 > ls packages/hello/dist # should have the library
 index.cjs
 
-> vp run hello#build | grep 'cache hit' # should hit cache
+> vp run hello#build 2>&1 | grep 'cache hit' # should hit cache
 ~/packages/hello$ vp pack ✓ cache hit, replaying
 [vp run] cache hit, <variable>ms saved.
 
@@ -11,7 +11,7 @@ index.cjs
 index.d.mts
 index.mjs
 
-> vp run array-config#build | grep 'cache hit' # should hit cache
+> vp run array-config#build 2>&1 | grep 'cache hit' # should hit cache
 ~/packages/array-config$ vp pack ✓ cache hit, replaying
 [vp run] cache hit, <variable>ms saved.
 
@@ -19,6 +19,6 @@ index.mjs
 > ls packages/default-config/dist # should have the library
 index.mjs
 
-> vp run default-config#build | grep 'cache hit' # should hit cache
+> vp run default-config#build 2>&1 | grep 'cache hit' # should hit cache
 ~/packages/default-config$ vp pack ✓ cache hit, replaying
 [vp run] cache hit, <variable>ms saved.
