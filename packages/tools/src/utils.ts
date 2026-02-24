@@ -4,11 +4,6 @@ import path from 'node:path';
 import { Minimatch } from 'minimatch';
 
 export function replaceUnstableOutput(output: string, cwd?: string) {
-  // Strip ANSI escape codes first. Tests set NO_COLOR=1 so vp output is clean,
-  // but third-party tools (e.g. rolldown) may still emit ANSI codes on stderr
-  // that leak into the captured output.
-  // eslint-disable-next-line no-control-regex
-  output = output.replaceAll(/\x1b\[[0-9;]*m/g, '');
   if (cwd) {
     output = output.replaceAll(cwd, '<cwd>');
     if (path.dirname(cwd) !== '/') {
