@@ -1,0 +1,7 @@
+# Prevent oxlint from scanning node_modules.
+# Without this, oxlint reads files in node_modules/.vite/task-cache, causing
+# fspy to fingerprint the cache directory as an input. The cache directory
+# changes between runs (DB writes, last-summary.json), producing flaky
+# cache-miss reasons that alternate between '' and
+# 'node_modules/.vite/task-cache'.
+node_modules

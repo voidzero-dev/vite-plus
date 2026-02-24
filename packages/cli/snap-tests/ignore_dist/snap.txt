@@ -6,7 +6,9 @@ Finished in <variable>ms on 1 file with <variable> rules using <variable> thread
 
 > mkdir dist
 > vp run lint # new dist folder should not invalidate cache
-$ vp lint ✗ cache miss: content of input 'node_modules/.vite/task-cache' changed, executing
+$ vp lint ✓ cache hit, replaying
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
+---
+[vp run] cache hit, <variable>ms saved.
