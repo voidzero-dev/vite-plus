@@ -18,4 +18,10 @@ disallowed-types = [
   { path = "std::string::String", reason = "Use `vite_str::Str` for small strings. For large strings, prefer `Box/Rc/Arc<str>` if mutation is not needed." },
 ]
 
-disallowed-macros = [{ path = "std::format", reason = "Use `vite_str::format` for small strings." }]
+disallowed-macros = [
+  { path = "std::format", reason = "Use `vite_str::format` for small strings." },
+  { path = "std::println", reason = "Use `vite_shared::output` functions (`info`, `note`, `success`) instead." },
+  { path = "std::print", reason = "Use `vite_shared::output` functions (`info`, `note`, `success`) instead." },
+  { path = "std::eprintln", reason = "Use `vite_shared::output` functions (`warn`, `error`) instead." },
+  { path = "std::eprint", reason = "Use `vite_shared::output` functions (`warn`, `error`) instead." },
+]
