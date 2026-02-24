@@ -80,7 +80,7 @@ vp run dev                         # runs dev script from package.json
 
 ## Clippy Rules
 
-All Rust code must follow the custom clippy rules defined in `.clippy.toml` (disallowed types, macros, and methods).
+All **new** Rust code must follow the custom clippy rules defined in `.clippy.toml` (disallowed types, macros, and methods). Existing code may not fully comply due to historical reasons.
 
 ## CLI Output
 
