@@ -78,6 +78,10 @@ vp run dev                         # runs dev script from package.json
 
 - **Passing to std functions**: `AbsolutePath` implements `AsRef<Path>`, use `.as_path()` when explicit `&Path` is required
 
+## Clippy Rules
+
+All Rust code must follow the custom clippy rules defined in `.clippy.toml` (disallowed types, macros, and methods).
+
 ## CLI Output
 
 All user-facing output must go through shared output modules instead of raw print calls.
