@@ -1,0 +1,7 @@
+{
+  "name": "lib-ui",
+  "dependencies": {
+    "lib-core": "workspace:*",
+    "lib-utils": "workspace:*"
+  }
+}

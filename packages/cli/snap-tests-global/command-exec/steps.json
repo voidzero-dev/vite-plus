@@ -1,0 +1,16 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    { "command": "node setup-bin.js", "ignoreOutput": true },
+    "vp exec hello-test # exec binary from node_modules/.bin",
+    "vp exec echo hello # basic exec",
+    "vp exec -- echo with-separator # explicit -- separator",
+    "vp exec node -e \"console.log('hi')\" # exec with args passthrough",
+    "vp exec -c 'echo hello from shell' # shell mode",
+    "vp exec --help # should show help message",
+    "vp exec # missing command should error",
+    "vp exec nonexistent-cmd-12345 # command not found error"
+  ]
+}

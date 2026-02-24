@@ -12,6 +12,7 @@ Core Commands:
   fmt                            Format code
   pack                           Build library
   run                            Run tasks
+  exec                           Execute a command from local node_modules/.bin
   preview                        Preview production build
   env                            Manage Node.js versions
   migrate                        Migrate an existing project to Vite+<repeat>

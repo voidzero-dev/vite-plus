@@ -585,6 +585,14 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// Execute a command from local node_modules/.bin
+    #[command(disable_help_flag = true)]
+    Exec {
+        /// Additional arguments
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
     /// Preview production build
     #[command(disable_help_flag = true)]
     Preview {
@@ -1791,6 +1799,8 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
 
         Commands::Run { args } => commands::run_or_delegate::execute(cwd, &args).await,
 
+        Commands::Exec { args } => commands::delegate::execute(cwd, "exec", &args).await,
+
         Commands::Preview { args } => commands::delegate::execute(cwd, "preview", &args).await,
 
         Commands::Cache { args } => commands::delegate::execute(cwd, "cache", &args).await,
@@ -1814,7 +1824,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
 }
 
 /// Create an exit status with the given code.
-fn exit_status(code: i32) -> ExitStatus {
+pub(crate) fn exit_status(code: i32) -> ExitStatus {
     #[cfg(unix)]
     {
         use std::os::unix::process::ExitStatusExt;
@@ -1849,6 +1859,7 @@ fn apply_custom_help(cmd: clap::Command) -> clap::Command {
   {bold}fmt{reset}                            Format code
   {bold}pack{reset}                           Build library
   {bold}run{reset}                            Run tasks
+  {bold}exec{reset}                           Execute a command from local node_modules/.bin
   {bold}preview{reset}                        Preview production build
   {bold}env{reset}                            Manage Node.js versions
   {bold}migrate{reset}                        Migrate an existing project to Vite+

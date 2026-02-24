@@ -1,0 +1,6 @@
+{
+  "name": "app-mobile",
+  "dependencies": {
+    "lib-ui": "workspace:*"
+  }
+}

@@ -202,8 +202,7 @@ fn find_on_path(cmd: &str) -> Option<AbsolutePathBuf> {
 
     let filtered_path = std::env::join_paths(filtered_paths).ok()?;
     let cwd = vite_path::current_dir().ok()?;
-    let path = which::which_in(cmd, Some(filtered_path), cwd).ok()?;
-    AbsolutePathBuf::new(path)
+    vite_command::resolve_bin(cmd, Some(&filtered_path), &cwd).ok()
 }
 
 /// Prepend all `node_modules/.bin` directories from cwd upward to PATH.

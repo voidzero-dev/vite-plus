@@ -3,9 +3,7 @@
 //! This module contains all the CLI-related code.
 //! It handles argument parsing, command dispatching, and orchestration of the task execution.
 
-use std::{
-    env, ffi::OsStr, future::Future, iter, path::PathBuf, pin::Pin, process::Stdio, sync::Arc,
-};
+use std::{env, ffi::OsStr, future::Future, iter, path::PathBuf, pin::Pin, sync::Arc};
 
 use clap::{Parser, Subcommand};
 use rustc_hash::FxHashMap;
@@ -112,6 +110,13 @@ enum CLIArgs {
     /// Built-in subcommands (lint, build, test, etc.)
     #[command(flatten)]
     Synthesizable(SynthesizableSubcommand),
+
+    /// Execute a command from local node_modules/.bin
+    #[command(disable_help_flag = true)]
+    Exec {
+        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
 }
 
 /// Type alias for boxed async resolver function
@@ -589,6 +594,10 @@ impl CommandHandler for VitePlusCommandHandler {
                 Ok(HandledCommand::Synthesized(resolved.into_synthetic_plan_request()))
             }
             CLIArgs::ViteTask(cmd) => Ok(HandledCommand::ViteTaskCommand(cmd)),
+            CLIArgs::Exec { .. } => {
+                // exec in task scripts should run as a subprocess
+                Ok(HandledCommand::Verbatim)
+            }
         }
     }
 }
@@ -697,31 +706,17 @@ async fn execute_direct_subcommand(
             };
             if is_path { Some(v.as_ref().to_os_string()) } else { None }
         });
-        which::which_in(resolved.program.as_ref(), paths, cwd.as_path()).map_err(|_| {
-            Error::Anyhow(anyhow::anyhow!(
-                "Cannot find program: {}",
-                resolved.program.to_string_lossy()
-            ))
-        })?
+        vite_command::resolve_bin(
+            resolved.program.as_ref().to_str().unwrap_or_default(),
+            paths.as_deref(),
+            cwd,
+        )?
     };
 
-    let mut cmd = tokio::process::Command::new(&program_path);
+    let mut cmd = vite_command::build_command(&program_path, cwd);
     cmd.args(resolved.args.iter().map(|s| s.as_str()))
         .env_clear()
-        .envs(resolved.envs.iter().map(|(k, v)| (k.as_ref(), v.as_ref())))
-        .current_dir(cwd.as_path())
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
-
-    // Clear FD_CLOEXEC on stdio fds before exec, since Node.js (NAPI host) may have set it.
-    #[cfg(unix)]
-    unsafe {
-        cmd.pre_exec(|| {
-            vite_command::fix_stdio_streams();
-            Ok(())
-        });
-    }
+        .envs(resolved.envs.iter().map(|(k, v)| (k.as_ref(), v.as_ref())));
 
     let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
 
@@ -825,6 +820,7 @@ pub async fn main(
     match cli_args {
         CLIArgs::Synthesizable(subcmd) => execute_direct_subcommand(subcmd, &cwd, options).await,
         CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
+        CLIArgs::Exec { args } => crate::exec::execute(&args, &cwd).await,
     }
 }
 
@@ -864,6 +860,7 @@ fn print_help() {
   {bold}fmt{reset}        Format code
   {bold}pack{reset}       Build library
   {bold}run{reset}        Run tasks
+  {bold}exec{reset}       Execute a command from local node_modules/.bin
   {bold}preview{reset}    Preview production build
   {bold}cache{reset}      Manage the task cache
 

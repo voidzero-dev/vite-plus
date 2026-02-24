@@ -7,7 +7,7 @@ use std::{
 use fspy::AccessMode;
 use tokio::process::Command;
 use vite_error::Error;
-use vite_path::{AbsolutePath, RelativePathBuf};
+use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 
 /// Result of running a command with fspy tracking.
 #[derive(Debug)]
@@ -16,6 +16,76 @@ pub struct FspyCommandResult {
     pub status: ExitStatus,
     /// The path accesses of the command.
     pub path_accesses: HashMap<RelativePathBuf, AccessMode>,
+}
+
+/// Resolve a binary name to a full path using the `which` crate.
+/// Handles PATHEXT (`.cmd`/`.bat`) resolution natively on Windows.
+///
+/// If `path_env` is `None`, searches the process's current `PATH`.
+pub fn resolve_bin(
+    bin_name: &str,
+    path_env: Option<&OsStr>,
+    cwd: impl AsRef<AbsolutePath>,
+) -> Result<AbsolutePathBuf, Error> {
+    let current_path;
+    let path_env = match path_env {
+        Some(p) => p,
+        None => {
+            current_path = std::env::var_os("PATH").unwrap_or_default();
+            &current_path
+        }
+    };
+    let path = which::which_in(bin_name, Some(path_env), cwd.as_ref())
+        .map_err(|_| Error::CannotFindBinaryPath(bin_name.into()))?;
+    AbsolutePathBuf::new(path).ok_or_else(|| Error::CannotFindBinaryPath(bin_name.into()))
+}
+
+/// Build a `tokio::process::Command` for a pre-resolved binary path.
+/// Sets inherited stdio and `fix_stdio_streams` (Unix pre_exec).
+/// Callers can further customize (add args, envs, override stdio, etc.).
+pub fn build_command(bin_path: &AbsolutePath, cwd: &AbsolutePath) -> Command {
+    let mut cmd = Command::new(bin_path.as_path());
+    cmd.current_dir(cwd).stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit());
+
+    #[cfg(unix)]
+    unsafe {
+        cmd.pre_exec(|| {
+            fix_stdio_streams();
+            Ok(())
+        });
+    }
+
+    cmd
+}
+
+/// Build a `tokio::process::Command` for shell execution.
+/// Uses `/bin/sh -c` on Unix, `cmd.exe /C` on Windows.
+pub fn build_shell_command(shell_cmd: &str, cwd: &AbsolutePath) -> Command {
+    #[cfg(unix)]
+    let mut cmd = {
+        let mut cmd = Command::new("/bin/sh");
+        cmd.arg("-c").arg(shell_cmd);
+        cmd
+    };
+
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut cmd = Command::new("cmd.exe");
+        cmd.arg("/C").arg(shell_cmd);
+        cmd
+    };
+
+    cmd.current_dir(cwd).stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit());
+
+    #[cfg(unix)]
+    unsafe {
+        cmd.pre_exec(|| {
+            fix_stdio_streams();
+            Ok(())
+        });
+    }
+
+    cmd
 }
 
 /// Run a command with the given bin name, arguments, environment variables, and current working directory.
@@ -40,31 +110,11 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    // Resolve the command path using which crate
-    // If PATH is provided in envs, use which_in to search in custom paths
-    // Otherwise, use which to search in system PATH
-    let paths = envs.get("PATH");
     let cwd = cwd.as_ref();
-    let bin_path = which::which_in(bin_name, paths, cwd)
-        .map_err(|_| Error::CannotFindBinaryPath(bin_name.into()))?;
-
-    let mut cmd = Command::new(bin_path);
-    cmd.args(args)
-        .envs(envs)
-        .current_dir(cwd)
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
-
-    // fix stdio streams on unix
-    #[cfg(unix)]
-    unsafe {
-        cmd.pre_exec(|| {
-            fix_stdio_streams();
-            Ok(())
-        });
-    }
-
+    let paths = envs.get("PATH");
+    let bin_path = resolve_bin(bin_name, paths.map(|p| OsStr::new(p.as_str())), cwd)?;
+    let mut cmd = build_command(&bin_path, cwd);
+    cmd.args(args).envs(envs);
     let status = cmd.status().await?;
     Ok(status)
 }

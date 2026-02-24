@@ -1,0 +1,6 @@
+{
+  "name": "cycle-a",
+  "dependencies": {
+    "cycle-b": "workspace:*"
+  }
+}

@@ -11,6 +11,7 @@ Vite+/<semver>
   [1mfmt[0m        Format code
   [1mpack[0m       Build library
   [1mrun[0m        Run tasks
+  [1mexec[0m       Execute a command from local node_modules/.bin
   [1mpreview[0m    Preview production build
   [1mcache[0m      Manage the task cache
 

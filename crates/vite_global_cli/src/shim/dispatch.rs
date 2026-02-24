@@ -506,10 +506,9 @@ fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
 
     let filtered_path = std::env::join_paths(filtered_paths).ok()?;
 
-    // Use which::which_in with filtered PATH - stops at first match
+    // Use vite_command::resolve_bin with filtered PATH - stops at first match
     let cwd = current_dir().ok()?;
-    let path = which::which_in(tool, Some(filtered_path), cwd).ok()?;
-    AbsolutePathBuf::new(path)
+    vite_command::resolve_bin(tool, Some(&filtered_path), &cwd).ok()
 }
 
 #[cfg(test)]

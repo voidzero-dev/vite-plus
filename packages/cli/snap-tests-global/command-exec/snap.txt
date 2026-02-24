@@ -1,0 +1,57 @@
+> node setup-bin.js
+> vp exec hello-test # exec binary from node_modules/.bin
+hello from test-bin
+
+> vp exec echo hello # basic exec
+hello
+
+> vp exec -- echo with-separator # explicit -- separator
+with-separator
+
+> vp exec node -e "console.log('hi')" # exec with args passthrough
+hi
+
+> vp exec -c 'echo hello from shell' # shell mode
+hello from shell
+
+> vp exec --help # should show help message
+Execute a command from local node_modules/.bin
+
+Usage: vp exec [OPTIONS] [--] <command> [args...]
+
+Arguments:
+  <command>  Command to execute from node_modules/.bin
+  [args...]  Arguments to pass to the command
+
+Options:
+  -c, --shell-mode              Execute the command within a shell environment
+  -r, --recursive               Run in every workspace package
+  -w, --workspace-root          Run on the workspace root package only
+      --include-workspace-root  Include workspace root when running recursively
+      --filter <PATTERN>        Filter packages (can be used multiple times)
+      --parallel                Run concurrently without topological ordering
+      --reverse                 Reverse execution order
+      --resume-from <PACKAGE>   Resume from a specific package
+      --report-summary          Save results to vp-exec-summary.json
+  -h, --help                    Print help
+
+Examples:
+  vp exec eslint .                            # Run local eslint
+  vp exec tsc --noEmit                        # Run local TypeScript compiler
+  vp exec -c 'eslint . && prettier --check .' # Shell mode
+  vp exec -r -- eslint .                      # Run in all workspace packages
+  vp exec --filter 'app...' -- tsc            # Run in filtered packages
+
+[1]> vp exec # missing command should error
+[1m[31merror:[39m[0m 'vp exec' requires a command to run
+
+Usage: vp exec [--] <command> [args...]
+
+Examples:
+  vp exec eslint .
+  vp exec tsc --noEmit
+
+[1]> vp exec nonexistent-cmd-12345 # command not found error
+[1m[31merror:[39m[0m Command 'nonexistent-cmd-12345' not found in node_modules/.bin
+
+Hint: Run 'vp install' to install dependencies, or use 'vpx' for remote fallback.

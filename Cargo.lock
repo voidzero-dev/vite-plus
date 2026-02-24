@@ -7128,9 +7128,11 @@ dependencies = [
  "async-trait",
  "clap",
  "fspy",
+ "glob",
  "napi",
  "napi-build",
  "napi-derive",
+ "petgraph 0.8.3",
  "pretty_assertions",
  "rolldown_binding",
  "rustc-hash",
@@ -7147,7 +7149,6 @@ dependencies = [
  "vite_str",
  "vite_task",
  "vite_workspace",
- "which",
 ]
 
 [[package]]
@@ -7217,6 +7218,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "vite_command",
  "vite_error",
  "vite_install",
  "vite_js_runtime",
@@ -7224,7 +7226,6 @@ dependencies = [
  "vite_shared",
  "vite_str",
  "vite_workspace",
- "which",
 ]
 
 [[package]]

@@ -1,0 +1,6 @@
+{
+  "name": "exec-monorepo-order",
+  "workspaces": [
+    "packages/*"
+  ]
+}
