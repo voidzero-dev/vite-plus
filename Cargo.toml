@@ -2,6 +2,20 @@
 resolver = "3"
 members = ["bench", "crates/*", "packages/cli/binding"]
 
+[workspace.metadata.cargo-shear]
+ignored = [
+  # These workspace dependencies are used by rolldown crates, not our local crates
+  "html5gum",
+  "rolldown_filter_analyzer",
+  "rolldown_plugin_vite_asset",
+  "rolldown_plugin_vite_asset_import_meta_url",
+  "rolldown_plugin_vite_css",
+  "rolldown_plugin_vite_css_post",
+  "rolldown_plugin_vite_html",
+  "rolldown_plugin_vite_html_inline_proxy",
+  "string_cache",
+]
+
 [workspace.package]
 authors = ["Vite+ Authors"]
 edition = "2024"
@@ -74,6 +88,7 @@ futures-util = "0.3.31"
 glob = "0.3.2"
 heck = "0.5.0"
 hex = "0.4.3"
+html5gum = "0.8.1"
 httpmock = "0.7"
 ignore = "0.4"
 indicatif = "0.18"
@@ -90,9 +105,19 @@ junction = "1.4.1"
 memchr = "2.7.4"
 mimalloc-safe = "0.1.52"
 mime = "0.3.17"
-napi = { version = "3.0.0", default-features = false, features = ["async", "error_anyhow"] }
+napi = { version = "3.0.0", default-features = false, features = [
+  "async",
+  "error_anyhow",
+  "anyhow",
+  "tracing",
+  "object_indexmap",
+] }
 napi-build = "2"
-napi-derive = { version = "3.0.0", default-features = false, features = ["type-def", "strict"] }
+napi-derive = { version = "3.0.0", default-features = false, features = [
+  "type-def",
+  "strict",
+  "tracing",
+] }
 nix = { version = "0.30.1", features = ["dir"] }
 nodejs-built-in-modules = "1.0.0"
 nom = "8.0.0"
@@ -129,6 +154,7 @@ sha1 = "0.10.6"
 sha2 = "0.10.9"
 simdutf8 = "0.1.5"
 smallvec = "1.15.0"
+string_cache = "0.9.0"
 sugar_path = { version = "1.2.1", features = ["cached_current_dir"] }
 tar = "0.4.43"
 tempfile = "3.14.0"
@@ -170,7 +196,7 @@ xxhash-rust = "0.8.15"
 zip = "7.2"
 
 # oxc crates with the same version
-oxc = { version = "0.111.0", features = [
+oxc = { version = "0.114.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -182,17 +208,18 @@ oxc = { version = "0.111.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.111.0", features = ["pool"] }
-oxc_ecmascript = "0.111.0"
-oxc_minify_napi = "0.111.0"
-oxc_parser_napi = "0.111.0"
-oxc_transform_napi = "0.111.0"
-oxc_traverse = "0.111.0"
+oxc_allocator = { version = "0.114.0", features = ["pool"] }
+oxc_ecmascript = "0.114.0"
+oxc_napi = "0.114.0"
+oxc_minify_napi = "0.114.0"
+oxc_parser_napi = "0.114.0"
+oxc_transform_napi = "0.114.0"
+oxc_traverse = "0.114.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "4", features = ["rayon", "serde"] }
-oxc_resolver = { version = "11.15.0", features = ["yarn_pnp"] }
-oxc_resolver_napi = { version = "11.15.0", default-features = false, features = ["yarn_pnp"] }
+oxc_resolver = { version = "11.17.1", features = ["yarn_pnp"] }
+oxc_resolver_napi = { version = "11.17.1", default-features = false, features = ["yarn_pnp"] }
 oxc_sourcemap = "6"
 
 # rolldown crates
@@ -206,9 +233,11 @@ rolldown_devtools_action = { path = "./rolldown/crates/rolldown_devtools_action"
 rolldown_ecmascript = { path = "./rolldown/crates/rolldown_ecmascript" }
 rolldown_ecmascript_utils = { path = "./rolldown/crates/rolldown_ecmascript_utils" }
 rolldown_error = { path = "./rolldown/crates/rolldown_error" }
+rolldown_filter_analyzer = { path = "./rolldown/crates/rolldown_filter_analyzer" }
 rolldown_fs = { path = "./rolldown/crates/rolldown_fs" }
 rolldown_fs_watcher = { path = "./rolldown/crates/rolldown_fs_watcher" }
 rolldown_plugin = { path = "./rolldown/crates/rolldown_plugin" }
+rolldown_plugin_bundle_analyzer = { path = "./rolldown/crates/rolldown_plugin_bundle_analyzer" }
 rolldown_plugin_chunk_import_map = { path = "./rolldown/crates/rolldown_plugin_chunk_import_map" }
 rolldown_plugin_data_uri = { path = "./rolldown/crates/rolldown_plugin_data_uri" }
 rolldown_plugin_esm_external_require = { path = "./rolldown/crates/rolldown_plugin_esm_external_require" }
@@ -219,8 +248,14 @@ rolldown_plugin_oxc_runtime = { path = "./rolldown/crates/rolldown_plugin_oxc_ru
 rolldown_plugin_replace = { path = "./rolldown/crates/rolldown_plugin_replace" }
 rolldown_plugin_utils = { path = "./rolldown/crates/rolldown_plugin_utils" }
 rolldown_plugin_vite_alias = { path = "./rolldown/crates/rolldown_plugin_vite_alias" }
+rolldown_plugin_vite_asset = { path = "./rolldown/crates/rolldown_plugin_vite_asset" }
+rolldown_plugin_vite_asset_import_meta_url = { path = "./rolldown/crates/rolldown_plugin_vite_asset_import_meta_url" }
 rolldown_plugin_vite_build_import_analysis = { path = "./rolldown/crates/rolldown_plugin_vite_build_import_analysis" }
+rolldown_plugin_vite_css = { path = "./rolldown/crates/rolldown_plugin_vite_css" }
+rolldown_plugin_vite_css_post = { path = "./rolldown/crates/rolldown_plugin_vite_css_post" }
 rolldown_plugin_vite_dynamic_import_vars = { path = "./rolldown/crates/rolldown_plugin_vite_dynamic_import_vars" }
+rolldown_plugin_vite_html = { path = "./rolldown/crates/rolldown_plugin_vite_html" }
+rolldown_plugin_vite_html_inline_proxy = { path = "./rolldown/crates/rolldown_plugin_vite_html_inline_proxy" }
 rolldown_plugin_vite_import_glob = { path = "./rolldown/crates/rolldown_plugin_vite_import_glob" }
 rolldown_plugin_vite_json = { path = "./rolldown/crates/rolldown_plugin_vite_json" }
 rolldown_plugin_vite_load_fallback = { path = "./rolldown/crates/rolldown_plugin_vite_load_fallback" }
@@ -231,7 +266,6 @@ rolldown_plugin_vite_reporter = { path = "./rolldown/crates/rolldown_plugin_vite
 rolldown_plugin_vite_resolve = { path = "./rolldown/crates/rolldown_plugin_vite_resolve" }
 rolldown_plugin_vite_transform = { path = "./rolldown/crates/rolldown_plugin_vite_transform" }
 rolldown_plugin_vite_wasm_fallback = { path = "./rolldown/crates/rolldown_plugin_vite_wasm_fallback" }
-rolldown_plugin_vite_wasm_helper = { path = "./rolldown/crates/rolldown_plugin_vite_wasm_helper" }
 rolldown_plugin_vite_web_worker_post = { path = "./rolldown/crates/rolldown_plugin_vite_web_worker_post" }
 rolldown_resolver = { path = "./rolldown/crates/rolldown_resolver" }
 rolldown_sourcemap = { path = "./rolldown/crates/rolldown_sourcemap" }
@@ -240,6 +274,7 @@ rolldown_testing = { path = "./rolldown/crates/rolldown_testing" }
 rolldown_testing_config = { path = "./rolldown/crates/rolldown_testing_config" }
 rolldown_tracing = { path = "./rolldown/crates/rolldown_tracing" }
 rolldown_utils = { path = "./rolldown/crates/rolldown_utils" }
+rolldown_watcher = { path = "./rolldown/crates/rolldown_watcher" }
 rolldown_workspace = { path = "./rolldown/crates/rolldown_workspace" }
 string_wizard = { path = "./rolldown/crates/string_wizard", features = ["serde"] }
 

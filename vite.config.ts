@@ -11,6 +11,7 @@ export default defineConfig({
     rules: {
       'eslint/no-await-in-loop': 'off',
       'no-console': ['error', { allow: ['error'] }],
+      'no-shadow': 'off',
       'typescript/no-unnecessary-boolean-literal-compare': 'off',
       'typescript/no-unsafe-type-assertion': 'off',
       curly: 'error',
@@ -33,6 +34,7 @@ export default defineConfig({
       {
         files: ['packages/cli/src/oxlint-config.ts'],
         rules: {
+          'no-shadow': 'off',
           'typescript/no-explicit-any': 'off',
           'typescript/no-extraneous-class': 'off',
         },
@@ -48,6 +50,7 @@ export default defineConfig({
       '**/snap-tests/**',
       '**/snap-tests-global/**',
       '**/snap-tests-todo/**',
+      'packages/*/binding/**',
       'packages/core/rollupLicensePlugin.ts',
       'packages/core/vite-rolldown.config.ts',
     ],
@@ -93,7 +96,6 @@ export default defineConfig({
           'value-sibling',
           'value-index',
         ],
-        ['ts-equals-import'],
         ['unknown'],
       ],
       newlinesBetween: true,
