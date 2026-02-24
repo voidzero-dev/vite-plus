@@ -58,19 +58,6 @@ $ vp pack src/index.ts
 ✔ Build complete in <variable>ms
 
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Vite+ Task Runner • Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
-Performance:  0% cache hit rate
-
-Task Details:
-────────────────────────────────────────────────
-  [1] command-pack#pack: $ vp pack src/index.ts ✓
-      → Cache miss: no previous cache entry found
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 > ls dist # should have the library
 index.mjs
 
@@ -82,16 +69,5 @@ $ vp pack src/index.ts ✓ cache hit, replaying
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
 
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Vite+ Task Runner • Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate, <variable>ms saved in total
-
-Task Details:
-────────────────────────────────────────────────
-  [1] command-pack#pack: $ vp pack src/index.ts ✓
-      → Cache hit - output replayed - <variable>ms saved
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+---
+[vp run] cache hit, <variable>ms saved.

@@ -23,14 +23,16 @@ Options:
 > vp run -h # vp run should show help
 Run tasks
 
-Usage: vp run [OPTIONS] <TASK_SPECIFIER> [ADDITIONAL_ARGS]...
+Usage: vp run [OPTIONS] [TASK_SPECIFIER] [ADDITIONAL_ARGS]...
 
 Arguments:
-  <TASK_SPECIFIER>      `packageName#taskName` or `taskName`
+  [TASK_SPECIFIER]      `packageName#taskName` or `taskName`. If omitted, lists all available tasks
   [ADDITIONAL_ARGS]...  Additional arguments to pass to the tasks
 
 Options:
   -r, --recursive          Run tasks found in all packages in the workspace, in topological order based on package dependencies
   -t, --transitive         Run tasks found in the current package and all its transitive dependencies, in topological order based on package dependencies
       --ignore-depends-on  Do not run dependencies specified in `dependsOn` fields
+  -v, --verbose            Show full detailed summary after execution
+      --last-details       Display the detailed summary of the last run
   -h, --help               Print help

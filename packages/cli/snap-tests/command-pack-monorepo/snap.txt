@@ -4,8 +4,7 @@ index.cjs
 
 > vp run hello#build | grep 'cache hit' # should hit cache
 ~/packages/hello$ vp pack ✓ cache hit, replaying
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate, <variable>ms saved in total
+[vp run] cache hit, <variable>ms saved.
 
 > vp run array-config#build # should build the library supports array config
 > ls packages/array-config/dist # should have the library
@@ -14,8 +13,7 @@ index.mjs
 
 > vp run array-config#build | grep 'cache hit' # should hit cache
 ~/packages/array-config$ vp pack ✓ cache hit, replaying
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate, <variable>ms saved in total
+[vp run] cache hit, <variable>ms saved.
 
 > vp run default-config#build # should build the library supports default config
 > ls packages/default-config/dist # should have the library
@@ -23,5 +21,4 @@ index.mjs
 
 > vp run default-config#build | grep 'cache hit' # should hit cache
 ~/packages/default-config$ vp pack ✓ cache hit, replaying
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate, <variable>ms saved in total
+[vp run] cache hit, <variable>ms saved.

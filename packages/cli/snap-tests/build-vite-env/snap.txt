@@ -10,19 +10,6 @@ dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
 ✓ built in <variable>ms
 
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Vite+ Task Runner • Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
-Performance:  0% cache hit rate
-
-Task Details:
-────────────────────────────────────────────────
-  [1] build-vite-env-test#build: $ vp build ✓
-      → Cache miss: no previous cache entry found
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 > VITE_MY_VAR=1 vp run build # should hit cache
 $ vp build ✓ cache hit, replaying
 vite+ v<semver> building client environment for production...
@@ -34,19 +21,8 @@ dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
 
 ✓ built in <variable>ms
 
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Vite+ Task Runner • Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Statistics:   1 tasks • 1 cache hits • 0 cache misses 
-Performance:  100% cache hit rate, <variable>ms saved in total
-
-Task Details:
-────────────────────────────────────────────────
-  [1] build-vite-env-test#build: $ vp build ✓
-      → Cache hit - output replayed - <variable>ms saved
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+---
+[vp run] cache hit, <variable>ms saved.
 
 > VITE_MY_VAR=2 vp run build # env changed, should miss cache
 $ vp build ✗ cache miss: envs changed, executing
@@ -59,16 +35,3 @@ dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
 
 ✓ built in <variable>ms
 
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Vite+ Task Runner • Execution Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Statistics:   1 tasks • 0 cache hits • 1 cache misses 
-Performance:  0% cache hit rate
-
-Task Details:
-────────────────────────────────────────────────
-  [1] build-vite-env-test#build: $ vp build ✓
-      → Cache miss: env VITE_MY_VAR value changed from '1' to '2'
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

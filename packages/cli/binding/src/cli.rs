@@ -16,7 +16,8 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{PrependOptions, prepend_to_path_env};
 use vite_str::Str;
 use vite_task::{
-    Command, CommandHandler, ExitStatus, HandledCommand, ScriptCommand, Session, SessionCallbacks,
+    Command, CommandHandler, ExitStatus, HandledCommand, ParsedCommand, ScriptCommand, Session,
+    SessionCallbacks,
     config::{
         UserRunConfig,
         user::{EnabledCacheConfig, UserCacheConfig},
@@ -107,7 +108,7 @@ pub enum SynthesizableSubcommand {
 enum CLIArgs {
     /// vite-task commands (run, cache)
     #[command(flatten)]
-    ViteTask(Command),
+    ViteTask(ParsedCommand),
 
     /// Built-in subcommands (lint, build, test, etc.)
     #[command(flatten)]
@@ -588,7 +589,7 @@ impl CommandHandler for VitePlusCommandHandler {
                 let resolved = self.resolver.resolve(subcmd, &command.envs, &command.cwd).await?;
                 Ok(HandledCommand::Synthesized(resolved.into_synthetic_plan_request()))
             }
-            CLIArgs::ViteTask(cmd) => Ok(HandledCommand::ViteTaskCommand(cmd)),
+            CLIArgs::ViteTask(cmd) => Ok(HandledCommand::ViteTaskCommand(cmd.into_command())),
         }
     }
 }
@@ -824,7 +825,9 @@ pub async fn main(
 
     match cli_args {
         CLIArgs::Synthesizable(subcmd) => execute_direct_subcommand(subcmd, &cwd, options).await,
-        CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
+        CLIArgs::ViteTask(command) => {
+            execute_vite_task_command(command.into_command(), cwd, options).await
+        }
     }
 }
 
