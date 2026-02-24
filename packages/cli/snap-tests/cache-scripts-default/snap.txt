@@ -3,4 +3,3 @@ $ node hello.mjs ⊘ cache disabled: no cache config
 
 > vp run hello 2>&1 | grep 'cache disabled' # second run should also show cache disabled
 $ node hello.mjs ⊘ cache disabled: no cache config
-
