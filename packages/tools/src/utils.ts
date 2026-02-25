@@ -18,12 +18,6 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
     // Pattern: backslash between alphanumeric/dot/underscore/hyphen chars
     output = output.replaceAll(/([a-zA-Z0-9._-])\\([a-zA-Z0-9._-])/g, '$1/$2');
   }
-  // Strip ANSI escape codes. Tests set NO_COLOR=1 so vp's own output is clean,
-  // but third-party tools (e.g. rolldown reporter, clap help text) may still emit
-  // ANSI codes that leak into captured output. This covers SGR (\x1b[...m),
-  // erase-line (\x1b[...K), cursor movement, and other CSI sequences.
-  // eslint-disable-next-line no-control-regex
-  output = output.replaceAll(/\x1b\[[0-9;]*[A-Za-z]/g, '');
   return (
     output
       // semver version
