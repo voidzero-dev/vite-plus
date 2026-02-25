@@ -27,13 +27,13 @@ Install Vite+ globally as `vp`:
 For Linux or macOS:
 
 ```bash
-curl -fsSL https://viteplus.dev/install.sh | bash
+curl -fsSL https://staging.viteplus.dev/install.sh | bash
 ```
 
 For Windows:
 
 ```bash
-irm https://viteplus.dev/install.ps1 | iex
+irm https://staging.viteplus.dev/install.ps1 | iex
 ```
 
 `vp` handles the full development lifecycle such as package management, development servers, linting, formatting, testing and building for production.
@@ -82,6 +82,17 @@ You can migrate an existing project to Vite+:
 
 ```bash
 vp migrate
+```
+
+### GitHub Actions
+
+Use the official [`setup-vp`](https://github.com/voidzero-dev/setup-vp) action to install Vite+ in GitHub Actions:
+
+```yaml
+- uses: voidzero-dev/setup-vp@v1
+  with:
+    node-version: '22'
+    cache: true
 ```
 
 #### Manual Installation & Migration

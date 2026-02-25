@@ -23,13 +23,13 @@ Install Vite+ globally as `vp`:
 For Linux or macOS:
 
 ```bash
-curl -fsSL https://viteplus.dev/install.sh | bash
+curl -fsSL https://staging.viteplus.dev/install.sh | bash
 ```
 
 For Windows:
 
 ```bash
-irm https://viteplus.dev/install.ps1 | iex
+irm https://staging.viteplus.dev/install.ps1 | iex
 ```
 
 ## Node.js Version Manager
@@ -135,6 +135,43 @@ View cache operations:
 ```bash
 vp run build -r --debug
 ```
+
+## CI/CD
+
+Use the official [`setup-vp`](https://github.com/voidzero-dev/setup-vp) GitHub Action to install Vite+ in CI:
+
+### Basic usage
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: voidzero-dev/setup-vp@v1
+    with:
+      node-version: '22'
+      cache: true
+  - run: vp run build -r
+  - run: vp run test -r
+```
+
+### Matrix testing
+
+```yaml
+jobs:
+  test:
+    strategy:
+      matrix:
+        node-version: ['20', '22', '24']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: true
+      - run: vp run test -r
+```
+
+See the [setup-vp README](https://github.com/voidzero-dev/setup-vp) for all options.
 
 ## Next Steps
 
