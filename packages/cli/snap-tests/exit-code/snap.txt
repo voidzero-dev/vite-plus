@@ -1,10 +1,10 @@
 > vp run script1 # script1 run, create the cache and should be success
-$ echo 'success' ⊘ cache disabled: built-in command
+$ echo 'success' ⊘ cache disabled
 success
 
 
 > vp run script1 # script1 should hit the updated cache
-$ echo 'success' ⊘ cache disabled: built-in command
+$ echo 'success' ⊘ cache disabled
 success
 
 

@@ -1,3 +1,3 @@
 > vp run build # synthetic build (vp build) should have cache disabled without cacheScripts
-$ vp build ⊘ cache disabled: no cache config
+$ vp build ⊘ cache disabled
 
