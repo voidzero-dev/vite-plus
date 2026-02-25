@@ -82,7 +82,7 @@ catalog:
   oxc-transform: =0.114.0
   oxfmt: ^0.35.0
   oxlint: ^1.50.0
-  oxlint-tsgolint: ^0.14.2
+  oxlint-tsgolint: ^0.15.0
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
