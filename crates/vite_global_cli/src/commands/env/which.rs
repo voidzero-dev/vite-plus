@@ -10,7 +10,7 @@ use std::process::ExitStatus;
 
 use chrono::Local;
 use owo_colors::OwoColorize;
-use vite_path::AbsolutePathBuf;
+use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::output;
 
 use super::{
@@ -77,7 +77,7 @@ async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatu
     println!("{}", tool_path.as_path().display());
 
     // Print metadata
-    let source_display = format_source(&resolution.source);
+    let source_display = format_source(&resolution.source, resolution.source_path.as_deref());
     println!("  {:<LABEL_WIDTH$}  {}", "Version:".dimmed(), resolution.version.bright_green());
     println!("  {:<LABEL_WIDTH$}  {}", "Source:".dimmed(), source_display.dimmed());
 
@@ -85,11 +85,17 @@ async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatu
 }
 
 /// Format the resolution source for human-friendly display.
-fn format_source(source: &str) -> String {
+///
+/// When a `source_path` is available, shows the full file path instead of just the source type name.
+/// For env var and lts sources, annotations like `(session)` and `(fallback)` are preserved.
+fn format_source(source: &str, source_path: Option<&AbsolutePath>) -> String {
     match source {
         s if s == VERSION_ENV_VAR => format!("{s} (session)"),
         "lts" => "lts (fallback)".to_string(),
-        other => other.to_string(),
+        _ => match source_path {
+            Some(path) => path.as_path().display().to_string(),
+            None => source.to_string(),
+        },
     }
 }
 

@@ -4,17 +4,17 @@ v20.18.0
 > vp env which node # Core tool - shows resolved Node.js binary path
 <vite-plus-home>/js_runtime/node/<semver>/bin/node
   [2mVersion:  [0m  [92m20.18.0[39m
-  [2mSource:   [0m  [2m.node-version[0m
+  [2mSource:   [0m  [2m<cwd>/.node-version[0m
 
 > vp env which npm # Core tool - shows resolved npm binary path
 <vite-plus-home>/js_runtime/node/<semver>/bin/npm
   [2mVersion:  [0m  [92m20.18.0[39m
-  [2mSource:   [0m  [2m.node-version[0m
+  [2mSource:   [0m  [2m<cwd>/.node-version[0m
 
 > vp env which npx # Core tool - shows resolved npx binary path
 <vite-plus-home>/js_runtime/node/<semver>/bin/npx
   [2mVersion:  [0m  [92m20.18.0[39m
-  [2mSource:   [0m  [2m.node-version[0m
+  [2mSource:   [0m  [2m<cwd>/.node-version[0m
 
 > vp install -g cowsay@1.6.0 # Install a global package via vp
   Installing cowsay@<semver> globally...

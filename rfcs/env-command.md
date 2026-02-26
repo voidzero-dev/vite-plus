@@ -1307,12 +1307,12 @@ Shows the path to the tool binary that would be executed. The first line is alwa
 $ vp env which node
 /Users/user/.vite-plus/js_runtime/node/20.18.0/bin/node
   Version:    20.18.0
-  Source:     .node-version
+  Source:     /Users/user/projects/my-app/.node-version
 
 $ vp env which npm
 /Users/user/.vite-plus/js_runtime/node/20.18.0/bin/npm
   Version:    20.18.0
-  Source:     .node-version
+  Source:     /Users/user/projects/my-app/.node-version
 ```
 
 When using session override:

@@ -543,7 +543,12 @@ async fn check_current_resolution(cwd: &AbsolutePathBuf) {
 
     match resolve_version(cwd).await {
         Ok(resolution) => {
-            print_check(" ", "Source", &resolution.source);
+            let source_display = resolution
+                .source_path
+                .as_ref()
+                .map(|p| p.as_path().display().to_string())
+                .unwrap_or(resolution.source);
+            print_check(" ", "Source", &source_display);
             print_check(" ", "Version", &resolution.version.bright_green().to_string());
 
             // Check if Node.js is installed
