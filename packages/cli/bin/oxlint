@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+
+// LSP-only wrapper for oxlint.
+// This enables IDE extensions (e.g., oxc-vscode) to discover and start the LSP server.
+// Binary resolution follows the same approach as `src/resolve-lint.ts`.
+
+if (!process.argv.includes('--lsp')) {
+  console.error('This oxlint wrapper is for IDE extension use only (--lsp mode).');
+  console.error('To lint your code, run: vp lint');
+  process.exit(1);
+}
+
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+
+const require = createRequire(import.meta.url);
+const oxlintMainPath = require.resolve('oxlint');
+const oxlintBin = join(dirname(dirname(oxlintMainPath)), 'bin', 'oxlint');
+
+await import(oxlintBin);

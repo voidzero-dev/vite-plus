@@ -2,6 +2,8 @@
   "name": "vite-plus",
   "version": "0.0.0",
   "bin": {
+    "oxfmt": "./bin/oxfmt",
+    "oxlint": "./bin/oxlint",
     "vp": "./bin/vp"
   },
   "files": [

@@ -1,0 +1,7 @@
+[1]> oxfmt # should reject non-LSP usage
+This oxfmt wrapper is for IDE extension use only (--lsp mode).
+To format your code, run: vp fmt
+
+[1]> oxfmt --help # should reject non-LSP usage
+This oxfmt wrapper is for IDE extension use only (--lsp mode).
+To format your code, run: vp fmt

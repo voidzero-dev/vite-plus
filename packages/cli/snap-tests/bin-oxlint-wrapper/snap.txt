@@ -1,0 +1,7 @@
+[1]> oxlint # should reject non-LSP usage
+This oxlint wrapper is for IDE extension use only (--lsp mode).
+To lint your code, run: vp lint
+
+[1]> oxlint --help # should reject non-LSP usage
+This oxlint wrapper is for IDE extension use only (--lsp mode).
+To lint your code, run: vp lint

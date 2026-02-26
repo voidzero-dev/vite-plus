@@ -1,0 +1,7 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "oxlint # should reject non-LSP usage",
+    "oxlint --help # should reject non-LSP usage"
+  ]
+}
