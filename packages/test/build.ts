@@ -1138,7 +1138,8 @@ function rewriteImportsWithAst(
   }
 
   // Sort replacements in reverse order (end to start) to preserve positions
-  const replacements = [...replacementMap.values()].toSorted((a, b) => b[0] - a[0]);
+  // eslint-disable-next-line unicorn/no-array-sort -- safe: sorting a fresh spread copy
+  const replacements = [...replacementMap.values()].sort((a, b) => b[0] - a[0]);
 
   // Apply replacements
   let result_content = content;

@@ -83,7 +83,8 @@ export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOpt
         dirs.add(dir);
       }
     }
-    result.parentDirs = Array.from(dirs).toSorted();
+    // eslint-disable-next-line unicorn/no-array-sort -- safe: sorting a fresh Array.from copy
+    result.parentDirs = Array.from(dirs).sort();
 
     // Extract the scope from the package.json
     const pkg = readJsonFile<{ name?: string }>(packageJsonFile);
