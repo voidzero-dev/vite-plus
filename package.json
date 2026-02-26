@@ -9,7 +9,7 @@
     "bootstrap-cli:ci": "pnpm install-global-cli",
     "install-global-cli": "tool install-global-cli",
     "tsgo": "tsgo -b tsconfig.json",
-    "lint": "vp lint --type-aware --threads 4",
+    "lint": "vp lint --type-aware --type-check --threads 4",
     "test": "vp test run && pnpm -r snap-test",
     "fmt": "vp fmt",
     "test:unit": "vp test run",
