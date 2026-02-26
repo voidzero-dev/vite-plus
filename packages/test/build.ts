@@ -720,7 +720,7 @@ async function bundleLeafDeps(leafDeps: Set<string>): Promise<Map<string, string
         entryFileNames: '[name].mjs',
         chunkFileNames: 'shared-[hash].mjs',
       },
-      platform: 'node',
+      platform: 'neutral',
       treeshake: false,
       external: [
         // Keep node built-ins external
@@ -736,6 +736,7 @@ async function bundleLeafDeps(leafDeps: Set<string>): Promise<Map<string, string
       ],
       resolve: {
         conditionNames: ['node', 'import', 'default'],
+        mainFields: ['module', 'main'],
       },
       logLevel: 'warn',
     });
@@ -1150,17 +1151,25 @@ async function fixCjsNamedExports(vendorFilePath: string, specifier: string) {
   // Match pattern like: export default require_xxx();
   // and: export {  };
   const defaultExportMatch = content.match(/export default (require_\w+)\(\);/);
-  const emptyExportMatch = content.match(/export \{\s*\};/);
 
-  if (defaultExportMatch && emptyExportMatch) {
+  if (defaultExportMatch) {
     const requireFn = defaultExportMatch[1];
     console.log(`      Fixing CJS named exports for ${specifier}...`);
 
-    // Replace empty export with named exports from the default
-    content = content.replace(
-      /export default (require_\w+)\(\);\s*\nexport \{\s*\};/,
-      `const __cjs_export__ = ${requireFn}();\nexport const { expectTypeOf } = __cjs_export__;\nexport default __cjs_export__;`,
-    );
+    const emptyExportMatch = content.match(/export \{\s*\};/);
+    if (emptyExportMatch) {
+      // Pattern: export default require_xxx();\nexport {  };
+      content = content.replace(
+        /export default (require_\w+)\(\);\s*\nexport \{\s*\};/,
+        `const __cjs_export__ = ${requireFn}();\nexport const { expectTypeOf } = __cjs_export__;\nexport default __cjs_export__;`,
+      );
+    } else {
+      // Pattern: export default require_xxx(); (no empty export block)
+      content = content.replace(
+        /export default (require_\w+)\(\);/,
+        `const __cjs_export__ = ${requireFn}();\nexport const { expectTypeOf } = __cjs_export__;\nexport default __cjs_export__;`,
+      );
+    }
 
     await writeFile(vendorFilePath, content, 'utf-8');
   }
