@@ -229,6 +229,12 @@ jobs:
               vp run lint
               vp run test:run
               npx tsc --noEmit
+          - name: vite-vue-vercel
+            node-version: 24
+            command: |
+              npx playwright install chromium
+              vp run test
+              vp run build
           - name: dify
             node-version: 24
             directory: web
