@@ -132,6 +132,8 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       // [PLUGIN_TIMINGS] Warning: Your build spent significant time in plugins. Here is a breakdown:
       //   - externalize-deps (74%)
       .replaceAll(/\[PLUGIN_TIMINGS\] Warning:.*?\n(?:\s+-\s+.+?\n)*/g, '')
+      // remove JS stack traces (lines starting with "    at ")
+      .replaceAll(/\n\s+at .+/g, '')
   );
 }
 

@@ -1,10 +1,4 @@
 [1]> vp pack # should not mention tsdown in error
 
  ERROR  Error: undefined No input files, try "vp pack <your-file>" or create src/index.ts
-    at resolveEntry (file://<homedir>/git/github.com/voidzero-dev/vite-plus/packages/core/dist/tsdown/build-C5RQkVSf-TFRE7tGr.js:3078:14)
-    at async resolveUserConfig (file://<homedir>/git/github.com/voidzero-dev/vite-plus/packages/core/dist/tsdown/build-C5RQkVSf-TFRE7tGr.js:3511:24)
-    at async runBuild (file://<homedir>/git/github.com/voidzero-dev/vite-plus/packages/cli/dist/pack-bin.js:81:36)
-    at async CAC.<anonymous> (file://<homedir>/git/github.com/voidzero-dev/vite-plus/packages/cli/dist/pack-bin.js:86:5)
-    at async runCLI (file://<homedir>/git/github.com/voidzero-dev/vite-plus/packages/cli/dist/pack-bin.js:92:9)
-    at async file://<homedir>/git/github.com/voidzero-dev/vite-plus/packages/cli/dist/pack-bin.js:102:1
 
