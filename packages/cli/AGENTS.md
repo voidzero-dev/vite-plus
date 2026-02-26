@@ -15,6 +15,7 @@ This project is using Vite+, a modern toolchain built on top of Vite, Rolldown, 
 - lint - Lint code
 - test - Run tests
 - fmt - Format code
+- check - Run format, lint, and type checks
 - lib - Build library
 - migrate - Migrate an existing project to Vite+
 - create - Create a new monorepo package (in-project) or a new project (global)

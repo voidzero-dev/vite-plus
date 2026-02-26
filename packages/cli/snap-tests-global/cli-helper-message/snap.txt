@@ -10,6 +10,7 @@ Core Commands:
   test                           Run tests
   lint                           Lint code
   fmt                            Format code
+  check                          Run format, lint, and type checks
   pack                           Build library
   run                            Run tasks
   exec                           Execute a command from local node_modules/.bin

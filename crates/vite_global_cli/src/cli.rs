@@ -569,6 +569,14 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// Run format, lint, and type checks
+    #[command(disable_help_flag = true)]
+    Check {
+        /// Additional arguments
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
     /// Build library
     #[command(disable_help_flag = true)]
     Pack {
@@ -1795,6 +1803,8 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
 
         Commands::Fmt { args } => commands::delegate::execute(cwd, "fmt", &args).await,
 
+        Commands::Check { args } => commands::delegate::execute(cwd, "check", &args).await,
+
         Commands::Pack { args } => commands::delegate::execute(cwd, "pack", &args).await,
 
         Commands::Run { args } => commands::run_or_delegate::execute(cwd, &args).await,
@@ -1857,6 +1867,7 @@ fn apply_custom_help(cmd: clap::Command) -> clap::Command {
   {bold}test{reset}                           Run tests
   {bold}lint{reset}                           Lint code
   {bold}fmt{reset}                            Format code
+  {bold}check{reset}                          Run format, lint, and type checks
   {bold}pack{reset}                           Build library
   {bold}run{reset}                            Run tasks
   {bold}exec{reset}                           Execute a command from local node_modules/.bin

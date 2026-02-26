@@ -69,6 +69,7 @@ export default defineConfig({
   fmt: {
     ignorePatterns: [
       '**/tmp/**',
+      'packages/cli/snap-tests/check-*/**',
       'packages/cli/snap-tests/fmt-ignore-patterns/src/ignored',
       'ecosystem-ci/*/**',
       'packages/test/**.cjs',

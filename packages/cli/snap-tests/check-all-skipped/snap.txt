@@ -1,0 +1,1 @@
+> vp check --no-fmt --no-lint

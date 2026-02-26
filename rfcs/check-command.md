@@ -1,0 +1,209 @@
+# RFC: `vp check` Command
+
+## Summary
+
+Add `vp check` as a built-in command that runs format verification, linting, and type checking in a single invocation. This provides a single "fast check" command for CI and local development, distinct from "slow checks" like test suites.
+
+## Motivation
+
+Currently, running a full code quality check requires chaining multiple commands:
+
+```bash
+# From the monorepo template's "ready" script:
+vp fmt && vp lint --type-aware && vp run test -r && vp run build -r
+```
+
+Pain points:
+
+- **No single command** for the most common pre-commit/CI check: "is my code correct?"
+- Users must remember to pass `--type-aware` and `--type-check` to lint
+- The `&&` chaining pattern is fragile and verbose
+- No standardized "check" workflow across projects
+
+### Fast vs Slow Checks
+
+- **Fast checks** (seconds): type checking + linting + formatting — static analysis, no code execution
+- **Slow checks** (minutes): test suites (Vitest) — code execution
+
+`vp check` targets the **fast checks** category. Tests are explicitly excluded — use `vp test` for that.
+
+## Command Syntax
+
+```bash
+# Run all fast checks (fmt --check + lint --type-aware --type-check)
+vp check
+
+# Disable specific checks
+vp check --no-fmt
+vp check --no-lint
+vp check --no-type-aware
+vp check --no-type-check
+```
+
+### Options
+
+| Flag                               | Default | Description                                             |
+| ---------------------------------- | ------- | ------------------------------------------------------- |
+| `--fmt` / `--no-fmt`               | ON      | Run format check (`vp fmt --check`)                     |
+| `--lint` / `--no-lint`             | ON      | Run lint check (`vp lint`)                              |
+| `--type-aware` / `--no-type-aware` | ON      | Enable type-aware lint rules (oxlint `--type-aware`)    |
+| `--type-check` / `--no-type-check` | ON      | Enable TypeScript type checking (oxlint `--type-check`) |
+
+**Flag dependency:** `--type-check` requires `--type-aware` as a prerequisite.
+
+- `--type-aware` enables lint rules that use type information (e.g., `no-floating-promises`)
+- `--type-check` enables experimental TypeScript compiler-level type checking (requires type-aware)
+- If `--no-type-aware` is set, `--type-check` is also implicitly disabled
+
+Both are enabled by default in `vp check` to provide comprehensive static analysis.
+
+## Behavior
+
+### Alpha (Non-Parallel, Sequential)
+
+Commands run **sequentially** with fail-fast semantics:
+
+```
+1. vp fmt --check                          (verify formatting, don't auto-fix)
+2. vp lint --type-aware --type-check       (lint + type checking)
+```
+
+If any step fails, `vp check` exits immediately with a non-zero exit code.
+
+### Future (Parallel)
+
+In a later iteration, steps could run in parallel and aggregate errors.
+
+## Decisions
+
+### Verify only, no auto-fix
+
+`vp check` is a **read-only verification** command. It never modifies files.
+
+- `vp fmt --check` reports unformatted files (doesn't auto-format)
+- `vp lint` reports issues (doesn't auto-fix)
+- To fix issues, users run `vp fmt` and `vp lint --fix` separately
+
+This keeps `vp check` safe for CI and predictable for local dev.
+
+### No `--fix` flag (alpha)
+
+For simplicity in the alpha, there's no `--fix` flag. Users compose fixes manually:
+
+```bash
+vp fmt && vp lint --fix   # fix what's fixable
+vp check                  # verify everything passes
+```
+
+A `--fix` flag could be added later if needed.
+
+### No tests
+
+`vp check` does **not** run Vitest. The distinction is intentional:
+
+- `vp check` = fast static analysis (seconds)
+- `vp test` = test execution (minutes)
+
+## Implementation Architecture
+
+### Rust Global CLI
+
+Add `Check` variant to `Commands` enum in `crates/vite_global_cli/src/cli.rs`:
+
+```rust
+#[command(disable_help_flag = true)]
+Check {
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    args: Vec<String>,
+},
+```
+
+Route via delegation:
+
+```rust
+Commands::Check { args } => commands::delegate::execute(cwd, "check", &args).await,
+```
+
+### NAPI Binding
+
+Add `Check` to `SynthesizableSubcommand` in `packages/cli/binding/src/cli.rs`. The check command internally resolves and runs fmt + lint sequentially, reusing existing resolvers.
+
+### TypeScript Side
+
+No new resolver needed — `vp check` reuses existing `resolve-lint.ts` and `resolve-fmt.ts`.
+
+### Key Files to Modify
+
+1. `crates/vite_global_cli/src/cli.rs` — Add `Check` command variant and routing
+2. `packages/cli/binding/src/cli.rs` — Add check subcommand handling (sequential fmt + lint)
+3. `packages/cli/src/bin.ts` — (if needed for routing)
+
+## CLI Help Output
+
+```
+Run format, lint, and type checks
+
+Usage: vp check [OPTIONS]
+
+Options:
+      --fmt              Run format check [default: true]
+      --lint             Run lint check [default: true]
+      --type-aware       Enable type-aware linting [default: true]
+      --type-check       Enable TypeScript type checking [default: true]
+  -h, --help             Print help
+```
+
+## Relationship to Existing Commands
+
+| Command                             | Purpose                                          | Speed    |
+| ----------------------------------- | ------------------------------------------------ | -------- |
+| `vp fmt`                            | Format code (auto-fix)                           | Fast     |
+| `vp fmt --check`                    | Verify formatting                                | Fast     |
+| `vp lint`                           | Lint code                                        | Fast     |
+| `vp lint --type-aware --type-check` | Lint + full type checking                        | Fast     |
+| `vp test`                           | Run test suite                                   | Slow     |
+| `vp build`                          | Build project                                    | Slow     |
+| **`vp check`**                      | **fmt --check + lint --type-aware --type-check** | **Fast** |
+
+With `vp check`, the monorepo template's "ready" script simplifies to:
+
+```json
+"ready": "vp check && vp run test -r && vp run build -r"
+```
+
+## Comparison with Other Tools
+
+| Tool              | Scope                              |
+| ----------------- | ---------------------------------- |
+| `cargo check`     | Type checking only                 |
+| `cargo clippy`    | Lint only                          |
+| **`biome check`** | **Format + lint (closest analog)** |
+| `deno check`      | Type checking only                 |
+
+## Snap Tests
+
+```
+packages/cli/snap-tests/check-basic/
+  package.json
+  steps.json     # { "steps": [{ "command": "vp check" }] }
+  src/index.ts   # Clean file that passes all checks
+  snap.txt
+
+packages/cli/snap-tests/check-fmt-fail/
+  package.json
+  steps.json     # { "steps": [{ "command": "vp check" }] }
+  src/index.ts   # Badly formatted file
+  snap.txt       # Shows fmt --check failure, lint doesn't run (fail-fast)
+
+packages/cli/snap-tests/check-no-fmt/
+  package.json
+  steps.json     # { "steps": [{ "command": "vp check --no-fmt" }] }
+  snap.txt       # Only lint runs
+```
+
+## Future Enhancements
+
+- Parallel execution of fmt and lint
+- `--fix` flag to auto-fix fixable issues
+- Workspace-aware mode (`vp check -r`) running checks across all packages
+- Integration with `vp run` task graph for caching

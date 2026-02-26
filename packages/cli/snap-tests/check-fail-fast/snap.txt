@@ -1,0 +1,7 @@
+[1]> vp check
+[1m[94minfo:[39m[0m vp fmt --check
+Checking formatting...
+src/index.js (<variable>ms)
+
+Format issues found in above 1 files. Run without `--check` to fix.
+Finished in <variable>ms on 3 files using <variable> threads.

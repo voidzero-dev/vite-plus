@@ -9,6 +9,7 @@ Vite+/<semver>
   [1mtest[0m       Run tests
   [1mlint[0m       Lint code
   [1mfmt[0m        Format code
+  [1mcheck[0m      Run format, lint, and type checks
   [1mpack[0m       Build library
   [1mrun[0m        Run tasks
   [1mexec[0m       Execute a command from local node_modules/.bin
