@@ -1,0 +1,12 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1",
+    "CI": ""
+  },
+  "commands": [
+    "vp migrate --no-interactive # migration should work with npm, add overrides, and update lockfile",
+    "cat package.json # check package.json has overrides field (not pnpm.overrides)",
+    "node -e \"const lock = require('./package-lock.json'); const vite = lock.packages['node_modules/vite']; if (vite && vite.resolved && vite.resolved.includes('@voidzero-dev/vite-plus-core')) console.log('lockfile has vite override'); else { console.error('vite override not found in lockfile'); process.exit(1); }\" # verify lockfile updated with override"
+  ]
+}

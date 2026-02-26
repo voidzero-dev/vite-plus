@@ -206,7 +206,10 @@ async function main() {
   });
 
   // reinstall after migration
-  await runViteInstall(workspaceInfo.rootDir, options.interactive);
+  // npm needs --force to re-resolve packages with newly added overrides,
+  // otherwise the stale lockfile prevents override resolution.
+  const installArgs = packageManager === PackageManager.npm ? ['--force'] : undefined;
+  await runViteInstall(workspaceInfo.rootDir, options.interactive, installArgs);
   prompts.outro(green('✔ Migration completed!'));
 }
 

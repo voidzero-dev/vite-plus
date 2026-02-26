@@ -1,0 +1,8 @@
+{
+  "name": "migration-standalone-npm",
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0"
+  },
+  "packageManager": "npm@10.9.2"
+}

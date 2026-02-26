@@ -1,0 +1,37 @@
+> vp migrate --no-interactive # migration should work with npm, add overrides, and update lockfile
+┌  VITE+ - The Unified Toolchain for the Web
+│
+●  npm@<semver> installing...
+│
+●  npm@<semver> installed
+│
+●  Installing dependencies...
+│
+●  Dependencies installed
+│
+◆  Wrote agent instructions to AGENTS.md
+│
+●  Installing dependencies...
+│
+●  Dependencies installed
+│
+└  ✔ Migration completed!
+
+
+> cat package.json # check package.json has overrides field (not pnpm.overrides)
+{
+  "name": "migration-standalone-npm",
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+    "vite-plus": "latest"
+  },
+  "packageManager": "npm@<semver>",
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  }
+}
+
+[1]> node -e "const lock = require('./package-lock.json'); const vite = lock.packages['node_modules/vite']; if (vite && vite.resolved && vite.resolved.includes('@voidzero-dev/vite-plus-core')) console.log('lockfile has vite override'); else { console.error('vite override not found in lockfile'); process.exit(1); }" # verify lockfile updated with override
+vite override not found in lockfile

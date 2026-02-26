@@ -49,7 +49,7 @@ export async function downloadPackageManager(
   return downloadResult;
 }
 
-export async function runViteInstall(cwd: string, interactive?: boolean) {
+export async function runViteInstall(cwd: string, interactive?: boolean, extraArgs?: string[]) {
   // install dependencies on non-CI environment
   if (process.env.CI) {
     return;
@@ -59,7 +59,7 @@ export async function runViteInstall(cwd: string, interactive?: boolean) {
   spinner.start(`Installing dependencies...`);
   const { exitCode, stderr, stdout } = await runCommandSilently({
     command: process.env.VITE_PLUS_CLI_BIN ?? 'vp',
-    args: ['install'],
+    args: ['install', ...(extraArgs ?? [])],
     cwd,
     envs: process.env,
   });
