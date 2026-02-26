@@ -49,6 +49,7 @@ await bundleRolldownPluginutils();
 await bundleRolldown();
 await buildVite();
 await bundleTsdown();
+await brandTsdown();
 await bundleVitepress();
 await mergePackageJson();
 await syncLicenseFromRoot();
@@ -348,6 +349,33 @@ async function bundleTsdown() {
       }),
     ],
   });
+}
+
+async function brandTsdown() {
+  const tsdownDistDir = join(projectDir, 'dist/tsdown');
+  const buildFiles = await glob(toPosixPath(join(tsdownDistDir, 'build-*.js')), { absolute: true });
+  if (buildFiles.length === 0) {
+    throw new Error('brandTsdown: no build chunk found in dist/tsdown/');
+  }
+
+  const search = '"tsdown <your-file>"';
+  const replacement = '"vp pack <your-file>"';
+  let patched = false;
+
+  for (const buildFile of buildFiles) {
+    let content = await readFile(buildFile, 'utf-8');
+    if (!content.includes(search)) {
+      continue;
+    }
+    content = content.replace(search, replacement);
+    await writeFile(buildFile, content, 'utf-8');
+    console.log(`Branded tsdown → vp pack in ${buildFile}`);
+    patched = true;
+  }
+
+  if (!patched) {
+    throw new Error(`brandTsdown: pattern ${search} not found in any build chunk`);
+  }
 }
 
 // Actually do nothing now, we will polish it in the future when `vitepress` is ready

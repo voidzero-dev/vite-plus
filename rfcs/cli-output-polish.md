@@ -325,6 +325,18 @@ These are straightforward string replacements in the source, verified by snap te
 
 For oxlint and oxfmt, pre-spawn banners or build-time patching can follow the same pattern once their source/dist is bundled.
 
+### Phase 3.5: Rebrand tsdown Output
+
+tsdown is bundled via `@voidzero-dev/vite-plus-core`. Its build script (`packages/core/build.ts`) bundles tsdown's dist files via rolldown.
+
+#### 3.5.1 Approach: Build-time patching of bundled build chunk
+
+After `bundleTsdown()` rebuilds tsdown, a `brandTsdown()` step patches the build chunk (`dist/tsdown/build-*.js`) with string replacements:
+
+1. `"tsdown <your-file>"` → `"vp pack <your-file>"` — error message when no input files found
+
+Internal identifiers are left unchanged: debug namespaces (`tsdown:*`), plugin names (`tsdown:external`), config prefix (`tsdown.config`), temp dirs (`tsdown-pack-`).
+
 ### Phase 4: JS-Side Output Consistency
 
 The JS code in `packages/cli/src/utils/terminal.ts` already has `accent()`, `headline()`, `muted()`, `success()`, `error()` functions. Extend it with prefix functions matching the Rust convention:
@@ -435,6 +447,12 @@ These are internal identifiers, API references, or project name references:
 8. Migrate `vite_install/src/commands/*.rs` Warning/Note messages
 9. Update snap tests
 
+### Phase 2.5: tsdown Branding
+
+1. Add `brandTsdown()` in `packages/core/build.ts` after `bundleTsdown()`
+2. Patch `dist/tsdown/build-*.js` with string replacement: `"tsdown <your-file>"` → `"vp pack <your-file>"`
+3. Update snap tests
+
 ### Phase 3: Sub-tool Banners
 
 1. Add `print_banner()` for vitest, oxlint, oxfmt in `packages/cli/binding/src/cli.rs`
@@ -459,6 +477,7 @@ Many existing snap tests will need updates due to prefix and branding changes:
 - `snap-tests/command-dev-*/snap.txt` — vite banner change
 - `snap-tests/command-build-*/snap.txt` — build banner change
 - All `Warning:`/`Note:` snap outputs across global snap tests
+- `snap-tests/command-pack-no-input/snap.txt` — tsdown error message branding
 
 **Process:** Run `pnpm -F vite-plus snap-test` after each phase, review `git diff` on `snap.txt` files, and verify the new formatting matches expectations.
 
