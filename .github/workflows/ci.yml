@@ -230,11 +230,8 @@ jobs:
           vp --version
           vp -h
 
-      - name: Run CLI fmt
-        run: vp fmt --check
-
-      - name: Run CLI lint
-        run: vp run lint
+      - name: Run CLI check
+        run: vp check
 
       - name: Test global package install (powershell)
         if: ${{ matrix.os == 'windows-latest' }}
