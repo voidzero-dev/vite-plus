@@ -89,11 +89,11 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       // vite modules transformed count
       .replaceAll(/✓ \d+ modules? transformed/g, '✓ <variable> modules transformed')
       // replace size for tsdown
-      .replaceAll(/ \d+(\.\d+)? ([km]?B)/g, ' <variable> $2')
+      .replaceAll(/ \d+(\.\d+)? ([kKmMgG]?B)/g, ' <variable> $2')
       // replace npm notice size:
       // "npm notice 5.6kB snap.txt"
       // "npm notice 619B steps.json"
-      .replaceAll(/ \d+(\.\d+)?([km]?B) /g, ' <variable>$2 ')
+      .replaceAll(/ \d+(\.\d+)?([kKmMgG]?B) /g, ' <variable>$2 ')
       // '"size": 821' => '"size": <variable>'
       // '"unpackedSize": 2720' => '"unpackedSize": <variable>'
       .replaceAll(/"(size|unpackedSize)": \d+/g, '"$1": <variable>')

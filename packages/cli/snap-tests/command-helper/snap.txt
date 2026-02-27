@@ -70,6 +70,7 @@ Options:
   -W, --workspace [dir]     Enable workspace mode 
   -F, --filter <pattern>    Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name 
   --exports                 Generate export-related metadata for package.json (experimental) 
+  --exe                     Bundle as executable using Node.js SEA (experimental) 
   -h, --help                Display this message 
 
 > vp fmt -h # fmt help message

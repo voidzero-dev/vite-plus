@@ -74,6 +74,7 @@ cli
   .option('-W, --workspace [dir]', 'Enable workspace mode')
   .option('-F, --filter <pattern>', 'Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name')
   .option('--exports', 'Generate export-related metadata for package.json (experimental)')
+  .option('--exe', 'Bundle as executable using Node.js SEA (experimental)')
   .action(async (input: string[], flags: InlineConfig) => {
     if (input.length > 0) {
       flags.entry = input;

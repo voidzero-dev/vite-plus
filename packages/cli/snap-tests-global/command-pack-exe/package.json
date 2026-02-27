@@ -1,0 +1,8 @@
+{
+  "name": "command-pack-exe",
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": "25.7.0"
+  }
+}

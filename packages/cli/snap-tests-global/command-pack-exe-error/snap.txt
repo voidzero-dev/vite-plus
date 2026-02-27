@@ -1,0 +1,6 @@
+[1]> vp pack src/index.ts --exe
+ℹ entry: src/index.ts
+ℹ target: node22.22.0
+
+ ERROR  Error: Node.js version v<semver> does not support `exe` option. Please upgrade to Node.js <semver> or later.
+
