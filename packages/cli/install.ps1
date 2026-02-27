@@ -1,4 +1,4 @@
-# Vite+ CLI Installer for Windows
+﻿# Vite+ CLI Installer for Windows
 # https://viteplus.dev/install.ps1
 #
 # Usage:
@@ -382,7 +382,7 @@ exec "`$VITE_PLUS_HOME/current/bin/vp.exe" "`$@"
 
     # Print success message
     Write-Host ""
-    Write-Host "${GREEN}+${NC} ${BOLD_BRIGHT_BLUE}VITE+${NC} successfully installed!"
+    Write-Host "${GREEN}✔${NC} ${BOLD_BRIGHT_BLUE}VITE+${NC} successfully installed!"
     Write-Host ""
     Write-Host "  The Unified Toolchain for the Web."
     Write-Host ""
