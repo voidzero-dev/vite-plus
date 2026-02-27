@@ -37,7 +37,7 @@
     "zod": "catalog:"
   },
   "lint-staged": {
-    "*.@(js|ts|tsx)": "vp check --fix",
+    "*.@(js|ts|tsx|md|yaml|yml)": "vp check --fix",
     "*.rs": "cargo fmt --"
   },
   "engines": {
