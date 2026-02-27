@@ -45,9 +45,6 @@ catalogs:
     '@rollup/plugin-node-resolve':
       specifier: ^16.0.0
       version: 16.0.3
-    '@std/yaml':
-      specifier: npm:@jsr/std__yaml@^1.0.10
-      version: 1.0.10
     '@types/babel__core':
       specifier: 7.20.5
       version: 7.20.5
@@ -767,9 +764,6 @@ importers:
       '@oxc-node/core':
         specifier: 'catalog:'
         version: 0.0.35
-      '@std/yaml':
-        specifier: 'catalog:'
-        version: '@jsr/std__yaml@1.0.10'
       '@types/semver':
         specifier: 'catalog:'
         version: 7.7.1
@@ -782,6 +776,9 @@ importers:
       semver:
         specifier: 'catalog:'
         version: 7.7.3
+      yaml:
+        specifier: 'catalog:'
+        version: 2.8.2
 
   rolldown:
     devDependencies:
@@ -2548,9 +2545,6 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
-
-  '@jsr/std__yaml@1.0.10':
-    resolution: {integrity: sha512-1WIM023Kvi48pvPE3UO5YcieambLgywUooLhAkkaObIcMB77F/YP2ILdl+vNfik+vElkl9znmuST9AZo8mbCpA==, tarball: https://npm.jsr.io/~/11/@jsr/std__yaml/1.0.10.tgz}
 
   '@loaderkit/resolve@1.0.4':
     resolution: {integrity: sha512-rJzYKVcV4dxJv+vW6jlvagF8zvGxHJ2+HTr1e2qOejfmGhAApgJHl8Aog4mMszxceTRiKTTbnpgmTO1bEZHV/A==}
@@ -10403,8 +10397,6 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
-
-  '@jsr/std__yaml@1.0.10': {}
 
   '@loaderkit/resolve@1.0.4':
     dependencies:

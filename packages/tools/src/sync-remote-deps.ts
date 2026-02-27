@@ -666,12 +666,12 @@ export async function syncRemote() {
   );
 
   // Dynamically import dependencies after git clone
-  let parseYaml: typeof import('@std/yaml').parse;
-  let stringifyYaml: typeof import('@std/yaml').stringify;
+  let parseYaml: typeof import('yaml').parse;
+  let stringifyYaml: typeof import('yaml').stringify;
   let semver: typeof import('semver');
 
   try {
-    const yaml = await import('@std/yaml');
+    const yaml = await import('yaml');
     parseYaml = yaml.parse;
     stringifyYaml = yaml.stringify;
     semver = await import('semver');
@@ -679,7 +679,7 @@ export async function syncRemote() {
     log('Dependencies not found, running pnpm install...');
     execCommand('pnpm install --no-frozen-lockfile', rootDir);
     log('Retrying imports...');
-    const yaml = await import('@std/yaml');
+    const yaml = await import('yaml');
     parseYaml = yaml.parse;
     stringifyYaml = yaml.stringify;
     semver = await import('semver');

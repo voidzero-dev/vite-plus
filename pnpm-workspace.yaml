@@ -21,7 +21,6 @@ catalog:
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
   '@rollup/plugin-node-resolve': ^16.0.0
-  '@std/yaml': 'npm:@jsr/std__yaml@^1.0.10'
   '@types/babel__core': 7.20.5
   '@types/connect': ^3.4.38
   '@types/cross-spawn': ^6.0.6
@@ -153,11 +152,11 @@ minimumReleaseAgeExclude:
   - vitepress
   - vitest
 overrides:
-  '@rolldown/pluginutils': 'workspace:@rolldown/pluginutils@*'
-  rolldown: 'workspace:rolldown@*'
-  vite: 'workspace:@voidzero-dev/vite-plus-core@*'
-  vitest: 'workspace:@voidzero-dev/vite-plus-test@*'
-  vitest-dev: 'npm:vitest@^4.0.18'
+  '@rolldown/pluginutils': workspace:@rolldown/pluginutils@*
+  rolldown: workspace:rolldown@*
+  vite: workspace:@voidzero-dev/vite-plus-core@*
+  vitest: workspace:@voidzero-dev/vite-plus-test@*
+  vitest-dev: npm:vitest@^4.0.18
 packageExtensions:
   sass-embedded:
     peerDependencies:
