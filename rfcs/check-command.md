@@ -62,6 +62,30 @@ vp check --no-type-check
 
 Both are enabled by default in `vp check` to provide comprehensive static analysis.
 
+### File Path Arguments
+
+`vp check` accepts optional trailing file paths, which are passed through to `fmt` and `lint`:
+
+```bash
+# Check only specific files
+vp check --fix src/index.ts src/utils.ts
+```
+
+When file paths are provided:
+
+- `--no-error-on-unmatched-pattern` is automatically added to `fmt` args (prevents errors when paths don't match fmt patterns)
+- Paths are appended to both `fmt` and `lint` sub-commands
+
+This enables lint-staged integration:
+
+```json
+"lint-staged": {
+  "*.@(js|ts|tsx)": "vp check --fix"
+}
+```
+
+lint-staged appends staged file paths automatically, so `vp check --fix` becomes e.g. `vp check --fix src/a.ts src/b.ts`.
+
 ## Behavior
 
 Commands run **sequentially** with fail-fast semantics:
@@ -195,4 +219,3 @@ packages/cli/snap-tests/check-no-fmt/
   steps.json     # { "steps": [{ "command": "vp check --no-fmt" }] }
   snap.txt       # Only lint runs
 ```
-

@@ -1,0 +1,3 @@
+{
+  "commands": ["vp check --fix src/index.js"]
+}

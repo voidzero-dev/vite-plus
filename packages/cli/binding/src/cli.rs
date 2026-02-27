@@ -114,6 +114,9 @@ pub enum SynthesizableSubcommand {
         /// Disable TypeScript type checking
         #[arg(long = "no-type-check")]
         no_type_check: bool,
+        /// File paths to check (passed through to fmt and lint)
+        #[arg(trailing_var_arg = true)]
+        paths: Vec<String>,
     },
 }
 
@@ -735,11 +738,23 @@ async fn execute_direct_subcommand(
     let cwd_arc: Arc<AbsolutePath> = cwd.clone().into();
 
     let status = match subcommand {
-        SynthesizableSubcommand::Check { fix, no_fmt, no_lint, no_type_aware, no_type_check } => {
+        SynthesizableSubcommand::Check {
+            fix,
+            no_fmt,
+            no_lint,
+            no_type_aware,
+            no_type_check,
+            paths,
+        } => {
             let mut status = ExitStatus::SUCCESS;
+            let has_paths = !paths.is_empty();
 
             if !no_fmt {
-                let args = if fix { vec![] } else { vec!["--check".to_string()] };
+                let mut args = if fix { vec![] } else { vec!["--check".to_string()] };
+                if has_paths {
+                    args.push("--no-error-on-unmatched-pattern".to_string());
+                    args.extend(paths.iter().cloned());
+                }
                 if args.is_empty() {
                     output::info("vp fmt");
                 } else {
@@ -772,6 +787,9 @@ async fn execute_direct_subcommand(
                         args.push("--type-check".to_string());
                     }
                 }
+                if has_paths {
+                    args.extend(paths.iter().cloned());
+                }
                 if args.is_empty() {
                     output::info("vp lint");
                 } else {
@@ -795,9 +813,14 @@ async fn execute_direct_subcommand(
             // Re-run fmt after lint --fix, since lint fixes can break formatting
             // (e.g. the curly rule adding braces to if-statements)
             if fix && !no_fmt && !no_lint {
+                let mut args = Vec::new();
+                if has_paths {
+                    args.push("--no-error-on-unmatched-pattern".to_string());
+                    args.extend(paths.into_iter());
+                }
                 status = resolve_and_execute(
                     &mut resolver,
-                    SynthesizableSubcommand::Fmt { args: vec![] },
+                    SynthesizableSubcommand::Fmt { args },
                     &envs,
                     cwd,
                     &cwd_arc,
