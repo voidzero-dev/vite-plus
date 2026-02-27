@@ -82,6 +82,8 @@ exports[`rewritePackageJson > should rewrite package.json scripts 1`] = `
     "ready_new": "vp install && vp fmt && vp lint --type-aware && vp test -r && vp build -r",
     "test": "vp test",
     "test_run": "vp test run && vp test --ui",
+    "version": "vp --version",
+    "version_short": "vp -v",
   },
 }
 `;

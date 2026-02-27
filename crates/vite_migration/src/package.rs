@@ -78,6 +78,18 @@ mod tests {
     use super::*;
 
     const RULES_YAML: &str = r#"
+# vite --version / vite -v => vp --version / vp -v (global flags, not dev-specific)
+---
+id: replace-vite-version
+language: bash
+rule:
+  kind: command_name
+  regex: '^vite$'
+  inside:
+    kind: command
+    regex: 'vite\s+(-v|--version)'
+fix: vp
+
 # vite => vp dev (handles all cases: with/without env var prefix and flag args)
 # Match command_name to preserve env var prefix and arguments
 # Excludes subcommands like "vite build", "vite test", etc.
@@ -156,6 +168,9 @@ fix: vp pack
         assert_eq!(rewrite_script("vp fmt", &rules), "vp fmt");
         assert_eq!(rewrite_script("vp pack", &rules), "vp pack");
         assert_eq!(rewrite_script("vp dev --port 3000", &rules), "vp dev --port 3000");
+        // vite version flags (global, not dev-specific)
+        assert_eq!(rewrite_script("vite --version", &rules), "vp --version");
+        assert_eq!(rewrite_script("vite -v", &rules), "vp -v");
         // vite commands
         assert_eq!(rewrite_script("vite", &rules), "vp dev");
         assert_eq!(rewrite_script("vite dev", &rules), "vp dev");

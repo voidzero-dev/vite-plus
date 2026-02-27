@@ -1,3 +1,16 @@
+# vite --version / vite -v => vp --version / vp -v (global flags, not dev-specific)
+---
+id: replace-vite-version
+language: bash
+rule:
+  kind: command_name
+  regex: '^vite$'
+  inside:
+    kind: command
+    regex: 'vite\s+(-v|--version)'
+fix: vp
+
+
 # vite => vp dev (handles all cases: with/without env var prefix and flag args)
 # Match command_name to preserve env var prefix and arguments
 # Excludes subcommands like "vite build", "vite test", etc.

@@ -31,6 +31,8 @@ describe('rewritePackageJson', () => {
         dev: 'vite',
         dev_cjs: 'VITE_CJS_IGNORE_WARNING=true vite',
         dev_cjs_cross_env: 'cross-env VITE_CJS_IGNORE_WARNING=true vite',
+        version: 'vite --version',
+        version_short: 'vite -v',
         dev_help: 'vite --help && vite -h',
         dev_port: 'vite --port 3000',
         dev_host: 'vite --host 0.0.0.0',

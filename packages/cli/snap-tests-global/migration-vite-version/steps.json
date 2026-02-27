@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # migration should rewrite vite --version to vp --version",
+    "cat package.json # check package.json"
+  ]
+}
