@@ -4,6 +4,10 @@ inputs:
   target:
     description: 'The target platform'
     required: true
+  print-after-build:
+    description: 'Print the output after the build'
+    required: false
+    default: 'false'
 
 runs:
   using: 'composite'
