@@ -1,7 +1,4 @@
 {
-  "env": {
-    "VITE_DISABLE_AUTO_INSTALL": "1"
-  },
   "commands": [
     "vp check --fix",
     "vp check # should pass after fix"
