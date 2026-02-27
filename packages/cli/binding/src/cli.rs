@@ -786,6 +786,24 @@ async fn execute_direct_subcommand(
                     &cwd_arc,
                 )
                 .await?;
+                if status != ExitStatus::SUCCESS {
+                    resolver.cleanup_temp_files().await;
+                    return Ok(status);
+                }
+            }
+
+            // Re-run fmt after lint --fix, since lint fixes can break formatting
+            // (e.g. the curly rule adding braces to if-statements)
+            if fix && !no_fmt && !no_lint {
+                output::info("vp fmt");
+                status = resolve_and_execute(
+                    &mut resolver,
+                    SynthesizableSubcommand::Fmt { args: vec![] },
+                    &envs,
+                    cwd,
+                    &cwd_arc,
+                )
+                .await?;
             }
 
             status
