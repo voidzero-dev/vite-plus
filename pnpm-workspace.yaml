@@ -15,8 +15,8 @@ catalog:
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.0.35
   '@oxc-node/core': ^0.0.35
-  '@oxc-project/runtime': =0.114.0
-  '@oxc-project/types': =0.114.0
+  '@oxc-project/runtime': =0.115.0
+  '@oxc-project/types': =0.115.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
@@ -76,9 +76,9 @@ catalog:
   mocha: ^11.7.5
   mri: ^1.2.0
   next: ^15.4.3
-  oxc-minify: =0.114.0
-  oxc-parser: =0.114.0
-  oxc-transform: =0.114.0
+  oxc-minify: =0.115.0
+  oxc-parser: =0.115.0
+  oxc-transform: =0.115.0
   oxfmt: ^0.35.0
   oxlint: ^1.50.0
   oxlint-tsgolint: ^0.15.0
@@ -164,11 +164,13 @@ packageExtensions:
     peerDependenciesMeta:
       source-map-js:
         optional: true
+  '@rollup/plugin-dynamic-import-vars':
+    dependencies:
+      '@types/estree': ^1.0.0
 patchedDependencies:
   sirv@3.0.2: rolldown-vite/patches/sirv@3.0.2.patch
   chokidar@3.6.0: rolldown-vite/patches/chokidar@3.6.0.patch
   dotenv-expand@12.0.3: rolldown-vite/patches/dotenv-expand@12.0.3.patch
-  http-proxy-3: rolldown-vite/patches/http-proxy-3.patch
 peerDependencyRules:
   allowAny:
     - vite
