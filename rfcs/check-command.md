@@ -196,7 +196,3 @@ packages/cli/snap-tests/check-no-fmt/
   snap.txt       # Only lint runs
 ```
 
-## Future Enhancements
-
-- Workspace-aware mode (`vp check -r`) running checks across all packages
-- Integration with `vp run` task graph for caching
