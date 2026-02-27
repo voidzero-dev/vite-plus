@@ -51,6 +51,7 @@ await buildVite();
 await bundleTsdown();
 await bundleVitepress();
 await mergePackageJson();
+await syncLicenseFromRoot();
 
 async function buildVite() {
   const newViteRolldownConfig = viteRolldownConfig.map((config) => {
@@ -472,4 +473,10 @@ async function mergePackageJson() {
     process.exit(1);
   }
   await writeFile(destPkgPath, code);
+}
+
+async function syncLicenseFromRoot() {
+  const rootLicensePath = join(projectDir, '..', '..', 'LICENSE');
+  const packageLicensePath = join(projectDir, 'LICENSE');
+  await copyFile(rootLicensePath, packageLicensePath);
 }

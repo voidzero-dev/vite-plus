@@ -1,6 +1,7 @@
 {
   "name": "vite-plus",
   "version": "0.0.0",
+  "license": "MIT",
   "bin": {
     "oxfmt": "./bin/oxfmt",
     "oxlint": "./bin/oxlint",

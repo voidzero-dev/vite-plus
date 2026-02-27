@@ -1,7 +1,7 @@
 {
   "name": "vite-plus-monorepo",
   "private": true,
-  "license": "BUSL-1.1",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "pnpm -F @voidzero-dev/* -F vite-plus build",

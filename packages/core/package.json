@@ -1,6 +1,7 @@
 {
   "name": "@voidzero-dev/vite-plus-core",
   "version": "0.0.0",
+  "license": "MIT",
   "files": [
     "dist"
   ],

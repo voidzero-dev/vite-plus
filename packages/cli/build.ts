@@ -67,6 +67,7 @@ if (!skipTs) {
   await syncTestPackageExports();
 }
 await syncReadmeFromRoot();
+await syncLicenseFromRoot();
 
 async function buildNapiBinding() {
   const buildCommand = createBuildCommand(napiArgs);
@@ -422,6 +423,12 @@ async function syncReadmeFromRoot() {
   if (nextReadme !== packageReadme) {
     await writeFile(packageReadmePath, nextReadme);
   }
+}
+
+async function syncLicenseFromRoot() {
+  const rootLicensePath = join(projectDir, '..', '..', 'LICENSE');
+  const packageLicensePath = join(projectDir, 'LICENSE');
+  await copyFile(rootLicensePath, packageLicensePath);
 }
 
 function splitReadme(content: string, label: string) {
