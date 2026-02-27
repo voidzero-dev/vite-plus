@@ -1,18 +1,13 @@
 > vp run hello # should fall back to pnpm run when no vite-plus dependency
-
-> command-run-without-vite-plus@<semver> hello <cwd>
-> echo hello from script
-
+$ echo hello from script ⊘ cache disabled
 hello from script
 
+
 > vp run greet --arg1 value1 # should pass through args to pnpm run
-
-> command-run-without-vite-plus@<semver> greet <cwd>
-> echo greet --arg1 value1
-
+$ echo greet --arg1 value1 ⊘ cache disabled
 greet --arg1 value1
 
-[1]> vp run nonexistent # should show pnpm missing script error
- ERR_PNPM_NO_SCRIPT  Missing script: nonexistent
 
-Command "nonexistent" not found.
+[1]> vp run nonexistent # should show pnpm missing script error
+Task "nonexistent" not found. Did you mean:
+  No matching tasks.

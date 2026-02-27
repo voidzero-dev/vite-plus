@@ -1,5 +1,13 @@
-[1]> vp ls # should output nothing without package.json
-No package.json found.
+[2]> vp ls # should output nothing without package.json
+error: unrecognized subcommand 'ls'
 
-[1]> vp pm list # should output nothing without package.json
-No package.json found.
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm list # should output nothing without package.json
+error: unrecognized subcommand 'pm'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.

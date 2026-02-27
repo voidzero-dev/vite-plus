@@ -1,39 +1,34 @@
-> vp env use --help # should show help
-Use a specific Node.js version for this shell session
+[2]> vp env use --help # should show help
+error: unrecognized subcommand 'env'
 
-Usage: vp env use [OPTIONS] [VERSION]
+Usage: vp <COMMAND>
 
-Arguments:
-  [VERSION]  Version to use (e.g., "20", "20.18.0", "lts", "latest") If not provided, reads from .node-version or package.json
+For more information, try '--help'.
 
-Options:
-      --unset                Remove session override (revert to file-based resolution)
-      --no-install           Skip auto-installation if version not present
-      --silent-if-unchanged  Suppress output if version is already active
-  -h, --help                 Print help
+[2]> vp env use 20.18.0 --no-install # should output export command to stdout
+error: unrecognized subcommand 'env'
 
-> vp env use 20.18.0 --no-install # should output export command to stdout
-export VITE_PLUS_NODE_VERSION=20.18.0
-Using Node.js v<semver> (resolved from <semver>)
+Usage: vp <COMMAND>
 
-> vp env use --unset # should output unset command to stdout
-unset VITE_PLUS_NODE_VERSION
-Reverted to file-based Node.js version resolution
+For more information, try '--help'.
 
-[1]> vp env use d # should show friendly error for invalid version
-[1m[31merror:[39m[0m Invalid Node.js version: "d"
+[2]> vp env use --unset # should output unset command to stdout
+error: unrecognized subcommand 'env'
 
-Valid examples:
-  vp env use 20          # Latest Node.js 20.x
-  vp env use <semver>     # Exact version
-  vp env use lts         # Latest LTS version
-  vp env use latest      # Latest version
+Usage: vp <COMMAND>
 
-[1]> vp env use abc # should show friendly error for invalid version
-[1m[31merror:[39m[0m Invalid Node.js version: "abc"
+For more information, try '--help'.
 
-Valid examples:
-  vp env use 20          # Latest Node.js 20.x
-  vp env use <semver>     # Exact version
-  vp env use lts         # Latest LTS version
-  vp env use latest      # Latest version
+[2]> vp env use d # should show friendly error for invalid version
+error: unrecognized subcommand 'env'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp env use abc # should show friendly error for invalid version
+error: unrecognized subcommand 'env'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.

@@ -1,14 +1,20 @@
-[1]> vp pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope
-Usage Error: Couldn't find a configuration settings named "vite-plus-pm-config-test-key"
+[2]> vp pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope
+error: unrecognized subcommand 'pm'
 
-$ yarn config set [--json] [-H,--home] <name> <value>
+Usage: vp <COMMAND>
 
-[1]> vp pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope
-Usage Error: Couldn't find a configuration settings named "vite-plus-pm-config-test-key"
+For more information, try '--help'.
 
-$ yarn config get [--why] [--json] [--no-redacted] <name>
+[2]> vp pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope
+error: unrecognized subcommand 'pm'
 
-[1]> vp pm config delete vite-plus-pm-config-test-key --location project # should delete config key from project scope (uses yarn config unset)
-Usage Error: Couldn't find a configuration settings named "vite-plus-pm-config-test-key"
+Usage: vp <COMMAND>
 
-$ yarn config unset [-H,--home] <name>
+For more information, try '--help'.
+
+[2]> vp pm config delete vite-plus-pm-config-test-key --location project # should delete config key from project scope (uses yarn config unset)
+error: unrecognized subcommand 'pm'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.

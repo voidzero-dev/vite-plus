@@ -1,219 +1,56 @@
-> vp add testnpm2 -D -w -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add package to workspace root
+[2]> vp add testnpm2 -D -w -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add package to workspace root
+error: unrecognized subcommand 'add'
 
-added 3 packages in <variable>ms
-{
-  "name": "command-add-npm11-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  }
-}
-{
-  "name": "app"
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true
-}
+Usage: vp <COMMAND>
 
-> vp add @vite-plus-test/utils --workspace -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to workspace root
+For more information, try '--help'.
 
-up to date in <variable>ms
-{
-  "name": "command-add-npm11-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0"
-  }
-}
-{
-  "name": "app"
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true
-}
+[2]> vp add @vite-plus-test/utils --workspace -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to workspace root
+error: unrecognized subcommand 'add'
 
-> vp add testnpm2 test-vite-plus-install@1.0.0 --filter app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app
+Usage: vp <COMMAND>
 
-added 1 package in <variable>ms
-{
-  "name": "command-add-npm11-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0"
-  }
-}
-{
-  "name": "app",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0",
-    "testnpm2": "^1.0.1"
-  }
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true
-}
+For more information, try '--help'.
 
-> vp add @vite-plus-test/utils --workspace --filter app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app
+[2]> vp add testnpm2 test-vite-plus-install@1.0.0 --filter app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app
+error: unrecognized subcommand 'add'
 
-up to date in <variable>ms
-{
-  "name": "command-add-npm11-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0"
-  }
-}
-{
-  "name": "app",
-  "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0",
-    "test-vite-plus-install": "^1.0.0",
-    "testnpm2": "^1.0.1"
-  }
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true
-}
+Usage: vp <COMMAND>
 
-> vp add testnpm2 test-vite-plus-install@1.0.0 --filter "*" -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages except workspace root
+For more information, try '--help'.
 
-up to date in <variable>ms
-{
-  "name": "command-add-npm11-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0"
-  }
-}
-{
-  "name": "app",
-  "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0",
-    "test-vite-plus-install": "^1.0.0",
-    "testnpm2": "^1.0.1"
-  }
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0",
-    "testnpm2": "^1.0.1"
-  }
-}
+[2]> vp add @vite-plus-test/utils --workspace --filter app -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app
+error: unrecognized subcommand 'add'
 
-> vp add -E testnpm2 test-vite-plus-install@1.0.0 --filter "*" --workspace-root -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages include workspace root
+Usage: vp <COMMAND>
 
-up to date in <variable>ms
-{
-  "name": "command-add-npm11-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "devDependencies": {
-    "testnpm2": "1.0.1"
-  },
-  "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0",
-    "test-vite-plus-install": "1.0.0"
-  }
-}
-{
-  "name": "app",
-  "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0",
-    "test-vite-plus-install": "1.0.0",
-    "testnpm2": "1.0.1"
-  }
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "test-vite-plus-install": "1.0.0",
-    "testnpm2": "1.0.1"
-  }
-}
+For more information, try '--help'.
 
-> vp install test-vite-plus-package@1.0.0 --filter "*" --workspace-root -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should install packages alias for add command
+[2]> vp add testnpm2 test-vite-plus-install@1.0.0 --filter "*" -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages except workspace root
+error: unrecognized subcommand 'add'
 
-added 1 package in <variable>ms
-{
-  "name": "command-add-npm11-with-workspace",
-  "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "packageManager": "npm@<semver>",
-  "devDependencies": {
-    "testnpm2": "1.0.1"
-  },
-  "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0",
-    "test-vite-plus-install": "1.0.0",
-    "test-vite-plus-package": "^1.0.0"
-  }
-}
-{
-  "name": "app",
-  "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0",
-    "test-vite-plus-install": "1.0.0",
-    "test-vite-plus-package": "^1.0.0",
-    "testnpm2": "1.0.1"
-  }
-}
-{
-  "name": "@vite-plus-test/utils",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "test-vite-plus-install": "1.0.0",
-    "test-vite-plus-package": "^1.0.0",
-    "testnpm2": "1.0.1"
-  }
-}
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp add -E testnpm2 test-vite-plus-install@1.0.0 --filter "*" --workspace-root -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages include workspace root
+error: unrecognized subcommand 'add'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[1]> vp install test-vite-plus-package@1.0.0 --filter "*" --workspace-root -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should install packages alias for add command
+npm warn "*" is being parsed as a normal command line argument.
+npm warn Unknown cli config "--filter". This will stop working in the next major version of npm.
+npm warn Unknown cli config "--workspace-root". This will stop working in the next major version of npm.
+npm error code E404
+npm error 404 Not Found - GET https://registry.<domain>/* - Not found
+npm error 404
+npm error 404  The requested resource '*@*' could not be found or you do not have permission to access it.
+npm error 404 This package name is not valid, because 
+npm error 404  1. name can no longer contain special characters ("~'!()*")
+npm error 404
+npm error 404 Note that you can also install from a
+npm error 404 tarball, folder, http url, or git url.
+npm error A complete log of this run can be found in: <homedir>/.npm/_logs/<timestamp>-debug.log

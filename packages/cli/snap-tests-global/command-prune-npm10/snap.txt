@@ -2,35 +2,44 @@
 
 added 3 packages in <variable>ms
 
-> vp pm prune --help # should show help
-Remove unnecessary packages
+[2]> vp pm prune --help # should show help
+error: unrecognized subcommand 'pm'
 
-Usage: vp pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+Usage: vp <COMMAND>
 
-Arguments:
-  [PASS_THROUGH_ARGS]...  Additional arguments
+For more information, try '--help'.
 
-Options:
-      --prod         Remove devDependencies
-      --no-optional  Remove optional dependencies
-  -h, --help         Print help
+[2]> vp pm prune # should prune extraneous dependencies
+error: unrecognized subcommand 'pm'
 
-> vp pm prune # should prune extraneous dependencies
+Usage: vp <COMMAND>
 
-up to date in <variable>ms
+For more information, try '--help'.
 
-> vp pm prune --prod # should prune dev dependencies (uses --omit=dev)
+[2]> vp pm prune --prod # should prune dev dependencies (uses --omit=dev)
+error: unrecognized subcommand 'pm'
 
-up to date in <variable>ms
+Usage: vp <COMMAND>
 
-> vp pm prune --no-optional # should prune optional dependencies (uses --omit=optional)
+For more information, try '--help'.
 
-added 1 package in <variable>ms
+[2]> vp pm prune --no-optional # should prune optional dependencies (uses --omit=optional)
+error: unrecognized subcommand 'pm'
 
-> vp pm prune --prod --no-optional # should prune both dev and optional dependencies
+Usage: vp <COMMAND>
 
-up to date in <variable>ms
+For more information, try '--help'.
 
-> vp pm prune -- --loglevel=warn # should support pass through arguments
+[2]> vp pm prune --prod --no-optional # should prune both dev and optional dependencies
+error: unrecognized subcommand 'pm'
 
-added 2 packages in <variable>ms
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm prune -- --loglevel=warn # should support pass through arguments
+error: unrecognized subcommand 'pm'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.

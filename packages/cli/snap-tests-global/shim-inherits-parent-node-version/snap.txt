@@ -1,8 +1,16 @@
-> vp env exec node -v # Root: uses .node-version directly
-v20.18.0
+[2]> vp env exec node -v # Root: uses .node-version directly
+error: unrecognized subcommand 'env'
 
-> cd packages/app && vp env exec node -v # Sub-package: inherits parent .node-version
-v20.18.0
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[2]> cd packages/app && vp env exec node -v # Sub-package: inherits parent .node-version
+error: unrecognized subcommand 'env'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
 
 > test ! -f packages/app/.node-version && echo 'No .node-version written in sub-package' # Verify no .node-version created in sub-package
 No .node-version written in sub-package

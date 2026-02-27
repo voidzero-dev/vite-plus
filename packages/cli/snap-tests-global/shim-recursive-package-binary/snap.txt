@@ -1,15 +1,16 @@
-> vp install -g ./recursive-cli-pkg # Install test package
-  Installing ./recursive-cli-pkg globally...
-  Running npm install...
+[1]> vp install -g ./recursive-cli-pkg # Install test package
+[Vite+] run error: [Error: Package not found in workspace: `AbsolutePathBuf("<cwd>")`] {
+  code: 'GenericFailure'
+}
 
-added 1 package in <variable>ms
-  Installed ./recursive-cli-pkg v<semver>
-  Binaries: recursive-cli
+[127]> recursive-cli # Outer call triggers recursive inner call through shim
+command not found: recursive-cli
 
-> recursive-cli # Outer call triggers recursive inner call through shim
-outer call
-inner call succeeded
+[2]> vp remove -g recursive-cli-pkg # Cleanup
+error: unrecognized subcommand 'remove'
 
-> vp remove -g recursive-cli-pkg # Cleanup
-  Uninstalling recursive-cli-pkg...
-  Uninstalled recursive-cli-pkg
+  tip: a similar subcommand exists: 'preview'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.

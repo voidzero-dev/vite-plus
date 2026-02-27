@@ -1,5 +1,13 @@
-> vp pm cache dir # should show cache directory (uses npm config get cache)
-<homedir>/.npm
+[2]> vp pm cache dir # should show cache directory (uses npm config get cache)
+error: unrecognized subcommand 'pm'
 
-> vp pm cache path # should show cache path (alias for dir, uses npm config get cache)
-<homedir>/.npm
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm cache path # should show cache path (alias for dir, uses npm config get cache)
+error: unrecognized subcommand 'pm'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.

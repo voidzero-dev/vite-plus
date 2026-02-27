@@ -1,78 +1,32 @@
-> vp dedupe --help # should show help
-Deduplicate dependencies
+[2]> vp dedupe --help # should show help
+error: unrecognized subcommand 'dedupe'
 
-Usage: vp dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+Usage: vp <COMMAND>
 
-Arguments:
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+For more information, try '--help'.
 
-Options:
-      --check  Check if deduplication would make changes
-  -h, --help   Print help
+[2]> vp dedupe && cat package.json # should dedupe dependencies
+error: unrecognized subcommand 'dedupe'
 
-> vp dedupe && cat package.json # should dedupe dependencies
-Already up to date
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Usage: vp <COMMAND>
 
-dependencies:
-+ testnpm2 <semver>
+For more information, try '--help'.
 
-optionalDependencies:
-+ test-vite-plus-package-optional <semver>
+[2]> vp dedupe --check && cat package.json # should check if deduplication would make changes
+error: unrecognized subcommand 'dedupe'
 
-devDependencies:
-+ test-vite-plus-package <semver>
+Usage: vp <COMMAND>
 
-{
-  "name": "command-dedupe-pnpm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "1.0.0"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+For more information, try '--help'.
 
-> vp dedupe --check && cat package.json # should check if deduplication would make changes
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+[2]> vp dedupe -- --loglevel=warn && cat package.json # support pass through arguments
+error: unrecognized subcommand 'dedupe'
 
-{
-  "name": "command-dedupe-pnpm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "1.0.0"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+Usage: vp <COMMAND>
 
-> vp dedupe -- --loglevel=warn && cat package.json # support pass through arguments
-{
-  "name": "command-dedupe-pnpm10",
-  "version": "1.0.0",
-  "dependencies": {
-    "testnpm2": "1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "1.0.0"
-  },
-  "packageManager": "pnpm@<semver>"
-}
+For more information, try '--help'.
 
-[1]> json-edit package.json '_.dependencies = {}' && cat package.json && vp dedupe --check # should check fails because no dependencies
+[2]> json-edit package.json '_.dependencies = {}' && cat package.json && vp dedupe --check # should check fails because no dependencies
 {
   "name": "command-dedupe-pnpm10",
   "version": "1.0.0",
@@ -85,40 +39,15 @@ Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <
   },
   "packageManager": "pnpm@<semver>"
 }
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+error: unrecognized subcommand 'dedupe'
 
- ERR_PNPM_DEDUPE_CHECK_ISSUES  Dedupe --check found changes to the lockfile
+Usage: vp <COMMAND>
 
-Importers
-.
-└── - testnpm2 <semver>
+For more information, try '--help'.
 
+[2]> vp dedupe && cat package.json && vp dedupe --check # should dedupe fix the change by removing the dependencies
+error: unrecognized subcommand 'dedupe'
 
-Packages
-- testnpm2@<semver>
+Usage: vp <COMMAND>
 
-Run pnpm dedupe to apply the changes above.
-
-
-> vp dedupe && cat package.json && vp dedupe --check # should dedupe fix the change by removing the dependencies
-Packages: -1
--
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
-
-dependencies:
-- testnpm2 <semver>
-
-{
-  "name": "command-dedupe-pnpm10",
-  "version": "1.0.0",
-  "dependencies": {},
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "1.0.0"
-  },
-  "packageManager": "pnpm@<semver>"
-}
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
-
+For more information, try '--help'.

@@ -1,117 +1,48 @@
-> vp pm pack --help # should show help
-Create a tarball of the package
+[2]> vp pm pack --help # should show help
+error: unrecognized subcommand 'pm'
 
-Usage: vp pm pack [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+Usage: vp <COMMAND>
 
-Arguments:
-  [PASS_THROUGH_ARGS]...  Additional arguments
+For more information, try '--help'.
 
-Options:
-  -r, --recursive                            Pack all workspace packages
-      --filter <PATTERN>                     Filter packages to pack
-      --out <OUT>                            Output path for the tarball
-      --pack-destination <PACK_DESTINATION>  Directory where the tarball will be saved
-      --pack-gzip-level <PACK_GZIP_LEVEL>    Gzip compression level (0-9)
-      --json                                 Output in JSON format
-  -h, --help                                 Print help
+[2]> vp pm pack && rm -rf *.tgz # should pack current package
+error: unrecognized subcommand 'pm'
 
-> vp pm pack && rm -rf *.tgz # should pack current package
-📦  command-pack-pnpm10@<semver>
-Tarball Contents
-.node-version
-output.log
-package.json
-snap.txt
-steps.json
-Tarball Details
-command-pack-pnpm10-1.0.0.tgz
+Usage: vp <COMMAND>
 
-> vp pm pack --out ./dist/package.tgz && rm -rf ./dist # should pack with output file
-📦  command-pack-pnpm10@<semver>
-Tarball Contents
-.node-version
-command-pack-pnpm10-1.0.0.tgz
-output.log
-package.json
-snap.txt
-steps.json
-Tarball Details
-<cwd>/dist/package.tgz
+For more information, try '--help'.
 
-> vp pm pack --pack-destination ./dist && rm -rf ./dist # should pack with destination
-📦  command-pack-pnpm10@<semver>
-Tarball Contents
-.node-version
-command-pack-pnpm10-1.0.0.tgz
-output.log
-package.json
-snap.txt
-steps.json
-Tarball Details
-<cwd>/dist/command-pack-pnpm10-1.0.0.tgz
+[2]> vp pm pack --out ./dist/package.tgz && rm -rf ./dist # should pack with output file
+error: unrecognized subcommand 'pm'
 
-> vp pm pack --json --pack-gzip-level 9 && rm -rf *.tgz # should pack with gzip compression level
-{
-  "name": "command-pack-pnpm10",
-  "version": "1.0.0",
-  "filename": "command-pack-pnpm10-1.0.0.tgz",
-  "files": [
-    {
-      "path": ".node-version"
-    },
-    {
-      "path": "command-pack-pnpm10-1.0.0.tgz"
-    },
-    {
-      "path": "output.log"
-    },
-    {
-      "path": "package.json"
-    },
-    {
-      "path": "snap.txt"
-    },
-    {
-      "path": "steps.json"
-    }
-  ]
-}
+Usage: vp <COMMAND>
 
-> vp pm pack --json && rm -rf *.tgz # should pack with json output
-{
-  "name": "command-pack-pnpm10",
-  "version": "1.0.0",
-  "filename": "command-pack-pnpm10-1.0.0.tgz",
-  "files": [
-    {
-      "path": ".node-version"
-    },
-    {
-      "path": "command-pack-pnpm10-1.0.0.tgz"
-    },
-    {
-      "path": "output.log"
-    },
-    {
-      "path": "package.json"
-    },
-    {
-      "path": "snap.txt"
-    },
-    {
-      "path": "steps.json"
-    }
-  ]
-}
+For more information, try '--help'.
 
-> vp pm pack -- --loglevel=warn && rm -rf *.tgz # should support pass through arguments
-📦  command-pack-pnpm10@<semver>
-Tarball Contents
-.node-version
-command-pack-pnpm10-1.0.0.tgz
-output.log
-package.json
-snap.txt
-steps.json
-Tarball Details
-command-pack-pnpm10-1.0.0.tgz
+[2]> vp pm pack --pack-destination ./dist && rm -rf ./dist # should pack with destination
+error: unrecognized subcommand 'pm'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm pack --json --pack-gzip-level 9 && rm -rf *.tgz # should pack with gzip compression level
+error: unrecognized subcommand 'pm'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm pack --json && rm -rf *.tgz # should pack with json output
+error: unrecognized subcommand 'pm'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm pack -- --loglevel=warn && rm -rf *.tgz # should support pass through arguments
+error: unrecognized subcommand 'pm'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.

@@ -1,227 +1,34 @@
-> vp pm pack --json # should pack current workspace root
-[
-  {
-    "id": "command-pack-npm10-with-workspace@<semver>",
-    "name": "command-pack-npm10-with-workspace",
-    "version": "1.0.0",
-    "size": <variable>,
-    "unpackedSize": <variable>,
-    "shasum": "<hash>",
-    "integrity": "sha512-<hash>",
-    "filename": "command-pack-npm10-with-workspace-1.0.0.tgz",
-    "files": [
-      {
-        "path": ".node-version",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "output.log",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "package.json",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "packages/app/package.json",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "packages/utils/package.json",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "snap.txt",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "steps.json",
-        "size": <variable>,
-        "mode": 420
-      }
-    ],
-    "entryCount": 7,
-    "bundled": []
-  }
-]
+[2]> vp pm pack --json # should pack current workspace root
+error: unrecognized subcommand 'pm'
 
-> vp pm pack --recursive --json && rm -rf *.tgz # should pack all packages in workspace (uses --workspaces)
-[
-  {
-    "id": "app@<semver>",
-    "name": "app",
-    "version": "1.0.0",
-    "size": <variable>,
-    "unpackedSize": <variable>,
-    "shasum": "<hash>",
-    "integrity": "sha512-<hash>",
-    "filename": "app-1.0.0.tgz",
-    "files": [
-      {
-        "path": "package.json",
-        "size": <variable>,
-        "mode": 420
-      }
-    ],
-    "entryCount": 1,
-    "bundled": []
-  },
-  {
-    "id": "@vite-plus-test/utils@<semver>",
-    "name": "@vite-plus-test/utils",
-    "version": "1.0.0",
-    "size": <variable>,
-    "unpackedSize": <variable>,
-    "shasum": "<hash>",
-    "integrity": "sha512-<hash>",
-    "filename": "vite-plus-test-utils-1.0.0.tgz",
-    "files": [
-      {
-        "path": "package.json",
-        "size": <variable>,
-        "mode": 420
-      }
-    ],
-    "entryCount": 1,
-    "bundled": []
-  }
-]
+Usage: vp <COMMAND>
 
-> vp pm pack --filter app --json && rm -rf *.tgz # should pack specific package (uses --workspace app)
-[
-  {
-    "id": "app@<semver>",
-    "name": "app",
-    "version": "1.0.0",
-    "size": <variable>,
-    "unpackedSize": <variable>,
-    "shasum": "<hash>",
-    "integrity": "sha512-<hash>",
-    "filename": "app-1.0.0.tgz",
-    "files": [
-      {
-        "path": "package.json",
-        "size": <variable>,
-        "mode": 420
-      }
-    ],
-    "entryCount": 1,
-    "bundled": []
-  }
-]
+For more information, try '--help'.
 
-> vp pm pack --filter app --filter @vite-plus-test/utils --json && rm -rf *.tgz # should pack multiple packages
-[
-  {
-    "id": "app@<semver>",
-    "name": "app",
-    "version": "1.0.0",
-    "size": <variable>,
-    "unpackedSize": <variable>,
-    "shasum": "<hash>",
-    "integrity": "sha512-<hash>",
-    "filename": "app-1.0.0.tgz",
-    "files": [
-      {
-        "path": "package.json",
-        "size": <variable>,
-        "mode": 420
-      }
-    ],
-    "entryCount": 1,
-    "bundled": []
-  },
-  {
-    "id": "@vite-plus-test/utils@<semver>",
-    "name": "@vite-plus-test/utils",
-    "version": "1.0.0",
-    "size": <variable>,
-    "unpackedSize": <variable>,
-    "shasum": "<hash>",
-    "integrity": "sha512-<hash>",
-    "filename": "vite-plus-test-utils-1.0.0.tgz",
-    "files": [
-      {
-        "path": "package.json",
-        "size": <variable>,
-        "mode": 420
-      }
-    ],
-    "entryCount": 1,
-    "bundled": []
-  }
-]
+[129]> vp pm pack --recursive --json && rm -rf *.tgz # should pack all packages in workspace (uses --workspaces)
+error: unrecognized subcommand 'pm'
 
-> vp pm pack --pack-destination ./dist --json && rm -rf ./dist # should pack with destination
-[
-  {
-    "id": "command-pack-npm10-with-workspace@<semver>",
-    "name": "command-pack-npm10-with-workspace",
-    "version": "1.0.0",
-    "size": <variable>,
-    "unpackedSize": <variable>,
-    "shasum": "<hash>",
-    "integrity": "sha512-<hash>",
-    "filename": "command-pack-npm10-with-workspace-1.0.0.tgz",
-    "files": [
-      {
-        "path": ".node-version",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "app-1.0.0.tgz",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "command-pack-npm10-with-workspace-1.0.0.tgz",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "output.log",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "package.json",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "packages/app/package.json",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "packages/utils/package.json",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "snap.txt",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "steps.json",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
-        "path": "vite-plus-test-utils-1.0.0.tgz",
-        "size": <variable>,
-        "mode": 420
-      }
-    ],
-    "entryCount": 10,
-    "bundled": []
-  }
-]
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm pack --filter app --json && rm -rf *.tgz # should pack specific package (uses --workspace app)
+error: unrecognized subcommand 'pm'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm pack --filter app --filter @vite-plus-test/utils --json && rm -rf *.tgz # should pack multiple packages
+error: unrecognized subcommand 'pm'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp pm pack --pack-destination ./dist --json && rm -rf ./dist # should pack with destination
+error: unrecognized subcommand 'pm'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.

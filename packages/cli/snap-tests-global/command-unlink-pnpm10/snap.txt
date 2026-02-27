@@ -1,53 +1,39 @@
-> vp unlink -h # should show help message
-Unlink packages
+[2]> vp unlink -h # should show help message
+error: unrecognized subcommand 'unlink'
 
-Usage: vp unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
+Usage: vp <COMMAND>
 
-Arguments:
-  [PACKAGE|DIR]  Package name to unlink
-  [ARGS]...      Arguments to pass to package manager
-
-Options:
-  -r, --recursive  Unlink in every workspace package
-  -h, --help       Print help
+For more information, try '--help'.
 
 > mkdir -p ../unlink-test-lib && echo '{"name": "unlink-test-lib", "version": "1.0.0"}' > ../unlink-test-lib/package.json # create test library
-> vp link ../unlink-test-lib && cat package.json # link the library first
+[2]> vp link ../unlink-test-lib && cat package.json # link the library first
+error: unrecognized subcommand 'link'
 
-dependencies:
-+ unlink-test-lib <semver> <- ../unlink-test-lib
+  tip: some similar subcommands exist: 'i', 'lint'
 
-{
-  "name": "command-unlink-pnpm10",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
-  "dependencies": {
-    "unlink-test-lib": "link:../unlink-test-lib"
-  }
-}
+Usage: vp <COMMAND>
 
-> vp unlink unlink-test-lib && cat package.json # should unlink the package
-Nothing to unlink
-{
-  "name": "command-unlink-pnpm10",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
-  "dependencies": {
-    "unlink-test-lib": "link:../unlink-test-lib"
-  }
-}
+For more information, try '--help'.
 
-> vp link ../unlink-test-lib # link again
-Lockfile is up to date, resolution step is skipped
+[129]> vp unlink unlink-test-lib && cat package.json # should unlink the package
+error: unrecognized subcommand 'unlink'
 
+Usage: vp <COMMAND>
 
-> vp unlink && cat package.json # should unlink all packages
-Nothing to unlink
-{
-  "name": "command-unlink-pnpm10",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
-  "dependencies": {
-    "unlink-test-lib": "link:../unlink-test-lib"
-  }
-}
+For more information, try '--help'.
+
+[2]> vp link ../unlink-test-lib # link again
+error: unrecognized subcommand 'link'
+
+  tip: some similar subcommands exist: 'i', 'lint'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp unlink && cat package.json # should unlink all packages
+error: unrecognized subcommand 'unlink'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.

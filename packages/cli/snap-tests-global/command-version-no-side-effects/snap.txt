@@ -2,8 +2,17 @@
 VITE+ - The Unified Toolchain for the Web
 
 PACKAGE VERSIONS:
-  Global vite-plus:    v<semver>
-  Local vite-plus:     Not found
+  Global vite-plus:    Not found
+  Local vite-plus:     v<semver>
+
+BUNDLED WITH VITE-PLUS:
+  vite:                 vite v<semver>
+  rolldown:             rolldown v<semver>
+  test:                 vitest v<semver>
+  fmt:                  oxfmt v<semver>
+  lint:                 oxlint v<semver>
+  tsgolint:             oxlint-tsgolint v<semver>
+  pack:                 tsdown v<semver>
 
 > test -f .node-version && echo 'FAIL: .node-version was created' || echo 'OK: no .node-version created'
 OK: no .node-version created

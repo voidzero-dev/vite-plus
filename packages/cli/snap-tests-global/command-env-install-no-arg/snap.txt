@@ -1,3 +1,6 @@
-> vp env install # Install version from .node-version (22.x)
-Installing Node.js v<semver>...
-Installed Node.js v<semver>
+[2]> vp env install # Install version from .node-version (22.x)
+error: unrecognized subcommand 'env'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.

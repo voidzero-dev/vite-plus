@@ -1,54 +1,42 @@
-> vp remove testnpm2 -D -- --no-audit && cat package.json # should pass when remove not exists package
+[2]> vp remove testnpm2 -D -- --no-audit && cat package.json # should pass when remove not exists package
+error: unrecognized subcommand 'remove'
 
-up to date in <variable>ms
-{
-  "name": "command-remove-npm10",
-  "version": "1.0.0",
-  "packageManager": "npm@<semver>"
-}
+  tip: a similar subcommand exists: 'preview'
 
-> vp add testnpm2 -- --no-audit && vp add -D test-vite-plus-install -- --no-audit && vp add -O test-vite-plus-package-optional -- --no-audit && cat package.json # should add packages to dependencies
+Usage: vp <COMMAND>
 
-added 1 package in <variable>ms
+For more information, try '--help'.
 
-added 1 package in <variable>ms
+[129]> vp add testnpm2 -- --no-audit && vp add -D test-vite-plus-install -- --no-audit && vp add -O test-vite-plus-package-optional -- --no-audit && cat package.json # should add packages to dependencies
+error: unrecognized subcommand 'add'
 
-added 1 package in <variable>ms
-{
-  "name": "command-remove-npm10",
-  "version": "1.0.0",
-  "packageManager": "npm@<semver>",
-  "dependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "devDependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
+Usage: vp <COMMAND>
 
-> vp remove testnpm2 test-vite-plus-install -- --no-audit && cat package.json # should remove packages from dependencies
+For more information, try '--help'.
 
-removed 2 packages in <variable>ms
-{
-  "name": "command-remove-npm10",
-  "version": "1.0.0",
-  "packageManager": "npm@<semver>",
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
+[2]> vp remove testnpm2 test-vite-plus-install -- --no-audit && cat package.json # should remove packages from dependencies
+error: unrecognized subcommand 'remove'
 
-> vp remove -D test-vite-plus-package-optional -- --loglevel=warn --no-audit && cat package.json # support ignore -O flag and remove package from optional dependencies
+  tip: a similar subcommand exists: 'preview'
 
-removed 1 package in <variable>ms
-{
-  "name": "command-remove-npm10",
-  "version": "1.0.0",
-  "packageManager": "npm@<semver>"
-}
+Usage: vp <COMMAND>
 
-[1]> vp remove -g --dry-run testnpm2 && cat package.json # support remove global package with dry-run
-Failed to uninstall testnpm2: Configuration error: Package testnpm2 is not installed
+For more information, try '--help'.
+
+[2]> vp remove -D test-vite-plus-package-optional -- --loglevel=warn --no-audit && cat package.json # support ignore -O flag and remove package from optional dependencies
+error: unrecognized subcommand 'remove'
+
+  tip: a similar subcommand exists: 'preview'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
+
+[2]> vp remove -g --dry-run testnpm2 && cat package.json # support remove global package with dry-run
+error: unrecognized subcommand 'remove'
+
+  tip: a similar subcommand exists: 'preview'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.

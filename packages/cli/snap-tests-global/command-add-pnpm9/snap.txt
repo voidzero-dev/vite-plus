@@ -1,84 +1,30 @@
-> vp add --help # should show help
-Add packages to dependencies
+[2]> vp add --help # should show help
+error: unrecognized subcommand 'add'
 
-Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp <COMMAND>
 
-Arguments:
-  <PACKAGES>...           Packages to add
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+For more information, try '--help'.
 
-Options:
-  -P, --save-prod
-          Save to `dependencies` (default)
-  -D, --save-dev
-          Save to `devDependencies`
-      --save-peer
-          Save to `peerDependencies` and `devDependencies`
-  -O, --save-optional
-          Save to `optionalDependencies`
-  -E, --save-exact
-          Save exact version rather than semver range
-      --save-catalog-name <CATALOG_NAME>
-          Save the new dependency to the specified catalog name
-      --save-catalog
-          Save the new dependency to the default catalog
-      --allow-build <NAMES>
-          A list of package names allowed to run postinstall
-      --filter <PATTERN>
-          Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root
-          Add to workspace root
-      --workspace
-          Only add if package exists in workspace (pnpm-specific)
-  -g, --global
-          Install globally
-      --node <NODE>
-          Node.js version to use for global installation (only with -g)
-  -h, --help
-          Print help
+[2]> vp add testnpm2 -D && cat package.json # should add package as dev dependencies
+error: unrecognized subcommand 'add'
 
-> vp add testnpm2 -D && cat package.json # should add package as dev dependencies
-Packages: +<variable>
-+<repeat>
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Usage: vp <COMMAND>
 
-devDependencies:
-+ testnpm2 <semver>
+For more information, try '--help'.
 
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-add-pnpm9",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  }
-}
+[2]> vp add testnpm2 test-vite-plus-install && cat package.json # should add packages to dependencies
+error: unrecognized subcommand 'add'
 
-> vp add testnpm2 test-vite-plus-install && cat package.json # should add packages to dependencies
-Packages: +<variable>
-+<repeat>
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Usage: vp <COMMAND>
 
-dependencies:
-+ test-vite-plus-install <semver>
+For more information, try '--help'.
 
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-add-pnpm9",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  }
-}
+[2]> vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install # should error because allow-build is not supported at pnpm@9
+error: unrecognized subcommand 'add'
 
-[1]> vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install # should error because allow-build is not supported at pnpm@9
- ERROR  Unknown option: 'allow-build'
-For help, run: pnpm help add
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
 
 > vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
 Packages: +<variable>
@@ -97,61 +43,23 @@ Done in <variable>ms using pnpm v<semver>
   "version": "1.0.0",
   "packageManager": "pnpm@<semver>",
   "devDependencies": {
-    "test-vite-plus-package": "1.0.0",
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
+    "test-vite-plus-package": "1.0.0"
   },
   "peerDependencies": {
     "test-vite-plus-package": "1.0.0"
   }
 }
 
-> vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
-Packages: +<variable>
-+<repeat>
-Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+[129]> vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
+error: unrecognized subcommand 'add'
 
-optionalDependencies:
-+ test-vite-plus-package-optional <semver>
+Usage: vp <COMMAND>
 
-Done in <variable>ms using pnpm v<semver>
-{
-  "name": "command-add-pnpm9",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0",
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  },
-  "peerDependencies": {
-    "test-vite-plus-package": "1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
+For more information, try '--help'.
 
-> vp add test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support pass through arguments
-{
-  "name": "command-add-pnpm9",
-  "version": "1.0.0",
-  "packageManager": "pnpm@<semver>",
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0",
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
-  },
-  "peerDependencies": {
-    "test-vite-plus-package": "1.0.0"
-  },
-  "optionalDependencies": {
-    "test-vite-plus-package-optional": "^1.0.0"
-  }
-}
+[2]> vp add test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support pass through arguments
+error: unrecognized subcommand 'add'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.

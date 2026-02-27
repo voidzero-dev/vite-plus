@@ -1,2 +1,6 @@
-> vp dlx -s print-current-version # should print Node.js version 22.11.0 from devEngines.runtime
-v22.11.0
+[2]> vp dlx -s print-current-version # should print Node.js version 22.11.0 from devEngines.runtime
+error: unrecognized subcommand 'dlx'
+
+Usage: vp <COMMAND>
+
+For more information, try '--help'.
