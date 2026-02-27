@@ -91,7 +91,7 @@ All user-facing output must go through shared output modules instead of raw prin
 
 ## Git Workflow
 
-- Run `vp fmt` before committing to format code
+- Run `vp check --fix` before committing to format and lint code
 
 ## Quick Reference
 
