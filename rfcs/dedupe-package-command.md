@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vite dedupe` command that automatically adapts to the detected package manager (pnpm/npm/yarn) for optimizing dependency trees by removing duplicate packages and upgrading older dependencies to newer compatible versions in the lockfile. This helps reduce redundancy and improve project efficiency.
+Add `vp dedupe` command that automatically adapts to the detected package manager (pnpm/npm/yarn) for optimizing dependency trees by removing duplicate packages and upgrading older dependencies to newer compatible versions in the lockfile. This helps reduce redundancy and improve project efficiency.
 
 ## Motivation
 
@@ -39,10 +39,10 @@ yarn dedupe --check            # yarn@2+ - check without modifying
 
 ```bash
 # Works for all package managers
-vite dedupe                    # Deduplicate dependencies
+vp dedupe                    # Deduplicate dependencies
 
 # Check mode (dry-run)
-vite dedupe --check            # Check if deduplication would make changes
+vp dedupe --check            # Check if deduplication would make changes
 ```
 
 ## Proposed Solution
@@ -52,17 +52,17 @@ vite dedupe --check            # Check if deduplication would make changes
 #### Dedupe Command
 
 ```bash
-vite dedupe [OPTIONS]
+vp dedupe [OPTIONS]
 ```
 
 **Examples:**
 
 ```bash
 # Basic deduplication
-vite dedupe
+vp dedupe
 
 # Check mode (preview changes without modifying)
-vite dedupe --check
+vp dedupe --check
 ```
 
 ### Command Mapping
@@ -84,10 +84,10 @@ vite dedupe --check
 - https://yarnpkg.com/cli/dedupe (yarn@2+)
 - Note: yarn@2+ has a dedicated `yarn dedupe` command with `--check` mode support
 
-| Vite+ Flag    | pnpm          | npm          | yarn@2+       | Description                  |
-| ------------- | ------------- | ------------ | ------------- | ---------------------------- |
-| `vite dedupe` | `pnpm dedupe` | `npm dedupe` | `yarn dedupe` | Deduplicate dependencies     |
-| `--check`     | `--check`     | `--dry-run`  | `--check`     | Check if changes would occur |
+| Vite+ Flag  | pnpm          | npm          | yarn@2+       | Description                  |
+| ----------- | ------------- | ------------ | ------------- | ---------------------------- |
+| `vp dedupe` | `pnpm dedupe` | `npm dedupe` | `yarn dedupe` | Deduplicate dependencies     |
+| `--check`   | `--check`     | `--dry-run`  | `--check`     | Check if changes would occur |
 
 **Note**:
 
@@ -368,26 +368,26 @@ impl DedupeCommand {
 ### No Package Manager Detected
 
 ```bash
-$ vite dedupe
+$ vp dedupe
 Error: No package manager detected
 Please run one of:
-  - vite install (to set up package manager)
+  - vp install (to set up package manager)
   - Add packageManager field to package.json
 ```
 
 ### Check Mode Detects Changes
 
 ```bash
-$ vite dedupe --check
+$ vp dedupe --check
 Checking if deduplication would make changes...
-Changes detected. Run 'vite dedupe' to apply.
+Changes detected. Run 'vp dedupe' to apply.
 Exit code: 1
 ```
 
 ### Unsupported Flag Warning
 
 ```bash
-$ vite dedupe --filter app
+$ vp dedupe --filter app
 Warning: --filter not supported by npm, use --workspace instead
 Running: npm dedupe
 ```
@@ -397,7 +397,7 @@ Running: npm dedupe
 ### Success Output
 
 ```bash
-$ vite dedupe
+$ vp dedupe
 Detected package manager: pnpm@10.15.0
 Running: pnpm dedupe
 
@@ -411,7 +411,7 @@ Done in 3.2s
 ```
 
 ```bash
-$ vite dedupe --check
+$ vp dedupe --check
 Detected package manager: pnpm@10.15.0
 Running: pnpm dedupe --check
 
@@ -420,12 +420,12 @@ Would deduplicate 8 packages:
   - react: 18.2.0 → 18.3.1 (2 occurrences)
   - typescript: 5.3.0 → 5.5.0 (3 occurrences)
 
-Run 'vite dedupe' to apply these changes.
+Run 'vp dedupe' to apply these changes.
 Exit code: 1
 ```
 
 ```bash
-$ vite dedupe --check
+$ vp dedupe --check
 Detected package manager: npm@11.0.0
 Running: npm dedupe --dry-run
 
@@ -440,7 +440,7 @@ Done in 4.5s
 ### Yarn@2+ Output
 
 ```bash
-$ vite dedupe
+$ vp dedupe
 Detected package manager: yarn@4.0.0
 Running: yarn dedupe
 
@@ -456,7 +456,7 @@ Done in 1.2s
 ```
 
 ```bash
-$ vite dedupe --check
+$ vp dedupe --check
 Detected package manager: yarn@4.0.0
 Running: yarn dedupe --check
 
@@ -469,7 +469,7 @@ Exit code: 1
 ### No Changes Needed
 
 ```bash
-$ vite dedupe
+$ vp dedupe
 Detected package manager: pnpm@10.15.0
 Running: pnpm dedupe
 
@@ -483,7 +483,7 @@ Done in 0.8s
 ### Alternative 1: Error on Unsupported Flags
 
 ```bash
-vite dedupe --filter app  # on npm
+vp dedupe --filter app  # on npm
 Error: --filter flag not supported by npm
 ```
 
@@ -497,7 +497,7 @@ Error: --filter flag not supported by npm
 ### Alternative 2: Auto-Translate All Flags
 
 ```bash
-vite dedupe --filter app  # on npm
+vp dedupe --filter app  # on npm
 # Automatically translates to: npm dedupe --workspace app
 ```
 
@@ -511,8 +511,8 @@ vite dedupe --filter app  # on npm
 ### Alternative 3: Separate Check Command
 
 ```bash
-vite dedupe:check
-vite dedupe:run
+vp dedupe:check
+vp dedupe:run
 ```
 
 **Rejected because**:
@@ -650,10 +650,10 @@ Test cases:
 ## CLI Help Output
 
 ```bash
-$ vite dedupe --help
+$ vp dedupe --help
 Deduplicate dependencies by removing older versions
 
-Usage: vite dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+Usage: vp dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Options:
   --check                    Check if deduplication would make changes
@@ -667,9 +667,9 @@ Behavior by Package Manager:
 Note: yarn@1 does not have a dedupe command and is not supported
 
 Examples:
-  vite dedupe                          # Deduplicate all dependencies
-  vite dedupe --check                  # Check if changes would occur
-  vite dedupe -- --some-flag           # Pass custom flags to package manager
+  vp dedupe                          # Deduplicate all dependencies
+  vp dedupe --check                  # Check if changes would occur
+  vp dedupe -- --some-flag           # Pass custom flags to package manager
 ```
 
 ## Performance Considerations
@@ -708,7 +708,7 @@ pnpm dedupe
 npm dedupe
 
 # New way (works with any package manager)
-vite dedupe
+vp dedupe
 ```
 
 ### CI/CD Integration
@@ -718,7 +718,7 @@ vite dedupe
 - run: pnpm dedupe --check
 
 # After (works with any package manager)
-- run: vite dedupe --check
+- run: vp dedupe --check
 ```
 
 ## Real-World Usage Examples
@@ -727,10 +727,10 @@ vite dedupe
 
 ```bash
 # After installing many packages over time
-vite dedupe                     # Clean up duplicates
+vp dedupe                     # Clean up duplicates
 
 # Check if cleanup is needed
-vite dedupe --check             # Preview changes
+vp dedupe --check             # Preview changes
 ```
 
 ### CI/CD Pipeline
@@ -744,8 +744,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: vite install
-      - run: vite dedupe --check
+      - run: vp install
+      - run: vp dedupe --check
         name: Verify dependencies are optimized
 ```
 
@@ -753,13 +753,13 @@ jobs:
 
 ```bash
 # Update dependencies
-vite update --latest
+vp update --latest
 
 # Deduplicate after updates
-vite dedupe
+vp dedupe
 
 # Verify everything still works
-vite test
+vp test
 ```
 
 ## Package Manager Compatibility
@@ -779,7 +779,7 @@ vite test
 Generate detailed report of deduplication changes:
 
 ```bash
-vite dedupe --report
+vp dedupe --report
 
 # Output:
 Deduplication Report:
@@ -797,7 +797,7 @@ Total: 8 packages deduplicated
 Automatically deduplicate after install:
 
 ```bash
-vite install --auto-dedupe
+vp install --auto-dedupe
 
 # Or configure in vite-task.json
 {
@@ -812,8 +812,8 @@ vite install --auto-dedupe
 Enforce deduplication policies in CI:
 
 ```bash
-vite dedupe --policy strict  # Fail if any duplicates exist
-vite dedupe --policy warn    # Warn but don't fail
+vp dedupe --policy strict  # Fail if any duplicates exist
+vp dedupe --policy warn    # Warn but don't fail
 ```
 
 ### 4. Dependency Analysis
@@ -821,7 +821,7 @@ vite dedupe --policy warn    # Warn but don't fail
 Show why packages are duplicated:
 
 ```bash
-vite dedupe --why lodash
+vp dedupe --why lodash
 
 # Output:
 lodash@4.17.20:
@@ -838,7 +838,7 @@ Recommendation: All can use lodash@4.17.21
 
 1. **Should we auto-run dedupe after updates?**
    - Proposed: No, keep commands separate
-   - Users can combine: `vite update && vite dedupe`
+   - Users can combine: `vp update && vp dedupe`
    - Later: Add `--auto-dedupe` flag to update command
 
 2. **Should we show detailed diff in check mode?**
@@ -859,18 +859,18 @@ Recommendation: All can use lodash@4.17.21
 5. **Should we support interactive mode?**
    - Proposed: Later enhancement
    - Let users choose which packages to dedupe
-   - Similar to `vite update --interactive`
+   - Similar to `vp update --interactive`
 
 ## Success Metrics
 
-1. **Adoption**: % of users using `vite dedupe` vs direct package manager
+1. **Adoption**: % of users using `vp dedupe` vs direct package manager
 2. **Dependency Reduction**: Average reduction in duplicate packages
 3. **CI Integration**: Usage in CI/CD pipelines for validation
 4. **Error Rate**: Track command failures vs package manager direct usage
 
 ## Conclusion
 
-This RFC proposes adding `vite dedupe` command to provide a unified interface for dependency deduplication across pnpm/npm/yarn@2+. The design:
+This RFC proposes adding `vp dedupe` command to provide a unified interface for dependency deduplication across pnpm/npm/yarn@2+. The design:
 
 - ✅ Automatically adapts to detected package manager
 - ✅ Supports check mode for validation (maps to --check for pnpm/yarn@2+, --dry-run for npm)

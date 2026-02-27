@@ -1,5 +1,5 @@
 > # Test that lint picks up workspace root config
-> # vite lint
+> # vp lint
 > # Test that fmt picks up workspace root config - specify file
 > vp fmt packages/app-b/index.js --check
 Checking formatting...

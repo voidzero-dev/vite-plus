@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vite add` and `vite remove` commands that automatically adapt to the detected package manager (pnpm/yarn/npm) for adding and removing packages, with support for multiple packages, common flags, and workspace-aware operations based on pnpm's API design.
+Add `vp add` and `vp remove` commands that automatically adapt to the detected package manager (pnpm/yarn/npm) for adding and removing packages, with support for multiple packages, common flags, and workspace-aware operations based on pnpm's API design.
 
 ## Motivation
 
@@ -39,17 +39,17 @@ npm uninstall lodash
 
 ```bash
 # Works for all package managers
-vite add typescript -D
-vite remove lodash
+vp add typescript -D
+vp remove lodash
 
 # Multiple packages
-vite add react react-dom
-vite remove axios lodash
+vp add react react-dom
+vp remove axios lodash
 
 # Workspace operations
-vite add react --filter app
-vite add @myorg/utils --workspace --filter app
-vite add lodash -w  # Add to workspace root
+vp add react --filter app
+vp add @myorg/utils --workspace --filter app
+vp add lodash -w  # Add to workspace root
 ```
 
 ## Proposed Solution
@@ -59,45 +59,45 @@ vite add lodash -w  # Add to workspace root
 #### Add Command
 
 ```bash
-vite add <PACKAGES>... [OPTIONS]
+vp add <PACKAGES>... [OPTIONS]
 ```
 
 **Examples:**
 
 ```bash
 # Add production dependency
-vite add react react-dom
+vp add react react-dom
 
 # Add dev dependency
-vite add -D typescript @types/react
+vp add -D typescript @types/react
 
 # Add with exact version
-vite add react -E
+vp add react -E
 
 # Add peer dependency
-vite add --save-peer react
+vp add --save-peer react
 
 # Add optional dependency
-vite add -O sharp
+vp add -O sharp
 
 # Workspace operations
-vite add react --filter app              # Add to specific package
-vite add @myorg/utils --workspace --filter app  # Add workspace dependency
-vite add lodash -w                       # Add to workspace root
-vite add react --filter "app*"           # Add to multiple packages (pattern)
-vite add utils --filter "!@myorg/core"   # Exclude packages
+vp add react --filter app              # Add to specific package
+vp add @myorg/utils --workspace --filter app  # Add workspace dependency
+vp add lodash -w                       # Add to workspace root
+vp add react --filter "app*"           # Add to multiple packages (pattern)
+vp add utils --filter "!@myorg/core"   # Exclude packages
 ```
 
-##### `vite install` Command with `PACKAGES` arguments
+##### `vp install` Command with `PACKAGES` arguments
 
-To accommodate the user habits and experience of `npm install <PACKAGES>…`, `vite install <PACKAGES>...` will be specially treated as an alias for the add command.
+To accommodate the user habits and experience of `npm install <PACKAGES>…`, `vp install <PACKAGES>...` will be specially treated as an alias for the add command.
 
 The following commands will be automatically converted to the add command for processing:
 
 ```bash
-vite install <PACKAGES>... [OPTIONS]
+vp install <PACKAGES>... [OPTIONS]
 
--> vite add <PACKAGES>... [OPTIONS]
+-> vp add <PACKAGES>... [OPTIONS]
 ```
 
 ##### Install global packages with npm cli only
@@ -107,8 +107,8 @@ For global packages, we will use npm cli only.
 > Because yarn do not support global packages install on [version>=2.x](https://yarnpkg.com/migration/guide#use-yarn-dlx-instead-of-yarn-global), and pnpm global install has some bugs like `wrong bin file` issues.
 
 ```bash
-vite install -g <PACKAGES>...
-vite add -g <PACKAGES>...
+vp install -g <PACKAGES>...
+vp add -g <PACKAGES>...
 
 -> npm install -g <PACKAGES>...
 ```
@@ -116,26 +116,26 @@ vite add -g <PACKAGES>...
 #### Remove Command
 
 ```bash
-vite remove <PACKAGES>... [OPTIONS]
-vite rm <PACKAGES>... [OPTIONS]        # Alias
+vp remove <PACKAGES>... [OPTIONS]
+vp rm <PACKAGES>... [OPTIONS]        # Alias
 ```
 
 **Examples:**
 
 ```bash
 # Remove packages
-vite remove lodash axios
+vp remove lodash axios
 
 # Remove dev dependency
-vite rm typescript
+vp rm typescript
 
 # Alias support
-vite rm old-package
+vp rm old-package
 
 # Workspace operations
-vite remove lodash --filter app          # Remove from specific package
-vite rm utils --filter "app*"            # Remove from multiple packages
-vite remove -g typescript                # Remove global package
+vp remove lodash --filter app          # Remove from specific package
+vp rm utils --filter "app*"            # Remove from multiple packages
+vp remove -g typescript                # Remove global package
 ```
 
 ### Command Mapping
@@ -185,9 +185,9 @@ vite remove -g typescript                # Remove global package
 
 **Aliases:**
 
-- `vite rm` = `vite remove`
-- `vite un` = `vite remove`
-- `vite uninstall` = `vite remove`
+- `vp rm` = `vp remove`
+- `vp un` = `vp remove`
+- `vp uninstall` = `vp remove`
 
 #### Workspace Filter Patterns
 
@@ -205,8 +205,8 @@ Based on pnpm's filter syntax:
 **Multiple Filters**:
 
 ```bash
-vite add react --filter app --filter web  # Add to both app and web
-vite add react --filter "app*" --filter "!app-test"  # Add to app* except app-test
+vp add react --filter app --filter web  # Add to both app and web
+vp add react --filter "app*" --filter "!app-test"  # Add to app* except app-test
 ```
 
 #### Pass-Through Arguments
@@ -216,7 +216,7 @@ Additional parameters not covered by Vite+ can all be handled through pass-throu
 All arguments after `--` will be passed through to the package manager.
 
 ```bash
-vite add react --allow-build=react,napi -- --use-stderr
+vp add react --allow-build=react,napi -- --use-stderr
 
 -> pnpm add --allow-build=react,napi --use-stderr react
 -> yarn add --use-stderr react
@@ -609,12 +609,12 @@ When adding workspace dependencies with `--workspace` flag:
 
 ```bash
 # pnpm: Adds with workspace: protocol
-vite add @myorg/utils --workspace --filter app
+vp add @myorg/utils --workspace --filter app
 # → pnpm --filter app add @myorg/utils --workspace
 # → Adds: "@myorg/utils": "workspace:*"
 
 # Without --workspace: Tries to install from registry
-vite add @myorg/utils --filter app
+vp add @myorg/utils --filter app
 # → pnpm --filter app add @myorg/utils
 # → Tries npm registry (may fail if not published)
 ```
@@ -630,7 +630,7 @@ vite add @myorg/utils --filter app
 - These commands modify package.json and lockfiles
 - Side effects make caching inappropriate
 - Each execution should run fresh
-- Similar to how `vite install` works
+- Similar to how `vp install` works
 
 **Implementation**: Set `cacheable: false` or skip cache entirely.
 
@@ -648,7 +648,7 @@ vite add @myorg/utils --filter app
 **Example**:
 
 ```bash
-vite add react --save-exact
+vp add react --save-exact
 # → pnpm add react --save-exact
 # → yarn add react --save-exact
 # → npm install react --save-exact
@@ -674,10 +674,10 @@ vite add react --save-exact
 
 **Aliases**:
 
-- `vite remove` (primary)
-- `vite rm` (short)
-- `vite un` (short, matches pnpm)
-- `vite uninstall` (explicit, matches npm)
+- `vp remove` (primary)
+- `vp rm` (short)
+- `vp un` (short, matches pnpm)
+- `vp uninstall` (explicit, matches npm)
 
 **Rationale**: Matches user expectations from other tools.
 
@@ -688,8 +688,8 @@ vite add react --save-exact
 **Example**:
 
 ```bash
-vite add react react-dom @types/react -D
-vite remove lodash axios underscore
+vp add react react-dom @types/react -D
+vp remove lodash axios underscore
 ```
 
 **Implementation**: Packages are positional arguments before flags.
@@ -699,18 +699,18 @@ vite remove lodash axios underscore
 ### No Packages Specified
 
 ```bash
-$ vite add
+$ vp add
 Error: No packages specified
-Usage: vite add <PACKAGES>... [OPTIONS]
+Usage: vp add <PACKAGES>... [OPTIONS]
 ```
 
 ### Package Manager Not Detected
 
 ```bash
-$ vite add react
+$ vp add react
 Error: No package manager detected
 Please run one of:
-  - vite install (to set up package manager)
+  - vp install (to set up package manager)
   - Add packageManager field to package.json
 ```
 
@@ -723,7 +723,7 @@ Let the underlying package manager handle validation and provide clear errors.
 ### Success Output
 
 ```bash
-$ vite add react react-dom
+$ vp add react react-dom
 Detected package manager: pnpm@10.15.0
 Running: pnpm add react react-dom
 
@@ -743,7 +743,7 @@ Done in 2.3s
 ### Error Output
 
 ```bash
-$ vite add invalid-package-that-does-not-exist
+$ vp add invalid-package-that-does-not-exist
 Detected package manager: pnpm@10.15.0
 Running: pnpm add invalid-package-that-does-not-exist
 
@@ -761,7 +761,7 @@ Error: Command failed with exit code 1
 Translate all flags to package manager-specific equivalents:
 
 ```bash
-vite add react --dev
+vp add react --dev
 # → pnpm add react -D
 # → yarn add react --dev
 # → npm install react --save-dev
@@ -777,9 +777,9 @@ vite add react --dev
 ### Alternative 2: Separate Commands per Package Manager
 
 ```bash
-vite pnpm:add react
-vite yarn:add react
-vite npm:install react
+vp pnpm:add react
+vp yarn:add react
+vp npm:install react
 ```
 
 **Rejected because**:
@@ -793,7 +793,7 @@ vite npm:install react
 Prompt for packages and options interactively:
 
 ```bash
-$ vite add
+$ vp add
 ? Which packages to add? react
 ? Add as dev dependency? Yes
 ```
@@ -951,10 +951,10 @@ Test cases:
 ### Add Command
 
 ```bash
-$ vite add --help
+$ vp add --help
 Add packages to dependencies
 
-Usage: vite add <PACKAGES>... [OPTIONS]
+Usage: vp add <PACKAGES>... [OPTIONS]
 
 Arguments:
   <PACKAGES>...  Packages to add
@@ -979,21 +979,21 @@ Filter Patterns:
   ...<pkg>         Package and dependents (pnpm only)
 
 Examples:
-  vite add react react-dom
-  vite add -D typescript @types/react
-  vite add react --filter app
-  vite add react --filter "app*" --filter "!app-test"
-  vite add @myorg/utils --workspace --filter web
-  vite add lodash -w
+  vp add react react-dom
+  vp add -D typescript @types/react
+  vp add react --filter app
+  vp add react --filter "app*" --filter "!app-test"
+  vp add @myorg/utils --workspace --filter web
+  vp add lodash -w
 ```
 
 ### Remove Command
 
 ```bash
-$ vite remove --help
+$ vp remove --help
 Remove packages from dependencies
 
-Usage: vite remove <PACKAGES>... [OPTIONS]
+Usage: vp remove <PACKAGES>... [OPTIONS]
 
 Aliases: rm, un, uninstall
 
@@ -1013,11 +1013,11 @@ Filter Patterns:
   !<pattern>       Exclude pattern (pnpm only)
 
 Examples:
-  vite remove lodash
-  vite remove axios underscore lodash
-  vite rm lodash --filter app
-  vite remove utils --filter "app*"
-  vite rm old-package
+  vp remove lodash
+  vp remove axios underscore lodash
+  vp rm lodash --filter app
+  vp remove utils --filter "app*"
+  vp rm old-package
 ```
 
 ## Performance Considerations
@@ -1054,7 +1054,7 @@ Users can start using immediately:
 pnpm add react
 
 # New way (works with any package manager)
-vite add react
+vp add react
 ```
 
 ### Discoverability
@@ -1076,7 +1076,7 @@ Add to CLI documentation:
 ### Adding Packages
 
 ```bash
-vite add <packages>... [OPTIONS]
+vp add <packages>... [OPTIONS]
 ```
 ````
 
@@ -1084,16 +1084,16 @@ Automatically uses the detected package manager (pnpm/yarn/npm).
 
 **Basic Examples:**
 
-- `vite add react` - Add production dependency
-- `vite add -D typescript` - Add dev dependency
-- `vite add react react-dom` - Add multiple packages
+- `vp add react` - Add production dependency
+- `vp add -D typescript` - Add dev dependency
+- `vp add react react-dom` - Add multiple packages
 
 **Workspace Examples:**
 
-- `vite add react --filter app` - Add to specific package
-- `vite add react --filter "app*"` - Add to multiple packages (pnpm)
-- `vite add @myorg/utils --workspace --filter web` - Add workspace dependency
-- `vite add lodash -w` - Add to workspace root
+- `vp add react --filter app` - Add to specific package
+- `vp add react --filter "app*"` - Add to multiple packages (pnpm)
+- `vp add @myorg/utils --workspace --filter web` - Add workspace dependency
+- `vp add lodash -w` - Add to workspace root
 
 **Common Options:**
 
@@ -1109,22 +1109,22 @@ Automatically uses the detected package manager (pnpm/yarn/npm).
 ### Removing Packages
 
 ```bash
-vite remove <packages>... [OPTIONS]
-vite rm <packages>... [OPTIONS]
+vp remove <packages>... [OPTIONS]
+vp rm <packages>... [OPTIONS]
 ```
 
 Aliases: `rm`, `un`, `uninstall`
 
 **Basic Examples:**
 
-- `vite remove lodash` - Remove package
-- `vite rm axios underscore` - Remove multiple packages
+- `vp remove lodash` - Remove package
+- `vp rm axios underscore` - Remove multiple packages
 
 **Workspace Examples:**
 
-- `vite remove lodash --filter app` - Remove from specific package
-- `vite rm utils --filter "app*"` - Remove from multiple packages (pnpm)
-- `vite remove -g typescript` - Remove global package
+- `vp remove lodash --filter app` - Remove from specific package
+- `vp rm utils --filter "app*"` - Remove from multiple packages (pnpm)
+- `vp remove -g typescript` - Remove global package
 
 **Options:**
 
@@ -1153,14 +1153,14 @@ Following pnpm's filter API:
 
 **Exact Match:**
 ```bash
-vite add react --filter app
+vp add react --filter app
 # → pnpm --filter app add react
 ````
 
 **Wildcard Patterns:**
 
 ```bash
-vite add react --filter "app*"
+vp add react --filter "app*"
 # → pnpm --filter "app*" add react
 # Matches: app, app-web, app-mobile
 ```
@@ -1168,7 +1168,7 @@ vite add react --filter "app*"
 **Scope Patterns:**
 
 ```bash
-vite add lodash --filter "@myorg/*"
+vp add lodash --filter "@myorg/*"
 # → pnpm --filter "@myorg/*" add lodash
 # Matches all packages in @myorg scope
 ```
@@ -1176,7 +1176,7 @@ vite add lodash --filter "@myorg/*"
 **Exclusion Patterns:**
 
 ```bash
-vite add react --filter "!test*"
+vp add react --filter "!test*"
 # → pnpm --filter "!test*" add react
 # Adds to all packages EXCEPT those starting with test
 ```
@@ -1184,7 +1184,7 @@ vite add react --filter "!test*"
 **Multiple Filters:**
 
 ```bash
-vite add react --filter app --filter web
+vp add react --filter app --filter web
 # → pnpm --filter app --filter web add react
 # Adds to both app AND web packages
 ```
@@ -1193,11 +1193,11 @@ vite add react --filter app --filter web
 
 ```bash
 # Add to package and all its dependencies
-vite add lodash --filter "app..."
+vp add lodash --filter "app..."
 # → pnpm --filter "app..." add lodash
 
 # Add to package and all its dependents
-vite add utils --filter "...core"
+vp add utils --filter "...core"
 # → pnpm --filter "...core" add utils
 ```
 
@@ -1206,7 +1206,7 @@ vite add utils --filter "...core"
 Add dependencies to workspace root (requires special flag):
 
 ```bash
-vite add -D typescript -w
+vp add -D typescript -w
 # → pnpm add -D typescript -w  (pnpm)
 # → yarn add -D typescript -W  (yarn)
 # → npm install -D typescript -w  (npm)
@@ -1220,12 +1220,12 @@ For internal monorepo dependencies:
 
 ```bash
 # Add workspace dependency with workspace: protocol
-vite add @myorg/utils --workspace --filter app
+vp add @myorg/utils --workspace --filter app
 # → pnpm --filter app add @myorg/utils --workspace
 # → Adds: "@myorg/utils": "workspace:*"
 
 # Specify version
-vite add "@myorg/utils@workspace:^" --filter app
+vp add "@myorg/utils@workspace:^" --filter app
 # → Adds: "@myorg/utils": "workspace:^"
 ```
 
@@ -1253,7 +1253,7 @@ vite add "@myorg/utils@workspace:^" --filter app
 Implement wildcard translation for yarn/npm:
 
 ```bash
-vite add react --filter "app*"
+vp add react --filter "app*"
 # → For yarn: Run `yarn workspace app add react` for each matching package
 # → For npm: Run `npm install react --workspace app` for each matching package
 ```
@@ -1263,7 +1263,7 @@ vite add react --filter "app*"
 > Referer to ni's interactive mode https://github.com/antfu-collective/ni
 
 ```bash
-$ vite add --interactive
+$ vp add --interactive
 ? Select for package > tsdown
 ❯   tsdown                         v0.15.7 - git+https://github.com/rolldown/tsdown.git
     tsdown-config-silverwind       v1.4.0 - git+https://github.com/silverwind/tsdown-config-silverwind.git
@@ -1290,24 +1290,24 @@ $ vite add --interactive
 ### 3. Upgrade Command
 
 ```bash
-vite upgrade react
-vite upgrade --latest
-vite upgrade --interactive
+vp upgrade react
+vp upgrade --latest
+vp upgrade --interactive
 ```
 
 ### 4. Smart Suggestions
 
 ```bash
-$ vite add react
+$ vp add react
 Adding react...
 💡 Suggestion: Install @types/react for TypeScript support?
-   Run: vite add -D @types/react
+   Run: vp add -D @types/react
 ```
 
 ### 5. Dependency Analysis
 
 ```bash
-$ vite add react
+$ vp add react
 Analyzing dependency impact...
   Will add:
     react@18.3.1 (85KB)
@@ -1325,11 +1325,11 @@ Proceed? (Y/n)
 
 2. **Should we support version specifiers?**
    - Proposed: Yes, pass through to package manager
-   - Example: `vite add react@18.2.0`
+   - Example: `vp add react@18.2.0`
 
 3. **Should we support scoped package shortcuts?**
    - Proposed: No special handling, pass through as-is
-   - Example: `vite add @types/react` works naturally
+   - Example: `vp add @types/react` works naturally
 
 4. **Should we prevent adding to wrong dependency types?**
    - Proposed: No validation, trust package manager
@@ -1353,7 +1353,7 @@ Proceed? (Y/n)
 
 ## Success Metrics
 
-1. **Adoption**: % of users using `vite add/remove` vs direct package manager
+1. **Adoption**: % of users using `vp add/remove` vs direct package manager
 2. **Error Rate**: Track command failures vs package manager direct usage
 3. **User Feedback**: Survey/issues about command ergonomics
 4. **Performance**: Measure overhead vs direct package manager calls (<100ms target)
@@ -1419,19 +1419,19 @@ None required - leverages existing:
 
 ```bash
 # Add React to all frontend packages
-vite add react react-dom --filter "@myorg/app-*"
+vp add react react-dom --filter "@myorg/app-*"
 
 # Add testing library to all packages
-vite add -D vitest --filter "*"
+vp add -D vitest --filter "*"
 
 # Add shared utils to app packages (workspace dependency)
-vite add @myorg/shared-utils --workspace --filter "@myorg/app-*"
+vp add @myorg/shared-utils --workspace --filter "@myorg/app-*"
 
 # Remove deprecated package from all packages
-vite remove moment --filter "*"
+vp remove moment --filter "*"
 
 # Add TypeScript to workspace root (shared config)
-vite add -D typescript @types/node -w
+vp add -D typescript @types/node -w
 ```
 
 ### Development Workflow
@@ -1439,20 +1439,20 @@ vite add -D typescript @types/node -w
 ```bash
 # Clone new monorepo
 git clone <repo>
-vite install
+vp install
 
 # Add new feature dependencies to web app
 cd packages/web
-vite add axios react-query
+vp add axios react-query
 
 # Add development tool to specific package
-vite add -D webpack-bundle-analyzer --filter web
+vp add -D webpack-bundle-analyzer --filter web
 
 # Remove unused dependencies from utils package
-vite rm lodash underscore --filter utils
+vp rm lodash underscore --filter utils
 
 # Add workspace package as dependency
-vite add @myorg/ui-components --workspace --filter web
+vp add @myorg/ui-components --workspace --filter web
 ```
 
 ### Migration from Direct Package Manager
@@ -1464,12 +1464,12 @@ yarn workspace app add react
 npm install react --workspace app
 
 # After (unified)
-vite add react --filter app
+vp add react --filter app
 ```
 
 ## Conclusion
 
-This RFC proposes adding `vite add` and `vite remove` commands to provide a unified interface for package management across pnpm/yarn/npm. The design:
+This RFC proposes adding `vp add` and `vp remove` commands to provide a unified interface for package management across pnpm/yarn/npm. The design:
 
 - ✅ Automatically adapts to detected package manager
 - ✅ Supports multiple packages in single command

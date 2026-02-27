@@ -316,8 +316,8 @@ The Rust NAPI binding injects `VITE_PLUS_VERSION` env var (same mechanism used f
 Several user-visible strings still show `vite` instead of `vp`:
 
 1. **Local CLI help usage line** (`packages/cli/binding/src/cli.rs`): `Usage: vite <COMMAND>` → `Usage: vp <COMMAND>`
-2. **Pack CLI cac name** (`packages/cli/src/pack-bin.ts`): `cac('vite pack')` → `cac('vp pack')`
-3. **Migration message** (`packages/cli/src/migration/bin.ts`): `vite install` → `vp install`
+2. **Pack CLI cac name** (`packages/cli/src/pack-bin.ts`): `cac('vp pack')` → `cac('vp pack')`
+3. **Migration message** (`packages/cli/src/migration/bin.ts`): `vp install` → `vp install`
 
 These are straightforward string replacements in the source, verified by snap test updates.
 

@@ -1,9 +1,9 @@
 {
   "ignoredPlatforms": ["win32"],
   "commands": [
-    "vite install --help | head -n 20 # print help message",
-    "vite install --prod # https://pnpm.io/cli/install#--prod--p",
+    "vp install --help | head -n 20 # print help message",
+    "vp install --prod # https://pnpm.io/cli/install#--prod--p",
     "ls node_modules",
-    "vite install --prod # install again hit cache"
+    "vp install --prod # install again hit cache"
   ]
 }

@@ -16,7 +16,7 @@ import viteBackground from '@local-assets/backgrounds/vite.jpg';
     <div class="px-5 py-6 md:p-10 flex flex-col justify-between gap-15">
       <div class="flex flex-col gap-5">
         <span class="text-grey text-xs font-mono uppercase tracking-wide"
-          >Vite dev &amp; build</span
+          >Vite+ dev &amp; build</span
         >
         <h4 class="text-white">Blazingly fast builds</h4>
         <p class="text-white/70 text-base max-w-[25rem] text-pretty">
@@ -49,7 +49,7 @@ import viteBackground from '@local-assets/backgrounds/vite.jpg';
         <div
           class="block px-5 py-6 relative bg-slate rounded-tl outline-1 outline-offset-[2px] outline-white/20"
         >
-          <img loading="lazy" :src="devTerminal" alt="vite build terminal command" />
+          <img loading="lazy" :src="devTerminal" alt="vp build terminal command" />
         </div>
       </div>
       <div class="p-10">

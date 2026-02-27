@@ -1,4 +1,4 @@
-> vite run create-files # first run
+> vp run create-files # first run
 $ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js
 
 
@@ -15,7 +15,7 @@ Task Details:
       → Cache miss: no previous cache entry found
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-> vite run create-files # cache hit - no changes
+> vp run create-files # cache hit - no changes
 $ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js (✓ cache hit, replaying)
 
 
@@ -33,7 +33,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > echo 'module.exports = {modified: true}' > node_modules/pkg-a/index.js
-> vite run create-files # cache hit - index.js ignored
+> vp run create-files # cache hit - index.js ignored
 $ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js (✓ cache hit, replaying)
 
 
@@ -51,7 +51,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > echo 'modified output' > dist/bundle.js
-> vite run create-files # cache hit - dist ignored
+> vp run create-files # cache hit - dist ignored
 $ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js (✓ cache hit, replaying)
 
 
@@ -69,7 +69,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 > echo '{"name":"pkg-a","version":"2.0.0"}' > node_modules/pkg-a/package.json
-> vite run create-files # cache miss - package.json NOT ignored
+> vp run create-files # cache miss - package.json NOT ignored
 $ mkdir -p node_modules/pkg-a dist && echo '{"name":"pkg-a","version":"1.0.0"}' > node_modules/pkg-a/package.json && echo 'module.exports = {}' > node_modules/pkg-a/index.js && echo 'output' > dist/bundle.js (✗ cache miss: content of input 'node_modules/pkg-a/package.json' changed, executing)
 
 

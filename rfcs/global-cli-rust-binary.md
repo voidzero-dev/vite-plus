@@ -65,7 +65,7 @@ The core innovation is enhancing JS runtime management, not eliminating Node.js 
 ```bash
 # Before (requires Node.js)
 npm install -g vite-plus-cli
-vite new my-app
+vp create my-app
 
 # After (no Node.js required)
 curl -fsSL https://viteplus.dev/install.sh | bash
@@ -73,14 +73,14 @@ curl -fsSL https://viteplus.dev/install.sh | bash
 brew install vite-plus
 # or download binary directly
 
-vite new my-app  # Works immediately
+vp create my-app  # Works immediately
 ```
 
 ### Story 2: Running Package Manager Commands
 
 ```bash
 # User runs install command (no Node.js pre-installed on system)
-vite install lodash
+vp install lodash
 
 # CLI automatically:
 # 1. Checks if managed Node.js is cached
@@ -96,7 +96,7 @@ vite install lodash
 
 ```bash
 # User runs a command that needs JS
-vite new --template create-vite my-app
+vp create --template create-vite my-app
 
 # CLI automatically:
 # 1. Checks if managed Node.js is cached
@@ -445,8 +445,8 @@ impl JsExecutor {
 
 **Success Criteria:**
 
-- [x] `vite new vite:monorepo` works without Node.js
-- [x] `vite new create-vite` downloads Node.js and executes correctly
+- [x] `vp create vite:monorepo` works without Node.js
+- [x] `vp create create-vite` downloads Node.js and executes correctly
 
 #### Phase 3: Migration & Remaining Commands
 
@@ -458,7 +458,7 @@ impl JsExecutor {
 
 **Success Criteria:**
 
-- [x] `vite migrate` works correctly
+- [x] `vp migrate` works correctly
 - [x] Local commands delegate properly
 - [x] Full feature parity with Node.js CLI
 
@@ -528,7 +528,7 @@ For package manager commands, `new`, `migrate`, and `--version`, the runtime ver
 - These commands are part of the global CLI's functionality
 - They should use a consistent, tested Node.js version
 - The version can be updated with CLI releases
-- Users don't need a project to run `vite new` or `vite install`
+- Users don't need a project to run `vp create` or `vp install`
 
 #### Strategy 2: Local CLI Delegation (Category C)
 
@@ -1176,7 +1176,7 @@ Rewriting these in Rust would be significant effort with limited benefit. Instea
 ## Future Enhancements
 
 - [ ] Support Bun/Deno as alternative JS runtimes
-- [ ] Self-update command (`vite upgrade`)
+- [ ] Self-update command (`vp upgrade`)
 - [ ] Plugin system for custom commands
 - [ ] Shell completions generation
 - [ ] Offline mode with cached templates

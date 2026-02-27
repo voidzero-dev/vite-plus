@@ -15,7 +15,7 @@ onMounted(() => {
     delay: 1,
   });
   typewriter
-    .typeString(`<span>$ vite new vite-plus-demo --template react-ts</span>`)
+    .typeString(`<span>$ vp create vite-plus-demo --template react-ts</span>`)
     .pauseFor(500)
     .pasteString(`<span class="block w-full h-[1rem]"></span>`)
     .pasteString(`<span class="text-aqua">◇  Scaffolding project in ~/vite-plus-demo</span>`)

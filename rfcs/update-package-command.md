@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vite update` (alias: `vite up`) command that automatically adapts to the detected package manager (pnpm/yarn/npm) for updating packages to their latest versions within the specified semver range, with support for updating to absolute latest versions, workspace-aware operations, and interactive mode.
+Add `vp update` (alias: `vp up`) command that automatically adapts to the detected package manager (pnpm/yarn/npm) for updating packages to their latest versions within the specified semver range, with support for updating to absolute latest versions, workspace-aware operations, and interactive mode.
 
 ## Motivation
 
@@ -39,14 +39,14 @@ npm update                          # npm
 
 ```bash
 # Works for all package managers
-vite update react             # Update to latest within semver range
-vite up react --latest        # Update to absolute latest version
-vite update                   # Update all packages
+vp update react             # Update to latest within semver range
+vp up react --latest        # Update to absolute latest version
+vp update                   # Update all packages
 
 # Workspace operations
-vite update --filter app                    # Update in specific package
-vite update react --latest --filter "app*"  # Update to latest in multiple packages
-vite update -r                              # Update recursively in all workspaces
+vp update --filter app                    # Update in specific package
+vp update react --latest --filter "app*"  # Update to latest in multiple packages
+vp update -r                              # Update recursively in all workspaces
 ```
 
 ## Proposed Solution
@@ -56,46 +56,46 @@ vite update -r                              # Update recursively in all workspac
 #### Update Command
 
 ```bash
-vite update [PACKAGES]... [OPTIONS]
-vite up [PACKAGES]... [OPTIONS]        # Alias
+vp update [PACKAGES]... [OPTIONS]
+vp up [PACKAGES]... [OPTIONS]        # Alias
 ```
 
 **Examples:**
 
 ```bash
 # Update to latest version within semver range
-vite update react react-dom
+vp update react react-dom
 
 # Update to absolute latest version
-vite update react --latest
-vite up react -L
+vp update react --latest
+vp up react -L
 
 # Update all dependencies
-vite update
+vp update
 
 # Update all to latest
-vite update --latest
+vp update --latest
 
 # Update only dev dependencies
-vite update -D
+vp update -D
 
 # Update only production dependencies
-vite update -P
+vp update -P
 
 # Workspace operations
-vite update --filter app                    # Update in specific package
-vite update react --latest --filter "app*"  # Update in multiple packages
-vite update -r                              # Update in all workspace packages
-vite update -g typescript                   # Update global package
+vp update --filter app                    # Update in specific package
+vp update react --latest --filter "app*"  # Update in multiple packages
+vp update -r                              # Update in all workspace packages
+vp update -g typescript                   # Update global package
 
 # Interactive mode (pnpm only)
-vite update --interactive
-vite up -i
+vp update --interactive
+vp up -i
 
 # Advanced options
-vite update --no-optional                   # Skip optional dependencies
-vite update --no-save                       # Update lockfile only
-vite update react --latest --no-save        # Test latest version without saving
+vp update --no-optional                   # Skip optional dependencies
+vp update --no-save                       # Update lockfile only
+vp update react --latest --no-save        # Test latest version without saving
 ```
 
 ### Command Mapping
@@ -133,7 +133,7 @@ vite update react --latest --no-save        # Test latest version without saving
 
 **Aliases:**
 
-- `vite up` = `vite update`
+- `vp up` = `vp update`
 
 ### Command Translation Strategy
 
@@ -142,7 +142,7 @@ vite update react --latest --no-save        # Test latest version without saving
 For global packages, use npm cli only (same as add/remove):
 
 ```bash
-vite update -g typescript
+vp update -g typescript
 -> npm update --global typescript
 ```
 
@@ -153,28 +153,28 @@ Different package managers handle "latest" differently:
 **pnpm**: Has explicit `--latest` flag
 
 ```bash
-vite update react --latest
+vp update react --latest
 -> pnpm update --latest react
 ```
 
 **yarn@1**: Has `--latest` flag
 
 ```bash
-vite update react --latest
+vp update react --latest
 -> yarn upgrade --latest react
 ```
 
 **yarn@2+**: Updates to latest by default, use `^` or `~` for range updates
 
 ```bash
-vite update react --latest
+vp update react --latest
 -> yarn up react                    # Already updates to latest
 ```
 
 **npm**: No `--latest` flag, only updates within semver range
 
 ```bash
-vite update react --latest
+vp update react --latest
 -> npx npm-check-updates -u react && npm install
 # OR warn user and update within range
 -> npm update react
@@ -487,8 +487,8 @@ impl UpdateCommand {
 **Rationale**:
 
 - Matches behavior of all three package managers
-- Common use case: `vite update` to update everything
-- Specific updates: `vite update react`
+- Common use case: `vp update` to update everything
+- Specific updates: `vp update react`
 
 ### 3. Latest Flag Handling for npm
 
@@ -503,7 +503,7 @@ impl UpdateCommand {
 **Alternative**: Could integrate with `npx npm-check-updates`:
 
 ```bash
-vite update react --latest
+vp update react --latest
 # For npm: npx npm-check-updates -u react && npm install
 ```
 
@@ -533,17 +533,17 @@ vite update react --latest
 ### No Package Manager Detected
 
 ```bash
-$ vite update react
+$ vp update react
 Error: No package manager detected
 Please run one of:
-  - vite install (to set up package manager)
+  - vp install (to set up package manager)
   - Add packageManager field to package.json
 ```
 
 ### Interactive Mode Not Supported
 
 ```bash
-$ vite update --interactive
+$ vp update --interactive
 Warning: npm doesn't support interactive mode
 Running standard update instead...
 ```
@@ -553,7 +553,7 @@ Running standard update instead...
 ### Success Output
 
 ```bash
-$ vite update react --latest
+$ vp update react --latest
 Detected package manager: pnpm@10.15.0
 Running: pnpm update --latest react
 
@@ -570,7 +570,7 @@ Done in 1.2s
 ### Interactive Mode Output
 
 ```bash
-$ vite up -i
+$ vp up -i
 Detected package manager: pnpm@10.15.0
 Running: pnpm update --interactive
 
@@ -586,8 +586,8 @@ Running: pnpm update --interactive
 ### Alternative 1: Separate Command for Latest Updates
 
 ```bash
-vite update react        # Update within range
-vite upgrade react       # Update to latest
+vp update react        # Update within range
+vp upgrade react       # Update to latest
 ```
 
 **Rejected because**:
@@ -599,8 +599,8 @@ vite upgrade react       # Update to latest
 ### Alternative 2: Always Update to Latest
 
 ```bash
-vite update react        # Always updates to latest
-vite update react --range # Updates within semver range
+vp update react        # Always updates to latest
+vp update react --range # Updates within semver range
 ```
 
 **Rejected because**:
@@ -690,10 +690,10 @@ fn test_npm_update_latest_warning() {
 ## CLI Help Output
 
 ```bash
-$ vite update --help
+$ vp update --help
 Update packages to their latest versions
 
-Usage: vite update [PACKAGES]... [OPTIONS]
+Usage: vp update [PACKAGES]... [OPTIONS]
 
 Aliases: up
 
@@ -714,16 +714,16 @@ Options:
   -h, --help             Print help
 
 Examples:
-  vite update                          # Update all packages within semver range
-  vite update react react-dom          # Update specific packages
-  vite update --latest                 # Update all to latest versions
-  vite up react -L                     # Update react to latest
-  vite update -i                       # Interactive mode
-  vite update --filter app             # Update in specific workspace
-  vite update -r                       # Update in all workspaces
-  vite update -D                       # Update only dev dependencies
-  vite update --no-optional            # Skip optional dependencies
-  vite update --no-save                # Update lockfile only
+  vp update                          # Update all packages within semver range
+  vp update react react-dom          # Update specific packages
+  vp update --latest                 # Update all to latest versions
+  vp up react -L                     # Update react to latest
+  vp update -i                       # Interactive mode
+  vp update --filter app             # Update in specific workspace
+  vp update -r                       # Update in all workspaces
+  vp update -D                       # Update only dev dependencies
+  vp update --no-optional            # Skip optional dependencies
+  vp update --no-save                # Update lockfile only
 ```
 
 ## Real-World Usage Examples
@@ -732,47 +732,47 @@ Examples:
 
 ```bash
 # Update React in all frontend packages to latest
-vite update react react-dom --latest --filter "@myorg/app-*"
+vp update react react-dom --latest --filter "@myorg/app-*"
 
 # Update all dev dependencies in all packages
-vite update -D -r
+vp update -D -r
 
 # Interactive update in specific package
-vite update -i --filter web
+vp update -i --filter web
 
 # Update all to latest in workspace root
-vite update --latest -w
+vp update --latest -w
 
 # Update TypeScript across entire monorepo
-vite update typescript --latest -r
+vp update typescript --latest -r
 ```
 
 ### Development Workflow
 
 ```bash
 # Check for updates interactively
-vite up -i
+vp up -i
 
 # Update all dependencies within semver range
-vite update
+vp update
 
 # Update security patches
-vite update
+vp update
 
 # Update to latest versions (major updates)
-vite update --latest
+vp update --latest
 
 # Update specific package to latest
-vite up react -L
+vp up react -L
 
 # Update global packages
-vite update -g typescript
+vp update -g typescript
 
 # Test updates without saving to package.json
-vite update --no-save
+vp update --no-save
 
 # Update without optional dependencies
-vite update --no-optional
+vp update --no-optional
 ```
 
 ## Package Manager Compatibility
@@ -796,14 +796,14 @@ vite update --no-optional
 Show outdated packages before updating:
 
 ```bash
-vite outdated
-vite outdated --filter app
+vp outdated
+vp outdated --filter app
 ```
 
 ### 2. Smart Update Suggestions
 
 ```bash
-$ vite update
+$ vp update
 Analyzing dependencies...
 ⚠️  Major updates available:
   react 17.0.0 → 18.3.1 (breaking changes)
@@ -811,14 +811,14 @@ Analyzing dependencies...
 ✓ Minor updates:
   lodash 4.17.20 → 4.17.21
 
-Run 'vite update --latest' to update to latest versions
-Run 'vite update -i' for interactive mode
+Run 'vp update --latest' to update to latest versions
+Run 'vp update -i' for interactive mode
 ```
 
 ### 3. Changelog Display
 
 ```bash
-$ vite update react --latest
+$ vp update react --latest
 Updating react 18.2.0 → 18.3.1
 
 📝 Changelog:
@@ -831,14 +831,14 @@ Continue? (Y/n)
 
 ## Success Metrics
 
-1. **Adoption**: % of users using `vite update` vs direct package manager
+1. **Adoption**: % of users using `vp update` vs direct package manager
 2. **Update Frequency**: Track how often dependencies are kept up-to-date
 3. **User Feedback**: Survey/issues about command ergonomics
 4. **Error Rate**: Track command failures vs package manager direct usage
 
 ## Conclusion
 
-This RFC proposes adding `vite update` command to provide a unified interface for updating packages across pnpm/yarn/npm. The design:
+This RFC proposes adding `vp update` command to provide a unified interface for updating packages across pnpm/yarn/npm. The design:
 
 - ✅ Automatically adapts to detected package manager
 - ✅ Supports updating specific packages or all packages

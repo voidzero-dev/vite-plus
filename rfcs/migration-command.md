@@ -2,7 +2,7 @@
 
 ## Background
 
-When transitioning to Vite+, projects typically use standalone tools like vite, oxlint, oxfmt, and vitest, each with their own dependencies and configuration files. The `vite migration` command automates the process of consolidating these tools into the unified Vite+ toolchain.
+When transitioning to Vite+, projects typically use standalone tools like vite, oxlint, oxfmt, and vitest, each with their own dependencies and configuration files. The `vp migrate` command automates the process of consolidating these tools into the unified Vite+ toolchain.
 
 **Problem**: Manual migration is error-prone and time-consuming:
 
@@ -15,8 +15,8 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
 
 **Related Commands**:
 
-- `vite new` - Uses this same migration engine after generating code (see [code-generator.md](./code-generator.md))
-- `vite migration` - This command, for migrating existing projects
+- `vp create` - Uses this same migration engine after generating code (see [code-generator.md](./code-generator.md))
+- `vp migration` - This command, for migrating existing projects
 
 ## Goals
 
@@ -52,11 +52,7 @@ These are **consolidation migrations**, not **feature migrations**.
 ## Command Usage
 
 ```bash
-# Migrate current directory
-vite migration
-
-# Aliases
-vite migrate
+vp migrate
 ```
 
 ## Migration Process
@@ -90,7 +86,7 @@ interface DetectionResult {
 Show user what will change:
 
 ```bash
-$ vite migration
+$ vp migrate
 
 ◇  Analyzing project...
 │
@@ -145,8 +141,8 @@ Apply migrations using ast-grep:
 
 Next steps:
   1. Review vite.config.ts to ensure configurations are correct
-  2. Run 'vite install' to update dependencies
-  3. Run 'vite build' and 'vite test' to verify everything works
+  2. Run 'vp install' to update dependencies
+  3. Run 'vp build' and 'vp test' to verify everything works
 ```
 
 ## Migration Rules

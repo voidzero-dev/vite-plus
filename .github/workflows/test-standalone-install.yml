@@ -67,7 +67,7 @@ jobs:
 
           vp --version
           vp --help
-          # test new command
+          # test create command
           vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
           cd hello && vp run build && vp --version
 
@@ -292,7 +292,7 @@ jobs:
           vp --version
           vp --help
           # $env:VITE_LOG = "trace"
-          # test new command
+          # test create command
           vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
           cd hello && vp run build && vp --version
 
@@ -335,7 +335,7 @@ jobs:
           dir "%USERPROFILE%\.vite-plus"
           dir "%USERPROFILE%\.vite-plus\bin"
 
-          REM test new command
+          REM test create command
           vp create vite --no-interactive --no-agent -- hello-cmd --no-interactive -t vanilla
           cd hello-cmd && vp run build && vp --version
 
@@ -374,7 +374,7 @@ jobs:
 
           vp --version
           vp --help
-          # test new command
+          # test create command
           vp create vite --no-interactive --no-agent -- hello-bash --no-interactive -t vanilla
           cd hello-bash && vp run build && vp --version
 

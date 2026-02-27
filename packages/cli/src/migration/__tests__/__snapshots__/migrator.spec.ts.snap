@@ -54,7 +54,7 @@ exports[`rewritePackageJson > should rewrite package.json scripts 1`] = `
     "*.ts": "vp fmt --fix",
   },
   "scripts": {
-    "build": "pnpm install &&vp build -r && vp run build --watch && vp pack && tsc || exit 1",
+    "build": "pnpm install && vp build -r && vp run build --watch && vp pack && tsc || exit 1",
     "dev": "vp dev",
     "dev_analyze": "vp dev --analyze",
     "dev_cjs": "VITE_CJS_IGNORE_WARNING=true vp dev",

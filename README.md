@@ -47,7 +47,7 @@ irm https://staging.viteplus.dev/install.ps1 | iex
 - **fmt** - Format code
 - **lib** - Build library
 - **migrate** - Migrate an existing project to Vite+
-- **new** - Create a new monorepo package (in-project) or a new project (global)
+- **create** - Create a new monorepo package (in-project) or a new project (global)
 - **run** - Run tasks from `package.json` scripts
 
 ### Package Manager Commands

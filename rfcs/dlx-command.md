@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vite dlx` command that fetches a package from the registry without installing it as a dependency, hotloads it, and runs whatever default command binary it exposes. This provides a unified interface across pnpm, npm, and yarn for executing remote packages temporarily.
+Add `vp dlx` command that fetches a package from the registry without installing it as a dependency, hotloads it, and runs whatever default command binary it exposes. This provides a unified interface across pnpm, npm, and yarn for executing remote packages temporarily.
 
 ## Motivation
 
@@ -51,10 +51,10 @@ yarn dlx -c 'echo "hello" | cowsay'  # Not supported in yarn
 
 ```bash
 # Works for all package managers
-vite dlx create-vue my-app
-vite dlx typescript tsc --version
-vite dlx --package yo --package generator-webapp yo webapp
-vite dlx -c 'echo "hello" | cowsay'
+vp dlx create-vue my-app
+vp dlx typescript tsc --version
+vp dlx --package yo --package generator-webapp yo webapp
+vp dlx -c 'echo "hello" | cowsay'
 ```
 
 ## Proposed Solution
@@ -62,7 +62,7 @@ vite dlx -c 'echo "hello" | cowsay'
 ### Command Syntax
 
 ```bash
-vite dlx [OPTIONS] <package[@version]> [args...]
+vp dlx [OPTIONS] <package[@version]> [args...]
 ```
 
 **Options:**
@@ -75,26 +75,26 @@ vite dlx [OPTIONS] <package[@version]> [args...]
 
 ```bash
 # Basic usage - run a package's default binary
-vite dlx create-vue my-app
+vp dlx create-vue my-app
 
 # Specify version
-vite dlx create-vue@3.10.0 my-app
-vite dlx typescript@5.5.4 tsc --version
+vp dlx create-vue@3.10.0 my-app
+vp dlx typescript@5.5.4 tsc --version
 
 # Separate package and command (when binary name differs from package name)
-vite dlx --package @pnpm/meta-updater meta-updater --help
+vp dlx --package @pnpm/meta-updater meta-updater --help
 
 # Multiple packages
-vite dlx --package yo --package generator-webapp yo webapp --skip-install
+vp dlx --package yo --package generator-webapp yo webapp --skip-install
 
 # Shell mode (pipe commands)
-vite dlx --package cowsay --package lolcatjs -c 'echo "hi vite" | cowsay | lolcatjs'
+vp dlx --package cowsay --package lolcatjs -c 'echo "hi vite" | cowsay | lolcatjs'
 
 # Silent mode
-vite dlx -s create-vue my-app
+vp dlx -s create-vue my-app
 
 # Combine options
-vite dlx -p typescript -p @types/node -c 'tsc --init && node -e "console.log(123)"'
+vp dlx -p typescript -p @types/node -c 'tsc --init && node -e "console.log(123)"'
 ```
 
 ### Command Mapping
@@ -107,7 +107,7 @@ vite dlx -p typescript -p @types/node -c 'tsc --init && node -e "console.log(123
 
 | Vite+ Flag                      | pnpm               | npm                 | yarn@1      | yarn@2+          | Description                |
 | ------------------------------- | ------------------ | ------------------- | ----------- | ---------------- | -------------------------- |
-| `vite dlx <pkg>`                | `pnpm dlx <pkg>`   | `npm exec <pkg>`    | `npx <pkg>` | `yarn dlx <pkg>` | Execute package binary     |
+| `vp dlx <pkg>`                  | `pnpm dlx <pkg>`   | `npm exec <pkg>`    | `npx <pkg>` | `yarn dlx <pkg>` | Execute package binary     |
 | `--package <name>`, `-p <name>` | `--package <name>` | `--package=<name>`  | N/A         | `-p <name>`      | Specify package to install |
 | `--shell-mode`, `-c`            | `-c`               | `-c`                | N/A         | N/A              | Execute in shell           |
 | `--silent`, `-s`                | `--silent`         | `--loglevel silent` | `--quiet`   | `--quiet`        | Suppress output            |
@@ -126,15 +126,15 @@ The `dlx` command has specific argument parsing requirements:
 
 ```bash
 # Everything after the package spec is passed to the executed command
-vite dlx typescript tsc --version --help
+vp dlx typescript tsc --version --help
 
 # This runs: tsc --version --help
-# NOT: typescript with vite dlx options --version --help
+# NOT: typescript with vp dlx options --version --help
 ```
 
 **Implementation approach:**
 
-1. Parse known vite dlx options (`--package`, `-c`, `-s`)
+1. Parse known vp dlx options (`--package`, `-c`, `-s`)
 2. First non-option argument is the package spec (with optional @version)
 3. All remaining arguments are passed through to the executed command
 
@@ -551,27 +551,27 @@ impl DlxCommand {
 - npm and npx prompt for confirmation when running packages not in cache
 - Auto-adding `--yes` ensures consistent behavior across all package managers
 - Removes npm-specific `--yes/-y` and `--no/-n` options from the CLI
-- Users expect `vite dlx` to behave the same regardless of underlying package manager
+- Users expect `vp dlx` to behave the same regardless of underlying package manager
 
 ## Error Handling
 
 ### Missing Package Spec
 
 ```bash
-$ vite dlx
+$ vp dlx
 Error: dlx requires a package name
 
-Usage: vite dlx [OPTIONS] <package[@version]> [args...]
+Usage: vp dlx [OPTIONS] <package[@version]> [args...]
 
 Examples:
-  vite dlx create-vue my-app
-  vite dlx typescript tsc --version
+  vp dlx create-vue my-app
+  vp dlx typescript tsc --version
 ```
 
 ### Package Not Found
 
 ```bash
-$ vite dlx non-existent-package-xyz
+$ vp dlx non-existent-package-xyz
 Detected package manager: pnpm@10.15.0
 Running: pnpm dlx non-existent-package-xyz
  ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND  No package.json was found for "non-existent-package-xyz"
@@ -581,7 +581,7 @@ Exit code: 1
 ### Network Error
 
 ```bash
-$ vite dlx create-vue my-app
+$ vp dlx create-vue my-app
 Detected package manager: npm@11.0.0
 Running: npm exec create-vue -- my-app
 npm error code ENOTFOUND
@@ -594,7 +594,7 @@ Exit code: 1
 ### Basic Execution
 
 ```bash
-$ vite dlx create-vue my-app
+$ vp dlx create-vue my-app
 Detected package manager: pnpm@10.15.0
 Running: pnpm dlx create-vue my-app
 
@@ -608,7 +608,7 @@ Vue.js - The Progressive JavaScript Framework
 ### Version Specific
 
 ```bash
-$ vite dlx typescript@5.5.4 tsc --version
+$ vp dlx typescript@5.5.4 tsc --version
 Detected package manager: pnpm@10.15.0
 Running: pnpm dlx typescript@5.5.4 tsc --version
 Version 5.5.4
@@ -617,7 +617,7 @@ Version 5.5.4
 ### Multiple Packages
 
 ```bash
-$ vite dlx --package yo --package generator-webapp yo webapp
+$ vp dlx --package yo --package generator-webapp yo webapp
 Detected package manager: npm@11.0.0
 Running: npm exec --package=yo --package=generator-webapp -- yo webapp
 ? What would you like to do? Create a new webapp
@@ -627,7 +627,7 @@ Running: npm exec --package=yo --package=generator-webapp -- yo webapp
 ### Shell Mode
 
 ```bash
-$ vite dlx --package cowsay --package lolcatjs -c 'echo "Hello Vite+" | cowsay | lolcatjs'
+$ vp dlx --package cowsay --package lolcatjs -c 'echo "Hello Vite+" | cowsay | lolcatjs'
 Detected package manager: pnpm@10.15.0
 Running: pnpm --package cowsay --package lolcatjs dlx -c 'echo "Hello Vite+" | cowsay | lolcatjs'
  _______________
@@ -643,7 +643,7 @@ Running: pnpm --package cowsay --package lolcatjs dlx -c 'echo "Hello Vite+" | c
 ### Yarn 1.x Fallback
 
 ```bash
-$ vite dlx create-vue my-app
+$ vp dlx create-vue my-app
 Detected package manager: yarn@1.22.19
 Note: yarn@1 does not have dlx command, falling back to npx
 Running: npx create-vue my-app
@@ -656,7 +656,7 @@ Running: npx create-vue my-app
 
 ```bash
 # Simply wrap npx for all package managers
-vite dlx → npx
+vp dlx → npx
 ```
 
 **Rejected because**:
@@ -669,7 +669,7 @@ vite dlx → npx
 ### Alternative 2: Top-Level Aliases
 
 ```bash
-vite create-vue my-app    # Implicit dlx
+vp create-vue my-app    # Implicit dlx
 ```
 
 **Rejected because**:
@@ -684,7 +684,7 @@ Note: A short alias `x` was initially considered but rejected for the same reaso
 ### Alternative 3: No Fallback for Yarn 1.x
 
 ```bash
-$ vite dlx create-vue
+$ vp dlx create-vue
 Error: yarn@1.22.19 does not support dlx command
 ```
 
@@ -836,10 +836,10 @@ fn test_shell_mode() {
 ## CLI Help Output
 
 ```bash
-$ vite dlx --help
+$ vp dlx --help
 Execute a package binary without installing it as a dependency
 
-Usage: vite dlx [OPTIONS] <package[@version]> [args...]
+Usage: vp dlx [OPTIONS] <package[@version]> [args...]
 
 Arguments:
   <package[@version]>  Package to execute (with optional version)
@@ -852,11 +852,11 @@ Options:
   -h, --help            Print help
 
 Examples:
-  vite dlx create-vue my-app                              # Create a new Vue project
-  vite dlx typescript@5.5.4 tsc --version                 # Run specific version
-  vite dlx -p yo -p generator-webapp yo webapp            # Multiple packages
-  vite dlx -c 'echo "hello" | cowsay'                     # Shell mode
-  vite dlx -s create-vue my-app                           # Silent mode
+  vp dlx create-vue my-app                              # Create a new Vue project
+  vp dlx typescript@5.5.4 tsc --version                 # Run specific version
+  vp dlx -p yo -p generator-webapp yo webapp            # Multiple packages
+  vp dlx -c 'echo "hello" | cowsay'                     # Shell mode
+  vp dlx -s create-vue my-app                           # Silent mode
 ```
 
 ## Package Manager Compatibility
@@ -903,20 +903,20 @@ This is a new feature with no breaking changes:
 ### 1. Cache Management
 
 ```bash
-vite dlx --clear-cache                # Clear dlx cache
-vite dlx --cache-dir                  # Show cache location
+vp dlx --clear-cache                # Clear dlx cache
+vp dlx --cache-dir                  # Show cache location
 ```
 
 ### 2. Offline Mode
 
 ```bash
-vite dlx --offline create-vue my-app  # Use cached version only
+vp dlx --offline create-vue my-app  # Use cached version only
 ```
 
 ### 3. Registry Override
 
 ```bash
-vite dlx --registry https://custom.registry.com create-vue my-app
+vp dlx --registry https://custom.registry.com create-vue my-app
 ```
 
 ### 4. Trust Configuration
@@ -934,8 +934,8 @@ vite dlx --registry https://custom.registry.com create-vue my-app
 ### 5. Execution History
 
 ```bash
-vite dlx --history                    # Show recent dlx executions
-vite dlx --replay 3                   # Re-run 3rd most recent command
+vp dlx --history                    # Show recent dlx executions
+vp dlx --replay 3                   # Re-run 3rd most recent command
 ```
 
 ## Real-World Usage Examples
@@ -944,27 +944,27 @@ vite dlx --replay 3                   # Re-run 3rd most recent command
 
 ```bash
 # Create new projects with various frameworks
-vite dlx create-vue my-vue-app
-vite dlx create-react-app my-react-app
-vite dlx create-next-app my-next-app
-vite dlx create-svelte my-svelte-app
-vite dlx @angular/cli ng new my-angular-app
+vp dlx create-vue my-vue-app
+vp dlx create-react-app my-react-app
+vp dlx create-next-app my-next-app
+vp dlx create-svelte my-svelte-app
+vp dlx @angular/cli ng new my-angular-app
 ```
 
 ### One-off Tools
 
 ```bash
 # Format JSON
-vite dlx prettier --write package.json
+vp dlx prettier --write package.json
 
 # Check TypeScript
-vite dlx typescript tsc --noEmit
+vp dlx typescript tsc --noEmit
 
 # Run ESLint
-vite dlx eslint src/
+vp dlx eslint src/
 
 # Generate licenses
-vite dlx license-checker --json
+vp dlx license-checker --json
 ```
 
 ### CI/CD Pipelines
@@ -972,34 +972,34 @@ vite dlx license-checker --json
 ```yaml
 # GitHub Actions
 - name: Create release notes
-  run: vite dlx -s conventional-changelog-cli -p angular > CHANGELOG.md
+  run: vp dlx -s conventional-changelog-cli -p angular > CHANGELOG.md
 
 - name: Check for vulnerabilities
-  run: vite dlx snyk test
+  run: vp dlx snyk test
 
 - name: Publish to npm
-  run: vite dlx np --no-tests
+  run: vp dlx np --no-tests
 ```
 
 ### Development Utilities
 
 ```bash
 # Quick HTTP server
-vite dlx serve dist/
+vp dlx serve dist/
 
 # JSON server for mocking
-vite dlx json-server db.json
+vp dlx json-server db.json
 
 # Bundle analyzer
-vite dlx source-map-explorer dist/*.js
+vp dlx source-map-explorer dist/*.js
 
 # Dependency visualization
-vite dlx madge --image deps.svg src/
+vp dlx madge --image deps.svg src/
 ```
 
 ## Conclusion
 
-This RFC proposes adding `vite dlx` command to provide unified remote package execution across pnpm/npm/yarn. The design:
+This RFC proposes adding `vp dlx` command to provide unified remote package execution across pnpm/npm/yarn. The design:
 
 - ✅ Unified interface for all package managers
 - ✅ Intelligent fallback for yarn@1

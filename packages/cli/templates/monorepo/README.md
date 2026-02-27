@@ -7,23 +7,23 @@ A starter for creating a Vite+ monorepo.
 - Check everything is ready:
 
 ```bash
-vite run ready
+vp run ready
 ```
 
 - Run the tests:
 
 ```bash
-vite run test -r
+vp run test -r
 ```
 
 - Build the monorepo:
 
 ```bash
-vite run build -r
+vp run build -r
 ```
 
 - Run the development server:
 
 ```bash
-vite run dev
+vp run dev
 ```

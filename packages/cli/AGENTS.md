@@ -17,7 +17,7 @@ This project is using Vite+, a modern toolchain built on top of Vite, Rolldown, 
 - fmt - Format code
 - lib - Build library
 - migrate - Migrate an existing project to Vite+
-- new - Create a new monorepo package (in-project) or a new project (global)
+- create - Create a new monorepo package (in-project) or a new project (global)
 - exec - Execute a command in workspace packages (supports `--filter`, `-r`, `--parallel`)
 - run - Run tasks from `package.json` scripts
 

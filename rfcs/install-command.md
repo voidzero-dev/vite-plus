@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vite install` command (alias: `vite i`) that automatically adapts to the detected package manager (pnpm/yarn/npm) for installing all dependencies in a project, with support for common flags and workspace-aware operations based on pnpm's API design.
+Add `vp install` command (alias: `vp i`) that automatically adapts to the detected package manager (pnpm/yarn/npm) for installing all dependencies in a project, with support for common flags and workspace-aware operations based on pnpm's API design.
 
 ## Motivation
 
@@ -39,50 +39,50 @@ npm install --omit=dev
 
 ```bash
 # Works for all package managers
-vite install
-vite i
+vp install
+vp i
 
 # With flags
-vite install --frozen-lockfile
-vite install --prod
-vite install --ignore-scripts
+vp install --frozen-lockfile
+vp install --prod
+vp install --ignore-scripts
 
 # Workspace operations
-vite install --filter app
+vp install --filter app
 ```
 
 ### Command Syntax
 
 ```bash
-vite install [OPTIONS]
-vite i [OPTIONS]
+vp install [OPTIONS]
+vp i [OPTIONS]
 ```
 
 **Examples:**
 
 ```bash
 # Install all dependencies
-vite install
-vite i
+vp install
+vp i
 
 # Production install (no devDependencies)
-vite install --prod
-vite install -P
+vp install --prod
+vp install -P
 
 # Frozen lockfile (CI mode)
-vite install --frozen-lockfile
+vp install --frozen-lockfile
 
 # Prefer offline (use cache when available)
-vite install --prefer-offline
+vp install --prefer-offline
 
 # Force reinstall
-vite install --force
+vp install --force
 
 # Ignore scripts
-vite install --ignore-scripts
+vp install --ignore-scripts
 
 # Workspace operations
-vite install --filter app              # Install for specific package
+vp install --filter app              # Install for specific package
 ```
 
 ### Command Options
@@ -123,7 +123,7 @@ vite install --filter app              # Install for specific package
 
 | Vite+ Flag             | pnpm                   | yarn@1                 | yarn@2+                                     | npm                         | Description                          |
 | ---------------------- | ---------------------- | ---------------------- | ------------------------------------------- | --------------------------- | ------------------------------------ |
-| `vite install`         | `pnpm install`         | `yarn install`         | `yarn install`                              | `npm install`               | Install all dependencies             |
+| `vp install`           | `pnpm install`         | `yarn install`         | `yarn install`                              | `npm install`               | Install all dependencies             |
 | `--prod, -P`           | `--prod`               | `--production`         | N/A (use `.yarnrc.yml`)                     | `--omit=dev`                | Skip devDependencies                 |
 | `--dev, -D`            | `--dev`                | N/A                    | N/A                                         | `--include=dev --omit=prod` | Only devDependencies                 |
 | `--no-optional`        | `--no-optional`        | `--ignore-optional`    | N/A                                         | `--omit=optional`           | Skip optionalDependencies            |
@@ -155,7 +155,7 @@ vite install --filter app              # Install for specific package
 
 **Add Package Mode:**
 
-When packages are provided as arguments (e.g., `vite install react`), the command acts as an alias for `vite add`:
+When packages are provided as arguments (e.g., `vp install react`), the command acts as an alias for `vp add`:
 
 - `--save-exact, -E`: Save exact version rather than semver range
 - `--save-peer`: Save to peerDependencies (and devDependencies)
@@ -179,8 +179,8 @@ Based on pnpm's filter syntax:
 **Multiple Filters:**
 
 ```bash
-vite install --filter app --filter web  # Install for both app and web
-vite install --filter "app*" --filter "!app-test"  # app* except app-test
+vp install --filter app --filter web  # Install for both app and web
+vp install --filter "app*" --filter "!app-test"  # app* except app-test
 ```
 
 **Note**: For pnpm, `--filter` must come before the command (e.g., `pnpm --filter app install`). For yarn/npm, it's integrated into the command structure.
@@ -192,7 +192,7 @@ Additional parameters not covered by Vite+ can be handled through pass-through a
 All arguments after `--` will be passed through to the package manager.
 
 ```bash
-vite install -- --use-stderr
+vp install -- --use-stderr
 
 -> pnpm install --use-stderr
 -> yarn install --use-stderr
@@ -608,7 +608,7 @@ impl InstallCommand {
 
 ### 5. Alias Support
 
-**Decision**: Support `vite i` as alias for `vite install`.
+**Decision**: Support `vp i` as alias for `vp install`.
 
 **Rationale**:
 
@@ -621,17 +621,17 @@ impl InstallCommand {
 ### No Package Manager Detected
 
 ```bash
-$ vite install
+$ vp install
 Error: No package manager detected
 Please run one of:
-  - vite install (after adding packageManager to package.json)
+  - vp install (after adding packageManager to package.json)
   - Add packageManager field to package.json
 ```
 
 ### Lockfile Out of Date
 
 ```bash
-$ vite install --frozen-lockfile
+$ vp install --frozen-lockfile
 Detected package manager: pnpm@10.15.0
 Running: pnpm install --frozen-lockfile
 
@@ -643,7 +643,7 @@ Error: Command failed with exit code 1
 ### Network Error
 
 ```bash
-$ vite install --offline
+$ vp install --offline
 Detected package manager: npm@11.0.0
 Running: npm install --offline
 
@@ -658,7 +658,7 @@ Error: Command failed with exit code 1
 ### Basic Install
 
 ```bash
-$ vite install
+$ vp install
 Detected package manager: pnpm@10.15.0
 Running: pnpm install
 
@@ -673,7 +673,7 @@ Done in 1.2s
 ### CI Install
 
 ```bash
-$ vite install --frozen-lockfile
+$ vp install --frozen-lockfile
 Detected package manager: npm@11.0.0
 Running: npm ci
 
@@ -685,7 +685,7 @@ Done in 2.3s
 ### Production Install
 
 ```bash
-$ vite install --prod
+$ vp install --prod
 Detected package manager: pnpm@10.15.0
 Running: pnpm install --prod
 
@@ -699,7 +699,7 @@ Done in 0.8s
 ### Workspace Install
 
 ```bash
-$ vite install --filter app
+$ vp install --filter app
 Detected package manager: pnpm@10.15.0
 Running: pnpm --filter app install
 
@@ -751,7 +751,7 @@ link_packages(&deps)?;
 
 ```bash
 # Detect package manager from environment
-VITE_PM=pnpm vite install
+VITE_PM=pnpm vp install
 ```
 
 **Rejected because**:
@@ -933,10 +933,10 @@ Test cases:
 ## CLI Help Output
 
 ```bash
-$ vite install --help
+$ vp install --help
 Install all dependencies, or add packages if package names are provided
 
-Usage: vite install [OPTIONS] [PACKAGES]...
+Usage: vp install [OPTIONS] [PACKAGES]...
 
 Aliases: i
 
@@ -966,15 +966,15 @@ Options:
   -h, --help               Print help
 
 Examples:
-  vite install                      # Install all dependencies
-  vite i                            # Short alias
-  vite install --prod               # Production install
-  vite install --frozen-lockfile    # CI mode (strict lockfile)
-  vite install --filter app         # Install for specific package
-  vite install --silent             # Silent install
-  vite install react                # Add react (alias for vite add)
-  vite install -D typescript        # Add typescript as devDependency
-  vite install --save-peer react    # Add react as peerDependency
+  vp install                      # Install all dependencies
+  vp i                            # Short alias
+  vp install --prod               # Production install
+  vp install --frozen-lockfile    # CI mode (strict lockfile)
+  vp install --filter app         # Install for specific package
+  vp install --silent             # Silent install
+  vp install react                # Add react (alias for vp add)
+  vp install -D typescript        # Add typescript as devDependency
+  vp install --save-peer react    # Add react as peerDependency
 ```
 
 ## Performance Considerations
@@ -1027,7 +1027,7 @@ This is a new feature with no breaking changes:
 ### 1. Interactive Mode
 
 ```bash
-$ vite install --interactive
+$ vp install --interactive
 ? Select packages to install:
   [x] dependencies (150 packages)
   [ ] devDependencies (80 packages)
@@ -1037,7 +1037,7 @@ $ vite install --interactive
 ### 2. Install Progress
 
 ```bash
-$ vite install --progress
+$ vp install --progress
 Installing dependencies...
 [============================] 100% | 150/150 packages
 ```
@@ -1045,7 +1045,7 @@ Installing dependencies...
 ### 3. Dependency Analysis
 
 ```bash
-$ vite install --analyze
+$ vp install --analyze
 Installing dependencies...
 
 Added packages:
@@ -1060,7 +1060,7 @@ Done in 2.3s
 ### 4. Selective Updates
 
 ```bash
-$ vite install --update react
+$ vp install --update react
 # Install and update specific package
 ```
 
@@ -1077,10 +1077,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: vite install --frozen-lockfile
+        run: vp install --frozen-lockfile
 
       - name: Build
-        run: vite build
+        run: vp build
 ```
 
 ### Docker Production Build
@@ -1093,30 +1093,30 @@ COPY package.json pnpm-lock.yaml ./
 
 # Production install only
 RUN npm install -g @voidzero/global && \
-    vite install --prod --frozen-lockfile
+    vp install --prod --frozen-lockfile
 
 COPY . .
-RUN vite build
+RUN vp build
 ```
 
 ### Monorepo Development
 
 ```bash
 # Install dependencies for specific package
-vite install --filter @myorg/web-app
+vp install --filter @myorg/web-app
 
 # Force reinstall after branch switch
-vite install --force
+vp install --force
 ```
 
 ### Offline Development
 
 ```bash
 # Populate cache first
-vite install
+vp install
 
 # Later, work offline
-vite install --offline
+vp install --offline
 ```
 
 ## Open Questions
@@ -1139,7 +1139,7 @@ vite install --offline
 
 ## Conclusion
 
-This RFC proposes adding `vite install` command to provide a unified interface for installing dependencies across pnpm/yarn/npm. The design:
+This RFC proposes adding `vp install` command to provide a unified interface for installing dependencies across pnpm/yarn/npm. The design:
 
 - ✅ Automatically adapts to detected package manager
 - ✅ Supports common installation flags

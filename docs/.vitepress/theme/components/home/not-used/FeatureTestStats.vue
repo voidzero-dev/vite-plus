@@ -10,7 +10,7 @@ import vitestBackground from '@local-assets/backgrounds/vitest.jpg';
   <section id="feature-test" class="wrapper border-t grid md:grid-cols-2 divide-x divide-nickel">
     <div class="px-5 py-6 md:p-10 flex flex-col justify-between gap-15">
       <div class="flex flex-col gap-5">
-        <span class="text-grey text-xs font-mono uppercase tracking-wide">Vite test</span>
+        <span class="text-grey text-xs font-mono uppercase tracking-wide">Vite+ test</span>
         <h4 class="text-white">Run tests without duplicate configurations</h4>
         <p class="text-white/70 text-base max-w-[25rem] text-pretty">
           A test runner that uses the same app configurations and shares a common transformation
@@ -37,7 +37,7 @@ import vitestBackground from '@local-assets/backgrounds/vitest.jpg';
         <div
           class="block px-5 py-6 relative bg-slate rounded-tl outline-1 outline-offset-[2px] outline-white/20"
         >
-          <img loading="lazy" :src="testTerminal" alt="vite build terminal command" />
+          <img loading="lazy" :src="testTerminal" alt="vp build terminal command" />
         </div>
       </div>
       <div class="p-10">

@@ -1,4 +1,4 @@
-> vite install --help | head -n 20 # print help message
+> vp install --help | head -n 20 # print help message
 Version <semver> (compiled to binary; bundled Node.js v<semver>)
 Usage: pnpm install [options]
 
@@ -19,7 +19,7 @@ Options:
                                         in the store were mutated
       --aggregate-output                Aggregate output from child processes
 
-> vite install --prod # https://pnpm.io/cli/install#--prod--p
+> vp install --prod # https://pnpm.io/cli/install#--prod--p
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -35,7 +35,7 @@ Done in <variable>ms using pnpm v<semver>
 > ls node_modules
 tslib
 
-> vite install --prod # install again hit cache
+> vp install --prod # install again hit cache
 ✓ cache hit, replaying
 Packages: +<variable>
 +<repeat>
@@ -47,4 +47,3 @@ dependencies:
 devDependencies: skipped
 
 Done in <variable>ms using pnpm v<semver>
-

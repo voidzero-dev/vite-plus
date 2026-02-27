@@ -1,4 +1,4 @@
-> vite test
+> vp test
 
  RUN  v<semver> <cwd>
 
@@ -12,7 +12,7 @@
 
 
 > echo //comment >> src/foo.js
-> vite test
+> vp test
 ✗ cache miss: content of input 'src/foo.js' changed, executing
 
  RUN  v<semver> <cwd>
@@ -27,7 +27,7 @@
 
 
 > echo //comment >> src/bar.js
-> vite test
+> vp test
 ✓ cache hit, replaying
 
  RUN  v<semver> <cwd>
@@ -38,5 +38,3 @@
       Tests  1 passed (1)
    Start at  <date>
    Duration  <variable>ms (transform <variable>ms, setup <variable>ms, collect <variable>ms, tests <variable>ms, environment <variable>ms, prepare <variable>ms)
-
-

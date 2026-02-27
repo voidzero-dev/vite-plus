@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vite link` (alias: `vite ln`) and `vite unlink` commands that automatically adapt to the detected package manager (pnpm/yarn/npm) for creating and removing symlinks to local packages, making them accessible system-wide or in other locations. This enables local package development and testing workflows.
+Add `vp link` (alias: `vp ln`) and `vp unlink` commands that automatically adapt to the detected package manager (pnpm/yarn/npm) for creating and removing symlinks to local packages, making them accessible system-wide or in other locations. This enables local package development and testing workflows.
 
 ## Motivation
 
@@ -50,25 +50,25 @@ npm unlink react
 # Works for all package managers
 
 # Register current package globally
-vite link
-vite ln
+vp link
+vp ln
 
 # Link a global package to current project
-vite link react
-vite ln lodash
+vp link react
+vp ln lodash
 
 # Link a package from a specific directory
-vite link ./packages/my-lib
-vite link ../other-project
+vp link ./packages/my-lib
+vp link ../other-project
 
 # Workspace operations
-vite link --filter app                # Link in specific package
-vite link react --filter "app*"       # Link in multiple packages
+vp link --filter app                # Link in specific package
+vp link react --filter "app*"       # Link in multiple packages
 
 # Unlink operations
-vite unlink                           # Unlink current package
-vite unlink react                     # Unlink specific package
-vite unlink --filter app              # Unlink in specific workspace
+vp unlink                           # Unlink current package
+vp unlink react                     # Unlink specific package
+vp unlink --filter app              # Unlink in specific workspace
 ```
 
 ## Proposed Solution
@@ -78,45 +78,45 @@ vite unlink --filter app              # Unlink in specific workspace
 #### Link Command
 
 ```bash
-vite link [PACKAGE]
-vite ln [PACKAGE]        # Alias
+vp link [PACKAGE]
+vp ln [PACKAGE]        # Alias
 ```
 
 **Examples:**
 
 ```bash
 # Register current package globally (make it linkable)
-vite link
-vite ln
+vp link
+vp ln
 
 # Link a global package to current project
-vite link react
-vite link @types/node
+vp link react
+vp link @types/node
 
 # Link a local directory as a package
-vite link ./packages/utils
-vite link ../my-other-project
+vp link ./packages/utils
+vp link ../my-other-project
 ```
 
 #### Unlink Command
 
 ```bash
-vite unlink [PACKAGE] [OPTIONS]
+vp unlink [PACKAGE] [OPTIONS]
 ```
 
 **Examples:**
 
 ```bash
 # Unregister current package from global
-vite unlink
+vp unlink
 
 # Unlink a package from current project
-vite unlink react
-vite unlink @types/node
+vp unlink react
+vp unlink @types/node
 
 # Unlink in every workspace package (pnpm only)
-vite unlink --recursive
-vite unlink -r
+vp unlink --recursive
+vp unlink -r
 ```
 
 ### Command Mapping
@@ -139,11 +139,11 @@ vite unlink -r
 - https://docs.npmjs.com/cli/v11/commands/npm-link
 - npm link creates symlinks between packages
 
-| Vite+ Command     | pnpm              | yarn@1            | yarn@2+           | npm              | Description                                             |
-| ----------------- | ----------------- | ----------------- | ----------------- | ---------------- | ------------------------------------------------------- |
-| `vite link`       | `pnpm link`       | `yarn link`       | `yarn link`       | `npm link`       | Register current package or link to local directory     |
-| `vite link <pkg>` | `pnpm link <pkg>` | `yarn link <pkg>` | `yarn link <pkg>` | `npm link <pkg>` | Links package to current project                        |
-| `vite link <dir>` | `pnpm link <dir>` | `yarn link <dir>` | `yarn link <dir>` | `npm link <dir>` | Links package from `<dir>` directory to current project |
+| Vite+ Command   | pnpm              | yarn@1            | yarn@2+           | npm              | Description                                             |
+| --------------- | ----------------- | ----------------- | ----------------- | ---------------- | ------------------------------------------------------- |
+| `vp link`       | `pnpm link`       | `yarn link`       | `yarn link`       | `npm link`       | Register current package or link to local directory     |
+| `vp link <pkg>` | `pnpm link <pkg>` | `yarn link <pkg>` | `yarn link <pkg>` | `npm link <pkg>` | Links package to current project                        |
+| `vp link <dir>` | `pnpm link <dir>` | `yarn link <dir>` | `yarn link <dir>` | `npm link <dir>` | Links package from `<dir>` directory to current project |
 
 #### Unlink Command Mapping
 
@@ -163,11 +163,11 @@ vite unlink -r
 - https://docs.npmjs.com/cli/v11/commands/npm-uninstall
 - npm unlink removes symlinks
 
-| Vite+ Command             | pnpm                      | yarn@1              | yarn@2+             | npm                | Description                        |
-| ------------------------- | ------------------------- | ------------------- | ------------------- | ------------------ | ---------------------------------- |
-| `vite unlink`             | `pnpm unlink`             | `yarn unlink`       | `yarn unlink`       | `npm unlink`       | Unlinks current package            |
-| `vite unlink <pkg>`       | `pnpm unlink <pkg>`       | `yarn unlink <pkg>` | `yarn unlink <pkg>` | `npm unlink <pkg>` | Unlinks specific package           |
-| `vite unlink --recursive` | `pnpm unlink --recursive` | N/A                 | `yarn unlink --all` | N/A                | Unlinks in every workspace package |
+| Vite+ Command           | pnpm                      | yarn@1              | yarn@2+             | npm                | Description                        |
+| ----------------------- | ------------------------- | ------------------- | ------------------- | ------------------ | ---------------------------------- |
+| `vp unlink`             | `pnpm unlink`             | `yarn unlink`       | `yarn unlink`       | `npm unlink`       | Unlinks current package            |
+| `vp unlink <pkg>`       | `pnpm unlink <pkg>`       | `yarn unlink <pkg>` | `yarn unlink <pkg>` | `npm unlink <pkg>` | Unlinks specific package           |
+| `vp unlink --recursive` | `pnpm unlink --recursive` | N/A                 | `yarn unlink --all` | N/A                | Unlinks in every workspace package |
 
 ### Link/Unlink Behavior Differences Across Package Managers
 
@@ -547,8 +547,8 @@ impl UnlinkCommand {
 
 ```bash
 # Link local package without global registration
-vite link ./packages/my-lib
-vite link ../other-project/packages/utils
+vp link ./packages/my-lib
+vp link ../other-project/packages/utils
 ```
 
 ### 3. Global vs Local Linking
@@ -579,17 +579,17 @@ vite link ../other-project/packages/utils
 ### No Package Manager Detected
 
 ```bash
-$ vite link react
+$ vp link react
 Error: No package manager detected
 Please run one of:
-  - vite install (to set up package manager)
+  - vp install (to set up package manager)
   - Add packageManager field to package.json
 ```
 
 ### Feature Not Supported
 
 ```bash
-$ vite unlink --recursive
+$ vp unlink --recursive
 Warning: npm doesn't support --recursive for unlink command
 # Proceeds with standard unlink (without --recursive flag)
 ```
@@ -599,7 +599,7 @@ Warning: npm doesn't support --recursive for unlink command
 ### Link Success Output
 
 ```bash
-$ vite link
+$ vp link
 Detected package manager: pnpm@10.15.0
 Running: pnpm link --global
 
@@ -609,7 +609,7 @@ Done in 0.5s
 ```
 
 ```bash
-$ vite link my-package
+$ vp link my-package
 Detected package manager: pnpm@10.15.0
 Running: pnpm link --global my-package
 
@@ -624,7 +624,7 @@ Done in 1.2s
 ```
 
 ```bash
-$ vite link ./packages/utils
+$ vp link ./packages/utils
 Detected package manager: npm@11.0.0
 Running: npm link ./packages/utils
 
@@ -637,7 +637,7 @@ Done in 2.1s
 ### Unlink Success Output
 
 ```bash
-$ vite unlink
+$ vp unlink
 Detected package manager: pnpm@10.15.0
 Running: pnpm unlink
 
@@ -647,7 +647,7 @@ Done in 0.3s
 ```
 
 ```bash
-$ vite unlink react
+$ vp unlink react
 Detected package manager: yarn@4.0.0
 Running: yarn unlink react
 
@@ -661,8 +661,8 @@ Done in 0.8s
 ### Alternative 1: Separate Global and Local Commands
 
 ```bash
-vite link:global          # Register globally
-vite link:local <dir>     # Link local directory
+vp link:global          # Register globally
+vp link:local <dir>     # Link local directory
 ```
 
 **Rejected because**:
@@ -674,8 +674,8 @@ vite link:local <dir>     # Link local directory
 ### Alternative 2: Auto-Detect Link Type
 
 ```bash
-vite link              # Auto-detect: global if no package, local if directory
-vite link react        # Auto-detect: global package or local directory
+vp link              # Auto-detect: global if no package, local if directory
+vp link react        # Auto-detect: global package or local directory
 ```
 
 **Rejected because**:
@@ -687,7 +687,7 @@ vite link react        # Auto-detect: global package or local directory
 ### Alternative 3: Interactive Mode
 
 ```bash
-$ vite link
+$ vp link
 ? What would you like to link?
   > Register current package globally
     Link a global package
@@ -848,10 +848,10 @@ Test cases:
 ### Link Command
 
 ```bash
-$ vite link --help
+$ vp link --help
 Link packages for local development
 
-Usage: vite link [PACKAGE]
+Usage: vp link [PACKAGE]
 
 Aliases: ln
 
@@ -863,25 +863,25 @@ Options:
   -h, --help             Print help
 
 Link Types:
-  Global Registration:   vite link (no package)
-  Link Global Package:   vite link <package-name>
-  Link Local Directory:  vite link <path>
+  Global Registration:   vp link (no package)
+  Link Global Package:   vp link <package-name>
+  Link Local Directory:  vp link <path>
 
 Examples:
-  vite link                        # Register current package globally
-  vite ln                          # Same as above (alias)
-  vite link react                  # Link global package 'react'
-  vite link ./packages/utils       # Link local directory
-  vite link ../my-lib              # Link from parent directory
+  vp link                        # Register current package globally
+  vp ln                          # Same as above (alias)
+  vp link react                  # Link global package 'react'
+  vp link ./packages/utils       # Link local directory
+  vp link ../my-lib              # Link from parent directory
 ```
 
 ### Unlink Command
 
 ```bash
-$ vite unlink --help
+$ vp unlink --help
 Unlink packages
 
-Usage: vite unlink [PACKAGE] [OPTIONS]
+Usage: vp unlink [PACKAGE] [OPTIONS]
 
 Arguments:
   [PACKAGE]  Package name to unlink
@@ -892,10 +892,10 @@ Options:
   -h, --help             Print help
 
 Examples:
-  vite unlink                      # Unlink current package
-  vite unlink react                # Unlink 'react' from current project
-  vite unlink --recursive          # Unlink in all workspace packages (pnpm and yarn@2+)
-  vite unlink -r                   # Same as above (short form)
+  vp unlink                      # Unlink current package
+  vp unlink react                # Unlink 'react' from current project
+  vp unlink --recursive          # Unlink in all workspace packages (pnpm and yarn@2+)
+  vp unlink -r                   # Same as above (short form)
 ```
 
 ## Performance Considerations
@@ -933,8 +933,8 @@ pnpm link --global
 pnpm link --global react
 
 # New way (works with any package manager)
-vite link
-vite link react
+vp link
+vp link react
 ```
 
 ### Discoverability
@@ -953,23 +953,23 @@ Add to:
 ```bash
 # Working on a shared library
 cd ~/projects/my-monorepo/packages/shared-utils
-vite link                           # Register globally
+vp link                           # Register globally
 
 # Use it in another project
 cd ~/projects/my-app
-vite link shared-utils              # Link the global package
+vp link shared-utils              # Link the global package
 
 # Or link directly without global registration
 cd ~/projects/my-app
-vite link ~/projects/my-monorepo/packages/shared-utils
+vp link ~/projects/my-monorepo/packages/shared-utils
 ```
 
 ### Monorepo Development
 
 ```bash
 # Unlink in all workspace packages (pnpm only)
-vite unlink --recursive             # Unlink current package from all workspaces
-vite unlink -r                      # Same as above (short form)
+vp unlink --recursive             # Unlink current package from all workspaces
+vp unlink -r                      # Same as above (short form)
 ```
 
 ### Testing Unpublished Changes
@@ -978,15 +978,15 @@ vite unlink -r                      # Same as above (short form)
 # Develop a library
 cd ~/my-lib
 npm version patch
-vite link
+vp link
 
 # Test in consuming project
 cd ~/consuming-app
-vite link my-lib
+vp link my-lib
 npm test
 
 # Unlink when done
-vite unlink my-lib
+vp unlink my-lib
 npm install my-lib@latest
 ```
 
@@ -1007,8 +1007,8 @@ npm install my-lib@latest
 Show which packages are currently linked:
 
 ```bash
-vite link:status
-vite link --list
+vp link:status
+vp link --list
 
 # Output:
 Linked packages:
@@ -1021,7 +1021,7 @@ Linked packages:
 Automatically link all workspace dependencies:
 
 ```bash
-vite link --workspace-deps
+vp link --workspace-deps
 
 # Scans package.json for workspace: protocol dependencies
 # and links them automatically
@@ -1032,8 +1032,8 @@ vite link --workspace-deps
 Save and restore link configurations:
 
 ```bash
-vite link --save-config dev
-vite link --load-config dev
+vp link --save-config dev
+vp link --load-config dev
 
 # .vite-link.json:
 {
@@ -1053,7 +1053,7 @@ vite link --load-config dev
 Verify linked packages are valid:
 
 ```bash
-vite link --verify
+vp link --verify
 
 # Checks that all symlinks point to valid directories
 # Reports broken links
@@ -1079,18 +1079,18 @@ vite link --verify
 
 5. **Should we provide better error messages for common issues?**
    - Proposed: Yes, detect common errors and provide helpful suggestions
-   - Example: Package not found → "Did you run 'vite link' in the package directory first?"
+   - Example: Package not found → "Did you run 'vp link' in the package directory first?"
 
 ## Success Metrics
 
-1. **Adoption**: % of users using `vite link/unlink` vs direct package manager
+1. **Adoption**: % of users using `vp link/unlink` vs direct package manager
 2. **Error Rate**: Track command failures vs package manager direct usage
 3. **User Feedback**: Survey/issues about command ergonomics
 4. **Performance**: Measure overhead vs direct package manager calls (<100ms target)
 
 ## Conclusion
 
-This RFC proposes adding `vite link` and `vite unlink` commands to provide a unified interface for local package development across pnpm/yarn/npm. The design:
+This RFC proposes adding `vp link` and `vp unlink` commands to provide a unified interface for local package development across pnpm/yarn/npm. The design:
 
 - ✅ Automatically adapts to detected package manager
 - ✅ Supports both package and local directory linking

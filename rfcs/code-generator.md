@@ -36,7 +36,7 @@ Bingo offers several advantages:
 
 ## Integration Strategy: Dual-Mode Support
 
-**Key Decision**: `vite new` supports BOTH bingo templates AND any existing `create-*` template through intelligent migration:
+**Key Decision**: `vp create` supports BOTH bingo templates AND any existing `create-*` template through intelligent migration:
 
 ### Two Ways to Write Generators
 
@@ -46,10 +46,10 @@ Best for creating **reusable local generators** within your monorepo:
 
 ```bash
 # Run workspace-local bingo generator
-vite new @company/generator-ui-lib
+vp create @company/generator-ui-lib
 
 # Or any bingo template from npm
-vite new create-typescript-app
+vp create create-typescript-app
 ```
 
 **Why use bingo**:
@@ -66,9 +66,9 @@ Run **ANY** existing `create-*` template from the ecosystem:
 
 ```bash
 # Run any existing template
-vite new create-vite
-vite new create-next-app
-vite new create-nuxt
+vp create create-vite
+vp create create-next-app
+vp create create-nuxt
 ```
 
 **Why use universal templates**:
@@ -113,7 +113,7 @@ Monorepo integration:
 
 ```
 ┌──────────────────────────┐
-│  vite new <name>         │
+│  vp create <name>         │
 └───────────┬──────────────┘
             │
       ┌─────▼─────────┐
@@ -166,7 +166,7 @@ After any template runs, Vite+ adds monorepo-specific features:
 **Purpose**: Simplify dependency management by consolidating vite, vitest, oxlint, and oxfmt into a single vite-plus package.
 
 ```bash
-$ vite new create-vite --template react-ts
+$ vp create create-vite --template react-ts
 
 # create-vite runs normally...
 ✔ Project name: › my-app
@@ -235,14 +235,14 @@ This is a **dependency consolidation** feature, not a tool replacement feature.
 - Structural search and replace for accurate code transformation
 - YAML-based rules for easy maintenance
 - Safe, reversible transformations
-- **Note**: Uses the same migration engine as `vite migration` command (see [migration-command.md](./migration-command.md))
+- **Note**: Uses the same migration engine as `vp migrate` command (see [migration-command.md](./migration-command.md))
 
 ### 2. Target Directory Selection (Monorepo)
 
-When running `vite new` in a monorepo workspace, Vite+ prompts users to select which parent directory to create the new package in:
+When running `vp create` in a monorepo workspace, Vite+ prompts users to select which parent directory to create the new package in:
 
 ```bash
-$ vite new create-vite
+$ vp create create-vite
 
 ◆  Where should we create the new package?
 │  ○ apps/        (Applications)
@@ -273,14 +273,14 @@ $ vite new create-vite
 - Clear organization in monorepo
 - Users don't need to remember directory structure
 - Consistent with workspace organization
-- Can be skipped with `--directory` flag: `vite new create-vite --directory=packages`
+- Can be skipped with `--directory` flag: `vp create create-vite --directory=packages`
 
 ### 3. Workspace Dependency Prompts
 
 Inspired by [Turbo's generator](https://turborepo.com/docs/guides/generating-code), Vite+ prompts users to select existing workspace packages as dependencies:
 
 ```bash
-$ vite new @company/generator-ui-lib --name=design-system
+$ vp create @company/generator-ui-lib --name=design-system
 
 ◇ Library name: design-system
 ◇ Framework: React
@@ -351,12 +351,12 @@ export default createTemplate({
         [`${projectPath}/src/index.ts`]: `export const app = '${options.name}';`,
       },
       scripts: [
-        { phase: 0, commands: [`cd ${projectPath}`, 'vite install'] },
-        { phase: 1, commands: ['vite build'] },
+        { phase: 0, commands: [`cd ${projectPath}`, 'vp install'] },
+        { phase: 1, commands: ['vp build'] },
       ],
       suggestions: [
         `✅ Created ${options.name} in ${projectPath}`,
-        `Next: cd ${projectPath} && vite dev`,
+        `Next: cd ${projectPath} && vp dev`,
       ],
     };
   },
@@ -427,12 +427,12 @@ const files = {
 ```typescript
 const scripts = [
   // Phase 0: runs first
-  { phase: 0, commands: ['vite install'] },
+  { phase: 0, commands: ['vp install'] },
   { phase: 0, commands: ['git init'] },
 
   // Phase 1: runs after phase 0 completes
-  { phase: 1, commands: ['vite build'] },
-  { phase: 1, commands: ['vite format'] },
+  { phase: 1, commands: ['vp build'] },
+  { phase: 1, commands: ['vp fmt'] },
 ];
 ```
 
@@ -524,14 +524,14 @@ const detectFramework = createInput({
 
 ## Interactive Mode
 
-When running `vite new` without specifying a template, users enter interactive mode with a beautiful template selection interface.
+When running `vp create` without specifying a template, users enter interactive mode with a beautiful template selection interface.
 
 ### Template Selection Menu
 
 Interactive mode presents a curated list of known templates:
 
 ```bash
-$ vite new
+$ vp create
 
 ┌  🎨 Vite+ Code Generator
 │
@@ -583,64 +583,64 @@ When selecting "Other", users can input any npm template:
 
 ```bash
 # Interactive mode - prompts for template selection
-vite new
+vp create
 
 # Built-in Vite+ templates
-vite new vite:monorepo                               # Vite+ monorepo
-vite new vite:generator                              # Vite+ generator scaffold
-vite new vite:application                            # Vite+ application
-vite new vite:library                                # Vite+ library
+vp create vite:monorepo                               # Vite+ monorepo
+vp create vite:generator                              # Vite+ generator scaffold
+vp create vite:application                            # Vite+ application
+vp create vite:library                                # Vite+ library
 
 # Run known templates directly
-vite new create-vite                                 # Vite apps/libs
-vite new @tanstack/create-start                      # TanStack apps/libs
+vp create create-vite                                 # Vite apps/libs
+vp create @tanstack/create-start                      # TanStack apps/libs
 
 # Run ANY template from npm
-vite new create-next-app          # Next.js
-vite new create-nuxt              # Nuxt
-vite new create-typescript-app    # TypeScript (bingo)
-vite new @company/generator-api   # Workspace-local bingo generator
+vp create create-next-app          # Next.js
+vp create create-nuxt              # Nuxt
+vp create create-typescript-app    # TypeScript (bingo)
+vp create @company/generator-api   # Workspace-local bingo generator
 
 # Run built-in Vite+ generators
-vite new vite:monorepo
-vite new vite:generator
-vite new vite:application
-vite new vite:library
+vp create vite:monorepo
+vp create vite:generator
+vp create vite:application
+vp create vite:library
 
 # Pass through template options (use -- separator)
-vite new create-vite -- --template react-ts
-vite new create-next-app -- --typescript --app
+vp create create-vite -- --template react-ts
+vp create create-next-app -- --typescript --app
 
 # Control migrations (Vite+ options, before --)
-vite new create-vite --no-migrate                    # Skip all migrations
-vite new create-vite --migrate=vite-plus             # Only migrate to vite-plus
+vp create create-vite --no-migrate                    # Skip all migrations
+vp create create-vite --migrate=vite-plus             # Only migrate to vite-plus
 
 # Control target directory (Vite+ options, before --)
-vite new create-vite --directory=packages            # Skip directory selection
+vp create create-vite --directory=packages            # Skip directory selection
 
 # Control workspace dependencies (Vite+ options, before --)
-vite new create-vite --deps=@company/utils,@company/logger  # Pre-select
-vite new create-vite --no-prompt                     # Skip workspace dependency prompt
+vp create create-vite --deps=@company/utils,@company/logger  # Pre-select
+vp create create-vite --no-prompt                     # Skip workspace dependency prompt
 
 # Combine Vite+ options and template options
-vite new create-vite --directory=apps --no-migrate --deps=@company/utils -- --template react-ts
+vp create create-vite --directory=apps --no-migrate --deps=@company/utils -- --template react-ts
 
 # List available templates
-vite new --list               # Shows built-in and popular templates
-vite new --list --all         # Shows all installed templates
+vp create --list               # Shows built-in and popular templates
+vp create --list --all         # Shows all installed templates
 
 # Dry run (show what would be generated/migrated)
-vite new create-vite --dry-run
+vp create create-vite --dry-run
 
 # Combine with template options
-vite new create-vite --dry-run -- --template vue-ts
+vp create create-vite --dry-run -- --template vue-ts
 
 # Help
-vite new --help
+vp create --help
 
 # Aliases
 vite g
-vite newerate
+vp createerate
 ```
 
 ## @vite-plus/create-generator Scaffold
@@ -710,17 +710,17 @@ export default createTemplate({
 
 ```bash
 # Step 1: Create the generator scaffold
-vite new @vite-plus/create-generator
+vp create @vite-plus/create-generator
 
 # Step 2: Customize the template
 cd tools/generators/your-generator
 # Edit src/template.ts
 
 # Step 3: Test your generator
-vite new @company/your-generator
+vp create @company/your-generator
 
 # Step 4: Run tests
-vite test
+vp test
 ```
 
 ### Benefits
@@ -934,7 +934,7 @@ Vite+ acts as an intelligent wrapper that:
      - Prompt for workspace dependencies to add
      - Update generated package.json with selected dependencies
      - Update workspace config if needed (add to pnpm-workspace.yaml or package.json workspaces)
-     - Run `vite install` to link workspace dependencies
+     - Run `vp install` to link workspace dependencies
 
 **Implementation Note**:
 
@@ -945,7 +945,7 @@ Vite+ acts as an intelligent wrapper that:
 ### Template Execution Flow
 
 ```
-1. User runs: vite new [template-name] [vite-options] -- [template-options]
+1. User runs: vp create [template-name] [vite-options] -- [template-options]
    ↓
 2. Vite+ parses CLI arguments (split on -- separator)
    ↓
@@ -992,7 +992,7 @@ Vite+ acts as an intelligent wrapper that:
    ├─ Update package.json with workspace:* dependencies
    ├─ Check if project path matches workspace patterns
    ├─ If not matched: Update workspace config (pnpm-workspace.yaml or package.json)
-   ├─ Run vite install to link workspace dependencies
+   ├─ Run vp install to link workspace dependencies
    └─ Display next steps and tips
 ```
 
@@ -1019,7 +1019,7 @@ This approach is **simple and robust**:
 When a template is not installed locally, Vite+ automatically uses the appropriate package manager runner:
 
 ```bash
-$ vite new create-vite -- --template react-ts
+$ vp create create-vite -- --template react-ts
 
 ┌  🎨 Vite+ Code Generator
 │
@@ -1050,8 +1050,8 @@ Scaffolding project in ./packages/my-react-app...
 
 Done. Now run:
   cd my-react-app
-  vite install
-  vite dev
+  vp install
+  vp dev
 
 # Vite+ detects standalone vite tools
 ◇  Template completed! Detecting vite-related tools...
@@ -1094,7 +1094,7 @@ Done. Now run:
 │
 ◇  Checking workspace configuration...
 ◇  Project matches pattern 'packages/*' ✓
-◇  Running vite install...
+◇  Running vp install...
 │
 └  Done!
 
@@ -1102,7 +1102,7 @@ Done. Now run:
 
 Next steps:
   cd packages/my-react-app
-  vite dev
+  vp dev
 ```
 
 ### Example 2: Complete Monorepo Integration Flow
@@ -1111,7 +1111,7 @@ This example shows the full monorepo integration with workspace dependency selec
 
 ```bash
 $ cd my-monorepo
-$ vite new create-vite -- --template react-ts
+$ vp create create-vite -- --template react-ts
 
 ┌  🎨 Vite+ Code Generator
 │
@@ -1178,7 +1178,7 @@ Done. Now run:
 │
 ◆  Project matches workspace pattern ✓
 │
-◒  Running vite install...
+◒  Running vp install...
 │
 ◆  Dependencies linked
 │
@@ -1186,7 +1186,7 @@ Done. Now run:
 
 Next steps:
   cd packages/ui-components
-  vite dev
+  vp dev
 ```
 
 ### Example 3: Creating a Generator Scaffold
@@ -1194,7 +1194,7 @@ Next steps:
 Use the built-in `vite:generator` to quickly scaffold a new generator:
 
 ```bash
-$ vite new vite:generator
+$ vp create vite:generator
 
 ┌  🎨 Vite+ Code Generator
 │
@@ -1234,7 +1234,7 @@ $ vite new vite:generator
 │
 ◆  Updated workspace configuration
 │
-◒  Running vite install...
+◒  Running vp install...
 │
 ◆  Dependencies linked
 │
@@ -1248,7 +1248,7 @@ Summary:
 Next steps:
   cd tools/generators/ui-lib
   # Edit src/template.ts to customize your generator
-  # Then test it with: vite new @company/generator-ui-lib
+  # Then test it with: vp create @company/generator-ui-lib
 ```
 
 The generated scaffold includes:
@@ -1264,7 +1264,7 @@ The generated scaffold includes:
 Use the built-in `vite:application` generator for a Vite+ optimized project:
 
 ```bash
-$ vite new vite:application
+$ vp create vite:application
 
 ┌  🎨 Vite+ Code Generator
 │
@@ -1308,7 +1308,7 @@ Summary:
 
 Next steps:
   cd my-app
-  vite dev
+  vp dev
 ```
 
 The generated project includes:
@@ -1322,9 +1322,9 @@ The generated project includes:
 
 ```bash
 # Use create-typescript-app (a popular bingo template)
-vite new create-typescript-app
+vp create create-typescript-app
 
-┌  vite new create-typescript-app
+┌  vp create create-typescript-app
 │
 # Vite+ prompts for target directory first
 ◆  Where should we create the new package?
@@ -1372,7 +1372,7 @@ vite new create-typescript-app
 ◇  Updating packages/my-lib/package.json...
 ◇  Checking workspace configuration...
 ◇  Project matches pattern 'packages/*' ✓
-◇  Running vite install...
+◇  Running vp install...
 │
 └  Done!
 
@@ -1380,7 +1380,7 @@ vite new create-typescript-app
 
 Next steps:
   cd packages/my-lib
-  vite dev
+  vp dev
 ```
 
 **Notice**: Even though create-typescript-app is a bingo template, it still gets the same auto-migration treatment to optimize for Vite+!
@@ -1393,7 +1393,7 @@ Use the official scaffold to quickly create a new generator:
 
 ```bash
 # Create a new generator in your monorepo
-vite new @vite-plus/create-generator
+vp create @vite-plus/create-generator
 
 ┌  @vite-plus/create-generator
 │
@@ -1418,7 +1418,7 @@ vite new @vite-plus/create-generator
 Next steps:
   1. cd tools/generators/ui-lib
   2. Edit src/template.ts to define your generator logic
-  3. Test with: vite new @company/generator-ui-lib
+  3. Test with: vp create @company/generator-ui-lib
 ```
 
 #### Generated Structure
@@ -1531,7 +1531,7 @@ export default createTemplate({
             },
             scripts: {
               dev: 'vite',
-              build: 'vite build && tsc --emitDeclarationOnly',
+              build: 'vp build && tsc --emitDeclarationOnly',
               test: 'vitest',
               lint: 'oxlint',
               ...(options.storybook && { storybook: 'storybook dev -p 6006' }),
@@ -1669,16 +1669,16 @@ API microservice for ${options.name}.
 
 \`\`\`bash
 # Install dependencies
-vite install
+vp install
 
 # Start dev server
-vite dev
+vp dev
 
 # Run tests
-vite test
+vp test
 
 # Build
-vite build
+vp build
 \`\`\`
 
 ## Configuration
@@ -1692,7 +1692,7 @@ vite build
       scripts: [
         {
           phase: 0,
-          commands: [`cd ${libPath}`, 'vite install'],
+          commands: [`cd ${libPath}`, 'vp install'],
         },
       ],
 
@@ -1703,7 +1703,7 @@ vite build
         `  1. cd ${libPath}`,
         `  2. Add your components to src/components/`,
         `  3. Export them in src/index.ts`,
-        `  4. vite build`,
+        `  4. vp build`,
         options.storybook && `  5. npm run storybook (view component docs)`,
         ``,
         `The library is ready to be used in other packages!`,
@@ -1736,13 +1736,13 @@ Generate new UI component libraries for our monorepo.
 From monorepo root:
 
 \`\`\`bash
-vite new @company/generator-ui-lib
+vp create @company/generator-ui-lib
 \`\`\`
 
 With options:
 
 \`\`\`bash
-vite new @company/generator-ui-lib --name=design-system --framework=react
+vp create @company/generator-ui-lib --name=design-system --framework=react
 \`\`\`
 
 ## Development
@@ -1751,11 +1751,11 @@ vite new @company/generator-ui-lib --name=design-system --framework=react
 
 # Run tests
 
-vite test
+vp test
 
 # Test the generator
 
-vite new @company/generator-ui-lib
+vp create @company/generator-ui-lib
 \`\`\`
 
 ## Customization
@@ -1771,7 +1771,7 @@ Edit `src/template.ts` to customize:
 
 ```bash
 # Run from monorepo root
-vite new @company/generator-ui-lib
+vp create @company/generator-ui-lib
 
 # Bingo generator prompts
 ┌  @company/generator-ui-lib
@@ -1815,7 +1815,7 @@ vite new @company/generator-ui-lib
 ◇  Updating packages/design-system/package.json...
 ◇  Checking workspace configuration...
 ◇  Project matches pattern 'packages/*' ✓
-◇  Running vite install...
+◇  Running vp install...
 │
 └  Done!
 
@@ -1825,17 +1825,17 @@ Next steps:
   1. cd packages/design-system
   2. Add components to src/components/
   3. Export in src/index.ts
-  4. vite build
+  4. vp build
   5. npm run storybook (view docs)
 
 # CLI options
-vite new @company/generator-ui-lib --name=icons --no-migrate  # Skip migrations
-vite new @company/generator-ui-lib --name=hooks --deps=@company/utils  # Pre-select deps
+vp create @company/generator-ui-lib --name=icons --no-migrate  # Skip migrations
+vp create @company/generator-ui-lib --name=hooks --deps=@company/utils  # Pre-select deps
 ```
 
 **Key Point**: Even your own bingo generators benefit from auto-migration! You can generate code using standalone vite/vitest/oxlint, and Vite+ will automatically consolidate them into vite-plus.
 
-**Tip**: Use `vite new @vite-plus/create-generator` to quickly scaffold a new generator in your monorepo!
+**Tip**: Use `vp create @vite-plus/create-generator` to quickly scaffold a new generator in your monorepo!
 
 **Testing the Generator:**
 
@@ -1884,7 +1884,7 @@ For monorepo-specific needs, Vite+ can provide thin wrappers:
 
 ```bash
 # Built-in generator that configures vite-task.json automatically
-vite new vite:library --name=shared-utils
+vp create vite:library --name=shared-utils
 
 # This could wrap an existing bingo template and add:
 # - vite-task.json with build/test/lint tasks
@@ -1947,14 +1947,14 @@ vite new vite:library --name=shared-utils
   - If not matched: Update workspace config file
     - **pnpm**: Add pattern to pnpm-workspace.yaml `packages` array
     - **npm/yarn/bun**: Add pattern to package.json `workspaces` array
-- **Dependency Installation**: Run `vite install` to link workspace dependencies
+- **Dependency Installation**: Run `vp install` to link workspace dependencies
 - **Path Normalization**: Ensure paths are relative to workspace root
 - **Idempotency**: Don't duplicate patterns if already exist
 
 ### 5. Error Handling
 
 - **Clear Messages**: Distinguish between Vite+ errors and template errors
-- **Installation Failures**: Handle vite install failures gracefully
+- **Installation Failures**: Handle vp install failures gracefully
 - **Partial Completion**: If template creates files but errors, inform user
 - **Troubleshooting**: Provide hints for common issues (Node.js not found, etc.)
 
@@ -2093,7 +2093,7 @@ A successful implementation should:
 9. ✅ Automatically detect standalone vite/vitest/oxlint/oxfmt (in detected project directory)
 10. ✅ Prompt to upgrade to vite-plus unified toolchain
 11. ✅ Consolidate dependencies (vite + vitest + oxlint + oxfmt → unified vite)
-12. ✅ Update script commands (vitest → vite test, oxlint → vite lint, etc.)
+12. ✅ Update script commands (vitest → vp test, oxlint → vp lint, etc.)
 13. ✅ Provide clear before/after explanations
 14. ✅ Be safe and reversible
 15. ⏳ Merge configurations (vitest.config.ts, .oxlintrc, .oxfmtrc → vite.config.ts) - Future enhancement with ast-grep
@@ -2105,7 +2105,7 @@ A successful implementation should:
 18. ✅ Integrate with workspace (auto-update pnpm-workspace.yaml or package.json workspaces if needed)
 19. ✅ Prompt for workspace dependencies with multi-select UI
 20. ✅ Use `workspace:*` protocol for internal dependencies
-21. ✅ Run `vite install` to link dependencies
+21. ✅ Run `vp install` to link dependencies
 22. ✅ Work with npm, pnpm, yarn, and bun package managers
 23. ✅ Smart package filtering (exclude generators from dependency selection)
 24. ✅ Support `--deps` flag for pre-selecting dependencies
@@ -2157,10 +2157,10 @@ A successful implementation should:
 
 ## Related RFCs
 
-- [migration-command.md](./migration-command.md) - `vite migration` command for migrating existing projects
+- [migration-command.md](./migration-command.md) - `vp migrate` command for migrating existing projects
   - Shares the same migration engine and rules
-  - `vite new` runs migrations after template generation
-  - `vite migration` runs migrations on existing projects
+  - `vp create` runs migrations after template generation
+  - `vp migrate` runs migrations on existing projects
 
 ## References
 

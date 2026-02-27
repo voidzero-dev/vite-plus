@@ -363,7 +363,7 @@ If you use lint-staged, update your configuration to use Vite+ commands:
 
 ```json
 {
-  "*.{js,ts,tsx}": ["vite lint --fix", "vite fmt"]
+  "*.{js,ts,tsx}": ["vp check --fix"]
 }
 ```
 
@@ -378,23 +378,23 @@ After migration completes:
 1. **Verify the build**:
 
    ```bash
-   vite run build
+   vp run build
    ```
 
    ::: tip
-   `vite run` automatically installs dependencies if needed, so you don't need to run `pnpm install` / `npm install` / `yarn install` manually.
+   `vp run` automatically installs dependencies if needed, so you don't need to run `pnpm install` / `npm install` / `yarn install` manually.
    :::
 
 2. **Run tests**:
 
    ```bash
-   vite test
+   vp test
    ```
 
 3. **Check linting**:
 
    ```bash
-   vite lint
+   vp lint
    ```
 
 4. **Review `vite.config.ts`**: Ensure all merged configurations are correct.

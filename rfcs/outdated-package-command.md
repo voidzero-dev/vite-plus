@@ -121,7 +121,7 @@ vite outdated -g                      # Check globally installed packages
 
 ### Global packages checking
 
-Only use `npm` to check globally installed packages, because `vite install -g` uses `npm` cli to install global packages.
+Only use `npm` to check globally installed packages, because `vp install -g` uses `npm` cli to install global packages.
 
 ```bash
 vite outdated -g                      # Check globally installed packages
@@ -788,7 +788,7 @@ impl OutdatedCommand {
 $ vite outdated
 Error: No package manager detected
 Please run one of:
-  - vite install (to set up package manager)
+  - vp install (to set up package manager)
   - Add packageManager field to package.json
 ```
 
@@ -947,7 +947,7 @@ vite outdated --format vite
 ### Alternative 3: Auto-Update Option
 
 ```bash
-vite outdated --update
+vp outdated --update
 # Automatically update all outdated packages
 ```
 
@@ -955,7 +955,7 @@ vite outdated --update
 
 - Mixing check and update is dangerous
 - Users should review before updating
-- Separate `vite update` command exists
+- Separate `vp update` command exists
 - Keep commands focused on single purpose
 
 ## Implementation Plan
@@ -1385,7 +1385,7 @@ Changes:
    - Expected by users
 
 2. **Should we add a --fix flag to auto-update?**
-   - Proposed: No, use separate `vite update` command
+   - Proposed: No, use separate `vp update` command
    - Keep commands focused
    - Prevents accidental updates
 

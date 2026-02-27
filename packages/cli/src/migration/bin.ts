@@ -178,7 +178,7 @@ async function main() {
     cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
   }
 
-  // run vite install first to ensure the project is ready
+  // run vp install first to ensure the project is ready
   await runViteInstall(workspaceInfo.rootDir, options.interactive);
   // check vite and vitest version is supported by migration
   const isViteSupported = checkViteVersion(workspaceInfo.rootDir);

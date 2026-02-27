@@ -24,7 +24,7 @@ onMounted(() => {
     delay: 1,
   });
   typewriter
-    .typeString(`<span>$ vite dev</span>`)
+    .typeString(`<span>$ vp dev</span>`)
     .pauseFor(200)
     .pasteString(`<span class="block w-full h-[1rem]"></span>`)
     .pasteString(

@@ -9,7 +9,7 @@ A monorepo task runner (like nx/turbo) with intelligent caching and dependency r
 ```bash
 # Built-in commands
 vp build                           # Run Vite build (dedicated command)
-vp test                            # Run Vite test (dedicated command)
+vp test                            # Run Vitest (dedicated command)
 vp lint                            # Run oxlint (dedicated command)
 
 # Run tasks across packages (explicit mode)

@@ -21,27 +21,27 @@ npm install -g @voidzero-dev/global
 ### Global CLI Commands
 
 ```bash
-vite --version
-vite --help
-vite new --help
+vp --version
+vp --help
+vp create --help
 ```
 
 Generate a new project
 
 ```bash
-vite new
+vp create
 ```
 
 Migrate an existing project
 
 ```bash
-vite migration
+vp migration
 ```
 
 Add a package to the project
 
 ```bash
-vite add vue
+vp add vue
 ```
 
 ### Delegate to local CLI Commands
@@ -50,7 +50,7 @@ All the other commands are delegated to the local CLI.
 If the local CLI is not installed, the global CLI will install it for you.
 
 ```bash
-vite run build
+vp run build
 
 # if not installed, will install it for you
 Add vite-plus as a devDependency in package.json? [y/N]: y
@@ -59,29 +59,29 @@ Add vite-plus as a devDependency in package.json? [y/N]: y
 Installing vite-plus...
 
 # will run the build task
-vite run build
+vp run build
 ```
 
 Format the project
 
 ```bash
-vite fmt
+vp fmt
 ```
 
 Lint the project
 
 ```bash
-vite lint
+vp lint
 ```
 
 Test the project
 
 ```bash
-vite test
+vp test
 ```
 
 Run a build task
 
 ```bash
-vite run build
+vp run build
 ```

@@ -1,4 +1,4 @@
 {
   "ignoredPlatforms": ["win32"],
-  "commands": ["vite lint --help | head -n 20 # print help message and no panicked"]
+  "commands": ["vp lint --help | head -n 20 # print help message and no panicked"]
 }

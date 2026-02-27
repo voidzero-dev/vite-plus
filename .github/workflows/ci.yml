@@ -505,7 +505,7 @@ jobs:
           )
 
   install-e2e-test:
-    name: Local CLI `vite install` E2E test
+    name: Local CLI `vp install` E2E test
     needs:
       - download-previous-rolldown-binaries
     runs-on: ubuntu-latest
@@ -543,11 +543,11 @@ jobs:
           pnpm bootstrap-cli:ci
           echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
 
-      - name: Run local CLI `vite install`
+      - name: Run local CLI `vp install`
         run: |
           export PATH=$PWD/node_modules/.bin:$PATH
           vp -h
-          # Test vite install on various repositories with different package managers
+          # Test vp install on various repositories with different package managers
           repos=(
             # pnpm workspace
             "pnpm/pnpm:pnpm"
@@ -562,7 +562,7 @@ jobs:
 
           for repo_info in "${repos[@]}"; do
             IFS=':' read -r repo dir_name <<< "$repo_info"
-            echo "Testing vite install on $repo…"
+            echo "Testing vp install on $repo…"
             # remove the directory if it exists
             if [ -d "$RUNNER_TEMP/$dir_name" ]; then
               rm -rf "$RUNNER_TEMP/$dir_name"

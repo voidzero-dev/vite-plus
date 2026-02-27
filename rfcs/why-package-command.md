@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vite why` (alias: `vite explain`) command that automatically adapts to the detected package manager (pnpm/npm/yarn) for showing all packages that depend on a specified package. This helps developers understand dependency relationships, audit package usage, and debug dependency tree issues.
+Add `vp why` (alias: `vp explain`) command that automatically adapts to the detected package manager (pnpm/npm/yarn) for showing all packages that depend on a specified package. This helps developers understand dependency relationships, audit package usage, and debug dependency tree issues.
 
 ## Motivation
 
@@ -44,22 +44,22 @@ yarn why react                    # yarn - no workspace filtering
 
 ```bash
 # Works for all package managers
-vite why <package>                # Show why package is installed
-vite explain <package>            # Alias (matches npm)
+vp why <package>                # Show why package is installed
+vp explain <package>            # Alias (matches npm)
 
 # Output formats
-vite why react --json             # JSON output
-vite why react --long             # Verbose output
-vite why react --parseable        # Parseable format
+vp why react --json             # JSON output
+vp why react --long             # Verbose output
+vp why react --parseable        # Parseable format
 
 # Workspace operations
-vite why react --filter app       # Check in specific workspace (pnpm)
-vite why react -r                 # Check recursively across workspaces
+vp why react --filter app       # Check in specific workspace (pnpm)
+vp why react -r                 # Check recursively across workspaces
 
 # Dependency type filtering
-vite why react --prod             # Only production dependencies
-vite why react --dev              # Only dev dependencies
-vite why react --depth 2          # Limit tree depth
+vp why react --prod             # Only production dependencies
+vp why react --dev              # Only dev dependencies
+vp why react --depth 2          # Limit tree depth
 ```
 
 ## Proposed Solution
@@ -69,51 +69,51 @@ vite why react --depth 2          # Limit tree depth
 #### Why Command
 
 ```bash
-vite why <PACKAGE> [OPTIONS]
-vite explain <PACKAGE> [OPTIONS]        # Alias
+vp why <PACKAGE> [OPTIONS]
+vp explain <PACKAGE> [OPTIONS]        # Alias
 ```
 
 **Examples:**
 
 ```bash
 # Basic usage
-vite why react
-vite explain lodash
+vp why react
+vp explain lodash
 
 # Multiple packages (pnpm style)
-vite why react react-dom
-vite why "babel-*" "eslint-*"
+vp why react react-dom
+vp why "babel-*" "eslint-*"
 
 # Output formats
-vite why react --json             # JSON output
-vite why react --long             # Verbose output
-vite why react --parseable        # Parseable output
+vp why react --json             # JSON output
+vp why react --long             # Verbose output
+vp why react --parseable        # Parseable output
 
 # Workspace operations
-vite why react -r                 # Recursive across all workspaces
-vite why react --filter app       # Check in specific workspace (pnpm)
+vp why react -r                 # Recursive across all workspaces
+vp why react --filter app       # Check in specific workspace (pnpm)
 
 # Dependency type filtering
-vite why react --prod             # Only production dependencies
-vite why react --dev              # Only dev dependencies
-vite why react --no-optional      # Exclude optional dependencies
+vp why react --prod             # Only production dependencies
+vp why react --dev              # Only dev dependencies
+vp why react --no-optional      # Exclude optional dependencies
 
 # Depth control
-vite why react --depth 3          # Limit tree depth to 3 levels
+vp why react --depth 3          # Limit tree depth to 3 levels
 
 # Global packages
-vite why typescript -g            # Check globally installed packages
+vp why typescript -g            # Check globally installed packages
 
 # Custom finder (pnpm only)
-vite why react --find-by myFinder # Use finder function from .pnpmfile.cjs
+vp why react --find-by myFinder # Use finder function from .pnpmfile.cjs
 ```
 
 ### Global Packages Checking
 
-Only use `npm` to check globally installed packages, because `vite install -g` uses `npm` cli to install global packages.
+Only use `npm` to check globally installed packages, because `vp install -g` uses `npm` cli to install global packages.
 
 ```bash
-vite why typescript -g            # Check globally installed packages
+vp why typescript -g            # Check globally installed packages
 
 -> npm why typescript -g
 ```
@@ -140,7 +140,7 @@ vite why typescript -g            # Check globally installed packages
 
 | Vite+ Flag                | pnpm                      | npm                     | yarn@1              | yarn@2+                  | Description                                                     |
 | ------------------------- | ------------------------- | ----------------------- | ------------------- | ------------------------ | --------------------------------------------------------------- |
-| `vite why <pkg>`          | `pnpm why <pkg>`          | `npm explain <pkg>`     | `yarn why <pkg>`    | `yarn why <pkg> --peers` | Show why package is installed                                   |
+| `vp why <pkg>`            | `pnpm why <pkg>`          | `npm explain <pkg>`     | `yarn why <pkg>`    | `yarn why <pkg> --peers` | Show why package is installed                                   |
 | `--json`                  | `--json`                  | `--json`                | `--json`            | `--json`                 | JSON output format                                              |
 | `--long`                  | `--long`                  | N/A                     | N/A                 | N/A                      | Verbose output (pnpm only)                                      |
 | `--parseable`             | `--parseable`             | N/A                     | N/A                 | N/A                      | Parseable format (pnpm only)                                    |
@@ -165,7 +165,7 @@ vite why typescript -g            # Check globally installed packages
 
 **Aliases:**
 
-- `vite explain` = `vite why` (matches npm's primary command name)
+- `vp explain` = `vp why` (matches npm's primary command name)
 
 ### Why Behavior Differences Across Package Managers
 
@@ -749,21 +749,21 @@ impl WhyCommand {
 ### No Package Manager Detected
 
 ```bash
-$ vite why react
+$ vp why react
 Error: No package manager detected
 Please run one of:
-  - vite install (to set up package manager)
+  - vp install (to set up package manager)
   - Add packageManager field to package.json
 ```
 
 ### No Packages Specified
 
 ```bash
-$ vite why
+$ vp why
 error: the following required arguments were not provided:
   <PACKAGES>...
 
-Usage: vite why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 For more information, try '--help'.
 ```
@@ -771,7 +771,7 @@ For more information, try '--help'.
 ### Package Not Found
 
 ```bash
-$ vite why nonexistent-package
+$ vp why nonexistent-package
 Package 'nonexistent-package' is not in the project.
 Exit code: 1
 ```
@@ -779,7 +779,7 @@ Exit code: 1
 ### Unsupported Flag Warning
 
 ```bash
-$ vite why react --long
+$ vp why react --long
 Warning: --long not supported by npm
 Running: npm explain react
 ```
@@ -789,7 +789,7 @@ Running: npm explain react
 ### Success Output (pnpm)
 
 ```bash
-$ vite why react
+$ vp why react
 Detected package manager: pnpm@10.15.0
 Running: pnpm why react
 
@@ -815,7 +815,7 @@ Done in 0.5s
 ### Success Output (npm)
 
 ```bash
-$ vite explain react
+$ vp explain react
 Detected package manager: npm@11.0.0
 Running: npm explain react
 
@@ -834,7 +834,7 @@ Done in 0.3s
 ### Success Output (yarn)
 
 ```bash
-$ vite why react
+$ vp why react
 Detected package manager: yarn@1.22.19
 Running: yarn why react
 
@@ -852,7 +852,7 @@ Done in 0.8s
 ### JSON Output (pnpm)
 
 ```bash
-$ vite why react --json
+$ vp why react --json
 Detected package manager: pnpm@10.15.0
 Running: pnpm why react --json
 
@@ -885,7 +885,7 @@ Done in 0.4s
 ### Multiple Packages (pnpm)
 
 ```bash
-$ vite why react react-dom lodash
+$ vp why react react-dom lodash
 Detected package manager: pnpm@10.15.0
 Running: pnpm why react react-dom lodash
 
@@ -911,8 +911,8 @@ Done in 0.6s
 ### Alternative 1: Separate Command Names
 
 ```bash
-vite why <package>      # For pnpm/yarn
-vite explain <package>  # For npm only
+vp why <package>      # For pnpm/yarn
+vp explain <package>  # For npm only
 ```
 
 **Rejected because**:
@@ -924,7 +924,7 @@ vite explain <package>  # For npm only
 ### Alternative 2: Always Use Multiple Package Format
 
 ```bash
-vite why react react-dom  # Always accept multiple
+vp why react react-dom  # Always accept multiple
 # Error on npm/yarn
 ```
 
@@ -937,7 +937,7 @@ vite why react react-dom  # Always accept multiple
 ### Alternative 3: Auto-Translate Output Format
 
 ```bash
-vite why react --json  # On yarn
+vp why react --json  # On yarn
 # Attempt to convert yarn's output to JSON
 ```
 
@@ -1098,10 +1098,10 @@ Test cases:
 ## CLI Help Output
 
 ```bash
-$ vite why --help
+$ vp why --help
 Show why a package is installed
 
-Usage: vite why [OPTIONS] <PACKAGE>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp why [OPTIONS] <PACKAGE>... [-- <PASS_THROUGH_ARGS>...]
 
 Aliases: explain
 
@@ -1131,17 +1131,17 @@ Package Manager Behavior:
   yarn@2+: Shows dependency tree in streamlined format
 
 Examples:
-  vite why react                       # Show why react is installed
-  vite explain lodash                  # Same as above (alias)
-  vite why react react-dom             # Check multiple packages (pnpm/npm)
-  vite why react --json                # JSON output
-  vite why react --long                # Verbose output (pnpm)
-  vite why react -r                    # Recursive across workspaces
-  vite why react --filter app          # Check in specific workspace (pnpm)
-  vite why react --prod                # Only production deps (pnpm)
-  vite why react --depth 3             # Limit tree depth (pnpm)
-  vite why typescript -g               # Check global packages
-  vite why react --find-by myFinder    # Use custom finder (pnpm)
+  vp why react                       # Show why react is installed
+  vp explain lodash                  # Same as above (alias)
+  vp why react react-dom             # Check multiple packages (pnpm/npm)
+  vp why react --json                # JSON output
+  vp why react --long                # Verbose output (pnpm)
+  vp why react -r                    # Recursive across workspaces
+  vp why react --filter app          # Check in specific workspace (pnpm)
+  vp why react --prod                # Only production deps (pnpm)
+  vp why react --depth 3             # Limit tree depth (pnpm)
+  vp why typescript -g               # Check global packages
+  vp why react --find-by myFinder    # Use custom finder (pnpm)
 ```
 
 ## Performance Considerations
@@ -1179,18 +1179,18 @@ pnpm why react
 npm explain react
 
 # New way (works with any package manager)
-vite why react
-vite explain react
+vp why react
+vp explain react
 ```
 
 ### CI/CD Integration
 
 ```yaml
 # Check why specific package is installed
-- run: vite why lodash --json > why-lodash.json
+- run: vp why lodash --json > why-lodash.json
 
 # Verify expected dependency paths
-- run: vite why react | grep "react-dom"
+- run: vp why react | grep "react-dom"
 ```
 
 ## Real-World Usage Examples
@@ -1199,56 +1199,56 @@ vite explain react
 
 ```bash
 # Check why multiple versions are installed
-vite why lodash
-vite why lodash --json | jq '.[] | .dependencies.lodash.version'
+vp why lodash
+vp why lodash --json | jq '.[] | .dependencies.lodash.version'
 
 # Check across workspaces
-vite why lodash -r
+vp why lodash -r
 ```
 
 ### Understanding Transitive Dependencies
 
 ```bash
 # Why is this indirect dependency here?
-vite why core-js
-vite why core-js --long
+vp why core-js
+vp why core-js --long
 
 # What's using this deep dependency?
-vite why @babel/helper-plugin-utils
+vp why @babel/helper-plugin-utils
 ```
 
 ### Auditing Dependencies
 
 ```bash
 # Check security vulnerability origins
-vite why vulnerable-package
-vite why vulnerable-package --prod  # Only production
+vp why vulnerable-package
+vp why vulnerable-package --prod  # Only production
 
 # Find all dependents in monorepo
-vite why legacy-library -r --json
+vp why legacy-library -r --json
 ```
 
 ### Workspace Analysis
 
 ```bash
 # Which workspaces use this package?
-vite why react -r
+vp why react -r
 
 # Check specific workspace
-vite why lodash --filter utils
+vp why lodash --filter utils
 
 # Compare dependency reasons across workspaces
-vite why axios --filter "app*" -r
+vp why axios --filter "app*" -r
 ```
 
 ### Production Dependency Analysis
 
 ```bash
 # What production code needs this?
-vite why package --prod
+vp why package --prod
 
 # Exclude dev dependencies
-vite why package --prod --json
+vp why package --prod --json
 ```
 
 ## Package Manager Compatibility
@@ -1274,10 +1274,10 @@ vite why package --prod --json
 Generate visual dependency graphs:
 
 ```bash
-vite why react --graph > dep-graph.html
+vp why react --graph > dep-graph.html
 
 # ASCII tree visualization
-vite why react --tree
+vp why react --tree
 ```
 
 ### 2. Compare Why Across Versions
@@ -1285,7 +1285,7 @@ vite why react --tree
 Show how dependency changed:
 
 ```bash
-vite why lodash --compare-version 4.17.20
+vp why lodash --compare-version 4.17.20
 
 # Output:
 lodash@4.17.21 (was 4.17.20)
@@ -1297,7 +1297,7 @@ lodash@4.17.21 (was 4.17.20)
 Generate comprehensive dependency report:
 
 ```bash
-vite why --report-all > dependencies-report.json
+vp why --report-all > dependencies-report.json
 
 # All packages and their dependents
 # Useful for auditing and optimization
@@ -1308,7 +1308,7 @@ vite why --report-all > dependencies-report.json
 Highlight circular dependencies:
 
 ```bash
-vite why package-a --detect-circular
+vp why package-a --detect-circular
 
 # Output:
 ⚠️  Circular dependency detected:
@@ -1320,7 +1320,7 @@ package-a → package-b → package-c → package-a
 Show size impact:
 
 ```bash
-vite why lodash --with-size
+vp why lodash --with-size
 
 # Output:
 lodash@4.17.21 (285KB gzipped)
@@ -1333,7 +1333,7 @@ Total impact: 23.3MB
 
 1. **Should we support package path queries (yarn style)?**
    - Proposed: Yes, for yarn compatibility
-   - Example: `vite why node_modules/once/once.js`
+   - Example: `vp why node_modules/once/once.js`
    - Translate to package name for other PMs
 
 2. **Should we aggregate output when checking multiple packages?**
@@ -1354,18 +1354,18 @@ Total impact: 23.3MB
 5. **Should we integrate with audit?**
    - Proposed: Later enhancement
    - Show security info inline
-   - Example: `vite why package --with-audit`
+   - Example: `vp why package --with-audit`
 
 ## Success Metrics
 
-1. **Adoption**: % of users using `vite why` vs direct package manager
+1. **Adoption**: % of users using `vp why` vs direct package manager
 2. **Debugging Efficiency**: Time to identify dependency issues
 3. **CI Integration**: Usage in CI/CD for dependency validation
 4. **User Feedback**: Survey/issues about command usefulness
 
 ## Conclusion
 
-This RFC proposes adding `vite why` command to provide a unified interface for understanding dependency relationships across pnpm/npm/yarn. The design:
+This RFC proposes adding `vp why` command to provide a unified interface for understanding dependency relationships across pnpm/npm/yarn. The design:
 
 - ✅ Automatically adapts to detected package manager
 - ✅ Supports multiple packages (pnpm) with graceful degradation

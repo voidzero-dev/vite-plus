@@ -475,7 +475,7 @@ https://nodejs.org/dist/v{version}/node-v{version}-{platform}.{ext}
 The distribution URL can be overridden using the `VITE_NODE_DIST_MIRROR` environment variable. This is useful for corporate environments or regions where nodejs.org might be slow or blocked.
 
 ```bash
-VITE_NODE_DIST_MIRROR=https://example.com/mirrors/node vite build
+VITE_NODE_DIST_MIRROR=https://example.com/mirrors/node vp build
 ```
 
 The mirror URL should have the same directory structure as the official distribution. Trailing slashes are automatically trimmed.

@@ -27,7 +27,7 @@ describe('rewritePackageJson', () => {
         pack_watch: 'tsdown --watch',
         preview: 'vite preview',
         optimize: 'vite optimize',
-        build: 'pnpm install &&vite build -r && vite run build --watch && tsdown && tsc || exit 1',
+        build: 'pnpm install && vite build -r && vite run build --watch && tsdown && tsc || exit 1',
         dev: 'vite',
         dev_cjs: 'VITE_CJS_IGNORE_WARNING=true vite',
         dev_cjs_cross_env: 'cross-env VITE_CJS_IGNORE_WARNING=true vite',

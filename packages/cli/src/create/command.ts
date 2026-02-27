@@ -130,7 +130,7 @@ export function getPackageRunner(workspaceInfo: WorkspaceInfo) {
   }
 }
 
-// TODO: will use `vite dlx` instead, see https://github.com/voidzero-dev/vite-task/issues/27
+// TODO: will use `vp dlx` instead, see https://github.com/voidzero-dev/vite-task/issues/27
 export function formatDlxCommand(
   packageName: string,
   args: string[],

@@ -1,6 +1,6 @@
 {
   "name": "root-package",
   "scripts": {
-    "my-task": "echo foo && vite lint"
+    "my-task": "echo foo && vp lint"
   }
 }

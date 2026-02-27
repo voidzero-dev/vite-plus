@@ -8,7 +8,7 @@ From monorepo root:
 
 ```bash
 # run and select the generator
-vite new
+vp create
 ```
 
 ## Development
@@ -18,10 +18,10 @@ vite new
 code src/template.ts
 
 # Test the generator CLI
-vite run dev
+vp run dev
 
 # Run tests
-vite run test
+vp run test
 ```
 
 ## Customization
