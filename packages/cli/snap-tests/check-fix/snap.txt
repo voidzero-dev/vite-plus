@@ -1,0 +1,5 @@
+> vp check --fix
+[1m[94minfo:[39m[0m vp fmt
+[1m[94minfo:[39m[0m vp lint --fix --type-aware --type-check
+Found 0 warnings and 0 errors.
+Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.

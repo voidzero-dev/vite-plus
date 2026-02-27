@@ -33,6 +33,10 @@ Pain points:
 # Run all fast checks (fmt --check + lint --type-aware --type-check)
 vp check
 
+# Auto-fix format and lint issues
+vp check --fix
+vp check --fix --no-lint    # Only fix formatting
+
 # Disable specific checks
 vp check --no-fmt
 vp check --no-lint
@@ -44,6 +48,7 @@ vp check --no-type-check
 
 | Flag                               | Default | Description                                             |
 | ---------------------------------- | ------- | ------------------------------------------------------- |
+| `--fix`                            | OFF     | Auto-fix format and lint issues                         |
 | `--fmt` / `--no-fmt`               | ON      | Run format check (`vp fmt --check`)                     |
 | `--lint` / `--no-lint`             | ON      | Run lint check (`vp lint`)                              |
 | `--type-aware` / `--no-type-aware` | ON      | Enable type-aware lint rules (oxlint `--type-aware`)    |
@@ -59,8 +64,6 @@ Both are enabled by default in `vp check` to provide comprehensive static analys
 
 ## Behavior
 
-### Alpha (Non-Parallel, Sequential)
-
 Commands run **sequentially** with fail-fast semantics:
 
 ```
@@ -70,32 +73,23 @@ Commands run **sequentially** with fail-fast semantics:
 
 If any step fails, `vp check` exits immediately with a non-zero exit code.
 
-### Future (Parallel)
-
-In a later iteration, steps could run in parallel and aggregate errors.
-
 ## Decisions
 
-### Verify only, no auto-fix
+### Dual mode: verify and fix
 
-`vp check` is a **read-only verification** command. It never modifies files.
+By default, `vp check` is a **read-only verification** command. It never modifies files:
 
 - `vp fmt --check` reports unformatted files (doesn't auto-format)
-- `vp lint` reports issues (doesn't auto-fix)
-- To fix issues, users run `vp fmt` and `vp lint --fix` separately
+- `vp lint --type-aware --type-check` reports issues (doesn't auto-fix)
 
 This keeps `vp check` safe for CI and predictable for local dev.
 
-### No `--fix` flag (alpha)
+With `--fix`, `vp check` switches to **auto-fix** mode:
 
-For simplicity in the alpha, there's no `--fix` flag. Users compose fixes manually:
+- `vp fmt` auto-formats files
+- `vp lint --fix --type-aware --type-check` auto-fixes lint issues
 
-```bash
-vp fmt && vp lint --fix   # fix what's fixable
-vp check                  # verify everything passes
-```
-
-A `--fix` flag could be added later if needed.
+This replaces the manual `vp fmt && vp lint --fix` workflow with a single command.
 
 ### No tests
 
@@ -164,6 +158,7 @@ Options:
 | `vp test`                           | Run test suite                                   | Slow     |
 | `vp build`                          | Build project                                    | Slow     |
 | **`vp check`**                      | **fmt --check + lint --type-aware --type-check** | **Fast** |
+| **`vp check --fix`**                | **fmt + lint --fix --type-aware --type-check**   | **Fast** |
 
 With `vp check`, the monorepo template's "ready" script simplifies to:
 
@@ -203,7 +198,5 @@ packages/cli/snap-tests/check-no-fmt/
 
 ## Future Enhancements
 
-- Parallel execution of fmt and lint
-- `--fix` flag to auto-fix fixable issues
 - Workspace-aware mode (`vp check -r`) running checks across all packages
 - Integration with `vp run` task graph for caching

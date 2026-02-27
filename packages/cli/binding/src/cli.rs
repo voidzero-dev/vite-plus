@@ -99,6 +99,9 @@ pub enum SynthesizableSubcommand {
     },
     /// Run format, lint, and type checks
     Check {
+        /// Auto-fix format and lint issues
+        #[arg(long)]
+        fix: bool,
         /// Skip format check
         #[arg(long = "no-fmt")]
         no_fmt: bool,
@@ -668,32 +671,6 @@ impl UserConfigLoader for VitePlusConfigLoader {
     }
 }
 
-/// Create auto-install synthetic plan request
-async fn create_install_synthetic_request(
-    cwd: &AbsolutePathBuf,
-) -> Result<SyntheticPlanRequest, Error> {
-    let package_manager = vite_install::PackageManager::builder(cwd).build_with_default().await?;
-    let resolve_command = package_manager.resolve_install_command(&vec![]);
-
-    let mut envs: FxHashMap<Arc<OsStr>, Arc<OsStr>> = std::env::vars_os()
-        .map(|(k, v)| (Arc::from(k.as_os_str()), Arc::from(v.as_os_str())))
-        .collect();
-
-    for (k, v) in resolve_command.envs {
-        envs.insert(Arc::from(OsStr::new(&k)), Arc::from(OsStr::new(&v)));
-    }
-
-    Ok(SyntheticPlanRequest {
-        program: Arc::<OsStr>::from(OsStr::new(&resolve_command.bin_path).to_os_string()),
-        args: resolve_command.args.into_iter().map(Str::from).collect(),
-        cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-            envs: None,
-            pass_through_envs: None,
-        }),
-        envs: Arc::new(envs),
-    })
-}
-
 /// Resolve a single subcommand and execute it, returning its exit status.
 async fn resolve_and_execute(
     resolver: &mut SubcommandResolver,
@@ -758,14 +735,20 @@ async fn execute_direct_subcommand(
     let cwd_arc: Arc<AbsolutePath> = cwd.clone().into();
 
     let status = match subcommand {
-        SynthesizableSubcommand::Check { no_fmt, no_lint, no_type_aware, no_type_check } => {
+        SynthesizableSubcommand::Check { fix, no_fmt, no_lint, no_type_aware, no_type_check } => {
             let mut status = ExitStatus::SUCCESS;
 
             if !no_fmt {
-                output::info("vp fmt --check");
+                let args = if fix { vec![] } else { vec!["--check".to_string()] };
+                if args.is_empty() {
+                    output::info("vp fmt");
+                } else {
+                    let cmd = vite_str::format!("vp fmt {}", args.join(" "));
+                    output::info(&cmd);
+                }
                 status = resolve_and_execute(
                     &mut resolver,
-                    SynthesizableSubcommand::Fmt { args: vec!["--check".to_string()] },
+                    SynthesizableSubcommand::Fmt { args },
                     &envs,
                     cwd,
                     &cwd_arc,
@@ -779,6 +762,9 @@ async fn execute_direct_subcommand(
 
             if !no_lint {
                 let mut args = Vec::new();
+                if fix {
+                    args.push("--fix".to_string());
+                }
                 if !no_type_aware {
                     args.push("--type-aware".to_string());
                     // --type-check requires --type-aware as prerequisite
