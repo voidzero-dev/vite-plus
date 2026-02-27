@@ -1,5 +1,6 @@
 *.d.ts
 *.d.cts
+/LICENSE
 LICENSE.md
 *.cjs
 *.mjs

@@ -222,6 +222,7 @@ await patchChaiTypeReference();
 await patchMockerHoistedModule();
 const pluginExports = await createPluginExports();
 await mergePackageJson(pluginExports);
+await syncLicenseFromRoot();
 await validateExternalDeps();
 
 async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimFile: string }>) {
@@ -399,6 +400,12 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
     process.exit(1);
   }
   await writeFile(destPackageJsonPath, code);
+}
+
+async function syncLicenseFromRoot() {
+  const rootLicensePath = join(projectDir, '..', '..', 'LICENSE');
+  const packageLicensePath = join(projectDir, 'LICENSE');
+  await copyFile(rootLicensePath, packageLicensePath);
 }
 
 async function bundleVitest() {
