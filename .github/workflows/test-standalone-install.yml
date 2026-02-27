@@ -254,6 +254,73 @@ jobs:
           vp upgrade --rollback
           vp --version
 
+  test-install-ps1-arm64:
+    name: Test install.ps1 (Windows ARM64)
+    runs-on: windows-11-arm
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Run install.ps1
+        shell: pwsh
+        run: |
+          & ./packages/cli/install.ps1
+
+      - name: Set PATH
+        shell: bash
+        run: |
+          echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
+
+      - name: Verify installation
+        shell: pwsh
+        working-directory: ${{ runner.temp }}
+        run: |
+          Write-Host "PATH: $env:Path"
+          vp --version
+          vp --help
+          vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          cd hello
+          vp run build
+          vp --version
+
+      - name: Verify bin setup
+        shell: pwsh
+        run: |
+          $binPath = "$env:USERPROFILE\.vite-plus\bin"
+          Get-ChildItem -Force $binPath
+          if (-not (Test-Path $binPath)) {
+            Write-Error "Bin directory not found: $binPath"
+            exit 1
+          }
+
+          $expectedShims = @("node.cmd", "npm.cmd", "npx.cmd")
+          foreach ($shim in $expectedShims) {
+            $shimFile = Join-Path $binPath $shim
+            if (-not (Test-Path $shimFile)) {
+              Write-Error "Shim not found: $shimFile"
+              exit 1
+            }
+            Write-Host "Found shim: $shimFile"
+          }
+          where.exe node
+          where.exe npm
+          where.exe npx
+          where.exe vp
+
+          $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
+          vp env doctor
+          vp env run --node 24 -- node -p "process.versions"
+
+      - name: Verify upgrade
+        shell: pwsh
+        run: |
+          vp upgrade --check
+          vp upgrade 0.0.0-f74442ad.20260222-0755
+          vp --version
+          vp upgrade --rollback
+          vp --version
+
   test-install-ps1:
     name: Test install.ps1 (Windows x64)
     runs-on: windows-latest

@@ -32,6 +32,21 @@ For Windows:
 irm https://staging.viteplus.dev/install.ps1 | iex
 ```
 
+::: details Supported platforms
+
+Prebuilt binaries are distributed for the following platforms (grouped by [Node.js v24 platform support tier](https://github.com/nodejs/node/blob/v24.x/BUILDING.md#platform-list)):
+
+- Tier 1
+  - Linux x64 glibc (`x86_64-unknown-linux-gnu`)
+  - Linux arm64 glibc (`aarch64-unknown-linux-gnu`)
+  - Windows x64 (`x86_64-pc-windows-msvc`)
+  - macOS x64 (`x86_64-apple-darwin`)
+  - macOS arm64 (`aarch64-apple-darwin`)
+- Tier 2
+  - Windows arm64 (`aarch64-pc-windows-msvc`)
+
+:::
+
 ## Node.js Version Manager
 
 Vite+ includes a built-in Node.js version manager. During installation, you can opt-in to let Vite+ manage your Node.js versions.
