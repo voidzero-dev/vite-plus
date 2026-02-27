@@ -131,7 +131,7 @@ function Download-AndExtract {
         & "$env:SystemRoot\System32\tar.exe" -xzf $tempFile -C $tempExtract
 
         # Copy the specified file/directory
-        $sourcePath = Join-Path $tempExtract "package" $Filter
+        $sourcePath = Join-Path (Join-Path $tempExtract "package") $Filter
         if (Test-Path $sourcePath) {
             Copy-Item -Path $sourcePath -Destination $DestDir -Recurse -Force
         }
@@ -293,7 +293,7 @@ function Main {
             & "$env:SystemRoot\System32\tar.exe" -xzf $platformTempFile -C $platformTempExtract
 
             # Copy binary to BinDir
-            $binarySource = Join-Path $platformTempExtract "package" $binaryName
+            $binarySource = Join-Path (Join-Path $platformTempExtract "package") $binaryName
             if (Test-Path $binarySource) {
                 Copy-Item -Path $binarySource -Destination $BinDir -Force
             }
@@ -382,7 +382,7 @@ exec "`$VITE_PLUS_HOME/current/bin/vp.exe" "`$@"
 
     # Print success message
     Write-Host ""
-    Write-Host "${GREEN}✔${NC} ${BOLD_BRIGHT_BLUE}VITE+${NC} successfully installed!"
+    Write-Host "${GREEN}+${NC} ${BOLD_BRIGHT_BLUE}VITE+${NC} successfully installed!"
     Write-Host ""
     Write-Host "  The Unified Toolchain for the Web."
     Write-Host ""
