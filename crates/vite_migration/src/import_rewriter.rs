@@ -368,16 +368,30 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
         pos
     };
 
+    // Check what follows after a `*/` close. Returns whether to enter a new block comment.
+    // Returns `None` if the trailing content is code (caller should break).
+    // Returns `Some(true)` if a new unclosed `/*` follows.
+    // Returns `Some(false)` if the rest is empty, a `//` comment, or a closed `/* ... */`.
+    let check_after_close = |text: &str| -> Option<bool> {
+        let after = text.trim();
+        if after.is_empty() || after.starts_with("//") {
+            return Some(false);
+        }
+        if after.starts_with("/*") {
+            // Another block comment starts — check if it closes on this line.
+            return Some(!after.contains("*/"));
+        }
+        None // Code follows — end of preamble.
+    };
+
     for line in content.lines() {
         // Strip UTF-8 BOM (U+FEFF) before trimming — Rust's trim() does not remove BOM.
         let trimmed = line.trim_start_matches('\u{feff}').trim();
         if in_block_comment {
             if let Some(pos) = trimmed.find("*/") {
-                in_block_comment = false;
-                // Check if there's code (not just comments) after the closing `*/`.
-                let after = trimmed[pos + 2..].trim();
-                if !after.is_empty() && !after.starts_with("//") && !after.starts_with("/*") {
-                    break;
+                match check_after_close(&trimmed[pos + 2..]) {
+                    None => break, // code after */ — end of preamble
+                    Some(new_block) => in_block_comment = new_block,
                 }
             }
             preamble_end = advance_past_line(preamble_end, line.len());
@@ -389,10 +403,9 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
         }
         if trimmed.starts_with("/*") {
             if let Some(pos) = trimmed.find("*/") {
-                // Single-line block comment. Check if there's code after the closing `*/`.
-                let after = trimmed[pos + 2..].trim();
-                if !after.is_empty() && !after.starts_with("//") && !after.starts_with("/*") {
-                    break;
+                match check_after_close(&trimmed[pos + 2..]) {
+                    None => break,
+                    Some(new_block) => in_block_comment = new_block,
                 }
             } else {
                 in_block_comment = true;
@@ -2505,6 +2518,18 @@ const x = 1;
         assert_eq!(
             result.content,
             "/*\n * License\n */ // end\n/// <reference types=\"vite-plus/client\" />\n"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_block_close_into_new_block_comment() {
+        // `/* a */ /* b` closes first comment then opens a new multi-line one
+        let content = "/* a */ /* b\n * still going */\n/// <reference types=\"vite/client\" />\n";
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            "/* a */ /* b\n * still going */\n/// <reference types=\"vite-plus/client\" />\n"
         );
     }
 
