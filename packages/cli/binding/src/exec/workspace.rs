@@ -170,7 +170,7 @@ pub(super) async fn execute_exec_workspace(
         // Print outputs in order and track worst exit code
         let mut worst_exit = 0u8;
         for (name, output, duration) in &results {
-            println!("{name}$ {cmd_display}");
+            vite_shared::output::raw(&vite_str::format!("{name}$ {cmd_display}"));
             use std::io::Write;
             let _ = std::io::stdout().write_all(&output.stdout);
             let _ = std::io::stderr().write_all(&output.stderr);
@@ -201,7 +201,7 @@ pub(super) async fn execute_exec_workspace(
 
             let path_env = build_package_path_env(pkg_path, &base_path_dirs, &base_path);
 
-            println!("{pkg_name}$ {cmd_display}");
+            vite_shared::output::raw(&vite_str::format!("{pkg_name}$ {cmd_display}"));
 
             let start = std::time::Instant::now();
 

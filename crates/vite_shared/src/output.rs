@@ -44,3 +44,9 @@ pub fn note(msg: &str) {
 pub fn success(msg: &str) {
     println!("{} {msg}", CHECK.green());
 }
+
+/// Print a raw message to stdout with no prefix or formatting.
+#[allow(clippy::print_stdout, clippy::disallowed_macros)]
+pub fn raw(msg: &str) {
+    println!("{msg}");
+}
