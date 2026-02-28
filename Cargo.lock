@@ -7133,7 +7133,6 @@ dependencies = [
  "async-trait",
  "clap",
  "fspy",
- "glob",
  "napi",
  "napi-build",
  "napi-derive",

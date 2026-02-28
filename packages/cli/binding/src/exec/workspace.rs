@@ -304,17 +304,13 @@ fn topological_sort_packages(
         vite_workspace::PackageIx,
     >,
 ) -> Vec<PackageNodeIndex> {
-    let selected: Vec<PackageNodeIndex> = subgraph.nodes().collect();
-    let selected_set: FxHashSet<PackageNodeIndex> = selected.iter().copied().collect();
+    let node_count = subgraph.node_count();
 
-    // Count how many selected dependencies each selected package has
+    // Count how many dependencies each package has within the subgraph
     // (Outgoing edges in the subgraph = dependencies)
     let mut dep_count: FxHashMap<PackageNodeIndex, usize> = FxHashMap::default();
-    for &idx in &selected {
-        let count = subgraph
-            .neighbors_directed(idx, petgraph::Direction::Outgoing)
-            .filter(|n| selected_set.contains(n))
-            .count();
+    for idx in subgraph.nodes() {
+        let count = subgraph.neighbors_directed(idx, petgraph::Direction::Outgoing).count();
         dep_count.insert(idx, count);
     }
 
@@ -326,27 +322,41 @@ fn topological_sort_packages(
         }
     }
 
-    let mut result = Vec::with_capacity(selected.len());
-    while let Some((_, idx)) = ready.pop_first() {
-        result.push(idx);
-        // Decrement dep counts for dependents (incoming edges in subgraph = dependents)
-        for dependent in subgraph.neighbors_directed(idx, petgraph::Direction::Incoming) {
-            if let Some(count) = dep_count.get_mut(&dependent) {
-                *count -= 1;
-                if *count == 0 {
-                    ready.insert(package_graph[dependent].package_json.name.as_str(), dependent);
+    let mut result = Vec::with_capacity(node_count);
+    let mut placed: FxHashSet<PackageNodeIndex> = FxHashSet::default();
+
+    /// Drain all ready nodes from `ready` into `result` using Kahn's algorithm,
+    /// decrementing dep counts and enqueuing newly-ready dependents.
+    macro_rules! drain_ready {
+        ($ready:expr, $result:expr, $placed:expr, $dep_count:expr) => {
+            while let Some((_, idx)) = $ready.pop_first() {
+                $result.push(idx);
+                $placed.insert(idx);
+                for dependent in subgraph.neighbors_directed(idx, petgraph::Direction::Incoming) {
+                    if let Some(count) = $dep_count.get_mut(&dependent)
+                        && *count > 0
+                    {
+                        *count -= 1;
+                        if *count == 0 && !$placed.contains(&dependent) {
+                            $ready.insert(
+                                package_graph[dependent].package_json.name.as_str(),
+                                dependent,
+                            );
+                        }
+                    }
                 }
             }
-        }
+        };
     }
+
+    drain_ready!(ready, result, placed, dep_count);
 
     // Cycle fallback: iteratively break cycles by forcing the alphabetically-first
     // remaining node, then continue Kahn's algorithm to correctly order any
     // non-cyclic dependents that become unblocked.
-    let mut placed: FxHashSet<PackageNodeIndex> = result.iter().copied().collect();
-    while result.len() < selected.len() {
+    while result.len() < node_count {
         let mut remaining: Vec<PackageNodeIndex> =
-            selected.iter().copied().filter(|idx| !placed.contains(idx)).collect();
+            subgraph.nodes().filter(|idx| !placed.contains(idx)).collect();
         remaining.sort_by(|a, b| {
             package_graph[*a].package_json.name.cmp(&package_graph[*b].package_json.name)
         });
@@ -376,22 +386,7 @@ fn topological_sort_packages(
             }
         }
 
-        // Continue Kahn's algorithm with any newly freed nodes
-        while let Some((_, idx)) = ready.pop_first() {
-            result.push(idx);
-            placed.insert(idx);
-            for dependent in subgraph.neighbors_directed(idx, petgraph::Direction::Incoming) {
-                if let Some(count) = dep_count.get_mut(&dependent)
-                    && *count > 0
-                {
-                    *count -= 1;
-                    if *count == 0 && !placed.contains(&dependent) {
-                        ready
-                            .insert(package_graph[dependent].package_json.name.as_str(), dependent);
-                    }
-                }
-            }
-        }
+        drain_ready!(ready, result, placed, dep_count);
     }
 
     result

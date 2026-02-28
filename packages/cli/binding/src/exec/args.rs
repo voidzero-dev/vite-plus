@@ -2,6 +2,7 @@ use vite_str::Str;
 use vite_workspace::package_filter::PackageQueryArgs;
 
 /// Parsed exec flags.
+#[derive(Default)]
 pub(super) struct ExecFlags {
     pub shell_mode: bool,
     pub help: bool,
@@ -290,18 +291,7 @@ mod tests {
 
     #[test]
     fn test_build_package_query_args_recursive() {
-        let flags = ExecFlags {
-            recursive: true,
-            filters: Vec::new(),
-            workspace_root: false,
-            shell_mode: false,
-            help: false,
-            parallel: false,
-            reverse: false,
-            resume_from: None,
-            report_summary: false,
-            include_workspace_root: false,
-        };
+        let flags = ExecFlags { recursive: true, ..Default::default() };
         let args = build_package_query_args(&flags);
         assert!(args.recursive);
         assert!(!args.transitive);
@@ -311,18 +301,8 @@ mod tests {
 
     #[test]
     fn test_build_package_query_args_filter_wins_over_recursive() {
-        let flags = ExecFlags {
-            recursive: true,
-            filters: vec!["app-a".to_string()],
-            workspace_root: false,
-            shell_mode: false,
-            help: false,
-            parallel: false,
-            reverse: false,
-            resume_from: None,
-            report_summary: false,
-            include_workspace_root: false,
-        };
+        let flags =
+            ExecFlags { recursive: true, filters: vec!["app-a".to_string()], ..Default::default() };
         let args = build_package_query_args(&flags);
         // -r is cleared when --filter is present
         assert!(!args.recursive);
@@ -332,18 +312,7 @@ mod tests {
 
     #[test]
     fn test_build_package_query_args_workspace_root() {
-        let flags = ExecFlags {
-            recursive: false,
-            filters: Vec::new(),
-            workspace_root: true,
-            shell_mode: false,
-            help: false,
-            parallel: false,
-            reverse: false,
-            resume_from: None,
-            report_summary: false,
-            include_workspace_root: false,
-        };
+        let flags = ExecFlags { workspace_root: true, ..Default::default() };
         let args = build_package_query_args(&flags);
         assert!(!args.recursive);
         assert!(args.workspace_root);
@@ -353,16 +322,9 @@ mod tests {
     #[test]
     fn test_build_package_query_args_workspace_root_with_filter() {
         let flags = ExecFlags {
-            recursive: false,
             filters: vec!["foo".to_string()],
             workspace_root: true,
-            shell_mode: false,
-            help: false,
-            parallel: false,
-            reverse: false,
-            resume_from: None,
-            report_summary: false,
-            include_workspace_root: false,
+            ..Default::default()
         };
         let args = build_package_query_args(&flags);
         assert!(!args.recursive);
