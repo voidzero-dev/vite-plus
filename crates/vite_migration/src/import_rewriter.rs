@@ -368,20 +368,25 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
         pos
     };
 
-    // Check what follows after a `*/` close. Returns whether to enter a new block comment.
-    // Returns `None` if the trailing content is code (caller should break).
-    // Returns `Some(true)` if a new unclosed `/*` follows.
-    // Returns `Some(false)` if the rest is empty, a `//` comment, or a closed `/* ... */`.
+    // Check what follows after a `*/` close, scanning past any additional `/* ... */` pairs.
+    // Returns `None` if code follows (caller should break).
+    // Returns `Some(true)` if an unclosed `/*` follows (enter block comment).
+    // Returns `Some(false)` if the rest is empty, a `//` comment, or only closed block comments.
     let check_after_close = |text: &str| -> Option<bool> {
-        let after = text.trim();
-        if after.is_empty() || after.starts_with("//") {
-            return Some(false);
-        }
-        if after.starts_with("/*") {
+        let mut remaining = text.trim();
+        loop {
+            if remaining.is_empty() || remaining.starts_with("//") {
+                return Some(false);
+            }
+            if !remaining.starts_with("/*") {
+                return None; // Code follows — end of preamble.
+            }
             // Another block comment starts — check if it closes on this line.
-            return Some(!after.contains("*/"));
+            match remaining[2..].find("*/") {
+                Some(pos) => remaining = remaining[2 + pos + 2..].trim(),
+                None => return Some(true), // Unclosed — enter block comment.
+            }
         }
-        None // Code follows — end of preamble.
     };
 
     for line in content.lines() {
@@ -2530,6 +2535,27 @@ const x = 1;
         assert_eq!(
             result.content,
             "/* a */ /* b\n * still going */\n/// <reference types=\"vite-plus/client\" />\n"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_multiple_inline_block_comments_then_code() {
+        // `/* a */ /* b */ const x = 1;` — code after two closed block comments ends preamble
+        let content = "/* a */ /* b */ const x = 1;\n/// <reference types=\"vite/client\" />\n";
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_multiple_inline_block_comments_no_code() {
+        // `/* a */ /* b */` — only block comments, no trailing code, preamble continues
+        let content = "/* a */ /* b */\n/// <reference types=\"vite/client\" />\n";
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            "/* a */ /* b */\n/// <reference types=\"vite-plus/client\" />\n"
         );
     }
 
