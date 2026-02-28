@@ -341,24 +341,60 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
         return false;
     }
 
-    // Find the byte offset where the preamble ends (first non-empty, non-comment line).
+    // Find the byte offset where the preamble ends.
+    // TypeScript allows triple-slash directives after blank lines, single-line comments (//),
+    // and block comments (/* ... */). The preamble ends at the first non-comment statement.
+    let bytes = content.as_bytes();
     let mut preamble_end = 0;
+    let mut in_block_comment = false;
     for line in content.lines() {
         let trimmed = line.trim();
+        if in_block_comment {
+            // Advance past the line (use byte search for actual line ending)
+            preamble_end += line.len();
+            // Skip \r\n or \n
+            if preamble_end < bytes.len() && bytes[preamble_end] == b'\r' {
+                preamble_end += 1;
+            }
+            if preamble_end < bytes.len() && bytes[preamble_end] == b'\n' {
+                preamble_end += 1;
+            }
+            if trimmed.contains("*/") {
+                in_block_comment = false;
+            }
+            continue;
+        }
         if trimmed.is_empty() || trimmed.starts_with("//") {
-            // +1 for the '\n' separator (safe: we checked content.contains above)
-            preamble_end += line.len() + 1;
+            preamble_end += line.len();
+            if preamble_end < bytes.len() && bytes[preamble_end] == b'\r' {
+                preamble_end += 1;
+            }
+            if preamble_end < bytes.len() && bytes[preamble_end] == b'\n' {
+                preamble_end += 1;
+            }
+            continue;
+        }
+        if trimmed.starts_with("/*") {
+            in_block_comment = !trimmed.contains("*/");
+            preamble_end += line.len();
+            if preamble_end < bytes.len() && bytes[preamble_end] == b'\r' {
+                preamble_end += 1;
+            }
+            if preamble_end < bytes.len() && bytes[preamble_end] == b'\n' {
+                preamble_end += 1;
+            }
             continue;
         }
         break;
     }
-    // Clamp to content length (last preamble line may not have trailing '\n')
-    preamble_end = preamble_end.min(content.len());
 
     let preamble = &content[..preamble_end];
     if !preamble.contains("/// <reference") {
         return false;
     }
+
+    // Detect the line ending style used in the preamble for faithful reconstruction.
+    let line_ending = if preamble.contains("\r\n") { "\r\n" } else { "\n" };
 
     let mut changed = false;
     let mut preamble_lines: Vec<String> = preamble.lines().map(|l| l.to_string()).collect();
@@ -406,10 +442,10 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
 
     if changed {
         let suffix = &content[preamble_end..];
-        let mut result = preamble_lines.join("\n");
-        // Re-add the newline between preamble and suffix if the original preamble ended with one
+        let mut result = preamble_lines.join(line_ending);
+        // Re-add the line ending between preamble and suffix if the original had one
         if preamble_end < content.len() || preamble.ends_with('\n') {
-            result.push('\n');
+            result.push_str(line_ending);
         }
         result.push_str(suffix);
         *content = result;
@@ -2372,6 +2408,57 @@ const x = 1;
 
 const x = 1;
 /// <reference types="vitest" />"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_after_block_comment() {
+        // Block comments (/* ... */) should not end the preamble scan
+        let content = "/* License: MIT */\n/// <reference types=\"vite/client\" />\n";
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            "/* License: MIT */\n/// <reference types=\"vite-plus/client\" />\n"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_after_multiline_block_comment() {
+        // Multi-line block comments should be skipped entirely
+        let content =
+            "/*\n * License header\n * Copyright 2024\n */\n/// <reference types=\"vitest\" />\n";
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            "/*\n * License header\n * Copyright 2024\n */\n/// <reference types=\"vite-plus/test\" />\n"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_crlf() {
+        // CRLF line endings should be preserved
+        let content =
+            "/// <reference types=\"vite/client\" />\r\n/// <reference types=\"vitest\" />\r\n";
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            "/// <reference types=\"vite-plus/client\" />\r\n/// <reference types=\"vite-plus/test\" />\r\n"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_crlf_with_block_comment() {
+        // CRLF + block comment header
+        let content =
+            "/* License */\r\n/// <reference types=\"vite/client\" />\r\nconst x = 1;\r\n";
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            "/* License */\r\n/// <reference types=\"vite-plus/client\" />\r\nconst x = 1;\r\n"
         );
     }
 
