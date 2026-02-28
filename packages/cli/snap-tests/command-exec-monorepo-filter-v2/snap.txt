@@ -1,5 +1,4 @@
 > vp exec -F app-a -- echo hello # -F short flag for --filter
-app-a$ echo hello
 hello
 
 > vp exec -F app-a -F lib-c -- echo hello # -F short flag multiple
@@ -32,7 +31,6 @@ app-b
 
 > vp exec --filter nonexistent-pkg --filter app-a -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # unmatched + matched filter
 [1m[33mwarn:[39m[0m No packages matched the filter 'nonexistent-pkg'
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-a
 
 > vp exec -w --filter app-a -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # -w + --filter is additive (root + filtered)

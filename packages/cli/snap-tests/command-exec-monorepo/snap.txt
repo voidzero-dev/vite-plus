@@ -15,7 +15,6 @@ app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-b
 
 > vp exec --filter lib-c -- echo lib-only # exact name filter
-lib-c$ echo lib-only
 lib-only
 
 > vp exec --filter app-a... -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # filter with dependencies
@@ -25,7 +24,6 @@ app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-a
 
 > vp exec --filter app-a^... -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # dependencies only, exclude self
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-c
 
 > vp exec -r --parallel -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # parallel mode
@@ -49,11 +47,9 @@ exec-monorepo$ echo shell-$VITE_PLUS_PACKAGE_NAME
 shell-exec-monorepo
 
 > vp exec --filter ./packages/app-a -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # path filter
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-a
 
 > vp exec --filter '{./packages/app-a}' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # braced path filter
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-a
 
 > vp exec --filter '{./packages/app-a}...' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # braced path filter with deps
@@ -103,7 +99,6 @@ app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-a
 
 > vp exec --filter 'app-*' --filter '!app-b' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # mixed inclusion + exclusion filters
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-a
 
 > vp exec --filter '!no-such-pkg' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # exclusion of nonexistent pkg returns all
@@ -133,7 +128,6 @@ app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-b
 
 > vp exec -w -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # workspace root only
-exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 exec-monorepo
 
 > vp exec -r --report-summary -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # report summary

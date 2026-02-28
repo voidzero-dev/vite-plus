@@ -9,7 +9,10 @@ use vite_workspace::{PackageNodeIndex, package_graph::IndexedPackageGraph};
 
 use super::args::ExecArgs;
 
-/// Execute `vp exec` across workspace packages (--recursive or --filter mode).
+/// Execute `vp exec` across workspace packages.
+///
+/// When no filter flags are given, selects the current package (containing `cwd`).
+/// With `--recursive` or `--filter`, selects matching workspace packages.
 pub(super) async fn execute_exec_workspace(
     args: ExecArgs,
     cwd: &AbsolutePathBuf,
@@ -70,6 +73,9 @@ pub(super) async fn execute_exec_workspace(
         vite_shared::output::warn("No packages matched the filter(s)");
         return Ok(ExitStatus::SUCCESS);
     }
+
+    // Suppress the "pkg_name$ cmd" prefix when only 1 package is selected
+    let show_prefix = selected.len() > 1;
 
     // Build base PATH: <pm_bin>:<workspace_root/node_modules/.bin>:<original_PATH>
     let base_path_dirs: Vec<std::path::PathBuf> = {
@@ -142,7 +148,9 @@ pub(super) async fn execute_exec_workspace(
         // Print outputs in order and track worst exit code
         let mut worst_exit = 0u8;
         for (name, output, duration) in &results {
-            vite_shared::output::raw(&vite_str::format!("{name}$ {cmd_display}"));
+            if show_prefix {
+                vite_shared::output::raw(&vite_str::format!("{name}$ {cmd_display}"));
+            }
             use std::io::Write;
             let _ = std::io::stdout().write_all(&output.stdout);
             let _ = std::io::stderr().write_all(&output.stderr);
@@ -173,17 +181,30 @@ pub(super) async fn execute_exec_workspace(
 
             let path_env = build_package_path_env(pkg_path, &base_path_dirs, &base_path);
 
-            vite_shared::output::raw(&vite_str::format!("{pkg_name}$ {cmd_display}"));
+            if show_prefix {
+                vite_shared::output::raw(&vite_str::format!("{pkg_name}$ {cmd_display}"));
+            }
 
             let start = std::time::Instant::now();
 
-            let mut cmd = build_exec_command(
+            let mut cmd = match build_exec_command(
                 args.shell_mode,
                 &args.command,
                 &cmd_display,
                 &path_env,
                 pkg_path,
-            )?;
+            ) {
+                Ok(cmd) => cmd,
+                Err(_) if !show_prefix => {
+                    vite_shared::output::error(&vite_str::format!(
+                        "Command '{}' not found in node_modules/.bin\n\n\
+                         Hint: Run 'vp install' to install dependencies, or use 'vpx' for remote fallback.",
+                        args.command[0]
+                    ));
+                    return Ok(ExitStatus(1));
+                }
+                Err(e) => return Err(e),
+            };
             cmd.env("PATH", &path_env).env("VITE_PLUS_PACKAGE_NAME", pkg_name);
 
             let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
