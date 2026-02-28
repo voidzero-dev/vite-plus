@@ -1,5 +1,4 @@
 mod args;
-mod filter;
 mod workspace;
 
 use vite_error::Error;
@@ -24,7 +23,7 @@ Options:
   -r, --recursive               Run in every workspace package
   -w, --workspace-root          Run on the workspace root package only
       --include-workspace-root  Include workspace root when running recursively
-      --filter <PATTERN>        Filter packages (can be used multiple times)
+  -F, --filter <PATTERN>        Filter packages (can be used multiple times)
       --parallel                Run concurrently without topological ordering
       --reverse                 Reverse execution order
       --resume-from <PACKAGE>   Resume from a specific package

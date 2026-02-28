@@ -62,7 +62,7 @@ The leading `--` is optional and stripped for backward compatibility (matching p
 - `--recursive, -r` — Run in every workspace package (local CLI only)
 - `--workspace-root, -w` — Run on the workspace root package only (local CLI only)
 - `--include-workspace-root` — Include workspace root when running recursively (local CLI only)
-- `--filter <selector>` — Filter packages by name pattern or relative path (local CLI only); also accepts `--filter=<selector>` form
+- `--filter, -F <selector>` — Filter packages by name pattern or relative path (local CLI only); also accepts `--filter=<selector>` form
 - `--parallel` — Run concurrently without topological sort (local CLI only)
 - `--reverse` — Reverse topological order (local CLI only)
 - `--resume-from <pkg>` — Resume from a specific package (local CLI only); also accepts `--resume-from=<pkg>` form
@@ -141,7 +141,13 @@ The `--filter` flag supports pnpm-compatible selectors:
 
 Modifiers work with name patterns (e.g., `app-a...`) and braced path selectors (e.g., `{./packages/app-a}...`). Unbraced path selectors (e.g., `./packages/app-a`) do not support traversal modifiers.
 
+**Whitespace splitting**: `--filter "a b"` is equivalent to `--filter a --filter b` (pnpm compatibility). Each `--filter` value is split by whitespace into individual filter tokens.
+
+**Unmatched filter warning**: When an inclusion filter matches no packages, a warning is emitted to stderr (e.g., `WARN No packages matched the filter 'nonexistent'`).
+
 **Exclusion-only filters**: When all selectors are exclusion-only (e.g., `--filter '!app-b'`), the result is all non-root workspace packages minus the excluded ones. This matches pnpm behavior — exclusion without an explicit inclusion implies "start with everything".
+
+**`-w --filter` interaction**: `-w` (workspace root) combined with `--filter` is additive — the workspace root is included alongside the filtered packages. This matches pnpm behavior.
 
 **Workspace root inclusion rules**:
 
@@ -214,15 +220,16 @@ The local CLI receives the `exec` command via delegation from the global CLI (sa
 ```
 packages/cli/binding/src/exec/
 ├── mod.rs       — entry point (execute), help text, command builder
-├── args.rs      — ExecFlags struct, parse_exec_args()
-├── filter.rs    — PackageSelector, parse_package_selector(), filter_packages()
-└── workspace.rs — execute_exec_workspace() for --recursive/--filter mode
+├── args.rs      — ExecFlags, parse_exec_args(), build_package_query_args()
+└── workspace.rs — execute_exec_workspace(), topological_sort_packages()
 ```
+
+Package filtering is delegated to `vite_workspace`'s reusable API: `PackageQueryArgs` (CLI args struct) → `PackageQuery` → `IndexedPackageGraph::resolve_query()` → `FilterResolution` (with `package_subgraph` and `unmatched_selectors`). The `args.rs` module provides `build_package_query_args()` to convert exec-specific `ExecFlags` into the upstream `PackageQueryArgs`.
 
 The local CLI has full workspace awareness and can handle:
 
 - `--recursive` — iterate workspace packages with topological sort
-- `--filter` — filter packages by selector
+- `--filter, -F` — filter packages by selector
 - `--parallel` — run concurrently
 - `--reverse` — reverse topological order
 - `--resume-from` — resume from specific package
@@ -234,13 +241,16 @@ For the local CLI, exec uses the workspace package graph to iterate packages, pr
 
 The following existing code is reused:
 
-| Module            | Function                             | Purpose                                       |
-| ----------------- | ------------------------------------ | --------------------------------------------- |
-| `vpx.rs`          | `find_local_binary()`                | Check if binary exists in `node_modules/.bin` |
-| `vpx.rs`          | `prepend_node_modules_bin_to_path()` | PATH manipulation for `node_modules/.bin`     |
-| `vite_shared`     | `prepend_to_path_env()`              | Generic PATH prepend                          |
-| `commands/mod.rs` | `has_vite_plus_dependency()`         | Check for local vite-plus                     |
-| `commands/mod.rs` | `prepend_js_runtime_to_path_env()`   | Ensure Node.js in fallback path               |
+| Module            | Function                             | Purpose                                           |
+| ----------------- | ------------------------------------ | ------------------------------------------------- |
+| `vpx.rs`          | `find_local_binary()`                | Check if binary exists in `node_modules/.bin`     |
+| `vpx.rs`          | `prepend_node_modules_bin_to_path()` | PATH manipulation for `node_modules/.bin`         |
+| `vite_shared`     | `prepend_to_path_env()`              | Generic PATH prepend                              |
+| `commands/mod.rs` | `has_vite_plus_dependency()`         | Check for local vite-plus                         |
+| `commands/mod.rs` | `prepend_js_runtime_to_path_env()`   | Ensure Node.js in fallback path                   |
+| `vite_workspace`  | `PackageQueryArgs`                   | CLI args struct for package selection             |
+| `vite_workspace`  | `IndexedPackageGraph`                | Indexed graph with `resolve_query()`              |
+| `vite_workspace`  | `FilterResolution`                   | Resolution result: subgraph + unmatched selectors |
 
 ## Design Decisions
 
@@ -298,7 +308,7 @@ The following existing code is reused:
 
 ### 6. Execution Ordering
 
-**Decision**: When `--recursive` or `--filter` is used, packages execute in topological order (dependencies first). Packages with no ordering constraint are sorted alphabetically for determinism.
+**Decision**: When `--recursive` or `--filter` is used, packages execute in topological order (dependencies first). Packages with no ordering constraint are sorted alphabetically for determinism. The topological sort uses edges from the `FilterResolution.package_subgraph` (not the original full graph), enabling future `--filter-prod` support where dev dependency edges are excluded at subgraph construction time.
 
 **Rationale**:
 
@@ -396,7 +406,7 @@ Options:
   -r, --recursive               Run in every workspace package
   -w, --workspace-root          Run on the workspace root package only
       --include-workspace-root  Include workspace root when running recursively
-      --filter <PATTERN>        Filter packages (can be used multiple times)
+  -F, --filter <PATTERN>        Filter packages (can be used multiple times)
       --parallel                Run concurrently without topological ordering
       --reverse                 Reverse execution order
       --resume-from <PACKAGE>   Resume from a specific package

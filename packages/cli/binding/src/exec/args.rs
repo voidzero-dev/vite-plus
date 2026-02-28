@@ -1,3 +1,6 @@
+use vite_str::Str;
+use vite_workspace::package_filter::PackageQueryArgs;
+
 /// Parsed exec flags.
 pub(super) struct ExecFlags {
     pub shell_mode: bool,
@@ -10,6 +13,20 @@ pub(super) struct ExecFlags {
     pub report_summary: bool,
     pub include_workspace_root: bool,
     pub workspace_root: bool,
+}
+
+/// Convert `ExecFlags` into `PackageQueryArgs` for the upstream filter API.
+///
+/// When `--filter` is present alongside `-r`, filter wins and recursive is cleared
+/// (exec allows both, but the upstream API treats them as mutually exclusive).
+pub(super) fn build_package_query_args(flags: &ExecFlags) -> PackageQueryArgs {
+    PackageQueryArgs {
+        // Clear recursive when filters present (exec allows -r --filter; filter wins)
+        recursive: flags.recursive && flags.filters.is_empty(),
+        transitive: false, // exec doesn't support -t
+        workspace_root: flags.workspace_root,
+        filter: flags.filters.iter().map(|s| Str::from(s.as_str())).collect(),
+    }
 }
 
 /// Parse exec-specific flags from argument slice.
@@ -79,7 +96,7 @@ pub(super) fn parse_exec_args(args: &[String]) -> (ExecFlags, Vec<String>) {
             "-w" | "--workspace-root" => {
                 flags.workspace_root = true;
             }
-            "--filter" => {
+            "-F" | "--filter" => {
                 i += 1;
                 if i < args.len() {
                     flags.filters.push(args[i].clone());
@@ -249,5 +266,107 @@ mod tests {
         assert!(!flags.recursive);
         assert!(!flags.include_workspace_root);
         assert_eq!(positional, vec!["echo", "hi"]);
+    }
+
+    #[test]
+    fn test_parse_exec_args_short_filter() {
+        let args: Vec<String> =
+            vec!["-F", "app-*", "--", "echo", "hi"].iter().map(|s| s.to_string()).collect();
+        let (flags, positional) = parse_exec_args(&args);
+        assert_eq!(flags.filters, vec!["app-*"]);
+        assert_eq!(positional, vec!["echo", "hi"]);
+    }
+
+    #[test]
+    fn test_parse_exec_args_short_filter_multiple() {
+        let args: Vec<String> = vec!["-F", "app-*", "-F", "lib-*", "--", "echo", "hi"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let (flags, positional) = parse_exec_args(&args);
+        assert_eq!(flags.filters, vec!["app-*", "lib-*"]);
+        assert_eq!(positional, vec!["echo", "hi"]);
+    }
+
+    #[test]
+    fn test_build_package_query_args_recursive() {
+        let flags = ExecFlags {
+            recursive: true,
+            filters: Vec::new(),
+            workspace_root: false,
+            shell_mode: false,
+            help: false,
+            parallel: false,
+            reverse: false,
+            resume_from: None,
+            report_summary: false,
+            include_workspace_root: false,
+        };
+        let args = build_package_query_args(&flags);
+        assert!(args.recursive);
+        assert!(!args.transitive);
+        assert!(!args.workspace_root);
+        assert!(args.filter.is_empty());
+    }
+
+    #[test]
+    fn test_build_package_query_args_filter_wins_over_recursive() {
+        let flags = ExecFlags {
+            recursive: true,
+            filters: vec!["app-a".to_string()],
+            workspace_root: false,
+            shell_mode: false,
+            help: false,
+            parallel: false,
+            reverse: false,
+            resume_from: None,
+            report_summary: false,
+            include_workspace_root: false,
+        };
+        let args = build_package_query_args(&flags);
+        // -r is cleared when --filter is present
+        assert!(!args.recursive);
+        assert_eq!(args.filter.len(), 1);
+        assert_eq!(args.filter[0].as_str(), "app-a");
+    }
+
+    #[test]
+    fn test_build_package_query_args_workspace_root() {
+        let flags = ExecFlags {
+            recursive: false,
+            filters: Vec::new(),
+            workspace_root: true,
+            shell_mode: false,
+            help: false,
+            parallel: false,
+            reverse: false,
+            resume_from: None,
+            report_summary: false,
+            include_workspace_root: false,
+        };
+        let args = build_package_query_args(&flags);
+        assert!(!args.recursive);
+        assert!(args.workspace_root);
+        assert!(args.filter.is_empty());
+    }
+
+    #[test]
+    fn test_build_package_query_args_workspace_root_with_filter() {
+        let flags = ExecFlags {
+            recursive: false,
+            filters: vec!["foo".to_string()],
+            workspace_root: true,
+            shell_mode: false,
+            help: false,
+            parallel: false,
+            reverse: false,
+            resume_from: None,
+            report_summary: false,
+            include_workspace_root: false,
+        };
+        let args = build_package_query_args(&flags);
+        assert!(!args.recursive);
+        assert!(args.workspace_root);
+        assert_eq!(args.filter.len(), 1);
     }
 }

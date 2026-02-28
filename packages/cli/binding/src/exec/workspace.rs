@@ -1,13 +1,13 @@
-use std::process::Stdio;
+use std::{collections::BTreeMap, process::Stdio, sync::Arc};
 
+use petgraph::prelude::DiGraphMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use vite_error::Error;
 use vite_path::AbsolutePathBuf;
 use vite_task::ExitStatus;
+use vite_workspace::{PackageNodeIndex, package_graph::IndexedPackageGraph};
 
-use super::{
-    args::ExecFlags,
-    filter::{PackageSelector, filter_packages, parse_package_selector, topological_sort_packages},
-};
+use super::args::{ExecFlags, build_package_query_args};
 
 /// Execute `vp exec` across workspace packages (--recursive or --filter mode).
 pub(super) async fn execute_exec_workspace(
@@ -21,24 +21,55 @@ pub(super) async fn execute_exec_workspace(
     let graph =
         vite_workspace::load_package_graph(&workspace_root).map_err(|e| Error::Anyhow(e.into()))?;
 
-    // Select packages
-    let selected: Vec<vite_workspace::PackageNodeIndex> = if flags.workspace_root {
-        // -w: workspace root only
-        let indices: Vec<_> =
-            graph.node_indices().filter(|&idx| graph[idx].path.as_str().is_empty()).collect();
-        topological_sort_packages(&graph, &indices)
-    } else if !flags.filters.is_empty() {
-        let selectors: Vec<PackageSelector> =
-            flags.filters.iter().map(|f| parse_package_selector(f)).collect();
-        filter_packages(&graph, &selectors, cwd)
+    // Index the graph for O(1) lookups
+    let indexed = IndexedPackageGraph::index(graph);
+
+    // Build the query from exec flags
+    let cwd_arc: Arc<vite_path::AbsolutePath> = cwd.clone().into();
+    let query_args = build_package_query_args(flags);
+    let query =
+        query_args.into_package_query(None, &cwd_arc).map_err(|e| Error::Anyhow(e.into()))?;
+
+    // Resolve query into a package subgraph
+    let resolution = indexed.resolve_query(&query);
+
+    // Warn about unmatched selectors
+    for selector in &resolution.unmatched_selectors {
+        vite_shared::output::warn(&vite_str::format!(
+            "No packages matched the filter '{}'",
+            selector
+        ));
+    }
+
+    let package_graph = indexed.package_graph();
+    let mut subgraph = resolution.package_subgraph;
+
+    // Post-filter: remove workspace root from subgraph when appropriate.
+    // For -r (recursive) without --include-workspace-root and no filters: exclude root.
+    // For exclusion-only --filter (all start with '!'): also exclude root to match
+    // current behavior where exclusion-only seeds with non-root packages.
+    let should_exclude_root = if flags.recursive && flags.filters.is_empty() {
+        // -r mode: exclude root unless --include-workspace-root
+        !flags.include_workspace_root
+    } else if !flags.filters.is_empty()
+        && flags.filters.iter().all(|f| f.trim_start().starts_with('!'))
+    {
+        // Exclusion-only filters: exclude root
+        true
     } else {
-        // Recursive: non-root packages, optionally including root
-        let indices: Vec<_> = graph
-            .node_indices()
-            .filter(|&idx| flags.include_workspace_root || !graph[idx].path.as_str().is_empty())
-            .collect();
-        topological_sort_packages(&graph, &indices)
+        false
     };
+
+    if should_exclude_root {
+        // Find and remove the root node (package with empty relative path)
+        let root_idx = subgraph.nodes().find(|&idx| package_graph[idx].path.as_str().is_empty());
+        if let Some(root_idx) = root_idx {
+            subgraph.remove_node(root_idx);
+        }
+    }
+
+    // Topological sort on the subgraph
+    let selected = topological_sort_packages(&subgraph, package_graph);
 
     // Apply --reverse: reverse the execution order
     let mut selected = selected;
@@ -50,17 +81,20 @@ pub(super) async fn execute_exec_workspace(
     if let Some(ref resume_pkg) = flags.resume_from {
         if let Some(pos) = selected
             .iter()
-            .position(|&idx| graph[idx].package_json.name.as_str() == resume_pkg.as_str())
+            .position(|&idx| package_graph[idx].package_json.name.as_str() == resume_pkg.as_str())
         {
             selected = selected[pos..].to_vec();
         } else {
-            eprintln!("Package '{}' not found in selected packages", resume_pkg);
+            vite_shared::output::error(&vite_str::format!(
+                "Package '{}' not found in selected packages",
+                resume_pkg
+            ));
             return Ok(ExitStatus(1));
         }
     }
 
     if selected.is_empty() {
-        eprintln!("No packages matched the filter(s)");
+        vite_shared::output::warn("No packages matched the filter(s)");
         return Ok(ExitStatus::SUCCESS);
     }
 
@@ -96,7 +130,7 @@ pub(super) async fn execute_exec_workspace(
             >,
         )> = Vec::new();
         for &idx in &selected {
-            let pkg = &graph[idx];
+            let pkg = &package_graph[idx];
             let pkg_name = pkg.package_json.name.to_string();
             let pkg_path = &pkg.absolute_path;
 
@@ -176,7 +210,7 @@ pub(super) async fn execute_exec_workspace(
         // Sequential execution
         let mut final_status = ExitStatus::SUCCESS;
         for &idx in &selected {
-            let pkg = &graph[idx];
+            let pkg = &package_graph[idx];
             let pkg_name = pkg.package_json.name.as_str();
             let pkg_path = &pkg.absolute_path;
 
@@ -241,9 +275,306 @@ pub(super) async fn execute_exec_workspace(
         if let Err(e) =
             std::fs::write(report_path.as_path(), serde_json::to_string_pretty(&report).unwrap())
         {
-            eprintln!("Failed to write vp-exec-summary.json: {e}");
+            vite_shared::output::error(&vite_str::format!(
+                "Failed to write vp-exec-summary.json: {}",
+                e
+            ));
         }
     }
 
     Ok(exit_status)
+}
+
+/// Sort package indices in topological order (dependencies before dependents)
+/// using Kahn's algorithm, with alphabetical tie-breaking for determinism.
+///
+/// Uses the subgraph edges (not the full package graph) so that only
+/// edges between selected packages affect ordering. This enables future
+/// `--filter-prod` support where dev edges are excluded at subgraph
+/// construction time.
+///
+/// Packages involved in dependency cycles are appended at the end using
+/// iterative cycle-breaking (force the alphabetically-first remaining node),
+/// ensuring the command completes rather than failing.
+fn topological_sort_packages(
+    subgraph: &DiGraphMap<PackageNodeIndex, ()>,
+    package_graph: &petgraph::graph::DiGraph<
+        vite_workspace::PackageInfo,
+        vite_workspace::DependencyType,
+        vite_workspace::PackageIx,
+    >,
+) -> Vec<PackageNodeIndex> {
+    let selected: Vec<PackageNodeIndex> = subgraph.nodes().collect();
+    let selected_set: FxHashSet<PackageNodeIndex> = selected.iter().copied().collect();
+
+    // Count how many selected dependencies each selected package has
+    // (Outgoing edges in the subgraph = dependencies)
+    let mut dep_count: FxHashMap<PackageNodeIndex, usize> = FxHashMap::default();
+    for &idx in &selected {
+        let count = subgraph
+            .neighbors_directed(idx, petgraph::Direction::Outgoing)
+            .filter(|n| selected_set.contains(n))
+            .count();
+        dep_count.insert(idx, count);
+    }
+
+    // BTreeMap keyed by name for deterministic alphabetical ordering among peers
+    let mut ready: BTreeMap<&str, PackageNodeIndex> = BTreeMap::new();
+    for (&idx, &count) in &dep_count {
+        if count == 0 {
+            ready.insert(package_graph[idx].package_json.name.as_str(), idx);
+        }
+    }
+
+    let mut result = Vec::with_capacity(selected.len());
+    while let Some((_, idx)) = ready.pop_first() {
+        result.push(idx);
+        // Decrement dep counts for dependents (incoming edges in subgraph = dependents)
+        for dependent in subgraph.neighbors_directed(idx, petgraph::Direction::Incoming) {
+            if let Some(count) = dep_count.get_mut(&dependent) {
+                *count -= 1;
+                if *count == 0 {
+                    ready.insert(package_graph[dependent].package_json.name.as_str(), dependent);
+                }
+            }
+        }
+    }
+
+    // Cycle fallback: iteratively break cycles by forcing the alphabetically-first
+    // remaining node, then continue Kahn's algorithm to correctly order any
+    // non-cyclic dependents that become unblocked.
+    let mut placed: FxHashSet<PackageNodeIndex> = result.iter().copied().collect();
+    while result.len() < selected.len() {
+        let mut remaining: Vec<PackageNodeIndex> =
+            selected.iter().copied().filter(|idx| !placed.contains(idx)).collect();
+        remaining.sort_by(|a, b| {
+            package_graph[*a].package_json.name.cmp(&package_graph[*b].package_json.name)
+        });
+
+        let cyclic_names: Vec<&str> =
+            remaining.iter().map(|&idx| package_graph[idx].package_json.name.as_str()).collect();
+        tracing::debug!(
+            "Circular dependencies detected among packages: {}. Breaking cycle at '{}'.",
+            cyclic_names.join(", "),
+            package_graph[remaining[0]].package_json.name
+        );
+
+        // Force-add the alphabetically-first remaining node to break the cycle
+        let forced = remaining[0];
+        result.push(forced);
+        placed.insert(forced);
+
+        // Decrement dep counts for its dependents, potentially freeing non-cyclic nodes
+        for dependent in subgraph.neighbors_directed(forced, petgraph::Direction::Incoming) {
+            if let Some(count) = dep_count.get_mut(&dependent)
+                && *count > 0
+            {
+                *count -= 1;
+                if *count == 0 && !placed.contains(&dependent) {
+                    ready.insert(package_graph[dependent].package_json.name.as_str(), dependent);
+                }
+            }
+        }
+
+        // Continue Kahn's algorithm with any newly freed nodes
+        while let Some((_, idx)) = ready.pop_first() {
+            result.push(idx);
+            placed.insert(idx);
+            for dependent in subgraph.neighbors_directed(idx, petgraph::Direction::Incoming) {
+                if let Some(count) = dep_count.get_mut(&dependent)
+                    && *count > 0
+                {
+                    *count -= 1;
+                    if *count == 0 && !placed.contains(&dependent) {
+                        ready
+                            .insert(package_graph[dependent].package_json.name.as_str(), dependent);
+                    }
+                }
+            }
+        }
+    }
+
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use petgraph::prelude::DiGraphMap;
+    use vite_path::{AbsolutePathBuf, RelativePathBuf};
+    use vite_workspace::{DependencyType, PackageInfo, PackageJson, PackageNodeIndex};
+
+    use super::*;
+
+    /// Build a test dependency graph:
+    /// - app-a depends on lib-c
+    /// - app-b has no workspace dependencies
+    /// - lib-c has no workspace dependencies
+    /// - root (workspace root, empty path)
+    fn build_test_graph()
+    -> petgraph::graph::DiGraph<PackageInfo, DependencyType, vite_workspace::PackageIx> {
+        let mut graph = petgraph::graph::DiGraph::default();
+
+        let root = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "root".into(), ..Default::default() },
+            path: RelativePathBuf::default(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace")).unwrap().into(),
+        });
+        let app_a = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "app-a".into(), ..Default::default() },
+            path: RelativePathBuf::try_from("packages/app-a").unwrap(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/app-a"))
+                .unwrap()
+                .into(),
+        });
+        let app_b = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "app-b".into(), ..Default::default() },
+            path: RelativePathBuf::try_from("packages/app-b").unwrap(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/app-b"))
+                .unwrap()
+                .into(),
+        });
+        let lib_c = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "lib-c".into(), ..Default::default() },
+            path: RelativePathBuf::try_from("packages/lib-c").unwrap(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/lib-c"))
+                .unwrap()
+                .into(),
+        });
+
+        // app-a depends on lib-c
+        graph.add_edge(app_a, lib_c, DependencyType::Normal);
+
+        let _ = (root, app_b); // suppress unused warnings
+        graph
+    }
+
+    /// Build a DiGraphMap subgraph from selected node indices and the original graph edges.
+    fn build_subgraph(
+        graph: &petgraph::graph::DiGraph<PackageInfo, DependencyType, vite_workspace::PackageIx>,
+        selected: &[PackageNodeIndex],
+    ) -> DiGraphMap<PackageNodeIndex, ()> {
+        use petgraph::visit::EdgeRef;
+        let selected_set: FxHashSet<PackageNodeIndex> = selected.iter().copied().collect();
+        let mut subgraph = DiGraphMap::new();
+        for &idx in selected {
+            subgraph.add_node(idx);
+        }
+        for edge in graph.edge_references() {
+            let src = edge.source();
+            let dst = edge.target();
+            if selected_set.contains(&src) && selected_set.contains(&dst) {
+                subgraph.add_edge(src, dst, ());
+            }
+        }
+        subgraph
+    }
+
+    #[test]
+    fn test_topological_sort_simple() {
+        let graph = build_test_graph();
+        // All non-root packages
+        let all: Vec<_> =
+            graph.node_indices().filter(|&idx| !graph[idx].path.as_str().is_empty()).collect();
+        let subgraph = build_subgraph(&graph, &all);
+        let sorted = topological_sort_packages(&subgraph, &graph);
+        let names: Vec<&str> =
+            sorted.iter().map(|&idx| graph[idx].package_json.name.as_str()).collect();
+        // app-b and lib-c have no deps, sorted alphabetically first
+        // app-a depends on lib-c, so it comes after lib-c
+        assert_eq!(names, vec!["app-b", "lib-c", "app-a"]);
+    }
+
+    #[test]
+    fn test_topological_sort_with_cycles() {
+        let mut graph = petgraph::graph::DiGraph::default();
+
+        let root = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "root".into(), ..Default::default() },
+            path: RelativePathBuf::default(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace")).unwrap().into(),
+        });
+        let pkg_a = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "pkg-a".into(), ..Default::default() },
+            path: RelativePathBuf::try_from("packages/pkg-a").unwrap(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/pkg-a"))
+                .unwrap()
+                .into(),
+        });
+        let pkg_b = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "pkg-b".into(), ..Default::default() },
+            path: RelativePathBuf::try_from("packages/pkg-b").unwrap(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/pkg-b"))
+                .unwrap()
+                .into(),
+        });
+        let pkg_c = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "pkg-c".into(), ..Default::default() },
+            path: RelativePathBuf::try_from("packages/pkg-c").unwrap(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/pkg-c"))
+                .unwrap()
+                .into(),
+        });
+
+        // Circular: pkg-a <-> pkg-b
+        graph.add_edge(pkg_a, pkg_b, DependencyType::Normal);
+        graph.add_edge(pkg_b, pkg_a, DependencyType::Normal);
+        // pkg-c has no dependencies
+        let _ = root;
+
+        let selected = vec![pkg_a, pkg_b, pkg_c];
+        let subgraph = build_subgraph(&graph, &selected);
+        let sorted = topological_sort_packages(&subgraph, &graph);
+        let names: Vec<&str> =
+            sorted.iter().map(|&idx| graph[idx].package_json.name.as_str()).collect();
+        // pkg-c has no deps, comes first; pkg-a and pkg-b are in a cycle, appended alphabetically
+        assert_eq!(names, vec!["pkg-c", "pkg-a", "pkg-b"]);
+    }
+
+    #[test]
+    fn test_topological_sort_cycle_with_dependent() {
+        let mut graph = petgraph::graph::DiGraph::default();
+
+        let _root = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "root".into(), ..Default::default() },
+            path: RelativePathBuf::default(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace")).unwrap().into(),
+        });
+        let a = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "a".into(), ..Default::default() },
+            path: RelativePathBuf::try_from("packages/a").unwrap(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/a"))
+                .unwrap()
+                .into(),
+        });
+        let b = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "b".into(), ..Default::default() },
+            path: RelativePathBuf::try_from("packages/b").unwrap(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/b"))
+                .unwrap()
+                .into(),
+        });
+        let aa = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "aa".into(), ..Default::default() },
+            path: RelativePathBuf::try_from("packages/aa").unwrap(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/aa"))
+                .unwrap()
+                .into(),
+        });
+
+        // Cycle: a <-> b
+        graph.add_edge(a, b, DependencyType::Normal);
+        graph.add_edge(b, a, DependencyType::Normal);
+        // aa depends on b (non-cyclic dependent)
+        graph.add_edge(aa, b, DependencyType::Normal);
+
+        let selected = vec![a, b, aa];
+        let subgraph = build_subgraph(&graph, &selected);
+        let sorted = topological_sort_packages(&subgraph, &graph);
+        let names: Vec<&str> =
+            sorted.iter().map(|&idx| graph[idx].package_json.name.as_str()).collect();
+        // Force 'a' first (alphabetical cycle break), frees 'b', then 'aa' follows
+        assert_eq!(names, vec!["a", "b", "aa"]);
+    }
 }
