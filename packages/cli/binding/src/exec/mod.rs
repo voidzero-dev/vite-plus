@@ -69,7 +69,7 @@ pub async fn execute(exec_args: ExecArgs, cwd: &AbsolutePathBuf) -> Result<ExitS
         let bin_path = match vite_command::resolve_bin(&exec_args.command[0], None, cwd) {
             Ok(p) => p,
             Err(_) => {
-                vite_shared::output::error(&format!(
+                vite_shared::output::error(&vite_str::format!(
                     "Command '{}' not found in node_modules/.bin\n\n\
                      Hint: Run 'vp install' to install dependencies, or use 'vpx' for remote fallback.",
                     exec_args.command[0]
