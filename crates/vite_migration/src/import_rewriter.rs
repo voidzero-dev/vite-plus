@@ -347,45 +347,43 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
     let bytes = content.as_bytes();
     let mut preamble_end = 0;
     let mut in_block_comment = false;
+
+    // Advance preamble_end past a line and its terminator (\n or \r\n).
+    let advance_past_line = |offset: usize, line_len: usize| -> usize {
+        let mut pos = offset + line_len;
+        if pos < bytes.len() && bytes[pos] == b'\r' {
+            pos += 1;
+        }
+        if pos < bytes.len() && bytes[pos] == b'\n' {
+            pos += 1;
+        }
+        pos
+    };
+
     for line in content.lines() {
         let trimmed = line.trim();
         if in_block_comment {
-            // Advance past the line (use byte search for actual line ending)
-            preamble_end += line.len();
-            // Skip \r\n or \n
-            if preamble_end < bytes.len() && bytes[preamble_end] == b'\r' {
-                preamble_end += 1;
-            }
-            if preamble_end < bytes.len() && bytes[preamble_end] == b'\n' {
-                preamble_end += 1;
-            }
+            preamble_end = advance_past_line(preamble_end, line.len());
             if trimmed.contains("*/") {
                 in_block_comment = false;
             }
             continue;
         }
         if trimmed.is_empty() || trimmed.starts_with("//") {
-            preamble_end += line.len();
-            if preamble_end < bytes.len() && bytes[preamble_end] == b'\r' {
-                preamble_end += 1;
-            }
-            if preamble_end < bytes.len() && bytes[preamble_end] == b'\n' {
-                preamble_end += 1;
-            }
+            preamble_end = advance_past_line(preamble_end, line.len());
             continue;
         }
         if trimmed.starts_with("/*") {
             in_block_comment = !trimmed.contains("*/");
-            preamble_end += line.len();
-            if preamble_end < bytes.len() && bytes[preamble_end] == b'\r' {
-                preamble_end += 1;
-            }
-            if preamble_end < bytes.len() && bytes[preamble_end] == b'\n' {
-                preamble_end += 1;
-            }
+            preamble_end = advance_past_line(preamble_end, line.len());
             continue;
         }
         break;
+    }
+
+    // Guard: unclosed block comment means the file has a syntax error; skip rewriting.
+    if in_block_comment {
+        return false;
     }
 
     let preamble = &content[..preamble_end];
