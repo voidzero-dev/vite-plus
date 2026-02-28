@@ -21,4 +21,4 @@
 /// <reference types="vite-plus/test" />
 /// <reference types="vite-plus/test/globals" />
 /// <reference types="vite-plus" />
-/// <reference types="vite-plus/test/browser/matchers" />
+/// <reference types="vite-plus/test/browser/context" />

@@ -295,8 +295,9 @@ static RE_REF_VITEST_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// `@vitest/{pkg}[/{subpath}]` → `vite-plus/test/{pkg}[/{subpath}]`
+/// Only matches packages that vite-plus actually re-exports, matching the ast-grep import rules.
 static RE_REF_VITEST_SCOPED: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?m)^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/(.+?)(["']\s*/>)"#).unwrap()
+    Regex::new(r#"(?m)^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/((?:browser-playwright|browser-preview|browser-webdriverio|browser)(?:/.+?)?)(["']\s*/>)"#).unwrap()
 });
 
 /// bare `vite` → `vite-plus`
@@ -314,11 +315,6 @@ static RE_REF_TSDOWN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?m)^(\s*///\s*<reference\s+types\s*=\s*["'])tsdown(["']\s*/>)"#).unwrap()
 });
 
-/// `tsdown/{subpath}` → `vite-plus/pack/{subpath}`
-static RE_REF_TSDOWN_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?m)^(\s*///\s*<reference\s+types\s*=\s*["'])tsdown/(.+?)(["']\s*/>)"#).unwrap()
-});
-
 /// Apply a single regex replacement, updating `content` in place if matched.
 /// Uses `Cow::Owned` variant check to avoid O(n) string comparison on no-match.
 fn apply_regex_replace(content: &mut String, re: &Regex, replacement: &str) -> bool {
@@ -334,6 +330,8 @@ fn apply_regex_replace(content: &mut String, re: &Regex, replacement: &str) -> b
 
 /// Rewrite `/// <reference types="..." />` directives in place.
 ///
+/// Only processes the file preamble (blank lines and comments before the first statement)
+/// to match TypeScript semantics and avoid false positives inside string/template literals.
 /// Returns whether any changes were made.
 fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -> bool {
     // Fast path: skip all regex scans if no triple-slash reference directives exist
@@ -341,34 +339,47 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
         return false;
     }
 
+    let has_trailing_newline = content.ends_with('\n');
     let mut changed = false;
+    let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
 
-    if !skip_packages.skip_vitest {
-        // vitest/config → vite-plus (special case, must come before generic vitest subpath)
-        changed |= apply_regex_replace(content, &RE_REF_VITEST_CONFIG, "${1}vite-plus${2}");
-        // @vitest/{pkg}[/{subpath}] → vite-plus/test/{pkg}[/{subpath}]
-        changed |=
-            apply_regex_replace(content, &RE_REF_VITEST_SCOPED, "${1}vite-plus/test/${2}${3}");
-        // vitest/{subpath} → vite-plus/test/{subpath}
-        changed |=
-            apply_regex_replace(content, &RE_REF_VITEST_SUBPATH, "${1}vite-plus/test/${2}${3}");
-        // bare vitest → vite-plus/test
-        changed |= apply_regex_replace(content, &RE_REF_VITEST, "${1}vite-plus/test${2}");
+    for line in &mut lines {
+        let trimmed = line.trim();
+        // Skip blank lines and continue scanning the preamble
+        if trimmed.is_empty() {
+            continue;
+        }
+        // Stop at the first non-comment line (end of preamble)
+        if !trimmed.starts_with("//") {
+            break;
+        }
+        // Only process triple-slash reference directives
+        if !trimmed.starts_with("/// <reference") {
+            continue;
+        }
+        if !skip_packages.skip_vitest {
+            changed |= apply_regex_replace(line, &RE_REF_VITEST_CONFIG, "${1}vite-plus${2}");
+            changed |=
+                apply_regex_replace(line, &RE_REF_VITEST_SCOPED, "${1}vite-plus/test/${2}${3}");
+            changed |=
+                apply_regex_replace(line, &RE_REF_VITEST_SUBPATH, "${1}vite-plus/test/${2}${3}");
+            changed |= apply_regex_replace(line, &RE_REF_VITEST, "${1}vite-plus/test${2}");
+        }
+        if !skip_packages.skip_vite {
+            changed |= apply_regex_replace(line, &RE_REF_VITE_SUBPATH, "${1}vite-plus/${2}${3}");
+            changed |= apply_regex_replace(line, &RE_REF_VITE, "${1}vite-plus${2}");
+        }
+        if !skip_packages.skip_tsdown {
+            changed |= apply_regex_replace(line, &RE_REF_TSDOWN, "${1}vite-plus/pack${2}");
+        }
     }
 
-    if !skip_packages.skip_vite {
-        // vite/{subpath} → vite-plus/{subpath} (before bare vite)
-        changed |= apply_regex_replace(content, &RE_REF_VITE_SUBPATH, "${1}vite-plus/${2}${3}");
-        // bare vite → vite-plus
-        changed |= apply_regex_replace(content, &RE_REF_VITE, "${1}vite-plus${2}");
-    }
-
-    if !skip_packages.skip_tsdown {
-        // tsdown/{subpath} → vite-plus/pack/{subpath} (before bare tsdown)
-        changed |=
-            apply_regex_replace(content, &RE_REF_TSDOWN_SUBPATH, "${1}vite-plus/pack/${2}${3}");
-        // bare tsdown → vite-plus/pack
-        changed |= apply_regex_replace(content, &RE_REF_TSDOWN, "${1}vite-plus/pack${2}");
+    if changed {
+        let mut result = lines.join("\n");
+        if has_trailing_newline {
+            result.push('\n');
+        }
+        *content = result;
     }
 
     changed
@@ -2281,11 +2292,54 @@ export default defineConfig({});"#
     }
 
     #[test]
-    fn test_rewrite_reference_types_tsdown_client() {
+    fn test_rewrite_reference_types_tsdown_subpath_not_rewritten() {
+        // tsdown subpaths should NOT be rewritten because vite-plus only exports ./pack (no subpaths)
         let content = r#"/// <reference types="tsdown/client" />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_vitest_scoped_not_matching() {
+        // Non-enumerated @vitest/* packages should NOT be rewritten
+        let content = r#"/// <reference types="@vitest/coverage-v8" />"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_inside_template_literal_not_rewritten() {
+        // Reference-like content inside template literals should NOT be rewritten.
+        // The preamble ends at the first non-comment line (`const`), so nothing is processed.
+        let content = r#"const template = `
+/// <reference types="vite/client" />
+`;"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_preamble_only() {
+        // Only references in the preamble (before first statement) should be rewritten
+        let content = r#"/// <reference types="vite/client" />
+// A regular comment
+
+const x = 1;
+/// <reference types="vitest" />"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/pack/client" />"#);
+        // First reference (preamble) is rewritten; last one (after code) is not
+        assert_eq!(
+            result.content,
+            r#"/// <reference types="vite-plus/client" />
+// A regular comment
+
+const x = 1;
+/// <reference types="vitest" />"#
+        );
     }
 
     #[test]
