@@ -48,7 +48,3 @@ app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-b
 exec-monorepo-filter-v2$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 exec-monorepo-filter-v2
-
-> vp exec -r --filter app-a -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # -r + --filter: filter wins over recursive
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-app-a

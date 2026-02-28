@@ -7,12 +7,11 @@ use vite_path::AbsolutePathBuf;
 use vite_task::ExitStatus;
 use vite_workspace::{PackageNodeIndex, package_graph::IndexedPackageGraph};
 
-use super::args::{ExecFlags, build_package_query_args};
+use super::args::ExecArgs;
 
 /// Execute `vp exec` across workspace packages (--recursive or --filter mode).
 pub(super) async fn execute_exec_workspace(
-    flags: &ExecFlags,
-    positional: &[String],
+    args: ExecArgs,
     cwd: &AbsolutePathBuf,
 ) -> Result<ExitStatus, Error> {
     // Find workspace root and load package graph
@@ -24,11 +23,16 @@ pub(super) async fn execute_exec_workspace(
     // Index the graph for O(1) lookups
     let indexed = IndexedPackageGraph::index(graph);
 
+    // Capture fields from packages before moving into into_package_query
+    let is_recursive = args.packages.is_recursive();
+    let has_filters = !args.packages.filter().is_empty();
+    let all_exclusion = has_filters
+        && args.packages.filter().iter().all(|f| f.as_str().trim_start().starts_with('!'));
+
     // Build the query from exec flags
     let cwd_arc: Arc<vite_path::AbsolutePath> = cwd.clone().into();
-    let query_args = build_package_query_args(flags);
     let query =
-        query_args.into_package_query(None, &cwd_arc).map_err(|e| Error::Anyhow(e.into()))?;
+        args.packages.into_package_query(None, &cwd_arc).map_err(|e| Error::Anyhow(e.into()))?;
 
     // Resolve query into a package subgraph
     let resolution = indexed.resolve_query(&query);
@@ -48,12 +52,10 @@ pub(super) async fn execute_exec_workspace(
     // For -r (recursive) without --include-workspace-root and no filters: exclude root.
     // For exclusion-only --filter (all start with '!'): also exclude root to match
     // current behavior where exclusion-only seeds with non-root packages.
-    let should_exclude_root = if flags.recursive && flags.filters.is_empty() {
+    let should_exclude_root = if is_recursive && !has_filters {
         // -r mode: exclude root unless --include-workspace-root
-        !flags.include_workspace_root
-    } else if !flags.filters.is_empty()
-        && flags.filters.iter().all(|f| f.trim_start().starts_with('!'))
-    {
+        !args.include_workspace_root
+    } else if all_exclusion {
         // Exclusion-only filters: exclude root
         true
     } else {
@@ -72,12 +74,12 @@ pub(super) async fn execute_exec_workspace(
     let mut selected = topological_sort_packages(&subgraph, package_graph);
 
     // Apply --reverse: reverse the execution order
-    if flags.reverse {
+    if args.reverse {
         selected.reverse();
     }
 
     // Apply --resume-from: skip packages until the named one
-    if let Some(ref resume_pkg) = flags.resume_from {
+    if let Some(ref resume_pkg) = args.resume_from {
         if let Some(pos) = selected
             .iter()
             .position(|&idx| package_graph[idx].package_json.name.as_str() == resume_pkg.as_str())
@@ -114,13 +116,13 @@ pub(super) async fn execute_exec_workspace(
     };
     let base_path = std::env::join_paths(&base_path_dirs).unwrap_or_default();
 
-    let cmd_display = positional.join(" ");
+    let cmd_display = args.command.join(" ");
 
     // Track per-package results for --report-summary
     let mut summary: std::collections::BTreeMap<String, serde_json::Value> =
         std::collections::BTreeMap::new();
 
-    let exit_status = if flags.parallel {
+    let exit_status = if args.parallel {
         // Parallel: spawn all processes with independent timing via tokio::spawn
         let mut handles: Vec<(
             String,
@@ -145,14 +147,14 @@ pub(super) async fn execute_exec_workspace(
                 base_path.clone()
             };
 
-            let mut cmd = if flags.shell_mode {
+            let mut cmd = if args.shell_mode {
                 vite_command::build_shell_command(&cmd_display, pkg_path)
             } else {
                 let bin_path =
-                    vite_command::resolve_bin(&positional[0], Some(&path_env), pkg_path)?;
+                    vite_command::resolve_bin(&args.command[0], Some(&path_env), pkg_path)?;
                 let mut cmd = vite_command::build_command(&bin_path, pkg_path);
-                if positional.len() > 1 {
-                    cmd.args(&positional[1..]);
+                if args.command.len() > 1 {
+                    cmd.args(&args.command[1..]);
                 }
                 cmd
             };
@@ -192,7 +194,7 @@ pub(super) async fn execute_exec_workspace(
             if code > worst_exit {
                 worst_exit = code;
             }
-            if flags.report_summary {
+            if args.report_summary {
                 let status = if code == 0 { "passed" } else { "failed" };
                 summary.insert(
                     name.clone(),
@@ -229,14 +231,14 @@ pub(super) async fn execute_exec_workspace(
 
             let start = std::time::Instant::now();
 
-            let mut cmd = if flags.shell_mode {
+            let mut cmd = if args.shell_mode {
                 vite_command::build_shell_command(&cmd_display, pkg_path)
             } else {
                 let bin_path =
-                    vite_command::resolve_bin(&positional[0], Some(&path_env), pkg_path)?;
+                    vite_command::resolve_bin(&args.command[0], Some(&path_env), pkg_path)?;
                 let mut cmd = vite_command::build_command(&bin_path, pkg_path);
-                if positional.len() > 1 {
-                    cmd.args(&positional[1..]);
+                if args.command.len() > 1 {
+                    cmd.args(&args.command[1..]);
                 }
                 cmd
             };
@@ -247,7 +249,7 @@ pub(super) async fn execute_exec_workspace(
             let duration = start.elapsed();
             let code = status.code().unwrap_or(1) as u8;
 
-            if flags.report_summary {
+            if args.report_summary {
                 let pkg_status = if code == 0 { "passed" } else { "failed" };
                 summary.insert(
                     pkg_name.to_string(),
@@ -268,7 +270,7 @@ pub(super) async fn execute_exec_workspace(
     };
 
     // Write report summary if requested
-    if flags.report_summary {
+    if args.report_summary {
         let report = serde_json::json!({ "executionStatus": summary });
         let report_path = cwd.join("vp-exec-summary.json");
         if let Err(e) =

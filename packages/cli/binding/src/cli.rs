@@ -133,11 +133,7 @@ enum CLIArgs {
     Synthesizable(SynthesizableSubcommand),
 
     /// Execute a command from local node_modules/.bin
-    #[command(disable_help_flag = true)]
-    Exec {
-        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
-    },
+    Exec(crate::exec::args::ExecArgs),
 }
 
 /// Type alias for boxed async resolver function
@@ -624,7 +620,7 @@ impl CommandHandler for VitePlusCommandHandler {
                 Ok(HandledCommand::Synthesized(resolved.into_synthetic_plan_request()))
             }
             CLIArgs::ViteTask(cmd) => Ok(HandledCommand::ViteTaskCommand(cmd)),
-            CLIArgs::Exec { .. } => {
+            CLIArgs::Exec(_) => {
                 // exec in task scripts should run as a subprocess
                 Ok(HandledCommand::Verbatim)
             }
@@ -915,7 +911,7 @@ pub async fn main(
     match cli_args {
         CLIArgs::Synthesizable(subcmd) => execute_direct_subcommand(subcmd, &cwd, options).await,
         CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
-        CLIArgs::Exec { args } => crate::exec::execute(&args, &cwd).await,
+        CLIArgs::Exec(exec_args) => crate::exec::execute(exec_args, &cwd).await,
     }
 }
 

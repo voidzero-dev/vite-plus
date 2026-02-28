@@ -219,12 +219,12 @@ The local CLI receives the `exec` command via delegation from the global CLI (sa
 
 ```
 packages/cli/binding/src/exec/
-├── mod.rs       — entry point (execute), help text, command builder
-├── args.rs      — ExecFlags, parse_exec_args(), build_package_query_args()
+├── mod.rs       — entry point (execute), single-package mode
+├── args.rs      — ExecArgs (clap-derived struct with #[clap(flatten)] PackageQueryArgs)
 └── workspace.rs — execute_exec_workspace(), topological_sort_packages()
 ```
 
-Package filtering is delegated to `vite_workspace`'s reusable API: `PackageQueryArgs` (CLI args struct) → `PackageQuery` → `IndexedPackageGraph::resolve_query()` → `FilterResolution` (with `package_subgraph` and `unmatched_selectors`). The `args.rs` module provides `build_package_query_args()` to convert exec-specific `ExecFlags` into the upstream `PackageQueryArgs`.
+Package filtering is delegated to `vite_workspace`'s reusable API: `PackageQueryArgs` (CLI args struct, embedded via `#[clap(flatten)]`) → `PackageQuery` (via `into_package_query()`) → `IndexedPackageGraph::resolve_query()` → `FilterResolution` (with `package_subgraph` and `unmatched_selectors`). This follows the same pattern used by `vp run` via `RunFlags`.
 
 The local CLI has full workspace awareness and can handle:
 
