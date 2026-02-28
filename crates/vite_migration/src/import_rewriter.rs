@@ -319,76 +319,59 @@ static RE_REF_TSDOWN_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?m)^(\s*///\s*<reference\s+types\s*=\s*["'])tsdown/(.+?)(["']\s*/>)"#).unwrap()
 });
 
-/// Rewrite `/// <reference types="..." />` directives.
+/// Apply a single regex replacement, updating `content` in place if matched.
+/// Uses `Cow::Owned` variant check to avoid O(n) string comparison on no-match.
+fn apply_regex_replace(content: &mut String, re: &Regex, replacement: &str) -> bool {
+    use std::borrow::Cow;
+    match re.replace_all(content, replacement) {
+        Cow::Owned(new) => {
+            *content = new;
+            true
+        }
+        Cow::Borrowed(_) => false,
+    }
+}
+
+/// Rewrite `/// <reference types="..." />` directives in place.
 ///
-/// Returns the (possibly modified) content and whether any changes were made.
-fn rewrite_reference_types(content: &str, skip_packages: &SkipPackages) -> (String, bool) {
-    let mut result = content.to_string();
+/// Returns whether any changes were made.
+fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -> bool {
+    // Fast path: skip all regex scans if no triple-slash reference directives exist
+    if !content.contains("/// <reference") {
+        return false;
+    }
+
     let mut changed = false;
 
     if !skip_packages.skip_vitest {
-        // vitest/config → vite-plus (special case, must come first)
-        let new = RE_REF_VITEST_CONFIG.replace_all(&result, "${1}vite-plus${2}");
-        if new != result {
-            result = new.into_owned();
-            changed = true;
-        }
-
+        // vitest/config → vite-plus (special case, must come before generic vitest subpath)
+        changed |= apply_regex_replace(content, &RE_REF_VITEST_CONFIG, "${1}vite-plus${2}");
         // @vitest/{pkg}[/{subpath}] → vite-plus/test/{pkg}[/{subpath}]
-        let new = RE_REF_VITEST_SCOPED.replace_all(&result, "${1}vite-plus/test/${2}${3}");
-        if new != result {
-            result = new.into_owned();
-            changed = true;
-        }
-
-        // vitest/{subpath} → vite-plus/test/{subpath} (after vitest/config special case)
-        let new = RE_REF_VITEST_SUBPATH.replace_all(&result, "${1}vite-plus/test/${2}${3}");
-        if new != result {
-            result = new.into_owned();
-            changed = true;
-        }
-
+        changed |=
+            apply_regex_replace(content, &RE_REF_VITEST_SCOPED, "${1}vite-plus/test/${2}${3}");
+        // vitest/{subpath} → vite-plus/test/{subpath}
+        changed |=
+            apply_regex_replace(content, &RE_REF_VITEST_SUBPATH, "${1}vite-plus/test/${2}${3}");
         // bare vitest → vite-plus/test
-        let new = RE_REF_VITEST.replace_all(&result, "${1}vite-plus/test${2}");
-        if new != result {
-            result = new.into_owned();
-            changed = true;
-        }
+        changed |= apply_regex_replace(content, &RE_REF_VITEST, "${1}vite-plus/test${2}");
     }
 
     if !skip_packages.skip_vite {
         // vite/{subpath} → vite-plus/{subpath} (before bare vite)
-        let new = RE_REF_VITE_SUBPATH.replace_all(&result, "${1}vite-plus/${2}${3}");
-        if new != result {
-            result = new.into_owned();
-            changed = true;
-        }
-
+        changed |= apply_regex_replace(content, &RE_REF_VITE_SUBPATH, "${1}vite-plus/${2}${3}");
         // bare vite → vite-plus
-        let new = RE_REF_VITE.replace_all(&result, "${1}vite-plus${2}");
-        if new != result {
-            result = new.into_owned();
-            changed = true;
-        }
+        changed |= apply_regex_replace(content, &RE_REF_VITE, "${1}vite-plus${2}");
     }
 
     if !skip_packages.skip_tsdown {
         // tsdown/{subpath} → vite-plus/pack/{subpath} (before bare tsdown)
-        let new = RE_REF_TSDOWN_SUBPATH.replace_all(&result, "${1}vite-plus/pack/${2}${3}");
-        if new != result {
-            result = new.into_owned();
-            changed = true;
-        }
-
+        changed |=
+            apply_regex_replace(content, &RE_REF_TSDOWN_SUBPATH, "${1}vite-plus/pack/${2}${3}");
         // bare tsdown → vite-plus/pack
-        let new = RE_REF_TSDOWN.replace_all(&result, "${1}vite-plus/pack${2}");
-        if new != result {
-            result = new.into_owned();
-            changed = true;
-        }
+        changed |= apply_regex_replace(content, &RE_REF_TSDOWN, "${1}vite-plus/pack${2}");
     }
 
-    (result, changed)
+    changed
 }
 
 /// Packages to skip rewriting based on peerDependencies or dependencies
@@ -630,11 +613,7 @@ fn rewrite_import_content(
 
     // Apply reference type rewriting (/// <reference types="..." />)
     // These cannot be handled by ast-grep because they are parsed as comments.
-    let (ref_content, ref_updated) = rewrite_reference_types(&new_content, skip_packages);
-    if ref_updated {
-        new_content = ref_content;
-        updated = true;
-    }
+    updated |= rewrite_reference_types(&mut new_content, skip_packages);
 
     Ok(RewriteResult { content: new_content, updated })
 }
