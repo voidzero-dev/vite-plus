@@ -74,8 +74,9 @@ pub(super) async fn execute_exec_workspace(
         return Ok(ExitStatus::SUCCESS);
     }
 
+    let single_package = selected.len() == 1;
     // Suppress the "pkg_name$ cmd" prefix when only 1 package is selected
-    let show_prefix = selected.len() > 1;
+    let show_prefix = !single_package;
 
     // Build base PATH: <pm_bin>:<workspace_root/node_modules/.bin>:<original_PATH>
     let base_path_dirs: Vec<std::path::PathBuf> = {
@@ -195,7 +196,7 @@ pub(super) async fn execute_exec_workspace(
                 pkg_path,
             ) {
                 Ok(cmd) => cmd,
-                Err(_) if !show_prefix => {
+                Err(Error::CannotFindBinaryPath(_)) if single_package => {
                     vite_shared::output::error(&vite_str::format!(
                         "Command '{}' not found in node_modules/.bin\n\n\
                          Hint: Run 'vp install' to install dependencies, or use 'vpx' for remote fallback.",
