@@ -372,10 +372,15 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
         // Strip UTF-8 BOM (U+FEFF) before trimming — Rust's trim() does not remove BOM.
         let trimmed = line.trim_start_matches('\u{feff}').trim();
         if in_block_comment {
-            preamble_end = advance_past_line(preamble_end, line.len());
-            if trimmed.contains("*/") {
+            if let Some(pos) = trimmed.find("*/") {
                 in_block_comment = false;
+                // Check if there's code (not just comments) after the closing `*/`.
+                let after = trimmed[pos + 2..].trim();
+                if !after.is_empty() && !after.starts_with("//") && !after.starts_with("/*") {
+                    break;
+                }
             }
+            preamble_end = advance_past_line(preamble_end, line.len());
             continue;
         }
         if trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with("#!") {
@@ -385,8 +390,8 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
         if trimmed.starts_with("/*") {
             if let Some(pos) = trimmed.find("*/") {
                 // Single-line block comment. Check if there's code after the closing `*/`.
-                if !trimmed[pos + 2..].trim().is_empty() {
-                    // Code follows the block comment on the same line — end of preamble.
+                let after = trimmed[pos + 2..].trim();
+                if !after.is_empty() && !after.starts_with("//") && !after.starts_with("/*") {
                     break;
                 }
             } else {
@@ -2468,6 +2473,39 @@ const x = 1;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(!result.updated);
         assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_block_comment_with_trailing_comment() {
+        // A block comment followed by a line comment is still preamble
+        let content = "/* banner */ // generated\n/// <reference types=\"vite/client\" />\n";
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            "/* banner */ // generated\n/// <reference types=\"vite-plus/client\" />\n"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_multiline_block_comment_closes_into_code() {
+        // Multi-line block comment closing line has code after */ — end of preamble
+        let content = "/*\n * License\n */ const x = 1;\n/// <reference types=\"vite/client\" />\n";
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_multiline_block_comment_closes_into_comment() {
+        // Multi-line block comment closing line has only a comment after */ — still preamble
+        let content = "/*\n * License\n */ // end\n/// <reference types=\"vite/client\" />\n";
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            "/*\n * License\n */ // end\n/// <reference types=\"vite-plus/client\" />\n"
+        );
     }
 
     #[test]
