@@ -295,9 +295,15 @@ static RE_REF_VITEST_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// `@vitest/{pkg}[/{subpath}]` → `vite-plus/test/{pkg}[/{subpath}]`
-/// Only matches packages that vite-plus actually re-exports, matching the ast-grep import rules.
+/// Only matches packages and subpaths that vite-plus actually exports:
+///   - `@vitest/browser` → `vite-plus/test/browser`
+///   - `@vitest/browser/context` → `vite-plus/test/browser/context`
+///   - `@vitest/browser/providers/{name}` → `vite-plus/test/browser/providers/{name}`
+///   - `@vitest/browser-playwright[/{subpath}]` → `vite-plus/test/browser-playwright[/{subpath}]`
+///   - `@vitest/browser-preview[/{subpath}]` → `vite-plus/test/browser-preview[/{subpath}]`
+///   - `@vitest/browser-webdriverio[/{subpath}]` → `vite-plus/test/browser-webdriverio[/{subpath}]`
 static RE_REF_VITEST_SCOPED: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/((?:browser-playwright|browser-preview|browser-webdriverio|browser)(?:/.+?)?)(["']\s*/>)"#).unwrap()
+    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/((?:browser-playwright|browser-preview|browser-webdriverio)(?:/.+?)?|browser(?:/(?:context|providers/.+?))?)(["']\s*/>)"#).unwrap()
 });
 
 /// bare `vite` → `vite-plus`
@@ -377,7 +383,16 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
             continue;
         }
         if trimmed.starts_with("/*") {
-            in_block_comment = !trimmed.contains("*/");
+            if trimmed.contains("*/") {
+                // Single-line block comment. Check if there's code after the closing `*/`.
+                let after_close = trimmed[trimmed.find("*/").unwrap() + 2..].trim();
+                if !after_close.is_empty() {
+                    // Code follows the block comment on the same line — end of preamble.
+                    break;
+                }
+            } else {
+                in_block_comment = true;
+            }
             preamble_end = advance_past_line(preamble_end, line.len());
             continue;
         }
@@ -2322,11 +2337,12 @@ export default defineConfig({});"#
     }
 
     #[test]
-    fn test_rewrite_reference_types_vitest_scoped_browser_matchers() {
+    fn test_rewrite_reference_types_vitest_scoped_browser_matchers_not_rewritten() {
+        // @vitest/browser/matchers is NOT exported by vite-plus — should not be rewritten
         let content = r#"/// <reference types="@vitest/browser/matchers" />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/test/browser/matchers" />"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -2447,6 +2463,27 @@ const x = 1;
     }
 
     #[test]
+    fn test_rewrite_reference_types_block_comment_with_trailing_code() {
+        // A single-line block comment followed by code should end the preamble
+        let content = "/* banner */ const x = 1;\n/// <reference types=\"vite/client\" />\n";
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_vitest_browser_providers_playwright() {
+        // @vitest/browser/providers/playwright → vite-plus/test/browser/providers/playwright
+        let content = r#"/// <reference types="@vitest/browser/providers/playwright" />"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"/// <reference types="vite-plus/test/browser/providers/playwright" />"#
+        );
+    }
+
+    #[test]
     fn test_rewrite_reference_types_crlf() {
         // CRLF line endings should be preserved
         let content =
@@ -2551,7 +2588,7 @@ const x = 1;
 /// <reference types="vitest" />
 /// <reference types="vitest/globals" />
 /// <reference types="vitest/config" />
-/// <reference types="@vitest/browser/matchers" />"#;
+/// <reference types="@vitest/browser/context" />"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
@@ -2561,7 +2598,7 @@ const x = 1;
 /// <reference types="vite-plus/test" />
 /// <reference types="vite-plus/test/globals" />
 /// <reference types="vite-plus" />
-/// <reference types="vite-plus/test/browser/matchers" />"#
+/// <reference types="vite-plus/test/browser/context" />"#
         );
     }
 
