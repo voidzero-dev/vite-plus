@@ -69,10 +69,9 @@ pub(super) async fn execute_exec_workspace(
     }
 
     // Topological sort on the subgraph
-    let selected = topological_sort_packages(&subgraph, package_graph);
+    let mut selected = topological_sort_packages(&subgraph, package_graph);
 
     // Apply --reverse: reverse the execution order
-    let mut selected = selected;
     if flags.reverse {
         selected.reverse();
     }
