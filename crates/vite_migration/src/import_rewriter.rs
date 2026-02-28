@@ -336,14 +336,16 @@ fn apply_regex_replace(content: &mut String, re: &Regex, replacement: &str) -> b
 /// Allocates only for preamble lines, leaving the file body untouched.
 /// Returns whether any changes were made.
 fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -> bool {
-    // Fast path: skip all regex scans if no triple-slash reference directives exist
-    if !content.contains("/// <reference") {
+    // Fast path: skip files with no triple-slash reference directives.
+    // Check for "///" which covers all spacing variants (///<ref, /// <ref, ///\t<ref).
+    if !content.contains("///") {
         return false;
     }
 
     // Find the byte offset where the preamble ends.
     // TypeScript allows triple-slash directives after blank lines, single-line comments (//),
-    // and block comments (/* ... */). The preamble ends at the first non-comment statement.
+    // block comments (/* ... */), a UTF-8 BOM, and a shebang line.
+    // The preamble ends at the first non-comment statement.
     let bytes = content.as_bytes();
     let mut preamble_end = 0;
     let mut in_block_comment = false;
@@ -361,7 +363,8 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
     };
 
     for line in content.lines() {
-        let trimmed = line.trim();
+        // Strip UTF-8 BOM (U+FEFF) before trimming — Rust's trim() does not remove BOM.
+        let trimmed = line.trim_start_matches('\u{feff}').trim();
         if in_block_comment {
             preamble_end = advance_past_line(preamble_end, line.len());
             if trimmed.contains("*/") {
@@ -369,7 +372,7 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
             }
             continue;
         }
-        if trimmed.is_empty() || trimmed.starts_with("//") {
+        if trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with("#!") {
             preamble_end = advance_past_line(preamble_end, line.len());
             continue;
         }
@@ -387,7 +390,8 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
     }
 
     let preamble = &content[..preamble_end];
-    if !preamble.contains("/// <reference") {
+    // Check for "///" which covers all spacing variants (///<ref, /// <ref, etc.)
+    if !preamble.contains("///") {
         return false;
     }
 
@@ -396,10 +400,18 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
 
     let mut changed = false;
     let mut preamble_lines: Vec<String> = preamble.lines().map(|l| l.to_string()).collect();
+    // Strip UTF-8 BOM from the first preamble line so the regex `^(\s*///` can match.
+    if let Some(first) = preamble_lines.first_mut() {
+        if first.starts_with('\u{feff}') {
+            *first = first.trim_start_matches('\u{feff}').to_string();
+        }
+    }
 
     for line in &mut preamble_lines {
+        // The regexes handle flexible spacing (///\s*<reference), so just check for "///"
+        // to avoid filtering out valid variants like ///<reference or ///\t<reference.
         let trimmed = line.trim();
-        if trimmed.is_empty() || !trimmed.starts_with("/// <reference") {
+        if trimmed.is_empty() || !trimmed.starts_with("///") {
             continue;
         }
         // Each line matches at most one pattern; use early exit to skip remaining regexes.
@@ -2458,6 +2470,45 @@ const x = 1;
             result.content,
             "/* License */\r\n/// <reference types=\"vite-plus/client\" />\r\nconst x = 1;\r\n"
         );
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_no_space_after_slashes() {
+        // TypeScript accepts ///<reference without a space
+        let content = r#"///<reference types="vite/client" />"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"///<reference types="vite-plus/client" />"#);
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_tab_after_slashes() {
+        // TypeScript accepts ///\t<reference with a tab
+        let content = "///\t<reference types=\"vite/client\" />";
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, "///\t<reference types=\"vite-plus/client\" />");
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_after_shebang() {
+        // Shebang lines should not end the preamble scan
+        let content = "#!/usr/bin/env node\n/// <reference types=\"vite/client\" />\n";
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            "#!/usr/bin/env node\n/// <reference types=\"vite-plus/client\" />\n"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_after_bom() {
+        // UTF-8 BOM should not end the preamble scan; BOM is stripped during rewrite
+        let content = "\u{feff}/// <reference types=\"vite/client\" />\n";
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, "/// <reference types=\"vite-plus/client\" />\n");
     }
 
     #[test]

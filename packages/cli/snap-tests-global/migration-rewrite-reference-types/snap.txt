@@ -17,6 +17,7 @@
 
 
 > cat src/env.d.ts # check reference types rewritten
+/// <reference types="vite-plus" />
 /// <reference types="vite-plus/client" />
 /// <reference types="vite-plus/test" />
 /// <reference types="vite-plus/test/globals" />
