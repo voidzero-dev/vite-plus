@@ -383,10 +383,9 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
             continue;
         }
         if trimmed.starts_with("/*") {
-            if trimmed.contains("*/") {
+            if let Some(pos) = trimmed.find("*/") {
                 // Single-line block comment. Check if there's code after the closing `*/`.
-                let after_close = trimmed[trimmed.find("*/").unwrap() + 2..].trim();
-                if !after_close.is_empty() {
+                if !trimmed[pos + 2..].trim().is_empty() {
                     // Code follows the block comment on the same line — end of preamble.
                     break;
                 }
