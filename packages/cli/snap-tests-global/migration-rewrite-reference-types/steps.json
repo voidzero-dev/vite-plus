@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # migration rewrites reference types",
+    "cat src/env.d.ts # check reference types rewritten"
+  ]
+}
