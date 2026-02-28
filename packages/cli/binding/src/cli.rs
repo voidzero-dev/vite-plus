@@ -133,7 +133,7 @@ enum CLIArgs {
     Synthesizable(SynthesizableSubcommand),
 
     /// Execute a command from local node_modules/.bin
-    Exec(crate::exec::args::ExecArgs),
+    Exec(crate::exec::ExecArgs),
 }
 
 /// Type alias for boxed async resolver function

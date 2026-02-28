@@ -1,12 +1,13 @@
-pub(crate) mod args;
+mod args;
 mod workspace;
 
+pub(crate) use args::ExecArgs;
 use vite_error::Error;
 use vite_path::AbsolutePathBuf;
 use vite_shared::{PrependOptions, prepend_to_path_env};
 use vite_task::ExitStatus;
 
-use self::{args::ExecArgs, workspace::execute_exec_workspace};
+use self::workspace::execute_exec_workspace;
 
 /// Execute `vp exec` command in the local CLI.
 ///

@@ -119,8 +119,7 @@ pub(super) async fn execute_exec_workspace(
     let cmd_display = args.command.join(" ");
 
     // Track per-package results for --report-summary
-    let mut summary: std::collections::BTreeMap<String, serde_json::Value> =
-        std::collections::BTreeMap::new();
+    let mut summary: BTreeMap<String, serde_json::Value> = BTreeMap::new();
 
     let exit_status = if args.parallel {
         // Parallel: spawn all processes with independent timing via tokio::spawn
@@ -135,29 +134,14 @@ pub(super) async fn execute_exec_workspace(
             let pkg_name = pkg.package_json.name.to_string();
             let pkg_path = &pkg.absolute_path;
 
-            // Build per-package PATH
-            let bin_dir = pkg_path.join("node_modules").join(".bin");
-            let path_env = if bin_dir.as_path().is_dir() {
-                std::env::join_paths(
-                    std::iter::once(bin_dir.as_path().to_path_buf())
-                        .chain(base_path_dirs.iter().cloned()),
-                )
-                .unwrap_or_default()
-            } else {
-                base_path.clone()
-            };
-
-            let mut cmd = if args.shell_mode {
-                vite_command::build_shell_command(&cmd_display, pkg_path)
-            } else {
-                let bin_path =
-                    vite_command::resolve_bin(&args.command[0], Some(&path_env), pkg_path)?;
-                let mut cmd = vite_command::build_command(&bin_path, pkg_path);
-                if args.command.len() > 1 {
-                    cmd.args(&args.command[1..]);
-                }
-                cmd
-            };
+            let path_env = build_package_path_env(pkg_path, &base_path_dirs, &base_path);
+            let mut cmd = build_exec_command(
+                args.shell_mode,
+                &args.command,
+                &cmd_display,
+                &path_env,
+                pkg_path,
+            )?;
             cmd.env("PATH", &path_env)
                 .env("VITE_PLUS_PACKAGE_NAME", &pkg_name)
                 .stdout(Stdio::piped())
@@ -215,33 +199,19 @@ pub(super) async fn execute_exec_workspace(
             let pkg_name = pkg.package_json.name.as_str();
             let pkg_path = &pkg.absolute_path;
 
-            // Build per-package PATH
-            let bin_dir = pkg_path.join("node_modules").join(".bin");
-            let path_env = if bin_dir.as_path().is_dir() {
-                std::env::join_paths(
-                    std::iter::once(bin_dir.as_path().to_path_buf())
-                        .chain(base_path_dirs.iter().cloned()),
-                )
-                .unwrap_or_default()
-            } else {
-                base_path.clone()
-            };
+            let path_env = build_package_path_env(pkg_path, &base_path_dirs, &base_path);
 
             println!("{pkg_name}$ {cmd_display}");
 
             let start = std::time::Instant::now();
 
-            let mut cmd = if args.shell_mode {
-                vite_command::build_shell_command(&cmd_display, pkg_path)
-            } else {
-                let bin_path =
-                    vite_command::resolve_bin(&args.command[0], Some(&path_env), pkg_path)?;
-                let mut cmd = vite_command::build_command(&bin_path, pkg_path);
-                if args.command.len() > 1 {
-                    cmd.args(&args.command[1..]);
-                }
-                cmd
-            };
+            let mut cmd = build_exec_command(
+                args.shell_mode,
+                &args.command,
+                &cmd_display,
+                &path_env,
+                pkg_path,
+            )?;
             cmd.env("PATH", &path_env).env("VITE_PLUS_PACKAGE_NAME", pkg_name);
 
             let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
@@ -286,6 +256,73 @@ pub(super) async fn execute_exec_workspace(
     Ok(exit_status)
 }
 
+/// Build a PATH value for a package, prepending its local node_modules/.bin.
+fn build_package_path_env(
+    pkg_path: &vite_path::AbsolutePath,
+    base_path_dirs: &[std::path::PathBuf],
+    base_path: &std::ffi::OsStr,
+) -> std::ffi::OsString {
+    let bin_dir = pkg_path.join("node_modules").join(".bin");
+    if bin_dir.as_path().is_dir() {
+        std::env::join_paths(
+            std::iter::once(bin_dir.as_path().to_path_buf()).chain(base_path_dirs.iter().cloned()),
+        )
+        .unwrap_or_default()
+    } else {
+        base_path.to_os_string()
+    }
+}
+
+/// Build a [`tokio::process::Command`] for the exec invocation in a package directory.
+fn build_exec_command(
+    shell_mode: bool,
+    command: &[String],
+    cmd_display: &str,
+    path_env: &std::ffi::OsStr,
+    pkg_path: &vite_path::AbsolutePath,
+) -> Result<tokio::process::Command, Error> {
+    if shell_mode {
+        Ok(vite_command::build_shell_command(cmd_display, pkg_path))
+    } else {
+        let bin_path = vite_command::resolve_bin(&command[0], Some(path_env), pkg_path)?;
+        let mut cmd = vite_command::build_command(&bin_path, pkg_path);
+        if command.len() > 1 {
+            cmd.args(&command[1..]);
+        }
+        Ok(cmd)
+    }
+}
+
+/// Drain all ready nodes into `result` using Kahn's algorithm,
+/// decrementing dep counts and enqueuing newly-ready dependents.
+fn drain_ready_nodes<'a>(
+    ready: &mut BTreeMap<&'a str, PackageNodeIndex>,
+    result: &mut Vec<PackageNodeIndex>,
+    placed: &mut FxHashSet<PackageNodeIndex>,
+    dep_count: &mut FxHashMap<PackageNodeIndex, usize>,
+    subgraph: &DiGraphMap<PackageNodeIndex, ()>,
+    package_graph: &'a petgraph::graph::DiGraph<
+        vite_workspace::PackageInfo,
+        vite_workspace::DependencyType,
+        vite_workspace::PackageIx,
+    >,
+) {
+    while let Some((_, idx)) = ready.pop_first() {
+        result.push(idx);
+        placed.insert(idx);
+        for dependent in subgraph.neighbors_directed(idx, petgraph::Direction::Incoming) {
+            if let Some(count) = dep_count.get_mut(&dependent)
+                && *count > 0
+            {
+                *count -= 1;
+                if *count == 0 && !placed.contains(&dependent) {
+                    ready.insert(package_graph[dependent].package_json.name.as_str(), dependent);
+                }
+            }
+        }
+    }
+}
+
 /// Sort package indices in topological order (dependencies before dependents)
 /// using Kahn's algorithm, with alphabetical tie-breaking for determinism.
 ///
@@ -326,31 +363,14 @@ fn topological_sort_packages(
     let mut result = Vec::with_capacity(node_count);
     let mut placed: FxHashSet<PackageNodeIndex> = FxHashSet::default();
 
-    /// Drain all ready nodes from `ready` into `result` using Kahn's algorithm,
-    /// decrementing dep counts and enqueuing newly-ready dependents.
-    macro_rules! drain_ready {
-        ($ready:expr, $result:expr, $placed:expr, $dep_count:expr) => {
-            while let Some((_, idx)) = $ready.pop_first() {
-                $result.push(idx);
-                $placed.insert(idx);
-                for dependent in subgraph.neighbors_directed(idx, petgraph::Direction::Incoming) {
-                    if let Some(count) = $dep_count.get_mut(&dependent)
-                        && *count > 0
-                    {
-                        *count -= 1;
-                        if *count == 0 && !$placed.contains(&dependent) {
-                            $ready.insert(
-                                package_graph[dependent].package_json.name.as_str(),
-                                dependent,
-                            );
-                        }
-                    }
-                }
-            }
-        };
-    }
-
-    drain_ready!(ready, result, placed, dep_count);
+    drain_ready_nodes(
+        &mut ready,
+        &mut result,
+        &mut placed,
+        &mut dep_count,
+        subgraph,
+        package_graph,
+    );
 
     // Cycle fallback: iteratively break cycles by forcing the alphabetically-first
     // remaining node, then continue Kahn's algorithm to correctly order any
@@ -387,7 +407,14 @@ fn topological_sort_packages(
             }
         }
 
-        drain_ready!(ready, result, placed, dep_count);
+        drain_ready_nodes(
+            &mut ready,
+            &mut result,
+            &mut placed,
+            &mut dep_count,
+            subgraph,
+            package_graph,
+        );
     }
 
     result
