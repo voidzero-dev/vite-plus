@@ -44,7 +44,7 @@ exec-monorepo-filter-v2
 > vp exec -w --filter 'app-*' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # -w + glob filter additive
 app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-a
-app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-app-b
 exec-monorepo-filter-v2$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 exec-monorepo-filter-v2
+app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-b

@@ -61,7 +61,6 @@ The leading `--` is optional and stripped for backward compatibility (matching p
 - `--shell-mode, -c` — Execute within a shell environment (`/bin/sh` on UNIX, `cmd.exe` on Windows)
 - `--recursive, -r` — Run in every workspace package (local CLI only)
 - `--workspace-root, -w` — Run on the workspace root package only (local CLI only)
-- `--include-workspace-root` — Include workspace root when running recursively (local CLI only)
 - `--filter, -F <selector>` — Filter packages by name pattern or relative path (local CLI only); also accepts `--filter=<selector>` form
 - `--parallel` — Run concurrently without topological sort (local CLI only)
 - `--reverse` — Reverse topological order (local CLI only)
@@ -101,9 +100,6 @@ vp exec -r --resume-from @my/app -- tsc --noEmit
 
 # Run on workspace root only
 vp exec -w -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)"
-
-# Recursive including workspace root
-vp exec -r --include-workspace-root -- eslint .
 
 # Save execution summary
 vp exec -r --report-summary -- vitest run
@@ -151,8 +147,7 @@ Modifiers work with name patterns (e.g., `app-a...`) and braced path selectors (
 
 **Workspace root inclusion rules**:
 
-- `-r` (recursive) excludes the workspace root by default
-- `-r --include-workspace-root` includes the workspace root along with all workspace packages
+- `-r` (recursive) includes the workspace root along with all workspace packages
 - `-w` (workspace root) runs on the workspace root package only
 - `--filter '*'` includes the workspace root because `*` name-matches all packages including root
 
@@ -278,7 +273,7 @@ The following existing code is reused:
 
 ### 3. Workspace Features Only via Local CLI
 
-**Decision**: `--recursive`, `--workspace-root`, `--include-workspace-root`, `--filter`, `--parallel`, `--reverse`, `--resume-from`, and `--report-summary` only work when vite-plus is a local dependency (local CLI handles them).
+**Decision**: `--recursive`, `--workspace-root`, `--filter`, `--parallel`, `--reverse`, `--resume-from`, and `--report-summary` only work when vite-plus is a local dependency (local CLI handles them).
 
 **Rationale**:
 
@@ -308,41 +303,33 @@ The following existing code is reused:
 
 ### 6. Execution Ordering
 
-**Decision**: When `--recursive` or `--filter` is used, packages execute in topological order (dependencies first). Packages with no ordering constraint are sorted alphabetically for determinism. The topological sort uses edges from the `FilterResolution.package_subgraph` (not the original full graph), enabling future `--filter-prod` support where dev dependency edges are excluded at subgraph construction time.
+**Decision**: When `--recursive` or `--filter` is used, packages execute in topological order (dependencies first). The topological sort uses `petgraph::algo::toposort` on the `FilterResolution.package_subgraph` (not the original full graph), enabling future `--filter-prod` support where dev dependency edges are excluded at subgraph construction time.
 
 **Rationale**:
 
 - **Topological ordering by default**: Commands like `tsc --noEmit` or `build` need dependencies to complete before dependents. Running in dependency order ensures correctness without requiring users to specify `--topological` explicitly.
-- **Deterministic tie-breaking**: Packages with no ordering constraint between them (e.g., two unrelated leaf packages) are sorted alphabetically by name for consistent, reproducible behavior across runs.
+- **No alphabetical tie-breaking**: Packages with no ordering constraint between them (e.g., two unrelated leaf packages) are ordered by petgraph's internal traversal order. This matches pnpm's behavior.
 - **`--parallel` skips ordering**: In parallel mode, all packages are spawned concurrently — topological order only affects the order of output collection.
 - **`--reverse`**: Reverses the topological order (dependents first, then dependencies). Useful for cleanup operations.
-- **Circular dependency handling**: When workspace packages have circular dependencies, strict topological sorting is impossible. The algorithm uses Kahn's algorithm which naturally detects cycles — packages involved in cycles will never reach zero in-degree. When cycles are detected, the algorithm iteratively breaks them by force-adding the alphabetically-first remaining node, then continuing Kahn's to correctly order any dependents that become unblocked.
+- **Circular dependency handling**: When cycles exist, `toposort()` returns an error. The fallback uses `petgraph::visit::Topo` to visit all acyclic nodes, then appends the remaining cyclic nodes.
 
   **Example — normal dependency chain (no cycle):**
 
   ```
   a → b → c → d → e    (a depends on b, b depends on c, ...)
 
-  Kahn's: e has in-degree 0, start there
-  → Process e → d's in-degree drops to 0
-  → Process d → c's in-degree drops to 0
-  → Process c → b's in-degree drops to 0
-  → Process b → a's in-degree drops to 0
-  → Process a
+  toposort produces dependencies-first order:
   Result: [e, d, c, b, a]
   ```
-
-  Dependencies are executed first — standard topological order, no cycle-breaking needed.
 
   **Example — simple cycle:**
 
   ```
   a ←→ b    (mutual dependency)
 
-  Kahn's: neither a nor b reaches 0 in-degree
-  → Force 'a' (alphabetically first)
-  → b's in-degree drops to 0, process b
-  Result: [a, b]
+  toposort returns Err(Cycle).
+  Topo visits acyclic nodes (none here), then appends cyclic nodes.
+  Result: [a, b]  (order between cyclic nodes is unspecified)
   ```
 
   **Example — cycle with a non-cyclic dependent:**
@@ -350,42 +337,24 @@ The following existing code is reused:
   ```
   a ←→ b ← aa    (a↔b cycle, aa depends on b)
 
-  Kahn's: all three stuck (a:1, b:1, aa:1)
-  → Force 'a' → b's in-degree drops to 0
-  → Process b  → aa's in-degree drops to 0
-  → Process aa
-  Result: [a, b, aa]
+  toposort returns Err(Cycle).
+  Topo cannot visit any node (aa's dependency b is stuck in a cycle).
+  All nodes appended as cyclic.
+  Result: [a, b, aa] or [b, a, aa]  (b before aa is guaranteed by the
+  reversal — aa, a source node, is visited first then reversed to the end)
   ```
 
-  Without iterative cycle-breaking, all three would be appended alphabetically as `[a, aa, b]` — placing `aa` before its dependency `b`.
-
-  **Example — 3-node cycle:**
+  **Example — cycle with an independent package:**
 
   ```
-  c → d → e → c    (circular chain)
+  a ←→ b, c (independent)    (a↔b cycle, c has no edges)
 
-  Kahn's: all stuck at in-degree 1
-  → Force 'c' → e's in-degree drops to 0
-  → Process e  → d's in-degree drops to 0
-  → Process d
-  Result: [c, e, d]
+  toposort returns Err(Cycle).
+  Topo visits c (no predecessors), then gets stuck on a↔b.
+  Cyclic nodes a, b appended.
+  After reversal: [b, a, c] or [a, b, c]  (order among unrelated
+  packages and cyclic nodes is not guaranteed)
   ```
-
-  **Example — 5-node indirect cycle:**
-
-  ```
-  a → b → c → d → e → a    (indirect circular chain)
-
-  Kahn's: all stuck at in-degree 1
-  → Force 'a' → e's in-degree drops to 0
-  → Process e  → d's in-degree drops to 0
-  → Process d  → c's in-degree drops to 0
-  → Process c  → b's in-degree drops to 0
-  → Process b
-  Result: [a, e, d, c, b]
-  ```
-
-  A single force-break at the alphabetically-first node unravels the entire chain in reverse dependency order.
 
 - **Platform-safe PATH construction**: PATH environment variable is constructed using `std::env::join_paths()` instead of hardcoded `:` separator, ensuring correct behavior on both Unix (`:`) and Windows (`;`).
 
@@ -405,7 +374,6 @@ Options:
   -c, --shell-mode              Execute the command within a shell environment
   -r, --recursive               Run in every workspace package
   -w, --workspace-root          Run on the workspace root package only
-      --include-workspace-root  Include workspace root when running recursively
   -F, --filter <PATTERN>        Filter packages (can be used multiple times)
       --parallel                Run concurrently without topological ordering
       --reverse                 Reverse execution order
@@ -587,23 +555,22 @@ This is a new feature with no breaking changes:
 
 ## Comparison with pnpm exec
 
-| Behavior               | `pnpm exec`                              | `vp exec`                                |
-| ---------------------- | ---------------------------------------- | ---------------------------------------- |
-| PATH modification      | Prepend `./node_modules/.bin`            | Prepend `./node_modules/.bin`            |
-| Command resolution     | Modified PATH (local bins + system PATH) | Modified PATH (local bins + system PATH) |
-| Walk-up                | No                                       | No                                       |
-| Shell mode (`-c`)      | Yes                                      | Yes                                      |
-| Recursive (`-r`)       | Yes (workspace iteration)                | Yes (via local CLI)                      |
-| Workspace root (`-w`)  | Yes (root only)                          | Yes (root only)                          |
-| Include workspace root | `--include-workspace-root`               | `--include-workspace-root`               |
-| Filter                 | `--filter`                               | `--filter`                               |
-| Path-based filter      | `--filter ./packages/app`                | `--filter ./packages/app`                |
-| Braced path filter     | `--filter {./packages/app}`              | `--filter {./packages/app}`              |
-| Name + path filter     | `--filter 'app-*{./packages}'`           | `--filter 'app-*{./packages}'`           |
-| Parallel               | `--parallel`                             | `--parallel`                             |
-| Report summary         | `--report-summary`                       | `--report-summary`                       |
-| Package name env var   | `PNPM_PACKAGE_NAME`                      | `VITE_PLUS_PACKAGE_NAME`                 |
-| Strip leading `--`     | Yes                                      | Yes                                      |
+| Behavior              | `pnpm exec`                              | `vp exec`                                |
+| --------------------- | ---------------------------------------- | ---------------------------------------- |
+| PATH modification     | Prepend `./node_modules/.bin`            | Prepend `./node_modules/.bin`            |
+| Command resolution    | Modified PATH (local bins + system PATH) | Modified PATH (local bins + system PATH) |
+| Walk-up               | No                                       | No                                       |
+| Shell mode (`-c`)     | Yes                                      | Yes                                      |
+| Recursive (`-r`)      | Yes (workspace iteration)                | Yes (via local CLI)                      |
+| Workspace root (`-w`) | Yes (root only)                          | Yes (root only)                          |
+| Filter                | `--filter`                               | `--filter`                               |
+| Path-based filter     | `--filter ./packages/app`                | `--filter ./packages/app`                |
+| Braced path filter    | `--filter {./packages/app}`              | `--filter {./packages/app}`              |
+| Name + path filter    | `--filter 'app-*{./packages}'`           | `--filter 'app-*{./packages}'`           |
+| Parallel              | `--parallel`                             | `--parallel`                             |
+| Report summary        | `--report-summary`                       | `--report-summary`                       |
+| Package name env var  | `PNPM_PACKAGE_NAME`                      | `VITE_PLUS_PACKAGE_NAME`                 |
+| Strip leading `--`    | Yes                                      | Yes                                      |
 
 ## Future Enhancements
 

@@ -17,23 +17,50 @@ hello from shell
 > vp exec --help # help message
 Execute a command from local node_modules/.bin
 
-Usage: vp exec [OPTIONS] [--] <command> [args...]
+Usage: vp exec [OPTIONS] [COMMAND]...
 
 Arguments:
-  <command>  Command to execute from node_modules/.bin
-  [args...]  Arguments to pass to the command
+  [COMMAND]...
+          Command and arguments to execute
 
 Options:
-  -c, --shell-mode              Execute the command within a shell environment
-  -r, --recursive               Run in every workspace package
-  -w, --workspace-root          Run on the workspace root package only
-      --include-workspace-root  Include workspace root when running recursively
-  -F, --filter <PATTERN>        Filter packages (can be used multiple times)
-      --parallel                Run concurrently without topological ordering
-      --reverse                 Reverse execution order
-      --resume-from <PACKAGE>   Resume from a specific package
-      --report-summary          Save results to vp-exec-summary.json
-  -h, --help                    Print help
+  -r, --recursive
+          Select all packages in the workspace
+
+  -t, --transitive
+          Select the current package and its transitive dependencies
+
+  -w, --workspace-root
+          Select the workspace root package
+
+  -F, --filter <FILTER>
+          Match packages by name, directory, or glob pattern.
+          
+            --filter <pattern>        Select by package name (e.g. foo, @scope/*)
+            --filter ./<dir>          Select packages under a directory
+            --filter {<dir>}          Same as ./<dir>, but allows traversal suffixes
+            --filter <pattern>...     Select package and its dependencies
+            --filter ...<pattern>     Select package and its dependents
+            --filter <pattern>^...    Select only the dependencies (exclude the package itself)
+            --filter !<pattern>       Exclude packages matching the pattern
+
+  -c, --shell-mode
+          Execute the command within a shell environment
+
+      --parallel
+          Run concurrently without topological ordering
+
+      --reverse
+          Reverse execution order
+
+      --resume-from <RESUME_FROM>
+          Resume from a specific package
+
+      --report-summary
+          Save results to vp-exec-summary.json
+
+  -h, --help
+          Print help (see a summary with '-h')
 
 Examples:
   vp exec eslint .                            # Run local eslint

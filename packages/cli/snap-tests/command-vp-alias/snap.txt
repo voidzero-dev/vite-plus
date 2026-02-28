@@ -32,11 +32,11 @@ Arguments:
   [ADDITIONAL_ARGS]...  Additional arguments to pass to the tasks
 
 Options:
-  -r, --recursive          Run tasks found in all packages in the workspace, in topological order based on package dependencies
-  -t, --transitive         Run tasks found in the current package and all its transitive dependencies, in topological order based on package dependencies
-  -w, --workspace-root     Run task in the workspace root package
-  -F, --filter <FILTER>    Filter packages (pnpm --filter syntax). Can be specified multiple times
+  -r, --recursive          Select all packages in the workspace
+  -t, --transitive         Select the current package and its transitive dependencies
+  -w, --workspace-root     Select the workspace root package
+  -F, --filter <FILTER>    Match packages by name, directory, or glob pattern
       --ignore-depends-on  Do not run dependencies specified in `dependsOn` fields
   -v, --verbose            Show full detailed summary after execution
       --last-details       Display the detailed summary of the last run
-  -h, --help               Print help
+  -h, --help               Print help (see more with '--help')

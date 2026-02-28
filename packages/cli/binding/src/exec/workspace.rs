@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, process::Stdio, sync::Arc};
 
 use petgraph::prelude::DiGraphMap;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 use vite_error::Error;
 use vite_path::AbsolutePathBuf;
 use vite_task::ExitStatus;
@@ -43,7 +43,7 @@ pub(super) async fn execute_exec_workspace(
     let subgraph = resolution.package_subgraph;
 
     // Topological sort on the subgraph
-    let mut selected = topological_sort_packages(&subgraph, package_graph);
+    let mut selected = topological_sort_packages(&subgraph);
 
     // Apply --reverse: reverse the execution order
     if args.reverse {
@@ -265,131 +265,36 @@ fn build_exec_command(
     }
 }
 
-/// Drain all ready nodes into `result` using Kahn's algorithm,
-/// decrementing dep counts and enqueuing newly-ready dependents.
-fn drain_ready_nodes<'a>(
-    ready: &mut BTreeMap<&'a str, PackageNodeIndex>,
-    result: &mut Vec<PackageNodeIndex>,
-    placed: &mut FxHashSet<PackageNodeIndex>,
-    dep_count: &mut FxHashMap<PackageNodeIndex, usize>,
-    subgraph: &DiGraphMap<PackageNodeIndex, ()>,
-    package_graph: &'a petgraph::graph::DiGraph<
-        vite_workspace::PackageInfo,
-        vite_workspace::DependencyType,
-        vite_workspace::PackageIx,
-    >,
-) {
-    while let Some((_, idx)) = ready.pop_first() {
-        result.push(idx);
-        placed.insert(idx);
-        for dependent in subgraph.neighbors_directed(idx, petgraph::Direction::Incoming) {
-            if let Some(count) = dep_count.get_mut(&dependent)
-                && *count > 0
-            {
-                *count -= 1;
-                if *count == 0 && !placed.contains(&dependent) {
-                    ready.insert(package_graph[dependent].package_json.name.as_str(), dependent);
+/// Sort package indices in topological order (dependencies before dependents).
+///
+/// Uses `petgraph::algo::toposort` for the common acyclic case.
+/// When cycles exist, falls back to `petgraph::visit::Topo` (which visits
+/// all acyclic nodes) and appends the remaining cyclic nodes.
+fn topological_sort_packages(subgraph: &DiGraphMap<PackageNodeIndex, ()>) -> Vec<PackageNodeIndex> {
+    // toposort returns sources-first; reverse for dependencies-first.
+    // Edges are dependent → dependency, so reversing gives correct order.
+    match petgraph::algo::toposort(subgraph, None) {
+        Ok(mut sorted) => {
+            sorted.reverse();
+            sorted
+        }
+        Err(_cycle) => {
+            // Graph has cycles: visit acyclic portion, then append cyclic nodes.
+            let mut topo = petgraph::visit::Topo::new(subgraph);
+            let mut result = Vec::with_capacity(subgraph.node_count());
+            while let Some(node) = topo.next(subgraph) {
+                result.push(node);
+            }
+            let placed: FxHashSet<_> = result.iter().copied().collect();
+            for node in subgraph.nodes() {
+                if !placed.contains(&node) {
+                    result.push(node);
                 }
             }
+            result.reverse();
+            result
         }
     }
-}
-
-/// Sort package indices in topological order (dependencies before dependents)
-/// using Kahn's algorithm, with alphabetical tie-breaking for determinism.
-///
-/// Uses the subgraph edges (not the full package graph) so that only
-/// edges between selected packages affect ordering. This enables future
-/// `--filter-prod` support where dev edges are excluded at subgraph
-/// construction time.
-///
-/// Packages involved in dependency cycles are appended at the end using
-/// iterative cycle-breaking (force the alphabetically-first remaining node),
-/// ensuring the command completes rather than failing.
-fn topological_sort_packages(
-    subgraph: &DiGraphMap<PackageNodeIndex, ()>,
-    package_graph: &petgraph::graph::DiGraph<
-        vite_workspace::PackageInfo,
-        vite_workspace::DependencyType,
-        vite_workspace::PackageIx,
-    >,
-) -> Vec<PackageNodeIndex> {
-    let node_count = subgraph.node_count();
-
-    // Count how many dependencies each package has within the subgraph
-    // (Outgoing edges in the subgraph = dependencies)
-    let mut dep_count: FxHashMap<PackageNodeIndex, usize> = FxHashMap::default();
-    for idx in subgraph.nodes() {
-        let count = subgraph.neighbors_directed(idx, petgraph::Direction::Outgoing).count();
-        dep_count.insert(idx, count);
-    }
-
-    // BTreeMap keyed by name for deterministic alphabetical ordering among peers
-    let mut ready: BTreeMap<&str, PackageNodeIndex> = BTreeMap::new();
-    for (&idx, &count) in &dep_count {
-        if count == 0 {
-            ready.insert(package_graph[idx].package_json.name.as_str(), idx);
-        }
-    }
-
-    let mut result = Vec::with_capacity(node_count);
-    let mut placed: FxHashSet<PackageNodeIndex> = FxHashSet::default();
-
-    drain_ready_nodes(
-        &mut ready,
-        &mut result,
-        &mut placed,
-        &mut dep_count,
-        subgraph,
-        package_graph,
-    );
-
-    // Cycle fallback: iteratively break cycles by forcing the alphabetically-first
-    // remaining node, then continue Kahn's algorithm to correctly order any
-    // non-cyclic dependents that become unblocked.
-    while result.len() < node_count {
-        let mut remaining: Vec<PackageNodeIndex> =
-            subgraph.nodes().filter(|idx| !placed.contains(idx)).collect();
-        remaining.sort_by(|a, b| {
-            package_graph[*a].package_json.name.cmp(&package_graph[*b].package_json.name)
-        });
-
-        let cyclic_names: Vec<&str> =
-            remaining.iter().map(|&idx| package_graph[idx].package_json.name.as_str()).collect();
-        tracing::debug!(
-            "Circular dependencies detected among packages: {}. Breaking cycle at '{}'.",
-            cyclic_names.join(", "),
-            package_graph[remaining[0]].package_json.name
-        );
-
-        // Force-add the alphabetically-first remaining node to break the cycle
-        let forced = remaining[0];
-        result.push(forced);
-        placed.insert(forced);
-
-        // Decrement dep counts for its dependents, potentially freeing non-cyclic nodes
-        for dependent in subgraph.neighbors_directed(forced, petgraph::Direction::Incoming) {
-            if let Some(count) = dep_count.get_mut(&dependent)
-                && *count > 0
-            {
-                *count -= 1;
-                if *count == 0 && !placed.contains(&dependent) {
-                    ready.insert(package_graph[dependent].package_json.name.as_str(), dependent);
-                }
-            }
-        }
-
-        drain_ready_nodes(
-            &mut ready,
-            &mut result,
-            &mut placed,
-            &mut dep_count,
-            subgraph,
-            package_graph,
-        );
-    }
-
-    result
 }
 
 #[cfg(test)]
@@ -473,12 +378,14 @@ mod tests {
         let all: Vec<_> =
             graph.node_indices().filter(|&idx| !graph[idx].path.as_str().is_empty()).collect();
         let subgraph = build_subgraph(&graph, &all);
-        let sorted = topological_sort_packages(&subgraph, &graph);
+        let sorted = topological_sort_packages(&subgraph);
         let names: Vec<&str> =
             sorted.iter().map(|&idx| graph[idx].package_json.name.as_str()).collect();
-        // app-b and lib-c have no deps, sorted alphabetically first
-        // app-a depends on lib-c, so it comes after lib-c
-        assert_eq!(names, vec!["app-b", "lib-c", "app-a"]);
+        // lib-c must precede app-a (dependency)
+        let lib_c_pos = names.iter().position(|&n| n == "lib-c").unwrap();
+        let app_a_pos = names.iter().position(|&n| n == "app-a").unwrap();
+        assert!(lib_c_pos < app_a_pos);
+        assert_eq!(names.len(), 3);
     }
 
     #[test]
@@ -520,11 +427,15 @@ mod tests {
 
         let selected = vec![pkg_a, pkg_b, pkg_c];
         let subgraph = build_subgraph(&graph, &selected);
-        let sorted = topological_sort_packages(&subgraph, &graph);
+        let sorted = topological_sort_packages(&subgraph);
         let names: Vec<&str> =
             sorted.iter().map(|&idx| graph[idx].package_json.name.as_str()).collect();
-        // pkg-c has no deps, comes first; pkg-a and pkg-b are in a cycle, appended alphabetically
-        assert_eq!(names, vec!["pkg-c", "pkg-a", "pkg-b"]);
+        // All three packages present; pkg-a/pkg-b are cyclic so no ordering
+        // constraint exists between them or relative to independent pkg-c.
+        assert_eq!(names.len(), 3);
+        assert!(names.contains(&"pkg-a"));
+        assert!(names.contains(&"pkg-b"));
+        assert!(names.contains(&"pkg-c"));
     }
 
     #[test]
@@ -566,10 +477,14 @@ mod tests {
 
         let selected = vec![a, b, aa];
         let subgraph = build_subgraph(&graph, &selected);
-        let sorted = topological_sort_packages(&subgraph, &graph);
+        let sorted = topological_sort_packages(&subgraph);
         let names: Vec<&str> =
             sorted.iter().map(|&idx| graph[idx].package_json.name.as_str()).collect();
-        // Force 'a' first (alphabetical cycle break), frees 'b', then 'aa' follows
-        assert_eq!(names, vec!["a", "b", "aa"]);
+        // b must come before aa (aa depends on b). a and b are cyclic so
+        // their relative order is unspecified.
+        let b_pos = names.iter().position(|&n| n == "b").unwrap();
+        let aa_pos = names.iter().position(|&n| n == "aa").unwrap();
+        assert!(b_pos < aa_pos);
+        assert_eq!(names.len(), 3);
     }
 }
