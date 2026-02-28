@@ -281,45 +281,46 @@ fix: $NEW_IMPORT
 
 /// `vitest/config` → `vite-plus` (special case, must be applied before generic vitest subpath)
 static RE_REF_VITEST_CONFIG: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?m)^(\s*///\s*<reference\s+types\s*=\s*["'])vitest/config(["']\s*/>)"#).unwrap()
+    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vitest/config(["']\s*/>)"#).unwrap()
 });
 
 /// bare `vitest` → `vite-plus/test`
 static RE_REF_VITEST: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?m)^(\s*///\s*<reference\s+types\s*=\s*["'])vitest(["']\s*/>)"#).unwrap()
+    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vitest(["']\s*/>)"#).unwrap()
 });
 
 /// `vitest/{subpath}` → `vite-plus/test/{subpath}`
 static RE_REF_VITEST_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?m)^(\s*///\s*<reference\s+types\s*=\s*["'])vitest/(.+?)(["']\s*/>)"#).unwrap()
+    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vitest/(.+?)(["']\s*/>)"#).unwrap()
 });
 
 /// `@vitest/{pkg}[/{subpath}]` → `vite-plus/test/{pkg}[/{subpath}]`
 /// Only matches packages that vite-plus actually re-exports, matching the ast-grep import rules.
 static RE_REF_VITEST_SCOPED: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?m)^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/((?:browser-playwright|browser-preview|browser-webdriverio|browser)(?:/.+?)?)(["']\s*/>)"#).unwrap()
+    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/((?:browser-playwright|browser-preview|browser-webdriverio|browser)(?:/.+?)?)(["']\s*/>)"#).unwrap()
 });
 
 /// bare `vite` → `vite-plus`
 static RE_REF_VITE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?m)^(\s*///\s*<reference\s+types\s*=\s*["'])vite(["']\s*/>)"#).unwrap()
+    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vite(["']\s*/>)"#).unwrap()
 });
 
 /// `vite/{subpath}` → `vite-plus/{subpath}`
 static RE_REF_VITE_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?m)^(\s*///\s*<reference\s+types\s*=\s*["'])vite/(.+?)(["']\s*/>)"#).unwrap()
+    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vite/(.+?)(["']\s*/>)"#).unwrap()
 });
 
 /// bare `tsdown` → `vite-plus/pack`
 static RE_REF_TSDOWN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?m)^(\s*///\s*<reference\s+types\s*=\s*["'])tsdown(["']\s*/>)"#).unwrap()
+    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])tsdown(["']\s*/>)"#).unwrap()
 });
 
 /// Apply a single regex replacement, updating `content` in place if matched.
 /// Uses `Cow::Owned` variant check to avoid O(n) string comparison on no-match.
+/// Uses `replace` (not `replace_all`) since each line contains at most one reference directive.
 fn apply_regex_replace(content: &mut String, re: &Regex, replacement: &str) -> bool {
     use std::borrow::Cow;
-    match re.replace_all(content, replacement) {
+    match re.replace(content, replacement) {
         Cow::Owned(new) => {
             *content = new;
             true
@@ -332,6 +333,7 @@ fn apply_regex_replace(content: &mut String, re: &Regex, replacement: &str) -> b
 ///
 /// Only processes the file preamble (blank lines and comments before the first statement)
 /// to match TypeScript semantics and avoid false positives inside string/template literals.
+/// Allocates only for preamble lines, leaving the file body untouched.
 /// Returns whether any changes were made.
 fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -> bool {
     // Fast path: skip all regex scans if no triple-slash reference directives exist
@@ -339,46 +341,77 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
         return false;
     }
 
-    let has_trailing_newline = content.ends_with('\n');
-    let mut changed = false;
-    let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
-
-    for line in &mut lines {
+    // Find the byte offset where the preamble ends (first non-empty, non-comment line).
+    let mut preamble_end = 0;
+    for line in content.lines() {
         let trimmed = line.trim();
-        // Skip blank lines and continue scanning the preamble
-        if trimmed.is_empty() {
+        if trimmed.is_empty() || trimmed.starts_with("//") {
+            // +1 for the '\n' separator (safe: we checked content.contains above)
+            preamble_end += line.len() + 1;
             continue;
         }
-        // Stop at the first non-comment line (end of preamble)
-        if !trimmed.starts_with("//") {
-            break;
-        }
-        // Only process triple-slash reference directives
-        if !trimmed.starts_with("/// <reference") {
+        break;
+    }
+    // Clamp to content length (last preamble line may not have trailing '\n')
+    preamble_end = preamble_end.min(content.len());
+
+    let preamble = &content[..preamble_end];
+    if !preamble.contains("/// <reference") {
+        return false;
+    }
+
+    let mut changed = false;
+    let mut preamble_lines: Vec<String> = preamble.lines().map(|l| l.to_string()).collect();
+
+    for line in &mut preamble_lines {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || !trimmed.starts_with("/// <reference") {
             continue;
         }
+        // Each line matches at most one pattern; use early exit to skip remaining regexes.
         if !skip_packages.skip_vitest {
-            changed |= apply_regex_replace(line, &RE_REF_VITEST_CONFIG, "${1}vite-plus${2}");
-            changed |=
-                apply_regex_replace(line, &RE_REF_VITEST_SCOPED, "${1}vite-plus/test/${2}${3}");
-            changed |=
-                apply_regex_replace(line, &RE_REF_VITEST_SUBPATH, "${1}vite-plus/test/${2}${3}");
-            changed |= apply_regex_replace(line, &RE_REF_VITEST, "${1}vite-plus/test${2}");
+            if apply_regex_replace(line, &RE_REF_VITEST_CONFIG, "${1}vite-plus${2}") {
+                changed = true;
+                continue;
+            }
+            if apply_regex_replace(line, &RE_REF_VITEST_SCOPED, "${1}vite-plus/test/${2}${3}") {
+                changed = true;
+                continue;
+            }
+            if apply_regex_replace(line, &RE_REF_VITEST_SUBPATH, "${1}vite-plus/test/${2}${3}") {
+                changed = true;
+                continue;
+            }
+            if apply_regex_replace(line, &RE_REF_VITEST, "${1}vite-plus/test${2}") {
+                changed = true;
+                continue;
+            }
         }
         if !skip_packages.skip_vite {
-            changed |= apply_regex_replace(line, &RE_REF_VITE_SUBPATH, "${1}vite-plus/${2}${3}");
-            changed |= apply_regex_replace(line, &RE_REF_VITE, "${1}vite-plus${2}");
+            if apply_regex_replace(line, &RE_REF_VITE_SUBPATH, "${1}vite-plus/${2}${3}") {
+                changed = true;
+                continue;
+            }
+            if apply_regex_replace(line, &RE_REF_VITE, "${1}vite-plus${2}") {
+                changed = true;
+                continue;
+            }
         }
-        if !skip_packages.skip_tsdown {
-            changed |= apply_regex_replace(line, &RE_REF_TSDOWN, "${1}vite-plus/pack${2}");
+        if !skip_packages.skip_tsdown
+            && apply_regex_replace(line, &RE_REF_TSDOWN, "${1}vite-plus/pack${2}")
+        {
+            changed = true;
         }
     }
 
     if changed {
-        let mut result = lines.join("\n");
-        if has_trailing_newline {
+        let suffix = &content[preamble_end..];
+        let mut result = preamble_lines.join("\n");
+        // Re-add the newline between preamble and suffix if the original preamble ended with one
+        if preamble_end < content.len() || preamble.ends_with('\n') {
             result.push('\n');
         }
+        result.push_str(suffix);
         *content = result;
     }
 
