@@ -27,10 +27,7 @@ pub async fn execute(exec_args: ExecArgs, cwd: &AbsolutePathBuf) -> Result<ExitS
     }
 
     // Workspace mode: --recursive, --workspace-root, or --filter
-    if exec_args.packages.is_recursive()
-        || exec_args.packages.is_workspace_root()
-        || !exec_args.packages.filter().is_empty()
-    {
+    if exec_args.packages.is_workspace_mode() {
         return execute_exec_workspace(exec_args, cwd).await;
     }
 

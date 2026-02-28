@@ -1,4 +1,6 @@
 > vp exec -r -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # recursive: topological order
+exec-monorepo-order$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo-order
 lib-core$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-core
 lib-utils$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
@@ -71,3 +73,5 @@ lib-utils$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-utils
 lib-core$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-core
+exec-monorepo-order$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo-order

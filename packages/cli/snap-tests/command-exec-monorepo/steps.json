@@ -24,8 +24,6 @@
     "vp exec --filter='app-*' -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # equals-form filter",
     "vp exec --filter '*' -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # glob star includes root",
     "vp exec -w -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # workspace root only",
-    "vp exec -r --include-workspace-root -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # recursive with workspace root",
-    "vp exec -w --include-workspace-root -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # -w wins over --include-workspace-root (root only)",
     "vp exec -r --report-summary -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # report summary",
     "node -e \"const r=JSON.parse(require('fs').readFileSync('vp-exec-summary.json','utf8'));const s=r.executionStatus;for(const[k,v]of Object.entries(s)){console.log(k+': '+v.status+' '+(typeof v.duration==='number'?'has_duration':'no_duration'))}\" # verify summary file"
   ]

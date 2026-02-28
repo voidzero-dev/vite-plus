@@ -1,6 +1,8 @@
 > vp exec -r -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # recursive exec with env var
 app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-b
+exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo
 lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-c
 app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
@@ -29,6 +31,8 @@ lib-c
 > vp exec -r --parallel -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # parallel mode
 app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-b
+exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo
 lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-c
 app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
@@ -37,6 +41,8 @@ app-a
 > vp exec -r -c 'echo shell-$VITE_PLUS_PACKAGE_NAME' # recursive + shell mode
 app-b$ echo shell-$VITE_PLUS_PACKAGE_NAME
 shell-app-b
+exec-monorepo$ echo shell-$VITE_PLUS_PACKAGE_NAME
+shell-exec-monorepo
 lib-c$ echo shell-$VITE_PLUS_PACKAGE_NAME
 shell-lib-c
 app-a$ echo shell-$VITE_PLUS_PACKAGE_NAME
@@ -61,6 +67,8 @@ app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-a
 lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-c
+exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo
 app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-b
 
@@ -71,12 +79,16 @@ app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-a
 
 > vp exec --filter '!app-b' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # exclusion-only filter
+exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo
 lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-c
 app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-a
 
 > vp exec --filter '!app-a' --filter '!app-b' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # multiple exclusion-only filters
+exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo
 lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-c
 
@@ -93,6 +105,8 @@ app-a
 > vp exec --filter '!no-such-pkg' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # exclusion of nonexistent pkg returns all
 app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-b
+exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo
 lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-c
 app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
@@ -118,23 +132,11 @@ app-a
 exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 exec-monorepo
 
-> vp exec -r --include-workspace-root -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # recursive with workspace root
-app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-app-b
-exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-exec-monorepo
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-lib-c
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-app-a
-
-> vp exec -w --include-workspace-root -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # -w wins over --include-workspace-root (root only)
-exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-exec-monorepo
-
 > vp exec -r --report-summary -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # report summary
 app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-b
+exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo
 lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-c
 app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
@@ -143,4 +145,5 @@ app-a
 > node -e "const r=JSON.parse(require('fs').readFileSync('vp-exec-summary.json','utf8'));const s=r.executionStatus;for(const[k,v]of Object.entries(s)){console.log(k+': '+v.status+' '+(typeof v.duration==='number'?'has_duration':'no_duration'))}" # verify summary file
 app-a: passed has_duration
 app-b: passed has_duration
+exec-monorepo: passed has_duration
 lib-c: passed has_duration

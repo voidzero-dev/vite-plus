@@ -23,12 +23,6 @@ pub(super) async fn execute_exec_workspace(
     // Index the graph for O(1) lookups
     let indexed = IndexedPackageGraph::index(graph);
 
-    // Capture fields from packages before moving into into_package_query
-    let is_recursive = args.packages.is_recursive();
-    let has_filters = !args.packages.filter().is_empty();
-    let all_exclusion = has_filters
-        && args.packages.filter().iter().all(|f| f.as_str().trim_start().starts_with('!'));
-
     // Build the query from exec flags
     let cwd_arc: Arc<vite_path::AbsolutePath> = cwd.clone().into();
     let query =
@@ -46,29 +40,7 @@ pub(super) async fn execute_exec_workspace(
     }
 
     let package_graph = indexed.package_graph();
-    let mut subgraph = resolution.package_subgraph;
-
-    // Post-filter: remove workspace root from subgraph when appropriate.
-    // For -r (recursive) without --include-workspace-root and no filters: exclude root.
-    // For exclusion-only --filter (all start with '!'): also exclude root to match
-    // current behavior where exclusion-only seeds with non-root packages.
-    let should_exclude_root = if is_recursive && !has_filters {
-        // -r mode: exclude root unless --include-workspace-root
-        !args.include_workspace_root
-    } else if all_exclusion {
-        // Exclusion-only filters: exclude root
-        true
-    } else {
-        false
-    };
-
-    if should_exclude_root {
-        // Find and remove the root node (package with empty relative path)
-        let root_idx = subgraph.nodes().find(|&idx| package_graph[idx].path.as_str().is_empty());
-        if let Some(root_idx) = root_idx {
-            subgraph.remove_node(root_idx);
-        }
-    }
+    let subgraph = resolution.package_subgraph;
 
     // Topological sort on the subgraph
     let mut selected = topological_sort_packages(&subgraph, package_graph);

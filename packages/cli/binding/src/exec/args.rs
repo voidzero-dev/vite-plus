@@ -36,10 +36,6 @@ pub(crate) struct ExecArgs {
     #[clap(long = "report-summary")]
     pub report_summary: bool,
 
-    /// Include workspace root when running recursively
-    #[clap(long = "include-workspace-root")]
-    pub include_workspace_root: bool,
-
     /// Command and arguments to execute
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub command: Vec<String>,
