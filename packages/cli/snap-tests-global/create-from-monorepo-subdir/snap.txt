@@ -1,0 +1,21 @@
+> cd apps/website && vp create --no-interactive vite:generator # from workspace subdir
+> test -f tools/vite-plus-generator/package.json && echo 'Created at tools/vite-plus-generator' || echo 'NOT at tools/'
+Created at tools/vite-plus-generator
+
+> test ! -f apps/website/tools/vite-plus-generator/package.json && echo 'Not in apps/website/' || echo 'BUG: in apps/website/'
+Not in apps/website/
+
+> cd apps && vp create --no-interactive vite:application # from workspace parent dir
+> test -f apps/vite-plus-application/package.json && echo 'Created at apps/vite-plus-application' || echo 'NOT at apps/'
+Created at apps/vite-plus-application
+
+> cd scripts/helper && vp create --no-interactive vite:library # from non-workspace dir
+> test -f packages/vite-plus-library/package.json && echo 'Created at packages/vite-plus-library' || echo 'NOT at packages/'
+Created at packages/vite-plus-library
+
+> test ! -f scripts/helper/packages/vite-plus-library/package.json && echo 'Not in scripts/helper/' || echo 'BUG: in scripts/helper/'
+Not in scripts/helper/
+
+> cd scripts/helper && vp create --no-interactive vite:application --directory apps/custom-app # --directory from non-workspace dir
+> test -f apps/custom-app/package.json && echo 'Created at apps/custom-app with --directory' || echo 'NOT at apps/custom-app'
+Created at apps/custom-app with --directory

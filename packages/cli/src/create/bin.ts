@@ -15,6 +15,7 @@ import {
   selectAgentTargetPath,
   writeAgentInstructions,
 } from '../utils/agent.js';
+import { displayRelative } from '../utils/path.js';
 import {
   defaultInteractive,
   downloadPackageManager,
@@ -184,8 +185,20 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     packageName = formatted.packageName;
   }
 
-  const workspaceInfoOptional = await detectWorkspace(process.cwd());
+  const cwd = process.cwd();
+  const workspaceInfoOptional = await detectWorkspace(cwd);
   const isMonorepo = workspaceInfoOptional.isMonorepo;
+  const cwdRelativeToRoot =
+    isMonorepo && workspaceInfoOptional.rootDir !== cwd
+      ? displayRelative(cwd, workspaceInfoOptional.rootDir)
+      : '';
+  const isInSubdirectory = cwdRelativeToRoot !== '';
+  const cwdUnderParentDir = isInSubdirectory
+    ? workspaceInfoOptional.parentDirs.some(
+        (dir) => cwdRelativeToRoot === dir || cwdRelativeToRoot.startsWith(`${dir}/`),
+      )
+    : true;
+  const shouldOfferCwdOption = isInSubdirectory && !cwdUnderParentDir;
 
   // Interactive mode: prompt for template if not provided
   let selectedTemplateName = templateName as string;
@@ -287,27 +300,44 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     cancelAndExit('Cannot create a monorepo inside an existing monorepo', 1);
   }
 
+  if (isInSubdirectory) {
+    prompts.log.info(`Detected monorepo root at ${accent(workspaceInfoOptional.rootDir)}`);
+  }
+
   if (isMonorepo && options.interactive && !targetDir) {
     let parentDir: string | undefined;
-    if (workspaceInfoOptional.parentDirs.length > 0) {
-      const defaultParentDir =
-        inferParentDir(selectedTemplateName, workspaceInfoOptional) ??
-        workspaceInfoOptional.parentDirs[0];
+    const hasParentDirs = workspaceInfoOptional.parentDirs.length > 0;
+
+    if (hasParentDirs || isInSubdirectory) {
+      const dirOptions: { label: string; value: string; hint: string }[] =
+        workspaceInfoOptional.parentDirs.map((dir) => ({
+          label: `${dir}/`,
+          value: dir,
+          hint: '',
+        }));
+
+      if (shouldOfferCwdOption) {
+        dirOptions.push({
+          label: `${cwdRelativeToRoot}/ (current directory)`,
+          value: cwdRelativeToRoot,
+          hint: '',
+        });
+      }
+
+      dirOptions.push({
+        label: 'other',
+        value: 'other',
+        hint: 'Enter a custom target directory',
+      });
+
+      const defaultParentDir = shouldOfferCwdOption
+        ? cwdRelativeToRoot
+        : (inferParentDir(selectedTemplateName, workspaceInfoOptional) ??
+          workspaceInfoOptional.parentDirs[0]);
+
       const selected = await prompts.select({
         message: 'Where should the new package be added to the monorepo:',
-        options: workspaceInfoOptional.parentDirs
-          .map((dir) => ({
-            label: `${dir}/`,
-            value: dir,
-            hint: ``,
-          }))
-          .concat([
-            {
-              label: 'other',
-              value: 'other',
-              hint: 'Enter a custom target directory',
-            },
-          ]),
+        options: dirOptions,
         initialValue: defaultParentDir,
       });
 
@@ -339,6 +369,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     selectedParentDir = parentDir;
   }
   if (isMonorepo && !options.interactive && !targetDir) {
+    if (isInSubdirectory) {
+      prompts.log.info(`Use ${accent('--directory')} to specify a different target location.`);
+    }
     const inferredParentDir =
       inferParentDir(selectedTemplateName, workspaceInfoOptional) ??
       workspaceInfoOptional.parentDirs[0];
