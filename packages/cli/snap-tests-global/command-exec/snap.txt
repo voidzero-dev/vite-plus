@@ -33,7 +33,7 @@ Options:
   -w, --workspace-root
           Select the workspace root package
 
-  -F, --filter <FILTER>
+  -F, --filter <FILTERS>
           Match packages by name, directory, or glob pattern.
           
             --filter <pattern>        Select by package name (e.g. foo, @scope/*)

@@ -327,7 +327,7 @@ The following existing code is reused:
   Result: [e, d, c, b, a]
   ```
 
-  **Example — simple cycle:**
+  **Example — simple cycle (2 nodes):**
 
   ```
   a ←→ b    (mutual dependency)
@@ -335,6 +335,16 @@ The following existing code is reused:
   toposort returns Err(Cycle).
   tarjan_scc returns [{a, b}] — one SCC containing both nodes.
   Result: [a, b] or [b, a]  (intra-SCC order is arbitrary)
+  ```
+
+  **Example — 3-node cycle:**
+
+  ```
+  a → b → c → a    (a depends on b, b depends on c, c depends on a)
+
+  toposort returns Err(Cycle).
+  tarjan_scc returns [{a, b, c}] — all three form one SCC.
+  Result: [a, b, c] in any permutation  (intra-SCC order is arbitrary)
   ```
 
   **Example — cycle with a non-cyclic dependency:**
