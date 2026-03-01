@@ -28,10 +28,15 @@ use crate::cli::{
     BoxedResolverFn, CliOptions as ViteTaskCliOptions, ResolveCommandResult, ViteConfigResolverFn,
 };
 
+/// Guard must be kept alive for the duration of the process when using chrome-json output.
+/// Stored in a OnceLock so it's never dropped until process exit.
+static TRACING_GUARD: std::sync::OnceLock<Option<Box<dyn std::any::Any + Send>>> =
+    std::sync::OnceLock::new();
+
 /// Module initialization - sets up tracing for debugging
 #[napi_derive::module_init]
 pub fn init() {
-    crate::cli::init_tracing();
+    TRACING_GUARD.get_or_init(crate::cli::init_tracing);
 }
 
 /// Configuration options passed from JavaScript to Rust.
