@@ -316,7 +316,7 @@ The following existing code is reused:
 - **No alphabetical tie-breaking**: Packages with no ordering constraint between them (e.g., two unrelated leaf packages) are ordered by petgraph's internal traversal order. This matches pnpm's behavior.
 - **`--parallel` skips ordering**: In parallel mode, all packages are spawned concurrently — topological order only affects the order of output collection.
 - **`--reverse`**: Reverses the topological order (dependents first, then dependencies). Useful for cleanup operations.
-- **Circular dependency handling**: When cycles exist, `toposort()` returns an error. The fallback uses `petgraph::visit::Topo` to visit all acyclic nodes, then appends the remaining cyclic nodes.
+- **Circular dependency handling**: When cycles exist, `toposort()` returns an error. The fallback uses `petgraph::algo::tarjan_scc`, which returns strongly connected components (SCCs) in reverse topological order of the condensed DAG. This preserves correct ordering for non-cyclic dependencies even when cycles are present — nodes outside a cycle are correctly placed before or after the cycle based on their dependency relationship.
 
   **Example — normal dependency chain (no cycle):**
 
@@ -333,8 +333,19 @@ The following existing code is reused:
   a ←→ b    (mutual dependency)
 
   toposort returns Err(Cycle).
-  Topo visits acyclic nodes (none here), then appends cyclic nodes.
-  Result: [a, b]  (order between cyclic nodes is unspecified)
+  tarjan_scc returns [{a, b}] — one SCC containing both nodes.
+  Result: [a, b] or [b, a]  (intra-SCC order is arbitrary)
+  ```
+
+  **Example — cycle with a non-cyclic dependency:**
+
+  ```
+  a ←→ b, a → c    (a↔b cycle, a depends on non-cyclic c)
+
+  toposort returns Err(Cycle).
+  tarjan_scc returns [{c}, {a, b}] — c as its own SCC first, then
+  the a↔b cycle.  Dependencies-first order is preserved.
+  Result: [c, a, b] or [c, b, a]  (c always before the cycle)
   ```
 
   **Example — cycle with a non-cyclic dependent:**
@@ -343,22 +354,8 @@ The following existing code is reused:
   a ←→ b ← aa    (a↔b cycle, aa depends on b)
 
   toposort returns Err(Cycle).
-  Topo cannot visit any node (aa's dependency b is stuck in a cycle).
-  All nodes appended as cyclic.
-  Result: [a, b, aa] or [b, a, aa]  (b before aa is guaranteed by the
-  reversal — aa, a source node, is visited first then reversed to the end)
-  ```
-
-  **Example — cycle with an independent package:**
-
-  ```
-  a ←→ b, c (independent)    (a↔b cycle, c has no edges)
-
-  toposort returns Err(Cycle).
-  Topo visits c (no predecessors), then gets stuck on a↔b.
-  Cyclic nodes a, b appended.
-  After reversal: [b, a, c] or [a, b, c]  (order among unrelated
-  packages and cyclic nodes is not guaranteed)
+  tarjan_scc returns [{a, b}, {aa}] — the cycle SCC first, then aa.
+  Result: [a, b, aa] or [b, a, aa]  (cycle always before aa)
   ```
 
 - **Platform-safe PATH construction**: PATH environment variable is constructed using `std::env::join_paths()` instead of hardcoded `:` separator, ensuring correct behavior on both Unix (`:`) and Windows (`;`).

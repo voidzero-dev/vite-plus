@@ -1,7 +1,6 @@
 use std::{collections::BTreeMap, process::Stdio, sync::Arc};
 
 use petgraph::prelude::DiGraphMap;
-use rustc_hash::FxHashSet;
 use vite_error::Error;
 use vite_path::AbsolutePathBuf;
 use vite_task::ExitStatus;
@@ -28,11 +27,16 @@ pub(super) async fn execute_exec_workspace(
 
     // Build the query from exec flags
     let cwd_arc: Arc<vite_path::AbsolutePath> = cwd.clone().into();
-    let (query, is_cwd_only) =
-        args.packages.into_package_query(None, &cwd_arc).map_err(|e| Error::Anyhow(e.into()))?;
+    let (query, is_cwd_only) = match args.packages.into_package_query(None, &cwd_arc) {
+        Ok(result) => result,
+        Err(e) => {
+            vite_shared::output::error(&vite_str::format!("{e}"));
+            return Ok(ExitStatus(1));
+        }
+    };
 
     // Resolve query into a package subgraph
-    let resolution = indexed.resolve_query(&query);
+    let resolution = indexed.resolve_query(&query).map_err(|e| Error::Anyhow(e.into()))?;
 
     // Warn about unmatched selectors
     for selector in &resolution.unmatched_selectors {
@@ -105,7 +109,7 @@ pub(super) async fn execute_exec_workspace(
     // Track per-package results for --report-summary
     let mut summary: BTreeMap<String, serde_json::Value> = BTreeMap::new();
 
-    let exit_status = if args.parallel {
+    let exit_status = if args.parallel && !single_package {
         // Parallel: spawn all processes with independent timing via tokio::spawn
         let mut handles: Vec<(
             String,
@@ -301,31 +305,22 @@ fn build_exec_command(
 /// Sort package indices in topological order (dependencies before dependents).
 ///
 /// Uses `petgraph::algo::toposort` for the common acyclic case.
-/// When cycles exist, falls back to `petgraph::visit::Topo` (which visits
-/// all acyclic nodes) and appends the remaining cyclic nodes.
+/// When cycles exist, falls back to `petgraph::algo::tarjan_scc` which
+/// returns SCCs in reverse topological order — preserving correct ordering
+/// for non-cyclic dependencies even when cycles are present.
 fn topological_sort_packages(subgraph: &DiGraphMap<PackageNodeIndex, ()>) -> Vec<PackageNodeIndex> {
-    // toposort returns sources-first; reverse for dependencies-first.
-    // Edges are dependent → dependency, so reversing gives correct order.
     match petgraph::algo::toposort(subgraph, None) {
         Ok(mut sorted) => {
             sorted.reverse();
             sorted
         }
         Err(_cycle) => {
-            // Graph has cycles: visit acyclic portion, then append cyclic nodes.
-            let mut topo = petgraph::visit::Topo::new(subgraph);
-            let mut result = Vec::with_capacity(subgraph.node_count());
-            while let Some(node) = topo.next(subgraph) {
-                result.push(node);
-            }
-            let placed: FxHashSet<_> = result.iter().copied().collect();
-            for node in subgraph.nodes() {
-                if !placed.contains(&node) {
-                    result.push(node);
-                }
-            }
-            result.reverse();
-            result
+            // tarjan_scc returns SCCs in reverse topological order of the
+            // condensed DAG.  Edges are dependent → dependency, so reverse
+            // topological = dependencies first — exactly the order we want.
+            // Within a cycle SCC, no valid linear ordering exists; the
+            // intra-SCC order is arbitrary (and correct).
+            petgraph::algo::tarjan_scc(subgraph).into_iter().flatten().collect()
         }
     }
 }
@@ -335,6 +330,7 @@ mod tests {
     use std::path::PathBuf;
 
     use petgraph::prelude::DiGraphMap;
+    use rustc_hash::FxHashSet;
     use vite_path::{AbsolutePathBuf, RelativePathBuf};
     use vite_workspace::{DependencyType, PackageInfo, PackageJson, PackageNodeIndex};
 
@@ -518,6 +514,64 @@ mod tests {
         let b_pos = names.iter().position(|&n| n == "b").unwrap();
         let aa_pos = names.iter().position(|&n| n == "aa").unwrap();
         assert!(b_pos < aa_pos);
+        assert_eq!(names.len(), 3);
+    }
+
+    #[test]
+    fn test_topological_sort_cycle_with_non_cyclic_dependency() {
+        let mut graph = petgraph::graph::DiGraph::default();
+
+        let _root = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "root".into(), ..Default::default() },
+            path: RelativePathBuf::default(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace")).unwrap().into(),
+        });
+        // Add c FIRST so it gets a lower node index than a/b.
+        // This exposes the bug: the old Topo fallback appends cycle members
+        // via `subgraph.nodes()` (index-ordered), then reverses — placing c
+        // *after* a when c has a lower index.
+        let c = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "c".into(), ..Default::default() },
+            path: RelativePathBuf::try_from("packages/c").unwrap(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/c"))
+                .unwrap()
+                .into(),
+        });
+        let a = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "a".into(), ..Default::default() },
+            path: RelativePathBuf::try_from("packages/a").unwrap(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/a"))
+                .unwrap()
+                .into(),
+        });
+        let b = graph.add_node(PackageInfo {
+            package_json: PackageJson { name: "b".into(), ..Default::default() },
+            path: RelativePathBuf::try_from("packages/b").unwrap(),
+            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/b"))
+                .unwrap()
+                .into(),
+        });
+
+        // Cycle: a <-> b
+        graph.add_edge(a, b, DependencyType::Normal);
+        graph.add_edge(b, a, DependencyType::Normal);
+        // a depends on c (non-cyclic dependency)
+        graph.add_edge(a, c, DependencyType::Normal);
+
+        // Insert c first so it gets the earliest position in the subgraph's
+        // internal IndexMap. The buggy Topo fallback iterates nodes() in
+        // insertion order, reverses, and puts c *after* the cycle — wrong.
+        let selected = vec![c, a, b];
+        let subgraph = build_subgraph(&graph, &selected);
+        let sorted = topological_sort_packages(&subgraph);
+        let names: Vec<&str> =
+            sorted.iter().map(|&idx| graph[idx].package_json.name.as_str()).collect();
+        // c must come before a (a depends on c). a and b are cyclic so
+        // their relative order is unspecified, but c must precede both
+        // since it is a dependency of a.
+        let c_pos = names.iter().position(|&n| n == "c").unwrap();
+        let a_pos = names.iter().position(|&n| n == "a").unwrap();
+        assert!(c_pos < a_pos, "c ({c_pos}) should precede a ({a_pos}), got: {names:?}");
         assert_eq!(names.len(), 3);
     }
 }

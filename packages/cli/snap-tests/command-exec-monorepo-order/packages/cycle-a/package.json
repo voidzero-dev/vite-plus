@@ -1,6 +1,7 @@
 {
   "name": "cycle-a",
   "dependencies": {
-    "cycle-b": "workspace:*"
+    "cycle-b": "workspace:*",
+    "lib-core": "workspace:*"
   }
 }

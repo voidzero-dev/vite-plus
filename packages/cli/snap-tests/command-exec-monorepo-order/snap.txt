@@ -1,14 +1,4 @@
 > vp exec -r -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # recursive: topological order
-cycle-e$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-cycle-e
-cycle-d$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-cycle-d
-cycle-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-cycle-c
-cycle-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-cycle-b
-cycle-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-cycle-a
 lib-core$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-core
 lib-utils$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
@@ -19,6 +9,16 @@ app-mobile$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-mobile
 app-web$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-web
+cycle-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+cycle-b
+cycle-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+cycle-a
+cycle-e$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+cycle-e
+cycle-d$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+cycle-d
+cycle-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+cycle-c
 exec-monorepo-order$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 exec-monorepo-order
 
@@ -49,12 +49,26 @@ lib-ui$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-ui
 app-mobile$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-mobile
+cycle-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+cycle-a
+cycle-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+cycle-b
 app-web$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-web
 
 > vp exec -r --reverse -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # reverse topological order
 exec-monorepo-order$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 exec-monorepo-order
+cycle-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+cycle-c
+cycle-d$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+cycle-d
+cycle-e$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+cycle-e
+cycle-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+cycle-a
+cycle-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+cycle-b
 app-web$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-web
 app-mobile$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
@@ -65,13 +79,11 @@ lib-utils$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-utils
 lib-core$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 lib-core
+
+> vp exec --filter 'cycle-a...' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # cycle member with non-cyclic dep: lib-core before cycle-a
+lib-core$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+lib-core
 cycle-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 cycle-a
 cycle-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 cycle-b
-cycle-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-cycle-c
-cycle-d$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-cycle-d
-cycle-e$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-cycle-e

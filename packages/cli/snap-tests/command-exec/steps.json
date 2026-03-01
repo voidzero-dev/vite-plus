@@ -9,6 +9,7 @@
     "vp exec -- echo with-separator # explicit -- separator",
     "vp exec node -e \"console.log('from node')\" # exec node with args",
     "vp exec -c 'echo hello from shell' # shell mode",
+    "vp exec --parallel -- echo hello # --parallel with single package should stream output",
     "vp exec --help # help message",
     "vp exec # missing command should error",
     "vp exec nonexistent-cmd-12345 # command not found error",

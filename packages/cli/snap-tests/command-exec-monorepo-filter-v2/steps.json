@@ -12,6 +12,7 @@
     "vp exec --filter nonexistent-pkg -- echo hello # unmatched filter warning",
     "vp exec --filter nonexistent-pkg --filter app-a -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # unmatched + matched filter",
     "vp exec -w --filter app-a -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # -w + --filter is additive (root + filtered)",
-    "vp exec -w --filter 'app-*' -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # -w + glob filter additive"
+    "vp exec -w --filter 'app-*' -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # -w + glob filter additive",
+    "vp exec -r --filter app-a -- echo hello # -r + --filter conflict error"
   ]
 }

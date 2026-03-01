@@ -46,3 +46,6 @@ exec-monorepo-filter-v2$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 exec-monorepo-filter-v2
 app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-b
+
+[1]> vp exec -r --filter app-a -- echo hello # -r + --filter conflict error
+[1m[31merror:[39m[0m --filter and --recursive cannot be used together
