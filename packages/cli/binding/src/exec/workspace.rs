@@ -28,7 +28,7 @@ pub(super) async fn execute_exec_workspace(
 
     // Build the query from exec flags
     let cwd_arc: Arc<vite_path::AbsolutePath> = cwd.clone().into();
-    let query =
+    let (query, is_cwd_only) =
         args.packages.into_package_query(None, &cwd_arc).map_err(|e| Error::Anyhow(e.into()))?;
 
     // Resolve query into a package subgraph
@@ -78,13 +78,10 @@ pub(super) async fn execute_exec_workspace(
     // Suppress the "pkg_name$ cmd" prefix when only 1 package is selected
     let show_prefix = !single_package;
 
-    // When the selected package contains cwd (i.e., no explicit filter was used),
-    // execute from the caller's exact working directory — not the package root.
-    // This matches `pnpm exec` behaviour: `pnpm exec -- pwd` prints cwd, not the
-    // package root.  When an explicit filter or --recursive targets a package,
-    // cwd may be outside that package, so we use the package root.
-    let use_caller_cwd = single_package
-        && cwd.as_path().starts_with(package_graph[selected[0]].absolute_path.as_path());
+    // When no package-selection flags were set (is_cwd_only), execute from the
+    // caller's exact working directory — not the package root.  This matches
+    // `pnpm exec` behaviour.
+    let use_caller_cwd = is_cwd_only;
 
     // Build base PATH: <pm_bin>:<workspace_root/node_modules/.bin>:<original_PATH>
     let base_path_dirs: Vec<std::path::PathBuf> = {
