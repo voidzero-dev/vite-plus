@@ -214,10 +214,12 @@ The local CLI receives the `exec` command via delegation from the global CLI (sa
 
 ```
 packages/cli/binding/src/exec/
-├── mod.rs       — entry point (execute), single-package mode
+├── mod.rs       — entry point (execute), delegates to workspace.rs
 ├── args.rs      — ExecArgs (clap-derived struct with #[clap(flatten)] PackageQueryArgs)
 └── workspace.rs — execute_exec_workspace(), topological_sort_packages()
 ```
+
+There is a single code path for both single-package and multi-package execution. `mod.rs` validates the command is non-empty and delegates to `execute_exec_workspace()`. When no workspace flags (`--recursive`, `--filter`, etc.) are given, `PackageQueryArgs::into_package_query()` returns a `ContainingPackage(cwd)` selector that resolves to just the current package — so the workspace path naturally handles the single-package case.
 
 Package filtering is delegated to `vite_workspace`'s reusable API: `PackageQueryArgs` (CLI args struct, embedded via `#[clap(flatten)]`) → `PackageQuery` (via `into_package_query()`) → `IndexedPackageGraph::resolve_query()` → `FilterResolution` (with `package_subgraph` and `unmatched_selectors`). This follows the same pattern used by `vp run` via `RunFlags`.
 
@@ -232,20 +234,23 @@ The local CLI has full workspace awareness and can handle:
 
 For the local CLI, exec uses the workspace package graph to iterate packages, prepending each package's `node_modules/.bin` to PATH before spawning the command in that package's directory.
 
+When only a single package is selected (whether by default or via `--filter`), the `pkg_name$ cmd` prefix is suppressed from output and command-not-found errors produce a user-friendly message with a hint to run `vp install` or use `vpx`.
+
 ### Reusable Code
 
 The following existing code is reused:
 
-| Module            | Function                             | Purpose                                           |
-| ----------------- | ------------------------------------ | ------------------------------------------------- |
-| `vpx.rs`          | `find_local_binary()`                | Check if binary exists in `node_modules/.bin`     |
-| `vpx.rs`          | `prepend_node_modules_bin_to_path()` | PATH manipulation for `node_modules/.bin`         |
-| `vite_shared`     | `prepend_to_path_env()`              | Generic PATH prepend                              |
-| `commands/mod.rs` | `has_vite_plus_dependency()`         | Check for local vite-plus                         |
-| `commands/mod.rs` | `prepend_js_runtime_to_path_env()`   | Ensure Node.js in fallback path                   |
-| `vite_workspace`  | `PackageQueryArgs`                   | CLI args struct for package selection             |
-| `vite_workspace`  | `IndexedPackageGraph`                | Indexed graph with `resolve_query()`              |
-| `vite_workspace`  | `FilterResolution`                   | Resolution result: subgraph + unmatched selectors |
+| Module           | Function                           | Purpose                                           |
+| ---------------- | ---------------------------------- | ------------------------------------------------- |
+| `vite_command`   | `resolve_bin()`                    | Resolve binary path via PATH lookup               |
+| `vite_command`   | `build_command()`                  | Build a `tokio::process::Command` for a binary    |
+| `vite_command`   | `build_shell_command()`            | Build a shell command for `-c` mode               |
+| `vite_install`   | `PackageManager::get_bin_prefix()` | Get package manager bin directory for PATH        |
+| `vite_workspace` | `find_workspace_root()`            | Locate workspace root from cwd                    |
+| `vite_workspace` | `load_package_graph()`             | Load workspace packages and dependency graph      |
+| `vite_workspace` | `PackageQueryArgs`                 | CLI args struct for package selection             |
+| `vite_workspace` | `IndexedPackageGraph`              | Indexed graph with `resolve_query()`              |
+| `vite_workspace` | `FilterResolution`                 | Resolution result: subgraph + unmatched selectors |
 
 ## Design Decisions
 
