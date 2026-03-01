@@ -36,7 +36,13 @@ pub(super) async fn execute_exec_workspace(
     };
 
     // Resolve query into a package subgraph
-    let resolution = indexed.resolve_query(&query).map_err(|e| Error::Anyhow(e.into()))?;
+    let resolution = match indexed.resolve_query(&query) {
+        Ok(result) => result,
+        Err(e) => {
+            vite_shared::output::error(&vite_str::format!("{e}"));
+            return Ok(ExitStatus(1));
+        }
+    };
 
     // Warn about unmatched selectors
     for selector in &resolution.unmatched_selectors {
@@ -527,9 +533,9 @@ mod tests {
             absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace")).unwrap().into(),
         });
         // Add c FIRST so it gets a lower node index than a/b.
-        // This exposes the bug: the old Topo fallback appends cycle members
-        // via `subgraph.nodes()` (index-ordered), then reverses — placing c
-        // *after* a when c has a lower index.
+        // This matters because tarjan_scc's intra-SCC order can depend on
+        // graph internals; placing c early verifies that the SCC boundary
+        // (not insertion order) determines the final position.
         let c = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "c".into(), ..Default::default() },
             path: RelativePathBuf::try_from("packages/c").unwrap(),
@@ -559,8 +565,8 @@ mod tests {
         graph.add_edge(a, c, DependencyType::Normal);
 
         // Insert c first so it gets the earliest position in the subgraph's
-        // internal IndexMap. The buggy Topo fallback iterates nodes() in
-        // insertion order, reverses, and puts c *after* the cycle — wrong.
+        // internal IndexMap, ensuring the test is not accidentally passing
+        // due to favorable insertion order.
         let selected = vec![c, a, b];
         let subgraph = build_subgraph(&graph, &selected);
         let sorted = topological_sort_packages(&subgraph);
