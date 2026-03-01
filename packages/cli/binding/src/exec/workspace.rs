@@ -129,16 +129,15 @@ pub(super) async fn execute_exec_workspace(
             let pkg_path = &pkg.absolute_path;
 
             let path_env = build_package_path_env(pkg_path, &base_path_dirs, &base_path);
+            let exec_dir: &vite_path::AbsolutePath =
+                if use_caller_cwd { cwd.as_ref() } else { pkg_path };
             let mut cmd = build_exec_command(
                 args.shell_mode,
                 &args.command,
                 &cmd_display,
                 &path_env,
-                pkg_path,
+                exec_dir,
             )?;
-            if use_caller_cwd {
-                cmd.current_dir(cwd.as_path());
-            }
             cmd.env("PATH", &path_env)
                 .env("VITE_PLUS_PACKAGE_NAME", &pkg_name)
                 .stdout(Stdio::piped())
@@ -206,12 +205,14 @@ pub(super) async fn execute_exec_workspace(
 
             let start = std::time::Instant::now();
 
+            let exec_dir: &vite_path::AbsolutePath =
+                if use_caller_cwd { cwd.as_ref() } else { pkg_path };
             let mut cmd = match build_exec_command(
                 args.shell_mode,
                 &args.command,
                 &cmd_display,
                 &path_env,
-                pkg_path,
+                exec_dir,
             ) {
                 Ok(cmd) => cmd,
                 Err(Error::CannotFindBinaryPath(_)) if single_package => {
@@ -224,9 +225,6 @@ pub(super) async fn execute_exec_workspace(
                 }
                 Err(e) => return Err(e),
             };
-            if use_caller_cwd {
-                cmd.current_dir(cwd.as_path());
-            }
             cmd.env("PATH", &path_env).env("VITE_PLUS_PACKAGE_NAME", pkg_name);
 
             let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;

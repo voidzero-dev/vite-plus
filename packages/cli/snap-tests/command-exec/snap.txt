@@ -17,6 +17,9 @@ hello from shell
 > vp exec --parallel -- echo hello # --parallel with single package should stream output
 hello
 
+> cd subdir && vp exec ./my-local # resolve relative executable from caller cwd
+hello from subdir
+
 > vp exec --help # help message
 Execute a command from local node_modules/.bin
 

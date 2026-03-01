@@ -1,7 +1,5 @@
 {
-  "env": {
-    "VITE_DISABLE_AUTO_INSTALL": "1"
-  },
+  "ignoredPlatforms": ["win32"],
   "commands": [
     { "command": "node setup.js", "ignoreOutput": true },
     "vp exec -c 'basename $(pwd)' # cwd is package root",
