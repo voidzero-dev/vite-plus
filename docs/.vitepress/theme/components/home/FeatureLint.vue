@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import oxcIcon from "@assets/icons/oxc-light.svg";
-import lintTerminal from "@local-assets/terminal-features/lint.svg";
+import oxcIcon from '@assets/icons/oxc-light.svg';
+import lintTerminal from '@local-assets/terminal-features/lint.svg';
 </script>
 <template>
   <section id="feature-lint" class="wrapper border-t grid md:grid-cols-2 divide-x divide-nickel">
@@ -44,7 +44,7 @@ import lintTerminal from "@local-assets/terminal-features/lint.svg";
 </template>
 <style scoped>
 .bg-oxc {
-  background-image: url("@local-assets/backgrounds/oxc.jpg");
+  background-image: url('@local-assets/backgrounds/oxc.jpg');
   background-size: cover;
   background-position: center;
 }

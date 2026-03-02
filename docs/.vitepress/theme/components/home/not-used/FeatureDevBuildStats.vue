@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "reka-ui";
-import { devPerformance, buildPerformance } from "../../../data/performance";
-import PerformanceBar from "./PerformanceBar.vue";
-import viteIcon from "@assets/icons/vite-light.svg";
-import rolldownIcon from "@assets/icons/rolldown-light.svg";
-import devTerminal from "@local-assets/terminal-features/dev.svg";
-import viteBackground from "@local-assets/backgrounds/vite.jpg";
+import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui';
+import { devPerformance, buildPerformance } from '../../../data/performance';
+import PerformanceBar from './PerformanceBar.vue';
+import viteIcon from '@assets/icons/vite-light.svg';
+import rolldownIcon from '@assets/icons/rolldown-light.svg';
+import devTerminal from '@local-assets/terminal-features/dev.svg';
+import viteBackground from '@local-assets/backgrounds/vite.jpg';
 </script>
 
 <template>
@@ -94,7 +94,7 @@ import viteBackground from "@local-assets/backgrounds/vite.jpg";
 
 <style scoped>
 .bg-vite {
-  background-image: url("@local-assets/backgrounds/vite.jpg");
+  background-image: url('@local-assets/backgrounds/vite.jpg');
   background-size: cover;
   background-position: center;
 }

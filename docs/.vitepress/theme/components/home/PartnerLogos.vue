@@ -1,23 +1,23 @@
 <script setup lang="ts">
 // Import client logos
-import shopifyLogo from "@assets/clients/shopify.svg";
-import openaiLogo from "@assets/clients/openai.svg";
-import framerLogo from "@assets/clients/framer.svg";
-import linearLogo from "@assets/clients/linear.svg";
-import huggingfaceLogo from "@assets/clients/hugging-face.svg";
-import cloudflareLogo from "@assets/clients/cloudflare.svg";
-import mercedesLogo from "@assets/clients/mercedes.svg";
-import boltLogo from "@assets/clients/bolt.svg";
+import shopifyLogo from '@assets/clients/shopify.svg';
+import openaiLogo from '@assets/clients/openai.svg';
+import framerLogo from '@assets/clients/framer.svg';
+import linearLogo from '@assets/clients/linear.svg';
+import huggingfaceLogo from '@assets/clients/hugging-face.svg';
+import cloudflareLogo from '@assets/clients/cloudflare.svg';
+import mercedesLogo from '@assets/clients/mercedes.svg';
+import boltLogo from '@assets/clients/bolt.svg';
 
 const logos = [
-  { src: openaiLogo, alt: "OpenAI" },
-  { src: boltLogo, alt: "Bolt" },
-  { src: framerLogo, alt: "Framer" },
-  { src: linearLogo, alt: "Linear" },
-  { src: shopifyLogo, alt: "Shopify" },
-  { src: mercedesLogo, alt: "Mercedes" },
-  { src: huggingfaceLogo, alt: "Hugging Face" },
-  { src: cloudflareLogo, alt: "Cloudflare" },
+  { src: openaiLogo, alt: 'OpenAI' },
+  { src: boltLogo, alt: 'Bolt' },
+  { src: framerLogo, alt: 'Framer' },
+  { src: linearLogo, alt: 'Linear' },
+  { src: shopifyLogo, alt: 'Shopify' },
+  { src: mercedesLogo, alt: 'Mercedes' },
+  { src: huggingfaceLogo, alt: 'Hugging Face' },
+  { src: cloudflareLogo, alt: 'Cloudflare' },
 ];
 </script>
 
@@ -79,7 +79,7 @@ const logos = [
 }
 
 .logo-container::after {
-  content: "";
+  content: '';
   position: absolute;
   right: -40px;
   top: -1.5rem;

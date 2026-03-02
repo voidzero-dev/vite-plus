@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
-import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "reka-ui";
-import TerminalAnimation1 from "../terminal-animations/TerminalAnimation1.vue";
-import TerminalAnimation2 from "../terminal-animations/TerminalAnimation2.vue";
-import TerminalAnimation3 from "../terminal-animations/TerminalAnimation3.vue";
-import TerminalAnimation4 from "../terminal-animations/TerminalAnimation4.vue";
-import TerminalAnimation5 from "../terminal-animations/TerminalAnimation5.vue";
-import TerminalAnimation6 from "../terminal-animations/TerminalAnimation6.vue";
+import { ref, onMounted, onUnmounted } from 'vue';
+import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui';
+import TerminalAnimation1 from '../terminal-animations/TerminalAnimation1.vue';
+import TerminalAnimation2 from '../terminal-animations/TerminalAnimation2.vue';
+import TerminalAnimation3 from '../terminal-animations/TerminalAnimation3.vue';
+import TerminalAnimation4 from '../terminal-animations/TerminalAnimation4.vue';
+import TerminalAnimation5 from '../terminal-animations/TerminalAnimation5.vue';
+import TerminalAnimation6 from '../terminal-animations/TerminalAnimation6.vue';
 
 // Auto-progression configuration
 const AUTO_ADVANCE_DELAY = 1500;
 
 // State management
-const activeTab = ref("tab1");
+const activeTab = ref('tab1');
 const autoPlayEnabled = ref(true);
 let autoAdvanceTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -22,7 +22,7 @@ const isVisible = ref(false);
 let observer: IntersectionObserver | null = null;
 
 // Tab progression logic
-const tabSequence = ["tab1", "tab2", "tab3", "tab4", "tab5", "tab6"];
+const tabSequence = ['tab1', 'tab2', 'tab3', 'tab4', 'tab5', 'tab6'];
 
 const goToNextTab = () => {
   const currentIndex = tabSequence.indexOf(activeTab.value);
@@ -77,7 +77,7 @@ onMounted(() => {
     },
     {
       threshold: 0.2, // Trigger when 20% of the element is visible
-      rootMargin: "0px",
+      rootMargin: '0px',
     },
   );
 

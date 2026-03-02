@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted } from 'vue';
 
 const features = [
-  { id: "feature-dev-build", label: "dev & build" },
-  { id: "feature-test", label: "test" },
-  { id: "feature-lint", label: "lint" },
-  { id: "feature-format", label: "fmt" },
-  { id: "feature-run", label: "run" },
-  { id: "feature-ui", label: "ui" },
-  { id: "feature-lib", label: "lib" },
+  { id: 'feature-dev-build', label: 'dev & build' },
+  { id: 'feature-test', label: 'test' },
+  { id: 'feature-lint', label: 'lint' },
+  { id: 'feature-format', label: 'fmt' },
+  { id: 'feature-run', label: 'run' },
+  { id: 'feature-ui', label: 'ui' },
+  { id: 'feature-lib', label: 'lib' },
 ];
 
-const activeSection = ref("feature-dev-build");
-const underlineStyle = ref({ left: "0px", width: "0px" });
+const activeSection = ref('feature-dev-build');
+const underlineStyle = ref({ left: '0px', width: '0px' });
 const listItems = ref<HTMLElement[]>([]);
 let scrollTimeout: number | null = null;
 
@@ -26,7 +26,7 @@ const scrollToSection = (e: Event, id: string) => {
   }
 
   // Get the toolbar height to offset the scroll
-  const toolbar = (e.currentTarget as HTMLElement).closest("section");
+  const toolbar = (e.currentTarget as HTMLElement).closest('section');
   const toolbarHeight = toolbar?.offsetHeight || 0;
 
   // Calculate position to scroll to
@@ -70,7 +70,7 @@ const updateUnderlinePosition = () => {
     };
 
     // Auto-scroll the toolbar on mobile to keep active item in view
-    const toolbar = activeItem.closest("ul");
+    const toolbar = activeItem.closest('ul');
     if (toolbar && window.innerWidth < 640) {
       // sm breakpoint
       const itemLeft = activeItem.offsetLeft;
@@ -82,7 +82,7 @@ const updateUnderlinePosition = () => {
 
       toolbar.scrollTo({
         left: targetScrollLeft,
-        behavior: "smooth",
+        behavior: 'smooth',
       });
     }
   }
@@ -155,7 +155,7 @@ let observer: IntersectionObserver | null = null;
 
 onMounted(() => {
   // Set up scroll listener for active state tracking
-  window.addEventListener("scroll", handleScroll, { passive: true });
+  window.addEventListener('scroll', handleScroll, { passive: true });
 
   // Initial underline position
   setTimeout(() => {
@@ -164,12 +164,12 @@ onMounted(() => {
   }, 100);
 
   // Update on resize
-  window.addEventListener("resize", updateUnderlinePosition);
+  window.addEventListener('resize', updateUnderlinePosition);
 });
 
 onUnmounted(() => {
-  window.removeEventListener("scroll", handleScroll);
-  window.removeEventListener("resize", updateUnderlinePosition);
+  window.removeEventListener('scroll', handleScroll);
+  window.removeEventListener('resize', updateUnderlinePosition);
   if (scrollTimeout) {
     window.cancelAnimationFrame(scrollTimeout);
   }

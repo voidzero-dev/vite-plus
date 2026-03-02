@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import oxcIcon from "@assets/icons/oxc-light.svg";
-import formatTerminal from "@local-assets/terminal-features/format.svg";
+import oxcIcon from '@assets/icons/oxc-light.svg';
+import formatTerminal from '@local-assets/terminal-features/format.svg';
 </script>
 <template>
   <section id="feature-format" class="wrapper border-t grid md:grid-cols-2 divide-x divide-nickel">
@@ -40,7 +40,7 @@ import formatTerminal from "@local-assets/terminal-features/format.svg";
 </template>
 <style scoped>
 .bg-oxc {
-  background-image: url("@local-assets/backgrounds/oxc.jpg");
+  background-image: url('@local-assets/backgrounds/oxc.jpg');
   background-size: cover;
   background-position: center;
 }

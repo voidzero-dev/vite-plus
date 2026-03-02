@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import viteIcon from "@assets/icons/vite-light.svg";
-import rolldownIcon from "@assets/icons/rolldown-light.svg";
-import devTerminal from "@local-assets/terminal-features/dev.svg";
+import viteIcon from '@assets/icons/vite-light.svg';
+import rolldownIcon from '@assets/icons/rolldown-light.svg';
+import devTerminal from '@local-assets/terminal-features/dev.svg';
 </script>
 
 <template>
@@ -62,7 +62,7 @@ import devTerminal from "@local-assets/terminal-features/dev.svg";
 
 <style scoped>
 .bg-vite {
-  background-image: url("@local-assets/backgrounds/vite.jpg");
+  background-image: url('@local-assets/backgrounds/vite.jpg');
   background-size: cover;
   background-position: center;
 }

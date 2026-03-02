@@ -180,19 +180,19 @@ Add to `pnpm-workspace.yaml`:
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
-  "vite-plus": latest
+  'vite-plus': latest
 
 overrides:
-  vite: "catalog:"
-  vitest: "catalog:"
+  vite: 'catalog:'
+  vitest: 'catalog:'
 
 peerDependencyRules:
   allowAny:
     - vite
     - vitest
   allowedVersions:
-    vite: "*"
-    vitest: "*"
+    vite: '*'
+    vitest: '*'
 ```
 
 #### For npm Monorepos
@@ -221,7 +221,7 @@ Add to `.yarnrc.yml`:
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
-  "vite-plus": latest
+  'vite-plus': latest
 ```
 
 Add to root `package.json`:
@@ -242,7 +242,7 @@ Add to root `package.json`:
 **Before:**
 
 ```typescript
-import { defineConfig } from "vite";
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   // your config
@@ -252,7 +252,7 @@ export default defineConfig({
 **After:**
 
 ```typescript
-import { defineConfig } from "vite-plus";
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   // your config
@@ -264,7 +264,7 @@ export default defineConfig({
 **Before:**
 
 ```typescript
-import { defineConfig } from "vitest/config";
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
@@ -276,7 +276,7 @@ export default defineConfig({
 **After:**
 
 ```typescript
-import { defineConfig } from "vite-plus";
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   test: {
@@ -304,15 +304,15 @@ If you have an `.oxlintrc` file, merge it into `vite.config.ts`:
 **After (vite.config.ts):**
 
 ```typescript
-import { defineConfig } from "vite-plus";
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lint: {
     rules: {
-      "no-unused-vars": "error",
-      "no-console": "warn",
+      'no-unused-vars': 'error',
+      'no-console': 'warn',
     },
-    ignorePatterns: ["dist", "node_modules"],
+    ignorePatterns: ['dist', 'node_modules'],
   },
 });
 ```
@@ -335,7 +335,7 @@ If you have an `.oxfmtrc` file, merge it into `vite.config.ts`:
 **After (vite.config.ts):**
 
 ```typescript
-import { defineConfig } from "vite-plus";
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   fmt: {

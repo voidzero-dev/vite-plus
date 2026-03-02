@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { testPerformance } from "../../../data/performance";
-import PerformanceBar from "./PerformanceBar.vue";
-import vitestIcon from "@assets/icons/vitest-light.svg";
-import testTerminal from "@local-assets/terminal-features/test.svg";
-import vitestBackground from "@local-assets/backgrounds/vitest.jpg";
+import { testPerformance } from '../../../data/performance';
+import PerformanceBar from './PerformanceBar.vue';
+import vitestIcon from '@assets/icons/vitest-light.svg';
+import testTerminal from '@local-assets/terminal-features/test.svg';
+import vitestBackground from '@local-assets/backgrounds/vitest.jpg';
 </script>
 
 <template>
@@ -60,7 +60,7 @@ import vitestBackground from "@local-assets/backgrounds/vitest.jpg";
 
 <style scoped>
 .bg-vitest {
-  background-image: url("@local-assets/backgrounds/vitest.jpg");
+  background-image: url('@local-assets/backgrounds/vitest.jpg');
   background-size: cover;
   background-position: center;
 }

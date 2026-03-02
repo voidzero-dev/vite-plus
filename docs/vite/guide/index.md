@@ -147,7 +147,7 @@ steps:
   - uses: actions/checkout@v4
   - uses: voidzero-dev/setup-vp@v1
     with:
-      node-version: "22"
+      node-version: '22'
       cache: true
   - run: vp run build -r
   - run: vp run test -r
@@ -160,7 +160,7 @@ jobs:
   test:
     strategy:
       matrix:
-        node-version: ["20", "22", "24"]
+        node-version: ['20', '22', '24']
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

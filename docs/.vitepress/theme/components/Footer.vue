@@ -127,5 +127,5 @@
 
 <style scoped></style>
 <script setup lang="ts">
-import Sponsors from "@components/oss/Sponsors.vue";
+import Sponsors from '@components/oss/Sponsors.vue';
 </script>
