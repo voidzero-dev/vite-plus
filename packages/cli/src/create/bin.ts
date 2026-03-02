@@ -332,7 +332,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       }
 
       dirOptions.push({
-        label: 'other',
+        label: 'other directory',
         value: 'other',
         hint: 'Enter a custom target directory',
       });
