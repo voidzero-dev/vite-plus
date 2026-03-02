@@ -125,7 +125,8 @@ export async function snapTest() {
 
   const casesDir = path.resolve(values.dir || 'snap-tests');
 
-  const taskFunctions: (() => Promise<void>)[] = [];
+  const serialTasks: (() => Promise<void>)[] = [];
+  const parallelTasks: (() => Promise<void>)[] = [];
   const missingStepsJson: string[] = [];
   for (const caseName of fs.readdirSync(casesDir)) {
     if (caseName.startsWith('.')) {
@@ -135,12 +136,19 @@ export async function snapTest() {
     if (!fs.statSync(caseDir).isDirectory()) {
       continue;
     }
-    if (!fs.existsSync(path.join(caseDir, 'steps.json'))) {
+    const stepsPath = path.join(caseDir, 'steps.json');
+    if (!fs.existsSync(stepsPath)) {
       missingStepsJson.push(caseName);
       continue;
     }
     if (caseName.includes(filter)) {
-      taskFunctions.push(() => runTestCase(caseName, tempTmpDir, casesDir, values['bin-dir']));
+      const steps: Steps = JSON.parse(readFileSync(stepsPath, 'utf-8'));
+      const task = () => runTestCase(caseName, tempTmpDir, casesDir, values['bin-dir']);
+      if (steps.serial) {
+        serialTasks.push(task);
+      } else {
+        parallelTasks.push(task);
+      }
     }
   }
 
@@ -150,14 +158,18 @@ export async function snapTest() {
     );
   }
 
-  if (taskFunctions.length > 0) {
+  const totalCount = serialTasks.length + parallelTasks.length;
+  if (totalCount > 0) {
     const cpuCount = cpus().length;
     console.log(
-      'Running %d test cases with concurrency limit of %d (CPU count)',
-      taskFunctions.length,
+      'Running %d test cases (%d serial + %d parallel, concurrency limit %d)',
+      totalCount,
+      serialTasks.length,
+      parallelTasks.length,
       cpuCount,
     );
-    await runWithConcurrencyLimit(taskFunctions, cpuCount);
+    await runWithConcurrencyLimit(serialTasks, 1);
+    await runWithConcurrencyLimit(parallelTasks, cpuCount);
   }
   process.exit(0); // Ensure exit even if there are pending timed-out steps
 }
@@ -186,6 +198,11 @@ interface Steps {
    * These commands are not included in the snap output.
    */
   after?: string[];
+  /**
+   * If true, this test case will run serially before parallel tests.
+   * Use for tests that modify global shared state (e.g., `vp env default`).
+   */
+  serial?: boolean;
 }
 
 async function runTestCase(name: string, tempTmpDir: string, casesDir: string, binDir?: string) {

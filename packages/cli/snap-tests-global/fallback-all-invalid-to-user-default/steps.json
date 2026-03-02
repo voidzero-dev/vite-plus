@@ -1,4 +1,5 @@
 {
+  "serial": true,
   "ignoredPlatforms": ["win32"],
   "commands": [
     "vp env default 22.12.0 # Set user default",
