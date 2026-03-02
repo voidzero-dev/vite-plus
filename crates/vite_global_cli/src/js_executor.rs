@@ -10,7 +10,7 @@ use vite_js_runtime::{JsRuntime, JsRuntimeType, download_runtime, download_runti
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepend};
 
-use crate::error::Error;
+use crate::{commands::env::config, error::Error};
 
 /// JavaScript executor using managed Node.js runtime.
 ///
@@ -134,15 +134,17 @@ impl JsExecutor {
 
     /// Ensure the project runtime is downloaded and cached.
     ///
-    /// Uses the project's package.json `devEngines.runtime` configuration
-    /// to determine which Node.js version to use.
+    /// Uses `config::resolve_version()` which checks the full resolution chain
+    /// (env var, .node-version, engines.node, devEngines.runtime, user default,
+    /// then LTS fallback) to determine which Node.js version to use.
     pub async fn ensure_project_runtime(
         &mut self,
         project_path: &AbsolutePath,
     ) -> Result<&JsRuntime, Error> {
         if self.project_runtime.is_none() {
             tracing::debug!("Resolving project runtime from {:?}", project_path);
-            let runtime = download_runtime_for_project(project_path).await?;
+            let resolution = config::resolve_version(project_path).await?;
+            let runtime = download_runtime(JsRuntimeType::Node, &resolution.version).await?;
             self.project_runtime = Some(runtime);
         }
         Ok(self.project_runtime.as_ref().unwrap())
@@ -163,8 +165,7 @@ impl JsExecutor {
     /// If found, runs the local `dist/bin.js` directly. Otherwise, falls back
     /// to the global installation's `dist/bin.js`.
     ///
-    /// Uses the project's runtime (from its `devEngines.runtime` configuration).
-    /// This may write a `.node-version` file if the project has no version source.
+    /// Uses the project's runtime resolved via `config::resolve_version()`.
     /// For side-effect-free commands like `--version`, use [`delegate_with_cli_runtime`] instead.
     ///
     /// # Arguments

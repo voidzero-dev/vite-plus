@@ -1,0 +1,8 @@
+{
+  "name": "delegate-respects-default-node-version",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "check-node": "node -e \"console.log(process.version)\""
+  }
+}

@@ -1,0 +1,17 @@
+> vp env default 22.12.0 # Set global default to 22.12.0
+✓ Default Node.js version set to <semver>
+
+> vp env which node # Should show 22.12.0 from 'default' source
+<vite-plus-home>/js_runtime/node/<semver>/bin/node
+  [2mVersion:  [0m  [92m22.12.0[39m
+  [2mSource:   [0m  [2m<vite-plus-home>/config.json[0m
+
+> vp run check-node # Should also use 22.12.0
+
+> delegate-respects-default-node-version@<semver> check-node <cwd>
+> node -e "console.log(process.version)"
+
+v<semver>
+
+> vp exec node -e "console.log(process.version)" # Should also use 22.12.0
+v22.12.0
