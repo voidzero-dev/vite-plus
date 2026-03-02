@@ -15,7 +15,6 @@ runs:
     - uses: ./.github/actions/download-rolldown-binaries
       with:
         github-token: ${{ github.token }}
-        target: ${{ inputs.target }}
         upload: 'false'
 
     # Compute cache key once before any builds modify files

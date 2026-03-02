@@ -169,7 +169,6 @@ jobs:
       - uses: ./.github/actions/download-rolldown-binaries
         with:
           github-token: ${{ github.token }}
-          target: x86_64-unknown-linux-gnu
           upload: 'false'
 
       - name: Download Rust CLI binaries

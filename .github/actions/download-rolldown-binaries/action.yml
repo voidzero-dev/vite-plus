@@ -5,10 +5,6 @@ inputs:
   github-token:
     description: 'GitHub token for accessing GitHub Package Registry'
     required: true
-  target:
-    description: 'The target platform (unused — kept for caller compatibility)'
-    default: 'x86_64-unknown-linux-gnu'
-    required: false
   upload:
     description: 'Upload the rolldown binaries as artifact'
     required: false
@@ -27,6 +23,7 @@ runs:
         elif ${{ runner.os == 'Linux' && runner.arch == 'ARM64' }}; then export TARGET="linux-arm64-gnu"
         elif ${{ runner.os == 'macOS' && runner.arch == 'ARM64' }}; then export TARGET="darwin-arm64"
         elif ${{ runner.os == 'macOS' && runner.arch == 'X64' }}; then export TARGET="darwin-x64"
+        else echo "Unsupported platform: ${{ runner.os }} ${{ runner.arch }}" && exit 1
         fi
 
         # Pin to the version from checked-out rolldown source to avoid mismatch
