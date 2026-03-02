@@ -1,0 +1,14 @@
+{
+  "name": "fallback-invalid-engines-to-dev-engines",
+  "version": "1.0.0",
+  "private": true,
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "22.12.0"
+    }
+  },
+  "engines": {
+    "node": "invalid"
+  }
+}

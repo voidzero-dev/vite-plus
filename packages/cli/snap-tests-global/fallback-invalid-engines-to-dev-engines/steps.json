@@ -1,0 +1,6 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp exec node -e \"console.log(process.version)\" # Should use devEngines.runtime 22.12.0, not LTS"
+  ]
+}

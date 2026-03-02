@@ -6,7 +6,9 @@
 use std::process::ExitStatus;
 
 use tokio::process::Command;
-use vite_js_runtime::{JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project};
+use vite_js_runtime::{
+    JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project, resolve_node_version,
+};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepend};
 
@@ -134,17 +136,48 @@ impl JsExecutor {
 
     /// Ensure the project runtime is downloaded and cached.
     ///
-    /// Uses `config::resolve_version()` which checks the full resolution chain
-    /// (env var, .node-version, engines.node, devEngines.runtime, user default,
-    /// then LTS fallback) to determine which Node.js version to use.
+    /// Resolution order:
+    /// 1. Session override (env var from `vp env use`)
+    /// 2. Session override (file from `vp env use`)
+    /// 3. Project sources (.node-version, engines.node, devEngines.runtime) —
+    ///    delegates to `download_runtime_for_project()` for cache-aware resolution
+    /// 4. User default from config.json
+    /// 5. Latest LTS
     pub async fn ensure_project_runtime(
         &mut self,
         project_path: &AbsolutePath,
     ) -> Result<&JsRuntime, Error> {
         if self.project_runtime.is_none() {
             tracing::debug!("Resolving project runtime from {:?}", project_path);
-            let resolution = config::resolve_version(project_path).await?;
-            let runtime = download_runtime(JsRuntimeType::Node, &resolution.version).await?;
+
+            // 1–2. Session overrides: env var (from `vp env use`), then file
+            let session_version = vite_shared::EnvConfig::get()
+                .node_version
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty());
+            let session_version = match session_version {
+                Some(v) => Some(v),
+                None => config::read_session_version().await,
+            };
+            if let Some(version) = session_version {
+                let runtime = download_runtime(JsRuntimeType::Node, &version).await?;
+                return Ok(self.project_runtime.insert(runtime));
+            }
+
+            // 3. Check if project has any version source
+            //    (.node-version, engines.node, devEngines.runtime)
+            let has_project_source =
+                resolve_node_version(project_path, true).await.unwrap_or(None).is_some();
+
+            let runtime = if has_project_source {
+                // Project has version sources — delegate to download_runtime_for_project
+                // which provides cache-aware range resolution and full fallback chain
+                download_runtime_for_project(project_path).await?
+            } else {
+                // No project source — check user default from config, then LTS
+                let resolution = config::resolve_version(project_path).await?;
+                download_runtime(JsRuntimeType::Node, &resolution.version).await?
+            };
             self.project_runtime = Some(runtime);
         }
         Ok(self.project_runtime.as_ref().unwrap())
