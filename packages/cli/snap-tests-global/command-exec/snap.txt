@@ -63,11 +63,11 @@ Options:
           Print help (see a summary with '-h')
 
 Examples:
-  vp exec eslint .                            # Run local eslint
-  vp exec tsc --noEmit                        # Run local TypeScript compiler
-  vp exec -c 'eslint . && prettier --check .' # Shell mode
-  vp exec -r -- eslint .                      # Run in all workspace packages
-  vp exec --filter 'app...' -- tsc            # Run in filtered packages
+  vp exec node --version                             # Run local node
+  vp exec tsc --noEmit                               # Run local TypeScript compiler
+  vp exec -c 'tsc --noEmit && prettier --check .'    # Shell mode
+  vp exec -r -- tsc --noEmit                         # Run in all workspace packages
+  vp exec --filter 'app...' -- tsc                   # Run in filtered packages
 
 [1]> vp exec # missing command should error
 [1m[31merror:[39m[0m 'vp exec' requires a command to run
@@ -75,7 +75,7 @@ Examples:
 Usage: vp exec [--] <command> [args...]
 
 Examples:
-  vp exec eslint .
+  vp exec node --version
   vp exec tsc --noEmit
 
 [1]> vp exec nonexistent-cmd-12345 # command not found error

@@ -6,11 +6,11 @@ use vite_workspace::package_filter::PackageQueryArgs;
     about = "Execute a command from local node_modules/.bin",
     after_help = "\
 Examples:
-  vp exec eslint .                            # Run local eslint
-  vp exec tsc --noEmit                        # Run local TypeScript compiler
-  vp exec -c 'eslint . && prettier --check .' # Shell mode
-  vp exec -r -- eslint .                      # Run in all workspace packages
-  vp exec --filter 'app...' -- tsc            # Run in filtered packages"
+  vp exec node --version                             # Run local node
+  vp exec tsc --noEmit                               # Run local TypeScript compiler
+  vp exec -c 'tsc --noEmit && prettier --check .'    # Shell mode
+  vp exec -r -- tsc --noEmit                         # Run in all workspace packages
+  vp exec --filter 'app...' -- tsc                   # Run in filtered packages"
 )]
 pub(crate) struct ExecArgs {
     #[clap(flatten)]

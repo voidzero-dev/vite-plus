@@ -19,7 +19,7 @@ pub async fn execute(exec_args: ExecArgs, cwd: &AbsolutePathBuf) -> Result<ExitS
             "'vp exec' requires a command to run\n\n\
              Usage: vp exec [--] <command> [args...]\n\n\
              Examples:\n\
-             \x20 vp exec eslint .\n\
+             \x20 vp exec node --version\n\
              \x20 vp exec tsc --noEmit",
         );
         return Ok(ExitStatus(1));
