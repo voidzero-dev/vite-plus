@@ -6,7 +6,7 @@ inputs:
     description: 'GitHub token for accessing GitHub Package Registry'
     required: true
   target:
-    description: 'The target platform'
+    description: 'The target platform (unused — kept for caller compatibility)'
     default: 'x86_64-unknown-linux-gnu'
     required: false
   upload:
@@ -20,20 +20,14 @@ runs:
     - name: Install previous release
       shell: bash
       run: |
-        case "${{ inputs.target }}" in
-          x86_64-pc-windows-msvc|aarch64-pc-windows-msvc) export TARGET="win32-x64-msvc" ;;
-          x86_64-unknown-linux-gnu) export TARGET="linux-x64-gnu" ;;
-          aarch64-unknown-linux-gnu) export TARGET="linux-arm64-gnu" ;;
-          aarch64-apple-darwin) export TARGET="darwin-arm64" ;;
-          x86_64-apple-darwin) export TARGET="darwin-x64" ;;
-          *)
-            # Fallback for callers that don't pass a target
-            if ${{ runner.os == 'Windows' }}; then export TARGET="win32-x64-msvc"
-            elif ${{ runner.os == 'Linux' }}; then export TARGET="linux-x64-gnu"
-            elif ${{ runner.os == 'macOS' }}; then export TARGET="darwin-arm64"
-            fi
-            ;;
-        esac
+        # Use host OS + arch (not cross-compilation target) since rolldown
+        # runs under the host Node process during the build.
+        if ${{ runner.os == 'Windows' }}; then export TARGET="win32-x64-msvc"
+        elif ${{ runner.os == 'Linux' && runner.arch == 'X64' }}; then export TARGET="linux-x64-gnu"
+        elif ${{ runner.os == 'Linux' && runner.arch == 'ARM64' }}; then export TARGET="linux-arm64-gnu"
+        elif ${{ runner.os == 'macOS' && runner.arch == 'ARM64' }}; then export TARGET="darwin-arm64"
+        elif ${{ runner.os == 'macOS' && runner.arch == 'X64' }}; then export TARGET="darwin-x64"
+        fi
 
         # Pin to the version from checked-out rolldown source to avoid mismatch
         # between JS code (built from source) and native binary (downloaded from npm).
