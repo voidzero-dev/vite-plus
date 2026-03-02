@@ -1,4 +1,4 @@
-> vp pack --deps.never-bundle node:path src/index.ts # should bundle with deps.never-bundle flag
+> vp pack --deps.neverBundle node:path src/index.ts # should bundle with deps.neverBundle flag
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
