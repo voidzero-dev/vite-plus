@@ -1,0 +1,6 @@
+> vp env default 22.12.0 # Set user default
+✓ Default Node.js version set to <semver>
+
+> vp exec node -e "console.log(process.version)" # Should use default 22.12.0, not LTS
+warning: invalid version 'invalid' in engines.node, ignoring
+v<semver>

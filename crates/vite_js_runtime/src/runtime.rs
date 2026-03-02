@@ -491,34 +491,44 @@ fn check_constraint(
     }
 }
 
-/// Normalize and validate a version string as semver (exact version or range) or LTS alias.
-/// Trims whitespace and returns the normalized version, or None with a warning if invalid.
-pub fn normalize_version(version: &Str, source: &str) -> Option<Str> {
-    // Trim leading/trailing whitespace
-    let trimmed: Str = version.trim().into();
+/// Check if a version string is valid (exact version, range, or LTS alias).
+/// Trims whitespace before checking. Does not print warnings.
+#[must_use]
+pub fn is_valid_version(version: &str) -> bool {
+    let trimmed = version.trim();
 
     if trimmed.is_empty() {
-        return None;
+        return false;
     }
 
     // Accept version aliases (lts/*, lts/iron, lts/-1, latest)
-    if NodeProvider::is_version_alias(&trimmed) {
-        return Some(trimmed);
+    if NodeProvider::is_version_alias(trimmed) {
+        return true;
     }
 
     // Try parsing as exact version (strip 'v' prefix for exact version check)
-    let without_v = trimmed.strip_prefix('v').unwrap_or(&trimmed);
+    let without_v = trimmed.strip_prefix('v').unwrap_or(trimmed);
     if Version::parse(without_v).is_ok() {
-        return Some(trimmed);
+        return true;
     }
 
     // Try parsing as range
-    if Range::parse(&trimmed).is_ok() {
+    Range::parse(trimmed).is_ok()
+}
+
+/// Normalize and validate a version string as semver (exact version or range) or LTS alias.
+/// Trims whitespace and returns the normalized version, or None with a warning if invalid.
+pub fn normalize_version(version: &Str, source: &str) -> Option<Str> {
+    let trimmed: Str = version.trim().into();
+
+    if is_valid_version(&trimmed) {
         return Some(trimmed);
     }
 
-    // Invalid version
-    println!("warning: invalid version '{version}' in {source}, ignoring");
+    // Invalid version — print warning (only if non-empty, empty is just "not specified")
+    if !trimmed.is_empty() {
+        println!("warning: invalid version '{version}' in {source}, ignoring");
+    }
     None
 }
 

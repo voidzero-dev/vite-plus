@@ -1,0 +1,8 @@
+{
+  "name": "fallback-all-invalid-to-user-default",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "invalid"
+  }
+}

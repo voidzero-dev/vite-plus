@@ -51,6 +51,6 @@ pub use provider::{ArchiveFormat, DownloadInfo, HashVerification, JsRuntimeProvi
 pub use providers::{LtsInfo, NodeProvider, NodeVersionEntry};
 pub use runtime::{
     JsRuntime, JsRuntimeType, VersionResolution, VersionSource, download_runtime,
-    download_runtime_for_project, download_runtime_with_provider, normalize_version,
-    read_package_json, resolve_node_version,
+    download_runtime_for_project, download_runtime_with_provider, is_valid_version,
+    normalize_version, read_package_json, resolve_node_version,
 };
