@@ -1,0 +1,6 @@
+> cd scripts && vp create --no-interactive vite:application # from non-monorepo subdir
+> test -f scripts/vite-plus-application/package.json && echo 'Created at scripts/vite-plus-application' || echo 'NOT at scripts/'
+Created at scripts/vite-plus-application
+
+> test ! -f vite-plus-application/package.json && echo 'Not at parent root' || echo 'BUG: created at parent root'
+Not at parent root

@@ -188,6 +188,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   const cwd = process.cwd();
   const workspaceInfoOptional = await detectWorkspace(cwd);
   const isMonorepo = workspaceInfoOptional.isMonorepo;
+
+  // For non-monorepo, always use cwd as rootDir.
+  // detectWorkspace walks up to find the nearest package.json, but for `vp create`
+  // in standalone mode, the project should be created relative to where the user is.
+  if (!isMonorepo) {
+    workspaceInfoOptional.rootDir = cwd;
+  }
   const cwdRelativeToRoot =
     isMonorepo && workspaceInfoOptional.rootDir !== cwd
       ? displayRelative(cwd, workspaceInfoOptional.rootDir)
