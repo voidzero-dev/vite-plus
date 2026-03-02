@@ -20,7 +20,7 @@ export async function promptPackageNameAndTargetDir(
       placeholder: defaultPackageName,
       defaultValue: defaultPackageName,
       validate: (value) => {
-        if (value != null && value.length === 0) {
+        if (value == null || value.length === 0) {
           return;
         }
 
