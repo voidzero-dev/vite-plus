@@ -157,7 +157,6 @@ pub async fn download_runtime(
 /// Download runtime based on project's version configuration
 /// Reads from .node-version, engines.node, or devEngines.runtime (in priority order)
 /// Resolves semver ranges, downloads the matching version
-/// Writes resolved version to .node-version for future use
 pub async fn download_runtime_for_project(
     project_path: &AbsolutePath,
 ) -> Result<JsRuntime, Error>;
@@ -209,7 +208,6 @@ use vite_path::AbsolutePathBuf;
 let project_path = AbsolutePathBuf::new("/path/to/project".into()).unwrap();
 let runtime = download_runtime_for_project(&project_path).await?;
 // Version is resolved from .node-version > engines.node > devEngines.runtime
-// Resolved version is saved to .node-version for future use
 ```
 
 ## Cache Directory Structure
@@ -407,52 +405,13 @@ When no version source exists:
 1. Check local cache for installed Node.js versions
 2. Use the **latest installed version** (if any exist)
 3. If no cached versions exist, fetch and use latest LTS from network
-4. Write the used version to `.node-version`
-5. Print: `Using Node {version} - saved version to .node-version`
 
 This optimizes for:
 
 - Avoiding unnecessary network requests
 - Using what the user already has installed
-- Establishing `.node-version` as the version source going forward
 
-### Version Write-Back
-
-When `download_runtime_for_project` resolves a version and **no version source exists**, it writes the resolved version to `.node-version`. This establishes a version source for future use.
-
-**Write-back only occurs when no version source exists:**
-
-| Read From            | Write To               | Message                                                 |
-| -------------------- | ---------------------- | ------------------------------------------------------- |
-| `.node-version`      | No write               | -                                                       |
-| `engines.node`       | No write               | -                                                       |
-| `devEngines.runtime` | No write               | -                                                       |
-| No source            | Create `.node-version` | "Using Node {version} - saved version to .node-version" |
-
-**Key behaviors:**
-
-1. Only write when no version source exists (respects user's explicit version requirements)
-2. Use three-part version without `v` prefix with Unix line ending
-3. Print informational message when saving version
-
-**Example: Before download (no version source)**
-
-Project structure:
-
-```
-my-project/
-└── package.json
-```
-
-**After download (.node-version created)**
-
-Project structure:
-
-```
-my-project/
-├── .node-version   # Contains: 24.5.0
-└── package.json
-```
+**Note:** `.node-version` is only written explicitly via `vp env pin`.
 
 ## Download Sources
 
@@ -723,7 +682,7 @@ pub enum Error {
 9. ✅ Support semver ranges (^, ~, etc.) with version resolution
 10. ✅ Version index caching with 1-hour TTL
 11. ✅ Support both single runtime and array of runtimes in devEngines
-12. ✅ Write resolved version to `.node-version` file
+12. ~~Write resolved version to `.node-version` file~~ (removed — `.node-version` is only written by `vp env pin`)
 13. ✅ Optimized version resolution (skip network for exact versions, check local cache for ranges)
 14. ✅ Multi-source version reading with priority: `.node-version` > `engines.node` > `devEngines.runtime`
 15. ✅ Support `.node-version` file format (with/without v prefix, partial versions)

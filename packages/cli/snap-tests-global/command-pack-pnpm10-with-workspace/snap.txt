@@ -1,7 +1,6 @@
 > vp pm pack && rm -rf *.tgz # should pack current workspace root
 📦  command-pack-pnpm10-with-workspace@<semver>
 Tarball Contents
-.node-version
 output.log
 package.json
 packages/app/package.json
@@ -39,9 +38,6 @@ command-pack-pnpm10-with-workspace-1.0.0.tgz
     "version": "1.0.0",
     "filename": "command-pack-pnpm10-with-workspace-1.0.0.tgz",
     "files": [
-      {
-        "path": ".node-version"
-      },
       {
         "path": "command-pack-pnpm10-with-workspace-1.0.0.tgz"
       },
@@ -107,7 +103,6 @@ Tarball Details
 > vp pm pack --out ./dist/package.tgz && rm -rf ./dist # should pack with output file
 📦  command-pack-pnpm10-with-workspace@<semver>
 Tarball Contents
-.node-version
 app-1.0.0.tgz
 command-pack-pnpm10-with-workspace-1.0.0.tgz
 out.json
@@ -125,7 +120,6 @@ Tarball Details
 > vp pm pack --pack-destination ./dist && rm -rf ./dist # should pack with destination
 📦  command-pack-pnpm10-with-workspace@<semver>
 Tarball Contents
-.node-version
 app-1.0.0.tgz
 command-pack-pnpm10-with-workspace-1.0.0.tgz
 out.json
@@ -143,7 +137,6 @@ Tarball Details
 > vp pm pack --pack-gzip-level 9 && rm -rf *.tgz # should pack with gzip compression level
 📦  command-pack-pnpm10-with-workspace@<semver>
 Tarball Contents
-.node-version
 app-1.0.0.tgz
 command-pack-pnpm10-with-workspace-1.0.0.tgz
 out.json
@@ -164,9 +157,6 @@ command-pack-pnpm10-with-workspace-1.0.0.tgz
   "version": "1.0.0",
   "filename": "foo-command-pack-pnpm10-with-workspace-1.0.0.tgz",
   "files": [
-    {
-      "path": ".node-version"
-    },
     {
       "path": "app-1.0.0.tgz"
     },

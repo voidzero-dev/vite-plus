@@ -18,7 +18,6 @@ Options:
 > vp pm pack && rm -rf *.tgz # should pack current package
 📦  command-pack-pnpm10@<semver>
 Tarball Contents
-.node-version
 output.log
 package.json
 snap.txt
@@ -29,7 +28,6 @@ command-pack-pnpm10-1.0.0.tgz
 > vp pm pack --out ./dist/package.tgz && rm -rf ./dist # should pack with output file
 📦  command-pack-pnpm10@<semver>
 Tarball Contents
-.node-version
 command-pack-pnpm10-1.0.0.tgz
 output.log
 package.json
@@ -41,7 +39,6 @@ Tarball Details
 > vp pm pack --pack-destination ./dist && rm -rf ./dist # should pack with destination
 📦  command-pack-pnpm10@<semver>
 Tarball Contents
-.node-version
 command-pack-pnpm10-1.0.0.tgz
 output.log
 package.json
@@ -56,9 +53,6 @@ Tarball Details
   "version": "1.0.0",
   "filename": "command-pack-pnpm10-1.0.0.tgz",
   "files": [
-    {
-      "path": ".node-version"
-    },
     {
       "path": "command-pack-pnpm10-1.0.0.tgz"
     },
@@ -84,9 +78,6 @@ Tarball Details
   "filename": "command-pack-pnpm10-1.0.0.tgz",
   "files": [
     {
-      "path": ".node-version"
-    },
-    {
       "path": "command-pack-pnpm10-1.0.0.tgz"
     },
     {
@@ -107,7 +98,6 @@ Tarball Details
 > vp pm pack -- --loglevel=warn && rm -rf *.tgz # should support pass through arguments
 📦  command-pack-pnpm10@<semver>
 Tarball Contents
-.node-version
 command-pack-pnpm10-1.0.0.tgz
 output.log
 package.json

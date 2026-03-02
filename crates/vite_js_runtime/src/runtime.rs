@@ -5,7 +5,7 @@ use vite_str::Str;
 
 use crate::{
     Error, Platform,
-    dev_engines::{PackageJson, read_node_version_file, write_node_version_file},
+    dev_engines::{PackageJson, read_node_version_file},
     download::{download_file, download_text, extract_archive, move_to_cache, verify_file_hash},
     provider::{HashVerification, JsRuntimeProvider},
     providers::NodeProvider,
@@ -384,8 +384,7 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
     tracing::debug!("Selected version source: {source:?}, version_req: {version_req:?}");
 
     // Resolve version (if range/partial → exact)
-    let (version, should_write_back) =
-        resolve_version_for_project(&version_req, source, &provider, &cache_dir).await?;
+    let version = resolve_version_for_project(&version_req, &provider, &cache_dir).await?;
 
     // Check compatibility with lower priority sources
     check_version_compatibility(&version, source, &engines_node, &dev_engines_runtime);
@@ -393,71 +392,51 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
     tracing::info!("Resolved Node.js version: {version}");
     let runtime = download_runtime(JsRuntimeType::Node, &version).await?;
 
-    // Write resolved version to .node-version (if resolution occurred)
-    if should_write_back {
-        if let Err(e) = write_node_version_file(project_path, &version).await {
-            tracing::warn!("Failed to write .node-version: {e}");
-        } else {
-            tracing::info!("Using Node {version} - saved version to .node-version");
-        }
-    }
-
     Ok(runtime)
 }
 
 /// Resolve version requirement to an exact version.
 ///
-/// Returns (resolved_version, should_write_back).
+/// Returns the resolved exact version string.
 async fn resolve_version_for_project(
     version_req: &str,
-    _source: Option<VersionSource>,
     provider: &NodeProvider,
     cache_dir: &AbsolutePath,
-) -> Result<(Str, bool), Error> {
+) -> Result<Str, Error> {
     if version_req.is_empty() {
         // No source specified - fetch latest LTS from network
         tracing::debug!("No version source specified, fetching latest LTS from network");
-        let version = provider.resolve_latest_version().await?;
-        return Ok((version, true));
+        return provider.resolve_latest_version().await;
     }
 
     // Handle LTS aliases (lts/*, lts/iron, lts/-1)
     if NodeProvider::is_lts_alias(version_req) {
         tracing::debug!("Resolving LTS alias: {version_req}");
-        let version = provider.resolve_lts_alias(version_req).await?;
-        // Don't write back - user explicitly specified an LTS alias
-        return Ok((version, false));
+        return provider.resolve_lts_alias(version_req).await;
     }
 
     // Handle "latest" alias - resolves to absolute latest version (including non-LTS)
     if NodeProvider::is_latest_alias(version_req) {
         tracing::debug!("Resolving 'latest' alias");
-        let version = provider.resolve_version("*").await?;
-        // Don't write back - user explicitly specified "latest"
-        return Ok((version, false));
+        return provider.resolve_version("*").await;
     }
 
     // Check if it's an exact version
     if NodeProvider::is_exact_version(version_req) {
         let normalized = version_req.strip_prefix('v').unwrap_or(version_req);
         tracing::debug!("Using exact version: {normalized}");
-        // Never write back exact versions - user explicitly specified the version
-        return Ok((normalized.into(), false));
+        return Ok(normalized.into());
     }
 
     // Check local cache first
     if let Some(cached) = provider.find_cached_version(version_req, cache_dir).await? {
         tracing::debug!("Found cached version {cached} satisfying {version_req}");
-        // Don't write back - user specified a version requirement
-        return Ok((cached, false));
+        return Ok(cached);
     }
 
     // Resolve from network
     tracing::debug!("Resolving version requirement from network: {version_req}");
-    let version = provider.resolve_version(version_req).await?;
-
-    // Don't write back - user specified a version requirement
-    Ok((version, false))
+    provider.resolve_version(version_req).await
 }
 
 /// Check if the resolved version is compatible with lower priority sources.
@@ -684,7 +663,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_download_runtime_for_project_writes_back_when_no_version() {
+    async fn test_download_runtime_for_project_does_not_write_back_when_no_version() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
@@ -700,16 +679,13 @@ mod tests {
 "#;
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
-        let version = runtime.version();
+        let _runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
-        // .node-version is written only if no ancestor has one (write-back is
-        // suppressed when an ancestor .node-version exists, e.g. in a monorepo)
-        if tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap() {
-            let node_version_content =
-                tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
-            assert_eq!(node_version_content, format!("{version}\n"));
-        }
+        // .node-version should NOT be written (auto-write was removed)
+        assert!(
+            !tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap(),
+            ".node-version should not be auto-created"
+        );
 
         // package.json should remain unchanged
         let pkg_content = tokio::fs::read_to_string(temp_path.join("package.json")).await.unwrap();
@@ -777,6 +753,12 @@ mod tests {
 
         // Should download latest Node.js
         assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+
+        // Should NOT write .node-version
+        assert!(
+            !tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap(),
+            ".node-version should not be auto-created"
+        );
     }
 
     #[tokio::test]

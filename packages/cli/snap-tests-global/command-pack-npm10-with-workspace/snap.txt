@@ -11,11 +11,6 @@
     "filename": "command-pack-npm10-with-workspace-1.0.0.tgz",
     "files": [
       {
-        "path": ".node-version",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
         "path": "output.log",
         "size": <variable>,
         "mode": 420
@@ -46,7 +41,7 @@
         "mode": 420
       }
     ],
-    "entryCount": 7,
+    "entryCount": 6,
     "bundled": []
   }
 ]
@@ -171,11 +166,6 @@
     "filename": "command-pack-npm10-with-workspace-1.0.0.tgz",
     "files": [
       {
-        "path": ".node-version",
-        "size": <variable>,
-        "mode": 420
-      },
-      {
         "path": "app-1.0.0.tgz",
         "size": <variable>,
         "mode": 420
@@ -221,7 +211,7 @@
         "mode": 420
       }
     ],
-    "entryCount": 10,
+    "entryCount": 9,
     "bundled": []
   }
 ]
