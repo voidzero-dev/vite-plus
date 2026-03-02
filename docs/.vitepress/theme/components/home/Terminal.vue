@@ -118,7 +118,7 @@ onUnmounted(() => {
           ]"
           style="transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1)"
         >
-          <TabsTrigger value="tab1"> new </TabsTrigger>
+          <TabsTrigger value="tab1"> create </TabsTrigger>
           <TabsTrigger value="tab2"> dev </TabsTrigger>
           <TabsTrigger value="tab3"> lint </TabsTrigger>
           <TabsTrigger value="tab4"> fmt </TabsTrigger>
