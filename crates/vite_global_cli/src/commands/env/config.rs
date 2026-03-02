@@ -258,29 +258,34 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
             });
         }
 
-        // Invalid .node-version - check package.json sources in the same directory
-        // This mirrors the fallback logic in download_runtime_for_project()
-        if matches!(resolution.source, VersionSource::NodeVersionFile) {
+        // Invalid version from a project source - try lower-priority sources in the same directory.
+        // This mirrors the fallback logic in download_runtime_for_project().
+        // - NodeVersionFile: try engines.node, then devEngines.runtime
+        // - EnginesNode: try devEngines.runtime
+        if matches!(resolution.source, VersionSource::NodeVersionFile | VersionSource::EnginesNode)
+        {
             if let Some(project_root) = &resolution.project_root {
                 let package_json_path = project_root.join("package.json");
                 if let Ok(Some(pkg)) = read_package_json(&package_json_path).await {
-                    // Try engines.node
-                    if let Some(engines_node) = pkg
-                        .engines
-                        .as_ref()
-                        .and_then(|e| e.node.clone())
-                        .and_then(|v| normalize_version(&v, "engines.node"))
-                    {
-                        let resolved = resolve_version_string(&engines_node, &provider).await?;
-                        let is_range = NodeProvider::is_lts_alias(&engines_node)
-                            || !NodeProvider::is_exact_version(&engines_node);
-                        return Ok(VersionResolution {
-                            version: resolved,
-                            source: "engines.node".into(),
-                            source_path: Some(package_json_path),
-                            project_root: Some(project_root.clone()),
-                            is_range,
-                        });
+                    // Try engines.node (only when falling back from .node-version)
+                    if matches!(resolution.source, VersionSource::NodeVersionFile) {
+                        if let Some(engines_node) = pkg
+                            .engines
+                            .as_ref()
+                            .and_then(|e| e.node.clone())
+                            .and_then(|v| normalize_version(&v, "engines.node"))
+                        {
+                            let resolved = resolve_version_string(&engines_node, &provider).await?;
+                            let is_range = NodeProvider::is_lts_alias(&engines_node)
+                                || !NodeProvider::is_exact_version(&engines_node);
+                            return Ok(VersionResolution {
+                                version: resolved,
+                                source: "engines.node".into(),
+                                source_path: Some(package_json_path),
+                                project_root: Some(project_root.clone()),
+                                is_range,
+                            });
+                        }
                     }
 
                     // Try devEngines.runtime
@@ -744,6 +749,30 @@ mod tests {
         // Should fall through to devEngines.runtime since .node-version is invalid
         assert_eq!(resolution.source, "devEngines.runtime");
         // Version should be resolved from ^20.18.0 (a 20.x version)
+        assert!(
+            resolution.version.starts_with("20."),
+            "Expected version to start with '20.', got: {}",
+            resolution.version
+        );
+    }
+
+    #[tokio::test]
+    async fn test_resolve_version_invalid_engines_node_falls_through_to_dev_engines() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+
+        // Create package.json with invalid engines.node but valid devEngines.runtime
+        // No .node-version file — resolve_node_version returns EnginesNode source
+        let package_json = r#"{"engines":{"node":"invalid"},"devEngines":{"runtime":{"name":"node","version":"^20.18.0"}}}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        // resolve_version should fall through from invalid engines.node to devEngines.runtime
+        let resolution = resolve_version(&temp_path).await.unwrap();
+
+        assert_eq!(resolution.source, "devEngines.runtime");
         assert!(
             resolution.version.starts_with("20."),
             "Expected version to start with '20.', got: {}",
