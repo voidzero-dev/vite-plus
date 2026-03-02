@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import runTerminal from '@local-assets/terminal-features/run.svg';
+import runTerminal from "@local-assets/terminal-features/run.svg";
 </script>
 
 <template>
@@ -34,7 +34,7 @@ import runTerminal from '@local-assets/terminal-features/run.svg';
 
 <style scoped>
 .bg-viteplus {
-  background-image: url('@local-assets/backgrounds/viteplus.jpg');
+  background-image: url("@local-assets/backgrounds/viteplus.jpg");
   background-size: cover;
   background-position: center;
 }

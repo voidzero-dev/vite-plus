@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import Typewriter from 'typewriter-effect/dist/core';
-import { onMounted, onUnmounted } from 'vue';
+import Typewriter from "typewriter-effect/dist/core";
+import { onMounted, onUnmounted } from "vue";
 
 const props = defineProps<{
   onAnimationComplete?: () => void;
@@ -12,13 +12,13 @@ onMounted(() => {
   // Get current time for easter egg
   const now = new Date();
   let hours = now.getHours();
-  const minutes = now.getMinutes().toString().padStart(2, '0');
-  const seconds = now.getSeconds().toString().padStart(2, '0');
-  const ampm = hours >= 12 ? 'pm' : 'am';
+  const minutes = now.getMinutes().toString().padStart(2, "0");
+  const seconds = now.getSeconds().toString().padStart(2, "0");
+  const ampm = hours >= 12 ? "pm" : "am";
   hours = hours % 12 || 12;
   const currentTime = `${hours}:${minutes}:${seconds} ${ampm}`;
 
-  const target = document.getElementById('terminal-code');
+  const target = document.getElementById("terminal-code");
   typewriter = new Typewriter(target, {
     loop: false,
     delay: 1,

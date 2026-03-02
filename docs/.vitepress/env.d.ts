@@ -1,27 +1,27 @@
 // Vue SFC module declaration
-declare module '*.vue' {
-  import type { DefineComponent } from 'vue';
+declare module "*.vue" {
+  import type { DefineComponent } from "vue";
   const component: DefineComponent<{}, {}, unknown>;
   export default component;
 }
 
 // Asset module declarations
-declare module '*.riv' {
+declare module "*.riv" {
   const src: string;
   export default src;
 }
 
-declare module '*.svg' {
+declare module "*.svg" {
   const src: string;
   export default src;
 }
 
-declare module '*.png' {
+declare module "*.png" {
   const src: string;
   export default src;
 }
 
-declare module '*.jpg' {
+declare module "*.jpg" {
   const src: string;
   export default src;
 }

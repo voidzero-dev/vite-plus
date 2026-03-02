@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { formatPerformance } from '../../../data/performance';
-import PerformanceBar from './PerformanceBar.vue';
-import oxcIcon from '@assets/icons/oxc-light.svg';
-import formatTerminal from '@local-assets/terminal-features/format.svg';
-import oxcBackground from '@local-assets/backgrounds/oxc.jpg';
+import { formatPerformance } from "../../../data/performance";
+import PerformanceBar from "./PerformanceBar.vue";
+import oxcIcon from "@assets/icons/oxc-light.svg";
+import formatTerminal from "@local-assets/terminal-features/format.svg";
+import oxcBackground from "@local-assets/backgrounds/oxc.jpg";
 </script>
 
 <template>
@@ -58,7 +58,7 @@ import oxcBackground from '@local-assets/backgrounds/oxc.jpg';
 
 <style scoped>
 .bg-oxc {
-  background-image: url('@local-assets/backgrounds/oxc.jpg');
+  background-image: url("@local-assets/backgrounds/oxc.jpg");
   background-size: cover;
   background-position: center;
 }

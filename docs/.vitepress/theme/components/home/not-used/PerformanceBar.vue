@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ProgressIndicator, ProgressRoot } from 'reka-ui';
-import type { PerformanceData } from '../../../data/performance';
+import { ProgressIndicator, ProgressRoot } from "reka-ui";
+import type { PerformanceData } from "../../../data/performance";
 interface Props {
   data: PerformanceData;
   backgroundImage?: string;
 }
-const { data, backgroundImage = '@local-assets/backgrounds/vite.jpg' } = defineProps<Props>();
+const { data, backgroundImage = "@local-assets/backgrounds/vite.jpg" } = defineProps<Props>();
 </script>
 
 <template>

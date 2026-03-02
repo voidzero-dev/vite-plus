@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import rolldownIcon from '@assets/icons/rolldown-light.svg';
-import libTerminal from '@local-assets/terminal-features/lib.svg';
+import rolldownIcon from "@assets/icons/rolldown-light.svg";
+import libTerminal from "@local-assets/terminal-features/lib.svg";
 </script>
 
 <template>
@@ -50,7 +50,7 @@ import libTerminal from '@local-assets/terminal-features/lib.svg';
 
 <style scoped>
 .bg-rolldown {
-  background-image: url('@local-assets/backgrounds/rolldown.jpg');
+  background-image: url("@local-assets/backgrounds/rolldown.jpg");
   background-size: cover;
   background-position: center;
 }

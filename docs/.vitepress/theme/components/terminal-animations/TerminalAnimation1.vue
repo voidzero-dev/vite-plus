@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import Typewriter from 'typewriter-effect/dist/core';
-import { onMounted, onUnmounted } from 'vue';
+import Typewriter from "typewriter-effect/dist/core";
+import { onMounted, onUnmounted } from "vue";
 
 const props = defineProps<{
   onAnimationComplete?: () => void;
@@ -9,7 +9,7 @@ const props = defineProps<{
 let typewriter;
 
 onMounted(() => {
-  const target = document.getElementById('terminal-code');
+  const target = document.getElementById("terminal-code");
   typewriter = new Typewriter(target, {
     loop: false,
     delay: 1,

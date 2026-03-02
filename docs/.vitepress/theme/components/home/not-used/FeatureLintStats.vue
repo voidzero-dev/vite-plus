@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui';
-import { lintSyntaticPerformance, lintTypeAwarePerformance } from '../../../data/performance';
-import PerformanceBar from './PerformanceBar.vue';
-import oxcIcon from '@assets/icons/oxc-light.svg';
-import lintTerminal from '@local-assets/terminal-features/lint.svg';
-import oxcBackground from '@local-assets/backgrounds/oxc.jpg';
+import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "reka-ui";
+import { lintSyntaticPerformance, lintTypeAwarePerformance } from "../../../data/performance";
+import PerformanceBar from "./PerformanceBar.vue";
+import oxcIcon from "@assets/icons/oxc-light.svg";
+import lintTerminal from "@local-assets/terminal-features/lint.svg";
+import oxcBackground from "@local-assets/backgrounds/oxc.jpg";
 </script>
 
 <template>
@@ -85,7 +85,7 @@ import oxcBackground from '@local-assets/backgrounds/oxc.jpg';
 
 <style scoped>
 .bg-oxc {
-  background-image: url('@local-assets/backgrounds/oxc.jpg');
+  background-image: url("@local-assets/backgrounds/oxc.jpg");
   background-size: cover;
   background-position: center;
 }

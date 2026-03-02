@@ -12,7 +12,7 @@ import {
   TooltipProvider,
   TooltipRoot,
   TooltipTrigger,
-} from 'reka-ui';
+} from "reka-ui";
 </script>
 
 <template>

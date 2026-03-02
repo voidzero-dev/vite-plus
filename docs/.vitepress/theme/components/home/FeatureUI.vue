@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import uiTerminal from '@local-assets/terminal-features/ui.svg';
+import uiTerminal from "@local-assets/terminal-features/ui.svg";
 </script>
 
 <template>
@@ -35,7 +35,7 @@ import uiTerminal from '@local-assets/terminal-features/ui.svg';
 </template>
 <style scoped>
 .bg-viteplus {
-  background-image: url('@local-assets/backgrounds/viteplus.jpg');
+  background-image: url("@local-assets/backgrounds/viteplus.jpg");
   background-size: cover;
   background-position: center;
 }

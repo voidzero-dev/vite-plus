@@ -1,10 +1,10 @@
 <template>
   <footer class="bg-primary" data-theme="dark">
     <Sponsors
-    description="Vite+ is free and open source, made possible by a full-time team and passionate open-source contributors."
-    sponsorLinkText="Contribute"
-    sponsorLink="https://github.com/voidzero-dev/vite-plus/blob/main/CONTRIBUTING.md"
-   />
+      description="Vite+ is free and open source, made possible by a full-time team and passionate open-source contributors."
+      sponsorLinkText="Contribute"
+      sponsorLink="https://github.com/voidzero-dev/vite-plus/blob/main/CONTRIBUTING.md"
+    />
     <section class="wrapper">
       <div
         class="bg-wine bg-[url(/cta-background.jpg)] bg-cover py-16 md:py-30 px-5 md:px-0 overflow-clip flex flex-col items-center justify-center gap-8 md:gap-12"
@@ -127,5 +127,5 @@
 
 <style scoped></style>
 <script setup lang="ts">
-import Sponsors from '@components/oss/Sponsors.vue'
+import Sponsors from "@components/oss/Sponsors.vue";
 </script>

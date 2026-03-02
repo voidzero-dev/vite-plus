@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import vercelLogo from '@local-assets/platforms/vercel.svg';
-import netlifyLogo from '@local-assets/platforms/netlify.svg';
-import cloudflareLogo from '@local-assets/platforms/cloudflare.svg';
-import renderLogo from '@local-assets/platforms/render.svg';
-import nitroIcon from '@local-assets/icons/nitro.png';
-import nitroTerminal from '@local-assets/terminal-features/nitro.svg';
-import metaFrameworksImage from '@local-assets/meta-frameworks.png';
+import vercelLogo from "@local-assets/platforms/vercel.svg";
+import netlifyLogo from "@local-assets/platforms/netlify.svg";
+import cloudflareLogo from "@local-assets/platforms/cloudflare.svg";
+import renderLogo from "@local-assets/platforms/render.svg";
+import nitroIcon from "@local-assets/icons/nitro.png";
+import nitroTerminal from "@local-assets/terminal-features/nitro.svg";
+import metaFrameworksImage from "@local-assets/meta-frameworks.png";
 </script>
 
 <template>
@@ -80,7 +80,7 @@ import metaFrameworksImage from '@local-assets/meta-frameworks.png';
 
 <style scoped>
 .bg-nitro {
-  background-image: url('@local-assets/backgrounds/nitro.jpg');
+  background-image: url("@local-assets/backgrounds/nitro.jpg");
   background-size: cover;
   background-position: center;
 }

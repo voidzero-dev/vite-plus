@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import vitestIcon from '@assets/icons/vitest-light.svg';
-import testTerminal from '@local-assets/terminal-features/test.svg';
+import vitestIcon from "@assets/icons/vitest-light.svg";
+import testTerminal from "@local-assets/terminal-features/test.svg";
 </script>
 <template>
   <section id="feature-test" class="wrapper border-t grid md:grid-cols-2 divide-x divide-nickel">
@@ -43,7 +43,7 @@ import testTerminal from '@local-assets/terminal-features/test.svg';
 
 <style scoped>
 .bg-vitest {
-  background-image: url('@local-assets/backgrounds/vitest.jpg');
+  background-image: url("@local-assets/backgrounds/vitest.jpg");
   background-size: cover;
   background-position: center;
 }
