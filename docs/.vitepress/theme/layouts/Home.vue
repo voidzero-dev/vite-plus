@@ -20,15 +20,16 @@ import FeatureFormat from '../components/home/FeatureFormat.vue';
 import FeatureRun from '../components/home/FeatureRun.vue';
 import FeatureUI from '../components/home/FeatureUI.vue';
 import FeatureLib from '../components/home/FeatureLib.vue';
+import HeroRive from '../components/home/HeroRive.vue';
 </script>
 
 <template>
   <Hero />
   <!-- <PartnerLogos /> -->
-  <HeadingSection1 />
+  <!-- <HeadingSection1 /> -->
   <Terminal />
   <CoreFeature3Col />
-  <HeadingSection2 />
+  <!-- <HeadingSection2 /> -->
   <ProductivityGrid />
   <section id="features" data-theme="dark" class="bg-primary">
     <HeadingSection4 />
@@ -44,9 +45,11 @@ import FeatureLib from '../components/home/FeatureLib.vue';
   <HeadingSection3 />
   <Fullstack2Col />
   <Spacer />
+  <HeroRive />
+  <Spacer />
   <!--
   <Testimonials/>
   <Spacer/>
   -->
-  <Pricing />
+  <!-- <Pricing /> -->
 </template>

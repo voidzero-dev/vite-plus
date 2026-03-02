@@ -26,63 +26,7 @@
       </div>
     </div>
   </div>
-  <div class="wrapper md:border-none mt-10 md:mt-0">
-    <RiveAnimation
-      :desktop-src="homepageAnimation"
-      :mobile-src="homepageAnimationMobile"
-      :desktop-width="1280"
-      :desktop-height="580"
-      :mobile-width="253"
-      :mobile-height="268"
-      canvas-class="w-full"
-    />
-  </div>
 </template>
-
-<script setup lang="ts">
-import RiveAnimation from '@components/shared/RiveAnimation.vue';
-import homepageAnimation from '@local-assets/animations/1280_x_580_vite+_masthead.riv';
-import homepageAnimationMobile from '@local-assets/animations/253_x_268_vite+_masthead_mobile.riv';
-
-const smoothScrollTo = (e: Event, targetId: string) => {
-  e.preventDefault();
-  e.stopPropagation();
-
-  const element = document.getElementById(targetId);
-  if (!element) {
-    return;
-  }
-
-  const elementPosition = element.getBoundingClientRect().top + window.scrollY;
-  const offsetPosition = elementPosition;
-
-  // Custom smooth scroll with requestAnimationFrame
-  const startPosition = window.scrollY;
-  const distance = offsetPosition - startPosition;
-  const duration = 800; // ms
-  let startTime: number | null = null;
-
-  const animation = (currentTime: number) => {
-    if (startTime === null) {
-      startTime = currentTime;
-    }
-    const timeElapsed = currentTime - startTime;
-    const progress = Math.min(timeElapsed / duration, 1);
-
-    // Easing function (easeInOutCubic)
-    const ease =
-      progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-    window.scrollTo(0, startPosition + distance * ease);
-
-    if (progress < 1) {
-      requestAnimationFrame(animation);
-    }
-  };
-
-  requestAnimationFrame(animation);
-};
-</script>
 
 <style scoped>
 .shine-text {
