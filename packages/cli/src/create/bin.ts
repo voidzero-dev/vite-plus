@@ -16,13 +16,14 @@ import {
   writeAgentInstructions,
 } from '../utils/agent.js';
 import { displayRelative } from '../utils/path.js';
+import { renderCliDoc } from '../utils/help.js';
 import {
   defaultInteractive,
   downloadPackageManager,
   runViteInstall,
   selectPackageManager,
 } from '../utils/prompts.js';
-import { accent, getVitePlusHeader, headline, muted, log, success } from '../utils/terminal.js';
+import { accent, getVitePlusHeader, muted, log, success } from '../utils/terminal.js';
 import {
   detectWorkspace,
   updatePackageJsonWithDeps,
@@ -41,51 +42,113 @@ import { InitialMonorepoAppDir } from './templates/monorepo.js';
 import { BuiltinTemplate, TemplateType } from './templates/types.js';
 import { formatTargetDir } from './utils.js';
 
-const helpMessage = `\
-${headline(`Usage:`)} ${styleText('bold', `vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]`)}
+const helpMessage = renderCliDoc({
+  usage: 'vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]',
+  summary: 'Use any builtin, local or remote template with Vite+.',
+  sections: [
+    {
+      title: 'Arguments',
+      rows: [
+        {
+          label: 'TEMPLATE',
+          description: [
+            `Template name. Run \`${accent('vp create --list')}\` to see available templates.`,
+            `- Default: ${accent('vite:monorepo')}, ${accent('vite:application')}, ${accent('vite:library')}, ${accent('vite:generator')}`,
+            '- Remote: vite, @tanstack/start, create-next-app,',
+            '  create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.',
+            '- Local: @company/generator-*, ./tools/create-ui-component',
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Options',
+      rows: [
+        { label: '--directory DIR', description: 'Target directory for the generated project.' },
+        {
+          label: '--agent NAME',
+          description: 'Create an agent instructions file for the specified agent.',
+        },
+        { label: '--no-interactive', description: 'Run in non-interactive mode' },
+        { label: '--list', description: 'List all available templates' },
+        { label: '-h, --help', description: 'Show this help message' },
+      ],
+    },
+    {
+      title: 'Template Options',
+      lines: ['  Any arguments after -- are passed directly to the template.'],
+    },
+    {
+      title: 'Examples',
+      lines: [
+        `  ${muted('# Interactive mode')}`,
+        `  ${accent('vp create')}`,
+        '',
+        `  ${muted('# Use existing templates (shorthand expands to create-* packages)')}`,
+        `  ${accent('vp create vite')}`,
+        `  ${accent('vp create @tanstack/start')}`,
+        `  ${accent('vp create vite -- --template react-ts')}`,
+        '',
+        `  ${muted('# Full package names also work')}`,
+        `  ${accent('vp create create-vite')}`,
+        `  ${accent('vp create create-next-app')}`,
+        '',
+        `  ${muted('# Create Vite+ monorepo, application, library, or generator scaffolds')}`,
+        `  ${accent('vp create vite:monorepo')}`,
+        `  ${accent('vp create vite:application')}`,
+        `  ${accent('vp create vite:library')}`,
+        `  ${accent('vp create vite:generator')}`,
+        '',
+        `  ${muted('# Use templates from GitHub (via degit)')}`,
+        `  ${accent('vp create github:user/repo')}`,
+        `  ${accent('vp create https://github.com/user/template-repo')}`,
+      ],
+    },
+  ],
+});
 
-Use any builtin, local or remote template with Vite+.
-
-${headline(`Arguments:`)}
-  TEMPLATE            Template name. Run \`${accent(`vp create --list`)}\` to see available templates.
-                      - Default: ${accent(`vite:monorepo`)}, ${accent(`vite:application`)}, ${accent(`vite:library`)}, ${accent(`vite:generator`)}
-                      - Remote: vite, @tanstack/start, create-next-app,
-                        create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
-                      - Local: @company/generator-*, ./tools/create-ui-component
-
-${headline(`Options:`)}
-  --directory DIR     Target directory for the generated project.
-  --agent NAME        Create an agent instructions file for the specified agent.
-  --no-interactive    Run in non-interactive mode
-  --list              List all available templates
-  -h, --help          Show this help message
-
-${headline(`Template options:`)}
-  Any arguments after -- are passed directly to the template.
-
-${headline(`Examples:`)}
-  ${muted('# Interactive mode')}
-  ${accent(`vp create`)}
-
-  ${muted('# Use existing templates (shorthand expands to create-* packages)')}
-  ${accent(`vp create vite`)}
-  ${accent(`vp create @tanstack/start`)}
-  ${accent(`vp create vite -- --template react-ts`)}
-
-  ${muted('# Full package names also work')}
-  ${accent(`vp create create-vite`)}
-  ${accent(`vp create create-next-app`)}
-
-  ${muted('# Create Vite+ monorepo, application, library, or generator scaffolds')}
-  ${accent(`vp create vite:monorepo`)}
-  ${accent(`vp create vite:application`)}
-  ${accent(`vp create vite:library`)}
-  ${accent(`vp create vite:generator`)}
-
-  ${muted('# Use templates from GitHub (via degit)')}
-  ${accent(`vp create github:user/repo`)}
-  ${accent(`vp create https://github.com/user/template-repo`)}
-`;
+const listTemplatesMessage = renderCliDoc({
+  usage: 'vp create --list',
+  summary: 'List available builtin and popular project templates.',
+  sections: [
+    {
+      title: 'Vite+ Built-in Templates',
+      rows: [
+        { label: 'vite:monorepo', description: 'Create a new monorepo' },
+        { label: 'vite:application', description: 'Create a new application' },
+        { label: 'vite:library', description: 'Create a new library' },
+        { label: 'vite:generator', description: 'Scaffold a new code generator' },
+      ],
+    },
+    {
+      title: 'Popular Templates (shorthand)',
+      rows: [
+        { label: 'vite', description: 'Official Vite templates (create-vite)' },
+        {
+          label: '@tanstack/start',
+          description: 'TanStack applications (@tanstack/create-start)',
+        },
+        { label: 'next-app', description: 'Next.js application (create-next-app)' },
+        { label: 'nuxt', description: 'Nuxt application (create-nuxt)' },
+        { label: 'react-router', description: 'React Router application (create-react-router)' },
+        { label: 'vue', description: 'Vue application (create-vue)' },
+      ],
+    },
+    {
+      title: 'Examples',
+      lines: [
+        `  ${accent('vp create')} ${muted('# interactive mode')}`,
+        `  ${accent('vp create vite')} ${muted('# shorthand for create-vite')}`,
+        `  ${accent('vp create @tanstack/start')} ${muted('# shorthand for @tanstack/create-start')}`,
+        `  ${accent('vp create <template> -- <options>')} ${muted('# pass options to the template')}`,
+      ],
+    },
+    {
+      title: 'Tip',
+      lines: [`  You can use any npm template or git repo with ${accent('vp create')}.`],
+    },
+  ],
+});
 
 export interface Options {
   directory?: string;
@@ -614,31 +677,7 @@ function showNextSteps(projectDir: string, isMonorepo: boolean) {
 
 async function showAvailableTemplates() {
   log((await getVitePlusHeader()) + '\n');
-
-  log(headline('Vite+ Built-in Templates:'));
-  log(`  vite:monorepo            ${muted('Create a new monorepo')}`);
-  log(`  vite:application         ${muted('Create a new application')}`);
-  log(`  vite:library             ${muted('Create a new library')}`);
-  log(`  vite:generator           ${muted('Scaffold a new code generator')}`);
-  log('');
-  log(headline('Popular Templates (shorthand):'));
-  log(`  vite                     ${muted('Official Vite templates (create-vite)')}`);
-  log(`  @tanstack/start          ${muted('TanStack applications (@tanstack/create-start)')}`);
-  log(`  next-app                 ${muted('Next.js application (create-next-app)')}`);
-  log(`  nuxt                     ${muted('Nuxt application (create-nuxt)')}`);
-  log(`  react-router             ${muted('React Router application (create-react-router)')}`);
-  log(`  vue                      ${muted('Vue application (create-vue)')}`);
-  log('');
-  log(headline(`Examples:`));
-  log(`  ${accent('vp create')} ${muted('# interactive mode')}`);
-  log(`  ${accent('vp create vite')} ${muted('# shorthand for create-vite')}`);
-  log(
-    `  ${accent('vp create @tanstack/start')} ${muted('# shorthand for @tanstack/create-start')}`,
-  );
-  log(
-    `  ${accent('vp create <template> -- <options>')} ${muted('# pass options to the template')}\n`,
-  );
-  log(`✨ Tip: You can use any npm template or git repo with ${accent('vp create')}!\n`);
+  log(listTemplatesMessage);
 }
 
 main().catch((err) => {

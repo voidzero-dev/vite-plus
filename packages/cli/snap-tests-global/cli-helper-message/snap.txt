@@ -4,38 +4,38 @@ Vite+/<semver>
 Usage: vp [COMMAND]
 
 Core Commands:
-  create                         Create a new project from a template
-  dev                            Run the development server
-  build                          Build for production
-  test                           Run tests
-  lint                           Lint code
-  fmt                            Format code
-  check                          Run format, lint, and type checks
-  pack                           Build library
-  run                            Run tasks
-  exec                           Execute a command from local node_modules/.bin
-  preview                        Preview production build
-  env                            Manage Node.js versions
-  migrate                        Migrate an existing project to Vite+<repeat>
-  cache                          Manage the task cache
+  create   Create a new project from a template
+  dev      Run the development server
+  build    Build for production
+  test     Run tests
+  lint     Lint code
+  fmt      Format code
+  check    Run format, lint, and type checks
+  pack     Build library
+  run      Run tasks
+  exec     Execute a command from local node_modules/.bin
+  preview  Preview production build
+  env      Manage Node.js versions
+  migrate  Migrate an existing project to Vite+<repeat>
+  cache    Manage the task cache
 
 Package Manager Commands:
-  install, i                     Install all dependencies, or add packages if package names are provided
-  add                            Add packages to dependencies
-  remove, rm, un, uninstall      Remove packages from dependencies
-  dedupe                         Deduplicate dependencies by removing older versions
-  dlx                            Execute a package binary without installing it as a dependency
-  info, view, show               View package information from the registry
-  link, ln                       Link packages for local development
-  list, ls                       List installed packages
-  outdated                       Check for outdated packages
-  pm                             Forward a command to the package manager
-  unlink                         Unlink packages
-  update, up                     Update packages to their latest versions
-  why, explain                   Show why a package is installed
+  install, i                 Install all dependencies, or add packages if package names are provided
+  add                        Add packages to dependencies
+  remove, rm, un, uninstall  Remove packages from dependencies
+  dedupe                     Deduplicate dependencies by removing older versions
+  dlx                        Execute a package binary without installing it as a dependency
+  info, view, show           View package information from the registry
+  link, ln                   Link packages for local development
+  list, ls                   List installed packages
+  outdated                   Check for outdated packages
+  pm                         Forward a command to the package manager
+  unlink                     Unlink packages
+  update, up                 Update packages to their latest versions
+  why, explain               Show why a package is installed
 
 Maintenance Commands:
-  upgrade                        Update vp itself to the latest version
+  upgrade  Update vp itself to the latest version
 
 Options:
   -V, --version  Print version
@@ -44,131 +44,122 @@ Options:
 > vp -V # show version
 VITE+ - The Unified Toolchain for the Web
 
-PACKAGE VERSIONS:
-  Global vite-plus:    v<semver>
-  Local vite-plus:     Not found
+Package Versions:
+  global vite-plus  v<semver>
+  local vite-plus   Not found
+
 
 > vp install -h # show install help message
-Install all dependencies, or add packages if package names are provided
-
 Usage: vp install [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+
+Install all dependencies, or add packages if package names are provided
 
 Arguments:
   [PACKAGES]...           Packages to add (if provided, acts as `vp add`)
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-  -P, --prod                Do not install devDependencies
-  -D, --dev                 Only install devDependencies (install) / Save to devDependencies (add)
-      --no-optional         Do not install optionalDependencies
-      --frozen-lockfile     Fail if lockfile needs to be updated (CI mode)
-      --no-frozen-lockfile  Allow lockfile updates (opposite of --frozen-lockfile)
-      --lockfile-only       Only update lockfile, don't install
-      --prefer-offline      Use cached packages when available
-      --offline             Only use packages already in cache
-  -f, --force               Force reinstall all dependencies
-      --ignore-scripts      Do not run lifecycle scripts
-      --no-lockfile         Don't read or generate lockfile
-      --fix-lockfile        Fix broken lockfile entries (pnpm and yarn@2+ only)
-      --shamefully-hoist    Create flat `node_modules` (pnpm only)
-      --resolution-only     Re-run resolution for peer dependency analysis (pnpm only)
-      --silent              Suppress output (silent mode)
-      --filter <PATTERN>    Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root      Install in workspace root only
-  -E, --save-exact          Save exact version (only when adding packages)
-      --save-peer           Save to peerDependencies (only when adding packages)
-  -O, --save-optional       Save to optionalDependencies (only when adding packages)
-      --save-catalog        Save the new dependency to the default catalog (only when adding packages)
-  -g, --global              Install globally (only when adding packages)
-      --node <NODE>         Node.js version to use for global installation (only with -g)
-  -h, --help                Print help
+  -P, --prod            Do not install devDependencies
+  -D, --dev             Only install devDependencies (install) / Save to devDependencies (add)
+  --no-optional         Do not install optionalDependencies
+  --frozen-lockfile     Fail if lockfile needs to be updated (CI mode)
+  --no-frozen-lockfile  Allow lockfile updates (opposite of --frozen-lockfile)
+  --lockfile-only       Only update lockfile, don't install
+  --prefer-offline      Use cached packages when available
+  --offline             Only use packages already in cache
+  -f, --force           Force reinstall all dependencies
+  --ignore-scripts      Do not run lifecycle scripts
+  --no-lockfile         Don't read or generate lockfile
+  --fix-lockfile        Fix broken lockfile entries (pnpm and yarn@2+ only)
+  --shamefully-hoist    Create flat `node_modules` (pnpm only)
+  --resolution-only     Re-run resolution for peer dependency analysis (pnpm only)
+  --silent              Suppress output (silent mode)
+  --filter <PATTERN>    Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root  Install in workspace root only
+  -E, --save-exact      Save exact version (only when adding packages)
+  --save-peer           Save to peerDependencies (only when adding packages)
+  -O, --save-optional   Save to optionalDependencies (only when adding packages)
+  --save-catalog        Save the new dependency to the default catalog (only when adding packages)
+  -g, --global          Install globally (only when adding packages)
+  --node <NODE>         Node.js version to use for global installation (only with -g)
+  -h, --help            Print help
+
 
 > vp add -h # show add help message
-Add packages to dependencies
-
 Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+Add packages to dependencies
 
 Arguments:
   <PACKAGES>...           Packages to add
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-  -P, --save-prod
-          Save to `dependencies` (default)
-  -D, --save-dev
-          Save to `devDependencies`
-      --save-peer
-          Save to `peerDependencies` and `devDependencies`
-  -O, --save-optional
-          Save to `optionalDependencies`
-  -E, --save-exact
-          Save exact version rather than semver range
-      --save-catalog-name <CATALOG_NAME>
-          Save the new dependency to the specified catalog name
-      --save-catalog
-          Save the new dependency to the default catalog
-      --allow-build <NAMES>
-          A list of package names allowed to run postinstall
-      --filter <PATTERN>
-          Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root
-          Add to workspace root
-      --workspace
-          Only add if package exists in workspace (pnpm-specific)
-  -g, --global
-          Install globally
-      --node <NODE>
-          Node.js version to use for global installation (only with -g)
-  -h, --help
-          Print help
+  -P, --save-prod                     Save to `dependencies` (default)
+  -D, --save-dev                      Save to `devDependencies`
+  --save-peer                         Save to `peerDependencies` and `devDependencies`
+  -O, --save-optional                 Save to `optionalDependencies`
+  -E, --save-exact                    Save exact version rather than semver range
+  --save-catalog-name <CATALOG_NAME>  Save the new dependency to the specified catalog name
+  --save-catalog                      Save the new dependency to the default catalog
+  --allow-build <NAMES>               A list of package names allowed to run postinstall
+  --filter <PATTERN>                  Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root                Add to workspace root
+  --workspace                         Only add if package exists in workspace (pnpm-specific)
+  -g, --global                        Install globally
+  --node <NODE>                       Node.js version to use for global installation (only with -g)
+  -h, --help                          Print help
+
 
 > vp remove -h # show remove help message
-Remove packages from dependencies
-
 Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+Remove packages from dependencies
 
 Arguments:
   <PACKAGES>...           Packages to remove
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-  -D, --save-dev          Only remove from `devDependencies` (pnpm-specific)
-  -O, --save-optional     Only remove from `optionalDependencies` (pnpm-specific)
-  -P, --save-prod         Only remove from `dependencies` (pnpm-specific)
-      --filter <PATTERN>  Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root    Remove from workspace root
-  -r, --recursive         Remove recursively from all workspace packages
-  -g, --global            Remove global packages
-      --dry-run           Preview what would be removed without actually removing (only with -g)
-  -h, --help              Print help
+  -D, --save-dev        Only remove from `devDependencies` (pnpm-specific)
+  -O, --save-optional   Only remove from `optionalDependencies` (pnpm-specific)
+  -P, --save-prod       Only remove from `dependencies` (pnpm-specific)
+  --filter <PATTERN>    Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root  Remove from workspace root
+  -r, --recursive       Remove recursively from all workspace packages
+  -g, --global          Remove global packages
+  --dry-run             Preview what would be removed without actually removing (only with -g)
+  -h, --help            Print help
+
 
 > vp update -h # show update help message
-Update packages to their latest versions
-
 Usage: vp update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+
+Update packages to their latest versions
 
 Arguments:
   [PACKAGES]...           Packages to update (optional - updates all if omitted)
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-  -L, --latest            Update to latest version (ignore semver range)
-  -g, --global            Update global packages
-  -r, --recursive         Update recursively in all workspace packages
-      --filter <PATTERN>  Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root    Include workspace root
-  -D, --dev               Update only devDependencies
-  -P, --prod              Update only dependencies (production)
-  -i, --interactive       Interactive mode
-      --no-optional       Don't update optionalDependencies
-      --no-save           Update lockfile only, don't modify package.json
-      --workspace         Only update if package exists in workspace (pnpm-specific)
-  -h, --help              Print help
+  -L, --latest          Update to latest version (ignore semver range)
+  -g, --global          Update global packages
+  -r, --recursive       Update recursively in all workspace packages
+  --filter <PATTERN>    Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root  Include workspace root
+  -D, --dev             Update only devDependencies
+  -P, --prod            Update only dependencies (production)
+  -i, --interactive     Interactive mode
+  --no-optional         Don't update optionalDependencies
+  --no-save             Update lockfile only, don't modify package.json
+  --workspace           Only update if package exists in workspace (pnpm-specific)
+  -h, --help            Print help
+
 
 > vp link -h # show link help message
-Link packages for local development
-
 Usage: vp link [PACKAGE|DIR] [ARGS]...
+
+Link packages for local development
 
 Arguments:
   [PACKAGE|DIR]  Package name or directory to link
@@ -177,10 +168,11 @@ Arguments:
 Options:
   -h, --help  Print help
 
-> vp unlink -h # show unlink help message
-Unlink packages
 
+> vp unlink -h # show unlink help message
 Usage: vp unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
+
+Unlink packages
 
 Arguments:
   [PACKAGE|DIR]  Package name to unlink
@@ -190,70 +182,74 @@ Options:
   -r, --recursive  Unlink in every workspace package
   -h, --help       Print help
 
-> vp dedupe -h # show dedupe help message
-Deduplicate dependencies
 
+> vp dedupe -h # show dedupe help message
 Usage: vp dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+
+Deduplicate dependencies
 
 Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-      --check  Check if deduplication would make changes
-  -h, --help   Print help
+  --check     Check if deduplication would make changes
+  -h, --help  Print help
+
 
 > vp outdated -h # show outdated help message
-Check for outdated packages
-
 Usage: vp outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+
+Check for outdated packages
 
 Arguments:
   [PACKAGES]...           Package name(s) to check
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-      --long              Show extended information
-      --format <FORMAT>   Output format: table (default), list, or json
-  -r, --recursive         Check recursively across all workspaces
-      --filter <PATTERN>  Filter packages in monorepo
-  -w, --workspace-root    Include workspace root
-  -P, --prod              Only production and optional dependencies
-  -D, --dev               Only dev dependencies
-      --no-optional       Exclude optional dependencies
-      --compatible        Only show compatible versions
-      --sort-by <FIELD>   Sort results by field
-  -g, --global            Check globally installed packages
-  -h, --help              Print help
+  --long                Show extended information
+  --format <FORMAT>     Output format: table (default), list, or json
+  -r, --recursive       Check recursively across all workspaces
+  --filter <PATTERN>    Filter packages in monorepo
+  -w, --workspace-root  Include workspace root
+  -P, --prod            Only production and optional dependencies
+  -D, --dev             Only dev dependencies
+  --no-optional         Exclude optional dependencies
+  --compatible          Only show compatible versions
+  --sort-by <FIELD>     Sort results by field
+  -g, --global          Check globally installed packages
+  -h, --help            Print help
+
 
 > vp why -h # show why help message
-Show why a package is installed
-
 Usage: vp why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+Show why a package is installed
 
 Arguments:
   <PACKAGES>...           Package(s) to check
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-      --json                   Output in JSON format
-      --long                   Show extended information
-      --parseable              Show parseable output
-  -r, --recursive              Check recursively across all workspaces
-      --filter <PATTERN>       Filter packages in monorepo
-  -w, --workspace-root         Check in workspace root
-  -P, --prod                   Only production dependencies
-  -D, --dev                    Only dev dependencies
-      --depth <DEPTH>          Limit tree depth
-      --no-optional            Exclude optional dependencies
-  -g, --global                 Check globally installed packages
-      --exclude-peers          Exclude peer dependencies
-      --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
-  -h, --help                   Print help
+  --json                   Output in JSON format
+  --long                   Show extended information
+  --parseable              Show parseable output
+  -r, --recursive          Check recursively across all workspaces
+  --filter <PATTERN>       Filter packages in monorepo
+  -w, --workspace-root     Check in workspace root
+  -P, --prod               Only production dependencies
+  -D, --dev                Only dev dependencies
+  --depth <DEPTH>          Limit tree depth
+  --no-optional            Exclude optional dependencies
+  -g, --global             Check globally installed packages
+  --exclude-peers          Exclude peer dependencies
+  --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
+  -h, --help               Print help
+
 
 > vp info -h # show info help message
-View package information from the registry
-
 Usage: vp info [OPTIONS] <PACKAGE> [FIELD] [-- <PASS_THROUGH_ARGS>...]
+
+View package information from the registry
 
 Arguments:
   <PACKAGE>               Package name with optional version
@@ -261,13 +257,14 @@ Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-      --json  Output in JSON format
+  --json      Output in JSON format
   -h, --help  Print help
 
-> vp pm -h # show pm help message
-Forward a command to the package manager
 
+> vp pm -h # show pm help message
 Usage: vp pm <COMMAND>
+
+Forward a command to the package manager
 
 Commands:
   prune      Remove unnecessary packages
@@ -292,6 +289,7 @@ Commands:
 
 Options:
   -h, --help  Print help
+
 
 > vp env # show env help message
 Manage Node.js versions
@@ -355,18 +353,19 @@ Global Packages:
   vp list -g [package]          # List installed global packages
 
 > vp upgrade -h # show upgrade help message
-Update vp itself to the latest version
-
 Usage: vp upgrade [OPTIONS] [VERSION]
+
+Update vp itself to the latest version
 
 Arguments:
   [VERSION]  Target version (e.g., "0.2.0"). Defaults to latest
 
 Options:
-      --tag <TAG>            npm dist-tag to install (default: "latest", also: "test") [default: latest]
-      --check                Check for updates without installing
-      --rollback             Revert to the previously active version
-      --force                Force reinstall even if already on the target version
-      --silent               Suppress output
-      --registry <REGISTRY>  Custom npm registry URL
-  -h, --help                 Print help
+  --tag <TAG>            npm dist-tag to install (default: "latest", also: "test") [default: latest]
+  --check                Check for updates without installing
+  --rollback             Revert to the previously active version
+  --force                Force reinstall even if already on the target version
+  --silent               Suppress output
+  --registry <REGISTRY>  Custom npm registry URL
+  -h, --help             Print help
+

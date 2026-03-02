@@ -1,25 +1,26 @@
 > vp outdated --help # should show help
-Check for outdated packages
-
 Usage: vp outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+
+Check for outdated packages
 
 Arguments:
   [PACKAGES]...           Package name(s) to check
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-      --long              Show extended information
-      --format <FORMAT>   Output format: table (default), list, or json
-  -r, --recursive         Check recursively across all workspaces
-      --filter <PATTERN>  Filter packages in monorepo
-  -w, --workspace-root    Include workspace root
-  -P, --prod              Only production and optional dependencies
-  -D, --dev               Only dev dependencies
-      --no-optional       Exclude optional dependencies
-      --compatible        Only show compatible versions
-      --sort-by <FIELD>   Sort results by field
-  -g, --global            Check globally installed packages
-  -h, --help              Print help
+  --long                Show extended information
+  --format <FORMAT>     Output format: table (default), list, or json
+  -r, --recursive       Check recursively across all workspaces
+  --filter <PATTERN>    Filter packages in monorepo
+  -w, --workspace-root  Include workspace root
+  -P, --prod            Only production and optional dependencies
+  -D, --dev             Only dev dependencies
+  --no-optional         Exclude optional dependencies
+  --compatible          Only show compatible versions
+  --sort-by <FIELD>     Sort results by field
+  -g, --global          Check globally installed packages
+  -h, --help            Print help
+
 
 > vp install # should install packages first
 Packages: +<variable>

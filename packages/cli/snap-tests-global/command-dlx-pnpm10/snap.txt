@@ -1,7 +1,7 @@
 > vp dlx --help # should show help message
-Execute a package binary without installing it
-
 Usage: vp dlx [OPTIONS] <ARGS>...
+
+Execute a package binary without installing it
 
 Arguments:
   <ARGS>...  Package to execute and arguments
@@ -11,6 +11,7 @@ Options:
   -c, --shell-mode      Execute within a shell environment
   -s, --silent          Suppress all output except the executed command's output
   -h, --help            Print help
+
 
 > vp dlx -s cowsay hello # should run cowsay with pnpm dlx
  _______

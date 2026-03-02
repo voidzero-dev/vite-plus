@@ -13,29 +13,30 @@ devDependencies:
 Done in <variable>ms using pnpm v<semver>
 
 > vp pm list --help # should show help
-List installed packages
-
 Usage: vp pm list [OPTIONS] [PATTERN] [-- <PASS_THROUGH_ARGS>...]
+
+List installed packages
 
 Arguments:
   [PATTERN]               Package pattern to filter
   [PASS_THROUGH_ARGS]...  Additional arguments
 
 Options:
-      --depth <DEPTH>          Maximum depth of dependency tree
-      --json                   Output in JSON format
-      --long                   Show extended information
-      --parseable              Parseable output format
-  -P, --prod                   Only production dependencies
-  -D, --dev                    Only dev dependencies
-      --no-optional            Exclude optional dependencies
-      --exclude-peers          Exclude peer dependencies
-      --only-projects          Show only project packages
-      --find-by <FINDER_NAME>  Use a finder function
-  -r, --recursive              List across all workspaces
-      --filter <PATTERN>       Filter packages in monorepo
-  -g, --global                 List global packages
-  -h, --help                   Print help
+  --depth <DEPTH>          Maximum depth of dependency tree
+  --json                   Output in JSON format
+  --long                   Show extended information
+  --parseable              Parseable output format
+  -P, --prod               Only production dependencies
+  -D, --dev                Only dev dependencies
+  --no-optional            Exclude optional dependencies
+  --exclude-peers          Exclude peer dependencies
+  --only-projects          Show only project packages
+  --find-by <FINDER_NAME>  Use a finder function
+  -r, --recursive          List across all workspaces
+  --filter <PATTERN>       Filter packages in monorepo
+  -g, --global             List global packages
+  -h, --help               Print help
+
 
 > vp pm list # should list installed packages
 Legend: production dependency, optional only, dev only

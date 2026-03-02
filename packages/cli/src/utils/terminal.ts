@@ -224,10 +224,6 @@ export function accent(text: string) {
   return styleText('blueBright', text);
 }
 
-export function headline(text: string) {
-  return styleText('bold', text.toUpperCase());
-}
-
 export function muted(text: string) {
   return styleText('gray', text);
 }

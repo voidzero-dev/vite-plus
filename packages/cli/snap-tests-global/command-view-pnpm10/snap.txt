@@ -1,7 +1,7 @@
 > vp pm view --help # should show help
-View package information from the registry
-
 Usage: vp pm view [OPTIONS] <PACKAGE> [FIELD] [-- <PASS_THROUGH_ARGS>...]
+
+View package information from the registry
 
 Arguments:
   <PACKAGE>               Package name with optional version
@@ -9,8 +9,9 @@ Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments
 
 Options:
-      --json  Output in JSON format
+  --json      Output in JSON format
   -h, --help  Print help
+
 
 > vp pm view testnpm2 # should view lodash package information (uses npm view)
 

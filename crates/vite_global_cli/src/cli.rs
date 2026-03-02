@@ -17,6 +17,7 @@ use crate::{
         RemoveCommand, UnlinkCommand, UpdateCommand, WhyCommand,
     },
     error::Error,
+    help,
 };
 
 /// Vite+ Global CLI
@@ -1793,25 +1794,65 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
         Commands::Migrate { args } => commands::migrate::execute(cwd, &args).await,
 
         // Category C: Local CLI Delegation (stubs)
-        Commands::Dev { args } => commands::delegate::execute(cwd, "dev", &args).await,
+        Commands::Dev { args } => {
+            if help::maybe_print_unified_delegate_help("dev", &args) {
+                return Ok(ExitStatus::default());
+            }
+            commands::delegate::execute(cwd, "dev", &args).await
+        }
 
-        Commands::Build { args } => commands::delegate::execute(cwd, "build", &args).await,
+        Commands::Build { args } => {
+            if help::maybe_print_unified_delegate_help("build", &args) {
+                return Ok(ExitStatus::default());
+            }
+            commands::delegate::execute(cwd, "build", &args).await
+        }
 
-        Commands::Test { args } => commands::delegate::execute(cwd, "test", &args).await,
+        Commands::Test { args } => {
+            if help::maybe_print_unified_delegate_help("test", &args) {
+                return Ok(ExitStatus::default());
+            }
+            commands::delegate::execute(cwd, "test", &args).await
+        }
 
-        Commands::Lint { args } => commands::delegate::execute(cwd, "lint", &args).await,
+        Commands::Lint { args } => {
+            if help::maybe_print_unified_delegate_help("lint", &args) {
+                return Ok(ExitStatus::default());
+            }
+            commands::delegate::execute(cwd, "lint", &args).await
+        }
 
-        Commands::Fmt { args } => commands::delegate::execute(cwd, "fmt", &args).await,
+        Commands::Fmt { args } => {
+            if help::maybe_print_unified_delegate_help("fmt", &args) {
+                return Ok(ExitStatus::default());
+            }
+            commands::delegate::execute(cwd, "fmt", &args).await
+        }
 
-        Commands::Check { args } => commands::delegate::execute(cwd, "check", &args).await,
+        Commands::Check { args } => {
+            if help::maybe_print_unified_delegate_help("check", &args) {
+                return Ok(ExitStatus::default());
+            }
+            commands::delegate::execute(cwd, "check", &args).await
+        }
 
-        Commands::Pack { args } => commands::delegate::execute(cwd, "pack", &args).await,
+        Commands::Pack { args } => {
+            if help::maybe_print_unified_delegate_help("pack", &args) {
+                return Ok(ExitStatus::default());
+            }
+            commands::delegate::execute(cwd, "pack", &args).await
+        }
 
         Commands::Run { args } => commands::run_or_delegate::execute(cwd, &args).await,
 
         Commands::Exec { args } => commands::delegate::execute(cwd, "exec", &args).await,
 
-        Commands::Preview { args } => commands::delegate::execute(cwd, "preview", &args).await,
+        Commands::Preview { args } => {
+            if help::maybe_print_unified_delegate_help("preview", &args) {
+                return Ok(ExitStatus::default());
+            }
+            commands::delegate::execute(cwd, "preview", &args).await
+        }
 
         Commands::Cache { args } => commands::delegate::execute(cwd, "cache", &args).await,
 
@@ -1854,52 +1895,12 @@ pub fn command_with_help() -> clap::Command {
 
 /// Apply custom help formatting to a clap Command to match the JS CLI output.
 fn apply_custom_help(cmd: clap::Command) -> clap::Command {
-    let bold = "\x1b[1m";
-    let bold_underline = "\x1b[1;4m";
-    let reset = "\x1b[0m";
     let version = env!("CARGO_PKG_VERSION");
-
-    let after_help = format!(
-        "{bold_underline}Core Commands:{reset}
-  {bold}create{reset}                         Create a new project from a template
-  {bold}dev{reset}                            Run the development server
-  {bold}build{reset}                          Build for production
-  {bold}test{reset}                           Run tests
-  {bold}lint{reset}                           Lint code
-  {bold}fmt{reset}                            Format code
-  {bold}check{reset}                          Run format, lint, and type checks
-  {bold}pack{reset}                           Build library
-  {bold}run{reset}                            Run tasks
-  {bold}exec{reset}                           Execute a command from local node_modules/.bin
-  {bold}preview{reset}                        Preview production build
-  {bold}env{reset}                            Manage Node.js versions
-  {bold}migrate{reset}                        Migrate an existing project to Vite+
-  {bold}cache{reset}                          Manage the task cache
-
-{bold_underline}Package Manager Commands:{reset}
-  {bold}install, i{reset}                     Install all dependencies, or add packages if package names are provided
-  {bold}add{reset}                            Add packages to dependencies
-  {bold}remove, rm, un, uninstall{reset}      Remove packages from dependencies
-  {bold}dedupe{reset}                         Deduplicate dependencies by removing older versions
-  {bold}dlx{reset}                            Execute a package binary without installing it as a dependency
-  {bold}info, view, show{reset}               View package information from the registry
-  {bold}link, ln{reset}                       Link packages for local development
-  {bold}list, ls{reset}                       List installed packages
-  {bold}outdated{reset}                       Check for outdated packages
-  {bold}pm{reset}                             Forward a command to the package manager
-  {bold}unlink{reset}                         Unlink packages
-  {bold}update, up{reset}                     Update packages to their latest versions
-  {bold}why, explain{reset}                   Show why a package is installed
-
-{bold_underline}Maintenance Commands:{reset}
-  {bold}upgrade{reset}                        Update vp itself to the latest version
-"
-    );
+    let after_help = help::render_help_doc(&help::top_level_help_doc());
     let help_template = format!(
-        "Vite+/{version}
-
-{{usage-heading}} {{usage}}{{after-help}}
-{bold_underline}Options:{reset}
+        "Vite+/{version}\
+{{after-help}}
+Options:
 {{options}}
 "
     );

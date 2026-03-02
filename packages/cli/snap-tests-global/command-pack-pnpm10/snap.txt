@@ -1,19 +1,20 @@
 > vp pm pack --help # should show help
-Create a tarball of the package
-
 Usage: vp pm pack [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+
+Create a tarball of the package
 
 Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments
 
 Options:
-  -r, --recursive                            Pack all workspace packages
-      --filter <PATTERN>                     Filter packages to pack
-      --out <OUT>                            Output path for the tarball
-      --pack-destination <PACK_DESTINATION>  Directory where the tarball will be saved
-      --pack-gzip-level <PACK_GZIP_LEVEL>    Gzip compression level (0-9)
-      --json                                 Output in JSON format
-  -h, --help                                 Print help
+  -r, --recursive                        Pack all workspace packages
+  --filter <PATTERN>                     Filter packages to pack
+  --out <OUT>                            Output path for the tarball
+  --pack-destination <PACK_DESTINATION>  Directory where the tarball will be saved
+  --pack-gzip-level <PACK_GZIP_LEVEL>    Gzip compression level (0-9)
+  --json                                 Output in JSON format
+  -h, --help                             Print help
+
 
 > vp pm pack && rm -rf *.tgz # should pack current package
 📦  command-pack-pnpm10@<semver>

@@ -1,7 +1,7 @@
 > vp link -h # should show help message
-Link packages for local development
-
 Usage: vp link [PACKAGE|DIR] [ARGS]...
+
+Link packages for local development
 
 Arguments:
   [PACKAGE|DIR]  Package name or directory to link
@@ -9,6 +9,7 @@ Arguments:
 
 Options:
   -h, --help  Print help
+
 
 > vp install # install initial dependencies
 Packages: +<variable>

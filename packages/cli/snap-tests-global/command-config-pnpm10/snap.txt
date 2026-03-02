@@ -1,7 +1,7 @@
 > vp pm config --help # should show help
-Manage package manager configuration
-
 Usage: vp pm config <COMMAND>
+
+Manage package manager configuration
 
 Commands:
   list    List all configuration
@@ -11,6 +11,7 @@ Commands:
 
 Options:
   -h, --help  Print help
+
 
 > vp pm config list --location project > /dev/null # should list all project configuration
 > vp pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope

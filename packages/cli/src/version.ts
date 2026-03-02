@@ -1,11 +1,11 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { styleText } from 'node:util';
 
 import { VITE_PLUS_NAME } from './utils/constants.js';
+import { renderCliDoc } from './utils/help.js';
 import { detectPackageMetadata } from './utils/package.js';
-import { getVitePlusHeader, headline, log } from './utils/terminal.js';
+import { getVitePlusHeader, log } from './utils/terminal.js';
 
 const require = createRequire(import.meta.url);
 
@@ -96,9 +96,6 @@ function formatToolVersion(tool: ToolVersionSpec, version: string | null): strin
   return `${tool.displayName} ${version ? `v${version}` : `Not found`}`;
 }
 
-const columnWidth = 21;
-const getColumnWidth = (label: string) => Math.max(1, columnWidth - label.length);
-
 /**
  * Print version information
  */
@@ -108,21 +105,25 @@ export async function printVersion(cwd: string) {
   const localVersion = localMetadata?.version ?? null;
 
   log((await getVitePlusHeader()) + '\n');
-  log(headline('Package Versions:'));
-  log(
-    `  ${styleText('bold', 'Global vite-plus:')}${' '.repeat(getColumnWidth('Global vite-plus:'))}${globalVersion ? `v${globalVersion}` : 'Not found'}`,
-  );
-  if (localVersion) {
-    log(
-      `  ${styleText('bold', 'Local vite-plus:')}${' '.repeat(getColumnWidth('Local vite-plus:'))}v${localVersion}`,
-    );
-  } else {
-    log(
-      `  ${styleText('bold', 'Local vite-plus:')}${' '.repeat(getColumnWidth('Local vite-plus:'))}Not found`,
-    );
-  }
+
+  const sections = [
+    {
+      title: 'Package Versions',
+      rows: [
+        {
+          label: 'global vite-plus',
+          description: globalVersion ? `v${globalVersion}` : 'Not found',
+        },
+        {
+          label: 'local vite-plus',
+          description: localVersion ? `v${localVersion}` : 'Not found',
+        },
+      ],
+    },
+  ];
 
   if (!localMetadata) {
+    log(renderCliDoc({ sections }));
     return;
   }
 
@@ -173,18 +174,19 @@ export async function printVersion(cwd: string) {
     version: resolveToolVersion(tool, localMetadata.path),
   }));
   if (resolvedTools.some(({ tool, version }) => tool.bundledVersionKey && !version)) {
+    log(renderCliDoc({ sections }));
     return;
   }
 
-  log('');
-  log(headline('Bundled with vite-plus:'));
-  for (const { tool, version } of resolvedTools) {
-    log(
-      `  ${styleText('bold', `${tool.command}:`)}${' '.repeat(
-        getColumnWidth(tool.command),
-      )}${formatToolVersion(tool, version)}`,
-    );
-  }
+  sections.push({
+    title: 'Bundled with vite-plus',
+    rows: resolvedTools.map(({ tool, version }) => ({
+      label: tool.command,
+      description: formatToolVersion(tool, version),
+    })),
+  });
+
+  log(renderCliDoc({ sections }));
 }
 
 await printVersion(process.cwd());

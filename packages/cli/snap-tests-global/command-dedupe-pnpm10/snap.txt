@@ -1,14 +1,15 @@
 > vp dedupe --help # should show help
-Deduplicate dependencies
-
 Usage: vp dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+
+Deduplicate dependencies
 
 Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-      --check  Check if deduplication would make changes
-  -h, --help   Print help
+  --check     Check if deduplication would make changes
+  -h, --help  Print help
+
 
 > vp dedupe && cat package.json # should dedupe dependencies
 Already up to date

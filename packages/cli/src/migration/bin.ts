@@ -8,6 +8,7 @@ import semver from 'semver';
 
 import { PackageManager, type WorkspaceInfo } from '../types/index.js';
 import { selectAgentTargetPath, writeAgentInstructions } from '../utils/agent.js';
+import { renderCliDoc } from '../utils/help.js';
 import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.js';
 import {
   cancelAndExit,
@@ -17,7 +18,7 @@ import {
   selectPackageManager,
   upgradeYarn,
 } from '../utils/prompts.js';
-import { accent, getVitePlusHeader, headline, log, muted } from '../utils/terminal.js';
+import { accent, getVitePlusHeader, log, muted } from '../utils/terminal.js';
 import type { PackageDependencies } from '../utils/types.js';
 import { detectWorkspace } from '../utils/workspace.js';
 import {
@@ -29,33 +30,51 @@ import {
 
 const { green } = colors;
 
-// prettier-ignore
-const helpMessage = `\
-${headline(`Usage:`)} ${styleText('bold', `vp migrate [PATH] [OPTIONS]`)}
-
-Migrate standalone Vite, Vitest, Oxlint, and Oxfmt projects to unified Vite+.
-
-${headline(`Arguments:`)}
-  PATH                       Target directory to migrate (default: current directory)
-
-${headline(`Options:`)}
-  --agent NAME               Write agent instructions file into the project (e.g. chatgpt, claude, opencode).
-  --no-agent                 Skip writing agent instructions file
-  --no-interactive           Run in non-interactive mode (skip prompts and use defaults)
-  --non-interactive          Alias for --no-interactive
-  -h, --help                 Show this help message
-
-${headline(`Examples:`)}
-  ${muted('# Migrate current package')}
-  ${accent(`vp migrate`)}
-
-  ${muted('# Migrate specific directory')}
-  ${accent(`vp migrate my-app`)}
-
-  ${muted('# Non-interactive mode')}
-  ${accent(`vp migrate --no-interactive`)}
-
-`;
+const helpMessage = renderCliDoc({
+  usage: 'vp migrate [PATH] [OPTIONS]',
+  summary: 'Migrate standalone Vite, Vitest, Oxlint, and Oxfmt projects to unified Vite+.',
+  sections: [
+    {
+      title: 'Arguments',
+      rows: [
+        {
+          label: 'PATH',
+          description: 'Target directory to migrate (default: current directory)',
+        },
+      ],
+    },
+    {
+      title: 'Options',
+      rows: [
+        {
+          label: '--agent NAME',
+          description:
+            'Write agent instructions file into the project (e.g. chatgpt, claude, opencode).',
+        },
+        { label: '--no-agent', description: 'Skip writing agent instructions file' },
+        {
+          label: '--no-interactive',
+          description: 'Run in non-interactive mode (skip prompts and use defaults)',
+        },
+        { label: '--non-interactive', description: 'Alias for --no-interactive' },
+        { label: '-h, --help', description: 'Show this help message' },
+      ],
+    },
+    {
+      title: 'Examples',
+      lines: [
+        `  ${muted('# Migrate current package')}`,
+        `  ${accent('vp migrate')}`,
+        '',
+        `  ${muted('# Migrate specific directory')}`,
+        `  ${accent('vp migrate my-app')}`,
+        '',
+        `  ${muted('# Non-interactive mode')}`,
+        `  ${accent('vp migrate --no-interactive')}`,
+      ],
+    },
+  ],
+});
 
 export interface MigrationOptions {
   interactive: boolean;

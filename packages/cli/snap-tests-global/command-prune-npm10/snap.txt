@@ -3,17 +3,18 @@
 added 3 packages in <variable>ms
 
 > vp pm prune --help # should show help
-Remove unnecessary packages
-
 Usage: vp pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+
+Remove unnecessary packages
 
 Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments
 
 Options:
-      --prod         Remove devDependencies
-      --no-optional  Remove optional dependencies
-  -h, --help         Print help
+  --prod         Remove devDependencies
+  --no-optional  Remove optional dependencies
+  -h, --help     Print help
+
 
 > vp pm prune # should prune extraneous dependencies
 

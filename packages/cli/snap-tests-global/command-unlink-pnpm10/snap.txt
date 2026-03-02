@@ -1,7 +1,7 @@
 > vp unlink -h # should show help message
-Unlink packages
-
 Usage: vp unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
+
+Unlink packages
 
 Arguments:
   [PACKAGE|DIR]  Package name to unlink
@@ -10,6 +10,7 @@ Arguments:
 Options:
   -r, --recursive  Unlink in every workspace package
   -h, --help       Print help
+
 
 > mkdir -p ../unlink-test-lib && echo '{"name": "unlink-test-lib", "version": "1.0.0"}' > ../unlink-test-lib/package.json # create test library
 > vp link ../unlink-test-lib && cat package.json # link the library first

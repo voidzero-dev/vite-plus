@@ -1,27 +1,28 @@
 > vp why --help # should show help
-Show why a package is installed
-
 Usage: vp why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+Show why a package is installed
 
 Arguments:
   <PACKAGES>...           Package(s) to check
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-      --json                   Output in JSON format
-      --long                   Show extended information
-      --parseable              Show parseable output
-  -r, --recursive              Check recursively across all workspaces
-      --filter <PATTERN>       Filter packages in monorepo
-  -w, --workspace-root         Check in workspace root
-  -P, --prod                   Only production dependencies
-  -D, --dev                    Only dev dependencies
-      --depth <DEPTH>          Limit tree depth
-      --no-optional            Exclude optional dependencies
-  -g, --global                 Check globally installed packages
-      --exclude-peers          Exclude peer dependencies
-      --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
-  -h, --help                   Print help
+  --json                   Output in JSON format
+  --long                   Show extended information
+  --parseable              Show parseable output
+  -r, --recursive          Check recursively across all workspaces
+  --filter <PATTERN>       Filter packages in monorepo
+  -w, --workspace-root     Check in workspace root
+  -P, --prod               Only production dependencies
+  -D, --dev                Only dev dependencies
+  --depth <DEPTH>          Limit tree depth
+  --no-optional            Exclude optional dependencies
+  -g, --global             Check globally installed packages
+  --exclude-peers          Exclude peer dependencies
+  --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
+  -h, --help               Print help
+
 
 > vp install # should install packages first
 Packages: +<variable>

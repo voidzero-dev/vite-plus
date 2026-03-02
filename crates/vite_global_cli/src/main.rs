@@ -10,6 +10,7 @@
 mod cli;
 mod commands;
 mod error;
+mod help;
 mod js_executor;
 mod shim;
 mod tips;
@@ -86,6 +87,11 @@ async fn main() -> ExitCode {
 
     // Normalize arguments (list/ls aliases, help rewriting)
     let normalized_args = normalize_args(args);
+
+    // Print unified subcommand help for clap-managed commands before clap handles help output.
+    if help::maybe_print_unified_clap_subcommand_help(&normalized_args) {
+        return ExitCode::SUCCESS;
+    }
 
     // Parse CLI arguments (using custom help formatting)
     let exit_code = match try_parse_args_from(normalized_args) {

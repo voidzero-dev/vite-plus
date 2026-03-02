@@ -1,6 +1,7 @@
 > vp --version
 VITE+ - The Unified Toolchain for the Web
 
-PACKAGE VERSIONS:
-  Global vite-plus:    Not found
-  Local vite-plus:     Not found
+Package Versions:
+  global vite-plus  Not found
+  local vite-plus   Not found
+

@@ -1,16 +1,17 @@
 > vp env use --help # should show help
-Use a specific Node.js version for this shell session
-
 Usage: vp env use [OPTIONS] [VERSION]
+
+Use a specific Node.js version for this shell session
 
 Arguments:
   [VERSION]  Version to use (e.g., "20", "20.18.0", "lts", "latest") If not provided, reads from .node-version or package.json
 
 Options:
-      --unset                Remove session override (revert to file-based resolution)
-      --no-install           Skip auto-installation if version not present
-      --silent-if-unchanged  Suppress output if version is already active
-  -h, --help                 Print help
+  --unset                Remove session override (revert to file-based resolution)
+  --no-install           Skip auto-installation if version not present
+  --silent-if-unchanged  Suppress output if version is already active
+  -h, --help             Print help
+
 
 > vp env use 20.18.0 --no-install # should output export command to stdout
 export VITE_PLUS_NODE_VERSION=20.18.0
