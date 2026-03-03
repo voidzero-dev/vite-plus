@@ -5,7 +5,11 @@
 
 use std::{env, ffi::OsStr, future::Future, iter, path::PathBuf, pin::Pin, sync::Arc};
 
-use clap::{Parser, Subcommand};
+use clap::{
+    Parser, Subcommand,
+    error::{ContextKind, ContextValue, ErrorKind},
+};
+use owo_colors::OwoColorize;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use tokio::fs::write;
@@ -903,9 +907,7 @@ pub async fn main(
     let args_with_program = std::iter::once("vp".to_string()).chain(args_vec.iter().cloned());
     let cli_args = match CLIArgs::try_parse_from(args_with_program) {
         Ok(args) => args,
-        Err(err) => {
-            err.exit();
-        }
+        Err(err) => return handle_cli_parse_error(err),
     };
 
     match cli_args {
@@ -913,6 +915,15 @@ pub async fn main(
         CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
         CLIArgs::Exec(exec_args) => crate::exec::execute(exec_args, &cwd).await,
     }
+}
+
+fn handle_cli_parse_error(err: clap::Error) -> Result<ExitStatus, Error> {
+    if matches!(err.kind(), ErrorKind::InvalidSubcommand) && print_invalid_subcommand_error(&err) {
+        return Ok(ExitStatus(err.exit_code() as u8));
+    }
+
+    err.print().map_err(|e| Error::Anyhow(e.into()))?;
+    Ok(ExitStatus(err.exit_code() as u8))
 }
 
 fn normalize_help_args(args: Vec<String>) -> Vec<String> {
@@ -931,6 +942,40 @@ fn normalize_help_args(args: Vec<String>) -> Vec<String> {
 
 fn should_print_help(args: &[String]) -> bool {
     args.is_empty() || matches!(args, [arg] if arg == "-h" || arg == "--help")
+}
+
+fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<(String, Option<String>)> {
+    let invalid_subcommand = match error.get(ContextKind::InvalidSubcommand) {
+        Some(ContextValue::String(value)) => value.as_str(),
+        _ => return None,
+    };
+
+    let suggestion = match error.get(ContextKind::SuggestedSubcommand) {
+        Some(ContextValue::String(value)) => Some(value.to_owned()),
+        Some(ContextValue::Strings(values)) => {
+            vite_shared::string_similarity::pick_best_suggestion(invalid_subcommand, values)
+        }
+        _ => None,
+    };
+
+    Some((invalid_subcommand.to_owned(), suggestion))
+}
+
+fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
+    let Some((invalid_subcommand, suggestion)) = extract_invalid_subcommand_details(error) else {
+        return false;
+    };
+
+    let highlighted_subcommand = invalid_subcommand.bright_blue().to_string();
+    output::error(&format!("Command '{highlighted_subcommand}' not found"));
+
+    if let Some(suggestion) = suggestion {
+        eprintln!();
+        let highlighted_suggestion = format!("`vp {suggestion}`").bright_blue().to_string();
+        eprintln!("Did you mean {highlighted_suggestion}?");
+    }
+
+    true
 }
 
 fn print_help() {

@@ -17,6 +17,7 @@ mod tips;
 
 use std::process::ExitCode;
 
+use clap::error::{ContextKind, ContextValue};
 use owo_colors::OwoColorize;
 use vite_shared::output;
 
@@ -52,6 +53,40 @@ fn normalize_args(args: Vec<String>) -> Vec<String> {
         // No transformation needed
         _ => args,
     }
+}
+
+fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<(String, Option<String>)> {
+    let invalid_subcommand = match error.get(ContextKind::InvalidSubcommand) {
+        Some(ContextValue::String(value)) => value.as_str(),
+        _ => return None,
+    };
+
+    let suggestion = match error.get(ContextKind::SuggestedSubcommand) {
+        Some(ContextValue::String(value)) => Some(value.to_owned()),
+        Some(ContextValue::Strings(values)) => {
+            vite_shared::string_similarity::pick_best_suggestion(invalid_subcommand, values)
+        }
+        _ => None,
+    };
+
+    Some((invalid_subcommand.to_owned(), suggestion))
+}
+
+fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
+    let Some((invalid_subcommand, suggestion)) = extract_invalid_subcommand_details(error) else {
+        return false;
+    };
+
+    let highlighted_subcommand = invalid_subcommand.bright_blue().to_string();
+    output::error(&format!("Command '{highlighted_subcommand}' not found"));
+
+    if let Some(suggestion) = suggestion {
+        eprintln!();
+        let highlighted_suggestion = format!("`vp {suggestion}`").bright_blue().to_string();
+        eprintln!("Did you mean {highlighted_suggestion}?");
+    }
+
+    true
 }
 
 #[tokio::main]
@@ -97,8 +132,15 @@ async fn main() -> ExitCode {
     let exit_code = match try_parse_args_from(normalized_args) {
         Err(e) => {
             use clap::error::ErrorKind;
-            // Print the clap error/help/version
-            e.print().ok();
+            // Print custom unknown-command output to align with JS CLI, otherwise fall back to clap.
+            let printed = if matches!(e.kind(), ErrorKind::InvalidSubcommand) {
+                print_invalid_subcommand_error(&e)
+            } else {
+                false
+            };
+            if !printed {
+                e.print().ok();
+            }
 
             // --help and --version are "errors" in clap but should exit successfully
             if matches!(e.kind(), ErrorKind::DisplayHelp | ErrorKind::DisplayVersion) {

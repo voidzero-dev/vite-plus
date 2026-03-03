@@ -1,5 +1,5 @@
 > vp -h # show help message
-Vite+/<semver>
+VITE+ - The Unified Toolchain for the Web
 
 Usage: vp [COMMAND]
 
@@ -44,10 +44,19 @@ Options:
 > vp -V # show version
 VITE+ - The Unified Toolchain for the Web
 
-Package Versions:
-  global vite-plus  v<semver>
-  local vite-plus   Not found
+vp v<semver>
 
+Local vite-plus:
+  vite-plus  Not found
+
+Tools:
+  vite             Not found
+  rolldown         Not found
+  vitest           Not found
+  oxfmt            Not found
+  oxlint           Not found
+  oxlint-tsgolint  Not found
+  tsdown           Not found
 
 > vp install -h # show install help message
 Usage: vp install [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
@@ -292,9 +301,9 @@ Options:
 
 
 > vp env # show env help message
-Manage Node.js versions
-
 Usage: vp env [OPTIONS] [COMMAND]
+
+Manage Node.js versions
 
 Commands:
   default      Set or show the global default Node.js version
@@ -313,10 +322,10 @@ Commands:
   use          Use a specific Node.js version for this shell session
 
 Options:
-      --current  Show current environment information
-      --json     Output in JSON format
-      --print    Print shell snippet to set environment for current session
-  -h, --help     Print help
+  --current   Show current environment information
+  --json      Output in JSON format
+  --print     Print shell snippet to set environment for current session
+  -h, --help  Print help
 
 Examples:
   vp env setup                  # Create shims for node, npm, npx
@@ -351,6 +360,7 @@ Global Packages:
   vp uninstall -g <package>     # Uninstall a global package
   vp update -g [package]        # Update global package(s)
   vp list -g [package]          # List installed global packages
+
 
 > vp upgrade -h # show upgrade help message
 Usage: vp upgrade [OPTIONS] [VERSION]

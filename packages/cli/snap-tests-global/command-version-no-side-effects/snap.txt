@@ -1,10 +1,19 @@
 > vp --version # should print version
 VITE+ - The Unified Toolchain for the Web
 
-Package Versions:
-  global vite-plus  v<semver>
-  local vite-plus   Not found
+vp v<semver>
 
+Local vite-plus:
+  vite-plus  Not found
+
+Tools:
+  vite             Not found
+  rolldown         Not found
+  vitest           Not found
+  oxfmt            Not found
+  oxlint           Not found
+  oxlint-tsgolint  Not found
+  tsdown           Not found
 
 > test -f .node-version && echo 'FAIL: .node-version was created' || echo 'OK: no .node-version created'
 OK: no .node-version created

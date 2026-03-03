@@ -5,7 +5,7 @@ import path from 'node:path';
 import { VITE_PLUS_NAME } from './utils/constants.js';
 import { renderCliDoc } from './utils/help.js';
 import { detectPackageMetadata } from './utils/package.js';
-import { getVitePlusHeader, log } from './utils/terminal.js';
+import { accent, getVitePlusHeader, log } from './utils/terminal.js';
 
 const require = createRequire(import.meta.url);
 
@@ -21,7 +21,6 @@ interface LocalPackageMetadata {
 }
 
 interface ToolVersionSpec {
-  command: string;
   displayName: string;
   packageName: string;
   bundledVersionKey?: string;
@@ -30,6 +29,11 @@ interface ToolVersionSpec {
 
 function getGlobalVersion(): string | null {
   return process.env.VITE_PLUS_GLOBAL_VERSION ?? null;
+}
+
+function getCliVersion(): string | null {
+  const pkg = resolvePackageJson(VITE_PLUS_NAME, process.cwd());
+  return pkg?.version ?? null;
 }
 
 function getLocalMetadata(cwd: string): LocalPackageMetadata | null {
@@ -92,77 +96,61 @@ function resolveToolVersion(tool: ToolVersionSpec, localPackagePath: string): st
   return null;
 }
 
-function formatToolVersion(tool: ToolVersionSpec, version: string | null): string {
-  return `${tool.displayName} ${version ? `v${version}` : `Not found`}`;
-}
-
 /**
  * Print version information
  */
 export async function printVersion(cwd: string) {
   const globalVersion = getGlobalVersion();
+  const cliVersion = getCliVersion();
   const localMetadata = getLocalMetadata(cwd);
   const localVersion = localMetadata?.version ?? null;
+  const vpVersion = globalVersion ?? cliVersion ?? localVersion ?? 'unknown';
 
-  log((await getVitePlusHeader()) + '\n');
+  log(await getVitePlusHeader());
+  log('');
+  log(`vp v${vpVersion}\n`);
 
   const sections = [
     {
-      title: 'Package Versions',
+      title: 'Local vite-plus',
       rows: [
         {
-          label: 'global vite-plus',
-          description: globalVersion ? `v${globalVersion}` : 'Not found',
-        },
-        {
-          label: 'local vite-plus',
+          label: accent('vite-plus'),
           description: localVersion ? `v${localVersion}` : 'Not found',
         },
       ],
     },
   ];
 
-  if (!localMetadata) {
-    log(renderCliDoc({ sections }));
-    return;
-  }
-
   const tools: ToolVersionSpec[] = [
     {
-      command: 'vite',
       displayName: 'vite',
       packageName: '@voidzero-dev/vite-plus-core',
       bundledVersionKey: 'vite',
     },
     {
-      command: 'rolldown',
       displayName: 'rolldown',
       packageName: '@voidzero-dev/vite-plus-core',
       bundledVersionKey: 'rolldown',
     },
     {
-      command: 'test',
       displayName: 'vitest',
       packageName: '@voidzero-dev/vite-plus-test',
       bundledVersionKey: 'vitest',
     },
     {
-      command: 'fmt',
       displayName: 'oxfmt',
       packageName: 'oxfmt',
     },
     {
-      command: 'lint',
       displayName: 'oxlint',
       packageName: 'oxlint',
     },
     {
-      command: 'tsgolint',
       displayName: 'oxlint-tsgolint',
       packageName: 'oxlint-tsgolint',
     },
     {
-      command: 'pack',
       displayName: 'tsdown',
       packageName: '@voidzero-dev/vite-plus-core',
       bundledVersionKey: 'tsdown',
@@ -171,18 +159,14 @@ export async function printVersion(cwd: string) {
 
   const resolvedTools = tools.map((tool) => ({
     tool,
-    version: resolveToolVersion(tool, localMetadata.path),
+    version: localMetadata ? resolveToolVersion(tool, localMetadata.path) : null,
   }));
-  if (resolvedTools.some(({ tool, version }) => tool.bundledVersionKey && !version)) {
-    log(renderCliDoc({ sections }));
-    return;
-  }
 
   sections.push({
-    title: 'Bundled with vite-plus',
+    title: 'Tools',
     rows: resolvedTools.map(({ tool, version }) => ({
-      label: tool.command,
-      description: formatToolVersion(tool, version),
+      label: accent(tool.displayName),
+      description: version ? `v${version}` : 'Not found',
     })),
   });
 

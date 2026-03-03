@@ -120,18 +120,18 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
         return print_env(cwd).await;
     }
 
-    // No flags provided - show help (use clap's built-in help printer)
-    use clap::CommandFactory;
-    let bin_name = crate::cli::Args::command().get_bin_name().unwrap_or("vp").to_string();
-    let display_name: &'static str = Box::leak(format!("{bin_name} env").into_boxed_str());
-    crate::cli::Args::command()
-        .find_subcommand("env")
-        .unwrap()
-        .clone()
-        .name(display_name)
-        .disable_help_subcommand(true)
-        .print_help()
-        .ok();
+    // No flags provided - show unified help to match `vp env --help`.
+    if !crate::help::print_unified_clap_help_for_path(&["env"]) {
+        // Fallback to clap's built-in help printer if unified rendering fails.
+        use clap::CommandFactory;
+        crate::cli::Args::command()
+            .find_subcommand("env")
+            .unwrap()
+            .clone()
+            .disable_help_subcommand(true)
+            .print_help()
+            .ok();
+    }
     Ok(ExitStatus::default())
 }
 

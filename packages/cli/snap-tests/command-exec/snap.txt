@@ -87,7 +87,7 @@ Examples:
 [1]> vp exec nonexistent-cmd-12345 # command not found error
 error: Command 'nonexistent-cmd-12345' not found in node_modules/.bin
 
-Hint: Run 'vp install' to install dependencies, or use 'vpx' for remote fallback.
+Run `vp install` to install dependencies, or use `vpx` for invoking remote commands.
 
 > vp run foo # vp exec works in package.json scripts
 $ vp exec node -e "console.log(5173)" ⊘ cache disabled

@@ -6,6 +6,7 @@
 use std::process::ExitStatus;
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
+use owo_colors::OwoColorize;
 use vite_install::commands::{
     add::SaveDependencyType, install::InstallCommandOptions, outdated::Format,
 };
@@ -1843,9 +1844,19 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             commands::delegate::execute(cwd, "pack", &args).await
         }
 
-        Commands::Run { args } => commands::run_or_delegate::execute(cwd, &args).await,
+        Commands::Run { args } => {
+            if help::maybe_print_unified_delegate_help("run", &args) {
+                return Ok(ExitStatus::default());
+            }
+            commands::run_or_delegate::execute(cwd, &args).await
+        }
 
-        Commands::Exec { args } => commands::delegate::execute(cwd, "exec", &args).await,
+        Commands::Exec { args } => {
+            if help::maybe_print_unified_delegate_help("exec", &args) {
+                return Ok(ExitStatus::default());
+            }
+            commands::delegate::execute(cwd, "exec", &args).await
+        }
 
         Commands::Preview { args } => {
             if help::maybe_print_unified_delegate_help("preview", &args) {
@@ -1854,7 +1865,12 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             commands::delegate::execute(cwd, "preview", &args).await
         }
 
-        Commands::Cache { args } => commands::delegate::execute(cwd, "cache", &args).await,
+        Commands::Cache { args } => {
+            if help::maybe_print_unified_delegate_help("cache", &args) {
+                return Ok(ExitStatus::default());
+            }
+            commands::delegate::execute(cwd, "cache", &args).await
+        }
 
         Commands::Env(args) => commands::env::execute(cwd, args).await,
 
@@ -1895,15 +1911,14 @@ pub fn command_with_help() -> clap::Command {
 
 /// Apply custom help formatting to a clap Command to match the JS CLI output.
 fn apply_custom_help(cmd: clap::Command) -> clap::Command {
-    let version = env!("CARGO_PKG_VERSION");
     let after_help = help::render_help_doc(&help::top_level_help_doc());
-    let help_template = format!(
-        "Vite+/{version}\
-{{after-help}}
-Options:
-{{options}}
-"
-    );
+    let options_heading = help::render_heading("Options");
+    let header = if help::should_style_help() {
+        "VITE+ - The Unified Toolchain for the Web".bold().to_string()
+    } else {
+        "VITE+ - The Unified Toolchain for the Web".to_string()
+    };
+    let help_template = format!("{header}{{after-help}}\n{options_heading}\n{{options}}\n");
 
     cmd.after_help(after_help).help_template(help_template)
 }

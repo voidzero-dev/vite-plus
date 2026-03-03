@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, process::Stdio, sync::Arc};
 
+use owo_colors::OwoColorize;
 use petgraph::prelude::DiGraphMap;
 use vite_error::Error;
 use vite_path::AbsolutePathBuf;
@@ -216,10 +217,15 @@ pub(super) async fn execute_exec_workspace(
             ) {
                 Ok(cmd) => cmd,
                 Err(Error::CannotFindBinaryPath(_)) if single_package => {
+                    let command = args.command[0].bright_blue().to_string();
+                    let vp_install = "`vp install`".bright_blue().to_string();
+                    let vpx = "`vpx`".bright_blue().to_string();
                     vite_shared::output::error(&vite_str::format!(
                         "Command '{}' not found in node_modules/.bin\n\n\
-                         Hint: Run 'vp install' to install dependencies, or use 'vpx' for remote fallback.",
-                        args.command[0]
+                         Run {} to install dependencies, or use {} for invoking remote commands.",
+                        command,
+                        vp_install,
+                        vpx
                     ));
                     return Ok(ExitStatus(1));
                 }

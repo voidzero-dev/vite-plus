@@ -55,16 +55,16 @@ fn section_lines(title: &'static str, lines: Vec<&'static str>) -> HelpSection {
     HelpSection::Lines { title, lines }
 }
 
-fn render_heading(title: &str) -> String {
+pub fn render_heading(title: &str) -> String {
     let heading = format!("{title}:");
-    if should_style_help() { heading.bold().underline().to_string() } else { heading }
+    if should_style_help() { heading.bold().to_string() } else { heading }
 }
 
 fn render_usage_value(usage: &str) -> String {
     if should_style_help() { usage.bold().to_string() } else { usage.to_string() }
 }
 
-fn should_style_help() -> bool {
+pub fn should_style_help() -> bool {
     std::io::stdout().is_terminal()
         && std::env::var_os("NO_COLOR").is_none()
         && std::env::var("CLICOLOR").map_or(true, |value| value != "0")
@@ -117,6 +117,22 @@ fn render_owned_rows(rows: &[OwnedHelpRow]) -> Vec<String> {
     output
 }
 
+fn split_comment_suffix(line: &str) -> Option<(&str, &str)> {
+    line.find(" #").map(|index| line.split_at(index))
+}
+
+fn render_muted_comment_suffix(line: &str) -> String {
+    if !should_style_help() {
+        return line.to_string();
+    }
+
+    if let Some((prefix, suffix)) = split_comment_suffix(line) {
+        return format!("{}{}", prefix, suffix.bright_black());
+    }
+
+    line.to_string()
+}
+
 pub fn render_help_doc(doc: &HelpDoc) -> String {
     let mut output = String::new();
 
@@ -141,7 +157,7 @@ pub fn render_help_doc(doc: &HelpDoc) -> String {
             HelpSection::Lines { title, lines } => {
                 let _ = writeln!(output, "{}", render_heading(title));
                 for line in lines {
-                    let _ = writeln!(output, "{line}");
+                    let _ = writeln!(output, "{}", render_muted_comment_suffix(line));
                 }
             }
         }
@@ -174,7 +190,7 @@ fn render_owned_help_doc(doc: &OwnedHelpDoc) -> String {
             OwnedHelpSection::Lines { title, lines } => {
                 let _ = writeln!(output, "{}", render_heading(title));
                 for line in lines {
-                    let _ = writeln!(output, "{line}");
+                    let _ = writeln!(output, "{}", render_muted_comment_suffix(line));
                 }
             }
         }
@@ -250,9 +266,47 @@ fn parse_rows(lines: &[String]) -> Vec<OwnedHelpRow> {
     rows
 }
 
+fn strip_ansi(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\u{1b}' {
+            match chars.peek().copied() {
+                // CSI sequence (for example: \x1b[1m)
+                Some('[') => {
+                    let _ = chars.next();
+                    for c in chars.by_ref() {
+                        if ('@'..='~').contains(&c) {
+                            break;
+                        }
+                    }
+                }
+                // OSC sequence (for example: hyperlinks)
+                Some(']') => {
+                    let _ = chars.next();
+                    let mut prev = '\0';
+                    for c in chars.by_ref() {
+                        if c == '\u{7}' || (prev == '\u{1b}' && c == '\\') {
+                            break;
+                        }
+                        prev = c;
+                    }
+                }
+                _ => {}
+            }
+            continue;
+        }
+
+        output.push(ch);
+    }
+
+    output
+}
+
 fn parse_clap_help_to_doc(raw_help: &str) -> Option<OwnedHelpDoc> {
     let normalized = raw_help.replace("\r\n", "\n");
-    let lines: Vec<String> = normalized.lines().map(str::to_string).collect();
+    let lines: Vec<String> = normalized.lines().map(strip_ansi).collect();
     let usage_index = lines.iter().position(|line| line.starts_with("Usage: "))?;
     let usage = lines[usage_index].trim_start_matches("Usage: ").trim().to_string();
 
@@ -575,6 +629,117 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                 ),
             ],
         }),
+        "run" => Some(HelpDoc {
+            usage: "vp run [OPTIONS] [TASK_SPECIFIER] [ADDITIONAL_ARGS]...",
+            summary: vec!["Run tasks."],
+            sections: vec![
+                section_rows(
+                    "Arguments",
+                    vec![
+                        row(
+                            "[TASK_SPECIFIER]",
+                            "`packageName#taskName` or `taskName`. If omitted, lists all available tasks",
+                        ),
+                        row("[ADDITIONAL_ARGS]...", "Additional arguments to pass to the tasks"),
+                    ],
+                ),
+                section_rows(
+                    "Options",
+                    vec![
+                        row("-r, --recursive", "Select all packages in the workspace"),
+                        row(
+                            "-t, --transitive",
+                            "Select the current package and its transitive dependencies",
+                        ),
+                        row("-w, --workspace-root", "Select the workspace root package"),
+                        row(
+                            "-F, --filter <FILTERS>",
+                            "Match packages by name, directory, or glob pattern",
+                        ),
+                        row(
+                            "--ignore-depends-on",
+                            "Do not run dependencies specified in `dependsOn` fields",
+                        ),
+                        row("-v, --verbose", "Show full detailed summary after execution"),
+                        row("--last-details", "Display the detailed summary of the last run"),
+                        row("-h, --help", "Print help (see more with '--help')"),
+                    ],
+                ),
+                section_lines(
+                    "Filter Patterns",
+                    vec![
+                        "  --filter <pattern>        Select by package name (e.g. foo, @scope/*)",
+                        "  --filter ./<dir>          Select packages under a directory",
+                        "  --filter {<dir>}          Same as ./<dir>, but allows traversal suffixes",
+                        "  --filter <pattern>...     Select package and its dependencies",
+                        "  --filter ...<pattern>     Select package and its dependents",
+                        "  --filter <pattern>^...    Select only the dependencies (exclude the package itself)",
+                        "  --filter !<pattern>       Exclude packages matching the pattern",
+                    ],
+                ),
+            ],
+        }),
+        "exec" => Some(HelpDoc {
+            usage: "vp exec [OPTIONS] [COMMAND]...",
+            summary: vec!["Execute a command from local node_modules/.bin."],
+            sections: vec![
+                section_rows(
+                    "Arguments",
+                    vec![row("[COMMAND]...", "Command and arguments to execute")],
+                ),
+                section_rows(
+                    "Options",
+                    vec![
+                        row("-r, --recursive", "Select all packages in the workspace"),
+                        row(
+                            "-t, --transitive",
+                            "Select the current package and its transitive dependencies",
+                        ),
+                        row("-w, --workspace-root", "Select the workspace root package"),
+                        row(
+                            "-F, --filter <FILTERS>",
+                            "Match packages by name, directory, or glob pattern",
+                        ),
+                        row("-c, --shell-mode", "Execute the command within a shell environment"),
+                        row("--parallel", "Run concurrently without topological ordering"),
+                        row("--reverse", "Reverse execution order"),
+                        row("--resume-from <RESUME_FROM>", "Resume from a specific package"),
+                        row("--report-summary", "Save results to vp-exec-summary.json"),
+                        row("-h, --help", "Print help (see more with '--help')"),
+                    ],
+                ),
+                section_lines(
+                    "Filter Patterns",
+                    vec![
+                        "  --filter <pattern>        Select by package name (e.g. foo, @scope/*)",
+                        "  --filter ./<dir>          Select packages under a directory",
+                        "  --filter {<dir>}          Same as ./<dir>, but allows traversal suffixes",
+                        "  --filter <pattern>...     Select package and its dependencies",
+                        "  --filter ...<pattern>     Select package and its dependents",
+                        "  --filter <pattern>^...    Select only the dependencies (exclude the package itself)",
+                        "  --filter !<pattern>       Exclude packages matching the pattern",
+                    ],
+                ),
+                section_lines(
+                    "Examples",
+                    vec![
+                        "  vp exec node --version                             # Run local node",
+                        "  vp exec tsc --noEmit                               # Run local TypeScript compiler",
+                        "  vp exec -c 'tsc --noEmit && prettier --check .'    # Shell mode",
+                        "  vp exec -r -- tsc --noEmit                         # Run in all workspace packages",
+                        "  vp exec --filter 'app...' -- tsc                   # Run in filtered packages",
+                    ],
+                ),
+            ],
+        }),
+        "cache" => Some(HelpDoc {
+            usage: "vp cache <COMMAND>",
+            summary: vec!["Manage the task cache."],
+            sections: vec![
+                section_rows("Commands", vec![row("clean", "Clean up all the cache")]),
+                section_rows("Options", vec![row("-h, --help", "Print help")]),
+            ],
+        }),
         _ => None,
     }
 }
@@ -655,21 +820,11 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
         return false;
     }
 
-    let mut help_args = vec!["vp".to_string()];
-    help_args.extend(command_path);
-    help_args.push("--help".to_string());
-
-    let raw_help = match crate::cli::try_parse_args_from(help_args) {
-        Err(error) if matches!(error.kind(), ErrorKind::DisplayHelp) => error.to_string(),
-        _ => return false,
-    };
-
-    let Some(doc) = parse_clap_help_to_doc(&raw_help) else {
-        return false;
-    };
-
-    println!("{}", render_owned_help_doc(&doc));
-    true
+    let mut command_path_refs = Vec::with_capacity(command_path.len());
+    for segment in &command_path {
+        command_path_refs.push(segment.as_str());
+    }
+    print_unified_clap_help_for_path(&command_path_refs)
 }
 
 pub fn should_print_unified_delegate_help(args: &[String]) -> bool {
@@ -689,9 +844,30 @@ pub fn maybe_print_unified_delegate_help(command: &str, args: &[String]) -> bool
     true
 }
 
+pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
+    let mut help_args = vec!["vp".to_string()];
+    help_args.extend(command_path.iter().map(ToString::to_string));
+    help_args.push("--help".to_string());
+
+    let raw_help = match crate::cli::try_parse_args_from(help_args) {
+        Err(error) if matches!(error.kind(), ErrorKind::DisplayHelp) => error.to_string(),
+        _ => return false,
+    };
+
+    let Some(doc) = parse_clap_help_to_doc(&raw_help) else {
+        return false;
+    };
+
+    println!("{}", render_owned_help_doc(&doc));
+    true
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{has_help_flag_before_terminator, parse_clap_help_to_doc, parse_rows};
+    use super::{
+        has_help_flag_before_terminator, parse_clap_help_to_doc, parse_rows, split_comment_suffix,
+        strip_ansi,
+    };
 
     #[test]
     fn parse_rows_supports_wrapped_option_labels() {
@@ -739,5 +915,44 @@ Options:
     fn help_flag_after_terminator_is_ignored() {
         let args = vec!["vpx".to_string(), "--".to_string(), "--help".to_string()];
         assert!(!has_help_flag_before_terminator(&args));
+    }
+
+    #[test]
+    fn strip_ansi_removes_csi_sequences() {
+        let input = "\u{1b}[1mOptions:\u{1b}[0m";
+        assert_eq!(strip_ansi(input), "Options:");
+    }
+
+    #[test]
+    fn parse_clap_help_with_ansi_sequences() {
+        let raw_help = "\
+\u{1b}[1mAdd packages to dependencies\u{1b}[0m
+
+\u{1b}[1mUsage:\u{1b}[0m vp add [OPTIONS] <PACKAGES>...
+
+\u{1b}[1mArguments:\u{1b}[0m
+  <PACKAGES>...  Packages to add
+
+\u{1b}[1mOptions:\u{1b}[0m
+  -h, --help  Print help
+";
+
+        let doc = parse_clap_help_to_doc(raw_help).expect("should parse clap help text");
+        assert_eq!(doc.usage, "vp add [OPTIONS] <PACKAGES>...");
+        assert_eq!(doc.summary, vec!["Add packages to dependencies"]);
+        assert_eq!(doc.sections.len(), 2);
+    }
+
+    #[test]
+    fn split_comment_suffix_extracts_command_comment() {
+        let line = "  vp env list-remote 20         # List Node.js 20.x versions";
+        let (prefix, suffix) = split_comment_suffix(line).expect("expected comment suffix");
+        assert_eq!(prefix, "  vp env list-remote 20        ");
+        assert_eq!(suffix, " # List Node.js 20.x versions");
+    }
+
+    #[test]
+    fn split_comment_suffix_returns_none_without_comment() {
+        assert!(split_comment_suffix("  vp env list").is_none());
     }
 }

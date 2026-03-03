@@ -229,6 +229,7 @@ impl JsExecutor {
     /// when no version source exists in the project directory.
     ///
     /// Use this for read-only / side-effect-free commands like `--version`.
+    #[allow(dead_code)] // kept for future read-only delegations
     pub async fn delegate_with_cli_runtime(
         &mut self,
         project_path: &AbsolutePath,

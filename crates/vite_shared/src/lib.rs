@@ -6,6 +6,7 @@ mod home;
 pub mod output;
 mod package_json;
 mod path_env;
+pub mod string_similarity;
 mod tracing;
 
 pub use env_config::{EnvConfig, TestEnvGuard};

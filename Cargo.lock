@@ -7136,6 +7136,7 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "owo-colors",
  "petgraph 0.8.3",
  "pretty_assertions",
  "rolldown_binding",
