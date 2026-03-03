@@ -712,7 +712,12 @@ export function setupGitHooks(projectPath: string): void {
 
   // Format package.json to sort fields conventionally
   const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
-  spawn.sync(vpBin, ['fmt', packageJsonPath], { stdio: 'pipe' });
+  const fmtResult = spawn.sync(vpBin, ['fmt', packageJsonPath], {
+    stdio: 'pipe',
+  });
+  if (fmtResult.status !== 0) {
+    prompts.log.warn('Failed to format package.json');
+  }
 
   // Create .husky/pre-commit if .git exists
   if (fs.existsSync(path.join(projectPath, '.git'))) {
