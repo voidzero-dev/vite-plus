@@ -14,7 +14,7 @@ export default defineConfig({
     if (source === 'cross-spawn' || source === 'picocolors') {
       return true;
     }
-    if (source === '../../binding/index.js') {
+    if (source === '../../binding/index.js' || source === '../binding/index.js') {
       return true;
     }
     return false;

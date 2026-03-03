@@ -7,9 +7,10 @@
  *
  * Changes applied:
  * 1. constants.ts: Add VITE_PLUS_VERSION constant
- * 2. cli.ts: Import VITE_PLUS_VERSION, change CLI name, version, and banner
- * 3. build.ts: Import VITE_PLUS_VERSION, change build banner and error prefix
+ * 2. cli.ts: Import VITE_PLUS_VERSION, change CLI name/version, and make banner magenta
+ * 3. build.ts: Remove startup build banner and change error prefix
  * 4. logger.ts: Change default prefix from '[vite]' to '[vite+]'
+ * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -49,6 +50,18 @@ function replaceInFile(
       `  Could not find search string: ${JSON.stringify(search)}\n` +
       `  The upstream code may have changed. Please update the search string in brand-rolldown-vite.ts.`,
   );
+}
+
+function removeAnyInFile(filePath: string, searches: string[]): 'patched' | 'already' {
+  const content = readFileSync(filePath, 'utf-8');
+  for (const search of searches) {
+    if (content.includes(search)) {
+      const newContent = content.replace(search, '');
+      writeFileSync(filePath, newContent, 'utf-8');
+      return 'patched';
+    }
+  }
+  return 'already';
 }
 
 function logPatch(file: string, desc: string, result: 'patched' | 'already') {
@@ -91,6 +104,11 @@ export function brandRolldownVite(rootDir: string = process.cwd()) {
       "`${colors.bold('VITE')} v${VERSION}`",
       "`${colors.bold('VITE+')} v${VITE_PLUS_VERSION}`",
     ),
+    replaceInFile(
+      cliFile,
+      "colors.green(\n            `${colors.bold('VITE+')} v${VITE_PLUS_VERSION}`,\n          )",
+      "colors.magenta(\n            `${colors.bold('VITE+')} v${VITE_PLUS_VERSION}`,\n          )",
+    ),
   ];
   logPatch(
     'cli.ts',
@@ -98,20 +116,18 @@ export function brandRolldownVite(rootDir: string = process.cwd()) {
     cliResults.includes('patched') ? 'patched' : 'already',
   );
 
-  // 3. build.ts: Import VITE_PLUS_VERSION, change build banner and error prefix
+  // 3. build.ts: Remove startup build banner and update error prefix
   const buildFile = join(nodeDir, 'build.ts');
   const buildResults = [
-    replaceInFile(
-      buildFile,
-      "  ROLLUP_HOOKS,\n  VERSION,\n} from './constants'",
-      "  ROLLUP_HOOKS,\n  VERSION,\n  VITE_PLUS_VERSION,\n} from './constants'",
-    ),
-    replaceInFile(buildFile, '`vite v${VERSION} ', '`vite+ v${VITE_PLUS_VERSION} '),
+    removeAnyInFile(buildFile, [
+      '    logger.info(\n      colors.cyan(\n        `vite v${VERSION} ${colors.green(\n          `building ${environment.name} environment for ${environment.config.mode}...`,\n        )}`,\n      ),\n    )\n',
+      '    logger.info(\n      colors.cyan(\n        `vite+ v${VITE_PLUS_VERSION} ${colors.green(\n          `building ${environment.name} environment for ${environment.config.mode}...`,\n        )}`,\n      ),\n    )\n',
+    ]),
     replaceInFile(buildFile, '`[vite]: Rolldown failed', '`[vite+]: Rolldown failed'),
   ];
   logPatch(
     'build.ts',
-    'Updated imports, banner, and error prefix',
+    'Removed startup banner and updated error prefix',
     buildResults.includes('patched') ? 'patched' : 'already',
   );
 
@@ -121,6 +137,26 @@ export function brandRolldownVite(rootDir: string = process.cwd()) {
     'logger.ts',
     "Changed prefix to '[vite+]'",
     replaceInFile(loggerFile, "prefix = '[vite]'", "prefix = '[vite+]'"),
+  );
+
+  // 5. reporter.ts: Suppress redundant version-only line from native reporter
+  const reporterFile = join(nodeDir, 'plugins', 'reporter.ts');
+  const reporterResults = [
+    replaceInFile(
+      reporterFile,
+      'const COMPRESSIBLE_ASSETS_RE = /\\.(?:html|json|svg|txt|xml|xhtml|wasm)$/',
+      'const COMPRESSIBLE_ASSETS_RE = /\\.(?:html|json|svg|txt|xml|xhtml|wasm)$/\nconst VITE_VERSION_ONLY_LINE_RE = /^vite v\\S+$/',
+    ),
+    replaceInFile(
+      reporterFile,
+      '        logInfo: shouldLogInfo ? (msg) => env.logger.info(msg) : undefined,',
+      '        logInfo: shouldLogInfo\n          ? (msg) => {\n              // Keep transformed/chunk/gzip logs but suppress redundant version-only line.\n              if (VITE_VERSION_ONLY_LINE_RE.test(msg.trim())) {\n                return\n              }\n              env.logger.info(msg)\n            }\n          : undefined,',
+    ),
+  ];
+  logPatch(
+    'plugins/reporter.ts',
+    'Suppressed redundant version-only native reporter line',
+    reporterResults.includes('patched') ? 'patched' : 'already',
   );
 
   log('Done!');

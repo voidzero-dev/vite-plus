@@ -1,5 +1,5 @@
 > vp -h # vp should show help same as vite
-Vite+/<semver>
+VITE+ - The Unified Toolchain for the Web
 
 Usage: vp <COMMAND>
 

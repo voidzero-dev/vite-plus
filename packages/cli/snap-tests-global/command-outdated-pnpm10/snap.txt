@@ -1,4 +1,6 @@
 > vp outdated --help # should show help
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Check for outdated packages
@@ -23,6 +25,8 @@ Options:
 
 
 > vp install # should install packages first
+VITE+ - The Unified Toolchain for the Web
+
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done

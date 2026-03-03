@@ -33,6 +33,11 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       // e.g.: ` v1.0.0` -> ` <semver>`
       // e.g.: `/1.0.0` -> `/<semver>`
       .replaceAll(/([@/\s]v?)\d+\.\d+\.\d+(?:-.*)?/g, '$1<semver>')
+      // vite build banner can appear on some environments/runtimes:
+      // vite v<semver>
+      // transforming...✓ ...
+      // Keep snapshots stable by stripping the standalone banner line.
+      .replaceAll(/(?:^|\n)vite v<semver>\n(?=transforming\.\.\.)/g, '\n')
       // vite-plus hash version
       // e.g.: `vite-plus": "^0.0.0-aa9f90fe23216b8ad85b0ba4fc1bccb0614afaf0"` -> `vite-plus": "^0.0.0-<hash>`
       .replaceAll(/0\.0\.0-\w{40}/g, '0.0.0-<hash>')

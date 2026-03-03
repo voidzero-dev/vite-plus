@@ -1,4 +1,6 @@
 > vp remove --help # should show help
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Remove packages from dependencies

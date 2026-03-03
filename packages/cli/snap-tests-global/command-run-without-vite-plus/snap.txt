@@ -1,4 +1,6 @@
 > vp run hello # should fall back to pnpm run when no vite-plus dependency
+VITE+ - The Unified Toolchain for the Web
+
 
 > command-run-without-vite-plus@<semver> hello <cwd>
 > echo hello from script
@@ -6,6 +8,8 @@
 hello from script
 
 > vp run greet --arg1 value1 # should pass through args to pnpm run
+VITE+ - The Unified Toolchain for the Web
+
 
 > command-run-without-vite-plus@<semver> greet <cwd>
 > echo greet --arg1 value1
@@ -13,6 +17,8 @@ hello from script
 greet --arg1 value1
 
 [1]> vp run nonexistent # should show pnpm missing script error
+VITE+ - The Unified Toolchain for the Web
+
  ERR_PNPM_NO_SCRIPT  Missing script: nonexistent
 
 Command "nonexistent" not found.

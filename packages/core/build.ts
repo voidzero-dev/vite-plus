@@ -161,6 +161,49 @@ async function buildVite() {
             }
           },
         },
+        {
+          name: 'suppress-vite-version-only-reporter-line',
+          transform(code, id) {
+            if (!id.endsWith(join('vite', 'src', 'node', 'plugins', 'reporter.ts'))) {
+              return;
+            }
+
+            // Upstream native reporter can emit a redundant standalone "vite vX.Y.Z" line.
+            // Filter it at source so snapshots and CLI output remain stable.
+            if (code.includes('VITE_VERSION_ONLY_LINE_RE')) {
+              return;
+            }
+
+            const constLine =
+              'const COMPRESSIBLE_ASSETS_RE = /\\.(?:html|json|svg|txt|xml|xhtml|wasm)$/';
+            const logInfoLine =
+              '        logInfo: shouldLogInfo ? (msg) => env.logger.info(msg) : undefined,';
+
+            if (!code.includes(constLine) || !code.includes(logInfoLine)) {
+              return;
+            }
+
+            return {
+              code: code
+                .replace(
+                  constLine,
+                  `${constLine}\nconst VITE_VERSION_ONLY_LINE_RE = /^vite v\\S+$/`,
+                )
+                .replace(
+                  logInfoLine,
+                  `        logInfo: shouldLogInfo
+          ? (msg) => {
+              // Keep transformed/chunk/gzip logs but suppress redundant version-only line.
+              if (VITE_VERSION_ONLY_LINE_RE.test(msg.trim())) {
+                return
+              }
+              env.logger.info(msg)
+            }
+          : undefined,`,
+                ),
+            };
+          },
+        },
         ...config.plugins.filter((plugin) => {
           return !(
             typeof plugin === 'object' &&

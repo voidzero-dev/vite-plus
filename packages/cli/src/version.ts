@@ -2,10 +2,11 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
+import { vitePlusHeader } from '../binding/index.js';
 import { VITE_PLUS_NAME } from './utils/constants.js';
 import { renderCliDoc } from './utils/help.js';
 import { detectPackageMetadata } from './utils/package.js';
-import { accent, getVitePlusHeader, log } from './utils/terminal.js';
+import { accent, log } from './utils/terminal.js';
 
 const require = createRequire(import.meta.url);
 
@@ -106,7 +107,7 @@ export async function printVersion(cwd: string) {
   const localVersion = localMetadata?.version ?? null;
   const vpVersion = globalVersion ?? cliVersion ?? localVersion ?? 'unknown';
 
-  log(await getVitePlusHeader());
+  log(vitePlusHeader());
   log('');
   log(`vp v${vpVersion}\n`);
 

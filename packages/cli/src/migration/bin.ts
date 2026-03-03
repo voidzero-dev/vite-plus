@@ -6,6 +6,7 @@ import mri from 'mri';
 import colors from 'picocolors';
 import semver from 'semver';
 
+import { vitePlusHeader } from '../../binding/index.js';
 import { PackageManager, type WorkspaceInfo } from '../types/index.js';
 import { selectAgentTargetPath, writeAgentInstructions } from '../utils/agent.js';
 import { renderCliDoc } from '../utils/help.js';
@@ -18,7 +19,7 @@ import {
   selectPackageManager,
   upgradeYarn,
 } from '../utils/prompts.js';
-import { accent, getVitePlusHeader, log, muted } from '../utils/terminal.js';
+import { accent, log, muted } from '../utils/terminal.js';
 import type { PackageDependencies } from '../utils/types.js';
 import { detectWorkspace } from '../utils/workspace.js';
 import {
@@ -120,12 +121,12 @@ async function main() {
   const { projectPath, options } = parseArgs();
 
   if (options.help) {
-    log((await getVitePlusHeader()) + '\n');
+    log(vitePlusHeader() + '\n');
     log(helpMessage);
     return;
   }
 
-  prompts.intro(await getVitePlusHeader());
+  prompts.intro(vitePlusHeader());
 
   const workspaceInfoOptional = await detectWorkspace(projectPath);
   if (

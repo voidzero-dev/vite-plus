@@ -59,6 +59,8 @@ Tools:
   tsdown           Not found
 
 > vp install -h # show install help message
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp install [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Install all dependencies, or add packages if package names are provided
@@ -95,6 +97,8 @@ Options:
 
 
 > vp add -h # show add help message
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Add packages to dependencies
@@ -121,6 +125,8 @@ Options:
 
 
 > vp remove -h # show remove help message
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Remove packages from dependencies
@@ -142,6 +148,8 @@ Options:
 
 
 > vp update -h # show update help message
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Update packages to their latest versions
@@ -166,6 +174,8 @@ Options:
 
 
 > vp link -h # show link help message
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp link [PACKAGE|DIR] [ARGS]...
 
 Link packages for local development
@@ -179,6 +189,8 @@ Options:
 
 
 > vp unlink -h # show unlink help message
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
 
 Unlink packages
@@ -193,6 +205,8 @@ Options:
 
 
 > vp dedupe -h # show dedupe help message
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Deduplicate dependencies
@@ -206,6 +220,8 @@ Options:
 
 
 > vp outdated -h # show outdated help message
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Check for outdated packages
@@ -230,6 +246,8 @@ Options:
 
 
 > vp why -h # show why help message
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Show why a package is installed
@@ -256,6 +274,8 @@ Options:
 
 
 > vp info -h # show info help message
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp info [OPTIONS] <PACKAGE> [FIELD] [-- <PASS_THROUGH_ARGS>...]
 
 View package information from the registry
@@ -271,6 +291,8 @@ Options:
 
 
 > vp pm -h # show pm help message
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp pm <COMMAND>
 
 Forward a command to the package manager
@@ -301,6 +323,8 @@ Options:
 
 
 > vp env # show env help message
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp env [OPTIONS] [COMMAND]
 
 Manage Node.js versions
@@ -363,6 +387,8 @@ Global Packages:
 
 
 > vp upgrade -h # show upgrade help message
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp upgrade [OPTIONS] [VERSION]
 
 Update vp itself to the latest version

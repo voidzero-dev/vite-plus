@@ -7344,9 +7344,11 @@ name = "vite_shared"
 version = "0.0.0"
 dependencies = [
  "directories",
+ "nix 0.30.1",
  "owo-colors",
  "serde",
  "serde_json",
+ "supports-color 3.0.2",
  "tracing-subscriber",
  "vite_path",
  "vite_str",

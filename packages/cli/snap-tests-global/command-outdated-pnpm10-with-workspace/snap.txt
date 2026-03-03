@@ -1,4 +1,6 @@
 > vp install
+VITE+ - The Unified Toolchain for the Web
+
 Scope: all <variable> workspace projects
 Packages: +<variable>
 +<repeat>

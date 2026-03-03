@@ -77,6 +77,9 @@ fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
         return false;
     };
 
+    println!("{}", vite_shared::header::vite_plus_header());
+    println!();
+
     let highlighted_subcommand = invalid_subcommand.bright_blue().to_string();
     output::error(&format!("Command '{highlighted_subcommand}' not found"));
 

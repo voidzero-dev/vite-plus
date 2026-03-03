@@ -1,4 +1,6 @@
 > vp pack src/index.ts --exe
+VITE+ - The Unified Toolchain for the Web
+
 ℹ entry: src/index.ts
 ℹ target: node25.7.0
 ℹ `exe` option is experimental and may change in future releases.

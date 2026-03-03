@@ -2,6 +2,7 @@
 
 mod env_config;
 pub mod env_vars;
+pub mod header;
 mod home;
 pub mod output;
 mod package_json;
