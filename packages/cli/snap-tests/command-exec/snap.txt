@@ -76,7 +76,7 @@ Examples:
   vp exec --filter 'app...' -- tsc                   # Run in filtered packages
 
 [1]> vp exec # missing command should error
-[1m[31merror:[39m[0m 'vp exec' requires a command to run
+error: 'vp exec' requires a command to run
 
 Usage: vp exec [--] <command> [args...]
 
@@ -85,7 +85,7 @@ Examples:
   vp exec tsc --noEmit
 
 [1]> vp exec nonexistent-cmd-12345 # command not found error
-[1m[31merror:[39m[0m Command 'nonexistent-cmd-12345' not found in node_modules/.bin
+error: Command 'nonexistent-cmd-12345' not found in node_modules/.bin
 
 Hint: Run 'vp install' to install dependencies, or use 'vpx' for remote fallback.
 

@@ -8,6 +8,16 @@ import { describe, expect, test } from '@voidzero-dev/vite-plus-test';
 import { isPassThroughEnv, replaceUnstableOutput } from '../utils';
 
 describe('replaceUnstableOutput()', () => {
+  test('strip ANSI escape sequences', () => {
+    const output = '\u001b[1m\u001b[2mnote:\u001b[0m\u001b[0m yarn@2+ uses upgrade-interactive';
+    expect(replaceUnstableOutput(output)).toBe('note: yarn@2+ uses upgrade-interactive');
+  });
+
+  test('normalize CRLF line endings', () => {
+    const output = 'line 1\r\nline 2\r\nline 3\r';
+    expect(replaceUnstableOutput(output)).toBe('line 1\nline 2\nline 3');
+  });
+
   test('replace unstable semver version', () => {
     const output = `
 foo v1.0.0

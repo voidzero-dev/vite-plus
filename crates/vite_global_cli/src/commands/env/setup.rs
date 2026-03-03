@@ -233,12 +233,14 @@ async fn create_windows_shim(
 ) -> Result<(), Error> {
     let cmd_path = bin_dir.join(format!("{tool}.cmd"));
 
-    // Create .cmd wrapper that calls vp env exec <tool>
+    // Create .cmd wrapper that calls vp env exec <tool>.
+    // Use `--` so tool args like `--help` are forwarded to the tool,
+    // not consumed by clap while parsing `vp env exec`.
     // Use a for loop to canonicalize VITE_PLUS_HOME path.
     // %~dp0.. would produce paths like C:\Users\x\.vite-plus\bin\..
     // The for loop resolves this to a clean C:\Users\x\.vite-plus
     let cmd_content = format!(
-        "@echo off\r\nfor %%I in (\"%~dp0..\") do set VITE_PLUS_HOME=%%~fI\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" env exec {} %*\r\nexit /b %ERRORLEVEL%\r\n",
+        "@echo off\r\nfor %%I in (\"%~dp0..\") do set VITE_PLUS_HOME=%%~fI\r\nset VITE_PLUS_SHIM_WRAPPER=1\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" env exec {} -- %*\r\nexit /b %ERRORLEVEL%\r\n",
         tool
     );
 
@@ -252,7 +254,8 @@ async fn create_windows_shim(
         r#"#!/bin/sh
 VITE_PLUS_HOME="$(dirname "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")")"
 export VITE_PLUS_HOME
-exec "$VITE_PLUS_HOME/current/bin/vp.exe" env exec {} "$@"
+export VITE_PLUS_SHIM_WRAPPER=1
+exec "$VITE_PLUS_HOME/current/bin/vp.exe" env exec {} -- "$@"
 "#,
         tool
     );

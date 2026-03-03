@@ -583,6 +583,10 @@ fn is_help_flag(arg: &str) -> bool {
     matches!(arg, "-h" | "--help")
 }
 
+fn has_help_flag_before_terminator(args: &[String]) -> bool {
+    args.iter().take_while(|arg| arg.as_str() != "--").any(|arg| is_help_flag(arg))
+}
+
 fn skip_clap_unified_help(command: &str) -> bool {
     matches!(
         command,
@@ -645,7 +649,9 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
         return false;
     }
 
-    if !argv[index..].iter().any(|arg| is_help_flag(arg)) {
+    // Respect `--` option terminator: flags after `--` belong to the wrapped
+    // command and should not trigger CLI help rewriting.
+    if !has_help_flag_before_terminator(&argv[index..]) {
         return false;
     }
 
@@ -685,7 +691,7 @@ pub fn maybe_print_unified_delegate_help(command: &str, args: &[String]) -> bool
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_clap_help_to_doc, parse_rows};
+    use super::{has_help_flag_before_terminator, parse_clap_help_to_doc, parse_rows};
 
     #[test]
     fn parse_rows_supports_wrapped_option_labels() {
@@ -721,5 +727,17 @@ Options:
         assert_eq!(doc.usage, "vp add [OPTIONS] <PACKAGES>...");
         assert_eq!(doc.summary, vec!["Add packages to dependencies"]);
         assert_eq!(doc.sections.len(), 2);
+    }
+
+    #[test]
+    fn help_flag_before_terminator_is_detected() {
+        let args = vec!["vpx".to_string(), "--help".to_string()];
+        assert!(has_help_flag_before_terminator(&args));
+    }
+
+    #[test]
+    fn help_flag_after_terminator_is_ignored() {
+        let args = vec!["vpx".to_string(), "--".to_string(), "--help".to_string()];
+        assert!(!has_help_flag_before_terminator(&args));
     }
 }

@@ -61,6 +61,12 @@ pub const VITE_PLUS_RESOLVE_SOURCE: &str = "VITE_PLUS_RESOLVE_SOURCE";
 /// Set by shell wrapper scripts to indicate which tool is being shimmed.
 pub const VITE_PLUS_SHIM_TOOL: &str = "VITE_PLUS_SHIM_TOOL";
 
+/// Set by Windows shim wrappers that route through `vp env exec`.
+///
+/// When present, `env exec` can normalize wrapper-inserted argument separators
+/// before forwarding to the actual tool.
+pub const VITE_PLUS_SHIM_WRAPPER: &str = "VITE_PLUS_SHIM_WRAPPER";
+
 /// Path to the vp binary, passed to JS scripts so they can invoke CLI commands.
 pub const VITE_PLUS_CLI_BIN: &str = "VITE_PLUS_CLI_BIN";
 

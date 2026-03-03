@@ -1,23 +1,18 @@
 > vp outdated -- -h # should show yarn upgrade-interactive help
-Usage: vp outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+note: yarn@2+ uses 'yarn upgrade-interactive' for checking outdated packages
+Open the upgrade interface
 
-Check for outdated packages
+Usage
 
-Arguments:
-  [PACKAGES]...           Package name(s) to check
-  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+$ yarn upgrade-interactive
 
-Options:
-  --long                Show extended information
-  --format <FORMAT>     Output format: table (default), list, or json
-  -r, --recursive       Check recursively across all workspaces
-  --filter <PATTERN>    Filter packages in monorepo
-  -w, --workspace-root  Include workspace root
-  -P, --prod            Only production and optional dependencies
-  -D, --dev             Only dev dependencies
-  --no-optional         Exclude optional dependencies
-  --compatible          Only show compatible versions
-  --sort-by <FIELD>     Sort results by field
-  -g, --global          Check globally installed packages
-  -h, --help            Print help
+Details
 
+This command opens a fullscreen terminal interface where you can see any out of 
+date packages used by your application, their status compared to the latest 
+versions available on the remote registry, and select packages to upgrade.
+
+Examples
+
+Open the upgrade window
+  $ yarn upgrade-interactive

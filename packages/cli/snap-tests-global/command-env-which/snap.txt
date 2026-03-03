@@ -3,18 +3,18 @@ v20.18.0
 
 > vp env which node # Core tool - shows resolved Node.js binary path
 <vite-plus-home>/js_runtime/node/<semver>/bin/node
-  [2mVersion:  [0m  [92m20.18.0[39m
-  [2mSource:   [0m  [2m<cwd>/.node-version[0m
+  Version:    <semver>
+  Source:     <cwd>/.node-version
 
 > vp env which npm # Core tool - shows resolved npm binary path
 <vite-plus-home>/js_runtime/node/<semver>/bin/npm
-  [2mVersion:  [0m  [92m20.18.0[39m
-  [2mSource:   [0m  [2m<cwd>/.node-version[0m
+  Version:    <semver>
+  Source:     <cwd>/.node-version
 
 > vp env which npx # Core tool - shows resolved npx binary path
 <vite-plus-home>/js_runtime/node/<semver>/bin/npx
-  [2mVersion:  [0m  [92m20.18.0[39m
-  [2mSource:   [0m  [2m<cwd>/.node-version[0m
+  Version:    <semver>
+  Source:     <cwd>/.node-version
 
 > vp install -g cowsay@1.6.0 # Install a global package via vp
   Installing cowsay@<semver> globally...
@@ -29,16 +29,16 @@ added 41 packages in <variable>ms
 
 > vp env which cowsay # Global package - shows binary path with metadata
 <vite-plus-home>/packages/cowsay/lib/node_modules/cowsay/./cli.js
-  [2mPackage:  [0m  [94mcowsay@<semver>[39m
-  [2mBinaries: [0m  cowsay, cowthink
-  [2mNode:     [0m  [92m20.18.0[39m
-  [2mInstalled:[0m  [2m<date>[0m
+  Package:    cowsay@<semver>
+  Binaries:   cowsay, cowthink
+  Node:       <semver>
+  Installed:  <date>
 
 > vp remove -g cowsay # Cleanup
   Uninstalling cowsay...
   Uninstalled cowsay
 
 [1]> vp env which unknown-tool # Unknown tool - error message
-[1m[31merror:[39m[0m tool '[1munknown-tool[0m' not found
+error: tool 'unknown-tool' not found
 Not a core tool (node, npm, npx) or installed global package.
 Run 'vp list -g' to see installed packages.

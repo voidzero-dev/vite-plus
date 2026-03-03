@@ -13,4 +13,4 @@ Options:
 
 
 > vp pm prune # should show warning that yarn does not support prune command
-[1m[33mwarn:[39m[0m yarn does not have 'prune' command. yarn install will prune extraneous packages automatically.
+warn: yarn does not have 'prune' command. yarn install will prune extraneous packages automatically.

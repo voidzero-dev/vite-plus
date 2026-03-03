@@ -27,6 +27,8 @@ pub async fn execute(
     npm_version: Option<&str>,
     command: &[String],
 ) -> Result<ExitStatus, Error> {
+    let command = normalize_wrapper_command(command);
+
     if command.is_empty() {
         eprintln!("vp env exec: missing command to execute");
         eprintln!("Usage: vp env exec [--node <version>] <command> [args...]");
@@ -35,7 +37,7 @@ pub async fn execute(
 
     // If --node is provided, use explicit version mode (existing behavior)
     if let Some(version) = node_version {
-        return execute_with_version(version, npm_version, command).await;
+        return execute_with_version(version, npm_version, &command).await;
     }
 
     // No --node provided - check if first command is a shim tool
@@ -75,6 +77,34 @@ pub async fn execute(
     eprintln!("  vp env exec npm install       # Core tool");
     eprintln!("  vp env exec tsc --version     # Global package");
     Ok(exit_status(1))
+}
+
+/// Normalize arguments when invoked via Windows shim wrappers.
+///
+/// Wrappers insert `--` after the tool name so flags like `--help` aren't
+/// consumed by clap while parsing `vp env exec`. Remove only that inserted
+/// separator before forwarding args to the target tool.
+fn normalize_wrapper_command(command: &[String]) -> Vec<String> {
+    let from_wrapper = std::env::var_os(env_vars::VITE_PLUS_SHIM_WRAPPER).is_some();
+    let normalized = normalize_wrapper_command_inner(command, from_wrapper);
+
+    if from_wrapper {
+        // SAFETY: We're in a short-lived CLI process and clearing a wrapper-only
+        // marker before tool execution avoids leaking it to child processes.
+        unsafe {
+            std::env::remove_var(env_vars::VITE_PLUS_SHIM_WRAPPER);
+        }
+    }
+
+    normalized
+}
+
+fn normalize_wrapper_command_inner(command: &[String], from_wrapper: bool) -> Vec<String> {
+    let mut normalized = command.to_vec();
+    if from_wrapper && normalized.len() >= 2 && normalized[1] == "--" {
+        normalized.remove(1);
+    }
+    normalized
 }
 
 /// Execute a command with an explicitly specified Node.js version.
@@ -237,5 +267,19 @@ mod tests {
         let status = result.unwrap();
         // Should fail because python is not a shim tool and --node was not provided
         assert!(!status.success(), "Non-shim command without --node should fail");
+    }
+
+    #[test]
+    fn test_normalize_wrapper_command_strips_only_wrapper_separator() {
+        let command = vec!["node".to_string(), "--".to_string(), "--version".to_string()];
+        let normalized = normalize_wrapper_command_inner(&command, true);
+        assert_eq!(normalized, vec!["node", "--version"]);
+    }
+
+    #[test]
+    fn test_normalize_wrapper_command_no_wrapper_keeps_separator() {
+        let command = vec!["node".to_string(), "--".to_string(), "--version".to_string()];
+        let normalized = normalize_wrapper_command_inner(&command, false);
+        assert_eq!(normalized, command);
     }
 }

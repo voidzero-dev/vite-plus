@@ -6,5 +6,5 @@ v<semver>
 > vp env which node # Should show devEngines.runtime source
 warning: invalid version 'invalid' in engines.node, ignoring
 <vite-plus-home>/js_runtime/node/<semver>/bin/node
-  [2mVersion:  [0m  [92m22.12.0[39m
-  [2mSource:   [0m  [2m<cwd>/package.json[0m
+  Version:    <semver>
+  Source:     <cwd>/package.json

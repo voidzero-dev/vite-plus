@@ -26,11 +26,11 @@ app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-b
 
 > vp exec --filter nonexistent-pkg -- echo hello # unmatched filter warning
-[1m[33mwarn:[39m[0m No packages matched the filter 'nonexistent-pkg'
-[1m[33mwarn:[39m[0m No packages matched the filter(s)
+warn: No packages matched the filter 'nonexistent-pkg'
+warn: No packages matched the filter(s)
 
 > vp exec --filter nonexistent-pkg --filter app-a -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # unmatched + matched filter
-[1m[33mwarn:[39m[0m No packages matched the filter 'nonexistent-pkg'
+warn: No packages matched the filter 'nonexistent-pkg'
 app-a
 
 > vp exec -w --filter app-a -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # -w + --filter is additive (root + filtered)
@@ -48,4 +48,4 @@ app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
 app-b
 
 [1]> vp exec -r --filter app-a -- echo hello # -r + --filter conflict error
-[1m[31merror:[39m[0m --filter and --recursive cannot be used together
+error: --filter and --recursive cannot be used together

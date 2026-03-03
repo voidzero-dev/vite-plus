@@ -1,7 +1,7 @@
 > vp run build # synthetic build (vp build) should have cache disabled without cacheScripts
 $ vp build ⊘ cache disabled
 vite+ v<semver> building client environment for production...
-[2Ktransforming...✓ <variable> modules transformed.
+transforming...✓ <variable> modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <variable> kB │ gzip: <variable> kB

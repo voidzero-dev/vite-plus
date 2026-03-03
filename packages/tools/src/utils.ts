@@ -3,7 +3,16 @@ import path from 'node:path';
 
 import { Minimatch } from 'minimatch';
 
+const ANSI_ESCAPE_REGEX = new RegExp(
+  `${String.fromCharCode(27)}(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~])`,
+  'g',
+);
+
 export function replaceUnstableOutput(output: string, cwd?: string) {
+  // Normalize line endings and strip ANSI escapes so snapshots are stable
+  // across CI platforms and terminal capabilities.
+  output = output.replaceAll(ANSI_ESCAPE_REGEX, '').replaceAll(/\r\n/g, '\n').replaceAll(/\r/g, '');
+
   if (cwd) {
     output = output.replaceAll(cwd, '<cwd>');
     if (path.dirname(cwd) !== '/') {

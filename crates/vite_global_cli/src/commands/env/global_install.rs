@@ -405,11 +405,13 @@ async fn create_package_shim(
             return Ok(());
         }
 
-        // Create .cmd wrapper that calls vp env exec <bin_name>
+        // Create .cmd wrapper that calls vp env exec <bin_name>.
+        // Use `--` so args like `--help` are forwarded to the package binary,
+        // not consumed by clap while parsing `vp env exec`.
         // Set VITE_PLUS_HOME using %~dp0.. which resolves to the parent of bin/
         // This ensures the vp binary knows its home directory
         let wrapper_content = format!(
-            "@echo off\r\nset VITE_PLUS_HOME=%~dp0..\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" env exec {} %*\r\nexit /b %ERRORLEVEL%\r\n",
+            "@echo off\r\nset VITE_PLUS_HOME=%~dp0..\r\nset VITE_PLUS_SHIM_WRAPPER=1\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" env exec {} -- %*\r\nexit /b %ERRORLEVEL%\r\n",
             bin_name
         );
         tokio::fs::write(&cmd_path, wrapper_content).await?;
@@ -422,7 +424,8 @@ async fn create_package_shim(
             r#"#!/bin/sh
 VITE_PLUS_HOME="$(dirname "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")")"
 export VITE_PLUS_HOME
-exec "$VITE_PLUS_HOME/current/bin/vp.exe" env exec {} "$@"
+export VITE_PLUS_SHIM_WRAPPER=1
+exec "$VITE_PLUS_HOME/current/bin/vp.exe" env exec {} -- "$@"
 "#,
             bin_name
         );

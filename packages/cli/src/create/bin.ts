@@ -15,8 +15,8 @@ import {
   selectAgentTargetPath,
   writeAgentInstructions,
 } from '../utils/agent.js';
-import { displayRelative } from '../utils/path.js';
 import { renderCliDoc } from '../utils/help.js';
+import { displayRelative } from '../utils/path.js';
 import {
   defaultInteractive,
   downloadPackageManager,
