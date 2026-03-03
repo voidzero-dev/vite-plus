@@ -5,6 +5,8 @@ export default defineConfig({
     create: './src/create/bin.ts',
     migrate: './src/migration/bin.ts',
     version: './src/version.ts',
+    init: './src/init/bin.ts',
+    mcp: './src/mcp/bin.ts',
   },
   treeshake: false,
   external(source) {

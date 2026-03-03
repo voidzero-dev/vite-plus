@@ -1,12 +1,14 @@
 /**
  * Build script for vite-plus CLI package
  *
- * This script performs five main tasks:
+ * This script performs seven main tasks:
  * 1. buildCli() - Compiles TypeScript sources (local CLI) via tsc
- * 2. buildGlobalModules() - Bundles global CLI modules (create, migrate, version) via rolldown
+ * 2. buildGlobalModules() - Bundles global CLI modules (create, migrate, init, mcp, version) via rolldown
  * 3. buildNapiBinding() - Builds the native Rust binding via NAPI
  * 4. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
  * 5. syncTestPackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-test
+ * 6. copySkillDocs() - Copies docs into skills/vite-plus/docs for runtime MCP access
+ * 7. syncReadmeFromRoot()/syncLicenseFromRoot() - Keeps package docs/license in sync
  *
  * The sync functions allow this package to be a drop-in replacement for 'vite' by
  * re-exporting all the same subpaths (./client, ./types/*, etc.) while delegating
@@ -66,6 +68,7 @@ if (!skipTs) {
   await syncCorePackageExports();
   await syncTestPackageExports();
 }
+await copySkillDocs();
 await syncReadmeFromRoot();
 await syncLicenseFromRoot();
 
@@ -406,6 +409,43 @@ async function syncTestPackageExports() {
   await updateCliPackageJson(cliPkgPath, generatedExports);
 
   console.log(`\nSynced ${Object.keys(generatedExports).length} exports from test package`);
+}
+
+/**
+ * Copy markdown doc files from the monorepo docs/ directory into skills/vite-plus/docs/,
+ * preserving the relative directory structure. This keeps stable file paths for
+ * skills routing and MCP page slugs.
+ */
+async function copySkillDocs() {
+  console.log('\nCopying skill docs...');
+
+  const docsSourceDir = join(projectDir, '..', '..', 'docs');
+  const docsTargetDir = join(projectDir, 'skills', 'vite-plus', 'docs');
+
+  if (!existsSync(docsSourceDir)) {
+    console.log('  Docs source directory not found, skipping skill docs copy');
+    return;
+  }
+
+  // Clean and recreate target directory
+  await rm(docsTargetDir, { recursive: true, force: true });
+  await mkdir(docsTargetDir, { recursive: true });
+
+  // Find all markdown files recursively and copy them with their relative paths.
+  const mdFiles = globSync('**/*.md', { cwd: docsSourceDir })
+    .filter((f) => !f.includes('node_modules'))
+    .toSorted();
+
+  let copied = 0;
+  for (const relPath of mdFiles) {
+    const sourcePath = join(docsSourceDir, relPath);
+    const targetPath = join(docsTargetDir, relPath);
+    await mkdir(dirname(targetPath), { recursive: true });
+    await copyFile(sourcePath, targetPath);
+    copied++;
+  }
+
+  console.log(`  Copied ${copied} doc files to skills/vite-plus/docs/ (with paths preserved)`);
 }
 
 async function syncReadmeFromRoot() {

@@ -18,6 +18,7 @@
     "binding/index.js",
     "dist/test",
     "rules",
+    "skills",
     "templates"
   ],
   "type": "module",
