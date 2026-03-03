@@ -1,0 +1,7 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # migration should replace husky in composed prepare script",
+    "cat package.json # check prepare becomes 'vp prepare && npm run build' without leftover husky"
+  ]
+}

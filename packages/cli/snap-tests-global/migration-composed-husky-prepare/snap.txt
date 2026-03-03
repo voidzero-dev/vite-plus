@@ -1,0 +1,38 @@
+> git init
+> vp migrate --no-interactive # migration should replace husky in composed prepare script
+┌  VITE+ - The Unified Toolchain for the Web
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+◆  ✔ Git hooks configured
+│
+◆  Wrote agent instructions to AGENTS.md
+│
+└  ✔ Migration completed!
+
+
+> cat package.json # check prepare becomes 'vp prepare && npm run build' without leftover husky
+{
+  "name": "migration-composed-husky-prepare",
+  "scripts": {
+    "prepare": "vp prepare && npm run build"
+  },
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
+  },
+  "packageManager": "pnpm@<semver>",
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  }
+}

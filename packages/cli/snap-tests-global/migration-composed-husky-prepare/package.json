@@ -1,0 +1,10 @@
+{
+  "name": "migration-composed-husky-prepare",
+  "scripts": {
+    "prepare": "husky && npm run build"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "vite": "^7.0.0"
+  }
+}

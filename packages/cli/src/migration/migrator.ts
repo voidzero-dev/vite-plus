@@ -710,19 +710,27 @@ export function setupGitHooks(projectPath: string): void {
         pkg.scripts.prepare = `vp prepare && ${currentPrepare}`;
       }
 
+      // Clean up leftover husky commands in composed prepare scripts
+      // e.g. "vp prepare && husky && npm run build" → "vp prepare && npm run build"
+      pkg.scripts.prepare = pkg.scripts.prepare
+        .replace(/\bhusky install\s*&&\s*/g, '')
+        .replace(/\s*&&\s*husky install\b/g, '')
+        .replace(/\bhusky\s*&&\s*/g, '')
+        .replace(/\s*&&\s*husky\b/g, '');
+
       // Add lint-staged config if not present (in package.json or standalone config files)
       if (!pkg['lint-staged'] && !hasStandaloneLintStagedConfig(projectPath)) {
         pkg['lint-staged'] = { '*': 'vp check --fix' };
       }
-    }
 
-    // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands)
-    for (const name of REPLACED_HOOK_PACKAGES) {
-      if (pkg.devDependencies?.[name]) {
-        delete pkg.devDependencies[name];
-      }
-      if (pkg.dependencies?.[name]) {
-        delete pkg.dependencies[name];
+      // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands)
+      for (const name of REPLACED_HOOK_PACKAGES) {
+        if (pkg.devDependencies?.[name]) {
+          delete pkg.devDependencies[name];
+        }
+        if (pkg.dependencies?.[name]) {
+          delete pkg.dependencies[name];
+        }
       }
     }
 
@@ -780,10 +788,11 @@ function hasUnsupportedLintStagedConfig(projectPath: string): boolean {
 /**
  * Create .husky/pre-commit hook file.
  */
-// Old lint-staged invocations that should be replaced by `vp lint-staged`.
-const OLD_LINT_STAGED_PATTERNS = [
+// Stale hook lines that should be stripped from existing pre-commit hooks.
+const STALE_HOOK_LINE_PATTERNS = [
   /^(pnpm|npx|yarn|npm exec)\s+lint-staged\b.*/,
   /^lint-staged\b.*/,
+  /^\.\s+".*husky\.sh"/, // husky v8 bootstrap: . "$(dirname "$0")/_/husky.sh"
 ];
 
 export function createHuskyPreCommitHook(projectPath: string): void {
@@ -798,7 +807,7 @@ export function createHuskyPreCommitHook(projectPath: string): void {
     // Replace old lint-staged invocations, preserve everything else
     const lines = existing.split('\n');
     const filtered = lines.filter(
-      (line) => !OLD_LINT_STAGED_PATTERNS.some((pattern) => pattern.test(line.trim())),
+      (line) => !STALE_HOOK_LINE_PATTERNS.some((pattern) => pattern.test(line.trim())),
     );
     fs.writeFileSync(hookPath, `vp lint-staged\n${filtered.join('\n')}`);
   } else {
