@@ -21,20 +21,20 @@
   "scripts": {
     "prepare": "vp prepare"
   },
-  "lint-staged": {
-    "*.js": "vp lint --fix"
-  },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
   },
+  "lint-staged": {
+    "*.js": "vp lint --fix"
+  },
+  "packageManager": "pnpm@<semver>",
   "pnpm": {
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
-  },
-  "packageManager": "pnpm@<semver>"
+  }
 }
 
 > cat .husky/pre-commit # check pre-commit hook rewritten

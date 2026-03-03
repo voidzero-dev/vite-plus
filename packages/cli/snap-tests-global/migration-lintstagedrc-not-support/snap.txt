@@ -38,17 +38,17 @@ export default {
 > cat package.json # check package.json
 {
   "name": "migration-lintstagedrc-not-support",
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
+  "scripts": {
+    "prepare": "vp prepare"
   },
   "devDependencies": {
     "vite-plus": "latest"
   },
   "packageManager": "pnpm@<semver>",
-  "scripts": {
-    "prepare": "vp prepare"
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
   }
 }

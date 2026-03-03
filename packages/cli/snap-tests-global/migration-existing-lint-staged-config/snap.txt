@@ -20,19 +20,19 @@
 > cat package.json # check prepare script added, lint-staged removed from devDeps, no inline lint-staged config
 {
   "name": "migration-existing-lint-staged-config",
+  "scripts": {
+    "prepare": "vp prepare"
+  },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
   },
+  "packageManager": "pnpm@<semver>",
   "pnpm": {
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
-  },
-  "packageManager": "pnpm@<semver>",
-  "scripts": {
-    "prepare": "vp prepare"
   }
 }
 

@@ -39,13 +39,10 @@ export default defineConfig({
 {
   "name": "migration-from-tsdown-json-config",
   "scripts": {
-    "prepare": "vp prepare",
     "build": "vp pack",
     "build:watch": "vp pack --watch",
-    "build:dts": "vp pack --dts"
-  },
-  "lint-staged": {
-    "*": "vp check --fix"
+    "build:dts": "vp pack --dts",
+    "prepare": "vp prepare"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -57,7 +54,10 @@ export default defineConfig({
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>"
+  "packageManager": "pnpm@<semver>",
+  "lint-staged": {
+    "*": "vp check --fix"
+  }
 }
 
 > vp migrate --no-interactive # run migration again to check if it is idempotent
@@ -88,13 +88,10 @@ export default defineConfig({
 {
   "name": "migration-from-tsdown-json-config",
   "scripts": {
-    "prepare": "vp prepare",
     "build": "vp pack",
     "build:watch": "vp pack --watch",
-    "build:dts": "vp pack --dts"
-  },
-  "lint-staged": {
-    "*": "vp check --fix"
+    "build:dts": "vp pack --dts",
+    "prepare": "vp prepare"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -106,5 +103,8 @@ export default defineConfig({
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>"
+  "packageManager": "pnpm@<semver>",
+  "lint-staged": {
+    "*": "vp check --fix"
+  }
 }

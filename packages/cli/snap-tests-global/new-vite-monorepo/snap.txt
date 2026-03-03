@@ -16,12 +16,9 @@ vite.config.ts
   "private": true,
   "type": "module",
   "scripts": {
-    "prepare": "vp prepare",
     "ready": "vp fmt && vp lint --type-aware && vp run test -r && vp run build -r",
-    "dev": "vp run website#dev"
-  },
-  "lint-staged": {
-    "*": "vp check --fix"
+    "dev": "vp run website#dev",
+    "prepare": "vp prepare"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -29,7 +26,10 @@ vite.config.ts
   "devDependencies": {
     "vite-plus": "catalog:"
   },
-  "packageManager": "pnpm@<semver>"
+  "packageManager": "pnpm@<semver>",
+  "lint-staged": {
+    "*": "vp check --fix"
+  }
 }
 
 > cat vite-plus-monorepo/pnpm-workspace.yaml # check workspace config
@@ -129,12 +129,9 @@ vite.config.ts
   "private": true,
   "type": "module",
   "scripts": {
-    "prepare": "vp prepare",
     "ready": "vp fmt && vp lint --type-aware && vp run test -r && vp run build -r",
-    "dev": "vp run website#dev"
-  },
-  "lint-staged": {
-    "*": "vp check --fix"
+    "dev": "vp run website#dev",
+    "prepare": "vp prepare"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -142,5 +139,8 @@ vite.config.ts
   "devDependencies": {
     "vite-plus": "catalog:"
   },
-  "packageManager": "pnpm@<semver>"
+  "packageManager": "pnpm@<semver>",
+  "lint-staged": {
+    "*": "vp check --fix"
+  }
 }

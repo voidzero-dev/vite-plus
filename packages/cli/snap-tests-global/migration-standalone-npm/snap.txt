@@ -44,22 +44,22 @@
 > cat package.json # check package.json has overrides field (not pnpm.overrides)
 {
   "name": "migration-standalone-npm",
+  "scripts": {
+    "prepare": "vp prepare"
+  },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "vite-plus": "latest"
+    "vite-plus": "latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
   },
-  "packageManager": "npm@<semver>",
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
   },
-  "scripts": {
-    "prepare": "vp prepare"
-  },
   "lint-staged": {
     "*": "vp check --fix"
-  }
+  },
+  "packageManager": "npm@<semver>"
 }
 
 [1]> node -e "const lock = require('./package-lock.json'); const vite = lock.packages['node_modules/vite']; if (vite && vite.resolved && vite.resolved.includes('@voidzero-dev/vite-plus-core')) console.log('lockfile has vite override'); else { console.error('vite override not found in lockfile'); process.exit(1); }" # verify lockfile updated with override
