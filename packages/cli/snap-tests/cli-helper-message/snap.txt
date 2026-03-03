@@ -27,7 +27,17 @@ Options:
 > vp -V # show version
 VITE+ - The Unified Toolchain for the Web
 
-Package Versions:
-  global vite-plus  Not found
-  local vite-plus   Not found
+vp v<semver>
+
+Local vite-plus:
+  vite-plus  v<semver>
+
+Tools:
+  vite             v<semver>
+  rolldown         v<semver>
+  vitest           v<semver>
+  oxfmt            v<semver>
+  oxlint           v<semver>
+  oxlint-tsgolint  v<semver>
+  tsdown           v<semver>
 

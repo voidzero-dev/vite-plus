@@ -545,7 +545,7 @@ pub enum Commands {
         args: Vec<String>,
     },
 
-    /// Run lint-staged on Git staged files (delegates to bundled lint-staged)
+    /// Run lint-staged on Git staged files
     #[command(disable_help_flag = true, name = "lint-staged")]
     LintStaged {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]

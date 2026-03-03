@@ -671,9 +671,9 @@ export function setupGitHooks(projectPath: string): void {
 
   // Check for other hook tools → warn and skip
   const pkgContent = readJsonFile(packageJsonPath);
+  const deps = pkgContent.devDependencies as Record<string, string> | undefined;
+  const prodDeps = pkgContent.dependencies as Record<string, string> | undefined;
   for (const tool of OTHER_HOOK_TOOLS) {
-    const deps = pkgContent.devDependencies as Record<string, string> | undefined;
-    const prodDeps = pkgContent.dependencies as Record<string, string> | undefined;
     if (deps?.[tool] || prodDeps?.[tool] || pkgContent[tool]) {
       prompts.log.warn(
         `⚠ Detected ${tool} — skipping git hooks setup. Please configure git hooks manually.`,
