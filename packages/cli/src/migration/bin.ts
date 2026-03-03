@@ -16,6 +16,7 @@ import {
   cancelAndExit,
   defaultInteractive,
   downloadPackageManager,
+  promptGitHooks,
   runViteInstall,
   selectPackageManager,
   upgradeYarn,
@@ -262,27 +263,6 @@ async function main() {
   const installArgs = packageManager === PackageManager.npm ? ['--force'] : undefined;
   await runViteInstall(workspaceInfo.rootDir, options.interactive, installArgs);
   prompts.outro(green('✔ Migration completed!'));
-}
-
-async function promptGitHooks(options: MigrationOptions): Promise<boolean> {
-  if (options.hooks === false) {
-    return false;
-  }
-  if (options.hooks === true) {
-    return true;
-  }
-  if (options.interactive) {
-    const selected = await prompts.confirm({
-      message: 'Set up pre-commit hooks to run format, lint, and type checks with auto-fix?',
-      initialValue: true,
-    });
-    if (prompts.isCancel(selected)) {
-      cancelAndExit();
-      return false;
-    }
-    return selected;
-  }
-  return true; // non-interactive default
 }
 
 main().catch((err) => {

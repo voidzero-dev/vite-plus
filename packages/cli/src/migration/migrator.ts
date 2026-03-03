@@ -19,7 +19,7 @@ import {
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
 } from '../utils/constants.js';
-import { editJsonFile, isJsonFile } from '../utils/json.js';
+import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
 import { detectPackageMetadata } from '../utils/package.js';
 import { displayRelative, rulesDir } from '../utils/path.js';
 import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.js';
@@ -662,11 +662,12 @@ export function setupGitHooks(projectPath: string): void {
     return;
   }
 
-  const pkgContent = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-
   // Check for other hook tools → warn and skip
+  const pkgContent = readJsonFile(packageJsonPath);
   for (const tool of OTHER_HOOK_TOOLS) {
-    if (pkgContent.devDependencies?.[tool] || pkgContent.dependencies?.[tool] || pkgContent[tool]) {
+    const deps = pkgContent.devDependencies as Record<string, string> | undefined;
+    const prodDeps = pkgContent.dependencies as Record<string, string> | undefined;
+    if (deps?.[tool] || prodDeps?.[tool] || pkgContent[tool]) {
       prompts.log.warn(
         `⚠ Detected ${tool} — skipping git hooks setup. Please configure git hooks manually.`,
       );

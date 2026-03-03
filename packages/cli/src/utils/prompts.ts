@@ -118,6 +118,30 @@ export async function upgradeYarn(cwd: string, interactive?: boolean) {
   }
 }
 
+export async function promptGitHooks(options: {
+  hooks?: boolean;
+  interactive: boolean;
+}): Promise<boolean> {
+  if (options.hooks === false) {
+    return false;
+  }
+  if (options.hooks === true) {
+    return true;
+  }
+  if (options.interactive) {
+    const selected = await prompts.confirm({
+      message: 'Set up pre-commit hooks to run format, lint, and type checks with auto-fix?',
+      initialValue: true,
+    });
+    if (prompts.isCancel(selected)) {
+      cancelAndExit();
+      return false;
+    }
+    return selected;
+  }
+  return true; // non-interactive default
+}
+
 export function defaultInteractive() {
   // If CI environment, use non-interactive mode by default
   return !process.env.CI && process.stdin.isTTY;
