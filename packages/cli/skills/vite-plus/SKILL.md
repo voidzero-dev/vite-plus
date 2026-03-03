@@ -28,22 +28,22 @@ Then ask what to do next.
 
 ## Task Routing
 
-| User intent                       | Docs file(s)                                                          |
-| --------------------------------- | --------------------------------------------------------------------- |
-| CLI command syntax, flags         | `docs/vite/guide/cli.md`                                              |
+| User intent                       | Docs file(s)                                                                     |
+| --------------------------------- | -------------------------------------------------------------------------------- |
+| CLI command syntax, flags         | `docs/vite/guide/cli.md`                                                         |
 | Initial setup, getting started    | `docs/index.md`, `docs/vite/guide/index.md`, `docs/lib/guide/getting-started.md` |
-| Dev server, development workflow  | `docs/vite/guide/index.md`, `docs/vite/guide/cli.md`                 |
-| Build configuration, optimization | `docs/config/index.md`, `docs/config/shared-options.md`              |
-| Testing with Vitest               | `docs/vite/guide/tasks.md`, `docs/vite/guide/task/getting-started.md` |
-| Linting with Oxlint               | `docs/vite/guide/cli.md`                                              |
-| Formatting with Oxfmt             | `docs/vite/guide/cli.md`                                              |
-| Monorepo setup and management     | `docs/vite/guide/monorepo.md`                                         |
-| Migration from existing tools     | `docs/vite/guide/migration.md`                                        |
-| Caching and performance           | `docs/vite/guide/caching.md`                                          |
-| Library mode                      | `docs/lib/guide/getting-started.md`                                   |
-| Troubleshooting                   | `docs/vite/guide/troubleshooting.md`                                  |
-| Configuration and shared options  | `docs/config/shared-options.md`                                       |
-| API reference                     | `docs/apis/index.md`                                                  |
+| Dev server, development workflow  | `docs/vite/guide/index.md`, `docs/vite/guide/cli.md`                             |
+| Build configuration, optimization | `docs/config/index.md`, `docs/config/shared-options.md`                          |
+| Testing with Vitest               | `docs/vite/guide/tasks.md`, `docs/vite/guide/task/getting-started.md`            |
+| Linting with Oxlint               | `docs/vite/guide/cli.md`                                                         |
+| Formatting with Oxfmt             | `docs/vite/guide/cli.md`                                                         |
+| Monorepo setup and management     | `docs/vite/guide/monorepo.md`                                                    |
+| Migration from existing tools     | `docs/vite/guide/migration.md`                                                   |
+| Caching and performance           | `docs/vite/guide/caching.md`                                                     |
+| Library mode                      | `docs/lib/guide/getting-started.md`                                              |
+| Troubleshooting                   | `docs/vite/guide/troubleshooting.md`                                             |
+| Configuration and shared options  | `docs/config/shared-options.md`                                                  |
+| API reference                     | `docs/apis/index.md`                                                             |
 
 ## Working Rules
 

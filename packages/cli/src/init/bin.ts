@@ -166,7 +166,7 @@ function writeMcpConfigForTarget(root: string, target: McpConfigTarget): void {
     try {
       existing = readJsonFile(fullPath);
     } catch {
-      // unparseable — start fresh
+      // unparsable — start fresh
     }
   }
 
