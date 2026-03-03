@@ -1,5 +1,14 @@
 // Built-in husky-compatible install logic — a reimplementation of husky v9's
 // install function. husky itself is not bundled as a dependency.
+//
+// Why reimplementation instead of bundling husky?
+// husky v9's install function uses `new URL('husky', import.meta.url)` to
+// resolve and copy its shell script (the hook dispatcher). When bundled by
+// rolldown, `import.meta.url` points to the bundled output directory, not the
+// original `node_modules/husky/` directory, so the shell script file cannot be
+// found. Rather than working around this with asset copying, we inline the
+// equivalent shell script as a string constant (HOOK_SCRIPT) and write it
+// directly via writeFileSync.
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';

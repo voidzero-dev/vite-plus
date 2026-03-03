@@ -149,6 +149,10 @@ Entry points bundled by rolldown into `dist/global/`:
 
 lint-staged is a devDependency of the `vite-plus` package, bundled by rolldown at build time into `dist/global/`. husky is not a dependency — `vp prepare` is a standalone reimplementation of husky v9's install logic.
 
+### Why husky cannot be bundled
+
+husky v9's `install()` function uses `new URL('husky', import.meta.url)` to resolve and `copyFileSync` its shell script (the hook dispatcher) relative to its own source location. When bundled by rolldown, `import.meta.url` points to the bundled output directory, not the original `node_modules/husky/` directory, so the shell script file cannot be found at runtime. Rather than working around this with asset copying hacks, `vp prepare` inlines the equivalent shell script as a string constant and writes it directly via `writeFileSync`.
+
 ## Relationship to Existing Commands
 
 | Command              | Purpose                             | When                        |
