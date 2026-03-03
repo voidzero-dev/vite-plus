@@ -53,6 +53,7 @@ cat: .oxfmtrc.json: No such file or directory
   "name": "migration-monorepo-pnpm",
   "version": "1.0.0",
   "scripts": {
+    "prepare": "vp prepare",
     "dev": "vp dev",
     "build": "vp build",
     "test:run": "vp test run",
@@ -61,8 +62,10 @@ cat: .oxfmtrc.json: No such file or directory
     "test:watch": "vp test --watch",
     "test": "vp test",
     "lint": "vp lint",
-    "fmt": "vp fmt",
-    "prepare": "vp prepare"
+    "fmt": "vp fmt"
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
   },
   "dependencies": {
     "testnpm2": "1.0.0"
@@ -75,10 +78,7 @@ cat: .oxfmtrc.json: No such file or directory
   "resolutions": {
     "vue": "3.5.25"
   },
-  "packageManager": "pnpm@<semver>",
-  "lint-staged": {
-    "*": "vp check --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml

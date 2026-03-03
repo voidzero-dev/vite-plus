@@ -21,6 +21,9 @@
   "scripts": {
     "prepare": "vp prepare"
   },
+  "lint-staged": {
+    "*": "vp check --fix"
+  },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
@@ -31,10 +34,7 @@
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>",
-  "lint-staged": {
-    "*": "vp check --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }
 
 > cat .husky/pre-commit # check pre-commit hook rewritten to vp lint-staged

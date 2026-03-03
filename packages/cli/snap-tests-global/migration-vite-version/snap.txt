@@ -16,9 +16,12 @@
 {
   "name": "migration-vite-version",
   "scripts": {
+    "prepare": "vp prepare",
     "version": "vp --version",
-    "version:short": "vp -v",
-    "prepare": "vp prepare"
+    "version:short": "vp -v"
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -30,8 +33,5 @@
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>",
-  "lint-staged": {
-    "*": "vp check --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }
