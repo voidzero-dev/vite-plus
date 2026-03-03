@@ -1,0 +1,8 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # migration should strip pnpm exec lint-staged and add vp lint-staged",
+    "cat package.json # check prepare rewritten and husky/lint-staged removed",
+    "cat .husky/pre-commit # check pnpm exec lint-staged replaced with vp lint-staged"
+  ]
+}

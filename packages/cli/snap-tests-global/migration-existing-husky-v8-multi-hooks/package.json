@@ -1,0 +1,11 @@
+{
+  "name": "migration-existing-husky-v8-multi-hooks",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^8.0.0",
+    "lint-staged": "^15.0.0",
+    "vite": "^7.0.0"
+  }
+}

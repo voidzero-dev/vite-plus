@@ -1,0 +1,46 @@
+> git init
+> vp migrate --no-interactive # migration should warn about unsupported TS lint-staged config
+┌  VITE+ - The Unified Toolchain for the Web
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+▲  ✘ lint-staged.config.ts is not supported by auto migration
+│
+▲  Please migrate the lint-staged config manually, see https://viteplus.dev/migration/#lint-staged for more details
+│
+▲  ⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.
+│
+◆  Wrote agent instructions to AGENTS.md
+│
+└  ✔ Migration completed!
+
+
+> cat package.json # check lint-staged NOT added to package.json, husky/lint-staged NOT removed
+{
+  "name": "migration-lint-staged-ts-config",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "packageManager": "pnpm@<semver>",
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  }
+}
+
+> cat lint-staged.config.ts # check TS config is not modified
+export default {
+  "*.{js,ts}": ["oxlint --fix", "oxfmt"],
+};

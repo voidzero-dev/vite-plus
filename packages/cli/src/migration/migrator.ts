@@ -37,6 +37,12 @@ const LINT_STAGED_OTHER_CONFIG_FILES = [
   'lint-staged.config.cjs',
   '.lintstagedrc.js',
   'lint-staged.config.js',
+  '.lintstagedrc.ts',
+  'lint-staged.config.ts',
+  '.lintstagedrc.mts',
+  'lint-staged.config.mts',
+  '.lintstagedrc.cts',
+  'lint-staged.config.cts',
 ] as const;
 const LINT_STAGED_ALL_CONFIG_FILES = [
   ...LINT_STAGED_JSON_CONFIG_FILES,
@@ -749,6 +755,7 @@ export function setupGitHooks(projectPath: string): void {
   // Create .husky/pre-commit and install hooks if .git exists
   if (!unsupported && fs.existsSync(path.join(projectPath, '.git'))) {
     createHuskyPreCommitHook(projectPath);
+    stripStaleHuskyBootstrap(projectPath);
     const prepareResult = spawn.sync(vpBin, ['prepare'], {
       cwd: projectPath,
       stdio: 'pipe',
@@ -790,7 +797,7 @@ function hasUnsupportedLintStagedConfig(projectPath: string): boolean {
  */
 // Stale hook lines that should be stripped from existing pre-commit hooks.
 const STALE_HOOK_LINE_PATTERNS = [
-  /^(pnpm|npx|yarn|npm exec)\s+lint-staged\b.*/,
+  /^(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)\s+lint-staged\b.*/,
   /^lint-staged\b.*/,
   /^\.\s+".*husky\.sh"/, // husky v8 bootstrap: . "$(dirname "$0")/_/husky.sh"
 ];
@@ -813,6 +820,44 @@ export function createHuskyPreCommitHook(projectPath: string): void {
   } else {
     fs.writeFileSync(hookPath, 'vp lint-staged\n');
     fs.chmodSync(hookPath, 0o755);
+  }
+}
+
+const HUSKY_BOOTSTRAP_PATTERN = /^\.\s+".*husky\.sh"/;
+
+/**
+ * Strip the husky.sh bootstrap line from ALL hook files in .husky/
+ * (not just pre-commit). Other hooks like commit-msg or pre-push also
+ * source husky.sh, which vp prepare deletes — those hooks would break.
+ */
+function stripStaleHuskyBootstrap(projectPath: string): void {
+  const huskyDir = path.join(projectPath, '.husky');
+  if (!fs.existsSync(huskyDir)) {
+    return;
+  }
+  const entries = fs.readdirSync(huskyDir, { withFileTypes: true });
+  for (const entry of entries) {
+    // Skip directories (e.g. _/) and only process files
+    if (!entry.isFile()) {
+      continue;
+    }
+    // Skip pre-commit — already handled by createHuskyPreCommitHook
+    if (entry.name === 'pre-commit') {
+      continue;
+    }
+    const hookPath = path.join(huskyDir, entry.name);
+    const content = fs.readFileSync(hookPath, 'utf8');
+    const lines = content.split('\n');
+    const filtered = lines.filter((line) => !HUSKY_BOOTSTRAP_PATTERN.test(line.trim()));
+    if (filtered.length === lines.length) {
+      continue; // nothing changed
+    }
+    const newContent = filtered.join('\n').trim();
+    if (newContent.length === 0) {
+      fs.unlinkSync(hookPath);
+    } else {
+      fs.writeFileSync(hookPath, `${newContent}\n`);
+    }
   }
 }
 

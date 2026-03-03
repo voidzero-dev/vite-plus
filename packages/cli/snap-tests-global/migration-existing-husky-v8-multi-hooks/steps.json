@@ -1,0 +1,9 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # migration should strip husky.sh bootstrap from ALL hooks",
+    "cat package.json # check prepare rewritten and husky/lint-staged removed",
+    "cat .husky/pre-commit # check husky.sh bootstrap stripped from pre-commit",
+    "cat .husky/commit-msg # check husky.sh bootstrap stripped from commit-msg, custom command preserved"
+  ]
+}
