@@ -22,7 +22,7 @@ secret-scan
 
 
 > cat .husky/pre-commit # check pre-commit hook preserves existing commands
-vp lint-staged
 #!/usr/bin/env sh
 npm test
 secret-scan
+vp lint-staged

@@ -49,7 +49,8 @@ export default defineConfig({
     "test:ui": "vp test --ui",
     "test:coverage": "vp test run --coverage",
     "test:watch": "vp test --watch",
-    "test": "vp test"
+    "test": "vp test",
+    "prepare": "vp prepare"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -62,5 +63,8 @@ export default defineConfig({
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>"
+  "packageManager": "pnpm@<semver>",
+  "lint-staged": {
+    "*": "vp check --fix"
+  }
 }

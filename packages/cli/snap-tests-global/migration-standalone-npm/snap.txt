@@ -13,7 +13,30 @@
 │
 ●  Installing dependencies...
 │
-●  Dependencies installed
+●  Install failed
+│
+●
+│  > prepare
+│  > vp prepare
+│
+│
+│
+■  npm warn using --force Recommended protections disabled.
+│  error: unrecognized subcommand 'prepare'
+│
+│    tip: a similar subcommand exists: 'preview'
+│
+│  Usage: vp <COMMAND>
+│
+│  For more information, try '--help'.
+│  npm error code 2
+│  npm error path <cwd>
+│  npm error command failed
+│  npm error command sh -c vp prepare
+│  npm error A complete log of this run can be found in: <homedir>/.npm/_logs/<timestamp>-debug.log
+│
+│
+●  You may need to run "vp install" manually in <cwd>
 │
 └  ✔ Migration completed!
 
@@ -30,6 +53,12 @@
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  },
+  "scripts": {
+    "prepare": "vp prepare"
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
   }
 }
 

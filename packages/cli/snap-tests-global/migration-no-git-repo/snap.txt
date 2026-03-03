@@ -25,7 +25,13 @@
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>"
+  "packageManager": "pnpm@<semver>",
+  "scripts": {
+    "prepare": "vp prepare"
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
+  }
 }
 
 > test -d .husky && echo 'husky dir exists' || echo 'no husky dir'

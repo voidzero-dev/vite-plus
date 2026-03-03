@@ -675,11 +675,6 @@ export function setupGitHooks(projectPath: string): void {
     return;
   }
 
-  // No .git directory → skip hooks setup entirely (e.g. subpath migrations)
-  if (!fs.existsSync(path.join(projectPath, '.git'))) {
-    return;
-  }
-
   // Check for other hook tools → warn and skip
   const pkgContent = readJsonFile(packageJsonPath);
   const deps = pkgContent.devDependencies as Record<string, string> | undefined;
@@ -748,6 +743,12 @@ export function setupGitHooks(projectPath: string): void {
 
     return pkg;
   });
+
+  // vp fmt and hook creation require a git workspace — skip both without .git
+  const hasGit = fs.existsSync(path.join(projectPath, '.git'));
+  if (!hasGit) {
+    return;
+  }
 
   // Format package.json to sort fields conventionally
   const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
@@ -836,8 +837,8 @@ export function createHuskyPreCommitHook(projectPath: string): void {
       }
     }
     if (!replaced) {
-      // No lint-staged line found — prepend
-      fs.writeFileSync(hookPath, `vp lint-staged\n${result.join('\n')}`);
+      // No lint-staged line found — append after existing content
+      fs.writeFileSync(hookPath, `${result.join('\n').trimEnd()}\nvp lint-staged\n`);
     } else {
       fs.writeFileSync(hookPath, result.join('\n'));
     }

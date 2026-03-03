@@ -24,7 +24,8 @@ Wrote agent instructions to AGENTS.md
     "test:ui": "vp test --ui",
     "test:coverage": "vp test run --coverage",
     "test:watch": "vp test --watch",
-    "test": "vp test"
+    "test": "vp test",
+    "prepare": "vp prepare"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -37,7 +38,10 @@ Wrote agent instructions to AGENTS.md
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>"
+  "packageManager": "pnpm@<semver>",
+  "lint-staged": {
+    "*": "vp check --fix"
+  }
 }
 
 > cat test/hello.ts # check test/hello.ts

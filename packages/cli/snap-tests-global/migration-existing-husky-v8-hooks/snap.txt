@@ -38,7 +38,7 @@
 }
 
 > cat .husky/pre-commit # check husky.sh bootstrap stripped, custom commands preserved
-vp lint-staged
 
 npm test
 echo "custom hook"
+vp lint-staged

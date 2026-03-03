@@ -7,6 +7,8 @@
 │
 ●  pnpm@<semver> installed
 │
+▲  ⚠ Detected simple-git-hooks — skipping git hooks setup. Please configure git hooks manually.
+│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!

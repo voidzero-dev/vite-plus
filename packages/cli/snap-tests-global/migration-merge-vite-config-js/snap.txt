@@ -34,7 +34,8 @@ cat: .oxlintrc.json: No such file or directory
   "scripts": {
     "dev": "vp dev --port 3000",
     "build": "vp build",
-    "lint": "vp lint"
+    "lint": "vp lint",
+    "prepare": "vp prepare"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",
@@ -47,5 +48,8 @@ cat: .oxlintrc.json: No such file or directory
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>"
+  "packageManager": "pnpm@<semver>",
+  "lint-staged": {
+    "*": "vp check --fix"
+  }
 }
