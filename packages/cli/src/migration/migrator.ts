@@ -669,6 +669,24 @@ const REPLACED_HOOK_PACKAGES = ['husky', 'lint-staged'] as const;
  * Set up git hooks with husky + lint-staged via vp commands.
  * Skips if another hook tool is detected (warns user).
  */
+/**
+ * Walk up from `startPath` looking for `.git` (directory or file — submodules
+ * use a `.git` file).  Returns the directory that contains `.git`, or `null`.
+ */
+function findGitRoot(startPath: string): string | null {
+  let dir = startPath;
+  while (true) {
+    if (fs.existsSync(path.join(dir, '.git'))) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return null;
+    }
+    dir = parent;
+  }
+}
+
 export function setupGitHooks(projectPath: string): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -761,9 +779,9 @@ export function setupGitHooks(projectPath: string): void {
     stripStaleHuskyBootstrap(projectPath, huskyDir);
   }
 
-  // vp fmt and vp prepare require a git workspace — skip without .git
-  const hasGit = fs.existsSync(path.join(projectPath, '.git'));
-  if (!hasGit) {
+  // vp fmt and vp prepare require a git workspace — walk up to find .git
+  const gitRoot = findGitRoot(projectPath);
+  if (!gitRoot) {
     return;
   }
 
@@ -781,7 +799,7 @@ export function setupGitHooks(projectPath: string): void {
   if (!unsupported) {
     const prepareArgs = huskyDir !== '.husky' ? ['prepare', huskyDir] : ['prepare'];
     const prepareResult = spawn.sync(vpBin, prepareArgs, {
-      cwd: projectPath,
+      cwd: gitRoot,
       stdio: 'pipe',
     });
     if (prepareResult.status === 0) {
