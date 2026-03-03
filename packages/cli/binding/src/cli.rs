@@ -1165,17 +1165,19 @@ fn print_help() {
 {bold_underline}Usage:{reset} {bold}vp{reset} <COMMAND>
 
 {bold_underline}Core Commands:{reset}
-  {bold}dev{reset}        Run the development server
-  {bold}build{reset}      Build for production
-  {bold}test{reset}       Run tests
-  {bold}lint{reset}       Lint code
-  {bold}fmt{reset}        Format code
-  {bold}check{reset}      Run format, lint, and type checks
-  {bold}pack{reset}       Build library
-  {bold}run{reset}        Run tasks
-  {bold}exec{reset}       Execute a command from local node_modules/.bin
-  {bold}preview{reset}    Preview production build
-  {bold}cache{reset}      Manage the task cache
+  {bold}dev{reset}            Run the development server
+  {bold}build{reset}          Build for production
+  {bold}test{reset}           Run tests
+  {bold}lint{reset}           Lint code
+  {bold}fmt{reset}            Format code
+  {bold}check{reset}          Run format, lint, and type checks
+  {bold}pack{reset}           Build library
+  {bold}run{reset}            Run tasks
+  {bold}exec{reset}           Execute a command from local node_modules/.bin
+  {bold}preview{reset}        Preview production build
+  {bold}cache{reset}          Manage the task cache
+  {bold}prepare{reset}        Set up Git hooks for the project
+  {bold}lint-staged{reset}    Run linters on staged files
 
 {bold_underline}Package Manager Commands:{reset}
   {bold}install{reset}    Install all dependencies, or add packages if package names are provided

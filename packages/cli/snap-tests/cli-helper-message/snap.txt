@@ -1,0 +1,33 @@
+> vp -h # show help message
+Vite+/<semver>
+
+Usage: vp <COMMAND>
+
+Core Commands:
+  dev            Run the development server
+  build          Build for production
+  test           Run tests
+  lint           Lint code
+  fmt            Format code
+  check          Run format, lint, and type checks
+  pack           Build library
+  run            Run tasks
+  exec           Execute a command from local node_modules/.bin
+  preview        Preview production build
+  cache          Manage the task cache
+  prepare        Set up Git hooks for the project
+  lint-staged    Run linters on staged files
+
+Package Manager Commands:
+  install    Install all dependencies, or add packages if package names are provided
+
+Options:
+  -h, --help  Print help
+
+> vp -V # show version
+VITE+ - The Unified Toolchain for the Web
+
+Package Versions:
+  global vite-plus  Not found
+  local vite-plus   Not found
+
