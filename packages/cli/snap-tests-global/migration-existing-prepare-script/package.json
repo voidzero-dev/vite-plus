@@ -1,0 +1,10 @@
+{
+  "name": "migration-existing-prepare-script",
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

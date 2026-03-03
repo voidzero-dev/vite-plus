@@ -692,12 +692,11 @@ export function setupGitHooks(projectPath: string): void {
     if (!pkg.scripts) {
       pkg.scripts = {};
     }
-    if (
-      !pkg.scripts.prepare ||
-      pkg.scripts.prepare === 'husky' ||
-      pkg.scripts.prepare === 'husky install'
-    ) {
+    const currentPrepare = pkg.scripts.prepare;
+    if (!currentPrepare || currentPrepare === 'husky' || currentPrepare === 'husky install') {
       pkg.scripts.prepare = 'vp prepare';
+    } else if (!currentPrepare.includes('vp prepare')) {
+      pkg.scripts.prepare = `vp prepare && ${currentPrepare}`;
     }
 
     // Add lint-staged config if not present (in package.json or standalone config files)
@@ -727,10 +726,18 @@ export function setupGitHooks(projectPath: string): void {
     prompts.log.warn('Failed to format package.json');
   }
 
-  // Create .husky/pre-commit if .git exists
+  // Create .husky/pre-commit and install hooks if .git exists
   if (fs.existsSync(path.join(projectPath, '.git'))) {
     createHuskyPreCommitHook(projectPath);
-    prompts.log.success('✔ Git hooks configured');
+    const prepareResult = spawn.sync(vpBin, ['prepare'], {
+      cwd: projectPath,
+      stdio: 'pipe',
+    });
+    if (prepareResult.status === 0) {
+      prompts.log.success('✔ Git hooks configured');
+    } else {
+      prompts.log.warn('Failed to install git hooks');
+    }
   }
 }
 

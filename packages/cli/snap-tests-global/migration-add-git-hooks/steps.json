@@ -3,6 +3,7 @@
     { "command": "git init", "ignoreOutput": true },
     "vp migrate --no-interactive # migration should add git hooks setup",
     "cat package.json # check package.json has prepare script and lint-staged config",
-    "cat .husky/pre-commit # check pre-commit hook"
+    "cat .husky/pre-commit # check pre-commit hook",
+    "test -d .husky/_ && echo 'husky shims exist' || echo 'no husky shims' # check vp prepare ran"
   ]
 }

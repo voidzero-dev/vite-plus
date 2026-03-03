@@ -66,24 +66,29 @@ c=$?
 [ $c = 127 ] && echo "husky - command not found in PATH=$PATH"
 exit $c`;
 
-function install(dir = '.husky'): string {
+interface InstallResult {
+  message: string;
+  isError: boolean;
+}
+
+function install(dir = '.husky'): InstallResult {
   if (process.env.HUSKY === '0') {
-    return 'HUSKY=0 skip install';
+    return { message: 'HUSKY=0 skip install', isError: false };
   }
   if (dir.includes('..')) {
-    return '.. not allowed';
+    return { message: '.. not allowed', isError: false };
   }
   if (!existsSync('.git')) {
-    return ".git can't be found";
+    return { message: ".git can't be found", isError: false };
   }
 
   const internal = (x = '') => join(dir, '_', x);
   const { status, stderr } = spawnSync('git', ['config', 'core.hooksPath', `${dir}/_`]);
   if (status == null) {
-    return 'git command not found';
+    return { message: 'git command not found', isError: true };
   }
   if (status) {
-    return '' + stderr;
+    return { message: '' + stderr, isError: true };
   }
 
   rmSync(internal('husky.sh'), { force: true });
@@ -93,7 +98,7 @@ function install(dir = '.husky'): string {
   for (const hook of HOOKS) {
     writeFileSync(internal(hook), `#!/usr/bin/env sh\n. "$(dirname "$0")/h"`, { mode: 0o755 });
   }
-  return '';
+  return { message: '', isError: false };
 }
 
 async function main() {
@@ -108,12 +113,12 @@ async function main() {
     return;
   }
 
-  const result = install();
-  if (result) {
-    // Exit 0 on non-fatal conditions (no .git, HUSKY=0) — matches husky's behavior.
-    // The "prepare" lifecycle runs during `npm install` in consumer projects too,
-    // so it must not fail when .git doesn't exist.
-    console.error(result);
+  const { message, isError } = install();
+  if (message) {
+    console.error(message);
+    if (isError) {
+      process.exit(1);
+    }
   }
 }
 
