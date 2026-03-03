@@ -273,15 +273,15 @@ async function main() {
   // Step 2: Inject agent instructions
   injectAgentBlock(root, agentSetup.instructionFilePath);
 
-  // Step 3: Link skills
+  // Step 3: MCP config (runs before skills so agent dirs like .claude/ exist)
+  setupMcpConfig(root, agentSetup.agents);
+
+  // Step 4: Link skills
   if (agentSetup.agents.length > 0) {
     linkSkillsForSpecificAgents(root, agentSetup.agents);
   } else {
     prompts.log.info('Skills linking skipped for generic agent setup');
   }
-
-  // Step 4: MCP config
-  setupMcpConfig(root, agentSetup.agents);
 
   prompts.outro('Agent setup complete');
 }
