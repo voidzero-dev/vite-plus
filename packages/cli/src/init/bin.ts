@@ -10,11 +10,23 @@ import {
   type AgentConfig,
   type McpConfigTarget,
 } from '../utils/agent.js';
+import { renderCliDoc } from '../utils/help.js';
 import { writeJsonFile, readJsonFile } from '../utils/json.js';
 import { pkgRoot } from '../utils/path.js';
 import { linkSkillsForSpecificAgents } from '../utils/skills.js';
 
 // --- Arg parsing ---
+
+const helpMessage = renderCliDoc({
+  usage: 'vp init [OPTIONS]',
+  summary: 'Set up coding agent integration for an existing project.',
+  sections: [
+    {
+      title: 'Options',
+      rows: [{ label: '-h, --help', description: 'Show this help message' }],
+    },
+  ],
+});
 
 function parseArgs(): void {
   const argv = mri(process.argv.slice(3), {
@@ -23,16 +35,7 @@ function parseArgs(): void {
   });
 
   if (argv.help) {
-    process.stdout.write(
-      `
-Usage: vp init [options]
-
-Set up coding agent integration for an existing project.
-
-Options:
-  -h, --help Show this help message
-`.trimStart(),
-    );
+    process.stdout.write(helpMessage);
     process.exit(0);
   }
 }
