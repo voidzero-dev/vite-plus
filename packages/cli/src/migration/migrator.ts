@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import spawn from 'cross-spawn';
 import semver from 'semver';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
@@ -679,7 +680,7 @@ export function setupGitHooks(projectPath: string): void {
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
-    // Add or rewrite "prepare" script (put prepare first)
+    // Add or rewrite "prepare" script
     if (!pkg.scripts) {
       pkg.scripts = {};
     }
@@ -688,8 +689,7 @@ export function setupGitHooks(projectPath: string): void {
       pkg.scripts.prepare === 'husky' ||
       pkg.scripts.prepare === 'husky install'
     ) {
-      const { prepare: _, ...rest } = pkg.scripts;
-      pkg.scripts = { prepare: 'vp prepare', ...rest };
+      pkg.scripts.prepare = 'vp prepare';
     }
 
     // Add lint-staged config if not present (in package.json or standalone config files)
@@ -707,22 +707,12 @@ export function setupGitHooks(projectPath: string): void {
       }
     }
 
-    // Reorder: put lint-staged right after scripts for conventional ordering
-    if (pkg['lint-staged']) {
-      const lintStaged = pkg['lint-staged'];
-      delete pkg['lint-staged'];
-      const reordered = {} as typeof pkg;
-      for (const [key, value] of Object.entries(pkg)) {
-        (reordered as Record<string, unknown>)[key] = value;
-        if (key === 'scripts') {
-          reordered['lint-staged'] = lintStaged;
-        }
-      }
-      return reordered;
-    }
-
     return pkg;
   });
+
+  // Format package.json to sort fields conventionally
+  const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
+  spawn.sync(vpBin, ['fmt', packageJsonPath], { stdio: 'pipe' });
 
   // Create .husky/pre-commit if .git exists
   if (fs.existsSync(path.join(projectPath, '.git'))) {

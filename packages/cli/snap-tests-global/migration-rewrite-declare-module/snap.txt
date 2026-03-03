@@ -50,20 +50,20 @@ declare module 'vite-plus' {
 > cat package.json # check package.json
 {
   "name": "migration-rewrite-declare-module",
+  "scripts": {
+    "prepare": "vp prepare"
+  },
+  "devDependencies": {
+    "vite-plus": "latest"
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
+  },
+  "packageManager": "pnpm@<semver>",
   "pnpm": {
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
-  },
-  "devDependencies": {
-    "vite-plus": "latest"
-  },
-  "packageManager": "pnpm@<semver>",
-  "scripts": {
-    "prepare": "vp prepare"
-  },
-  "lint-staged": {
-    "*": "vp check --fix"
   }
 }

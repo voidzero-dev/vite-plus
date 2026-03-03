@@ -53,18 +53,11 @@ EXAMPLES:
 > cat package.json # check package.json
 {
   "name": "migration-lintstagedrc",
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
+  "scripts": {
+    "prepare": "vp prepare"
   },
   "devDependencies": {
     "vite-plus": "latest"
-  },
-  "packageManager": "pnpm@<semver>",
-  "scripts": {
-    "prepare": "vp prepare"
   },
   "lint-staged": {
     "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
@@ -74,5 +67,12 @@ EXAMPLES:
     "*.@(js|ts|tsx)": [
       "vp lint --fix"
     ]
+  },
+  "packageManager": "pnpm@<semver>",
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
   }
 }
