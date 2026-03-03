@@ -1,0 +1,15 @@
+{
+  "name": "migration-lint-staged-in-scripts",
+  "scripts": {
+    "prepare": "husky",
+    "check-staged": "lint-staged --diff HEAD~1"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
+    "vite": "^7.0.0"
+  },
+  "lint-staged": {
+    "*.js": "oxlint --fix"
+  }
+}

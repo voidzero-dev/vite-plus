@@ -752,7 +752,13 @@ export function setupGitHooks(projectPath: string): void {
     return pkg;
   });
 
-  // vp fmt and hook creation require a git workspace — skip both without .git
+  // Hook file creation (no git needed — only filesystem ops)
+  if (!unsupported) {
+    createHuskyPreCommitHook(projectPath, huskyDir);
+    stripStaleHuskyBootstrap(projectPath, huskyDir);
+  }
+
+  // vp fmt and vp prepare require a git workspace — skip without .git
   const hasGit = fs.existsSync(path.join(projectPath, '.git'));
   if (!hasGit) {
     return;
@@ -768,17 +774,20 @@ export function setupGitHooks(projectPath: string): void {
     prompts.log.warn('Failed to format package.json');
   }
 
-  // Create .husky/pre-commit and install hooks
+  // Install git hooks via vp prepare
   if (!unsupported) {
-    createHuskyPreCommitHook(projectPath, huskyDir);
-    stripStaleHuskyBootstrap(projectPath, huskyDir);
     const prepareArgs = huskyDir !== '.husky' ? ['prepare', huskyDir] : ['prepare'];
     const prepareResult = spawn.sync(vpBin, prepareArgs, {
       cwd: projectPath,
       stdio: 'pipe',
     });
     if (prepareResult.status === 0) {
-      prompts.log.success('✔ Git hooks configured');
+      const stderr = prepareResult.stderr?.toString() ?? '';
+      if (stderr.includes('skipping')) {
+        prompts.log.warn(`⚠ Git hooks not configured — ${stderr.trim()}`);
+      } else {
+        prompts.log.success('✔ Git hooks configured');
+      }
     } else {
       prompts.log.warn('Failed to install git hooks');
     }
