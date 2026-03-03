@@ -11,8 +11,6 @@
 │
 ●    vite.config.ts
 │
-▲  Failed to format package.json
-│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
@@ -50,8 +48,7 @@ cat: .oxlintrc.json: No such file or directory
     "test:watch": "vp test --watch",
     "test": "vp test",
     "lint": "vp lint",
-    "fmt": "vp fmt",
-    "prepare": "vp prepare"
+    "fmt": "vp fmt"
   },
   "dependencies": {
     "testnpm2": "1.0.0"
@@ -65,9 +62,6 @@ cat: .oxlintrc.json: No such file or directory
   "resolutions": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-  },
-  "lint-staged": {
-    "*": "vp check --fix"
   }
 }
 

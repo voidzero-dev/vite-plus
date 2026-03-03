@@ -13,8 +13,6 @@
 │
 ◆  ✔ Merged .oxfmtrc.json into vite.config.ts
 │
-▲  Failed to format package.json
-│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
@@ -55,11 +53,5 @@ cat: .oxfmtrc.json: No such file or directory
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>",
-  "scripts": {
-    "prepare": "vp prepare"
-  },
-  "lint-staged": {
-    "*": "vp check --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }

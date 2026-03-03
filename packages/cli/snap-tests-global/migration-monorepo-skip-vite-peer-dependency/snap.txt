@@ -40,14 +40,8 @@ export default defineConfig({
 > cat package.json # check root package.json (no peerDependencies)
 {
   "name": "migration-monorepo-skip-vite-peer-dependency",
-  "scripts": {
-    "prepare": "vp prepare"
-  },
   "devDependencies": {
     "vite-plus": "catalog:"
-  },
-  "lint-staged": {
-    "*": "vp check --fix"
   },
   "packageManager": "pnpm@<semver>"
 }

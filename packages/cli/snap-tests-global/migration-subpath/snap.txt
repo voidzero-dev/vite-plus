@@ -7,8 +7,6 @@
 │
 ●  pnpm@<semver> installed
 │
-▲  Failed to format package.json
-│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
@@ -35,8 +33,5 @@
   "devDependencies": {
     "vite-plus": "latest"
   },
-  "packageManager": "pnpm@<semver>",
-  "scripts": {
-    "prepare": "vp prepare"
-  }
+  "packageManager": "pnpm@<semver>"
 }

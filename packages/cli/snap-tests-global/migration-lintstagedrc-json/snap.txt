@@ -44,12 +44,6 @@ Wrote agent instructions to AGENTS.md
 > cat package.json # check package.json
 {
   "name": "migration-lintstagedrc",
-  "scripts": {
-    "prepare": "vp prepare"
-  },
-  "devDependencies": {
-    "vite-plus": "latest"
-  },
   "lint-staged": {
     "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
       "vp fmt --staged",
@@ -59,11 +53,14 @@ Wrote agent instructions to AGENTS.md
       "vp lint --fix"
     ]
   },
-  "packageManager": "pnpm@<semver>",
   "pnpm": {
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
-  }
+  },
+  "devDependencies": {
+    "vite-plus": "latest"
+  },
+  "packageManager": "pnpm@<semver>"
 }

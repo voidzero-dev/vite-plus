@@ -49,22 +49,18 @@ export default defineConfig({
     "test:ui": "vp test --ui",
     "test:coverage": "vp test run --coverage",
     "test:watch": "vp test --watch",
-    "test": "vp test",
-    "prepare": "vp prepare"
+    "test": "vp test"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+    "vite-plus": "latest"
   },
-  "lint-staged": {
-    "*": "vp check --fix"
-  },
-  "packageManager": "pnpm@<semver>",
   "pnpm": {
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }

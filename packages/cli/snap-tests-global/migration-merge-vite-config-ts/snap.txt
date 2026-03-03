@@ -15,8 +15,6 @@
 │
 ●    vite.config.ts
 │
-▲  Failed to format package.json
-│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
@@ -77,8 +75,7 @@ cat: .oxfmtrc.json: No such file or directory
     "fmt": "vp fmt",
     "fmt:fix": "vp fmt --fix",
     "fmt:staged": "vp fmt --staged",
-    "fmt:staged:fix": "vp fmt --staged --fix",
-    "prepare": "vp prepare"
+    "fmt:staged:fix": "vp fmt --staged --fix"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",
@@ -92,8 +89,5 @@ cat: .oxfmtrc.json: No such file or directory
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>",
-  "lint-staged": {
-    "*": "vp check --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }

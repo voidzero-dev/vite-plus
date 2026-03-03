@@ -42,23 +42,17 @@ export default defineConfig({
 > cat package.json # check package.json
 {
   "name": "migration-skip-vite-dependency",
-  "scripts": {
-    "prepare": "vp prepare"
-  },
   "dependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest"
   },
-  "devDependencies": {
-    "vite-plus": "latest"
-  },
-  "lint-staged": {
-    "*": "vp check --fix"
-  },
-  "packageManager": "pnpm@<semver>",
   "pnpm": {
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
-  }
+  },
+  "devDependencies": {
+    "vite-plus": "latest"
+  },
+  "packageManager": "pnpm@<semver>"
 }

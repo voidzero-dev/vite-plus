@@ -9,8 +9,6 @@
 │
 ◆  ✔ Merged .oxlintrc.json into vite.config.js
 │
-▲  Failed to format package.json
-│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
@@ -36,8 +34,7 @@ cat: .oxlintrc.json: No such file or directory
   "scripts": {
     "dev": "vp dev --port 3000",
     "build": "vp build",
-    "lint": "vp lint",
-    "prepare": "vp prepare"
+    "lint": "vp lint"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",
@@ -50,8 +47,5 @@ cat: .oxlintrc.json: No such file or directory
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>",
-  "lint-staged": {
-    "*": "vp check --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }

@@ -675,6 +675,11 @@ export function setupGitHooks(projectPath: string): void {
     return;
   }
 
+  // No .git directory → skip hooks setup entirely (e.g. subpath migrations)
+  if (!fs.existsSync(path.join(projectPath, '.git'))) {
+    return;
+  }
+
   // Check for other hook tools → warn and skip
   const pkgContent = readJsonFile(packageJsonPath);
   const deps = pkgContent.devDependencies as Record<string, string> | undefined;
@@ -747,14 +752,15 @@ export function setupGitHooks(projectPath: string): void {
   // Format package.json to sort fields conventionally
   const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
   const fmtResult = spawn.sync(vpBin, ['fmt', packageJsonPath], {
+    cwd: projectPath,
     stdio: 'pipe',
   });
   if (fmtResult.status !== 0) {
     prompts.log.warn('Failed to format package.json');
   }
 
-  // Create .husky/pre-commit and install hooks if .git exists
-  if (!unsupported && fs.existsSync(path.join(projectPath, '.git'))) {
+  // Create .husky/pre-commit and install hooks
+  if (!unsupported) {
     createHuskyPreCommitHook(projectPath);
     stripStaleHuskyBootstrap(projectPath);
     const prepareResult = spawn.sync(vpBin, ['prepare'], {
@@ -796,12 +802,14 @@ function hasUnsupportedLintStagedConfig(projectPath: string): boolean {
 /**
  * Create .husky/pre-commit hook file.
  */
-// Stale hook lines that should be stripped from existing pre-commit hooks.
-const STALE_HOOK_LINE_PATTERNS = [
+// Lint-staged invocation patterns — replaced in-place with `vp lint-staged`.
+const STALE_LINT_STAGED_PATTERNS = [
   /^(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)\s+lint-staged\b.*/,
   /^lint-staged\b.*/,
-  /^\.\s+".*husky\.sh"/, // husky v8 bootstrap: . "$(dirname "$0")/_/husky.sh"
 ];
+
+// Husky v8 bootstrap pattern — stripped entirely.
+const STALE_BOOTSTRAP_PATTERN = /^\.\s+".*husky\.sh"/;
 
 export function createHuskyPreCommitHook(projectPath: string): void {
   const huskyDir = path.join(projectPath, '.husky');
@@ -812,12 +820,27 @@ export function createHuskyPreCommitHook(projectPath: string): void {
     if (existing.includes('vp lint-staged')) {
       return; // already has vp lint-staged
     }
-    // Replace old lint-staged invocations, preserve everything else
+    // Replace old lint-staged invocations in-place, strip bootstrap, preserve everything else
     const lines = existing.split('\n');
-    const filtered = lines.filter(
-      (line) => !STALE_HOOK_LINE_PATTERNS.some((pattern) => pattern.test(line.trim())),
-    );
-    fs.writeFileSync(hookPath, `vp lint-staged\n${filtered.join('\n')}`);
+    let replaced = false;
+    const result: string[] = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!replaced && STALE_LINT_STAGED_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+        result.push('vp lint-staged');
+        replaced = true;
+      } else if (STALE_BOOTSTRAP_PATTERN.test(trimmed)) {
+        // strip bootstrap line
+      } else {
+        result.push(line);
+      }
+    }
+    if (!replaced) {
+      // No lint-staged line found — prepend
+      fs.writeFileSync(hookPath, `vp lint-staged\n${result.join('\n')}`);
+    } else {
+      fs.writeFileSync(hookPath, result.join('\n'));
+    }
   } else {
     fs.writeFileSync(hookPath, 'vp lint-staged\n');
     fs.chmodSync(hookPath, 0o755);

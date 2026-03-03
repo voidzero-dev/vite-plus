@@ -13,30 +13,7 @@
 │
 ●  Installing dependencies...
 │
-●  Install failed
-│
-●
-│  > prepare
-│  > vp prepare
-│
-│
-│
-■  npm warn using --force Recommended protections disabled.
-│  error: unrecognized subcommand 'prepare'
-│
-│    tip: a similar subcommand exists: 'preview'
-│
-│  Usage: vp <COMMAND>
-│
-│  For more information, try '--help'.
-│  npm error code 2
-│  npm error path <cwd>
-│  npm error command failed
-│  npm error command sh -c vp prepare
-│  npm error A complete log of this run can be found in: <homedir>/.npm/_logs/<timestamp>-debug.log
-│
-│
-●  You may need to run "vp install" manually in <cwd>
+●  Dependencies installed
 │
 └  ✔ Migration completed!
 
@@ -44,22 +21,16 @@
 > cat package.json # check package.json has overrides field (not pnpm.overrides)
 {
   "name": "migration-standalone-npm",
-  "scripts": {
-    "prepare": "vp prepare"
-  },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+    "vite-plus": "latest"
   },
+  "packageManager": "npm@<semver>",
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-  },
-  "lint-staged": {
-    "*": "vp check --fix"
-  },
-  "packageManager": "npm@<semver>"
+  }
 }
 
 [1]> node -e "const lock = require('./package-lock.json'); const vite = lock.packages['node_modules/vite']; if (vite && vite.resolved && vite.resolved.includes('@voidzero-dev/vite-plus-core')) console.log('lockfile has vite override'); else { console.error('vite override not found in lockfile'); process.exit(1); }" # verify lockfile updated with override

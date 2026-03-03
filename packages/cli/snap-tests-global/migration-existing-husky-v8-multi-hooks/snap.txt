@@ -38,8 +38,8 @@
 }
 
 > cat .husky/pre-commit # check husky.sh bootstrap stripped from pre-commit
-vp lint-staged
 
+vp lint-staged
 
 > cat .husky/commit-msg # check husky.sh bootstrap stripped from commit-msg, custom command preserved
 npx commitlint --edit $1

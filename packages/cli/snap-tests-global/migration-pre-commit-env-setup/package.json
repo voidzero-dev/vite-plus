@@ -1,0 +1,11 @@
+{
+  "name": "migration-pre-commit-env-setup",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.0.0",
+    "vite": "^7.0.0"
+  }
+}

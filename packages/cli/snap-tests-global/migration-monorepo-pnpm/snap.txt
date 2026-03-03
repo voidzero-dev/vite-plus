@@ -17,8 +17,6 @@
 │
 ●    vite.config.ts
 │
-▲  Failed to format package.json
-│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
@@ -63,8 +61,7 @@ cat: .oxfmtrc.json: No such file or directory
     "test:watch": "vp test --watch",
     "test": "vp test",
     "lint": "vp lint",
-    "fmt": "vp fmt",
-    "prepare": "vp prepare"
+    "fmt": "vp fmt"
   },
   "dependencies": {
     "testnpm2": "1.0.0"
@@ -77,10 +74,7 @@ cat: .oxfmtrc.json: No such file or directory
   "resolutions": {
     "vue": "3.5.25"
   },
-  "packageManager": "pnpm@<semver>",
-  "lint-staged": {
-    "*": "vp check --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml
