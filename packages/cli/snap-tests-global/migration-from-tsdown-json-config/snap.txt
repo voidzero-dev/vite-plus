@@ -41,7 +41,8 @@ export default defineConfig({
   "scripts": {
     "build": "vp pack",
     "build:watch": "vp pack --watch",
-    "build:dts": "vp pack --dts"
+    "build:dts": "vp pack --dts",
+    "prepare": "vp prepare"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -52,6 +53,9 @@ export default defineConfig({
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
   },
   "packageManager": "pnpm@<semver>"
 }
@@ -86,7 +90,8 @@ export default defineConfig({
   "scripts": {
     "build": "vp pack",
     "build:watch": "vp pack --watch",
-    "build:dts": "vp pack --dts"
+    "build:dts": "vp pack --dts",
+    "prepare": "vp prepare"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -97,6 +102,9 @@ export default defineConfig({
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
   },
   "packageManager": "pnpm@<semver>"
 }

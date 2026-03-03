@@ -1,4 +1,5 @@
-> vp migrate --no-interactive # migration should rewrite vite --version to vp --version
+> git init
+> vp migrate --no-interactive # migration should rewrite husky to vp prepare
 ┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
@@ -7,17 +8,17 @@
 │
 ●  pnpm@<semver> installed
 │
+◆  ✔ Git hooks configured
+│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
 
 
-> cat package.json # check package.json
+> cat package.json # check prepare script rewritten and husky removed from devDeps
 {
-  "name": "migration-vite-version",
+  "name": "migration-existing-husky",
   "scripts": {
-    "version": "vp --version",
-    "version:short": "vp -v",
     "prepare": "vp prepare"
   },
   "devDependencies": {
@@ -35,3 +36,6 @@
   },
   "packageManager": "pnpm@<semver>"
 }
+
+> cat .husky/pre-commit # check pre-commit hook rewritten to vp lint-staged
+vp lint-staged

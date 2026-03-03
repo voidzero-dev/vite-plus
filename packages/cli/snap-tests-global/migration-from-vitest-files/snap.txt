@@ -24,7 +24,8 @@
     "test:ui": "vp test --ui",
     "test:coverage": "vp test run --coverage",
     "test:watch": "vp test --watch",
-    "test": "vp test"
+    "test": "vp test",
+    "prepare": "vp prepare"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -36,6 +37,9 @@
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
   },
   "packageManager": "pnpm@<semver>"
 }

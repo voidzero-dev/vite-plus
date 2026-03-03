@@ -1,4 +1,5 @@
-> vp migrate foo --no-interactive # migration work with subpath
+> git init
+> vp migrate --no-interactive # migration should add git hooks setup
 ┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
@@ -7,22 +8,19 @@
 │
 ●  pnpm@<semver> installed
 │
+◆  ✔ Git hooks configured
+│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
 
 
-> cat foo/package.json # check package.json
+> cat package.json # check package.json has prepare script and lint-staged config
 {
-  "name": "migration-subpath",
-  "lint-staged": {
-    "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
-      "vp fmt --staged",
-      "eslint --fix"
-    ],
-    "*.@(js|ts|tsx)": [
-      "vp lint --fix"
-    ]
+  "name": "migration-add-git-hooks",
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
   },
   "pnpm": {
     "overrides": {
@@ -30,11 +28,14 @@
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "devDependencies": {
-    "vite-plus": "latest"
-  },
   "scripts": {
     "prepare": "vp prepare"
   },
+  "lint-staged": {
+    "*": "vp check --fix"
+  },
   "packageManager": "pnpm@<semver>"
 }
+
+> cat .husky/pre-commit # check pre-commit hook
+vp lint-staged

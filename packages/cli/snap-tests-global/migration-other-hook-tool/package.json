@@ -1,10 +1,10 @@
 {
   "name": "migration-other-hook-tool",
+  "devDependencies": {
+    "simple-git-hooks": "^2.11.1",
+    "vite": "^7.0.0"
+  },
   "simple-git-hooks": {
     "pre-commit": "npx lint-staged"
-  },
-  "devDependencies": {
-    "vite": "^7.0.0",
-    "simple-git-hooks": "^2.11.1"
   }
 }

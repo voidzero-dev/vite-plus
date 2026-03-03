@@ -75,7 +75,8 @@ cat: .oxfmtrc.json: No such file or directory
     "fmt": "vp fmt",
     "fmt:fix": "vp fmt --fix",
     "fmt:staged": "vp fmt --staged",
-    "fmt:staged:fix": "vp fmt --staged --fix"
+    "fmt:staged:fix": "vp fmt --staged --fix",
+    "prepare": "vp prepare"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",
@@ -88,6 +89,9 @@ cat: .oxfmtrc.json: No such file or directory
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
   },
   "packageManager": "pnpm@<semver>"
 }

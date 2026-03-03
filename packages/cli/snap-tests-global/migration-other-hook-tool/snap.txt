@@ -1,4 +1,4 @@
-> vp migrate --no-interactive # migration should rewrite vite --version to vp --version
+> vp migrate --no-interactive # migration should warn about simple-git-hooks
 ┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
@@ -7,21 +7,22 @@
 │
 ●  pnpm@<semver> installed
 │
+▲  ⚠ Detected simple-git-hooks — skipping git hooks setup. Please configure git hooks manually.
+│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
 
 
-> cat package.json # check package.json
+> cat package.json # check simple-git-hooks config is untouched, no prepare script added
 {
-  "name": "migration-vite-version",
-  "scripts": {
-    "version": "vp --version",
-    "version:short": "vp -v",
-    "prepare": "vp prepare"
+  "name": "migration-other-hook-tool",
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "simple-git-hooks": "^2.11.1",
     "vite-plus": "latest"
   },
   "pnpm": {
@@ -29,9 +30,6 @@
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
-  },
-  "lint-staged": {
-    "*": "vp check --fix"
   },
   "packageManager": "pnpm@<semver>"
 }
