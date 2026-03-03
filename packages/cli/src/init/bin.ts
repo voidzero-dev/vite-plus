@@ -124,10 +124,10 @@ function readAgentPrompt(): string {
 
 // --- Versioned injection ---
 
-const MARKER_OPEN_RE = /<!--injected-by-vite-plus-v([\d.]+)-->/;
+const MARKER_OPEN_RE = /<!--injected-by-vite-plus-v([\w.+-]+)-->/;
 const MARKER_CLOSE = '<!--/injected-by-vite-plus-->';
 const MARKER_BLOCK_RE =
-  /<!--injected-by-vite-plus-v[\d.]+-->\n[\s\S]*?<!--\/injected-by-vite-plus-->/;
+  /<!--injected-by-vite-plus-v[\w.+-]+-->\n[\s\S]*?<!--\/injected-by-vite-plus-->/;
 
 function injectAgentBlock(root: string, filePath: string): void {
   const fullPath = join(root, filePath);

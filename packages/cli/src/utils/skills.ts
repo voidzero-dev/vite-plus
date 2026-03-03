@@ -1,16 +1,17 @@
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
   readlinkSync,
   symlinkSync,
 } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { detectAgents, type AgentConfig } from './agent.js';
+import { type AgentConfig } from './agent.js';
 import { pkgRoot } from './path.js';
 
 interface SkillInfo {
@@ -50,6 +51,16 @@ export function parseSkills(skillsDir: string): SkillInfo[] {
   return skills;
 }
 
+/** Check if a path exists on disk, including broken symlinks that existsSync misses. */
+function pathExists(p: string): boolean {
+  try {
+    lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function linkSkills(
   root: string,
   skillsDir: string,
@@ -57,7 +68,14 @@ function linkSkills(
   agentSkillsDir: string,
 ): number {
   const targetDir = join(root, agentSkillsDir);
-  mkdirSync(targetDir, { recursive: true });
+  if (!existsSync(targetDir)) {
+    const parentDir = dirname(targetDir);
+    if (!existsSync(parentDir)) {
+      prompts.log.info(`  Skipping ${agentSkillsDir} — parent directory does not exist`);
+      return 0;
+    }
+    mkdirSync(targetDir);
+  }
 
   let linked = 0;
   for (const skill of skills) {
@@ -65,7 +83,7 @@ function linkSkills(
     const sourcePath = join(skillsDir, skill.dirName);
     const relativeTarget = relative(targetDir, sourcePath);
 
-    if (existsSync(linkPath)) {
+    if (pathExists(linkPath)) {
       try {
         const existing = readlinkSync(linkPath);
         if (existing === relativeTarget) {
@@ -94,29 +112,6 @@ function linkSkills(
     linked++;
   }
   return linked;
-}
-
-/**
- * Link skills for all detected agents. Returns total number of newly linked skills.
- */
-export function linkSkillsForAgents(root: string): number {
-  const skillsDir = join(pkgRoot, 'skills');
-  const skills = parseSkills(skillsDir);
-  if (skills.length === 0) {
-    return 0;
-  }
-
-  const detected = detectAgents(root);
-  if (detected.length === 0) {
-    return 0;
-  }
-
-  let totalLinked = 0;
-  for (const agent of detected) {
-    prompts.log.info(`${agent.displayName} → ${agent.skillsDir}`);
-    totalLinked += linkSkills(root, skillsDir, skills, agent.skillsDir);
-  }
-  return totalLinked;
 }
 
 export function linkSkillsForSpecificAgents(root: string, agentConfigs: AgentConfig[]): number {

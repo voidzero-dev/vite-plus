@@ -161,10 +161,6 @@ export function detectAgents(root: string): AgentConfig[] {
   return Object.values(agents).filter((a) => a.detect(root));
 }
 
-export function getAllAgents(): Record<string, AgentConfig> {
-  return agents;
-}
-
 // --- Backward-compatible exports ---
 
 const AGENT_ALIASES: Record<string, string> = {
