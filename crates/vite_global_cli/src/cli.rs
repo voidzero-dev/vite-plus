@@ -538,7 +538,7 @@ pub enum Commands {
         args: Vec<String>,
     },
 
-    /// Set up Git hooks (delegates to bundled husky)
+    /// Set up Git hooks (built-in husky-compatible implementation)
     #[command(disable_help_flag = true)]
     Prepare {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]

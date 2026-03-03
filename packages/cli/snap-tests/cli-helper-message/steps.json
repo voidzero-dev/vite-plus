@@ -1,6 +1,3 @@
 {
-  "commands": [
-    "vp -h # show help message",
-    "vp -V # show version"
-  ]
+  "commands": ["vp -h # show help message", "vp -V # show version"]
 }

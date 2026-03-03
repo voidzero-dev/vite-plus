@@ -656,8 +656,8 @@ function rewriteAllImports(projectPath: string): void {
 
 const OTHER_HOOK_TOOLS = ['simple-git-hooks', 'lefthook', 'yorkie'] as const;
 
-// Packages that are now bundled in vite-plus and should be removed from devDependencies
-const BUNDLED_HOOK_PACKAGES = ['husky', 'lint-staged'] as const;
+// Packages replaced by vite-plus built-in commands and should be removed from devDependencies
+const REPLACED_HOOK_PACKAGES = ['husky', 'lint-staged'] as const;
 
 /**
  * Set up git hooks with husky + lint-staged via vp commands.
@@ -704,8 +704,8 @@ export function setupGitHooks(projectPath: string): void {
       pkg['lint-staged'] = { '*': 'vp check --fix' };
     }
 
-    // Remove husky and lint-staged from devDependencies (now bundled in vite-plus)
-    for (const name of BUNDLED_HOOK_PACKAGES) {
+    // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands)
+    for (const name of REPLACED_HOOK_PACKAGES) {
       if (pkg.devDependencies?.[name]) {
         delete pkg.devDependencies[name];
       }

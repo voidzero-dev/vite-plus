@@ -1,8 +1,5 @@
-// Inlined husky install logic — cannot use husky's default export directly
-// because it references `new URL('husky', import.meta.url)` which breaks
-// when bundled by rolldown (the `husky` shell script won't be next to the output).
-//
-// This is a faithful reimplementation of husky v9's install function.
+// Built-in husky-compatible install logic — a reimplementation of husky v9's
+// install function. husky itself is not bundled as a dependency.
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -15,7 +12,7 @@ import { getVitePlusHeader, log } from '../utils/terminal.js';
 
 const helpMessage = renderCliDoc({
   usage: 'vp prepare',
-  summary: 'Set up Git hooks for the project (bundled husky).',
+  summary: 'Set up Git hooks for the project.',
   sections: [
     {
       title: 'Options',

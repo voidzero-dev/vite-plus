@@ -3,7 +3,7 @@ VITE+ - The Unified Toolchain for the Web
 
 Usage: vp prepare
 
-Set up Git hooks for the project (bundled husky).
+Set up Git hooks for the project.
 
 Options:
   -h, --help  Show this help message
@@ -17,7 +17,7 @@ VITE+ - The Unified Toolchain for the Web
 
 Usage: vp prepare
 
-Set up Git hooks for the project (bundled husky).
+Set up Git hooks for the project.
 
 Options:
   -h, --help  Show this help message
@@ -31,7 +31,7 @@ VITE+ - The Unified Toolchain for the Web
 
 Usage: vp prepare
 
-Set up Git hooks for the project (bundled husky).
+Set up Git hooks for the project.
 
 Options:
   -h, --help  Show this help message

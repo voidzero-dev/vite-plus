@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vp prepare` and `vp lint-staged` as built-in commands that bundle husky and lint-staged functionality. Projects get a zero-config pre-commit hook that runs `vp check --fix` on staged files — no extra devDependencies needed.
+Add `vp prepare` and `vp lint-staged` as built-in commands. `vp prepare` is a husky-compatible reimplementation (husky itself is not a dependency), and `vp lint-staged` bundles lint-staged. Projects get a zero-config pre-commit hook that runs `vp check --fix` on staged files — no extra devDependencies needed.
 
 ## Motivation
 
@@ -17,15 +17,16 @@ Pain points:
 - **Extra devDependencies** that every project needs
 - **Manual setup steps** after `vp create` or `vp migrate`
 - **No standardized pre-commit workflow** across Vite+ projects
-- husky and lint-staged are universal enough to be bundled
+- husky and lint-staged are universal enough to be built in
 
-By bundling these tools inside vite-plus, projects get pre-commit hooks with zero extra devDependencies. Both `vp create` and `vp migrate` set this up automatically.
+By building these capabilities into vite-plus, projects get pre-commit hooks with zero extra devDependencies. Both `vp create` and `vp migrate` set this up automatically.
 
 ## Command Syntax
 
 ```bash
-# Set up git hooks (runs bundled husky install)
+# Set up git hooks (built-in husky-compatible implementation)
 vp prepare
+vp prepare -h               # Show help
 
 # Run lint-staged on staged files (runs bundled lint-staged)
 vp lint-staged
@@ -36,6 +37,8 @@ vp create --no-hooks        # Skip hooks setup
 vp migrate --hooks          # Force hooks setup
 vp migrate --no-hooks       # Skip hooks setup
 ```
+
+Both commands are listed under "Core Commands" in `vp -h` (global and local CLI).
 
 ## User-Facing Configuration
 
@@ -48,6 +51,16 @@ vp migrate --no-hooks       # Skip hooks setup
   },
   "lint-staged": {
     "*": "vp check --fix"
+  }
+}
+```
+
+If the project already has a prepare script, `vp prepare` is prepended:
+
+```json
+{
+  "scripts": {
+    "prepare": "vp prepare && npm run build"
   }
 }
 ```
@@ -66,12 +79,13 @@ vp lint-staged
 
 ### `vp prepare`
 
-1. Delegates to bundled husky install logic
+1. Built-in husky-compatible install logic (reimplementation of husky v9, not a bundled dependency)
 2. Sets `core.hooksPath` to `.husky/_`
 3. Creates hook scripts in `.husky/_/` that source the user-defined hooks in `.husky/`
 4. Safe to run multiple times (idempotent)
-5. Skips if `HUSKY=0` environment variable is set
-6. Skips if `.git` directory doesn't exist
+5. Exits 0 and skips if `HUSKY=0` environment variable is set
+6. Exits 0 and skips if `.git` directory doesn't exist (safe during `npm install` in consumer projects)
+7. Exits 1 on real errors (git command not found, `git config` failed)
 
 ### `vp lint-staged`
 
@@ -100,9 +114,11 @@ Both `vp create` and `vp migrate` prompt the user before setting up pre-commit h
 - After migration rewrite, prompts for hooks setup
 - **No hooks configured** — adds full setup (prepare script + lint-staged config + .husky/pre-commit)
 - **Has husky** — rewrites `"prepare": "husky"` to `"prepare": "vp prepare"`, removes husky from devDeps
+- **Has existing prepare script** (e.g. `"npm run build"`) — composes as `"vp prepare && npm run build"` (prepend so hooks are active before other prepare tasks; idempotent if already contains `vp prepare`)
 - **Has lint-staged** — keeps existing config (already rewritten by migration rules), removes from devDeps
 - **Has other tool (simple-git-hooks, lefthook, yorkie)** — warns and skips
 - **No .git directory** — adds package.json config but doesn't create .husky/ directory
+- After creating `.husky/pre-commit`, runs `vp prepare` directly to install hook shims (does not rely on npm install lifecycle, which may not run in CI or snap test contexts)
 
 ## Implementation Architecture
 
@@ -126,12 +142,12 @@ pub async fn execute(cwd: AbsolutePathBuf, args: &[String]) -> Result<ExitStatus
 
 Entry points bundled by rolldown into `dist/global/`:
 
-- `src/prepare/bin.ts` — imports husky and runs install
+- `src/prepare/bin.ts` — built-in husky-compatible install logic
 - `src/lint-staged/bin.ts` — imports lint-staged CLI entry
 
 ### Build
 
-Both husky and lint-staged are devDependencies of the `vite-plus` package, bundled by rolldown at build time. They are NOT externalized — the bundled output includes all their code, so users don't need these packages installed.
+lint-staged is a devDependency of the `vite-plus` package, bundled by rolldown at build time into `dist/global/`. husky is not a dependency — `vp prepare` is a standalone reimplementation of husky v9's install logic.
 
 ## Relationship to Existing Commands
 
@@ -144,9 +160,9 @@ Both husky and lint-staged are devDependencies of the `vite-plus` package, bundl
 
 ## Comparison with Other Tools
 
-| Tool                            | Approach                                  |
-| ------------------------------- | ----------------------------------------- |
-| husky + lint-staged             | Separate devDependencies, manual setup    |
-| simple-git-hooks                | Lightweight alternative to husky          |
-| lefthook                        | Go binary, config-file based              |
-| **vp prepare + vp lint-staged** | **Bundled, zero-config, automatic setup** |
+| Tool                            | Approach                                   |
+| ------------------------------- | ------------------------------------------ |
+| husky + lint-staged             | Separate devDependencies, manual setup     |
+| simple-git-hooks                | Lightweight alternative to husky           |
+| lefthook                        | Go binary, config-file based               |
+| **vp prepare + vp lint-staged** | **Built-in, zero-config, automatic setup** |
