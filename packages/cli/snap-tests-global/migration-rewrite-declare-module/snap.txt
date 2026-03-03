@@ -59,5 +59,11 @@ declare module 'vite-plus' {
   "devDependencies": {
     "vite-plus": "latest"
   },
+  "scripts": {
+    "prepare": "vp prepare"
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
+  },
   "packageManager": "pnpm@<semver>"
 }

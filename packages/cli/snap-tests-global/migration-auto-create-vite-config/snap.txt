@@ -53,5 +53,11 @@ cat: .oxfmtrc.json: No such file or directory
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
+  "scripts": {
+    "prepare": "vp prepare"
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
+  },
   "packageManager": "pnpm@<semver>"
 }

@@ -33,5 +33,8 @@ Wrote agent instructions to AGENTS.md
   "devDependencies": {
     "vite-plus": "latest"
   },
+  "scripts": {
+    "prepare": "vp prepare"
+  },
   "packageManager": "pnpm@<semver>"
 }

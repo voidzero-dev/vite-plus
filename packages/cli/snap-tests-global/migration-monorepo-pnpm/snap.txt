@@ -61,7 +61,8 @@ cat: .oxfmtrc.json: No such file or directory
     "test:watch": "vp test --watch",
     "test": "vp test",
     "lint": "vp lint",
-    "fmt": "vp fmt"
+    "fmt": "vp fmt",
+    "prepare": "vp prepare"
   },
   "dependencies": {
     "testnpm2": "1.0.0"
@@ -74,7 +75,10 @@ cat: .oxfmtrc.json: No such file or directory
   "resolutions": {
     "vue": "3.5.25"
   },
-  "packageManager": "pnpm@<semver>"
+  "packageManager": "pnpm@<semver>",
+  "lint-staged": {
+    "*": "vp check --fix"
+  }
 }
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml

@@ -78,6 +78,8 @@ function install(dir = '.husky'): string {
 
 const result = install();
 if (result) {
+  // Exit 0 on non-fatal conditions (no .git, HUSKY=0) — matches husky's behavior.
+  // The "prepare" lifecycle runs during `npm install` in consumer projects too,
+  // so it must not fail when .git doesn't exist.
   console.error(result);
-  process.exit(1);
 }

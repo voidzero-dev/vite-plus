@@ -1,0 +1,38 @@
+> vp migrate --no-interactive # migration should add prepare script but skip .husky/ creation
+┌  VITE+ - The Unified Toolchain for the Web
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+◆  Wrote agent instructions to AGENTS.md
+│
+└  ✔ Migration completed!
+
+
+> cat package.json # check package.json has prepare script and lint-staged config
+{
+  "name": "migration-no-git-repo",
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "scripts": {
+    "prepare": "vp prepare"
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> test -d .husky && echo 'husky dir exists' || echo 'no husky dir'
+no husky dir
