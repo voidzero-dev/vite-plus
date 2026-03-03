@@ -735,6 +735,18 @@ impl UserConfigLoader for VitePlusConfigLoader {
         &self,
         package_path: &AbsolutePath,
     ) -> anyhow::Result<Option<UserRunConfig>> {
+        // Try static config extraction first (no JS runtime needed)
+        let static_config = vite_static_config::resolve_static_config(package_path);
+        if let Some(run_value) = static_config.get("run") {
+            tracing::debug!(
+                "Using statically extracted run config for {}",
+                package_path.as_path().display()
+            );
+            let run_config: UserRunConfig = serde_json::from_value(run_value.clone())?;
+            return Ok(Some(run_config));
+        }
+
+        // Fall back to NAPI-based config resolution
         let package_path_str = package_path
             .as_path()
             .to_str()

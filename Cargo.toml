@@ -187,6 +187,7 @@ vite_glob = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "6f
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
 vite_shared = { path = "crates/vite_shared" }
+vite_static_config = { path = "crates/vite_static_config" }
 vite_path = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "6fdc4f106563491be4fb36381b84c5937d74fe9c" }
 vite_str = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "6fdc4f106563491be4fb36381b84c5937d74fe9c" }
 vite_task = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "6fdc4f106563491be4fb36381b84c5937d74fe9c" }

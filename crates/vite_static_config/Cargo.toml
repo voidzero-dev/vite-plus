@@ -1,0 +1,21 @@
+[package]
+name = "vite_static_config"
+version = "0.0.0"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+oxc = { workspace = true }
+oxc_allocator = { workspace = true }
+rustc-hash = { workspace = true }
+serde_json = { workspace = true }
+vite_path = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

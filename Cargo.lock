@@ -7191,6 +7191,7 @@ dependencies = [
  "vite_migration",
  "vite_path",
  "vite_shared",
+ "vite_static_config",
  "vite_str",
  "vite_task",
  "vite_workspace",
@@ -7409,6 +7410,18 @@ dependencies = [
  "serde",
  "shell-escape",
  "vite_str",
+]
+
+[[package]]
+name = "vite_static_config"
+version = "0.0.0"
+dependencies = [
+ "oxc",
+ "oxc_allocator",
+ "rustc-hash",
+ "serde_json",
+ "tempfile",
+ "vite_path",
 ]
 
 [[package]]
