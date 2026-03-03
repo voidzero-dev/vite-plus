@@ -90,8 +90,8 @@ cat: .oxfmtrc.json: No such file or directory
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
+  "packageManager": "pnpm@<semver>",
   "lint-staged": {
     "*": "vp check --fix"
-  },
-  "packageManager": "pnpm@<semver>"
+  }
 }

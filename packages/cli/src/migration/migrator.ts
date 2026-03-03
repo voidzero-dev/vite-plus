@@ -136,8 +136,6 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
   mergeTsdownConfigFile(projectPath);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(projectPath);
-  // set up git hooks
-  setupGitHooks(projectPath);
   // set package manager
   setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
 }
@@ -168,8 +166,6 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
   mergeTsdownConfigFile(workspaceInfo.rootDir);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(workspaceInfo.rootDir);
-  // set up git hooks
-  setupGitHooks(workspaceInfo.rootDir);
   // set package manager
   setPackageManager(workspaceInfo.rootDir, workspaceInfo.downloadPackageManager);
 }
@@ -659,7 +655,7 @@ const BUNDLED_HOOK_PACKAGES = ['husky', 'lint-staged'] as const;
  * Set up git hooks with husky + lint-staged via vp commands.
  * Skips if another hook tool is detected (warns user).
  */
-function setupGitHooks(projectPath: string): void {
+export function setupGitHooks(projectPath: string): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return;

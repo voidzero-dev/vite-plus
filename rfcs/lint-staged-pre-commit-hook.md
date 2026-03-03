@@ -29,6 +29,12 @@ vp prepare
 
 # Run lint-staged on staged files (runs bundled lint-staged)
 vp lint-staged
+
+# Control hooks setup during create/migrate
+vp create --hooks           # Force hooks setup
+vp create --no-hooks        # Skip hooks setup
+vp migrate --hooks          # Force hooks setup
+vp migrate --no-hooks       # Skip hooks setup
 ```
 
 ## User-Facing Configuration
@@ -76,13 +82,22 @@ vp lint-staged
 
 ### Automatic Setup
 
+Both `vp create` and `vp migrate` prompt the user before setting up pre-commit hooks:
+
+- **Interactive mode**: Shows a `prompts.confirm()` prompt: "Set up pre-commit hooks to run format, lint, and type checks with auto-fix?" (default: yes)
+- **Non-interactive mode**: Defaults to yes (hooks are set up automatically)
+- **`--hooks` flag**: Force hooks setup (no prompt)
+- **`--no-hooks` flag**: Skip hooks setup entirely (no prompt)
+
 #### `vp create`
 
-- Monorepo template includes `"prepare": "vp prepare"` and `"lint-staged"` config
-- After `git init`, creates `.husky/pre-commit` with `vp lint-staged`
+- After project creation and migration rewrite, prompts for hooks setup
+- If accepted, adds `"prepare": "vp prepare"` and `"lint-staged"` config to package.json
+- Creates `.husky/pre-commit` with `vp lint-staged` (if `.git` directory exists)
 
 #### `vp migrate`
 
+- After migration rewrite, prompts for hooks setup
 - **No hooks configured** — adds full setup (prepare script + lint-staged config + .husky/pre-commit)
 - **Has husky** — rewrites `"prepare": "husky"` to `"prepare": "vp prepare"`, removes husky from devDeps
 - **Has lint-staged** — keeps existing config (already rewritten by migration rules), removes from devDeps

@@ -9,6 +9,7 @@ import {
   rewriteMonorepo,
   rewriteMonorepoProject,
   rewriteStandaloneProject,
+  setupGitHooks,
 } from '../migration/migrator.js';
 import { DependencyType, type WorkspaceInfo } from '../types/index.js';
 import {
@@ -76,6 +77,8 @@ const helpMessage = renderCliDoc({
           label: '--editor NAME',
           description: 'Write editor config files for the specified editor.',
         },
+        { label: '--hooks', description: 'Set up pre-commit hooks (default in non-interactive mode)' },
+        { label: '--no-hooks', description: 'Skip pre-commit hooks setup' },
         { label: '--no-interactive', description: 'Run in non-interactive mode' },
         { label: '--list', description: 'List all available templates' },
         { label: '-h, --help', description: 'Show this help message' },
@@ -164,6 +167,7 @@ export interface Options {
   help: boolean;
   agent?: string | string[] | false;
   editor?: string;
+  hooks?: boolean;
 }
 
 // Parse CLI arguments: split on '--' separator
@@ -184,9 +188,10 @@ function parseArgs() {
     help?: boolean;
     agent?: string | string[] | false;
     editor?: string;
+    hooks?: boolean;
   }>(viteArgs, {
     alias: { h: 'help' },
-    boolean: ['help', 'list', 'all', 'interactive'],
+    boolean: ['help', 'list', 'all', 'interactive', 'hooks'],
     string: ['directory', 'agent', 'editor'],
     default: { interactive: defaultInteractive() },
   });
@@ -202,6 +207,7 @@ function parseArgs() {
       help: parsed.help || false,
       agent: parsed.agent,
       editor: parsed.editor,
+      hooks: parsed.hooks,
     } as Options,
     templateArgs,
   };
@@ -567,6 +573,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     });
     workspaceInfo.rootDir = fullPath;
     rewriteMonorepo(workspaceInfo);
+    const shouldSetupHooks = await promptGitHooks(options);
+    if (shouldSetupHooks) {
+      setupGitHooks(fullPath);
+    }
     await runViteInstall(fullPath, options.interactive);
     await runViteFmt(fullPath, options.interactive);
     prompts.outro(`✔ Created ${accent(projectDir)}!`);
@@ -690,6 +700,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     await runViteFmt(workspaceInfo.rootDir, options.interactive, [projectDir]);
   } else {
     rewriteStandaloneProject(fullPath, workspaceInfo);
+    const shouldSetupHooks = await promptGitHooks(options);
+    if (shouldSetupHooks) {
+      setupGitHooks(fullPath);
+    }
     await runViteInstall(fullPath, options.interactive);
     await runViteFmt(fullPath, options.interactive);
   }
@@ -714,6 +728,27 @@ function showNextSteps(projectDir: string, isMonorepo: boolean) {
 async function showAvailableTemplates() {
   log(vitePlusHeader() + '\n');
   log(listTemplatesMessage);
+}
+
+async function promptGitHooks(options: Options): Promise<boolean> {
+  if (options.hooks === false) {
+    return false;
+  }
+  if (options.hooks === true) {
+    return true;
+  }
+  if (options.interactive) {
+    const selected = await prompts.confirm({
+      message: 'Set up pre-commit hooks to run format, lint, and type checks with auto-fix?',
+      initialValue: true,
+    });
+    if (prompts.isCancel(selected)) {
+      cancelAndExit();
+      return false;
+    }
+    return selected;
+  }
+  return true; // non-interactive default
 }
 
 main().catch((err) => {

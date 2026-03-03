@@ -43,13 +43,13 @@ export default defineConfig({
   "devDependencies": {
     "vite-plus": "catalog:"
   },
+  "packageManager": "pnpm@<semver>",
   "scripts": {
     "prepare": "vp prepare"
   },
   "lint-staged": {
     "*": "vp check --fix"
-  },
-  "packageManager": "pnpm@<semver>"
+  }
 }
 
 > cat packages/vite-plugin/package.json # has vite in peerDependencies

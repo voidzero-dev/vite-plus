@@ -21,12 +21,12 @@
   "scripts": {
     "prepare": "vp prepare"
   },
-  "lint-staged": {
-    "*.js": "vp lint --fix"
-  },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
+  },
+  "lint-staged": {
+    "*.js": "vp lint --fix"
   },
   "pnpm": {
     "overrides": {

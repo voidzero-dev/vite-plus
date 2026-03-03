@@ -1,5 +1,5 @@
 > git init
-> vp migrate --no-interactive # migration should rewrite husky to vp prepare
+> vp migrate --no-hooks --no-interactive # migration with --no-hooks should skip hooks setup
 ┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
@@ -8,19 +8,14 @@
 │
 ●  pnpm@<semver> installed
 │
-◆  ✔ Git hooks configured
-│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
 
 
-> cat package.json # check prepare script rewritten and husky removed from devDeps
+> cat package.json # check package.json has no prepare script and no lint-staged config
 {
-  "name": "migration-existing-husky",
-  "scripts": {
-    "prepare": "vp prepare"
-  },
+  "name": "migration-no-hooks",
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
@@ -31,11 +26,8 @@
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>",
-  "lint-staged": {
-    "*": "vp check --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }
 
-> cat .husky/pre-commit # check pre-commit hook rewritten to vp lint-staged
-vp lint-staged
+> test -d .husky && echo '.husky directory exists' || echo 'No .husky directory' # verify no .husky directory
+No .husky directory

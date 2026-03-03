@@ -28,6 +28,7 @@ import {
   checkViteVersion,
   rewriteMonorepo,
   rewriteStandaloneProject,
+  setupGitHooks,
 } from './migrator.js';
 
 const { green } = colors;
@@ -60,6 +61,11 @@ const helpMessage = renderCliDoc({
         },
         { label: '--no-editor', description: 'Skip writing editor config files' },
         {
+          label: '--hooks',
+          description: 'Set up pre-commit hooks (default in non-interactive mode)',
+        },
+        { label: '--no-hooks', description: 'Skip pre-commit hooks setup' },
+        {
           label: '--no-interactive',
           description: 'Run in non-interactive mode (skip prompts and use defaults)',
         },
@@ -87,6 +93,7 @@ export interface MigrationOptions {
   help?: boolean;
   agent?: string | string[] | false;
   editor?: string | false;
+  hooks?: boolean;
 }
 
 function parseArgs() {
@@ -97,9 +104,10 @@ function parseArgs() {
     interactive?: boolean;
     agent?: string | string[] | false;
     editor?: string | false;
+    hooks?: boolean;
   }>(args, {
     alias: { h: 'help' },
-    boolean: ['help', 'interactive'],
+    boolean: ['help', 'interactive', 'non-interactive', 'nonInteractive', 'hooks'],
     default: { interactive: defaultInteractive() },
   });
   const interactive = parsed.interactive;
@@ -118,6 +126,7 @@ function parseArgs() {
       help: parsed.help,
       agent: parsed.agent,
       editor: parsed.editor,
+      hooks: parsed.hooks,
     } as MigrationOptions,
   };
 }
@@ -218,6 +227,11 @@ async function main() {
     rewriteStandaloneProject(workspaceInfo.rootDir, workspaceInfo);
   }
 
+  const shouldSetupHooks = await promptGitHooks(options);
+  if (shouldSetupHooks) {
+    setupGitHooks(workspaceInfo.rootDir);
+  }
+
   const selectedAgentTargetPaths = await selectAgentTargetPaths({
     interactive: options.interactive,
     agent: options.agent,
@@ -248,6 +262,27 @@ async function main() {
   const installArgs = packageManager === PackageManager.npm ? ['--force'] : undefined;
   await runViteInstall(workspaceInfo.rootDir, options.interactive, installArgs);
   prompts.outro(green('✔ Migration completed!'));
+}
+
+async function promptGitHooks(options: MigrationOptions): Promise<boolean> {
+  if (options.hooks === false) {
+    return false;
+  }
+  if (options.hooks === true) {
+    return true;
+  }
+  if (options.interactive) {
+    const selected = await prompts.confirm({
+      message: 'Set up pre-commit hooks to run format, lint, and type checks with auto-fix?',
+      initialValue: true,
+    });
+    if (prompts.isCancel(selected)) {
+      cancelAndExit();
+      return false;
+    }
+    return selected;
+  }
+  return true; // non-interactive default
 }
 
 main().catch((err) => {

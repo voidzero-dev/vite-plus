@@ -30,10 +30,10 @@
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
+  "packageManager": "pnpm@<semver>",
   "scripts": {
     "prepare": "vp prepare"
-  },
-  "packageManager": "pnpm@<semver>"
+  }
 }
 
 > cat .lintstagedrc.json # check lintstagedrc.json commands are rewritten

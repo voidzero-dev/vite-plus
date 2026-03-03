@@ -54,11 +54,11 @@ export default defineConfig({
   "devDependencies": {
     "vite-plus": "latest"
   },
+  "packageManager": "pnpm@<semver>",
   "scripts": {
     "prepare": "vp prepare"
   },
   "lint-staged": {
     "*": "vp check --fix"
-  },
-  "packageManager": "pnpm@<semver>"
+  }
 }

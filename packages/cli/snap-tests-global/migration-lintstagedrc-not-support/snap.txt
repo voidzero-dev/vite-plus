@@ -47,8 +47,8 @@ export default {
   "devDependencies": {
     "vite-plus": "latest"
   },
+  "packageManager": "pnpm@<semver>",
   "scripts": {
     "prepare": "vp prepare"
-  },
-  "packageManager": "pnpm@<semver>"
+  }
 }
