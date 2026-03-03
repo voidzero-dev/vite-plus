@@ -129,7 +129,17 @@ function install(dir = '.husky'): InstallResult {
   }
 
   const internal = (x = '') => join(dir, '_', x);
-  const { status, stderr } = spawnSync('git', ['config', 'core.hooksPath', `${dir}/_`]);
+  const target = `${dir}/_`;
+  const checkResult = spawnSync('git', ['config', 'core.hooksPath']);
+  const existingHooksPath = checkResult.status === 0 ? checkResult.stdout?.toString().trim() : '';
+  if (existingHooksPath && existingHooksPath !== target) {
+    return {
+      message: `core.hooksPath is already set to "${existingHooksPath}", skipping`,
+      isError: false,
+    };
+  }
+
+  const { status, stderr } = spawnSync('git', ['config', 'core.hooksPath', target]);
   if (status == null) {
     return { message: 'git command not found', isError: true };
   }
@@ -160,7 +170,8 @@ async function main() {
     return;
   }
 
-  const { message, isError } = install();
+  const dir = args._[0] as string | undefined;
+  const { message, isError } = install(dir);
   if (message) {
     console.error(message);
     if (isError) {

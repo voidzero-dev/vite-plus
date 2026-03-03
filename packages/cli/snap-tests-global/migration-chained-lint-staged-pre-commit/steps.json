@@ -1,0 +1,8 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # migration should preserve chained commands after lint-staged",
+    "cat package.json # check prepare rewritten and husky/lint-staged removed",
+    "cat .husky/pre-commit # check npx lint-staged replaced but && npm test preserved"
+  ]
+}

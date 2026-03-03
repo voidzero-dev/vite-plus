@@ -1,0 +1,41 @@
+> git init
+> vp migrate --no-interactive # migration should preserve chained commands after lint-staged
+┌  VITE+ - The Unified Toolchain for the Web
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+◆  ✔ Git hooks configured
+│
+◆  Wrote agent instructions to AGENTS.md
+│
+└  ✔ Migration completed!
+
+
+> cat package.json # check prepare rewritten and husky/lint-staged removed
+{
+  "name": "migration-chained-lint-staged-pre-commit",
+  "scripts": {
+    "prepare": "vp prepare"
+  },
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "lint-staged": {
+    "*.js": "vp lint --fix"
+  },
+  "packageManager": "pnpm@<semver>",
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  }
+}
+
+> cat .husky/pre-commit # check npx lint-staged replaced but && npm test preserved
+vp lint-staged && npm test

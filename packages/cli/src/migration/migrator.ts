@@ -710,8 +710,10 @@ export function setupGitHooks(projectPath: string): void {
         pkg.scripts = {};
       }
       const currentPrepare = pkg.scripts.prepare;
-      if (!currentPrepare || currentPrepare === 'husky' || currentPrepare === 'husky install') {
-        pkg.scripts.prepare = 'vp prepare';
+      const huskyMatch = currentPrepare?.match(/^husky(?:\s+install)?(?:\s+(\S+))?\s*$/);
+      if (!currentPrepare || huskyMatch) {
+        const dir = huskyMatch?.[1];
+        pkg.scripts.prepare = dir ? `vp prepare ${dir}` : 'vp prepare';
       } else if (!currentPrepare.includes('vp prepare')) {
         pkg.scripts.prepare = `vp prepare && ${currentPrepare}`;
       }
@@ -720,10 +722,10 @@ export function setupGitHooks(projectPath: string): void {
       // e.g. "vp prepare && husky && npm run build" → "vp prepare && npm run build"
       // Handles &&, ;, and || operators
       pkg.scripts.prepare = pkg.scripts.prepare
-        .replace(/\bhusky install\s*(?:&&|;|\|\|)\s*/g, '')
-        .replace(/\s*(?:&&|;|\|\|)\s*husky install\b/g, '')
-        .replace(/\bhusky\s*(?:&&|;|\|\|)\s*/g, '')
-        .replace(/\s*(?:&&|;|\|\|)\s*husky\b/g, '');
+        .replace(/\bhusky install(?:\s+\S+)?\s*(?:&&|;|\|\|)\s*/g, '')
+        .replace(/\s*(?:&&|;|\|\|)\s*husky install(?:\s+\S+)?/g, '')
+        .replace(/\bhusky(?:\s+\S+)?\s*(?:&&|;|\|\|)\s*/g, '')
+        .replace(/\s*(?:&&|;|\|\|)\s*husky(?:\s+\S+)?/g, '');
 
       // Add lint-staged config if not present (in package.json or standalone config files)
       if (!pkg['lint-staged'] && !hasStandaloneLintStagedConfig(projectPath)) {
@@ -805,8 +807,8 @@ function hasUnsupportedLintStagedConfig(projectPath: string): boolean {
  */
 // Lint-staged invocation patterns — replaced in-place with `vp lint-staged`.
 const STALE_LINT_STAGED_PATTERNS = [
-  /^(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)\s+lint-staged\b.*/,
-  /^lint-staged\b.*/,
+  /^(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)\s+lint-staged\b/,
+  /^lint-staged\b/,
 ];
 
 // Husky v8 bootstrap pattern — stripped entirely.
@@ -827,10 +829,25 @@ export function createHuskyPreCommitHook(projectPath: string): void {
     const result: string[] = [];
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!replaced && STALE_LINT_STAGED_PATTERNS.some((pattern) => pattern.test(trimmed))) {
-        result.push('vp lint-staged');
-        replaced = true;
-      } else if (STALE_BOOTSTRAP_PATTERN.test(trimmed)) {
+      if (!replaced) {
+        let matched = false;
+        for (const pattern of STALE_LINT_STAGED_PATTERNS) {
+          const match = pattern.exec(trimmed);
+          if (match) {
+            const rest = trimmed.slice(match[0].length);
+            // Preserve chained commands (&&, ||, ;) after lint-staged and its args
+            const chain = rest.match(/[^&;|]*((?:&&|\|\||;).*)/);
+            result.push(chain ? `vp lint-staged ${chain[1].trim()}` : 'vp lint-staged');
+            replaced = true;
+            matched = true;
+            break;
+          }
+        }
+        if (matched) {
+          continue;
+        }
+      }
+      if (STALE_BOOTSTRAP_PATTERN.test(trimmed)) {
         // strip bootstrap line
       } else {
         result.push(line);
