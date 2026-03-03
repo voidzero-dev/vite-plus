@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ProgressIndicator, ProgressRoot } from 'reka-ui';
+
 import type { PerformanceData } from '../../../data/performance';
 interface Props {
   data: PerformanceData;

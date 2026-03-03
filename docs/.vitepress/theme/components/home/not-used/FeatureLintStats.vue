@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import oxcIcon from '@assets/icons/oxc-light.svg';
+import oxcBackground from '@local-assets/backgrounds/oxc.jpg';
+import lintTerminal from '@local-assets/terminal-features/lint.svg';
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui';
+
 import { lintSyntaticPerformance, lintTypeAwarePerformance } from '../../../data/performance';
 import PerformanceBar from './PerformanceBar.vue';
-import oxcIcon from '@assets/icons/oxc-light.svg';
-import lintTerminal from '@local-assets/terminal-features/lint.svg';
-import oxcBackground from '@local-assets/backgrounds/oxc.jpg';
 </script>
 
 <template>

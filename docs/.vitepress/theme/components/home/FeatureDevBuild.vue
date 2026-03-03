@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import viteIcon from '@assets/icons/vite-light.svg';
 import rolldownIcon from '@assets/icons/rolldown-light.svg';
+import viteIcon from '@assets/icons/vite-light.svg';
 import devTerminal from '@local-assets/terminal-features/dev.svg';
 </script>
 

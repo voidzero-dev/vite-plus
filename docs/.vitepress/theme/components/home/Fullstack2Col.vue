@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import vercelLogo from '@local-assets/platforms/vercel.svg';
-import netlifyLogo from '@local-assets/platforms/netlify.svg';
-import cloudflareLogo from '@local-assets/platforms/cloudflare.svg';
-import renderLogo from '@local-assets/platforms/render.svg';
 import nitroIcon from '@local-assets/icons/nitro.png';
-import nitroTerminal from '@local-assets/terminal-features/nitro.svg';
 import metaFrameworksImage from '@local-assets/meta-frameworks.png';
+import cloudflareLogo from '@local-assets/platforms/cloudflare.svg';
+import netlifyLogo from '@local-assets/platforms/netlify.svg';
+import renderLogo from '@local-assets/platforms/render.svg';
+import vercelLogo from '@local-assets/platforms/vercel.svg';
+import nitroTerminal from '@local-assets/terminal-features/nitro.svg';
 </script>
 
 <template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui';
+import { ref, onMounted, onUnmounted } from 'vue';
+
 import TerminalAnimation1 from '../terminal-animations/TerminalAnimation1.vue';
 import TerminalAnimation2 from '../terminal-animations/TerminalAnimation2.vue';
 import TerminalAnimation3 from '../terminal-animations/TerminalAnimation3.vue';

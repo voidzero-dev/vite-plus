@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import rolldownIcon from '@assets/icons/rolldown-light.svg';
+import viteIcon from '@assets/icons/vite-light.svg';
+import viteBackground from '@local-assets/backgrounds/vite.jpg';
+import devTerminal from '@local-assets/terminal-features/dev.svg';
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui';
+
 import { devPerformance, buildPerformance } from '../../../data/performance';
 import PerformanceBar from './PerformanceBar.vue';
-import viteIcon from '@assets/icons/vite-light.svg';
-import rolldownIcon from '@assets/icons/rolldown-light.svg';
-import devTerminal from '@local-assets/terminal-features/dev.svg';
-import viteBackground from '@local-assets/backgrounds/vite.jpg';
 </script>
 
 <template>

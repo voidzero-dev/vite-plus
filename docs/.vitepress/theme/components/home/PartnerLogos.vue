@@ -1,13 +1,13 @@
 <script setup lang="ts">
+import boltLogo from '@assets/clients/bolt.svg';
+import cloudflareLogo from '@assets/clients/cloudflare.svg';
+import framerLogo from '@assets/clients/framer.svg';
+import huggingfaceLogo from '@assets/clients/hugging-face.svg';
+import linearLogo from '@assets/clients/linear.svg';
+import mercedesLogo from '@assets/clients/mercedes.svg';
+import openaiLogo from '@assets/clients/openai.svg';
 // Import client logos
 import shopifyLogo from '@assets/clients/shopify.svg';
-import openaiLogo from '@assets/clients/openai.svg';
-import framerLogo from '@assets/clients/framer.svg';
-import linearLogo from '@assets/clients/linear.svg';
-import huggingfaceLogo from '@assets/clients/hugging-face.svg';
-import cloudflareLogo from '@assets/clients/cloudflare.svg';
-import mercedesLogo from '@assets/clients/mercedes.svg';
-import boltLogo from '@assets/clients/bolt.svg';
 
 const logos = [
   { src: openaiLogo, alt: 'OpenAI' },

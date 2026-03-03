@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import oxcIcon from '@assets/icons/oxc-light.svg';
+import oxcBackground from '@local-assets/backgrounds/oxc.jpg';
+import formatTerminal from '@local-assets/terminal-features/format.svg';
+
 import { formatPerformance } from '../../../data/performance';
 import PerformanceBar from './PerformanceBar.vue';
-import oxcIcon from '@assets/icons/oxc-light.svg';
-import formatTerminal from '@local-assets/terminal-features/format.svg';
-import oxcBackground from '@local-assets/backgrounds/oxc.jpg';
 </script>
 
 <template>

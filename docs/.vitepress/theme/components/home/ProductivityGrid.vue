@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import RiveAnimation from '@components/shared/RiveAnimation.vue';
-import stayFastAtScaleAnimation from '@local-assets/animations/561_x_273_stay_fast_at_scale.riv';
 import focusOnShippingAnimation from '@local-assets/animations/514_x_246_focus_on_shipping_v2.riv';
+import stayFastAtScaleAnimation from '@local-assets/animations/561_x_273_stay_fast_at_scale.riv';
+import productivitySecurityImage from '@local-assets/productivity-security.png';
+import tileOxc from '@local-assets/tiles/oxc.png';
 import tileVite from '@local-assets/tiles/vite.png';
 import tileVitest from '@local-assets/tiles/vitest.png';
-import tileOxc from '@local-assets/tiles/oxc.png';
-import productivitySecurityImage from '@local-assets/productivity-security.png';
 </script>
 
 <template>

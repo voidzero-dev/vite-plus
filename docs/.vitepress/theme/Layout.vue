@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue';
-import { useData } from 'vitepress';
 import BaseTheme from '@voidzero-dev/vitepress-theme/src/viteplus';
-import Header from './components/Header.vue';
+import { useData } from 'vitepress';
+import { onMounted, watch } from 'vue';
+
 import Footer from './components/Footer.vue';
+import Header from './components/Header.vue';
 import Home from './layouts/Home.vue';
 // import Error404 from "./layouts/Error404.vue";
 

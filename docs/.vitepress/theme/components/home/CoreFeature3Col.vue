@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import StackedBlock from './StackedBlock.vue';
-import nodeIcon from '@local-assets/icons/node.png';
 import bunIcon from '@local-assets/icons/bun.png';
 import denoIcon from '@local-assets/icons/deno.png';
+import nodeIcon from '@local-assets/icons/node.png';
 import reactIcon from '@local-assets/icons/react.png';
-import vueIcon from '@local-assets/icons/vue.png';
-import svelteIcon from '@local-assets/icons/svelte.png';
 import solidIcon from '@local-assets/icons/solid.png';
+import svelteIcon from '@local-assets/icons/svelte.png';
+import vueIcon from '@local-assets/icons/vue.png';
 import superSetImage from '@local-assets/superset.png';
+
+import StackedBlock from './StackedBlock.vue';
 </script>
 
 <template>

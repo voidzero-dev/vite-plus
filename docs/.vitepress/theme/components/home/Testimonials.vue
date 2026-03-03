@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import 'vue3-carousel/carousel.css';
 import { Carousel, Slide, Pagination, Navigation } from 'vue3-carousel';
+
 import { testimonials } from '../../data/testimonials';
 
 const carouselConfig = {
