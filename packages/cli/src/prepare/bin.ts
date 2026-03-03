@@ -130,7 +130,7 @@ function install(dir = '.husky'): InstallResult {
 
   const internal = (x = '') => join(dir, '_', x);
   const target = `${dir}/_`;
-  const checkResult = spawnSync('git', ['config', 'core.hooksPath']);
+  const checkResult = spawnSync('git', ['config', '--local', 'core.hooksPath']);
   const existingHooksPath = checkResult.status === 0 ? checkResult.stdout?.toString().trim() : '';
   if (existingHooksPath && existingHooksPath !== target) {
     return {

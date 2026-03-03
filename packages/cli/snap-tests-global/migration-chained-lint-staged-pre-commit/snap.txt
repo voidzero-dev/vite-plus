@@ -37,5 +37,5 @@
   }
 }
 
-> cat .husky/pre-commit # check npx lint-staged replaced but && npm test preserved
-vp lint-staged && npm test
+> cat .husky/pre-commit # check npx lint-staged replaced but --diff HEAD~1 && npm test preserved
+vp lint-staged --diff HEAD~1 && npm test

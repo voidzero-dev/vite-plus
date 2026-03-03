@@ -698,6 +698,12 @@ export function setupGitHooks(projectPath: string): void {
     );
   }
 
+  // Extract custom husky dir from the original prepare script before editing.
+  // Matches "husky [install] <dir>" in both standalone and composed scripts.
+  const scripts = pkgContent.scripts as Record<string, string> | undefined;
+  const huskyDirMatch = scripts?.prepare?.match(/\bhusky(?:\s+install)?\s+([^\s&|;]+)/);
+  const huskyDir = huskyDirMatch?.[1] ?? '.husky';
+
   editJsonFile<{
     scripts?: Record<string, string>;
     'lint-staged'?: Record<string, string | string[]>;
@@ -764,9 +770,10 @@ export function setupGitHooks(projectPath: string): void {
 
   // Create .husky/pre-commit and install hooks
   if (!unsupported) {
-    createHuskyPreCommitHook(projectPath);
-    stripStaleHuskyBootstrap(projectPath);
-    const prepareResult = spawn.sync(vpBin, ['prepare'], {
+    createHuskyPreCommitHook(projectPath, huskyDir);
+    stripStaleHuskyBootstrap(projectPath, huskyDir);
+    const prepareArgs = huskyDir !== '.husky' ? ['prepare', huskyDir] : ['prepare'];
+    const prepareResult = spawn.sync(vpBin, prepareArgs, {
       cwd: projectPath,
       stdio: 'pipe',
     });
@@ -814,8 +821,8 @@ const STALE_LINT_STAGED_PATTERNS = [
 // Husky v8 bootstrap pattern — stripped entirely.
 const STALE_BOOTSTRAP_PATTERN = /^\.\s+".*husky\.sh"/;
 
-export function createHuskyPreCommitHook(projectPath: string): void {
-  const huskyDir = path.join(projectPath, '.husky');
+export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): void {
+  const huskyDir = path.join(projectPath, dir);
   fs.mkdirSync(huskyDir, { recursive: true });
   const hookPath = path.join(huskyDir, 'pre-commit');
   if (fs.existsSync(hookPath)) {
@@ -834,10 +841,9 @@ export function createHuskyPreCommitHook(projectPath: string): void {
         for (const pattern of STALE_LINT_STAGED_PATTERNS) {
           const match = pattern.exec(trimmed);
           if (match) {
-            const rest = trimmed.slice(match[0].length);
-            // Preserve chained commands (&&, ||, ;) after lint-staged and its args
-            const chain = rest.match(/[^&;|]*((?:&&|\|\||;).*)/);
-            result.push(chain ? `vp lint-staged ${chain[1].trim()}` : 'vp lint-staged');
+            // Preserve flags and chained commands after lint-staged
+            const rest = trimmed.slice(match[0].length).trim();
+            result.push(rest ? `vp lint-staged ${rest}` : 'vp lint-staged');
             replaced = true;
             matched = true;
             break;
@@ -872,8 +878,8 @@ const HUSKY_BOOTSTRAP_PATTERN = /^\.\s+".*husky\.sh"/;
  * (not just pre-commit). Other hooks like commit-msg or pre-push also
  * source husky.sh, which vp prepare deletes — those hooks would break.
  */
-function stripStaleHuskyBootstrap(projectPath: string): void {
-  const huskyDir = path.join(projectPath, '.husky');
+function stripStaleHuskyBootstrap(projectPath: string, dir = '.husky'): void {
+  const huskyDir = path.join(projectPath, dir);
   if (!fs.existsSync(huskyDir)) {
     return;
   }

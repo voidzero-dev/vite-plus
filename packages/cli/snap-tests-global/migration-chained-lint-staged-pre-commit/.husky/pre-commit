@@ -1,1 +1,1 @@
-npx lint-staged && npm test
+npx lint-staged --diff HEAD~1 && npm test

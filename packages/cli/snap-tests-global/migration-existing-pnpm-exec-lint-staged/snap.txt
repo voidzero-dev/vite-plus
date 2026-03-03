@@ -38,4 +38,4 @@
 }
 
 > cat .husky/pre-commit # check pnpm exec lint-staged replaced with vp lint-staged
-vp lint-staged
+vp lint-staged --concurrent false
