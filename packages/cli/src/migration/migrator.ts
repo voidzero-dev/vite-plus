@@ -679,7 +679,7 @@ export function setupGitHooks(projectPath: string): void {
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
-    // Add or rewrite "prepare" script
+    // Add or rewrite "prepare" script (put prepare first)
     if (!pkg.scripts) {
       pkg.scripts = {};
     }
@@ -688,7 +688,8 @@ export function setupGitHooks(projectPath: string): void {
       pkg.scripts.prepare === 'husky' ||
       pkg.scripts.prepare === 'husky install'
     ) {
-      pkg.scripts.prepare = 'vp prepare';
+      const { prepare: _, ...rest } = pkg.scripts;
+      pkg.scripts = { prepare: 'vp prepare', ...rest };
     }
 
     // Add lint-staged config if not present (in package.json or standalone config files)
@@ -704,6 +705,20 @@ export function setupGitHooks(projectPath: string): void {
       if (pkg.dependencies?.[name]) {
         delete pkg.dependencies[name];
       }
+    }
+
+    // Reorder: put lint-staged right after scripts for conventional ordering
+    if (pkg['lint-staged']) {
+      const lintStaged = pkg['lint-staged'];
+      delete pkg['lint-staged'];
+      const reordered = {} as typeof pkg;
+      for (const [key, value] of Object.entries(pkg)) {
+        (reordered as Record<string, unknown>)[key] = value;
+        if (key === 'scripts') {
+          reordered['lint-staged'] = lintStaged;
+        }
+      }
+      return reordered;
     }
 
     return pkg;

@@ -27,8 +27,11 @@ export default defineConfig({
   "name": "migration-monorepo-pnpm-overrides-dependency-selector",
   "version": "1.0.0",
   "scripts": {
-    "dev": "vp dev",
-    "prepare": "vp prepare"
+    "prepare": "vp prepare",
+    "dev": "vp dev"
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
   },
   "devDependencies": {
     "vite": "catalog:",
@@ -40,9 +43,6 @@ export default defineConfig({
       "react-click-away-listener>react": "0.0.0-experimental-7dc903cd-20251203",
       "supertest>superagent": "9.0.2"
     }
-  },
-  "lint-staged": {
-    "*": "vp check --fix"
   }
 }
 
