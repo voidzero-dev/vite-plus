@@ -1,0 +1,8 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # migration should preserve custom husky dir in composed prepare",
+    "cat package.json # prepare should be 'vp prepare .config/husky && npm run build'",
+    "cat .config/husky/pre-commit # pre-commit hook should be in custom dir"
+  ]
+}

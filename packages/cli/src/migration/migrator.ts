@@ -721,17 +721,20 @@ export function setupGitHooks(projectPath: string): void {
         const dir = huskyMatch?.[1];
         pkg.scripts.prepare = dir ? `vp prepare ${dir}` : 'vp prepare';
       } else if (!currentPrepare.includes('vp prepare')) {
-        pkg.scripts.prepare = `vp prepare && ${currentPrepare}`;
+        const vpPrepareCmd = huskyDir !== '.husky' ? `vp prepare ${huskyDir}` : 'vp prepare';
+        pkg.scripts.prepare = `${vpPrepareCmd} && ${currentPrepare}`;
       }
 
       // Clean up leftover husky commands in composed prepare scripts
       // e.g. "vp prepare && husky && npm run build" → "vp prepare && npm run build"
       // Handles &&, ;, and || operators
+      // Use (?<!\S) (not preceded by non-whitespace) instead of \b to avoid matching
+      // "husky" inside paths like ".config/husky"
       pkg.scripts.prepare = pkg.scripts.prepare
-        .replace(/\bhusky install(?:\s+\S+)?\s*(?:&&|;|\|\|)\s*/g, '')
-        .replace(/\s*(?:&&|;|\|\|)\s*husky install(?:\s+\S+)?/g, '')
-        .replace(/\bhusky(?:\s+\S+)?\s*(?:&&|;|\|\|)\s*/g, '')
-        .replace(/\s*(?:&&|;|\|\|)\s*husky(?:\s+\S+)?/g, '');
+        .replace(/(?<!\S)husky install(?:\s+\S+)?\s*(?:&&|;|\|\|)\s*/g, '')
+        .replace(/\s*(?:&&|;|\|\|)\s*husky install(?:\s+\S+)?$/g, '')
+        .replace(/(?<!\S)husky(?:\s+\S+)?\s*(?:&&|;|\|\|)\s*/g, '')
+        .replace(/\s*(?:&&|;|\|\|)\s*husky(?:\s+\S+)?$/g, '');
 
       // Add lint-staged config if not present (in package.json or standalone config files)
       if (!pkg['lint-staged'] && !hasStandaloneLintStagedConfig(projectPath)) {

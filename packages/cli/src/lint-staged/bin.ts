@@ -129,7 +129,19 @@ if (args.help) {
 
   // String flags
   if (args.config != null) {
-    options.configPath = args.config;
+    if (args.config === '-') {
+      // stdin mode: read JSON config from stdin (matches lint-staged's -c - behavior)
+      const chunks: Buffer[] = [];
+      for await (const chunk of process.stdin) {
+        chunks.push(chunk as Buffer);
+      }
+      const stdinContent = Buffer.concat(chunks).toString('utf8').trim();
+      if (stdinContent) {
+        options.config = JSON.parse(stdinContent);
+      }
+    } else {
+      options.configPath = args.config;
+    }
   }
   if (args.cwd != null) {
     options.cwd = args.cwd;

@@ -1,0 +1,10 @@
+{
+  "name": "migration-composed-husky-custom-dir",
+  "scripts": {
+    "prepare": "npm run build && husky install .config/husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "vite": "^7.0.0"
+  }
+}
