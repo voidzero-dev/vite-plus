@@ -11,54 +11,6 @@ import mri from 'mri';
 import { renderCliDoc } from '../utils/help.js';
 import { getVitePlusHeader, log } from '../utils/terminal.js';
 
-const helpMessage = renderCliDoc({
-  usage: 'vp lint-staged [options]',
-  summary: 'Run linters on staged files.',
-  sections: [
-    {
-      title: 'Options',
-      rows: [
-        {
-          label: '--allow-empty',
-          description: 'Allow empty commits when tasks revert all staged changes',
-        },
-        {
-          label: '-p, --concurrent <number|boolean>',
-          description: 'Number of tasks to run concurrently, or false for serial',
-        },
-        { label: '-c, --config <path>', description: 'Path to configuration file' },
-        {
-          label: '--continue-on-error',
-          description: 'Run all tasks to completion even if one fails',
-        },
-        { label: '--cwd <path>', description: 'Working directory to run all tasks in' },
-        { label: '-d, --debug', description: 'Enable debug output' },
-        { label: '--diff <string>', description: 'Override the default --staged flag of git diff' },
-        {
-          label: '--diff-filter <string>',
-          description: 'Override the default --diff-filter=ACMR flag of git diff',
-        },
-        {
-          label: '--fail-on-changes',
-          description: 'Fail with exit code 1 when tasks modify tracked files',
-        },
-        {
-          label: '--hide-partially-staged',
-          description: 'Hide unstaged changes from partially staged files',
-        },
-        { label: '--hide-unstaged', description: 'Hide all unstaged changes before running tasks' },
-        { label: '--max-arg-length <number>', description: 'Maximum argument string length' },
-        { label: '--no-stash', description: 'Disable the backup stash' },
-        { label: '-q, --quiet', description: 'Disable lint-staged console output' },
-        { label: '-r, --relative', description: 'Pass filepaths relative to cwd to tasks' },
-        { label: '--revert', description: 'Revert to original state in case of errors' },
-        { label: '-v, --verbose', description: 'Show task output even when tasks succeed' },
-        { label: '-h, --help', description: 'Show this help message' },
-      ],
-    },
-  ],
-});
-
 const args = mri(process.argv.slice(3), {
   alias: {
     h: 'help',
@@ -87,6 +39,59 @@ const args = mri(process.argv.slice(3), {
 });
 
 if (args.help) {
+  const helpMessage = renderCliDoc({
+    usage: 'vp lint-staged [options]',
+    summary: 'Run linters on staged files.',
+    sections: [
+      {
+        title: 'Options',
+        rows: [
+          {
+            label: '--allow-empty',
+            description: 'Allow empty commits when tasks revert all staged changes',
+          },
+          {
+            label: '-p, --concurrent <number|boolean>',
+            description: 'Number of tasks to run concurrently, or false for serial',
+          },
+          { label: '-c, --config <path>', description: 'Path to configuration file' },
+          {
+            label: '--continue-on-error',
+            description: 'Run all tasks to completion even if one fails',
+          },
+          { label: '--cwd <path>', description: 'Working directory to run all tasks in' },
+          { label: '-d, --debug', description: 'Enable debug output' },
+          {
+            label: '--diff <string>',
+            description: 'Override the default --staged flag of git diff',
+          },
+          {
+            label: '--diff-filter <string>',
+            description: 'Override the default --diff-filter=ACMR flag of git diff',
+          },
+          {
+            label: '--fail-on-changes',
+            description: 'Fail with exit code 1 when tasks modify tracked files',
+          },
+          {
+            label: '--hide-partially-staged',
+            description: 'Hide unstaged changes from partially staged files',
+          },
+          {
+            label: '--hide-unstaged',
+            description: 'Hide all unstaged changes before running tasks',
+          },
+          { label: '--max-arg-length <number>', description: 'Maximum argument string length' },
+          { label: '--no-stash', description: 'Disable the backup stash' },
+          { label: '-q, --quiet', description: 'Disable lint-staged console output' },
+          { label: '-r, --relative', description: 'Pass filepaths relative to cwd to tasks' },
+          { label: '--revert', description: 'Revert to original state in case of errors' },
+          { label: '-v, --verbose', description: 'Show task output even when tasks succeed' },
+          { label: '-h, --help', description: 'Show this help message' },
+        ],
+      },
+    ],
+  });
   log((await getVitePlusHeader()) + '\n');
   log(helpMessage);
 } else {

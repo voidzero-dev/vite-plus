@@ -27,21 +27,6 @@ import mri from 'mri';
 import { renderCliDoc } from '../utils/help.js';
 import { getVitePlusHeader, log } from '../utils/terminal.js';
 
-const helpMessage = renderCliDoc({
-  usage: 'vp prepare',
-  summary: 'Set up Git hooks for the project.',
-  sections: [
-    {
-      title: 'Options',
-      rows: [{ label: '-h, --help', description: 'Show this help message' }],
-    },
-    {
-      title: 'Environment',
-      rows: [{ label: 'HUSKY=0', description: 'Skip hook installation' }],
-    },
-  ],
-});
-
 const HOOKS = [
   'pre-commit',
   'pre-merge-commit',
@@ -165,6 +150,20 @@ async function main() {
   });
 
   if (args.help) {
+    const helpMessage = renderCliDoc({
+      usage: 'vp prepare',
+      summary: 'Set up Git hooks for the project.',
+      sections: [
+        {
+          title: 'Options',
+          rows: [{ label: '-h, --help', description: 'Show this help message' }],
+        },
+        {
+          title: 'Environment',
+          rows: [{ label: 'HUSKY=0', description: 'Skip hook installation' }],
+        },
+      ],
+    });
     log((await getVitePlusHeader()) + '\n');
     log(helpMessage);
     return;
@@ -173,7 +172,7 @@ async function main() {
   const dir = args._[0] as string | undefined;
   const { message, isError } = install(dir);
   if (message) {
-    console.error(message);
+    log(message);
     if (isError) {
       process.exit(1);
     }

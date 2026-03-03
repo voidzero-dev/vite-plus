@@ -666,10 +666,6 @@ const OTHER_HOOK_TOOLS = ['simple-git-hooks', 'lefthook', 'yorkie'] as const;
 const REPLACED_HOOK_PACKAGES = ['husky', 'lint-staged'] as const;
 
 /**
- * Set up git hooks with husky + lint-staged via vp commands.
- * Skips if another hook tool is detected (warns user).
- */
-/**
  * Walk up from `startPath` looking for `.git` (directory or file — submodules
  * use a `.git` file).  Returns the directory that contains `.git`, or `null`.
  */
@@ -687,6 +683,10 @@ function findGitRoot(startPath: string): string | null {
   }
 }
 
+/**
+ * Set up git hooks with husky + lint-staged via vp commands.
+ * Skips if another hook tool is detected (warns user).
+ */
 export function setupGitHooks(projectPath: string): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -901,8 +901,6 @@ export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): v
   }
 }
 
-const HUSKY_BOOTSTRAP_PATTERN = /^\.\s+".*husky\.sh"/;
-
 /**
  * Strip the husky.sh bootstrap line from ALL hook files in .husky/
  * (not just pre-commit). Other hooks like commit-msg or pre-push also
@@ -922,7 +920,7 @@ function stripStaleHuskyBootstrap(projectPath: string, dir = '.husky'): void {
     const hookPath = path.join(huskyDir, entry.name);
     const content = fs.readFileSync(hookPath, 'utf8');
     const lines = content.split('\n');
-    const filtered = lines.filter((line) => !HUSKY_BOOTSTRAP_PATTERN.test(line.trim()));
+    const filtered = lines.filter((line) => !STALE_BOOTSTRAP_PATTERN.test(line.trim()));
     if (filtered.length === lines.length) {
       continue; // nothing changed
     }
