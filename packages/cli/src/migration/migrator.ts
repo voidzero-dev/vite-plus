@@ -682,26 +682,38 @@ export function setupGitHooks(projectPath: string): void {
     }
   }
 
+  // Skip hook setup if lint-staged config exists in an unsupported format —
+  // the config still references old commands (oxlint/oxfmt) that migration
+  // can't rewrite, so vp lint-staged would fail on the next commit.
+  const unsupported = hasUnsupportedLintStagedConfig(projectPath);
+  if (unsupported) {
+    prompts.log.warn(
+      '⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.',
+    );
+  }
+
   editJsonFile<{
     scripts?: Record<string, string>;
     'lint-staged'?: Record<string, string | string[]>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
-    // Add or rewrite "prepare" script
-    if (!pkg.scripts) {
-      pkg.scripts = {};
-    }
-    const currentPrepare = pkg.scripts.prepare;
-    if (!currentPrepare || currentPrepare === 'husky' || currentPrepare === 'husky install') {
-      pkg.scripts.prepare = 'vp prepare';
-    } else if (!currentPrepare.includes('vp prepare')) {
-      pkg.scripts.prepare = `vp prepare && ${currentPrepare}`;
-    }
+    if (!unsupported) {
+      // Add or rewrite "prepare" script
+      if (!pkg.scripts) {
+        pkg.scripts = {};
+      }
+      const currentPrepare = pkg.scripts.prepare;
+      if (!currentPrepare || currentPrepare === 'husky' || currentPrepare === 'husky install') {
+        pkg.scripts.prepare = 'vp prepare';
+      } else if (!currentPrepare.includes('vp prepare')) {
+        pkg.scripts.prepare = `vp prepare && ${currentPrepare}`;
+      }
 
-    // Add lint-staged config if not present (in package.json or standalone config files)
-    if (!pkg['lint-staged'] && !hasStandaloneLintStagedConfig(projectPath)) {
-      pkg['lint-staged'] = { '*': 'vp check --fix' };
+      // Add lint-staged config if not present (in package.json or standalone config files)
+      if (!pkg['lint-staged'] && !hasStandaloneLintStagedConfig(projectPath)) {
+        pkg['lint-staged'] = { '*': 'vp check --fix' };
+      }
     }
 
     // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands)
@@ -727,7 +739,7 @@ export function setupGitHooks(projectPath: string): void {
   }
 
   // Create .husky/pre-commit and install hooks if .git exists
-  if (fs.existsSync(path.join(projectPath, '.git'))) {
+  if (!unsupported && fs.existsSync(path.join(projectPath, '.git'))) {
     createHuskyPreCommitHook(projectPath);
     const prepareResult = spawn.sync(vpBin, ['prepare'], {
       cwd: projectPath,
@@ -749,14 +761,50 @@ function hasStandaloneLintStagedConfig(projectPath: string): boolean {
 }
 
 /**
+ * Check if lint-staged config exists in a format that can't be auto-migrated
+ * (non-JSON files like .yaml, .mjs, .cjs, .js, or a non-JSON .lintstagedrc).
+ */
+function hasUnsupportedLintStagedConfig(projectPath: string): boolean {
+  for (const filename of LINT_STAGED_OTHER_CONFIG_FILES) {
+    if (fs.existsSync(path.join(projectPath, filename))) {
+      return true;
+    }
+  }
+  const lintstagedrcPath = path.join(projectPath, '.lintstagedrc');
+  if (fs.existsSync(lintstagedrcPath) && !isJsonFile(lintstagedrcPath)) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Create .husky/pre-commit hook file.
  */
+// Old lint-staged invocations that should be replaced by `vp lint-staged`.
+const OLD_LINT_STAGED_PATTERNS = [
+  /^(pnpm|npx|yarn|npm exec)\s+lint-staged\b.*/,
+  /^lint-staged\b.*/,
+];
+
 export function createHuskyPreCommitHook(projectPath: string): void {
   const huskyDir = path.join(projectPath, '.husky');
   fs.mkdirSync(huskyDir, { recursive: true });
   const hookPath = path.join(huskyDir, 'pre-commit');
-  fs.writeFileSync(hookPath, 'vp lint-staged\n');
-  fs.chmodSync(hookPath, 0o755);
+  if (fs.existsSync(hookPath)) {
+    const existing = fs.readFileSync(hookPath, 'utf8');
+    if (existing.includes('vp lint-staged')) {
+      return; // already has vp lint-staged
+    }
+    // Replace old lint-staged invocations, preserve everything else
+    const lines = existing.split('\n');
+    const filtered = lines.filter(
+      (line) => !OLD_LINT_STAGED_PATTERNS.some((pattern) => pattern.test(line.trim())),
+    );
+    fs.writeFileSync(hookPath, `vp lint-staged\n${filtered.join('\n')}`);
+  } else {
+    fs.writeFileSync(hookPath, 'vp lint-staged\n');
+    fs.chmodSync(hookPath, 0o755);
+  }
 }
 
 function setPackageManager(

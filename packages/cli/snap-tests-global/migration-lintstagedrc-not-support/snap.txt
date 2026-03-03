@@ -1,23 +1,26 @@
+> git init
 > vp migrate --no-interactive # migration should not support non-json format lintstagedrc
-VITE+ - The Unified Toolchain for the Web
-
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-✘ .lintstagedrc is not JSON format file, auto migration is not supported
-
-✘ .lintstagedrc.yaml is not supported by auto migration
-
-✘ lint-staged.config.mjs is not supported by auto migration
-
-Please migrate the lint-staged config manually, see https://viteplus.dev/migration/#lint-staged for more details
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
+┌  VITE+ - The Unified Toolchain for the Web
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+▲  ✘ .lintstagedrc is not JSON format file, auto migration is not supported
+│
+▲  ✘ .lintstagedrc.yaml is not supported by auto migration
+│
+▲  ✘ lint-staged.config.mjs is not supported by auto migration
+│
+▲  Please migrate the lint-staged config manually, see https://viteplus.dev/migration/#lint-staged for more details
+│
+▲  ⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.
+│
+◆  Wrote agent instructions to AGENTS.md
+│
+└  ✔ Migration completed!
 
 
 > cat .lintstagedrc # check .lintstagedrc is not updated
@@ -35,12 +38,9 @@ export default {
   '*.js': ['oxlint', 'oxfmt'],
 };
 
-> cat package.json # check package.json
+> cat package.json # check package.json has no prepare script when lint-staged config is unsupported
 {
   "name": "migration-lintstagedrc-not-support",
-  "scripts": {
-    "prepare": "vp prepare"
-  },
   "devDependencies": {
     "vite-plus": "latest"
   },

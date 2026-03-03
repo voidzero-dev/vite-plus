@@ -1,0 +1,32 @@
+> vp lint-staged -h
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp lint-staged
+
+Run linters on staged files.
+
+Options:
+  -h, --help  Show this help message
+
+
+> vp lint-staged --help
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp lint-staged
+
+Run linters on staged files.
+
+Options:
+  -h, --help  Show this help message
+
+
+> vp help lint-staged
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp lint-staged
+
+Run linters on staged files.
+
+Options:
+  -h, --help  Show this help message
+

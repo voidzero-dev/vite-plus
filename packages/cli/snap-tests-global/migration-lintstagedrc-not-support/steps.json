@@ -1,9 +1,10 @@
 {
   "commands": [
+    { "command": "git init", "ignoreOutput": true },
     "vp migrate --no-interactive # migration should not support non-json format lintstagedrc",
     "cat .lintstagedrc # check .lintstagedrc is not updated",
     "cat .lintstagedrc.yaml # check .lintstagedrc.yaml is not updated",
     "cat lint-staged.config.mjs # check lint-staged.config.mjs is not updated",
-    "cat package.json # check package.json"
+    "cat package.json # check package.json has no prepare script when lint-staged config is unsupported"
   ]
 }

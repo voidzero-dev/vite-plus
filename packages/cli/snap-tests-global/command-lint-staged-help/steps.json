@@ -1,0 +1,3 @@
+{
+  "commands": ["vp lint-staged -h", "vp lint-staged --help", "vp help lint-staged"]
+}

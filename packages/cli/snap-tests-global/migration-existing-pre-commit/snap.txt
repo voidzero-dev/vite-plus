@@ -1,0 +1,28 @@
+> git init
+> mkdir -p .husky && printf '#!/usr/bin/env sh\nnpm test\nsecret-scan\n' > .husky/pre-commit && chmod 755 .husky/pre-commit
+> cat .husky/pre-commit # check existing pre-commit hook before migration
+#!/usr/bin/env sh
+npm test
+secret-scan
+
+> vp migrate --no-interactive # migration should preserve existing pre-commit contents
+┌  VITE+ - The Unified Toolchain for the Web
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+◆  ✔ Git hooks configured
+│
+◆  Wrote agent instructions to AGENTS.md
+│
+└  ✔ Migration completed!
+
+
+> cat .husky/pre-commit # check pre-commit hook preserves existing commands
+vp lint-staged
+#!/usr/bin/env sh
+npm test
+secret-scan
