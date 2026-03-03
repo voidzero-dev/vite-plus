@@ -33,7 +33,6 @@ impl TipContext {
         self.exit_code == 0
     }
 
-    #[expect(dead_code)]
     pub fn is_unknown_command_error(&self) -> bool {
         if let Some(err) = &self.clap_error {
             matches!(err.kind(), ClapErrorKind::InvalidSubcommand)
