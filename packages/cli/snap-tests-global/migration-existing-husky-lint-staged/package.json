@@ -1,0 +1,14 @@
+{
+  "name": "migration-existing-husky-lint-staged",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.js": "oxlint --fix"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # migration should add prepare script, remove lint-staged from devDeps",
+    "cat package.json # check prepare script added, lint-staged removed from devDeps, no inline lint-staged config",
+    "cat .lintstagedrc.json # check lintstagedrc.json commands are rewritten",
+    "cat .husky/pre-commit # check pre-commit hook created"
+  ]
+}

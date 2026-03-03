@@ -5,7 +5,7 @@ import path from 'node:path';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import spawn from 'cross-spawn';
 
-import { rewriteMonorepoProject } from '../../migration/migrator.js';
+import { createHuskyPreCommitHook, rewriteMonorepoProject } from '../../migration/migrator.js';
 import { PackageManager, type WorkspaceInfo } from '../../types/index.js';
 import { editJsonFile } from '../../utils/json.js';
 import { templatesDir } from '../../utils/path.js';
@@ -110,6 +110,8 @@ export async function executeMonorepoTemplate(
 
     if (gitResult.status === 0) {
       prompts.log.success('Git repository initialized');
+      createHuskyPreCommitHook(fullPath);
+      prompts.log.success('Git hooks configured');
     } else {
       prompts.log.warn('Failed to initialize git repository');
       if (gitResult.stderr) {

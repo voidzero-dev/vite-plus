@@ -9,8 +9,12 @@
   ],
   "type": "module",
   "scripts": {
+    "prepare": "vp prepare",
     "ready": "vp fmt && vp lint --type-aware && vp run test -r && vp run build -r",
     "dev": "vp run website#dev"
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
   },
   "engines": {
     "node": ">=22.12.0"

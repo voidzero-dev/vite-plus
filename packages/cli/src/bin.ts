@@ -1,7 +1,7 @@
 /**
  * Unified entry point for both the local CLI (via bin/vp) and the global CLI (via Rust vp binary).
  *
- * Global commands (create, migrate, init, mcp, --version) are handled by rolldown-bundled modules.
+ * Global commands (create, migrate, init, mcp, prepare, lint-staged, --version) are handled by rolldown-bundled modules.
  * All other commands are delegated to the Rust core through NAPI bindings, which
  * uses JavaScript tool resolver functions to locate tool binaries.
  *
@@ -47,6 +47,12 @@ if (command === 'create') {
 } else if (command === '--version' || command === '-V') {
   // @ts-ignore — rolldown output
   await import('./global/version.js');
+} else if (command === 'prepare') {
+  // @ts-ignore — rolldown output
+  await import('./global/prepare.js');
+} else if (command === 'lint-staged') {
+  // @ts-ignore — rolldown output
+  await import('./global/lint-staged.js');
 } else {
   // All other commands — delegate to Rust core via NAPI binding
   run({

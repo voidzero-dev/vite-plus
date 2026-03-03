@@ -1,0 +1,6 @@
+{
+  "name": "migration-add-git-hooks",
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

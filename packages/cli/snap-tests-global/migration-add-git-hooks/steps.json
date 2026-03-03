@@ -1,0 +1,8 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # migration should add git hooks setup",
+    "cat package.json # check package.json has prepare script and lint-staged config",
+    "cat .husky/pre-commit # check pre-commit hook"
+  ]
+}

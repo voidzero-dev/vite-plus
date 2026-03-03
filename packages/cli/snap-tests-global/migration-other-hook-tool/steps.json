@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # migration should warn about simple-git-hooks",
+    "cat package.json # check simple-git-hooks config is untouched, no prepare script added"
+  ]
+}

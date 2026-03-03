@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # migration should add prepare script but skip .husky/ creation",
+    "cat package.json # check package.json has prepare script and lint-staged config",
+    "test -d .husky && echo 'husky dir exists' || echo 'no husky dir'"
+  ]
+}

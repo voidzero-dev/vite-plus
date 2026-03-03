@@ -538,6 +538,20 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// Set up Git hooks (delegates to bundled husky)
+    #[command(disable_help_flag = true)]
+    Prepare {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
+    /// Run lint-staged on Git staged files (delegates to bundled lint-staged)
+    #[command(disable_help_flag = true, name = "lint-staged")]
+    LintStaged {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
     // =========================================================================
     // Category C: Local CLI Delegation (stubs for now)
     // =========================================================================
@@ -1810,6 +1824,10 @@ pub async fn run_command_with_options(
         Commands::Create { args } => commands::create::execute(cwd, &args).await,
 
         Commands::Migrate { args } => commands::migrate::execute(cwd, &args).await,
+
+        Commands::Prepare { args } => commands::prepare::execute(cwd, &args).await,
+
+        Commands::LintStaged { args } => commands::lint_staged::execute(cwd, &args).await,
 
         // Category C: Local CLI Delegation (stubs)
         Commands::Dev { args } => {

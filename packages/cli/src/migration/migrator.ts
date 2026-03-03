@@ -136,6 +136,8 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
   mergeTsdownConfigFile(projectPath);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(projectPath);
+  // set up git hooks
+  setupGitHooks(projectPath);
   // set package manager
   setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
 }
@@ -166,6 +168,8 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
   mergeTsdownConfigFile(workspaceInfo.rootDir);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(workspaceInfo.rootDir);
+  // set up git hooks
+  setupGitHooks(workspaceInfo.rootDir);
   // set package manager
   setPackageManager(workspaceInfo.rootDir, workspaceInfo.downloadPackageManager);
 }
@@ -644,6 +648,106 @@ function rewriteAllImports(projectPath: string): void {
       prompts.log.error(`  ${displayRelative(error.path)}: ${error.message}`);
     }
   }
+}
+
+const OTHER_HOOK_TOOLS = ['simple-git-hooks', 'lefthook', 'yorkie'] as const;
+
+// Packages that are now bundled in vite-plus and should be removed from devDependencies
+const BUNDLED_HOOK_PACKAGES = ['husky', 'lint-staged'] as const;
+
+/**
+ * Set up git hooks with husky + lint-staged via vp commands.
+ * Skips if another hook tool is detected (warns user).
+ */
+function setupGitHooks(projectPath: string): void {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return;
+  }
+
+  const pkgContent = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+
+  // Check for other hook tools → warn and skip
+  for (const tool of OTHER_HOOK_TOOLS) {
+    if (pkgContent.devDependencies?.[tool] || pkgContent.dependencies?.[tool] || pkgContent[tool]) {
+      prompts.log.warn(
+        `⚠ Detected ${tool} — skipping git hooks setup. Please configure git hooks manually.`,
+      );
+      return;
+    }
+  }
+
+  editJsonFile<{
+    scripts?: Record<string, string>;
+    'lint-staged'?: Record<string, string | string[]>;
+    devDependencies?: Record<string, string>;
+    dependencies?: Record<string, string>;
+  }>(packageJsonPath, (pkg) => {
+    // Add or rewrite "prepare" script
+    if (!pkg.scripts) {
+      pkg.scripts = {};
+    }
+    if (
+      !pkg.scripts.prepare ||
+      pkg.scripts.prepare === 'husky' ||
+      pkg.scripts.prepare === 'husky install'
+    ) {
+      pkg.scripts.prepare = 'vp prepare';
+    }
+
+    // Add lint-staged config if not present (in package.json or standalone config files)
+    if (!pkg['lint-staged'] && !hasStandaloneLintStagedConfig(projectPath)) {
+      pkg['lint-staged'] = { '*': 'vp check --fix' };
+    }
+
+    // Remove husky and lint-staged from devDependencies (now bundled in vite-plus)
+    for (const name of BUNDLED_HOOK_PACKAGES) {
+      if (pkg.devDependencies?.[name]) {
+        delete pkg.devDependencies[name];
+      }
+      if (pkg.dependencies?.[name]) {
+        delete pkg.dependencies[name];
+      }
+    }
+
+    return pkg;
+  });
+
+  // Create .husky/pre-commit if .git exists
+  if (fs.existsSync(path.join(projectPath, '.git'))) {
+    createHuskyPreCommitHook(projectPath);
+    prompts.log.success('✔ Git hooks configured');
+  }
+}
+
+/**
+ * Check if a standalone lint-staged config file exists
+ */
+function hasStandaloneLintStagedConfig(projectPath: string): boolean {
+  const configFiles = [
+    '.lintstagedrc',
+    '.lintstagedrc.json',
+    '.lintstagedrc.yaml',
+    '.lintstagedrc.yml',
+    '.lintstagedrc.js',
+    '.lintstagedrc.mjs',
+    '.lintstagedrc.cjs',
+    'lint-staged.config.js',
+    'lint-staged.config.mjs',
+    'lint-staged.config.cjs',
+  ];
+  return configFiles.some((file) => fs.existsSync(path.join(projectPath, file)));
+}
+
+/**
+ * Create .husky/pre-commit hook file.
+ */
+export function createHuskyPreCommitHook(projectPath: string): void {
+  const huskyDir = path.join(projectPath, '.husky');
+  fs.mkdirSync(huskyDir, { recursive: true });
+  const hookPath = path.join(huskyDir, 'pre-commit');
+  fs.writeFileSync(hookPath, 'vp lint-staged\n');
+  fs.chmodSync(hookPath, 0o755);
 }
 
 function setPackageManager(

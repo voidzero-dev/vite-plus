@@ -414,6 +414,12 @@ importers:
       glob:
         specifier: 'catalog:'
         version: 13.0.0
+      husky:
+        specifier: 'catalog:'
+        version: 9.1.7
+      lint-staged:
+        specifier: 'catalog:'
+        version: 16.2.7
       minimatch:
         specifier: 'catalog:'
         version: 10.2.4

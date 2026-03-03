@@ -133,7 +133,9 @@ pub mod why;
 
 // Category B: JS Script Commands
 pub mod create;
+pub mod lint_staged;
 pub mod migrate;
+pub mod prepare;
 pub mod version;
 
 // Category D: Environment Management

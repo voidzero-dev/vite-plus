@@ -1,0 +1,8 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # migration should rewrite husky and lint-staged",
+    "cat package.json # check prepare rewritten, lint-staged commands rewritten, both removed from devDeps",
+    "cat .husky/pre-commit # check pre-commit hook rewritten"
+  ]
+}
