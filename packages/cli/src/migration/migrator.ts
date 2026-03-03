@@ -25,6 +25,24 @@ import { displayRelative, rulesDir } from '../utils/path.js';
 import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.js';
 import { detectConfigs, type ConfigFiles } from './detector.js';
 
+// All known lint-staged config file names.
+// JSON-parseable ones come first so rewriteLintStagedConfigFile can rewrite them.
+const LINT_STAGED_JSON_CONFIG_FILES = ['.lintstagedrc.json', '.lintstagedrc'] as const;
+const LINT_STAGED_OTHER_CONFIG_FILES = [
+  '.lintstagedrc.yaml',
+  '.lintstagedrc.yml',
+  '.lintstagedrc.mjs',
+  'lint-staged.config.mjs',
+  '.lintstagedrc.cjs',
+  'lint-staged.config.cjs',
+  '.lintstagedrc.js',
+  'lint-staged.config.js',
+] as const;
+const LINT_STAGED_ALL_CONFIG_FILES = [
+  ...LINT_STAGED_JSON_CONFIG_FILES,
+  ...LINT_STAGED_OTHER_CONFIG_FILES,
+] as const;
+
 // packages that are replaced with vite-plus
 const REMOVE_PACKAGES = [
   'oxlint',
@@ -470,8 +488,7 @@ export function rewritePackageJson(
 // only support json format
 function rewriteLintStagedConfigFile(projectPath: string): void {
   let hasUnsupported = false;
-  const filenames = ['.lintstagedrc.json', '.lintstagedrc'];
-  for (const filename of filenames) {
+  for (const filename of LINT_STAGED_JSON_CONFIG_FILES) {
     const lintStagedConfigJsonPath = path.join(projectPath, filename);
     if (!fs.existsSync(lintStagedConfigJsonPath)) {
       continue;
@@ -497,17 +514,7 @@ function rewriteLintStagedConfigFile(projectPath: string): void {
     });
   }
   // others non-json files
-  const others = [
-    '.lintstagedrc.yaml',
-    '.lintstagedrc.yml',
-    'lintstagedrc.mjs',
-    'lint-staged.config.mjs',
-    'lintstagedrc.cjs',
-    'lint-staged.config.cjs',
-    '.lintstagedrc.js',
-    'lint-staged.config.js',
-  ];
-  for (const filename of others) {
+  for (const filename of LINT_STAGED_OTHER_CONFIG_FILES) {
     const lintStagedConfigPath = path.join(projectPath, filename);
     if (!fs.existsSync(lintStagedConfigPath)) {
       continue;
@@ -731,19 +738,7 @@ export function setupGitHooks(projectPath: string): void {
  * Check if a standalone lint-staged config file exists
  */
 function hasStandaloneLintStagedConfig(projectPath: string): boolean {
-  const configFiles = [
-    '.lintstagedrc',
-    '.lintstagedrc.json',
-    '.lintstagedrc.yaml',
-    '.lintstagedrc.yml',
-    '.lintstagedrc.js',
-    '.lintstagedrc.mjs',
-    '.lintstagedrc.cjs',
-    'lint-staged.config.js',
-    'lint-staged.config.mjs',
-    'lint-staged.config.cjs',
-  ];
-  return configFiles.some((file) => fs.existsSync(path.join(projectPath, file)));
+  return LINT_STAGED_ALL_CONFIG_FILES.some((file) => fs.existsSync(path.join(projectPath, file)));
 }
 
 /**
