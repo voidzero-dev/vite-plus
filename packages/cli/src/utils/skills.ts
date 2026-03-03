@@ -36,6 +36,7 @@ export function parseSkills(skillsDir: string): SkillInfo[] {
     const content = readFileSync(skillMd, 'utf-8');
     const frontmatter = content.match(/^---\n([\s\S]*?)\n---/);
     if (!frontmatter) {
+      prompts.log.warn(`  Skipping ${entry.name}: SKILL.md is missing valid frontmatter`);
       continue;
     }
     const nameMatch = frontmatter[1].match(/^name:\s*(.+)$/m);
@@ -71,14 +72,24 @@ function linkSkills(
           prompts.log.info(`  ${skill.name} — already linked`);
           continue;
         }
-      } catch {
-        // not a symlink
+      } catch (err: unknown) {
+        if ((err as NodeJS.ErrnoException).code !== 'EINVAL') {
+          prompts.log.warn(
+            `  ${skill.name} — failed to read existing path: ${(err as Error).message}`,
+          );
+          continue;
+        }
       }
       prompts.log.warn(`  ${skill.name} — path exists but is not the expected symlink, skipping`);
       continue;
     }
 
-    symlinkSync(relativeTarget, linkPath);
+    try {
+      symlinkSync(relativeTarget, linkPath);
+    } catch (err: unknown) {
+      prompts.log.warn(`  ${skill.name} — failed to create symlink: ${(err as Error).message}`);
+      continue;
+    }
     prompts.log.success(`  ${skill.name} — linked`);
     linked++;
   }

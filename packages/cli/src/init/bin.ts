@@ -112,6 +112,9 @@ async function resolveAgentSetup(root: string): Promise<AgentSetupSelection> {
 
 function getOwnVersion(): string {
   const pkg = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf-8'));
+  if (typeof pkg.version !== 'string') {
+    throw new Error('vite-plus package.json is missing a "version" field');
+  }
   return pkg.version;
 }
 
@@ -143,8 +146,17 @@ function injectAgentBlock(root: string, filePath: string): void {
       }
       // Replace existing block with updated version
       const updated = existing.replace(MARKER_BLOCK_RE, block);
-      writeFileSync(fullPath, updated);
-      prompts.log.success(`Updated Vite+ instructions in ${filePath} (v${match[1]} → v${version})`);
+      if (updated === existing) {
+        // Closing marker is missing or malformed — append fresh block
+        const separator = existing.endsWith('\n') ? '\n' : '\n\n';
+        writeFileSync(fullPath, existing + separator + block + '\n');
+        prompts.log.warn(`Existing Vite+ block in ${filePath} was malformed; appended fresh block`);
+      } else {
+        writeFileSync(fullPath, updated);
+        prompts.log.success(
+          `Updated Vite+ instructions in ${filePath} (v${match[1]} → v${version})`,
+        );
+      }
     } else {
       // Append block to end of file
       const separator = existing.endsWith('\n') ? '\n' : '\n\n';
@@ -166,7 +178,10 @@ function writeMcpConfigForTarget(root: string, target: McpConfigTarget): void {
     try {
       existing = readJsonFile(fullPath);
     } catch {
-      // unparsable — start fresh
+      prompts.log.warn(
+        `Could not parse ${target.filePath} — skipping MCP config. Please add the config manually.`,
+      );
+      return;
     }
   }
 

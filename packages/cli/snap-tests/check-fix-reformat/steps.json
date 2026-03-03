@@ -1,6 +1,3 @@
 {
-  "commands": [
-    "vp check --fix",
-    "vp check # should pass after fix"
-  ]
+  "commands": ["vp check --fix", "vp check # should pass after fix"]
 }

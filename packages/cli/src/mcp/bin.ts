@@ -83,14 +83,9 @@ function findPackageRoot(from: string): string {
 }
 
 function readPackageVersion(pkgRoot: string): string {
-  try {
-    const pkg = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8')) as {
-      version?: string;
-    };
-    return pkg.version ?? '0.0.0';
-  } catch {
-    return '0.0.0';
-  }
+  const raw = readFileSync(join(pkgRoot, 'package.json'), 'utf8');
+  const pkg = JSON.parse(raw) as { version?: string };
+  return pkg.version ?? '0.0.0';
 }
 
 function resolveDocsDir(pkgRoot: string): string {
@@ -115,6 +110,9 @@ function collectMarkdownFiles(rootDir: string, relativeDir = ''): string[] {
   for (const entry of entries) {
     const relPath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
+      if (entry.name === 'node_modules') {
+        continue;
+      }
       files.push(...collectMarkdownFiles(rootDir, relPath));
       continue;
     }
@@ -123,7 +121,7 @@ function collectMarkdownFiles(rootDir: string, relativeDir = ''): string[] {
     }
   }
 
-  // eslint-disable-next-line unicorn/no-array-sort -- sorting an owned local array
+  // eslint-disable-next-line unicorn/no-array-sort -- deterministic ordering for stable alias resolution
   files.sort();
   return files;
 }
@@ -428,6 +426,14 @@ function parseContentLength(rawHeaders: string): number | null {
 function startStdioServer(index: DocIndex, serverVersion: string): void {
   let buffer = Buffer.alloc(0);
 
+  process.stdin.on('error', () => {
+    process.exit(1);
+  });
+
+  process.stdin.on('end', () => {
+    process.exit(0);
+  });
+
   process.stdin.on('data', (chunk: Buffer) => {
     buffer = Buffer.concat([buffer, chunk]);
 
@@ -463,6 +469,13 @@ function startStdioServer(index: DocIndex, serverVersion: string): void {
         continue;
       }
 
+      if (typeof request.method !== 'string') {
+        writeMessage(
+          makeErrorResponse(request.id ?? null, -32600, 'Invalid request: missing "method" field'),
+        );
+        continue;
+      }
+
       const response = handleRequest(index, serverVersion, request);
       if (response !== null) {
         writeMessage(response);
@@ -471,7 +484,14 @@ function startStdioServer(index: DocIndex, serverVersion: string): void {
   });
 }
 
-const packageRoot = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
-const serverVersion = readPackageVersion(packageRoot);
-const docs = loadDocs(packageRoot);
-startStdioServer(docs, serverVersion);
+try {
+  const packageRoot = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
+  const serverVersion = readPackageVersion(packageRoot);
+  const docs = loadDocs(packageRoot);
+  startStdioServer(docs, serverVersion);
+} catch (err) {
+  process.stderr.write(
+    `[vite-plus mcp] Failed to start: ${err instanceof Error ? err.message : String(err)}\n`,
+  );
+  process.exit(1);
+}

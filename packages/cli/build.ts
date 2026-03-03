@@ -1,7 +1,7 @@
 /**
  * Build script for vite-plus CLI package
  *
- * This script performs seven main tasks:
+ * This script performs the following main tasks:
  * 1. buildCli() - Compiles TypeScript sources (local CLI) via tsc
  * 2. buildGlobalModules() - Bundles global CLI modules (create, migrate, init, mcp, version) via rolldown
  * 3. buildNapiBinding() - Builds the native Rust binding via NAPI
@@ -166,6 +166,8 @@ async function buildCli() {
         '**/*/__tests__',
         // Global CLI modules — bundled by rolldown instead of tsc
         'src/create/**',
+        'src/init/**',
+        'src/mcp/**',
         'src/migration/**',
         'src/version.ts',
         'src/types/**',
@@ -432,9 +434,11 @@ async function copySkillDocs() {
   await mkdir(docsTargetDir, { recursive: true });
 
   // Find all markdown files recursively and copy them with their relative paths.
-  const mdFiles = globSync('**/*.md', { cwd: docsSourceDir })
-    .filter((f) => !f.includes('node_modules'))
-    .toSorted();
+  const mdFiles = globSync('**/*.md', { cwd: docsSourceDir }).filter(
+    (f) => !f.includes('node_modules'),
+  );
+  // eslint-disable-next-line unicorn/no-array-sort -- sorted traversal keeps output deterministic
+  mdFiles.sort();
 
   let copied = 0;
   for (const relPath of mdFiles) {
