@@ -1,0 +1,41 @@
+> vp prepare -h
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp prepare
+
+Set up Git hooks for the project (bundled husky).
+
+Options:
+  -h, --help  Show this help message
+
+Environment:
+  HUSKY=0  Skip hook installation
+
+
+> vp prepare --help
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp prepare
+
+Set up Git hooks for the project (bundled husky).
+
+Options:
+  -h, --help  Show this help message
+
+Environment:
+  HUSKY=0  Skip hook installation
+
+
+> vp help prepare
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp prepare
+
+Set up Git hooks for the project (bundled husky).
+
+Options:
+  -h, --help  Show this help message
+
+Environment:
+  HUSKY=0  Skip hook installation
+

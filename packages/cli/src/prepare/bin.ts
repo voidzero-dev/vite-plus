@@ -8,6 +8,26 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import mri from 'mri';
+
+import { renderCliDoc } from '../utils/help.js';
+import { getVitePlusHeader, log } from '../utils/terminal.js';
+
+const helpMessage = renderCliDoc({
+  usage: 'vp prepare',
+  summary: 'Set up Git hooks for the project (bundled husky).',
+  sections: [
+    {
+      title: 'Options',
+      rows: [{ label: '-h, --help', description: 'Show this help message' }],
+    },
+    {
+      title: 'Environment',
+      rows: [{ label: 'HUSKY=0', description: 'Skip hook installation' }],
+    },
+  ],
+});
+
 const HOOKS = [
   'pre-commit',
   'pre-merge-commit',
@@ -76,10 +96,25 @@ function install(dir = '.husky'): string {
   return '';
 }
 
-const result = install();
-if (result) {
-  // Exit 0 on non-fatal conditions (no .git, HUSKY=0) — matches husky's behavior.
-  // The "prepare" lifecycle runs during `npm install` in consumer projects too,
-  // so it must not fail when .git doesn't exist.
-  console.error(result);
+async function main() {
+  const args = mri(process.argv.slice(3), {
+    alias: { h: 'help' },
+    boolean: ['help'],
+  });
+
+  if (args.help) {
+    log((await getVitePlusHeader()) + '\n');
+    log(helpMessage);
+    return;
+  }
+
+  const result = install();
+  if (result) {
+    // Exit 0 on non-fatal conditions (no .git, HUSKY=0) — matches husky's behavior.
+    // The "prepare" lifecycle runs during `npm install` in consumer projects too,
+    // so it must not fail when .git doesn't exist.
+    console.error(result);
+  }
 }
+
+void main();
