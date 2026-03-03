@@ -1,5 +1,6 @@
 {
   "name": "migration-lint-staged-ts-config",
+  "type": "module",
   "scripts": {
     "prepare": "husky"
   },

@@ -71,6 +71,7 @@ export default defineConfig({
       '**/tmp/**',
       'packages/cli/snap-tests/check-*/**',
       'packages/cli/snap-tests/fmt-ignore-patterns/src/ignored',
+      'packages/cli/snap-tests-global/migration-lint-staged-ts-config',
       'ecosystem-ci/*/**',
       'packages/test/**.cjs',
       'packages/test/**.cts',
