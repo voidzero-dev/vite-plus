@@ -1,0 +1,8 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # migration should strip bootstrap even though vp lint-staged already present",
+    "cat package.json # check prepare rewritten and husky/lint-staged removed",
+    "cat .husky/pre-commit # check husky.sh bootstrap stripped despite vp lint-staged already present"
+  ]
+}

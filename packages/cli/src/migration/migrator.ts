@@ -718,11 +718,12 @@ export function setupGitHooks(projectPath: string): void {
 
       // Clean up leftover husky commands in composed prepare scripts
       // e.g. "vp prepare && husky && npm run build" → "vp prepare && npm run build"
+      // Handles &&, ;, and || operators
       pkg.scripts.prepare = pkg.scripts.prepare
-        .replace(/\bhusky install\s*&&\s*/g, '')
-        .replace(/\s*&&\s*husky install\b/g, '')
-        .replace(/\bhusky\s*&&\s*/g, '')
-        .replace(/\s*&&\s*husky\b/g, '');
+        .replace(/\bhusky install\s*(?:&&|;|\|\|)\s*/g, '')
+        .replace(/\s*(?:&&|;|\|\|)\s*husky install\b/g, '')
+        .replace(/\bhusky\s*(?:&&|;|\|\|)\s*/g, '')
+        .replace(/\s*(?:&&|;|\|\|)\s*husky\b/g, '');
 
       // Add lint-staged config if not present (in package.json or standalone config files)
       if (!pkg['lint-staged'] && !hasStandaloneLintStagedConfig(projectPath)) {
@@ -839,10 +840,6 @@ function stripStaleHuskyBootstrap(projectPath: string): void {
   for (const entry of entries) {
     // Skip directories (e.g. _/) and only process files
     if (!entry.isFile()) {
-      continue;
-    }
-    // Skip pre-commit — already handled by createHuskyPreCommitHook
-    if (entry.name === 'pre-commit') {
       continue;
     }
     const hookPath = path.join(huskyDir, entry.name);

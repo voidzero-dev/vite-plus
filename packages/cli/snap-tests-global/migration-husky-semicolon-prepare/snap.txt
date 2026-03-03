@@ -1,0 +1,38 @@
+> git init
+> vp migrate --no-interactive # migration should strip husky from semicolon-composed prepare script
+┌  VITE+ - The Unified Toolchain for the Web
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+◆  ✔ Git hooks configured
+│
+◆  Wrote agent instructions to AGENTS.md
+│
+└  ✔ Migration completed!
+
+
+> cat package.json # check husky removed from prepare script, not left as broken command
+{
+  "name": "migration-husky-semicolon-prepare",
+  "scripts": {
+    "prepare": "vp prepare && npm run build"
+  },
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "lint-staged": {
+    "*.js": "vp lint --fix"
+  },
+  "packageManager": "pnpm@<semver>",
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  }
+}

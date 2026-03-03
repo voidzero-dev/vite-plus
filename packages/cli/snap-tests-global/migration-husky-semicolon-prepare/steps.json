@@ -1,0 +1,7 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # migration should strip husky from semicolon-composed prepare script",
+    "cat package.json # check husky removed from prepare script, not left as broken command"
+  ]
+}

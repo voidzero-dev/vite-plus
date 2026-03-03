@@ -11,7 +11,15 @@
 // directly via writeFileSync.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 import mri from 'mri';
@@ -72,6 +80,38 @@ c=$?
 [ $c = 127 ] && echo "husky - command not found in PATH=$PATH"
 exit $c`;
 
+const HUSKY_BOOTSTRAP_PATTERN = /^\.\s+".*husky\.sh"/;
+
+/**
+ * Strip the stale `. "…/husky.sh"` bootstrap line from every user-defined
+ * hook file in the husky directory. Called during `vp prepare` so that repos
+ * manually switching from Husky don't break on the next commit.
+ */
+function stripHuskyBootstrapFromHooks(huskyDir: string): void {
+  if (!existsSync(huskyDir)) {
+    return;
+  }
+  const entries = readdirSync(huskyDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isFile()) {
+      continue;
+    }
+    const hookPath = join(huskyDir, entry.name);
+    const content = readFileSync(hookPath, 'utf8');
+    const lines = content.split('\n');
+    const filtered = lines.filter((line) => !HUSKY_BOOTSTRAP_PATTERN.test(line.trim()));
+    if (filtered.length === lines.length) {
+      continue;
+    }
+    const newContent = filtered.join('\n').trim();
+    if (newContent.length === 0) {
+      unlinkSync(hookPath);
+    } else {
+      writeFileSync(hookPath, `${newContent}\n`);
+    }
+  }
+}
+
 interface InstallResult {
   message: string;
   isError: boolean;
@@ -98,6 +138,7 @@ function install(dir = '.husky'): InstallResult {
   }
 
   rmSync(internal('husky.sh'), { force: true });
+  stripHuskyBootstrapFromHooks(dir);
   mkdirSync(internal(), { recursive: true });
   writeFileSync(internal('.gitignore'), '*');
   writeFileSync(internal('h'), HOOK_SCRIPT, { mode: 0o755 });

@@ -1,0 +1,7 @@
+> git init
+> vp prepare # should strip husky.sh bootstrap from all hook files
+> cat .husky/pre-commit # check husky.sh bootstrap stripped, custom command preserved
+npm test
+
+> cat .husky/commit-msg # check husky.sh bootstrap stripped, custom command preserved
+npx commitlint --edit $1

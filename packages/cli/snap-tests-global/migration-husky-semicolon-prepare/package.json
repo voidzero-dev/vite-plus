@@ -1,0 +1,14 @@
+{
+  "name": "migration-husky-semicolon-prepare",
+  "scripts": {
+    "prepare": "npm run build; husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
+    "vite": "^7.0.0"
+  },
+  "lint-staged": {
+    "*.js": "oxlint --fix"
+  }
+}
