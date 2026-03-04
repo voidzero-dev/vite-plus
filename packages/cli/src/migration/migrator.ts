@@ -426,6 +426,7 @@ function rewriteRootWorkspacePackageJson(
 }
 
 const RULES_YAML_PATH = path.join(rulesDir, 'vite-tools.yml');
+const PREPARE_RULES_YAML_PATH = path.join(rulesDir, 'vite-prepare.yml');
 
 export function rewritePackageJson(
   pkg: {
@@ -744,17 +745,17 @@ export function setupGitHooks(projectPath: string): void {
       if (!pkg['lint-staged'] && !hasStandaloneLintStagedConfig(projectPath)) {
         pkg['lint-staged'] = { '*': 'vp check --fix' };
       }
-    }
 
-    // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands).
-    // Done unconditionally because rewriteScripts() already replaced husky → vp prepare
-    // and lint-staged → vp lint-staged in scripts.
-    for (const name of REPLACED_HOOK_PACKAGES) {
-      if (pkg.devDependencies?.[name]) {
-        delete pkg.devDependencies[name];
-      }
-      if (pkg.dependencies?.[name]) {
-        delete pkg.dependencies[name];
+      // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands).
+      // Only when config migration succeeds — if unsupported config files remain,
+      // they still reference old tooling, so removing packages would break the repo.
+      for (const name of REPLACED_HOOK_PACKAGES) {
+        if (pkg.devDependencies?.[name]) {
+          delete pkg.devDependencies[name];
+        }
+        if (pkg.dependencies?.[name]) {
+          delete pkg.dependencies[name];
+        }
       }
     }
 
@@ -835,9 +836,10 @@ function hasUnsupportedLintStagedConfig(projectPath: string): boolean {
  * Create .husky/pre-commit hook file.
  */
 // Lint-staged invocation patterns — replaced in-place with `vp lint-staged`.
+// The optional prefix group captures env var assignments like `NODE_OPTIONS=... `.
 const STALE_LINT_STAGED_PATTERNS = [
-  /^(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)\s+lint-staged\b/,
-  /^lint-staged\b/,
+  /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)\s+lint-staged\b/,
+  /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)lint-staged\b/,
 ];
 
 // Husky v8 bootstrap pattern — stripped entirely.
@@ -863,9 +865,11 @@ export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): v
         for (const pattern of STALE_LINT_STAGED_PATTERNS) {
           const match = pattern.exec(trimmed);
           if (match) {
-            // Preserve flags and chained commands after lint-staged
+            // Preserve env var prefix (capture group 1) and flags/chained commands after lint-staged
+            const envPrefix = match[1]?.trim() ?? '';
             const rest = trimmed.slice(match[0].length).trim();
-            result.push(rest ? `vp lint-staged ${rest}` : 'vp lint-staged');
+            const parts = [envPrefix, 'vp lint-staged', rest].filter(Boolean);
+            result.push(parts.join(' '));
             replaced = true;
             matched = true;
             break;
@@ -923,6 +927,43 @@ function stripStaleHuskyBootstrap(projectPath: string, dir = '.husky'): void {
       fs.writeFileSync(hookPath, `${newContent}\n`);
     }
   }
+}
+
+/**
+ * Rewrite only `scripts.prepare` in the root package.json using vite-prepare.yml rules.
+ * Collapses "husky install" → "husky" before applying ast-grep so that the
+ * replace-husky rule produces "vp prepare" with any directory argument preserved.
+ * Called only when hooks are being set up (not with --no-hooks).
+ */
+export function rewritePrepareScript(rootDir: string): void {
+  const packageJsonPath = path.join(rootDir, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return;
+  }
+
+  editJsonFile<{ scripts?: Record<string, string> }>(packageJsonPath, (pkg) => {
+    if (!pkg.scripts?.prepare) {
+      return pkg;
+    }
+
+    // Collapse "husky install" → "husky" so the ast-grep rule
+    // produces "vp prepare" with any directory argument preserved.
+    // (Moved from Rust rewrite_script pre-processing)
+    let prepare = pkg.scripts.prepare;
+    prepare = prepare.replace('husky install ', 'husky ');
+    prepare = prepare.replace('husky install', 'husky');
+
+    const prepareJson = JSON.stringify({ prepare });
+    const updated = rewriteScripts(prepareJson, fs.readFileSync(PREPARE_RULES_YAML_PATH, 'utf8'));
+    if (updated) {
+      pkg.scripts.prepare = JSON.parse(updated).prepare;
+    } else if (prepare !== pkg.scripts.prepare) {
+      // Pre-processing changed the script (husky install → husky)
+      // but no rule matched — keep the collapsed form
+      pkg.scripts.prepare = prepare;
+    }
+    return pkg;
+  });
 }
 
 function setPackageManager(

@@ -112,6 +112,9 @@ function install(dir = '.husky'): InstallResult {
     return { message: '.. not allowed', isError: false };
   }
   const topResult = spawnSync('git', ['rev-parse', '--show-toplevel']);
+  if (topResult.status == null) {
+    return { message: 'git command not found', isError: true };
+  }
   if (topResult.status !== 0) {
     return { message: ".git can't be found", isError: false };
   }

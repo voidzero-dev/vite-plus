@@ -22,13 +22,6 @@ fn rewrite_script(script: &str, rules: &[RuleConfig<SupportLang>]) -> String {
         script.to_string()
     };
 
-    // Collapse "husky install" → "husky" so the replace-husky rule
-    // produces "vp prepare" with any directory argument preserved.
-    // ast-grep cannot match "husky install" as a unit in bash due to
-    // metavariable conflicts with bash's $ syntax.
-    let preprocessed =
-        preprocessed.replace("husky install ", "husky ").replace("husky install", "husky");
-
     // Step 2: Process with ast-grep
     let result = ast_grep::apply_loaded_rules(&preprocessed, rules);
 
@@ -162,15 +155,6 @@ rule:
   kind: command_name
   regex: '^tsdown$'
 fix: vp pack
-
-# husky => vp prepare
----
-id: replace-husky
-language: bash
-rule:
-  kind: command_name
-  regex: '^husky$'
-fix: vp prepare
     "#;
 
     #[test]
@@ -279,19 +263,11 @@ fix: vp prepare
             rewrite_script("npm run type-check && oxlint --type-aware", &rules),
             "npm run type-check && vp lint --type-aware"
         );
-        // husky commands
-        assert_eq!(rewrite_script("husky", &rules), "vp prepare");
-        assert_eq!(rewrite_script("husky install", &rules), "vp prepare");
-        assert_eq!(rewrite_script("husky install .hooks", &rules), "vp prepare .hooks");
-        assert_eq!(rewrite_script("husky || true", &rules), "vp prepare || true");
-        assert_eq!(
-            rewrite_script("npm run build && husky install .hooks", &rules),
-            "npm run build && vp prepare .hooks"
-        );
-        assert_eq!(
-            rewrite_script("cross-env FOO=bar husky install", &rules),
-            "cross-env FOO=bar vp prepare"
-        );
+        // husky commands should NOT be rewritten by vite-tools rules
+        // (husky rule is in separate vite-prepare.yml, applied only to scripts.prepare)
+        assert_eq!(rewrite_script("husky", &rules), "husky");
+        assert_eq!(rewrite_script("husky install", &rules), "husky install");
+        assert_eq!(rewrite_script("husky || true", &rules), "husky || true");
     }
 
     #[test]

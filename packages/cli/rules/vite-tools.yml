@@ -91,13 +91,3 @@ rule:
   kind: command_name
   regex: '^tsdown$'
 fix: vp pack
-
-
-# husky => vp prepare
----
-id: replace-husky
-language: bash
-rule:
-  kind: command_name
-  regex: '^husky$'
-fix: vp prepare

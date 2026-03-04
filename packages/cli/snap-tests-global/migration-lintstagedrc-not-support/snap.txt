@@ -45,6 +45,8 @@ export default {
     "prepare": "vp prepare"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
     "vite-plus": "latest"
   },
   "packageManager": "pnpm@<semver>",

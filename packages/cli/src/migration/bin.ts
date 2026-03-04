@@ -28,6 +28,7 @@ import {
   checkVitestVersion,
   checkViteVersion,
   rewriteMonorepo,
+  rewritePrepareScript,
   rewriteStandaloneProject,
   setupGitHooks,
 } from './migrator.js';
@@ -222,14 +223,16 @@ async function main() {
     cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
   }
 
+  const shouldSetupHooks = await promptGitHooks(options);
+
   if (workspaceInfo.isMonorepo) {
     rewriteMonorepo(workspaceInfo);
   } else {
     rewriteStandaloneProject(workspaceInfo.rootDir, workspaceInfo);
   }
 
-  const shouldSetupHooks = await promptGitHooks(options);
   if (shouldSetupHooks) {
+    rewritePrepareScript(workspaceInfo.rootDir);
     setupGitHooks(workspaceInfo.rootDir);
   }
 
