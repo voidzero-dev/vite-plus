@@ -1,11 +1,18 @@
-// Runs lint-staged on staged files using the programmatic API.
+// Runs vite-staged on staged files using the lint-staged programmatic API.
 // Bundled by rolldown — no runtime dependency needed in user projects.
+//
+// Reads the "vite-staged" key from the nearest package.json and passes it
+// to lint-staged as an explicit config object.  Falls back to lint-staged's
+// own config discovery for projects that haven't migrated yet.
 //
 // We use the programmatic API instead of importing lint-staged/bin because
 // lint-staged's dependency tree includes CJS modules that use require('node:events')
 // etc., which breaks when bundled to ESM format by rolldown.
+import fs from 'node:fs';
+import path from 'node:path';
+
 import lintStaged from 'lint-staged';
-import type { Options } from 'lint-staged';
+import type { Configuration, Options } from 'lint-staged';
 import mri from 'mri';
 
 import { vitePlusHeader } from '../../binding/index.js';
@@ -41,8 +48,8 @@ const args = mri(process.argv.slice(3), {
 
 if (args.help) {
   const helpMessage = renderCliDoc({
-    usage: 'vp lint-staged [options]',
-    summary: 'Run linters on staged files.',
+    usage: 'vp staged [options]',
+    summary: 'Run linters on staged files using vite-staged config.',
     sections: [
       {
         title: 'Options',
@@ -84,7 +91,7 @@ if (args.help) {
           },
           { label: '--max-arg-length <number>', description: 'Maximum argument string length' },
           { label: '--no-stash', description: 'Disable the backup stash' },
-          { label: '-q, --quiet', description: 'Disable lint-staged console output' },
+          { label: '-q, --quiet', description: 'Disable console output' },
           { label: '-r, --relative', description: 'Pass filepaths relative to cwd to tasks' },
           { label: '--revert', description: 'Revert to original state in case of errors' },
           { label: '-v, --verbose', description: 'Show task output even when tasks succeed' },
@@ -148,6 +155,15 @@ if (args.help) {
     } else {
       options.configPath = args.config;
     }
+  } else {
+    // No explicit --config flag: read "vite-staged" from the nearest package.json
+    // and pass it as an inline config object to lint-staged.
+    const viteStagedConfig = findViteStagedConfig(args.cwd ?? process.cwd());
+    if (viteStagedConfig) {
+      options.config = viteStagedConfig;
+    }
+    // If not found, fall through — let lint-staged use its own config discovery
+    // (covers projects that haven't migrated to vite-staged yet).
   }
   if (args.cwd != null) {
     options.cwd = args.cwd;
@@ -182,4 +198,32 @@ if (args.help) {
 
   const success = await lintStaged(options);
   process.exit(success ? 0 : 1);
+}
+
+/**
+ * Walk up from `startDir` looking for a package.json that contains a
+ * "vite-staged" key.  Returns the config object or `null`.
+ */
+function findViteStagedConfig(startDir: string): Configuration | null {
+  let dir = path.resolve(startDir);
+  while (true) {
+    const pkgPath = path.join(dir, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        if (pkg['vite-staged']) {
+          return pkg['vite-staged'] as Configuration;
+        }
+      } catch {
+        // Malformed JSON — skip
+      }
+      // Found a package.json but no vite-staged key → stop searching
+      return null;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return null;
+    }
+    dir = parent;
+  }
 }

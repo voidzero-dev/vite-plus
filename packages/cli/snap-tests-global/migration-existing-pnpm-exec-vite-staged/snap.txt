@@ -1,5 +1,5 @@
 > git init
-> vp migrate --no-interactive # migration should rewrite lint-staged commands in scripts
+> vp migrate --no-interactive # migration should strip pnpm exec lint-staged and add vp staged
 ┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
@@ -15,19 +15,15 @@
 └  ✔ Migration completed!
 
 
-> cat package.json # check-staged script should use vp lint-staged, lint-staged removed from devDeps
+> cat package.json # check prepare rewritten and husky/lint-staged removed
 {
-  "name": "migration-lint-staged-in-scripts",
+  "name": "migration-existing-pnpm-exec-lint-staged",
   "scripts": {
-    "prepare": "vp prepare",
-    "check-staged": "vp lint-staged --diff HEAD~1"
+    "prepare": "vp prepare"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
-  },
-  "lint-staged": {
-    "*.js": "vp lint --fix"
   },
   "packageManager": "pnpm@<semver>",
   "pnpm": {
@@ -35,5 +31,11 @@
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
+  },
+  "vite-staged": {
+    "*.js": "vp lint --fix"
   }
 }
+
+> cat .husky/pre-commit # check pnpm exec lint-staged replaced with vp staged
+vp staged --concurrent false

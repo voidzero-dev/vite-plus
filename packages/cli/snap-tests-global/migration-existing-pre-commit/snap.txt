@@ -25,4 +25,4 @@ secret-scan
 #!/usr/bin/env sh
 npm test
 secret-scan
-vp lint-staged
+vp staged

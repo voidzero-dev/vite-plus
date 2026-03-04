@@ -39,7 +39,7 @@ Wrote agent instructions to AGENTS.md
     }
   },
   "packageManager": "pnpm@<semver>",
-  "lint-staged": {
+  "vite-staged": {
     "*": "vp check --fix"
   }
 }

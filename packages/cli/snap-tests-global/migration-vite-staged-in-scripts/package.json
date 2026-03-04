@@ -9,7 +9,7 @@
     "lint-staged": "^16.2.6",
     "vite": "^7.0.0"
   },
-  "lint-staged": {
+  "vite-staged": {
     "*.js": "oxlint --fix"
   }
 }

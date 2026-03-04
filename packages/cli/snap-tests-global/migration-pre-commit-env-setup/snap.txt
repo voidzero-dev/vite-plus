@@ -22,8 +22,8 @@ npm test
 └  ✔ Migration completed!
 
 
-> cat .husky/pre-commit # check vp lint-staged replaced npx lint-staged in-place
+> cat .husky/pre-commit # check vp staged replaced npx lint-staged in-place
 #!/usr/bin/env sh
 export NODE_OPTIONS="--max-old-space-size=4096"
-vp lint-staged
+vp staged
 npm test

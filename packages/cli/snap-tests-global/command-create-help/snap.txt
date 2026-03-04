@@ -12,6 +12,15 @@ Arguments:
               create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
             - Local: @company/generator-*, ./tools/create-ui-component
 
+Options:
+  --directory DIR   Target directory for the generated project.
+  --agent NAME      Create an agent instructions file for the specified agent.
+  --editor NAME     Write editor config files for the specified editor.
+  --hooks           Set up pre-commit hooks (default in non-interactive mode)
+  --no-hooks        Skip pre-commit hooks setup
+  --no-interactive  Run in non-interactive mode
+  --list            List all available templates
+  -h, --help        Show this help message
 
 Template Options:
   Any arguments after -- are passed directly to the template.
@@ -54,6 +63,15 @@ Arguments:
               create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
             - Local: @company/generator-*, ./tools/create-ui-component
 
+Options:
+  --directory DIR   Target directory for the generated project.
+  --agent NAME      Create an agent instructions file for the specified agent.
+  --editor NAME     Write editor config files for the specified editor.
+  --hooks           Set up pre-commit hooks (default in non-interactive mode)
+  --no-hooks        Skip pre-commit hooks setup
+  --no-interactive  Run in non-interactive mode
+  --list            List all available templates
+  -h, --help        Show this help message
 
 Template Options:
   Any arguments after -- are passed directly to the template.
@@ -96,6 +114,15 @@ Arguments:
               create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
             - Local: @company/generator-*, ./tools/create-ui-component
 
+Options:
+  --directory DIR   Target directory for the generated project.
+  --agent NAME      Create an agent instructions file for the specified agent.
+  --editor NAME     Write editor config files for the specified editor.
+  --hooks           Set up pre-commit hooks (default in non-interactive mode)
+  --no-hooks        Skip pre-commit hooks setup
+  --no-interactive  Run in non-interactive mode
+  --list            List all available templates
+  -h, --help        Show this help message
 
 Template Options:
   Any arguments after -- are passed directly to the template.

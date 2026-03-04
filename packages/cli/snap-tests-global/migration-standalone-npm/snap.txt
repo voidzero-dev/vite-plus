@@ -59,7 +59,7 @@
   "scripts": {
     "prepare": "vp prepare"
   },
-  "lint-staged": {
+  "vite-staged": {
     "*": "vp check --fix"
   }
 }

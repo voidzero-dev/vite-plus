@@ -8,9 +8,9 @@
 │
 ●  pnpm@<semver> installed
 │
-▲  ✘ lint-staged.config.ts is not supported by auto migration
+▲  ✘ lint-staged.config.ts — please migrate to "vite-staged" in package.json manually
 │
-▲  Please migrate the lint-staged config manually, see https://viteplus.dev/migration/#lint-staged for more details
+▲  Only "vite-staged" in package.json is supported. See https://viteplus.dev/migration/#lint-staged
 │
 ▲  ⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.
 │

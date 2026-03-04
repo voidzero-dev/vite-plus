@@ -39,5 +39,5 @@
 > cat .husky/pre-commit # hook file should be unchanged (still has bootstrap)
 . "$(dirname -- "$0")/_/husky.sh"
 
-vp lint-staged
+vp staged
 npm test

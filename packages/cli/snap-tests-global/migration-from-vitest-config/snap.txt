@@ -64,7 +64,7 @@ export default defineConfig({
     }
   },
   "packageManager": "pnpm@<semver>",
-  "lint-staged": {
+  "vite-staged": {
     "*": "vp check --fix"
   }
 }

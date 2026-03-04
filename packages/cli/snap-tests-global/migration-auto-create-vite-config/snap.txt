@@ -57,7 +57,7 @@ cat: .oxfmtrc.json: No such file or directory
   "scripts": {
     "prepare": "vp prepare"
   },
-  "lint-staged": {
+  "vite-staged": {
     "*": "vp check --fix"
   }
 }

@@ -8,13 +8,13 @@
 │
 ●  pnpm@<semver> installed
 │
-▲  ✘ .lintstagedrc is not JSON format file, auto migration is not supported
+▲  ✘ .lintstagedrc is not JSON format — please migrate to "vite-staged" in package.json manually
 │
-▲  ✘ .lintstagedrc.yaml is not supported by auto migration
+▲  ✘ .lintstagedrc.yaml — please migrate to "vite-staged" in package.json manually
 │
-▲  ✘ lint-staged.config.mjs is not supported by auto migration
+▲  ✘ lint-staged.config.mjs — please migrate to "vite-staged" in package.json manually
 │
-▲  Please migrate the lint-staged config manually, see https://viteplus.dev/migration/#lint-staged for more details
+▲  Only "vite-staged" in package.json is supported. See https://viteplus.dev/migration/#lint-staged
 │
 ▲  ⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.
 │

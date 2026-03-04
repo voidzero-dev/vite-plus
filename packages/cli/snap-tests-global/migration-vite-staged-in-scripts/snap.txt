@@ -1,5 +1,5 @@
 > git init
-> vp migrate --no-interactive # migration should add prepare script, remove lint-staged from devDeps
+> vp migrate --no-interactive # migration should rewrite lint-staged commands in scripts
 ┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
@@ -8,8 +8,6 @@
 │
 ●  pnpm@<semver> installed
 │
-◆  ✔ Rewrote lint-staged config in .lintstagedrc.json
-│
 ◆  ✔ Git hooks configured
 │
 ◆  Wrote agent instructions to AGENTS.md
@@ -17,11 +15,12 @@
 └  ✔ Migration completed!
 
 
-> cat package.json # check prepare script added, lint-staged removed from devDeps, no inline lint-staged config
+> cat package.json # check-staged script should use vp staged, lint-staged removed from devDeps
 {
-  "name": "migration-existing-lint-staged-config",
+  "name": "migration-lint-staged-in-scripts",
   "scripts": {
-    "prepare": "vp prepare"
+    "prepare": "vp prepare",
+    "check-staged": "vp staged --diff HEAD~1"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -33,13 +32,8 @@
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
+  },
+  "vite-staged": {
+    "*.js": "vp lint --fix"
   }
 }
-
-> cat .lintstagedrc.json # check lintstagedrc.json commands are rewritten
-{
-  "*.ts": "vp lint --fix"
-}
-
-> cat .husky/pre-commit # check pre-commit hook created
-vp lint-staged

@@ -2,7 +2,7 @@
   "commands": [
     { "command": "git init", "ignoreOutput": true },
     "vp migrate --no-interactive # migration should replace env-prefixed lint-staged in pre-commit",
-    "cat package.json # check husky/lint-staged removed, lint-staged config rewritten",
-    "cat .husky/pre-commit # check env prefix preserved with vp lint-staged"
+    "cat package.json # check husky/lint-staged removed, vite-staged config rewritten",
+    "cat .husky/pre-commit # check env prefix preserved with vp staged"
   ]
 }

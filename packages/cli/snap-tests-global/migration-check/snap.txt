@@ -8,6 +8,15 @@ Migrate standalone Vite, Vitest, Oxlint, and Oxfmt projects to unified Vite+.
 Arguments:
   PATH  Target directory to migrate (default: current directory)
 
+Options:
+  --agent NAME      Write agent instructions file into the project (e.g. chatgpt, claude, opencode).
+  --no-agent        Skip writing agent instructions file
+  --editor NAME     Write editor config files into the project.
+  --no-editor       Skip writing editor config files
+  --hooks           Set up pre-commit hooks (default in non-interactive mode)
+  --no-hooks        Skip pre-commit hooks setup
+  --no-interactive  Run in non-interactive mode (skip prompts and use defaults)
+  -h, --help        Show this help message
 
 Examples:
   # Migrate current package

@@ -1,6 +1,6 @@
 {
   "name": "migration-subpath",
-  "lint-staged": {
+  "vite-staged": {
     "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
       "oxfmt --staged",
       "eslint --fix"

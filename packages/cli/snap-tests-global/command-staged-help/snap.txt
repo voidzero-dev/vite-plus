@@ -1,9 +1,9 @@
-> vp lint-staged -h
+> vp staged -h
 VITE+ - The Unified Toolchain for the Web
 
-Usage: vp lint-staged [options]
+Usage: vp staged [options]
 
-Run linters on staged files.
+Run linters on staged files using vite-staged config.
 
 Options:
   --allow-empty                      Allow empty commits when tasks revert all staged changes
@@ -19,19 +19,19 @@ Options:
   --hide-unstaged                    Hide all unstaged changes before running tasks
   --max-arg-length <number>          Maximum argument string length
   --no-stash                         Disable the backup stash
-  -q, --quiet                        Disable lint-staged console output
+  -q, --quiet                        Disable console output
   -r, --relative                     Pass filepaths relative to cwd to tasks
   --revert                           Revert to original state in case of errors
   -v, --verbose                      Show task output even when tasks succeed
   -h, --help                         Show this help message
 
 
-> vp lint-staged --help
+> vp staged --help
 VITE+ - The Unified Toolchain for the Web
 
-Usage: vp lint-staged [options]
+Usage: vp staged [options]
 
-Run linters on staged files.
+Run linters on staged files using vite-staged config.
 
 Options:
   --allow-empty                      Allow empty commits when tasks revert all staged changes
@@ -47,19 +47,19 @@ Options:
   --hide-unstaged                    Hide all unstaged changes before running tasks
   --max-arg-length <number>          Maximum argument string length
   --no-stash                         Disable the backup stash
-  -q, --quiet                        Disable lint-staged console output
+  -q, --quiet                        Disable console output
   -r, --relative                     Pass filepaths relative to cwd to tasks
   --revert                           Revert to original state in case of errors
   -v, --verbose                      Show task output even when tasks succeed
   -h, --help                         Show this help message
 
 
-> vp help lint-staged
+> vp help staged
 VITE+ - The Unified Toolchain for the Web
 
-Usage: vp lint-staged [options]
+Usage: vp staged [options]
 
-Run linters on staged files.
+Run linters on staged files using vite-staged config.
 
 Options:
   --allow-empty                      Allow empty commits when tasks revert all staged changes
@@ -75,7 +75,7 @@ Options:
   --hide-unstaged                    Hide all unstaged changes before running tasks
   --max-arg-length <number>          Maximum argument string length
   --no-stash                         Disable the backup stash
-  -q, --quiet                        Disable lint-staged console output
+  -q, --quiet                        Disable console output
   -r, --relative                     Pass filepaths relative to cwd to tasks
   --revert                           Revert to original state in case of errors
   -v, --verbose                      Show task output even when tasks succeed

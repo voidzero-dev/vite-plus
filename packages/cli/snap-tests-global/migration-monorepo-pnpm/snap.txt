@@ -76,7 +76,7 @@ cat: .oxfmtrc.json: No such file or directory
     "vue": "3.5.25"
   },
   "packageManager": "pnpm@<semver>",
-  "lint-staged": {
+  "vite-staged": {
     "*": "vp check --fix"
   }
 }

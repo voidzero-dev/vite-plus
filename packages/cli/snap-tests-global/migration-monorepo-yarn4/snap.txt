@@ -64,7 +64,7 @@ cat: .oxlintrc.json: No such file or directory
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
   },
-  "lint-staged": {
+  "vite-staged": {
     "*": "vp check --fix"
   }
 }

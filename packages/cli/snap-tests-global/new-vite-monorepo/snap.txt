@@ -23,13 +23,13 @@ vite.config.ts
   "devDependencies": {
     "vite-plus": "catalog:"
   },
-  "lint-staged": {
-    "*": "vp check --fix"
-  },
   "engines": {
     "node": ">=22.12.0"
   },
-  "packageManager": "pnpm@<semver>"
+  "packageManager": "pnpm@<semver>",
+  "vite-staged": {
+    "*": "vp check --fix"
+  }
 }
 
 > cat vite-plus-monorepo/pnpm-workspace.yaml # check workspace config
@@ -136,11 +136,11 @@ vite.config.ts
   "devDependencies": {
     "vite-plus": "catalog:"
   },
-  "lint-staged": {
-    "*": "vp check --fix"
-  },
   "engines": {
     "node": ">=22.12.0"
   },
-  "packageManager": "pnpm@<semver>"
+  "packageManager": "pnpm@<semver>",
+  "vite-staged": {
+    "*": "vp check --fix"
+  }
 }

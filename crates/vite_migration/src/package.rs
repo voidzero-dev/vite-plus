@@ -39,7 +39,7 @@ pub fn rewrite_scripts(scripts_json: &str, rules_yaml: &str) -> Result<Option<St
 
     for value in scripts.values_mut() {
         if value.is_array() {
-            // lint-staged scripts can be an array of strings
+            // vite-staged/lint-staged scripts can be an array of strings
             // https://github.com/lint-staged/lint-staged?tab=readme-ov-file#packagejson-example
             if let Some(sub_scripts) = value.as_array_mut() {
                 for sub_script in sub_scripts.iter_mut() {

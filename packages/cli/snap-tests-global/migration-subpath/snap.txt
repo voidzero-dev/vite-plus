@@ -24,7 +24,14 @@
   "devDependencies": {
     "vite-plus": "latest"
   },
-  "lint-staged": {
+  "packageManager": "pnpm@<semver>",
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "vite-staged": {
     "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
       "vp fmt --staged",
       "eslint --fix"
@@ -32,18 +39,11 @@
     "*.@(js|ts|tsx)": [
       "vp lint --fix"
     ]
-  },
-  "packageManager": "pnpm@<semver>",
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
   }
 }
 
 > cat foo/.husky/pre-commit # pre-commit hook should exist in subpath
-vp lint-staged
+vp staged
 
 > git config --local core.hooksPath # should be foo/.husky/_
 foo/.husky/_

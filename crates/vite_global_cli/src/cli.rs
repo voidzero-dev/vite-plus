@@ -545,9 +545,9 @@ pub enum Commands {
         args: Vec<String>,
     },
 
-    /// Run lint-staged on Git staged files
-    #[command(disable_help_flag = true, name = "lint-staged")]
-    LintStaged {
+    /// Run vite-staged on Git staged files
+    #[command(disable_help_flag = true, name = "staged")]
+    Staged {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
@@ -1827,7 +1827,7 @@ pub async fn run_command_with_options(
 
         Commands::Prepare { args } => commands::prepare::execute(cwd, &args).await,
 
-        Commands::LintStaged { args } => commands::lint_staged::execute(cwd, &args).await,
+        Commands::Staged { args } => commands::staged::execute(cwd, &args).await,
 
         // Category C: Local CLI Delegation (stubs)
         Commands::Dev { args } => {

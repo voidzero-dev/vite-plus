@@ -91,7 +91,7 @@ cat: .oxfmtrc.json: No such file or directory
     }
   },
   "packageManager": "pnpm@<semver>",
-  "lint-staged": {
+  "vite-staged": {
     "*": "vp check --fix"
   }
 }

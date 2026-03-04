@@ -41,7 +41,7 @@ export default defineConfig({
       "supertest>superagent": "9.0.2"
     }
   },
-  "lint-staged": {
+  "vite-staged": {
     "*": "vp check --fix"
   }
 }

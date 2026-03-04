@@ -46,13 +46,6 @@ exports[`rewritePackageJson > should rewrite devDependencies and dependencies on
 
 exports[`rewritePackageJson > should rewrite package.json scripts 1`] = `
 {
-  "lint-staged": {
-    "*.js": [
-      "vp lint --fix --type-aware",
-      "vp fmt --fix",
-    ],
-    "*.ts": "vp fmt --fix",
-  },
   "scripts": {
     "build": "pnpm install && vp build -r && vp run build --watch && vp pack && tsc || exit 1",
     "dev": "vp dev",
@@ -84,6 +77,13 @@ exports[`rewritePackageJson > should rewrite package.json scripts 1`] = `
     "test_run": "vp test run && vp test --ui",
     "version": "vp --version",
     "version_short": "vp -v",
+  },
+  "vite-staged": {
+    "*.js": [
+      "vp lint --fix --type-aware",
+      "vp fmt --fix",
+    ],
+    "*.ts": "vp fmt --fix",
   },
 }
 `;

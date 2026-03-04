@@ -14,7 +14,7 @@ export default defineConfig({
     init: './src/init/bin.ts',
     mcp: './src/mcp/bin.ts',
     prepare: './src/prepare/bin.ts',
-    'lint-staged': './src/lint-staged/bin.ts',
+    staged: './src/staged/bin.ts',
   },
   treeshake: false,
   external(source) {

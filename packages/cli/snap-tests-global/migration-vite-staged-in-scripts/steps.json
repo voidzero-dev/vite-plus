@@ -2,6 +2,6 @@
   "commands": [
     { "command": "git init", "ignoreOutput": true },
     "vp migrate --no-interactive # migration should rewrite lint-staged commands in scripts",
-    "cat package.json # check-staged script should use vp lint-staged, lint-staged removed from devDeps"
+    "cat package.json # check-staged script should use vp staged, lint-staged removed from devDeps"
   ]
 }

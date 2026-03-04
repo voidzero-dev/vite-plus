@@ -73,14 +73,14 @@ rule:
 fix: vp test
 
 
-# lint-staged => vp lint-staged
+# lint-staged => vp staged
 ---
 id: replace-lint-staged
 language: bash
 rule:
   kind: command_name
   regex: '^lint-staged$'
-fix: vp lint-staged
+fix: vp staged
 
 
 # tsdown => vp pack

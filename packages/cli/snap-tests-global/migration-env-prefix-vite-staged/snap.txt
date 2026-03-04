@@ -15,7 +15,7 @@
 └  ✔ Migration completed!
 
 
-> cat package.json # check husky/lint-staged removed, lint-staged config rewritten
+> cat package.json # check husky/lint-staged removed, vite-staged config rewritten
 {
   "name": "migration-env-prefix-lint-staged",
   "scripts": {
@@ -25,17 +25,17 @@
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
   },
-  "lint-staged": {
-    "*.js": "vp lint --fix"
-  },
   "packageManager": "pnpm@<semver>",
   "pnpm": {
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
+  },
+  "vite-staged": {
+    "*.js": "vp lint --fix"
   }
 }
 
-> cat .husky/pre-commit # check env prefix preserved with vp lint-staged
-NODE_OPTIONS=--max-old-space-size=4096 vp lint-staged
+> cat .husky/pre-commit # check env prefix preserved with vp staged
+NODE_OPTIONS=--max-old-space-size=4096 vp staged

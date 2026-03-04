@@ -444,6 +444,7 @@ export function rewritePackageJson(
   pkg: {
     scripts?: Record<string, string>;
     'lint-staged'?: Record<string, string | string[]>;
+    'vite-staged'?: Record<string, string | string[]>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   },
@@ -456,10 +457,16 @@ export function rewritePackageJson(
       pkg.scripts = JSON.parse(updated);
     }
   }
+  // Migrate "lint-staged" key → "vite-staged"
   if (pkg['lint-staged']) {
-    const updated = rewriteScripts(JSON.stringify(pkg['lint-staged']), readRulesYaml());
+    const config = pkg['lint-staged'];
+    const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
+    pkg['vite-staged'] = updated ? JSON.parse(updated) : config;
+    delete pkg['lint-staged'];
+  } else if (pkg['vite-staged']) {
+    const updated = rewriteScripts(JSON.stringify(pkg['vite-staged']), readRulesYaml());
     if (updated) {
-      pkg['lint-staged'] = JSON.parse(updated);
+      pkg['vite-staged'] = JSON.parse(updated);
     }
   }
   const supportCatalog = isMonorepo && packageManager !== PackageManager.npm;
@@ -497,46 +504,56 @@ export function rewritePackageJson(
   }
 }
 
-// https://github.com/lint-staged/lint-staged#configuration
-// only support json format
+// Migrate standalone lint-staged config files into "vite-staged" in package.json.
+// JSON-parseable files are inlined automatically; non-JSON files get a warning.
 function rewriteLintStagedConfigFile(projectPath: string): void {
+  const packageJsonPath = path.join(projectPath, 'package.json');
   let hasUnsupported = false;
+
   for (const filename of LINT_STAGED_JSON_CONFIG_FILES) {
-    const lintStagedConfigJsonPath = path.join(projectPath, filename);
-    if (!fs.existsSync(lintStagedConfigJsonPath)) {
+    const configPath = path.join(projectPath, filename);
+    if (!fs.existsSync(configPath)) {
       continue;
     }
-    if (filename === '.lintstagedrc' && !isJsonFile(lintStagedConfigJsonPath)) {
+    if (filename === '.lintstagedrc' && !isJsonFile(configPath)) {
       prompts.log.warn(
-        `✘ ${displayRelative(lintStagedConfigJsonPath)} is not JSON format file, auto migration is not supported`,
+        `✘ ${displayRelative(configPath)} is not JSON format — please migrate to "vite-staged" in package.json manually`,
       );
       hasUnsupported = true;
       continue;
     }
-    editJsonFile<Record<string, string | string[]>>(lintStagedConfigJsonPath, (config) => {
+    // Inline the JSON config into package.json as "vite-staged" and delete the file
+    if (fs.existsSync(packageJsonPath)) {
+      const config = readJsonFile(configPath);
       const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
-      if (updated) {
-        prompts.log.success(
-          `✔ Rewrote lint-staged config in ${displayRelative(lintStagedConfigJsonPath)}`,
-        );
-        return JSON.parse(updated);
-      }
-    });
+      const finalConfig = updated ? JSON.parse(updated) : config;
+      editJsonFile<{ 'vite-staged'?: Record<string, string | string[]> }>(
+        packageJsonPath,
+        (pkg) => {
+          pkg['vite-staged'] = finalConfig;
+          return pkg;
+        },
+      );
+      fs.unlinkSync(configPath);
+      prompts.log.success(
+        `✔ Inlined ${displayRelative(configPath)} into "vite-staged" in ${displayRelative(packageJsonPath)}`,
+      );
+    }
   }
-  // others non-json files
+  // Non-JSON standalone files — warn
   for (const filename of LINT_STAGED_OTHER_CONFIG_FILES) {
-    const lintStagedConfigPath = path.join(projectPath, filename);
-    if (!fs.existsSync(lintStagedConfigPath)) {
+    const configPath = path.join(projectPath, filename);
+    if (!fs.existsSync(configPath)) {
       continue;
     }
     prompts.log.warn(
-      `✘ ${displayRelative(lintStagedConfigPath)} is not supported by auto migration`,
+      `✘ ${displayRelative(configPath)} — please migrate to "vite-staged" in package.json manually`,
     );
     hasUnsupported = true;
   }
   if (hasUnsupported) {
     prompts.log.warn(
-      `Please migrate the lint-staged config manually, see https://viteplus.dev/migration/#lint-staged for more details`,
+      `Only "vite-staged" in package.json is supported. See https://viteplus.dev/migration/#lint-staged`,
     );
   }
 }
@@ -737,9 +754,9 @@ export function setupGitHooks(projectPath: string): void {
     return;
   }
 
-  // Skip hook setup if lint-staged config exists in an unsupported format —
-  // the config still references old commands (oxlint/oxfmt) that migration
-  // can't rewrite, so vp lint-staged would fail on the next commit.
+  // Skip hook setup if lint-staged config exists in a format that can't be
+  // auto-migrated — the config still references old commands (oxlint/oxfmt)
+  // that migration can't rewrite, so vp staged would fail on the next commit.
   const unsupported = hasUnsupportedLintStagedConfig(projectPath);
   if (unsupported) {
     prompts.log.warn(
@@ -756,6 +773,7 @@ export function setupGitHooks(projectPath: string): void {
   editJsonFile<{
     scripts?: Record<string, string>;
     'lint-staged'?: Record<string, string | string[]>;
+    'vite-staged'?: Record<string, string | string[]>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
@@ -771,9 +789,15 @@ export function setupGitHooks(projectPath: string): void {
         pkg.scripts.prepare = `vp prepare && ${pkg.scripts.prepare}`;
       }
 
-      // Add lint-staged config if not present (in package.json or standalone config files)
-      if (!pkg['lint-staged'] && !hasStandaloneLintStagedConfig(projectPath)) {
-        pkg['lint-staged'] = { '*': 'vp check --fix' };
+      // Migrate "lint-staged" → "vite-staged" if present
+      if (pkg['lint-staged'] && !pkg['vite-staged']) {
+        pkg['vite-staged'] = pkg['lint-staged'];
+        delete pkg['lint-staged'];
+      }
+
+      // Add vite-staged config if not present (in package.json or standalone config files)
+      if (!pkg['vite-staged'] && !hasStandaloneLintStagedConfig(projectPath)) {
+        pkg['vite-staged'] = { '*': 'vp check --fix' };
       }
 
       // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands).
@@ -845,8 +869,9 @@ function hasStandaloneLintStagedConfig(projectPath: string): boolean {
 }
 
 /**
- * Check if lint-staged config exists in a format that can't be auto-migrated
- * (non-JSON files like .yaml, .mjs, .cjs, .js, or a non-JSON .lintstagedrc).
+ * Check if a standalone lint-staged config exists in a format that can't be
+ * auto-migrated to "vite-staged" in package.json (non-JSON files like .yaml,
+ * .mjs, .cjs, .js, or a non-JSON .lintstagedrc).
  */
 function hasUnsupportedLintStagedConfig(projectPath: string): boolean {
   for (const filename of LINT_STAGED_OTHER_CONFIG_FILES) {
@@ -864,8 +889,9 @@ function hasUnsupportedLintStagedConfig(projectPath: string): boolean {
 /**
  * Create .husky/pre-commit hook file.
  */
-// Lint-staged invocation patterns — replaced in-place with `vp lint-staged`.
+// Lint-staged invocation patterns — replaced in-place with `vp staged`.
 // The optional prefix group captures env var assignments like `NODE_OPTIONS=... `.
+// We still detect old lint-staged patterns to migrate existing hooks.
 const STALE_LINT_STAGED_PATTERNS = [
   /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)\s+lint-staged\b/,
   /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)lint-staged\b/,
@@ -877,8 +903,8 @@ export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): v
   const hookPath = path.join(huskyDir, 'pre-commit');
   if (fs.existsSync(hookPath)) {
     const existing = fs.readFileSync(hookPath, 'utf8');
-    if (existing.includes('vp lint-staged')) {
-      return; // already has vp lint-staged
+    if (existing.includes('vp staged')) {
+      return; // already has vp staged
     }
     // Replace old lint-staged invocations in-place, preserve everything else
     const lines = existing.split('\n');
@@ -894,7 +920,7 @@ export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): v
             // Preserve env var prefix (capture group 1) and flags/chained commands after lint-staged
             const envPrefix = match[1]?.trim() ?? '';
             const rest = trimmed.slice(match[0].length).trim();
-            const parts = [envPrefix, 'vp lint-staged', rest].filter(Boolean);
+            const parts = [envPrefix, 'vp staged', rest].filter(Boolean);
             result.push(parts.join(' '));
             replaced = true;
             matched = true;
@@ -909,12 +935,12 @@ export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): v
     }
     if (!replaced) {
       // No lint-staged line found — append after existing content
-      fs.writeFileSync(hookPath, `${result.join('\n').trimEnd()}\nvp lint-staged\n`);
+      fs.writeFileSync(hookPath, `${result.join('\n').trimEnd()}\nvp staged\n`);
     } else {
       fs.writeFileSync(hookPath, result.join('\n'));
     }
   } else {
-    fs.writeFileSync(hookPath, 'vp lint-staged\n');
+    fs.writeFileSync(hookPath, 'vp staged\n');
     fs.chmodSync(hookPath, 0o755);
   }
 }

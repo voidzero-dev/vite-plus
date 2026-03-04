@@ -8,6 +8,15 @@ Migrate standalone Vite, Vitest, Oxlint, and Oxfmt projects to unified Vite+.
 Arguments:
   PATH  Target directory to migrate (default: current directory)
 
+Options:
+  --agent NAME      Write agent instructions file into the project (e.g. chatgpt, claude, opencode).
+  --no-agent        Skip writing agent instructions file
+  --editor NAME     Write editor config files into the project.
+  --no-editor       Skip writing editor config files
+  --hooks           Set up pre-commit hooks (default in non-interactive mode)
+  --no-hooks        Skip pre-commit hooks setup
+  --no-interactive  Run in non-interactive mode (skip prompts and use defaults)
+  -h, --help        Show this help message
 
 Examples:
   # Migrate current package
@@ -21,37 +30,29 @@ Examples:
 
 
 > vp migrate --no-interactive # migration work with lintstagedrc.json
-VITE+ - The Unified Toolchain for the Web
+┌  VITE+ - The Unified Toolchain for the Web
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+◆  ✔ Inlined .lintstagedrc.json into "vite-staged" in package.json
+│
+◆  Wrote agent instructions to AGENTS.md
+│
+└  ✔ Migration completed!
 
 
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-✔ Rewrote lint-staged config in .lintstagedrc.json
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
-
-> cat .lintstagedrc.json # check lintstagedrc.json
-{
-  "*.js": "vp lint --fix"
-}
+[1]> cat .lintstagedrc.json # check lintstagedrc.json
+cat: .lintstagedrc.json: No such file or directory
 
 > cat package.json # check package.json
 {
   "name": "migration-lintstagedrc",
-  "lint-staged": {
-    "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
-      "vp fmt --staged",
-      "eslint --fix"
-    ],
-    "*.@(js|ts|tsx)": [
-      "vp lint --fix"
-    ]
+  "vite-staged": {
+    "*.js": "vp lint --fix"
   },
   "pnpm": {
     "overrides": {
