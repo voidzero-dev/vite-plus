@@ -44,7 +44,7 @@ Based on [oxc-vscode's own `.vscode/settings.json`](https://github.com/oxc-proje
   "editor.formatOnSave": true,
   "editor.formatOnSaveMode": "file",
   "editor.codeActionsOnSave": {
-    "source.organizeImports": "never"
+    "source.fixAll.oxc": "explicit"
   },
   "oxc.typeAware": true
 }
@@ -67,7 +67,7 @@ When a config file already exists:
 - **Interactive mode**: Prompt with Merge / Skip options
   - Merge: Add new keys without overwriting existing user settings. For `extensions.json`, deduplicate recommendations array.
   - Skip: Leave unchanged
-- **Non-interactive mode**: Skip silently with info log
+- **Non-interactive mode**: Merge automatically (safe because existing keys are never overwritten)
 
 ### Non-interactive defaults
 
