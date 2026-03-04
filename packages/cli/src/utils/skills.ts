@@ -98,7 +98,7 @@ function linkSkills(
     }
 
     try {
-      symlinkSync(relativeTarget, linkPath);
+      symlinkSync(relativeTarget, linkPath, 'dir');
     } catch (err: unknown) {
       prompts.log.warn(`  ${skill.name} — failed to create symlink: ${(err as Error).message}`);
       continue;
