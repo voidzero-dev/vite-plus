@@ -736,14 +736,28 @@ impl UserConfigLoader for VitePlusConfigLoader {
         package_path: &AbsolutePath,
     ) -> anyhow::Result<Option<UserRunConfig>> {
         // Try static config extraction first (no JS runtime needed)
-        let static_config = vite_static_config::resolve_static_config(package_path);
-        if let Some(run_value) = static_config.get("run") {
-            tracing::debug!(
-                "Using statically extracted run config for {}",
-                package_path.as_path().display()
-            );
-            let run_config: UserRunConfig = serde_json::from_value(run_value.clone())?;
-            return Ok(Some(run_config));
+        if let Some(static_fields) = vite_static_config::resolve_static_config(package_path) {
+            match static_fields.get("run") {
+                Some(vite_static_config::StaticFieldValue::Json(run_value)) => {
+                    tracing::debug!(
+                        "Using statically extracted run config for {}",
+                        package_path.as_path().display()
+                    );
+                    let run_config: UserRunConfig = serde_json::from_value(run_value.clone())?;
+                    return Ok(Some(run_config));
+                }
+                Some(vite_static_config::StaticFieldValue::NonStatic) => {
+                    // `run` field exists but contains non-static values — fall back to NAPI
+                    tracing::debug!(
+                        "run config is not statically analyzable for {}, falling back to NAPI",
+                        package_path.as_path().display()
+                    );
+                }
+                None => {
+                    // Config was analyzed successfully but has no `run` field
+                    return Ok(None);
+                }
+            }
         }
 
         // Fall back to NAPI-based config resolution
