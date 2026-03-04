@@ -339,7 +339,7 @@ importers:
         version: 0.16.0(vue@3.5.27(typescript@5.9.3))
     devDependencies:
       '@voidzero-dev/vitepress-theme':
-        specifier: ^4.3.0
+        specifier: 4.3.0
         version: 4.3.0(focus-trap@7.8.0)(typescript@5.9.3)(vite@packages+core)(vitepress@2.0.0-alpha.15(oxc-minify@0.110.0)(postcss@8.5.6)(typescript@5.9.3))(vue@3.5.27(typescript@5.9.3))
       oxc-minify:
         specifier: ^0.110.0
@@ -2360,8 +2360,8 @@ packages:
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
 
-  '@iconify-json/simple-icons@1.2.67':
-    resolution: {integrity: sha512-RGJRwlxyup54L1UDAjCshy3ckX5zcvYIU74YLSnUgHGvqh6B4mvksbGNHAIEp7dZQ6cM13RZVT5KC07CmnFNew==}
+  '@iconify-json/simple-icons@1.2.72':
+    resolution: {integrity: sha512-wkcixntHvaCoqPqerGrNFcHQ3Yx1ux4ZkhscCDK0DEHpP62XCH+cxq1HTsRjbUiQl/M9K8bj03HF6Wgn5iE2rQ==}
 
   '@iconify/types@2.0.0':
     resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
@@ -10214,7 +10214,7 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@iconify-json/simple-icons@1.2.67':
+  '@iconify-json/simple-icons@1.2.72':
     dependencies:
       '@iconify/types': 2.0.0
 
@@ -16588,7 +16588,7 @@ snapshots:
     dependencies:
       '@docsearch/css': 4.5.3
       '@docsearch/js': 4.5.3
-      '@iconify-json/simple-icons': 1.2.67
+      '@iconify-json/simple-icons': 1.2.72
       '@shikijs/core': 3.21.0
       '@shikijs/transformers': 3.21.0
       '@shikijs/types': 3.21.0
