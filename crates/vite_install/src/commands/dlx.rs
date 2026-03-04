@@ -184,35 +184,44 @@ impl PackageManager {
     ) -> ResolveCommandResult {
         output::note("yarn@1 does not have dlx command, falling back to npx");
 
-        let mut args = Vec::new();
-
-        // Add package flags
-        for pkg in options.packages {
-            args.push("--package".into());
-            args.push(pkg.clone());
-        }
-
-        // Always add --yes to auto-confirm prompts (align with pnpm behavior)
-        args.push("--yes".into());
-
-        // Add quiet flag for silent mode
-        if options.silent {
-            args.push("--quiet".into());
-        }
-
-        if options.shell_mode {
-            args.push("-c".into());
-            args.push(build_shell_command(options.package_spec, options.args));
-        } else {
-            // Add package spec
-            args.push(options.package_spec.into());
-
-            // Add command arguments
-            args.extend(options.args.iter().cloned());
-        }
-
+        let args = build_npx_args(options);
         ResolveCommandResult { bin_path: "npx".into(), args, envs }
     }
+}
+
+/// Build npx command-line arguments from dlx options.
+///
+/// Used both by the yarn@1 fallback (in `resolve_npx_fallback`) and by the
+/// no-package.json fallback in `vite_global_cli`.
+pub fn build_npx_args(options: &DlxCommandOptions<'_>) -> Vec<String> {
+    let mut args = Vec::new();
+
+    // Add package flags
+    for pkg in options.packages {
+        args.push("--package".into());
+        args.push(pkg.clone());
+    }
+
+    // Always add --yes to auto-confirm prompts (align with pnpm behavior)
+    args.push("--yes".into());
+
+    // Add quiet flag for silent mode
+    if options.silent {
+        args.push("--quiet".into());
+    }
+
+    if options.shell_mode {
+        args.push("-c".into());
+        args.push(build_shell_command(options.package_spec, options.args));
+    } else {
+        // Add package spec
+        args.push(options.package_spec.into());
+
+        // Add command arguments
+        args.extend(options.args.iter().cloned());
+    }
+
+    args
 }
 
 fn build_shell_command(package_spec: &str, args: &[String]) -> String {

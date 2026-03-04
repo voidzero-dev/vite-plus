@@ -540,7 +540,18 @@ impl DlxCommand {
 - Automation provides consistent UX
 - Handles scoped packages correctly
 
-### 6. Auto-confirm Prompts for npm/npx
+### 6. Fallback to npx Without package.json
+
+**Decision**: When no `package.json` is found anywhere up the directory tree, fall back to `npx` directly instead of erroring.
+
+**Rationale**:
+
+- `npx` doesn't require a `package.json` — `vp dlx` shouldn't either
+- Users may run `vp dlx` or `vpx` from directories outside any project (e.g., `/tmp`, home directory)
+- Without a `package.json`, there is no package manager to detect, so `npx` is the universal fallback
+- `prepend_js_runtime_to_path_env()` already handles the no-package.json case (uses CLI runtime), so `npx` is on PATH
+
+### 7. Auto-confirm Prompts for npm/npx
 
 **Decision**: Always add `--yes` flag for npm and npx (yarn@1 fallback).
 
@@ -566,6 +577,22 @@ Usage: vp dlx [OPTIONS] <package[@version]> [args...]
 Examples:
   vp dlx create-vue my-app
   vp dlx typescript tsc --version
+```
+
+### No package.json
+
+```bash
+$ cd /tmp
+$ vp dlx cowsay hello
+# No package.json found — falls back to npx directly
+ _______
+< hello >
+ -------
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
 ```
 
 ### Package Not Found

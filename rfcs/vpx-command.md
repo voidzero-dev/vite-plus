@@ -398,6 +398,24 @@ Running: pnpm dlx some-tool --version
 some-tool v1.2.3
 ```
 
+### No package.json
+
+```bash
+$ cd /tmp
+$ vpx cowsay hello
+# No package.json — vpx delegates to vp dlx, which falls back to npx
+ _______
+< hello >
+ -------
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
+```
+
+`vpx` works in directories without a `package.json` because `vp dlx` falls back to `npx` when no package manager can be detected.
+
 ### Remote Package Not Found
 
 ```bash
