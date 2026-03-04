@@ -16,13 +16,14 @@ use rustc_hash::FxHashMap;
 use vite_path::AbsolutePath;
 
 /// Config file names to try, in priority order.
+/// This matches Vite's `DEFAULT_CONFIG_FILES` order.
 const CONFIG_FILE_NAMES: &[&str] = &[
-    "vite.config.ts",
     "vite.config.js",
-    "vite.config.mts",
     "vite.config.mjs",
-    "vite.config.cts",
+    "vite.config.ts",
     "vite.config.cjs",
+    "vite.config.mts",
+    "vite.config.cts",
 ];
 
 /// Resolve the vite config file path in the given directory.
@@ -349,7 +350,7 @@ mod tests {
     }
 
     #[test]
-    fn ts_takes_priority_over_js() {
+    fn js_takes_priority_over_ts() {
         let dir = TempDir::new().unwrap();
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir.path().join("vite.config.ts"), "export default { fromTs: true }")
@@ -357,8 +358,8 @@ mod tests {
         std::fs::write(dir.path().join("vite.config.js"), "export default { fromJs: true }")
             .unwrap();
         let result = resolve_static_config(&dir_path);
-        assert!(result.contains_key("fromTs"));
-        assert!(!result.contains_key("fromJs"));
+        assert!(result.contains_key("fromJs"));
+        assert!(!result.contains_key("fromTs"));
     }
 
     #[test]
