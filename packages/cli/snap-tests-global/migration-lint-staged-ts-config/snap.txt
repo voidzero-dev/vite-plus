@@ -19,7 +19,7 @@
 └  ✔ Migration completed!
 
 
-> cat package.json # check lint-staged NOT added to package.json, husky/lint-staged NOT removed
+> cat package.json # check lint-staged NOT added to package.json, husky/lint-staged removed from devDependencies
 {
   "name": "migration-lint-staged-ts-config",
   "type": "module",
@@ -27,8 +27,6 @@
     "prepare": "vp prepare"
   },
   "devDependencies": {
-    "husky": "^9.1.7",
-    "lint-staged": "^16.2.6",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
   },

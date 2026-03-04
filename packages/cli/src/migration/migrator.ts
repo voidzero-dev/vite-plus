@@ -744,15 +744,17 @@ export function setupGitHooks(projectPath: string): void {
       if (!pkg['lint-staged'] && !hasStandaloneLintStagedConfig(projectPath)) {
         pkg['lint-staged'] = { '*': 'vp check --fix' };
       }
+    }
 
-      // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands)
-      for (const name of REPLACED_HOOK_PACKAGES) {
-        if (pkg.devDependencies?.[name]) {
-          delete pkg.devDependencies[name];
-        }
-        if (pkg.dependencies?.[name]) {
-          delete pkg.dependencies[name];
-        }
+    // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands).
+    // Done unconditionally because rewriteScripts() already replaced husky → vp prepare
+    // and lint-staged → vp lint-staged in scripts.
+    for (const name of REPLACED_HOOK_PACKAGES) {
+      if (pkg.devDependencies?.[name]) {
+        delete pkg.devDependencies[name];
+      }
+      if (pkg.dependencies?.[name]) {
+        delete pkg.dependencies[name];
       }
     }
 

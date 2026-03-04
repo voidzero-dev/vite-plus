@@ -2,7 +2,7 @@
   "commands": [
     { "command": "git init", "ignoreOutput": true },
     "vp migrate --no-interactive # migration should warn about unsupported TS lint-staged config",
-    "cat package.json # check lint-staged NOT added to package.json, husky/lint-staged NOT removed",
+    "cat package.json # check lint-staged NOT added to package.json, husky/lint-staged removed from devDependencies",
     "cat lint-staged.config.ts # check TS config is not modified"
   ]
 }

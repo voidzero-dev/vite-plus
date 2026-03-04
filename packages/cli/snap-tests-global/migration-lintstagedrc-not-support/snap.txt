@@ -38,15 +38,13 @@ export default {
   '*.js': ['oxlint', 'oxfmt'],
 };
 
-> cat package.json # check husky and lint-staged are NOT removed when unsupported config is detected
+> cat package.json # check hooks setup skipped but husky/lint-staged removed from devDependencies
 {
   "name": "migration-lintstagedrc-not-support",
   "scripts": {
     "prepare": "vp prepare"
   },
   "devDependencies": {
-    "husky": "^9.1.7",
-    "lint-staged": "^16.2.6",
     "vite-plus": "latest"
   },
   "packageManager": "pnpm@<semver>",

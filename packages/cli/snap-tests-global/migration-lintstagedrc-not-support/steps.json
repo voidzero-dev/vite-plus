@@ -5,6 +5,6 @@
     "cat .lintstagedrc # check .lintstagedrc is not updated",
     "cat .lintstagedrc.yaml # check .lintstagedrc.yaml is not updated",
     "cat lint-staged.config.mjs # check lint-staged.config.mjs is not updated",
-    "cat package.json # check husky and lint-staged are NOT removed when unsupported config is detected"
+    "cat package.json # check hooks setup skipped but husky/lint-staged removed from devDependencies"
   ]
 }
