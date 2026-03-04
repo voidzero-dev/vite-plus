@@ -110,7 +110,7 @@ function parseArgs() {
     hooks?: boolean;
   }>(args, {
     alias: { h: 'help' },
-    boolean: ['help', 'interactive', 'non-interactive', 'nonInteractive', 'hooks'],
+    boolean: ['help', 'interactive', 'hooks'],
     default: { interactive: defaultInteractive() },
   });
   const interactive = parsed.interactive;

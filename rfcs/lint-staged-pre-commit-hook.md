@@ -105,6 +105,7 @@ vp staged
 3. Passes config to bundled lint-staged via its programmatic API
 4. Runs configured commands on git-staged files only
 5. Exits with non-zero code if any command fails
+6. Does not support custom config file paths — config must be in vite.config.ts
 
 ### Automatic Setup
 

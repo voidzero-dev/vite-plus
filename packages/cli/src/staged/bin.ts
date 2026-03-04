@@ -21,7 +21,6 @@ const args = mri(process.argv.slice(3), {
   alias: {
     h: 'help',
     p: 'concurrent',
-    c: 'config',
     d: 'debug',
     q: 'quiet',
     r: 'relative',
@@ -41,7 +40,7 @@ const args = mri(process.argv.slice(3), {
     'stash',
     'verbose',
   ],
-  string: ['concurrent', 'config', 'cwd', 'diff', 'diff-filter', 'max-arg-length'],
+  string: ['concurrent', 'cwd', 'diff', 'diff-filter'],
 });
 
 if (args.help) {
@@ -60,7 +59,6 @@ if (args.help) {
             label: '-p, --concurrent <number|boolean>',
             description: 'Number of tasks to run concurrently, or false for serial',
           },
-          { label: '-c, --config <path>', description: 'Path to configuration file' },
           {
             label: '--continue-on-error',
             description: 'Run all tasks to completion even if one fails',
@@ -87,7 +85,6 @@ if (args.help) {
             label: '--hide-unstaged',
             description: 'Hide all unstaged changes before running tasks',
           },
-          { label: '--max-arg-length <number>', description: 'Maximum argument string length' },
           { label: '--no-stash', description: 'Disable the backup stash' },
           { label: '-q, --quiet', description: 'Disable console output' },
           { label: '-r, --relative', description: 'Pass filepaths relative to cwd to tasks' },
@@ -138,36 +135,18 @@ if (args.help) {
     options.verbose = args.verbose;
   }
 
-  // String flags
-  if (args.config != null) {
-    if (args.config === '-') {
-      // stdin mode: read JSON config from stdin (matches lint-staged's -c - behavior)
-      const chunks: Buffer[] = [];
-      for await (const chunk of process.stdin) {
-        chunks.push(chunk as Buffer);
-      }
-      const stdinContent = Buffer.concat(chunks).toString('utf8').trim();
-      if (stdinContent) {
-        options.config = JSON.parse(stdinContent);
-      }
-    } else {
-      options.configPath = args.config;
-    }
+  // Read "staged" from vite.config.ts and pass it as an inline config object to lint-staged.
+  const stagedConfig = await resolveStagedConfig(args.cwd ?? process.cwd());
+  if (stagedConfig) {
+    options.config = stagedConfig;
   } else {
-    // No explicit --config flag: read "staged" from vite.config.ts
-    // and pass it as an inline config object to lint-staged.
-    const stagedConfig = await resolveStagedConfig(args.cwd ?? process.cwd());
-    if (stagedConfig) {
-      options.config = stagedConfig;
-    } else {
-      log('No "staged" config found in vite.config.ts. Please add a staged config:');
-      log('');
-      log('  // vite.config.ts');
-      log('  export default defineConfig({');
-      log("    staged: { '*': 'vp check --fix' },");
-      log('  });');
-      process.exit(1);
-    }
+    log('No "staged" config found in vite.config.ts. Please add a staged config:');
+    log('');
+    log('  // vite.config.ts');
+    log('  export default defineConfig({');
+    log("    staged: { '*': 'vp check --fix' },");
+    log('  });');
+    process.exit(1);
   }
   if (args.cwd != null) {
     options.cwd = args.cwd;
@@ -192,14 +171,6 @@ if (args.help) {
     }
   }
 
-  // Parsed flags: max-arg-length → number
-  if (args['max-arg-length'] != null) {
-    const num = Number(args['max-arg-length']);
-    if (!Number.isNaN(num)) {
-      options.maxArgLength = num;
-    }
-  }
-
   const success = await lintStaged(options);
   process.exit(success ? 0 : 1);
 }
@@ -211,7 +182,7 @@ if (args.help) {
 async function resolveStagedConfig(cwd: string): Promise<Configuration | null> {
   try {
     const { resolveConfig } = await import('@voidzero-dev/vite-plus-core');
-    const config = await resolveConfig({ root: cwd }, 'build');
+    const config: Record<string, unknown> = await resolveConfig({ root: cwd }, 'build');
     if (config.staged) {
       return config.staged as Configuration;
     }
