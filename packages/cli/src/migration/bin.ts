@@ -8,7 +8,7 @@ import semver from 'semver';
 
 import { vitePlusHeader } from '../../binding/index.js';
 import { PackageManager, type WorkspaceInfo } from '../types/index.js';
-import { selectAgentTargetPath, writeAgentInstructions } from '../utils/agent.js';
+import { selectAgentTargetPaths, writeAgentInstructions } from '../utils/agent.js';
 import { selectEditor, writeEditorConfigs } from '../utils/editor.js';
 import { renderCliDoc } from '../utils/help.js';
 import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.js';
@@ -85,7 +85,7 @@ const helpMessage = renderCliDoc({
 export interface MigrationOptions {
   interactive: boolean;
   help?: boolean;
-  agent?: string | false;
+  agent?: string | string[] | false;
   editor?: string | false;
 }
 
@@ -95,7 +95,7 @@ function parseArgs() {
   const parsed = mri<{
     help?: boolean;
     interactive?: boolean;
-    agent?: string | false;
+    agent?: string | string[] | false;
     editor?: string | false;
   }>(args, {
     alias: { h: 'help' },
@@ -218,7 +218,7 @@ async function main() {
     rewriteStandaloneProject(workspaceInfo.rootDir, workspaceInfo);
   }
 
-  const selectedAgentTargetPath = await selectAgentTargetPath({
+  const selectedAgentTargetPaths = await selectAgentTargetPaths({
     interactive: options.interactive,
     agent: options.agent,
     onCancel: () => cancelAndExit(),
@@ -226,7 +226,7 @@ async function main() {
 
   await writeAgentInstructions({
     projectRoot: workspaceInfo.rootDir,
-    targetPath: selectedAgentTargetPath,
+    targetPaths: selectedAgentTargetPaths,
     interactive: options.interactive,
   });
 

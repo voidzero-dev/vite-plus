@@ -187,13 +187,18 @@ export const AGENTS = [
   { id: 'other', label: 'Other', targetPath: 'AGENTS.md' },
 ] as const;
 
-export async function selectAgentTargetPath({
+type AgentSelection = string | string[] | false;
+const AGENT_STANDARD_PATH = 'AGENTS.md';
+const AGENT_INSTRUCTIONS_START_MARKER = '<!--VITE PLUS START-->';
+const AGENT_INSTRUCTIONS_END_MARKER = '<!--VITE PLUS END-->';
+
+export async function selectAgentTargetPaths({
   interactive,
   agent,
   onCancel,
 }: {
   interactive: boolean;
-  agent?: string | false;
+  agent?: AgentSelection;
   onCancel: () => void;
 }) {
   // Skip entirely if --no-agent is passed
@@ -202,51 +207,87 @@ export async function selectAgentTargetPath({
   }
 
   if (interactive && !agent) {
-    const selectedAgent = await prompts.select({
-      message: 'Which agent are you using?',
-      options: [
-        {
-          label: 'None',
-          value: null,
-          hint: 'Skip writing agent instructions',
-        },
-        ...AGENTS.map((option) => ({
-          label: option.label,
-          value: option.id,
-          hint: option.targetPath,
-        })),
-      ],
-      initialValue: 'chatgpt-codex',
+    const selectedAgents = await prompts.multiselect({
+      message: 'Which agents are you using?',
+      options: AGENTS.map((option) => ({
+        label: option.label,
+        value: option.id,
+        hint: option.targetPath,
+      })),
+      initialValues: ['chatgpt-codex'],
+      required: false,
     });
 
-    if (prompts.isCancel(selectedAgent)) {
+    if (prompts.isCancel(selectedAgents)) {
       onCancel();
       return undefined;
     }
 
-    if (selectedAgent === null) {
+    if (selectedAgents.length === 0) {
       return undefined;
     }
-    return resolveAgentTargetPath(selectedAgent);
+    return resolveAgentTargetPaths(selectedAgents);
   }
 
-  return resolveAgentTargetPath(agent ?? 'other');
+  return resolveAgentTargetPaths(agent ?? 'other');
+}
+
+export async function selectAgentTargetPath({
+  interactive,
+  agent,
+  onCancel,
+}: {
+  interactive: boolean;
+  agent?: AgentSelection;
+  onCancel: () => void;
+}) {
+  const targetPaths = await selectAgentTargetPaths({ interactive, agent, onCancel });
+  return targetPaths?.[0];
 }
 
 export function detectExistingAgentTargetPath(projectRoot: string) {
   for (const option of AGENTS) {
     const targetPath = path.join(projectRoot, option.targetPath);
-    if (fs.existsSync(targetPath)) {
+    if (fs.existsSync(targetPath) && !fs.lstatSync(targetPath).isSymbolicLink()) {
       return option.targetPath;
     }
   }
   return undefined;
 }
 
-export function resolveAgentTargetPath(agent?: string) {
-  if (!agent) {
-    return 'AGENTS.md';
+export function resolveAgentTargetPaths(agent?: string | string[]) {
+  const agentNames = parseAgentNames(agent);
+  const resolvedAgentNames = agentNames.length > 0 ? agentNames : ['other'];
+  const dedupedTargetPaths: string[] = [];
+  const seenTargetPaths = new Set<string>();
+  for (const name of resolvedAgentNames) {
+    const targetPath = resolveSingleAgentTargetPath(name);
+    if (seenTargetPaths.has(targetPath)) {
+      continue;
+    }
+    seenTargetPaths.add(targetPath);
+    dedupedTargetPaths.push(targetPath);
   }
+  return dedupedTargetPaths;
+}
+
+export function resolveAgentTargetPath(agent?: string) {
+  return resolveAgentTargetPaths(agent)[0] ?? 'AGENTS.md';
+}
+
+function parseAgentNames(agent?: string | string[]) {
+  if (!agent) {
+    return [];
+  }
+  const values = Array.isArray(agent) ? agent : [agent];
+  return values
+    .filter((value): value is string => typeof value === 'string')
+    .flatMap((value) => value.split(','))
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function resolveSingleAgentTargetPath(agent: string) {
   const normalized = normalizeAgentName(agent);
   const alias = AGENT_ALIASES[normalized];
   const resolved = alias ? normalizeAgentName(alias) : normalized;
@@ -254,19 +295,22 @@ export function resolveAgentTargetPath(agent?: string) {
     (option) =>
       normalizeAgentName(option.id) === resolved || normalizeAgentName(option.label) === resolved,
   );
-  return match?.targetPath ?? 'AGENTS.md';
+  return match?.targetPath ?? AGENTS[AGENTS.length - 1].targetPath;
 }
 
 export async function writeAgentInstructions({
   projectRoot,
   targetPath,
+  targetPaths,
   interactive,
 }: {
   projectRoot: string;
-  targetPath: string | undefined;
+  targetPath?: string;
+  targetPaths?: string[];
   interactive: boolean;
 }) {
-  if (!targetPath) {
+  const paths = [...(targetPaths ?? []), ...(targetPath ? [targetPath] : [])];
+  if (paths.length === 0) {
     return;
   }
 
@@ -276,47 +320,94 @@ export async function writeAgentInstructions({
     return;
   }
 
-  const destinationPath = path.join(projectRoot, targetPath);
-  await fsPromises.mkdir(path.dirname(destinationPath), { recursive: true });
-  if (fs.existsSync(destinationPath)) {
-    if (interactive) {
-      const action = await prompts.select({
-        message: `Agent instructions already exist at ${targetPath}.`,
-        options: [
-          {
-            label: 'Append',
-            value: 'append',
-            hint: 'Add template content to the end',
-          },
-          {
-            label: 'Skip',
-            value: 'skip',
-            hint: 'Leave existing file unchanged',
-          },
-        ],
-        initialValue: 'skip',
-      });
-      if (prompts.isCancel(action) || action === 'skip') {
-        prompts.log.info(`Skipped writing ${targetPath}`);
-        return;
-      }
+  const seenDestinationPaths = new Set<string>();
+  const seenRealPaths = new Set<string>();
+  const incomingContent = await fsPromises.readFile(sourcePath, 'utf-8');
+  const shouldLinkToAgents = paths.includes(AGENT_STANDARD_PATH);
+  const orderedPaths = shouldLinkToAgents
+    ? [AGENT_STANDARD_PATH, ...paths.filter((p) => p !== AGENT_STANDARD_PATH)]
+    : paths;
 
-      const [existingContent, incomingContent] = await Promise.all([
-        fsPromises.readFile(destinationPath, 'utf-8'),
-        fsPromises.readFile(sourcePath, 'utf-8'),
-      ]);
-      const separator = existingContent.endsWith('\n') ? '' : '\n';
-      await fsPromises.appendFile(destinationPath, `${separator}\n${incomingContent}`);
-      prompts.log.success(`Appended agent instructions to ${targetPath}`);
-      return;
+  for (const targetPathToWrite of orderedPaths) {
+    const destinationPath = path.join(projectRoot, targetPathToWrite);
+    const destinationKey = path.resolve(destinationPath);
+    if (seenDestinationPaths.has(destinationKey)) {
+      continue;
+    }
+    seenDestinationPaths.add(destinationKey);
+
+    await fsPromises.mkdir(path.dirname(destinationPath), { recursive: true });
+
+    if (shouldLinkToAgents && targetPathToWrite !== AGENT_STANDARD_PATH) {
+      const linked = await tryLinkTargetToAgents(projectRoot, targetPathToWrite);
+      if (linked) {
+        continue;
+      }
     }
 
-    prompts.log.info(`Skipped writing ${targetPath} (already exists)`);
-    return;
-  }
+    if (fs.existsSync(destinationPath)) {
+      if (fs.lstatSync(destinationPath).isSymbolicLink()) {
+        prompts.log.info(`Skipped writing ${targetPathToWrite} (symlink)`);
+        continue;
+      }
 
-  await fsPromises.copyFile(sourcePath, destinationPath);
-  prompts.log.success(`Wrote agent instructions to ${targetPath}`);
+      const destinationRealPath = await fsPromises.realpath(destinationPath);
+      if (seenRealPaths.has(destinationRealPath)) {
+        prompts.log.info(`Skipped writing ${targetPathToWrite} (duplicate target)`);
+        continue;
+      }
+
+      if (interactive) {
+        const action = await prompts.select({
+          message: `Agent instructions already exist at ${targetPathToWrite}.`,
+          options: [
+            {
+              label: 'Append',
+              value: 'append',
+              hint: 'Add template content to the end',
+            },
+            {
+              label: 'Skip',
+              value: 'skip',
+              hint: 'Leave existing file unchanged',
+            },
+          ],
+          initialValue: 'skip',
+        });
+        if (prompts.isCancel(action) || action === 'skip') {
+          prompts.log.info(`Skipped writing ${targetPathToWrite}`);
+          seenRealPaths.add(destinationRealPath);
+          continue;
+        }
+
+        const existingContent = await fsPromises.readFile(destinationPath, 'utf-8');
+        const updatedContent = replaceMarkedAgentInstructionsSection(
+          existingContent,
+          incomingContent,
+        );
+        if (updatedContent !== undefined) {
+          await fsPromises.writeFile(destinationPath, updatedContent);
+          prompts.log.success(`Updated agent instructions in ${targetPathToWrite}`);
+          seenRealPaths.add(destinationRealPath);
+          continue;
+        }
+
+        const separator = existingContent.endsWith('\n') ? '' : '\n';
+        await fsPromises.appendFile(destinationPath, `${separator}\n${incomingContent}`);
+        prompts.log.success(`Appended agent instructions to ${targetPathToWrite}`);
+        seenRealPaths.add(destinationRealPath);
+        continue;
+      }
+
+      prompts.log.info(`Skipped writing ${targetPathToWrite} (already exists)`);
+      seenRealPaths.add(destinationRealPath);
+      continue;
+    }
+
+    await fsPromises.writeFile(destinationPath, incomingContent);
+    prompts.log.success(`Wrote agent instructions to ${targetPathToWrite}`);
+    seenRealPaths.add(await fsPromises.realpath(destinationPath));
+  }
 }
 
 function normalizeAgentName(value: string) {
@@ -324,4 +415,77 @@ function normalizeAgentName(value: string) {
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '');
+}
+
+export function replaceMarkedAgentInstructionsSection(existing: string, incoming: string) {
+  const existingRange = getMarkedRange(
+    existing,
+    AGENT_INSTRUCTIONS_START_MARKER,
+    AGENT_INSTRUCTIONS_END_MARKER,
+  );
+  if (!existingRange) {
+    return undefined;
+  }
+
+  const incomingRange = getMarkedRange(
+    incoming,
+    AGENT_INSTRUCTIONS_START_MARKER,
+    AGENT_INSTRUCTIONS_END_MARKER,
+  );
+  if (!incomingRange) {
+    return undefined;
+  }
+
+  return `${existing.slice(0, existingRange.start)}${incoming.slice(
+    incomingRange.start,
+    incomingRange.end,
+  )}${existing.slice(existingRange.end)}`;
+}
+
+async function tryLinkTargetToAgents(projectRoot: string, targetPath: string) {
+  const destinationPath = path.join(projectRoot, targetPath);
+  const agentsPath = path.join(projectRoot, AGENT_STANDARD_PATH);
+  const symlinkTarget = path.relative(path.dirname(destinationPath), agentsPath);
+  const existing = await getExistingPathKind(destinationPath);
+
+  if (existing === 'file') {
+    return false;
+  }
+
+  if (existing === 'symlink') {
+    const currentLink = await fsPromises.readlink(destinationPath);
+    const resolvedCurrentLink = path.resolve(path.dirname(destinationPath), currentLink);
+    if (resolvedCurrentLink === agentsPath) {
+      prompts.log.info(`Skipped linking ${targetPath} (already linked to ${AGENT_STANDARD_PATH})`);
+      return true;
+    }
+    await fsPromises.unlink(destinationPath);
+  }
+
+  await fsPromises.symlink(symlinkTarget, destinationPath);
+  prompts.log.success(`Linked ${targetPath} to ${AGENT_STANDARD_PATH}`);
+  return true;
+}
+
+async function getExistingPathKind(filePath: string) {
+  if (!fs.existsSync(filePath)) {
+    return 'missing' as const;
+  }
+  const stat = await fsPromises.lstat(filePath);
+  return stat.isSymbolicLink() ? ('symlink' as const) : ('file' as const);
+}
+
+function getMarkedRange(content: string, startMarker: string, endMarker: string) {
+  const start = content.indexOf(startMarker);
+  if (start === -1) {
+    return undefined;
+  }
+  const endMarkerIndex = content.indexOf(endMarker, start + startMarker.length);
+  if (endMarkerIndex === -1) {
+    return undefined;
+  }
+  return {
+    start,
+    end: endMarkerIndex + endMarker.length,
+  };
 }

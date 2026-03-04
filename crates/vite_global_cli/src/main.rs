@@ -249,13 +249,16 @@ async fn main() -> ExitCode {
 
     if args.len() == 1 {
         match command_picker::pick_top_level_command_if_interactive() {
-            Ok(Some(selection)) => {
+            Ok(command_picker::TopLevelCommandPick::Selected(selection)) => {
                 args.push(selection.command.to_string());
                 if selection.append_help {
                     args.push("--help".to_string());
                 }
             }
-            Ok(None) => {}
+            Ok(command_picker::TopLevelCommandPick::Cancelled) => {
+                return ExitCode::SUCCESS;
+            }
+            Ok(command_picker::TopLevelCommandPick::Skipped) => {}
             Err(err) => {
                 tracing::debug!("Failed to run top-level command picker: {err}");
             }

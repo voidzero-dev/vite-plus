@@ -13,7 +13,7 @@ import {
 import { DependencyType, type WorkspaceInfo } from '../types/index.js';
 import {
   detectExistingAgentTargetPath,
-  selectAgentTargetPath,
+  selectAgentTargetPaths,
   writeAgentInstructions,
 } from '../utils/agent.js';
 import { detectExistingEditor, selectEditor, writeEditorConfigs } from '../utils/editor.js';
@@ -161,7 +161,7 @@ export interface Options {
   interactive: boolean;
   list: boolean;
   help: boolean;
-  agent?: string;
+  agent?: string | string[] | false;
   editor?: string;
 }
 
@@ -181,7 +181,7 @@ function parseArgs() {
     interactive?: boolean;
     list?: boolean;
     help?: boolean;
-    agent?: string;
+    agent?: string | string[] | false;
     editor?: string;
   }>(viteArgs, {
     alias: { h: 'help' },
@@ -282,7 +282,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // Interactive mode: prompt for template if not provided
   let selectedTemplateName = templateName as string;
   let selectedTemplateArgs = [...templateArgs];
-  let selectedAgentTargetPath: string | undefined;
+  let selectedAgentTargetPaths: string[] | undefined;
   let selectedEditor: Awaited<ReturnType<typeof selectEditor>>;
   let selectedParentDir: string | undefined;
 
@@ -495,16 +495,17 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   };
 
   const existingAgentTargetPath =
-    options.agent || !options.interactive
+    options.agent !== undefined || !options.interactive
       ? undefined
       : detectExistingAgentTargetPath(workspaceInfoOptional.rootDir);
-  selectedAgentTargetPath =
-    existingAgentTargetPath ??
-    (await selectAgentTargetPath({
-      interactive: options.interactive,
-      agent: options.agent,
-      onCancel: () => cancelAndExit(),
-    }));
+  selectedAgentTargetPaths =
+    existingAgentTargetPath !== undefined
+      ? [existingAgentTargetPath]
+      : await selectAgentTargetPaths({
+          interactive: options.interactive,
+          agent: options.agent,
+          onCancel: () => cancelAndExit(),
+        });
 
   const existingEditor =
     options.editor || !options.interactive
@@ -556,7 +557,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     const fullPath = path.join(workspaceInfo.rootDir, projectDir);
     await writeAgentInstructions({
       projectRoot: fullPath,
-      targetPath: selectedAgentTargetPath,
+      targetPaths: selectedAgentTargetPaths,
       interactive: options.interactive,
     });
     await writeEditorConfigs({
@@ -614,7 +615,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   const fullPath = path.join(workspaceInfo.rootDir, projectDir);
   await writeAgentInstructions({
     projectRoot: fullPath,
-    targetPath: selectedAgentTargetPath,
+    targetPaths: selectedAgentTargetPaths,
     interactive: options.interactive,
   });
   await writeEditorConfigs({

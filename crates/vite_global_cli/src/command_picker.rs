@@ -25,6 +25,13 @@ pub struct PickedCommand {
     pub append_help: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TopLevelCommandPick {
+    Skipped,
+    Selected(PickedCommand),
+    Cancelled,
+}
+
 #[derive(Clone, Copy)]
 struct CommandEntry {
     label: &'static str,
@@ -113,12 +120,15 @@ const CI_ENV_VARS: &[&str] = &[
     "TF_BUILD",
 ];
 
-pub fn pick_top_level_command_if_interactive() -> io::Result<Option<PickedCommand>> {
+pub fn pick_top_level_command_if_interactive() -> io::Result<TopLevelCommandPick> {
     if !should_enable_picker() {
-        return Ok(None);
+        return Ok(TopLevelCommandPick::Skipped);
     }
 
-    run_picker()
+    Ok(match run_picker()? {
+        Some(selection) => TopLevelCommandPick::Selected(selection),
+        None => TopLevelCommandPick::Cancelled,
+    })
 }
 
 fn should_enable_picker() -> bool {
