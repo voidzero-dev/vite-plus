@@ -11,6 +11,8 @@ Arguments:
 Options:
   --agent NAME       Write agent instructions file into the project (e.g. chatgpt, claude, opencode).
   --no-agent         Skip writing agent instructions file
+  --editor NAME      Write editor config files into the project.
+  --no-editor        Skip writing editor config files
   --no-interactive   Run in non-interactive mode (skip prompts and use defaults)
   --non-interactive  Alias for --no-interactive
   -h, --help         Show this help message

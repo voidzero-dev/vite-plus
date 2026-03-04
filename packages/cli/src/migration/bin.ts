@@ -9,6 +9,7 @@ import semver from 'semver';
 import { vitePlusHeader } from '../../binding/index.js';
 import { PackageManager, type WorkspaceInfo } from '../types/index.js';
 import { selectAgentTargetPath, writeAgentInstructions } from '../utils/agent.js';
+import { selectEditor, writeEditorConfigs } from '../utils/editor.js';
 import { renderCliDoc } from '../utils/help.js';
 import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.js';
 import {
@@ -54,6 +55,11 @@ const helpMessage = renderCliDoc({
         },
         { label: '--no-agent', description: 'Skip writing agent instructions file' },
         {
+          label: '--editor NAME',
+          description: 'Write editor config files into the project.',
+        },
+        { label: '--no-editor', description: 'Skip writing editor config files' },
+        {
           label: '--no-interactive',
           description: 'Run in non-interactive mode (skip prompts and use defaults)',
         },
@@ -81,6 +87,7 @@ export interface MigrationOptions {
   interactive: boolean;
   help?: boolean;
   agent?: string | false;
+  editor?: string | false;
 }
 
 function parseArgs() {
@@ -92,6 +99,7 @@ function parseArgs() {
     nonInteractive?: boolean;
     'non-interactive'?: boolean;
     agent?: string | false;
+    editor?: string | false;
   }>(args, {
     alias: { h: 'help' },
     boolean: ['help', 'interactive', 'non-interactive', 'nonInteractive'],
@@ -113,6 +121,7 @@ function parseArgs() {
       interactive,
       help: parsed.help,
       agent: parsed.agent,
+      editor: parsed.editor,
     } as MigrationOptions,
   };
 }
@@ -222,6 +231,18 @@ async function main() {
   await writeAgentInstructions({
     projectRoot: workspaceInfo.rootDir,
     targetPath: selectedAgentTargetPath,
+    interactive: options.interactive,
+  });
+
+  const selectedEditor = await selectEditor({
+    interactive: options.interactive,
+    editor: options.editor,
+    onCancel: () => cancelAndExit(),
+  });
+
+  await writeEditorConfigs({
+    projectRoot: workspaceInfo.rootDir,
+    editorId: selectedEditor,
     interactive: options.interactive,
   });
 
