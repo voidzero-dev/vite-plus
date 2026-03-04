@@ -108,56 +108,62 @@ fn parse_js_ts_config(source: &str, extension: &str) -> StaticConfig {
         return None;
     }
 
-    extract_default_export_fields(&result.program)
+    extract_config_fields(&result.program)
 }
 
-/// Find the default export in a parsed program and extract its object fields.
+/// Find the config object in a parsed program and extract its fields.
 ///
-/// Returns `None` if no `export default` is found or the exported value is not
-/// an object literal (or `defineConfig({...})` call).
-///
-/// Supports two patterns:
+/// Searches for the config value in the following patterns (in order):
 /// 1. `export default defineConfig({ ... })`
 /// 2. `export default { ... }`
-fn extract_default_export_fields(program: &Program<'_>) -> StaticConfig {
+/// 3. `module.exports = defineConfig({ ... })`
+/// 4. `module.exports = { ... }`
+fn extract_config_fields(program: &Program<'_>) -> StaticConfig {
     for stmt in &program.body {
-        let Statement::ExportDefaultDeclaration(decl) = stmt else {
-            continue;
-        };
-
-        let Some(expr) = decl.declaration.as_expression() else {
-            continue;
-        };
-
-        // Unwrap parenthesized expressions
-        let expr = expr.without_parentheses();
-
-        match expr {
-            // Pattern: export default defineConfig({ ... })
-            Expression::CallExpression(call) => {
-                if !call.callee.is_specific_id("defineConfig") {
-                    // Unknown function call — not analyzable
-                    return None;
-                }
-                if let Some(first_arg) = call.arguments.first()
-                    && let Some(Expression::ObjectExpression(obj)) = first_arg.as_expression()
-                {
-                    return Some(extract_object_fields(obj));
-                }
-                // defineConfig() with non-object arg — not analyzable
-                return None;
+        // ESM: export default ...
+        if let Statement::ExportDefaultDeclaration(decl) = stmt {
+            if let Some(expr) = decl.declaration.as_expression() {
+                return extract_config_from_expr(expr);
             }
-            // Pattern: export default { ... }
-            Expression::ObjectExpression(obj) => {
-                return Some(extract_object_fields(obj));
-            }
-            // e.g. export default 42, export default someVar — not analyzable
-            _ => return None,
+            // export default class/function — not analyzable
+            return None;
+        }
+
+        // CJS: module.exports = ...
+        if let Statement::ExpressionStatement(expr_stmt) = stmt
+            && let Expression::AssignmentExpression(assign) = &expr_stmt.expression
+            && assign.left.as_member_expression().is_some_and(|m| {
+                m.object().is_specific_id("module") && m.static_property_name() == Some("exports")
+            })
+        {
+            return extract_config_from_expr(&assign.right);
         }
     }
 
-    // No export default found
     None
+}
+
+/// Extract the config object from an expression that is either:
+/// - `defineConfig({ ... })` → extract the object argument
+/// - `{ ... }` → extract directly
+/// - anything else → not analyzable
+fn extract_config_from_expr(expr: &Expression<'_>) -> StaticConfig {
+    let expr = expr.without_parentheses();
+    match expr {
+        Expression::CallExpression(call) => {
+            if !call.callee.is_specific_id("defineConfig") {
+                return None;
+            }
+            if let Some(first_arg) = call.arguments.first()
+                && let Some(Expression::ObjectExpression(obj)) = first_arg.as_expression()
+            {
+                return Some(extract_object_fields(obj));
+            }
+            None
+        }
+        Expression::ObjectExpression(obj) => Some(extract_object_fields(obj)),
+        _ => None,
+    }
 }
 
 /// Extract fields from an object expression, converting each value to JSON.
@@ -401,6 +407,40 @@ mod tests {
         );
         assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
         assert_json(&result, "lint", serde_json::json!({ "plugins": ["a"] }));
+    }
+
+    // ── module.exports = { ... } ───────────────────────────────────────
+
+    #[test]
+    fn module_exports_object() {
+        let result = parse_js_ts_config("module.exports = { run: { cache: true } }", "cjs")
+            .expect("expected analyzable config");
+        assert_json(&result, "run", serde_json::json!({ "cache": true }));
+    }
+
+    #[test]
+    fn module_exports_define_config() {
+        let result = parse_js_ts_config(
+            r"
+            const { defineConfig } = require('vite-plus');
+            module.exports = defineConfig({
+                run: { cacheScripts: true },
+            });
+            ",
+            "cjs",
+        )
+        .expect("expected analyzable config");
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+    }
+
+    #[test]
+    fn module_exports_non_object() {
+        assert!(parse_js_ts_config("module.exports = 42;", "cjs").is_none());
+    }
+
+    #[test]
+    fn module_exports_unknown_call() {
+        assert!(parse_js_ts_config("module.exports = otherFn({ a: 1 });", "cjs").is_none());
     }
 
     // ── Primitive values ────────────────────────────────────────────────
