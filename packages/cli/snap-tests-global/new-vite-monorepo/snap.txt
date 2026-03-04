@@ -26,10 +26,7 @@ vite.config.ts
   "engines": {
     "node": ">=22.12.0"
   },
-  "packageManager": "pnpm@<semver>",
-  "vite-staged": {
-    "*": "vp check --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }
 
 > cat vite-plus-monorepo/pnpm-workspace.yaml # check workspace config
@@ -139,8 +136,5 @@ vite.config.ts
   "engines": {
     "node": ">=22.12.0"
   },
-  "packageManager": "pnpm@<semver>",
-  "vite-staged": {
-    "*": "vp check --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }

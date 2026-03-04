@@ -3,7 +3,7 @@ VITE+ - The Unified Toolchain for the Web
 
 Usage: vp staged [options]
 
-Run linters on staged files using vite-staged config.
+Run linters on staged files using staged config from vite.config.ts.
 
 Options:
   --allow-empty                      Allow empty commits when tasks revert all staged changes
@@ -31,7 +31,7 @@ VITE+ - The Unified Toolchain for the Web
 
 Usage: vp staged [options]
 
-Run linters on staged files using vite-staged config.
+Run linters on staged files using staged config from vite.config.ts.
 
 Options:
   --allow-empty                      Allow empty commits when tasks revert all staged changes
@@ -59,7 +59,7 @@ VITE+ - The Unified Toolchain for the Web
 
 Usage: vp staged [options]
 
-Run linters on staged files using vite-staged config.
+Run linters on staged files using staged config from vite.config.ts.
 
 Options:
   --allow-empty                      Allow empty commits when tasks revert all staged changes

@@ -21,7 +21,11 @@ export default defineConfig({
     if (nodeBuiltins.has(source)) {
       return true;
     }
-    if (source === 'cross-spawn' || source === 'picocolors') {
+    if (
+      source === 'cross-spawn' ||
+      source === 'picocolors' ||
+      source === '@voidzero-dev/vite-plus-core'
+    ) {
       return true;
     }
     if (source === '../../binding/index.js' || source === '../binding/index.js') {

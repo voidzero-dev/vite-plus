@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vp prepare` and `vp staged` as built-in commands. `vp prepare` is a husky-compatible reimplementation (husky itself is not a dependency), and `vp staged` bundles lint-staged and reads config from the `"vite-staged"` key in package.json. Projects get a zero-config pre-commit hook that runs `vp check --fix` on staged files — no extra devDependencies needed.
+Add `vp prepare` and `vp staged` as built-in commands. `vp prepare` is a husky-compatible reimplementation (husky itself is not a dependency), and `vp staged` bundles lint-staged and reads config from the `staged` key in `vite.config.ts`. Projects get a zero-config pre-commit hook that runs `vp check --fix` on staged files — no extra devDependencies needed.
 
 ## Motivation
 
@@ -28,7 +28,7 @@ By building these capabilities into vite-plus, projects get pre-commit hooks wit
 vp prepare
 vp prepare -h               # Show help
 
-# Run vite-staged on staged files (runs bundled lint-staged with vite-staged config)
+# Run staged linters on staged files (runs bundled lint-staged with staged config)
 vp staged
 
 # Control hooks setup during create/migrate
@@ -42,15 +42,22 @@ Both commands are listed under "Core Commands" in `vp -h` (global and local CLI)
 
 ## User-Facing Configuration
 
-### package.json (zero extra devDependencies)
+### vite.config.ts + package.json (zero extra devDependencies)
+
+```typescript
+// vite.config.ts
+export default defineConfig({
+  staged: {
+    '*': 'vp check --fix',
+  },
+});
+```
 
 ```json
+// package.json
 {
   "scripts": {
     "prepare": "vp prepare"
-  },
-  "vite-staged": {
-    "*": "vp check --fix"
   }
 }
 ```
@@ -77,7 +84,7 @@ vp staged
 
 ### Config Discovery
 
-`vp staged` reads config from the `"vite-staged"` key in the nearest package.json. If no `"vite-staged"` key is found, it falls back to lint-staged's own config discovery (supports projects that haven't migrated yet). Standalone config files (`.lintstagedrc.*`, `lint-staged.config.*`) are not supported by the migration — projects using those formats are warned to migrate manually.
+`vp staged` reads config from the `staged` key in `vite.config.ts` via Vite's `resolveConfig()`. If no `staged` key is found, it exits with a warning and instructions to add the config. Standalone config files (`.lintstagedrc.*`, `lint-staged.config.*`) are not supported by the migration — projects using those formats are warned to migrate manually.
 
 ## Behavior
 
@@ -93,8 +100,8 @@ vp staged
 
 ### `vp staged`
 
-1. Reads config from `"vite-staged"` key in the nearest package.json
-2. If `"vite-staged"` key not found, falls back to lint-staged's own config discovery
+1. Reads config from `staged` key in `vite.config.ts` via `resolveConfig()`
+2. If `staged` key not found, exits with a warning and setup instructions
 3. Passes config to bundled lint-staged via its programmatic API
 4. Runs configured commands on git-staged files only
 5. Exits with non-zero code if any command fails
@@ -111,7 +118,7 @@ Both `vp create` and `vp migrate` prompt the user before setting up pre-commit h
 #### `vp create`
 
 - After project creation and migration rewrite, prompts for hooks setup
-- If accepted, adds `"prepare": "vp prepare"` and `"vite-staged"` config to package.json
+- If accepted, adds `"prepare": "vp prepare"` to package.json and `staged` config to vite.config.ts
 - Creates `.husky/pre-commit` with `vp staged` (if `.git` directory exists)
 
 #### `vp migrate`
@@ -124,11 +131,11 @@ Migration rewrite (`rewritePackageJson`) uses `vite-tools.yml` rules to rewrite 
 
 Hook setup behavior:
 
-- **No hooks configured** — adds full setup (prepare script + vite-staged config + .husky/pre-commit)
+- **No hooks configured** — adds full setup (prepare script + staged config in vite.config.ts + .husky/pre-commit)
 - **Has husky** — `rewritePrepareScript()` rewrites `"prepare": "husky"` to `"prepare": "vp prepare"`, `setupGitHooks()` removes husky from devDeps
 - **Has `husky install`** — `rewritePrepareScript()` collapses `"husky install"` → `"husky"` before applying the ast-grep rule, so `"husky install .hooks"` becomes `"vp prepare .hooks"`
 - **Has existing prepare script** (e.g. `"npm run build"`) — composes as `"vp prepare && npm run build"` (prepend so hooks are active before other prepare tasks; idempotent if already contains `vp prepare`)
-- **Has lint-staged** — migrates `"lint-staged"` key to `"vite-staged"`, keeps existing config (already rewritten by migration rules), removes lint-staged from devDeps
+- **Has lint-staged** — migrates `"lint-staged"` key to `staged` in vite.config.ts, keeps existing config (already rewritten by migration rules), removes lint-staged from devDeps
 - **Has husky <9.0.0** — warns "please upgrade to husky v9+ first" and skips hooks setup entirely. The prepare script, devDependencies, and hook files are left untouched.
 - **Has other tool (simple-git-hooks, lefthook, yorkie)** — warns and skips
 - **No .git directory** — adds package.json config but doesn't create .husky/ directory
@@ -157,7 +164,7 @@ pub async fn execute(cwd: AbsolutePathBuf, args: &[String]) -> Result<ExitStatus
 Entry points bundled by rolldown into `dist/global/`:
 
 - `src/prepare/bin.ts` — built-in husky-compatible install logic
-- `src/staged/bin.ts` — imports lint-staged programmatic API, reads `"vite-staged"` from package.json
+- `src/staged/bin.ts` — imports lint-staged programmatic API, reads `staged` config from vite.config.ts
 - `src/migration/bin.ts` — migration flow, calls `rewritePrepareScript()` + `setupGitHooks()`
 
 ### AST-grep Rules
@@ -179,12 +186,12 @@ Husky <9.0.0 is not supported by auto migration — `vp migrate` detects unsuppo
 
 ## Relationship to Existing Commands
 
-| Command          | Purpose                                     | When                        |
-| ---------------- | ------------------------------------------- | --------------------------- |
-| `vp check`       | Format + lint + type check                  | Manual or CI                |
-| `vp check --fix` | Auto-fix format + lint issues               | Manual or pre-commit        |
-| **`vp prepare`** | **Set up git hooks**                        | **npm `prepare` lifecycle** |
-| **`vp staged`**  | **Run vite-staged linters on staged files** | **Pre-commit hook**         |
+| Command          | Purpose                                | When                        |
+| ---------------- | -------------------------------------- | --------------------------- |
+| `vp check`       | Format + lint + type check             | Manual or CI                |
+| `vp check --fix` | Auto-fix format + lint issues          | Manual or pre-commit        |
+| **`vp prepare`** | **Set up git hooks**                   | **npm `prepare` lifecycle** |
+| **`vp staged`**  | **Run staged linters on staged files** | **Pre-commit hook**         |
 
 ## Comparison with Other Tools
 

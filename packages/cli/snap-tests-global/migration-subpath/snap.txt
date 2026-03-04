@@ -8,6 +8,12 @@
 │
 ●  pnpm@<semver> installed
 │
+◆  ✔ Created vite.config.ts in foo/vite.config.ts
+│
+◆  ✔ Merged staged config into foo/vite.config.ts
+│
+▲  Failed to format package.json
+│
 ◆  ✔ Git hooks configured
 │
 ◆  Wrote agent instructions to AGENTS.md
@@ -18,27 +24,18 @@
 > cat foo/package.json # check package.json
 {
   "name": "migration-subpath",
-  "scripts": {
-    "prepare": "vp prepare"
-  },
-  "devDependencies": {
-    "vite-plus": "latest"
-  },
-  "packageManager": "pnpm@<semver>",
   "pnpm": {
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "vite-staged": {
-    "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
-      "vp fmt --staged",
-      "eslint --fix"
-    ],
-    "*.@(js|ts|tsx)": [
-      "vp lint --fix"
-    ]
+  "devDependencies": {
+    "vite-plus": "latest"
+  },
+  "packageManager": "pnpm@<semver>",
+  "scripts": {
+    "prepare": "vp prepare"
   }
 }
 

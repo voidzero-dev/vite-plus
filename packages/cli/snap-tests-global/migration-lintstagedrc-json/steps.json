@@ -2,7 +2,8 @@
   "commands": [
     "vp migrate -h # migration help message",
     "vp migrate --no-interactive # migration work with lintstagedrc.json",
-    "cat .lintstagedrc.json # check lintstagedrc.json",
-    "cat package.json # check package.json"
+    "cat .lintstagedrc.json # check lintstagedrc.json (should be deleted after inlining)",
+    "cat package.json # check package.json",
+    "cat vite.config.ts # check staged config migrated to vite.config.ts"
   ]
 }

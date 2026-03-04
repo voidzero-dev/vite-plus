@@ -8,6 +8,12 @@
 │
 ●  pnpm@<semver> installed
 │
+◆  ✔ Created vite.config.ts in vite.config.ts
+│
+◆  ✔ Merged staged config into vite.config.ts
+│
+▲  Failed to format package.json
+│
 ▲  ⚠ Git hooks not configured — HUSKY=0 skip install
 │
 ◆  Wrote agent instructions to AGENTS.md

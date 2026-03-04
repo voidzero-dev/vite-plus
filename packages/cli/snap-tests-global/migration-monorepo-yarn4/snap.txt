@@ -11,6 +11,8 @@
 │
 ●    vite.config.ts
 │
+◆  ✔ Merged staged config into vite.config.ts
+│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
@@ -21,6 +23,9 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  staged: {
+    "*": "vp check --fix"
+  },
   lint: {
     "rules": {
       "no-unused-vars": "error"
@@ -63,9 +68,6 @@ cat: .oxlintrc.json: No such file or directory
   "resolutions": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-  },
-  "vite-staged": {
-    "*": "vp check --fix"
   }
 }
 

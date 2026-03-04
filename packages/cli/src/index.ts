@@ -5,6 +5,7 @@ import type { FormatOptions } from './oxfmt-config';
 import type { OxlintConfig } from './oxlint-config';
 import type { PackUserConfig } from './pack';
 import type { RunConfig } from './run-config';
+import type { StagedConfig } from './staged-config';
 
 declare module '@voidzero-dev/vite-plus-core' {
   interface UserConfig {
@@ -18,6 +19,8 @@ declare module '@voidzero-dev/vite-plus-core' {
     pack?: PackUserConfig | PackUserConfig[];
 
     run?: RunConfig;
+
+    staged?: StagedConfig;
 
     // temporary solution to load plugins lazily
     // We need to support this in the upstream vite

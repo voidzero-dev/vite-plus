@@ -103,6 +103,7 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
   }
 
   const packageManager = workspaceInfo.packageManager;
+  let extractedStagedConfig: Record<string, string | string[]> | null = null;
   editJsonFile<{
     overrides?: Record<string, string>;
     resolutions?: Record<string, string>;
@@ -144,7 +145,7 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
       }
     }
 
-    rewritePackageJson(pkg, packageManager);
+    extractedStagedConfig = rewritePackageJson(pkg, packageManager);
 
     // ensure vite-plus is in devDependencies
     if (!pkg.devDependencies?.[VITE_PLUS_NAME]) {
@@ -155,6 +156,11 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
     }
     return pkg;
   });
+
+  // Merge extracted staged config into vite.config.ts
+  if (extractedStagedConfig) {
+    mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig);
+  }
 
   rewriteLintStagedConfigFile(projectPath);
   mergeViteConfigFiles(projectPath);
@@ -208,15 +214,21 @@ export function rewriteMonorepoProject(projectPath: string, packageManager: Pack
     return;
   }
 
+  let extractedStagedConfig: Record<string, string | string[]> | null = null;
   editJsonFile<{
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
     scripts?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
     // rewrite scripts in package.json
-    rewritePackageJson(pkg, packageManager, true);
+    extractedStagedConfig = rewritePackageJson(pkg, packageManager, true);
     return pkg;
   });
+
+  // Merge extracted staged config into vite.config.ts
+  if (extractedStagedConfig) {
+    mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig);
+  }
 }
 
 /**
@@ -450,25 +462,28 @@ export function rewritePackageJson(
   },
   packageManager: PackageManager,
   isMonorepo?: boolean,
-): void {
+): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(JSON.stringify(pkg.scripts), readRulesYaml());
     if (updated) {
       pkg.scripts = JSON.parse(updated);
     }
   }
-  // Migrate "lint-staged" key → "vite-staged"
+  // Extract staged config from package.json (lint-staged or vite-staged) → will be merged into vite.config.ts
+  let extractedStagedConfig: Record<string, string | string[]> | null = null;
   if (pkg['lint-staged']) {
     const config = pkg['lint-staged'];
     const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
-    pkg['vite-staged'] = updated ? JSON.parse(updated) : config;
+    extractedStagedConfig = updated ? JSON.parse(updated) : config;
     delete pkg['lint-staged'];
   } else if (pkg['vite-staged']) {
-    const updated = rewriteScripts(JSON.stringify(pkg['vite-staged']), readRulesYaml());
-    if (updated) {
-      pkg['vite-staged'] = JSON.parse(updated);
-    }
+    const config = pkg['vite-staged'];
+    const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
+    extractedStagedConfig = updated ? JSON.parse(updated) : config;
   }
+  // Remove both keys from package.json — config now lives in vite.config.ts
+  delete pkg['lint-staged'];
+  delete pkg['vite-staged'];
   const supportCatalog = isMonorepo && packageManager !== PackageManager.npm;
   let needVitePlus = false;
   for (const [key, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
@@ -502,15 +517,14 @@ export function rewritePackageJson(
       [VITE_PLUS_NAME]: version,
     };
   }
+  return extractedStagedConfig;
 }
 
-// Migrate standalone lint-staged config files into "vite-staged" in package.json.
+// Migrate standalone lint-staged config files into staged in vite.config.ts.
 // JSON-parseable files are inlined automatically; non-JSON files get a warning.
 function rewriteLintStagedConfigFile(projectPath: string): void {
-  const packageJsonPath = path.join(projectPath, 'package.json');
   let hasUnsupported = false;
 
-  const hasPackageJson = fs.existsSync(packageJsonPath);
   for (const filename of LINT_STAGED_JSON_CONFIG_FILES) {
     const configPath = path.join(projectPath, filename);
     if (!fs.existsSync(configPath)) {
@@ -518,28 +532,21 @@ function rewriteLintStagedConfigFile(projectPath: string): void {
     }
     if (filename === '.lintstagedrc' && !isJsonFile(configPath)) {
       prompts.log.warn(
-        `✘ ${displayRelative(configPath)} is not JSON format — please migrate to "vite-staged" in package.json manually`,
+        `✘ ${displayRelative(configPath)} is not JSON format — please migrate to "staged" in vite.config.ts manually`,
       );
       hasUnsupported = true;
       continue;
     }
-    // Inline the JSON config into package.json as "vite-staged" and delete the file
-    if (hasPackageJson) {
+    // Merge the JSON config into vite.config.ts as "staged" and delete the file.
+    // Skip if staged already exists in vite.config.ts (already migrated by rewritePackageJson).
+    if (!hasStagedConfigInViteConfig(projectPath)) {
       const config = readJsonFile(configPath);
       const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
       const finalConfig = updated ? JSON.parse(updated) : config;
-      editJsonFile<{ 'vite-staged'?: Record<string, string | string[]> }>(
-        packageJsonPath,
-        (pkg) => {
-          pkg['vite-staged'] = finalConfig;
-          return pkg;
-        },
-      );
-      fs.unlinkSync(configPath);
-      prompts.log.success(
-        `✔ Inlined ${displayRelative(configPath)} into "vite-staged" in ${displayRelative(packageJsonPath)}`,
-      );
+      mergeStagedConfigToViteConfig(projectPath, finalConfig);
     }
+    fs.unlinkSync(configPath);
+    prompts.log.success(`✔ Inlined ${displayRelative(configPath)} into "staged" in vite.config.ts`);
   }
   // Non-JSON standalone files — warn
   for (const filename of LINT_STAGED_OTHER_CONFIG_FILES) {
@@ -548,13 +555,13 @@ function rewriteLintStagedConfigFile(projectPath: string): void {
       continue;
     }
     prompts.log.warn(
-      `✘ ${displayRelative(configPath)} — please migrate to "vite-staged" in package.json manually`,
+      `✘ ${displayRelative(configPath)} — please migrate to "staged" in vite.config.ts manually`,
     );
     hasUnsupported = true;
   }
   if (hasUnsupported) {
     prompts.log.warn(
-      `Only "vite-staged" in package.json is supported. See https://viteplus.dev/migration/#lint-staged`,
+      `Only "staged" in vite.config.ts is supported. See https://viteplus.dev/migration/#lint-staged`,
     );
   }
 }
@@ -657,6 +664,50 @@ function mergeAndRemoveJsonConfig(
       `Please complete the merge manually and follow the instructions in the documentation: https://viteplus.dev/config/`,
     );
   }
+}
+
+/**
+ * Merge a staged config object into vite.config.ts as `staged: { ... }`.
+ * Writes the config to a temp JSON file, calls mergeJsonConfig NAPI, then cleans up.
+ */
+function mergeStagedConfigToViteConfig(
+  projectPath: string,
+  stagedConfig: Record<string, string | string[]>,
+): void {
+  const configs = detectConfigs(projectPath);
+  const viteConfig = ensureViteConfig(projectPath, configs);
+  const fullViteConfigPath = path.join(projectPath, viteConfig);
+
+  // Write staged config to a temp JSON file for mergeJsonConfig NAPI
+  const tempJsonPath = path.join(projectPath, '.staged-config-temp.json');
+  fs.writeFileSync(tempJsonPath, JSON.stringify(stagedConfig, null, 2));
+
+  const result = mergeJsonConfig(fullViteConfigPath, tempJsonPath, 'staged');
+  // Clean up temp file
+  fs.unlinkSync(tempJsonPath);
+
+  if (result.updated) {
+    fs.writeFileSync(fullViteConfigPath, result.content);
+    prompts.log.success(`✔ Merged staged config into ${displayRelative(fullViteConfigPath)}`);
+  } else {
+    prompts.log.warn(`✘ Failed to merge staged config into ${displayRelative(fullViteConfigPath)}`);
+    prompts.log.info(
+      `Please add staged config to ${displayRelative(fullViteConfigPath)} manually, see https://viteplus.dev/config/`,
+    );
+  }
+}
+
+/**
+ * Check if vite.config.ts already has a `staged` config key.
+ */
+function hasStagedConfigInViteConfig(projectPath: string): boolean {
+  const configs = detectConfigs(projectPath);
+  if (!configs.viteConfig) {
+    return false;
+  }
+  const viteConfigPath = path.join(projectPath, configs.viteConfig);
+  const content = fs.readFileSync(viteConfigPath, 'utf8');
+  return /\bstaged\s*:/.test(content);
 }
 
 /**
@@ -790,16 +841,9 @@ export function setupGitHooks(projectPath: string): void {
         pkg.scripts.prepare = `vp prepare && ${pkg.scripts.prepare}`;
       }
 
-      // Migrate "lint-staged" → "vite-staged" if present
-      if (pkg['lint-staged'] && !pkg['vite-staged']) {
-        pkg['vite-staged'] = pkg['lint-staged'];
-        delete pkg['lint-staged'];
-      }
-
-      // Add vite-staged config if not present (in package.json or standalone config files)
-      if (!pkg['vite-staged'] && !hasStandaloneLintStagedConfig(projectPath)) {
-        pkg['vite-staged'] = { '*': 'vp check --fix' };
-      }
+      // Remove lint-staged and vite-staged keys from package.json — config now lives in vite.config.ts
+      delete pkg['lint-staged'];
+      delete pkg['vite-staged'];
 
       // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands).
       // Only when config migration succeeds — if unsupported config files remain,
@@ -816,6 +860,13 @@ export function setupGitHooks(projectPath: string): void {
 
     return pkg;
   });
+
+  // Add staged config to vite.config.ts if not present
+  if (!unsupported) {
+    if (!hasStagedConfigInViteConfig(projectPath) && !hasStandaloneLintStagedConfig(projectPath)) {
+      mergeStagedConfigToViteConfig(projectPath, { '*': 'vp check --fix' });
+    }
+  }
 
   // Hook file creation (no git needed — only filesystem ops)
   if (!unsupported) {
@@ -871,7 +922,7 @@ function hasStandaloneLintStagedConfig(projectPath: string): boolean {
 
 /**
  * Check if a standalone lint-staged config exists in a format that can't be
- * auto-migrated to "vite-staged" in package.json (non-JSON files like .yaml,
+ * auto-migrated to "staged" in vite.config.ts (non-JSON files like .yaml,
  * .mjs, .cjs, .js, or a non-JSON .lintstagedrc).
  */
 function hasUnsupportedLintStagedConfig(projectPath: string): boolean {

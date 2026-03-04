@@ -7,6 +7,10 @@
 │
 ●  pnpm@<semver> installed
 │
+◆  ✔ Created vite.config.ts in vite.config.ts
+│
+◆  ✔ Merged staged config into vite.config.ts
+│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
@@ -28,9 +32,6 @@
   "packageManager": "pnpm@<semver>",
   "scripts": {
     "prepare": "vp prepare"
-  },
-  "vite-staged": {
-    "*": "vp check --fix"
   }
 }
 

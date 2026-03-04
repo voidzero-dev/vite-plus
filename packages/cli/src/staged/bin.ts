@@ -1,15 +1,13 @@
-// Runs vite-staged on staged files using the lint-staged programmatic API.
+// Runs staged linters on staged files using the lint-staged programmatic API.
 // Bundled by rolldown — no runtime dependency needed in user projects.
 //
-// Reads the "vite-staged" key from the nearest package.json and passes it
-// to lint-staged as an explicit config object.  Falls back to lint-staged's
-// own config discovery for projects that haven't migrated yet.
+// Reads the "staged" key from vite.config.ts via resolveConfig() and passes it
+// to lint-staged as an explicit config object.  Exits with a warning if no
+// staged config is found.
 //
 // We use the programmatic API instead of importing lint-staged/bin because
 // lint-staged's dependency tree includes CJS modules that use require('node:events')
 // etc., which breaks when bundled to ESM format by rolldown.
-import fs from 'node:fs';
-import path from 'node:path';
 
 import lintStaged from 'lint-staged';
 import type { Configuration, Options } from 'lint-staged';
@@ -49,7 +47,7 @@ const args = mri(process.argv.slice(3), {
 if (args.help) {
   const helpMessage = renderCliDoc({
     usage: 'vp staged [options]',
-    summary: 'Run linters on staged files using vite-staged config.',
+    summary: 'Run linters on staged files using staged config from vite.config.ts.',
     sections: [
       {
         title: 'Options',
@@ -156,14 +154,20 @@ if (args.help) {
       options.configPath = args.config;
     }
   } else {
-    // No explicit --config flag: read "vite-staged" from the nearest package.json
+    // No explicit --config flag: read "staged" from vite.config.ts
     // and pass it as an inline config object to lint-staged.
-    const viteStagedConfig = findViteStagedConfig(args.cwd ?? process.cwd());
-    if (viteStagedConfig) {
-      options.config = viteStagedConfig;
+    const stagedConfig = await resolveStagedConfig(args.cwd ?? process.cwd());
+    if (stagedConfig) {
+      options.config = stagedConfig;
+    } else {
+      log('No "staged" config found in vite.config.ts. Please add a staged config:');
+      log('');
+      log('  // vite.config.ts');
+      log('  export default defineConfig({');
+      log("    staged: { '*': 'vp check --fix' },");
+      log('  });');
+      process.exit(1);
     }
-    // If not found, fall through — let lint-staged use its own config discovery
-    // (covers projects that haven't migrated to vite-staged yet).
   }
   if (args.cwd != null) {
     options.cwd = args.cwd;
@@ -201,27 +205,19 @@ if (args.help) {
 }
 
 /**
- * Walk up from `startDir` looking for a package.json that contains a
- * "vite-staged" key.  Returns the config object or `null`.
+ * Resolve the `staged` config from vite.config.ts using Vite's resolveConfig.
+ * Returns the config object or `null` if not found.
  */
-function findViteStagedConfig(startDir: string): Configuration | null {
-  let dir = path.resolve(startDir);
-  while (true) {
-    const pkgPath = path.join(dir, 'package.json');
-    try {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-      if (pkg['vite-staged']) {
-        return pkg['vite-staged'] as Configuration;
-      }
-      // Found a package.json but no vite-staged key → stop searching
-      return null;
-    } catch {
-      // File doesn't exist or malformed JSON — walk up
+async function resolveStagedConfig(cwd: string): Promise<Configuration | null> {
+  try {
+    const { resolveConfig } = await import('@voidzero-dev/vite-plus-core');
+    const config = await resolveConfig({ root: cwd }, 'build');
+    if (config.staged) {
+      return config.staged as Configuration;
     }
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      return null;
-    }
-    dir = parent;
+    return null;
+  } catch {
+    // vite.config.ts not found or resolve failed — fall through
+    return null;
   }
 }

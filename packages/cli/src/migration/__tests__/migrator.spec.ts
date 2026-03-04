@@ -13,7 +13,7 @@ vi.mock('../../utils/constants.js', async (importOriginal) => {
 const { rewritePackageJson } = await import('../migrator.js');
 
 describe('rewritePackageJson', () => {
-  it('should rewrite package.json scripts', async () => {
+  it('should rewrite package.json scripts and extract staged config', async () => {
     const pkg = {
       scripts: {
         test: 'vitest',
@@ -54,8 +54,11 @@ describe('rewritePackageJson', () => {
         '*.ts': 'oxfmt --fix',
       },
     };
-    rewritePackageJson(pkg, PackageManager.npm);
+    const extractedStagedConfig = rewritePackageJson(pkg, PackageManager.npm);
+    // lint-staged and vite-staged keys should be removed from pkg
     expect(pkg).toMatchSnapshot();
+    // Extracted config should have rewritten commands
+    expect(extractedStagedConfig).toMatchSnapshot();
   });
 
   it('should rewrite devDependencies and dependencies on standalone project', async () => {

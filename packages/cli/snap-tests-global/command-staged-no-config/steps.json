@@ -1,0 +1,5 @@
+{
+  "commands": [
+    "vp staged # should warn about missing staged config and exit with code 1"
+  ]
+}

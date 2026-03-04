@@ -8,6 +8,12 @@
 │
 ●  pnpm@<semver> installed
 │
+◆  ✔ Created vite.config.ts in vite.config.ts
+│
+◆  ✔ Merged staged config into vite.config.ts
+│
+▲  Failed to format package.json
+│
 ◆  ✔ Git hooks configured
 │
 ◆  Wrote agent instructions to AGENTS.md
@@ -15,7 +21,7 @@
 └  ✔ Migration completed!
 
 
-> cat package.json # check husky/lint-staged removed, vite-staged config rewritten
+> cat package.json # check husky/lint-staged removed, staged config in vite.config.ts
 {
   "name": "migration-env-prefix-lint-staged",
   "scripts": {
@@ -25,17 +31,24 @@
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
   },
-  "packageManager": "pnpm@<semver>",
   "pnpm": {
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "vite-staged": {
-    "*.js": "vp lint --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }
+
+> cat vite.config.ts # check staged config migrated to vite.config.ts
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  staged: {
+    "*.js": "vp lint --fix"
+  },
+  
+});
 
 > cat .husky/pre-commit # check env prefix preserved with vp staged
 NODE_OPTIONS=--max-old-space-size=4096 vp staged

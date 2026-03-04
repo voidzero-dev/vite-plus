@@ -9,6 +9,8 @@
 │
 ◆  ✔ Merged .oxlintrc.json into vite.config.js
 │
+◆  ✔ Merged staged config into vite.config.js
+│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
@@ -18,6 +20,9 @@
 import react from '@vitejs/plugin-react';
 
 export default {
+  staged: {
+    "*": "vp check --fix"
+  },
   lint: {
     "rules": {
       "no-unused-vars": "error"
@@ -48,8 +53,5 @@ cat: .oxlintrc.json: No such file or directory
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>",
-  "vite-staged": {
-    "*": "vp check --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }

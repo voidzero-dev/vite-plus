@@ -1,0 +1,7 @@
+[1]> vp staged # should warn about missing staged config and exit with code 1
+No "staged" config found in vite.config.ts. Please add a staged config:
+
+  // vite.config.ts
+  export default defineConfig({
+    staged: { '*': 'vp check --fix' },
+  });

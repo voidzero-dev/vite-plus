@@ -9,6 +9,10 @@
 │
 ●  Dependencies installed
 │
+◆  ✔ Created vite.config.ts in vite.config.ts
+│
+◆  ✔ Merged staged config into vite.config.ts
+│
 ◆  Wrote agent instructions to AGENTS.md
 │
 ●  Installing dependencies...
@@ -24,13 +28,9 @@
 │
 │
 ■  npm warn using --force Recommended protections disabled.
-│  error: unrecognized subcommand 'prepare'
+│  error: Command 'prepare' not found
 │
-│    tip: a similar subcommand exists: 'preview'
-│
-│  Usage: vp <COMMAND>
-│
-│  For more information, try '--help'.
+│  Did you mean `vp preview`?
 │  npm error code 2
 │  npm error path <cwd>
 │  npm error command failed
@@ -58,9 +58,6 @@
   },
   "scripts": {
     "prepare": "vp prepare"
-  },
-  "vite-staged": {
-    "*": "vp check --fix"
   }
 }
 

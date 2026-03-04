@@ -1,19 +1,23 @@
 > vp migrate --no-interactive # migration should skip rewriting vite imports when vite is in peerDependencies
-VITE+ - The Unified Toolchain for the Web
-
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-Rewrote imports in one file
-
-  src/index.ts
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
+┌  VITE+ - The Unified Toolchain for the Web
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+◆  Rewrote imports in one file
+│
+●    src/index.ts
+│
+◆  ✔ Created vite.config.ts in vite.config.ts
+│
+◆  ✔ Merged staged config into vite.config.ts
+│
+◆  Wrote agent instructions to AGENTS.md
+│
+└  ✔ Migration completed!
 
 
 > cat src/index.ts # vite imports should NOT be rewritten, vitest imports SHOULD be rewritten
@@ -57,8 +61,5 @@ export default defineConfig({
   "packageManager": "pnpm@<semver>",
   "scripts": {
     "prepare": "vp prepare"
-  },
-  "vite-staged": {
-    "*": "vp check --fix"
   }
 }

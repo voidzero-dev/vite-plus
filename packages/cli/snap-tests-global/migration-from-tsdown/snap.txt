@@ -17,6 +17,8 @@
 │
 ●    tsdown.config.ts
 │
+◆  ✔ Merged staged config into vite.config.ts
+│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
@@ -38,8 +40,10 @@ import tsdownConfig from './tsdown.config.js';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  staged: {
+    "*": "vp check --fix"
+  },
   pack: tsdownConfig,
-  
 });
 
 > cat package.json # check package.json
@@ -61,10 +65,7 @@ export default defineConfig({
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>",
-  "vite-staged": {
-    "*": "vp check --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }
 
 > vp migrate --no-interactive # run migration again to check if it is idempotent
@@ -89,8 +90,10 @@ import tsdownConfig from './tsdown.config.js';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  staged: {
+    "*": "vp check --fix"
+  },
   pack: tsdownConfig,
-  
 });
 
 > cat package.json # check package.json
@@ -112,8 +115,5 @@ export default defineConfig({
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
   },
-  "packageManager": "pnpm@<semver>",
-  "vite-staged": {
-    "*": "vp check --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }

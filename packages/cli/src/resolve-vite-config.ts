@@ -12,6 +12,7 @@ export async function resolveUniversalViteConfig(err: null | Error, viteConfigCw
         lint: config.lint,
         fmt: config.fmt,
         run: config.run,
+        staged: config.staged,
       }),
     );
   } catch (resolveErr) {

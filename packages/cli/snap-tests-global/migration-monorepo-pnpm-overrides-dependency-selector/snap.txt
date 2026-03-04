@@ -9,6 +9,8 @@
 │
 ●    vite.config.ts
 │
+◆  ✔ Merged staged config into vite.config.ts
+│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
@@ -19,6 +21,9 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  staged: {
+    "*": "vp check --fix"
+  },
   plugins: [react()],
 });
 
@@ -40,9 +45,6 @@ export default defineConfig({
       "react-click-away-listener>react": "0.0.0-experimental-7dc903cd-20251203",
       "supertest>superagent": "9.0.2"
     }
-  },
-  "vite-staged": {
-    "*": "vp check --fix"
   }
 }
 

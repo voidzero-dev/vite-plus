@@ -17,6 +17,8 @@
 │
 ●    vite.config.ts
 │
+◆  ✔ Merged staged config into vite.config.ts
+│
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
@@ -27,6 +29,9 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  staged: {
+    "*": "vp check --fix"
+  },
   fmt: {
     "printWidth": 100,
     "tabWidth": 2,
@@ -75,10 +80,7 @@ cat: .oxfmtrc.json: No such file or directory
   "resolutions": {
     "vue": "3.5.25"
   },
-  "packageManager": "pnpm@<semver>",
-  "vite-staged": {
-    "*": "vp check --fix"
-  }
+  "packageManager": "pnpm@<semver>"
 }
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml
