@@ -5,9 +5,7 @@
 //! config like `run` without needing a Node.js runtime.
 
 use oxc::{
-    ast::ast::{
-        ArrayExpressionElement, Expression, ObjectPropertyKind, Program, PropertyKey, Statement,
-    },
+    ast::ast::{Expression, ObjectPropertyKind, Program, Statement},
     parser::Parser,
     span::SourceType,
 };
@@ -137,7 +135,7 @@ fn extract_default_export_fields(program: &Program<'_>) -> StaticConfig {
         match expr {
             // Pattern: export default defineConfig({ ... })
             Expression::CallExpression(call) => {
-                if !is_define_config_call(&call.callee) {
+                if !call.callee.is_specific_id("defineConfig") {
                     // Unknown function call — not analyzable
                     return None;
                 }
@@ -162,11 +160,6 @@ fn extract_default_export_fields(program: &Program<'_>) -> StaticConfig {
     None
 }
 
-/// Check if a callee expression is `defineConfig`.
-fn is_define_config_call(callee: &Expression<'_>) -> bool {
-    matches!(callee, Expression::Identifier(ident) if ident.name == "defineConfig")
-}
-
 /// Extract fields from an object expression, converting each value to JSON.
 /// Fields whose values cannot be represented as pure JSON are recorded as
 /// [`StaticFieldValue::NonStatic`]. Spread elements and computed properties
@@ -177,46 +170,25 @@ fn extract_object_fields(
     let mut map = FxHashMap::default();
 
     for prop in &obj.properties {
-        let ObjectPropertyKind::ObjectProperty(prop) = prop else {
+        if prop.is_spread() {
             // Spread elements — keys are unknown at static analysis time
             continue;
-        };
-
-        // Computed properties — keys are unknown at static analysis time
-        if prop.computed {
-            continue;
         }
-
-        let Some(key) = property_key_to_string(&prop.key) else {
+        let ObjectPropertyKind::ObjectProperty(prop) = prop else {
             continue;
         };
 
-        let value = expr_to_json(&prop.value)
-            .map_or(StaticFieldValue::NonStatic, StaticFieldValue::Json);
-        map.insert(key, value);
+        let Some(key) = prop.key.static_name() else {
+            // Computed properties — keys are unknown at static analysis time
+            continue;
+        };
+
+        let value =
+            expr_to_json(&prop.value).map_or(StaticFieldValue::NonStatic, StaticFieldValue::Json);
+        map.insert(Box::from(key.as_ref()), value);
     }
 
     map
-}
-
-/// Convert a property key to a string.
-fn property_key_to_string(key: &PropertyKey<'_>) -> Option<Box<str>> {
-    match key {
-        PropertyKey::StaticIdentifier(ident) => Some(Box::from(ident.name.as_str())),
-        PropertyKey::StringLiteral(lit) => Some(Box::from(lit.value.as_str())),
-        PropertyKey::NumericLiteral(lit) => {
-            let s = if lit.value.fract() == 0.0 && lit.value.is_finite() {
-                #[expect(clippy::cast_possible_truncation)]
-                {
-                    (lit.value as i64).to_string()
-                }
-            } else {
-                lit.value.to_string()
-            };
-            Some(Box::from(s.as_str()))
-        }
-        _ => None,
-    }
 }
 
 /// Convert an f64 to a JSON value, preserving integers when possible.
@@ -252,13 +224,8 @@ fn expr_to_json(expr: &Expression<'_>) -> Option<serde_json::Value> {
         Expression::StringLiteral(lit) => Some(serde_json::Value::String(lit.value.to_string())),
 
         Expression::TemplateLiteral(lit) => {
-            // Only convert template literals with no expressions (pure strings)
-            if lit.expressions.is_empty() && lit.quasis.len() == 1 {
-                let raw = &lit.quasis[0].value.cooked.as_ref()?;
-                Some(serde_json::Value::String(raw.to_string()))
-            } else {
-                None
-            }
+            let quasi = lit.single_quasi()?;
+            Some(serde_json::Value::String(quasi.to_string()))
         }
 
         Expression::UnaryExpression(unary) => {
@@ -274,17 +241,13 @@ fn expr_to_json(expr: &Expression<'_>) -> Option<serde_json::Value> {
         Expression::ArrayExpression(arr) => {
             let mut values = Vec::with_capacity(arr.elements.len());
             for elem in &arr.elements {
-                match elem {
-                    ArrayExpressionElement::Elision(_) => {
-                        values.push(serde_json::Value::Null);
-                    }
-                    ArrayExpressionElement::SpreadElement(_) => {
-                        return None;
-                    }
-                    _ => {
-                        let elem_expr = elem.as_expression()?;
-                        values.push(expr_to_json(elem_expr)?);
-                    }
+                if elem.is_elision() {
+                    values.push(serde_json::Value::Null);
+                } else if elem.is_spread() {
+                    return None;
+                } else {
+                    let elem_expr = elem.as_expression()?;
+                    values.push(expr_to_json(elem_expr)?);
                 }
             }
             Some(serde_json::Value::Array(values))
@@ -293,43 +256,19 @@ fn expr_to_json(expr: &Expression<'_>) -> Option<serde_json::Value> {
         Expression::ObjectExpression(obj) => {
             let mut map = serde_json::Map::new();
             for prop in &obj.properties {
-                match prop {
-                    ObjectPropertyKind::ObjectProperty(prop) => {
-                        if prop.computed {
-                            return None;
-                        }
-                        let key = property_key_to_json_key(&prop.key)?;
-                        let value = expr_to_json(&prop.value)?;
-                        map.insert(key, value);
-                    }
-                    ObjectPropertyKind::SpreadProperty(_) => {
-                        return None;
-                    }
+                if prop.is_spread() {
+                    return None;
                 }
+                let ObjectPropertyKind::ObjectProperty(prop) = prop else {
+                    continue;
+                };
+                let key = prop.key.static_name()?;
+                let value = expr_to_json(&prop.value)?;
+                map.insert(key.into_owned(), value);
             }
             Some(serde_json::Value::Object(map))
         }
 
-        _ => None,
-    }
-}
-
-/// Convert a property key to a JSON-compatible string key.
-#[expect(clippy::disallowed_types)]
-fn property_key_to_json_key(key: &PropertyKey<'_>) -> Option<String> {
-    match key {
-        PropertyKey::StaticIdentifier(ident) => Some(ident.name.to_string()),
-        PropertyKey::StringLiteral(lit) => Some(lit.value.to_string()),
-        PropertyKey::NumericLiteral(lit) => {
-            if lit.value.fract() == 0.0 && lit.value.is_finite() {
-                #[expect(clippy::cast_possible_truncation)]
-                {
-                    Some((lit.value as i64).to_string())
-                }
-            } else {
-                Some(lit.value.to_string())
-            }
-        }
         _ => None,
     }
 }
