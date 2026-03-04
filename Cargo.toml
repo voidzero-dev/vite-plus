@@ -212,7 +212,10 @@ oxc = { version = "0.115.0", features = [
   "cfg",
 ] }
 oxc_allocator = { version = "0.115.0", features = ["pool"] }
+oxc_ast = "0.115.0"
 oxc_ecmascript = "0.115.0"
+oxc_parser = "0.115.0"
+oxc_span = "0.115.0"
 oxc_napi = "0.115.0"
 oxc_minify_napi = "0.115.0"
 oxc_parser_napi = "0.115.0"

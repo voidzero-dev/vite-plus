@@ -4,12 +4,10 @@
 //! top-level fields whose values are pure JSON literals. This allows reading
 //! config like `run` without needing a Node.js runtime.
 
-use oxc::{
-    ast::ast::{Expression, ObjectPropertyKind, Program, Statement},
-    parser::Parser,
-    span::SourceType,
-};
 use oxc_allocator::Allocator;
+use oxc_ast::ast::{Expression, ObjectPropertyKind, Program, Statement};
+use oxc_parser::Parser;
+use oxc_span::SourceType;
 use rustc_hash::FxHashMap;
 use vite_path::AbsolutePath;
 
@@ -171,7 +169,7 @@ fn extract_config_from_expr(expr: &Expression<'_>) -> StaticConfig {
 /// [`StaticFieldValue::NonStatic`]. Spread elements and computed properties
 /// are not representable so they are silently skipped (their keys are unknown).
 fn extract_object_fields(
-    obj: &oxc::ast::ast::ObjectExpression<'_>,
+    obj: &oxc_ast::ast::ObjectExpression<'_>,
 ) -> FxHashMap<Box<str>, StaticFieldValue> {
     let mut map = FxHashMap::default();
 
@@ -236,7 +234,7 @@ fn expr_to_json(expr: &Expression<'_>) -> Option<serde_json::Value> {
 
         Expression::UnaryExpression(unary) => {
             // Handle negative numbers: -42
-            if unary.operator == oxc::ast::ast::UnaryOperator::UnaryNegation
+            if unary.operator == oxc_ast::ast::UnaryOperator::UnaryNegation
                 && let Expression::NumericLiteral(lit) = &unary.argument
             {
                 return Some(f64_to_json_number(-lit.value));

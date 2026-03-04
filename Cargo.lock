@@ -7416,8 +7416,10 @@ dependencies = [
 name = "vite_static_config"
 version = "0.0.0"
 dependencies = [
- "oxc",
  "oxc_allocator",
+ "oxc_ast",
+ "oxc_parser",
+ "oxc_span",
  "rustc-hash",
  "serde_json",
  "tempfile",
