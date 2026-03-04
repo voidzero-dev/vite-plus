@@ -124,6 +124,7 @@ Hook setup behavior:
 - **Has `husky install`** — `rewritePrepareScript()` collapses `"husky install"` → `"husky"` before applying the ast-grep rule, so `"husky install .hooks"` becomes `"vp prepare .hooks"`
 - **Has existing prepare script** (e.g. `"npm run build"`) — composes as `"vp prepare && npm run build"` (prepend so hooks are active before other prepare tasks; idempotent if already contains `vp prepare`)
 - **Has lint-staged** — keeps existing config (already rewritten by migration rules), removes from devDeps
+- **Has husky <9.0.0** — warns "please upgrade to husky v9+ first" and skips hooks setup entirely. The prepare script, devDependencies, and hook files are left untouched.
 - **Has other tool (simple-git-hooks, lefthook, yorkie)** — warns and skips
 - **No .git directory** — adds package.json config but doesn't create .husky/ directory
 - After creating `.husky/pre-commit`, runs `vp prepare` directly to install hook shims (does not rely on npm install lifecycle, which may not run in CI or snap test contexts)
@@ -154,10 +155,6 @@ Entry points bundled by rolldown into `dist/global/`:
 - `src/lint-staged/bin.ts` — imports lint-staged CLI entry
 - `src/migration/bin.ts` — migration flow, calls `rewritePrepareScript()` + `setupGitHooks()`
 
-Shared modules:
-
-- `src/utils/husky.ts` — `HUSKY_BOOTSTRAP_PATTERN` regex and `stripHuskyBootstrapFromHooks()` function, shared between `prepare/bin.ts` and `migration/migrator.ts`
-
 ### AST-grep Rules
 
 - `rules/vite-tools.yml` — rewrites tool commands (vite, oxlint, vitest, lint-staged, tsdown) in **all** scripts
@@ -173,7 +170,7 @@ lint-staged is a devDependency of the `vite-plus` package, bundled by rolldown a
 
 husky v9's `install()` function uses `new URL('husky', import.meta.url)` to resolve and `copyFileSync` its shell script (the hook dispatcher) relative to its own source location. When bundled by rolldown, `import.meta.url` points to the bundled output directory, not the original `node_modules/husky/` directory, so the shell script file cannot be found at runtime. Rather than working around this with asset copying hacks, `vp prepare` inlines the equivalent shell script as a string constant and writes it directly via `writeFileSync`.
 
-Both `vp prepare` (at runtime) and `vp migrate` (at migration time) need to strip stale husky v8 bootstrap lines (`. "…/husky.sh"`) from hook files. This logic is shared via `src/utils/husky.ts` to avoid duplication.
+Husky <9.0.0 is not supported by auto migration — `vp migrate` detects unsupported versions and skips hooks setup with a warning.
 
 ## Relationship to Existing Commands
 

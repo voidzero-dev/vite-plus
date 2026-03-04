@@ -1,9 +1,9 @@
 {
   "commands": [
     { "command": "git init", "ignoreOutput": true },
-    "vp migrate --no-interactive # migration should strip husky.sh bootstrap from ALL hooks",
-    "cat package.json # check prepare rewritten and husky/lint-staged removed",
-    "cat .husky/pre-commit # check husky.sh bootstrap stripped from pre-commit",
-    "cat .husky/commit-msg # check husky.sh bootstrap stripped from commit-msg, custom command preserved"
+    "vp migrate --no-interactive # should warn about husky v8 and skip hooks setup",
+    "cat package.json # husky/lint-staged should remain in devDeps, prepare should stay as husky",
+    "cat .husky/pre-commit # hook file should be unchanged (still has bootstrap)",
+    "cat .husky/commit-msg # hook file should be unchanged (still has bootstrap)"
   ]
 }

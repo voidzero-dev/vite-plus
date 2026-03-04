@@ -19,7 +19,6 @@ import {
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
 } from '../utils/constants.js';
-import { HUSKY_BOOTSTRAP_PATTERN, stripHuskyBootstrapFromHooks } from '../utils/husky.js';
 import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
 import { detectPackageMetadata } from '../utils/package.js';
 import { displayRelative, rulesDir } from '../utils/path.js';
@@ -665,6 +664,25 @@ function rewriteAllImports(projectPath: string): void {
   }
 }
 
+/**
+ * Check if the project has an unsupported husky version (<9.0.0).
+ * Uses `semver.coerce` to handle ranges like `^8.0.0` → `8.0.0`.
+ */
+export function hasUnsupportedHuskyVersion(rootDir: string): boolean {
+  const packageJsonPath = path.join(rootDir, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return false;
+  }
+  const pkg = readJsonFile(packageJsonPath);
+  const deps = pkg.devDependencies as Record<string, string> | undefined;
+  const prodDeps = pkg.dependencies as Record<string, string> | undefined;
+  const huskyVersion = deps?.husky ?? prodDeps?.husky;
+  if (!huskyVersion) {
+    return false;
+  }
+  return semver.satisfies(semver.coerce(huskyVersion) ?? '0.0.0', '<9.0.0');
+}
+
 const OTHER_HOOK_TOOLS = ['simple-git-hooks', 'lefthook', 'yorkie'] as const;
 
 // Packages replaced by vite-plus built-in commands and should be removed from devDependencies
@@ -709,6 +727,14 @@ export function setupGitHooks(projectPath: string): void {
       );
       return;
     }
+  }
+
+  // Check for unsupported husky version (<9.0.0) → warn and skip
+  if (hasUnsupportedHuskyVersion(projectPath)) {
+    prompts.log.warn(
+      '⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.',
+    );
+    return;
   }
 
   // Skip hook setup if lint-staged config exists in an unsupported format —
@@ -769,7 +795,6 @@ export function setupGitHooks(projectPath: string): void {
   // Hook file creation (no git needed — only filesystem ops)
   if (!unsupported) {
     createHuskyPreCommitHook(projectPath, huskyDir);
-    stripHuskyBootstrapFromHooks(path.join(projectPath, huskyDir));
   }
 
   // vp fmt and vp prepare require a git workspace — walk up to find .git
@@ -846,8 +871,6 @@ const STALE_LINT_STAGED_PATTERNS = [
   /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)lint-staged\b/,
 ];
 
-// HUSKY_BOOTSTRAP_PATTERN imported from ../utils/husky.js
-
 export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): void {
   const huskyDir = path.join(projectPath, dir);
   fs.mkdirSync(huskyDir, { recursive: true });
@@ -857,7 +880,7 @@ export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): v
     if (existing.includes('vp lint-staged')) {
       return; // already has vp lint-staged
     }
-    // Replace old lint-staged invocations in-place, strip bootstrap, preserve everything else
+    // Replace old lint-staged invocations in-place, preserve everything else
     const lines = existing.split('\n');
     let replaced = false;
     const result: string[] = [];
@@ -882,11 +905,7 @@ export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): v
           continue;
         }
       }
-      if (HUSKY_BOOTSTRAP_PATTERN.test(trimmed)) {
-        // strip bootstrap line
-      } else {
-        result.push(line);
-      }
+      result.push(line);
     }
     if (!replaced) {
       // No lint-staged line found — append after existing content
@@ -899,8 +918,6 @@ export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): v
     fs.chmodSync(hookPath, 0o755);
   }
 }
-
-// stripHuskyBootstrapFromHooks imported from ../utils/husky.js
 
 /**
  * Rewrite only `scripts.prepare` in the root package.json using vite-prepare.yml rules.

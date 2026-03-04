@@ -1,5 +1,5 @@
 > git init
-> vp migrate --no-interactive # migration should strip husky.sh bootstrap from ALL hooks
+> vp migrate --no-interactive # should warn about husky v8 and skip hooks setup
 ┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
@@ -8,38 +8,40 @@
 │
 ●  pnpm@<semver> installed
 │
-◆  ✔ Git hooks configured
+▲  ⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.
 │
 ◆  Wrote agent instructions to AGENTS.md
 │
 └  ✔ Migration completed!
 
 
-> cat package.json # check prepare rewritten and husky/lint-staged removed
+> cat package.json # husky/lint-staged should remain in devDeps, prepare should stay as husky
 {
   "name": "migration-existing-husky-v8-multi-hooks",
   "scripts": {
-    "prepare": "vp prepare"
+    "prepare": "husky"
   },
   "devDependencies": {
+    "husky": "^8.0.0",
+    "lint-staged": "^15.0.0",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
   },
-  "lint-staged": {
-    "*": "vp check --fix"
-  },
-  "packageManager": "pnpm@<semver>",
   "pnpm": {
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }
 
-> cat .husky/pre-commit # check husky.sh bootstrap stripped from pre-commit
+> cat .husky/pre-commit # hook file should be unchanged (still has bootstrap)
+. "$(dirname -- "$0")/_/husky.sh"
 
-vp lint-staged
+npx lint-staged
 
-> cat .husky/commit-msg # check husky.sh bootstrap stripped from commit-msg, custom command preserved
+> cat .husky/commit-msg # hook file should be unchanged (still has bootstrap)
+. "$(dirname -- "$0")/_/husky.sh"
+
 npx commitlint --edit $1

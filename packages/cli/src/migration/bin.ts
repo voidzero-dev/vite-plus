@@ -28,6 +28,7 @@ import {
   checkVitestVersion,
   checkViteVersion,
   rewriteMonorepo,
+  hasUnsupportedHuskyVersion,
   rewritePrepareScript,
   rewriteStandaloneProject,
   setupGitHooks,
@@ -232,8 +233,14 @@ async function main() {
   }
 
   if (shouldSetupHooks) {
-    rewritePrepareScript(workspaceInfo.rootDir);
-    setupGitHooks(workspaceInfo.rootDir);
+    if (hasUnsupportedHuskyVersion(workspaceInfo.rootDir)) {
+      prompts.log.warn(
+        '⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.',
+      );
+    } else {
+      rewritePrepareScript(workspaceInfo.rootDir);
+      setupGitHooks(workspaceInfo.rootDir);
+    }
   }
 
   const selectedAgentTargetPaths = await selectAgentTargetPaths({

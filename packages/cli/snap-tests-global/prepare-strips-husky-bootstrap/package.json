@@ -1,6 +1,0 @@
-{
-  "name": "prepare-strips-husky-bootstrap",
-  "scripts": {
-    "prepare": "vp prepare"
-  }
-}

@@ -18,7 +18,6 @@ import mri from 'mri';
 
 import { vitePlusHeader } from '../../binding/index.js';
 import { renderCliDoc } from '../utils/help.js';
-import { stripHuskyBootstrapFromHooks } from '../utils/husky.js';
 import { log } from '../utils/terminal.js';
 
 const HOOKS = [
@@ -59,8 +58,6 @@ c=$?
 [ $c != 0 ] && echo "husky - $n script failed (code $c)"
 [ $c = 127 ] && echo "husky - command not found in PATH=$PATH"
 exit $c`;
-
-// stripHuskyBootstrapFromHooks imported from ../utils/husky.js
 
 interface InstallResult {
   message: string;
@@ -104,7 +101,6 @@ function install(dir = '.husky'): InstallResult {
   }
 
   rmSync(internal('husky.sh'), { force: true });
-  stripHuskyBootstrapFromHooks(dir);
   mkdirSync(internal(), { recursive: true });
   writeFileSync(internal('.gitignore'), '*');
   writeFileSync(internal('h'), HOOK_SCRIPT, { mode: 0o755 });
