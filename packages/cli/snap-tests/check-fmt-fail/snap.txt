@@ -2,6 +2,22 @@
 info: vp fmt --check
 Checking formatting...
 src/index.js (<variable>ms)
+steps.json (<variable>ms)
 
-Format issues found in above 1 files. Run with `--fix` to fix.
+Format issues found in above 2 files. Run with `--fix` to fix.
 Finished in <variable>ms on 3 files using <variable> threads.
+
+> vp check --fix
+info: vp fmt
+info: vp lint --fix --type-aware --type-check
+Found 0 warnings and 0 errors.
+Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+
+> vp check # should pass after fix
+info: vp fmt --check
+Checking formatting...
+All matched files use the correct format.
+Finished in <variable>ms on 3 files using <variable> threads.
+info: vp lint --type-aware --type-check
+Found 0 warnings and 0 errors.
+Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
