@@ -98,7 +98,7 @@ vp lint-staged
 
 Both `vp create` and `vp migrate` prompt the user before setting up pre-commit hooks:
 
-- **Interactive mode**: Shows a `prompts.confirm()` prompt: "Set up pre-commit hooks to run format, lint, and type checks with auto-fix?" (default: yes)
+- **Interactive mode**: Shows a `prompts.confirm()` prompt: "Set up pre-commit hooks to run formatting, linting, and type checking with auto-fixes?" (default: yes)
 - **Non-interactive mode**: Defaults to yes (hooks are set up automatically)
 - **`--hooks` flag**: Force hooks setup (no prompt)
 - **`--no-hooks` flag**: Skip hooks setup entirely (no prompt)

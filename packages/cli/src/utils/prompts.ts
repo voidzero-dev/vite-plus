@@ -130,7 +130,8 @@ export async function promptGitHooks(options: {
   }
   if (options.interactive) {
     const selected = await prompts.confirm({
-      message: 'Set up pre-commit hooks to run format, lint, and type checks with auto-fix?',
+      message:
+        'Set up pre-commit hooks to run formatting, linting, and type checking with auto-fixes?',
       initialValue: true,
     });
     if (prompts.isCancel(selected)) {
