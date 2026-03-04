@@ -19,6 +19,7 @@ import {
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
 } from '../utils/constants.js';
+import { HUSKY_BOOTSTRAP_PATTERN, stripHuskyBootstrapFromHooks } from '../utils/husky.js';
 import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
 import { detectPackageMetadata } from '../utils/package.js';
 import { displayRelative, rulesDir } from '../utils/path.js';
@@ -428,6 +429,18 @@ function rewriteRootWorkspacePackageJson(
 const RULES_YAML_PATH = path.join(rulesDir, 'vite-tools.yml');
 const PREPARE_RULES_YAML_PATH = path.join(rulesDir, 'vite-prepare.yml');
 
+// Cache YAML content to avoid repeated disk reads (called once per package in monorepos)
+let cachedRulesYaml: string | undefined;
+let cachedPrepareRulesYaml: string | undefined;
+function readRulesYaml(): string {
+  cachedRulesYaml ??= fs.readFileSync(RULES_YAML_PATH, 'utf8');
+  return cachedRulesYaml;
+}
+function readPrepareRulesYaml(): string {
+  cachedPrepareRulesYaml ??= fs.readFileSync(PREPARE_RULES_YAML_PATH, 'utf8');
+  return cachedPrepareRulesYaml;
+}
+
 export function rewritePackageJson(
   pkg: {
     scripts?: Record<string, string>;
@@ -439,19 +452,13 @@ export function rewritePackageJson(
   isMonorepo?: boolean,
 ): void {
   if (pkg.scripts) {
-    const updated = rewriteScripts(
-      JSON.stringify(pkg.scripts),
-      fs.readFileSync(RULES_YAML_PATH, 'utf8'),
-    );
+    const updated = rewriteScripts(JSON.stringify(pkg.scripts), readRulesYaml());
     if (updated) {
       pkg.scripts = JSON.parse(updated);
     }
   }
   if (pkg['lint-staged']) {
-    const updated = rewriteScripts(
-      JSON.stringify(pkg['lint-staged']),
-      fs.readFileSync(RULES_YAML_PATH, 'utf8'),
-    );
+    const updated = rewriteScripts(JSON.stringify(pkg['lint-staged']), readRulesYaml());
     if (updated) {
       pkg['lint-staged'] = JSON.parse(updated);
     }
@@ -508,10 +515,7 @@ function rewriteLintStagedConfigFile(projectPath: string): void {
       continue;
     }
     editJsonFile<Record<string, string | string[]>>(lintStagedConfigJsonPath, (config) => {
-      const updated = rewriteScripts(
-        JSON.stringify(config),
-        fs.readFileSync(RULES_YAML_PATH, 'utf8'),
-      );
+      const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
       if (updated) {
         prompts.log.success(
           `✔ Rewrote lint-staged config in ${displayRelative(lintStagedConfigJsonPath)}`,
@@ -765,7 +769,7 @@ export function setupGitHooks(projectPath: string): void {
   // Hook file creation (no git needed — only filesystem ops)
   if (!unsupported) {
     createHuskyPreCommitHook(projectPath, huskyDir);
-    stripStaleHuskyBootstrap(projectPath, huskyDir);
+    stripHuskyBootstrapFromHooks(path.join(projectPath, huskyDir));
   }
 
   // vp fmt and vp prepare require a git workspace — walk up to find .git
@@ -842,8 +846,7 @@ const STALE_LINT_STAGED_PATTERNS = [
   /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)lint-staged\b/,
 ];
 
-// Husky v8 bootstrap pattern — stripped entirely.
-const STALE_BOOTSTRAP_PATTERN = /^\.\s+".*husky\.sh"/;
+// HUSKY_BOOTSTRAP_PATTERN imported from ../utils/husky.js
 
 export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): void {
   const huskyDir = path.join(projectPath, dir);
@@ -879,7 +882,7 @@ export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): v
           continue;
         }
       }
-      if (STALE_BOOTSTRAP_PATTERN.test(trimmed)) {
+      if (HUSKY_BOOTSTRAP_PATTERN.test(trimmed)) {
         // strip bootstrap line
       } else {
         result.push(line);
@@ -897,37 +900,7 @@ export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): v
   }
 }
 
-/**
- * Strip the husky.sh bootstrap line from ALL hook files in .husky/
- * (not just pre-commit). Other hooks like commit-msg or pre-push also
- * source husky.sh, which vp prepare deletes — those hooks would break.
- */
-function stripStaleHuskyBootstrap(projectPath: string, dir = '.husky'): void {
-  const huskyDir = path.join(projectPath, dir);
-  if (!fs.existsSync(huskyDir)) {
-    return;
-  }
-  const entries = fs.readdirSync(huskyDir, { withFileTypes: true });
-  for (const entry of entries) {
-    // Skip directories (e.g. _/) and only process files
-    if (!entry.isFile()) {
-      continue;
-    }
-    const hookPath = path.join(huskyDir, entry.name);
-    const content = fs.readFileSync(hookPath, 'utf8');
-    const lines = content.split('\n');
-    const filtered = lines.filter((line) => !STALE_BOOTSTRAP_PATTERN.test(line.trim()));
-    if (filtered.length === lines.length) {
-      continue; // nothing changed
-    }
-    const newContent = filtered.join('\n').trim();
-    if (newContent.length === 0) {
-      fs.unlinkSync(hookPath);
-    } else {
-      fs.writeFileSync(hookPath, `${newContent}\n`);
-    }
-  }
-}
+// stripHuskyBootstrapFromHooks imported from ../utils/husky.js
 
 /**
  * Rewrite only `scripts.prepare` in the root package.json using vite-prepare.yml rules.
@@ -954,7 +927,7 @@ export function rewritePrepareScript(rootDir: string): void {
     prepare = prepare.replace('husky install', 'husky');
 
     const prepareJson = JSON.stringify({ prepare });
-    const updated = rewriteScripts(prepareJson, fs.readFileSync(PREPARE_RULES_YAML_PATH, 'utf8'));
+    const updated = rewriteScripts(prepareJson, readPrepareRulesYaml());
     if (updated) {
       pkg.scripts.prepare = JSON.parse(updated).prepare;
     } else if (prepare !== pkg.scripts.prepare) {
