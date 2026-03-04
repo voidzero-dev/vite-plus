@@ -16,8 +16,12 @@ use rustc_hash::FxHashMap;
 use vite_path::AbsolutePath;
 
 /// Config file names to try, in priority order.
-/// This matches Vite's `DEFAULT_CONFIG_FILES` order:
-/// https://github.com/vitejs/vite/blob/25227bbdc7de0ed07cf7bdc9a1a733e3a9a132bc/packages/vite/src/node/constants.ts#L119-L126
+/// This matches Vite's `DEFAULT_CONFIG_FILES`:
+/// https://github.com/vitejs/vite/blob/25227bbdc7de0ed07cf7bdc9a1a733e3a9a132bc/packages/vite/src/node/constants.ts#L98-L105
+///
+/// Vite resolves config files by iterating this list and checking `fs.existsSync` — no
+/// module resolution involved, so oxc_resolver is not needed here:
+/// https://github.com/vitejs/vite/blob/25227bbdc7de0ed07cf7bdc9a1a733e3a9a132bc/packages/vite/src/node/config.ts#L2231-L2237
 const CONFIG_FILE_NAMES: &[&str] = &[
     "vite.config.js",
     "vite.config.mjs",
