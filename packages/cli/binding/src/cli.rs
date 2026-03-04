@@ -979,12 +979,12 @@ fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
 }
 
 fn print_help() {
-    let version = env!("CARGO_PKG_VERSION");
+    let header = vite_shared::header::vite_plus_header();
     let bold = "\x1b[1m";
     let bold_underline = "\x1b[1;4m";
     let reset = "\x1b[0m";
     println!(
-        "Vite+/{version}
+        "{header}
 
 {bold_underline}Usage:{reset} {bold}vp{reset} <COMMAND>
 

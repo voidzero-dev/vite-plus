@@ -336,3 +336,6 @@ export interface RunCommandResult {
   /** Map of relative paths to their access modes */
   pathAccesses: Record<string, PathAccess>;
 }
+
+/** Render the Vite+ header using the Rust implementation. */
+export declare function vitePlusHeader(): string;

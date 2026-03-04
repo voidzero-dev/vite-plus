@@ -769,3 +769,4 @@ module.exports.rewriteImportsInDirectory = nativeBinding.rewriteImportsInDirecto
 module.exports.rewriteScripts = nativeBinding.rewriteScripts;
 module.exports.run = nativeBinding.run;
 module.exports.runCommand = nativeBinding.runCommand;
+module.exports.vitePlusHeader = nativeBinding.vitePlusHeader;

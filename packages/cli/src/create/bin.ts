@@ -4,6 +4,7 @@ import { styleText } from 'node:util';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import mri from 'mri';
 
+import { vitePlusHeader } from '../../binding/index.js';
 import {
   rewriteMonorepo,
   rewriteMonorepoProject,
@@ -23,7 +24,7 @@ import {
   runViteInstall,
   selectPackageManager,
 } from '../utils/prompts.js';
-import { accent, getVitePlusHeader, muted, log, success } from '../utils/terminal.js';
+import { accent, muted, log, success } from '../utils/terminal.js';
 import {
   detectWorkspace,
   updatePackageJsonWithDeps,
@@ -202,7 +203,7 @@ async function main() {
 
   // #region Handle help flag
   if (options.help) {
-    log((await getVitePlusHeader()) + '\n');
+    log(vitePlusHeader() + '\n');
     log(helpMessage);
     return;
   }
@@ -233,7 +234,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // #endregion
 
   // #region Prepare Stage
-  prompts.intro(await getVitePlusHeader());
+  prompts.intro(vitePlusHeader());
 
   // check --directory option is valid
   let targetDir = '';
@@ -676,7 +677,7 @@ function showNextSteps(projectDir: string, isMonorepo: boolean) {
 }
 
 async function showAvailableTemplates() {
-  log((await getVitePlusHeader()) + '\n');
+  log(vitePlusHeader() + '\n');
   log(listTemplatesMessage);
 }
 

@@ -124,6 +124,8 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
     if !crate::help::print_unified_clap_help_for_path(&["env"]) {
         // Fallback to clap's built-in help printer if unified rendering fails.
         use clap::CommandFactory;
+        println!("{}", vite_shared::header::vite_plus_header());
+        println!();
         crate::cli::Args::command()
             .find_subcommand("env")
             .unwrap()

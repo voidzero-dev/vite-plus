@@ -459,8 +459,8 @@ async function bundleVitest() {
 }
 
 /**
- * Rebrand vitest CLI output as "vp test" with vite-plus version.
- * Patches the bundled cac chunk to replace vitest branding with vp test branding.
+ * Rebrand vitest CLI output as "vp test" with Vite+ banner styling.
+ * Patches bundled chunks to replace vitest branding and align banner output.
  */
 async function brandVitest() {
   const chunksDir = resolve(projectDir, 'dist/chunks');
@@ -505,6 +505,55 @@ async function brandVitest() {
 
     await writeFile(cacFile, content, 'utf-8');
     console.log(`Branded vitest → vp test in ${cacFile}`);
+  }
+
+  const cliApiFiles: string[] = [];
+  for await (const file of fsGlob(join(chunksDir, 'cli-api.*.js'))) {
+    cliApiFiles.push(file);
+  }
+  if (cliApiFiles.length === 0) {
+    throw new Error('brandVitest: no cli-api chunk found in dist/chunks/');
+  }
+
+  for (const cliApiFile of cliApiFiles) {
+    let content = await readFile(cliApiFile, 'utf-8');
+
+    function patchString(label: string, search: string | RegExp, replacement: string) {
+      const before = content;
+      content =
+        typeof search === 'string'
+          ? content.replace(search, replacement)
+          : content.replace(search, replacement);
+      if (content === before) {
+        throw new Error(
+          `brandVitest: failed to patch "${label}" — pattern not found in ${cliApiFile}`,
+        );
+      }
+    }
+
+    // Remove one extra leading newline before DEV/RUN banner.
+    patchString(
+      'banner leading newline',
+      /printBanner\(\) \{\n\t\tthis\.log\(\);\n/,
+      'printBanner() {\n',
+    );
+
+    // Use a magenta badge for both DEV and RUN.
+    patchString(
+      'banner color',
+      /const color = this\.ctx\.config\.watch \? "blue" : "cyan";\n\t\tconst mode = this\.ctx\.config\.watch \? "DEV" : "RUN";/,
+      'const mode = this.ctx.config.watch ? "DEV" : "RUN";\n\t\tconst label = c.bold(c.inverse(c.magenta(` ${mode} `)));',
+    );
+
+    // Remove the version from the banner line and render a high-contrast label.
+    patchString(
+      'banner version text',
+      /this\.log\(withLabel\(color, mode, (?:""|`v\$\{this\.ctx\.version\} `)\) \+ c\.gray\(this\.ctx\.config\.root\)\);/,
+      'this.log(`${label} ${c.gray(this.ctx.config.root)}`);',
+    );
+
+    await writeFile(cliApiFile, content, 'utf-8');
+    console.log(`Branded vitest banner in ${cliApiFile}`);
   }
 }
 

@@ -17,6 +17,8 @@ v20.18.0
   Source:     <cwd>/.node-version
 
 > vp install -g cowsay@1.6.0 # Install a global package via vp
+VITE+ - The Unified Toolchain for the Web
+
   Installing cowsay@<semver> globally...
   Running npm install...
 

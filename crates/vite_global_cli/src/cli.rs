@@ -6,7 +6,6 @@
 use std::process::ExitStatus;
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
-use owo_colors::OwoColorize;
 use vite_install::commands::{
     add::SaveDependencyType, install::InstallCommandOptions, outdated::Format,
 };
@@ -1478,6 +1477,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             packages,
             pass_through_args,
         } => {
+            print_runtime_header();
             // If packages are provided, redirect to Add command
             if let Some(pkgs) = packages
                 && !pkgs.is_empty()
@@ -1799,6 +1799,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             if help::maybe_print_unified_delegate_help("dev", &args) {
                 return Ok(ExitStatus::default());
             }
+            print_runtime_header();
             commands::delegate::execute(cwd, "dev", &args).await
         }
 
@@ -1806,6 +1807,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             if help::maybe_print_unified_delegate_help("build", &args) {
                 return Ok(ExitStatus::default());
             }
+            print_runtime_header();
             commands::delegate::execute(cwd, "build", &args).await
         }
 
@@ -1813,6 +1815,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             if help::maybe_print_unified_delegate_help("test", &args) {
                 return Ok(ExitStatus::default());
             }
+            print_runtime_header();
             commands::delegate::execute(cwd, "test", &args).await
         }
 
@@ -1820,6 +1823,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             if help::maybe_print_unified_delegate_help("lint", &args) {
                 return Ok(ExitStatus::default());
             }
+            print_runtime_header();
             commands::delegate::execute(cwd, "lint", &args).await
         }
 
@@ -1827,6 +1831,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             if help::maybe_print_unified_delegate_help("fmt", &args) {
                 return Ok(ExitStatus::default());
             }
+            print_runtime_header();
             commands::delegate::execute(cwd, "fmt", &args).await
         }
 
@@ -1834,6 +1839,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             if help::maybe_print_unified_delegate_help("check", &args) {
                 return Ok(ExitStatus::default());
             }
+            print_runtime_header();
             commands::delegate::execute(cwd, "check", &args).await
         }
 
@@ -1841,6 +1847,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             if help::maybe_print_unified_delegate_help("pack", &args) {
                 return Ok(ExitStatus::default());
             }
+            print_runtime_header();
             commands::delegate::execute(cwd, "pack", &args).await
         }
 
@@ -1848,6 +1855,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             if help::maybe_print_unified_delegate_help("run", &args) {
                 return Ok(ExitStatus::default());
             }
+            print_runtime_header();
             commands::run_or_delegate::execute(cwd, &args).await
         }
 
@@ -1855,6 +1863,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             if help::maybe_print_unified_delegate_help("exec", &args) {
                 return Ok(ExitStatus::default());
             }
+            print_runtime_header();
             commands::delegate::execute(cwd, "exec", &args).await
         }
 
@@ -1862,6 +1871,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             if help::maybe_print_unified_delegate_help("preview", &args) {
                 return Ok(ExitStatus::default());
             }
+            print_runtime_header();
             commands::delegate::execute(cwd, "preview", &args).await
         }
 
@@ -1869,6 +1879,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             if help::maybe_print_unified_delegate_help("cache", &args) {
                 return Ok(ExitStatus::default());
             }
+            print_runtime_header();
             commands::delegate::execute(cwd, "cache", &args).await
         }
 
@@ -1904,6 +1915,11 @@ pub(crate) fn exit_status(code: i32) -> ExitStatus {
     }
 }
 
+fn print_runtime_header() {
+    println!("{}", vite_shared::header::vite_plus_header());
+    println!();
+}
+
 /// Build a clap Command with custom help formatting matching the JS CLI output.
 pub fn command_with_help() -> clap::Command {
     apply_custom_help(Args::command())
@@ -1913,11 +1929,7 @@ pub fn command_with_help() -> clap::Command {
 fn apply_custom_help(cmd: clap::Command) -> clap::Command {
     let after_help = help::render_help_doc(&help::top_level_help_doc());
     let options_heading = help::render_heading("Options");
-    let header = if help::should_style_help() {
-        "VITE+ - The Unified Toolchain for the Web".bold().to_string()
-    } else {
-        "VITE+ - The Unified Toolchain for the Web".to_string()
-    };
+    let header = vite_shared::header::vite_plus_header();
     let help_template = format!("{header}{{after-help}}\n{options_heading}\n{{options}}\n");
 
     cmd.after_help(after_help).help_template(help_template)

@@ -1,4 +1,6 @@
 > vp install -g ./env-binary-conflict-pkg-a # Install pkg-a which provides env-binary-conflict-cli binary
+VITE+ - The Unified Toolchain for the Web
+
   Installing ./env-binary-conflict-pkg-a globally...
   Running npm install...
 
@@ -14,6 +16,8 @@ added 1 package in <variable>ms
   "nodeVersion": "22.22.0"
 }
 [1]> vp install -g ./env-binary-conflict-pkg-b # Try to install pkg-b without force - should fail
+VITE+ - The Unified Toolchain for the Web
+
   Installing ./env-binary-conflict-pkg-b globally...
   Running npm install...
 
@@ -30,6 +34,8 @@ Please remove ./env-binary-conflict-pkg-a before installing ./env-binary-conflic
   "nodeVersion": "22.22.0"
 }
 > vp install -g --force ./env-binary-conflict-pkg-b # Force install pkg-b - should auto-uninstall pkg-a
+VITE+ - The Unified Toolchain for the Web
+
   Installing ./env-binary-conflict-pkg-b globally...
   Running npm install...
 

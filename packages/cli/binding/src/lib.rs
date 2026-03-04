@@ -185,3 +185,9 @@ pub async fn run(options: CliOptions) -> Result<i32> {
         },
     }
 }
+
+/// Render the Vite+ header using the Rust implementation.
+#[napi]
+pub fn vite_plus_header() -> String {
+    vite_shared::header::vite_plus_header()
+}

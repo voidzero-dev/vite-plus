@@ -1,4 +1,6 @@
 > vp install -g ./conflict-pkg # Install package with conflicting binary name (uses cwd version)
+VITE+ - The Unified Toolchain for the Web
+
   Installing ./conflict-pkg globally...
   Running npm install...
 
@@ -12,6 +14,8 @@ added 1 package in <variable>ms
   Uninstalled conflict-pkg
 
 > vp install -g --node 20 ./conflict-pkg # Install with specific Node.js version
+VITE+ - The Unified Toolchain for the Web
+
   Installing ./conflict-pkg globally...
   Running npm install...
 

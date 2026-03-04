@@ -1,4 +1,6 @@
 > vp build -h # should fall back to global vite-plus and show build help
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp build [ROOT] [OPTIONS]
 
 Build for production.
@@ -24,6 +26,8 @@ Examples:
 
 
 > vp dev -h # should fall back to global vite-plus and show dev help
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp dev [ROOT] [OPTIONS]
 
 Run the development server.
@@ -49,6 +53,8 @@ Examples:
 
 
 > vp test -h # should fall back to global vite-plus and show test help
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp test [COMMAND] [FILTERS] [OPTIONS]
 
 Run tests.

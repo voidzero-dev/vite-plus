@@ -126,12 +126,7 @@ fn format_version(version: Option<String>) -> String {
 
 /// Execute the `--version` command.
 pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
-    let header = if help::should_style_help() {
-        "VITE+ - The Unified Toolchain for the Web".bold().to_string()
-    } else {
-        "VITE+ - The Unified Toolchain for the Web".to_string()
-    };
-    println!("{header}");
+    println!("{}", vite_shared::header::vite_plus_header());
     println!();
 
     println!("vp v{}", env!("CARGO_PKG_VERSION"));

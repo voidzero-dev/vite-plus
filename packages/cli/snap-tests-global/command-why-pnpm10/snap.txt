@@ -1,4 +1,6 @@
 > vp why --help # should show help
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Show why a package is installed
@@ -25,6 +27,8 @@ Options:
 
 
 > vp install # should install packages first
+VITE+ - The Unified Toolchain for the Web
+
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done

@@ -840,6 +840,8 @@ pub fn maybe_print_unified_delegate_help(command: &str, args: &[String]) -> bool
         return false;
     };
 
+    println!("{}", vite_shared::header::vite_plus_header());
+    println!();
     println!("{}", render_help_doc(&doc));
     true
 }
@@ -858,6 +860,8 @@ pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
         return false;
     };
 
+    println!("{}", vite_shared::header::vite_plus_header());
+    println!();
     println!("{}", render_owned_help_doc(&doc));
     true
 }

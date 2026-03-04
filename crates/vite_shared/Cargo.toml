@@ -9,9 +9,11 @@ rust-version.workspace = true
 
 [dependencies]
 directories = { workspace = true }
+nix = { workspace = true, features = ["poll", "term"] }
 owo-colors = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+supports-color = "3"
 tracing-subscriber = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }

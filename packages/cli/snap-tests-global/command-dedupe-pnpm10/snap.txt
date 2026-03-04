@@ -1,4 +1,6 @@
 > vp dedupe --help # should show help
+VITE+ - The Unified Toolchain for the Web
+
 Usage: vp dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Deduplicate dependencies
