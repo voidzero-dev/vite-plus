@@ -3,5 +3,5 @@ info: vp fmt --check
 Checking formatting...
 src/index.js (<variable>ms)
 
-Format issues found in above 1 files. Run without `--check` to fix.
+Format issues found in above 1 files. Run with `--fix` to fix.
 Finished in <variable>ms on 3 files using <variable> threads.

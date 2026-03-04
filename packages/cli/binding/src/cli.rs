@@ -3,7 +3,10 @@
 //! This module contains all the CLI-related code.
 //! It handles argument parsing, command dispatching, and orchestration of the task execution.
 
-use std::{env, ffi::OsStr, future::Future, iter, path::PathBuf, pin::Pin, sync::Arc};
+use std::{
+    borrow::Cow, env, ffi::OsStr, future::Future, iter, path::PathBuf, pin::Pin, process::Stdio,
+    sync::Arc,
+};
 
 use clap::{
     Parser, Subcommand,
@@ -674,14 +677,14 @@ impl UserConfigLoader for VitePlusConfigLoader {
     }
 }
 
-/// Resolve a single subcommand and execute it, returning its exit status.
-async fn resolve_and_execute(
+/// Resolve a subcommand into a prepared `tokio::process::Command`.
+async fn resolve_and_build_command(
     resolver: &mut SubcommandResolver,
     subcommand: SynthesizableSubcommand,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
     cwd_arc: &Arc<AbsolutePath>,
-) -> Result<ExitStatus, Error> {
+) -> Result<tokio::process::Command, Error> {
     let resolved =
         resolver.resolve(subcommand, envs, cwd_arc).await.map_err(|e| Error::Anyhow(e))?;
 
@@ -706,12 +709,45 @@ async fn resolve_and_execute(
     cmd.args(resolved.args.iter().map(|s| s.as_str()))
         .env_clear()
         .envs(resolved.envs.iter().map(|(k, v)| (k.as_ref(), v.as_ref())));
+    Ok(cmd)
+}
 
+/// Resolve a single subcommand and execute it, returning its exit status.
+async fn resolve_and_execute(
+    resolver: &mut SubcommandResolver,
+    subcommand: SynthesizableSubcommand,
+    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
+    cwd: &AbsolutePathBuf,
+    cwd_arc: &Arc<AbsolutePath>,
+) -> Result<ExitStatus, Error> {
+    let mut cmd = resolve_and_build_command(resolver, subcommand, envs, cwd, cwd_arc).await?;
     let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
-
-    let status = child.wait().await;
-    let status = status.map_err(|e| Error::Anyhow(e.into()))?;
+    let status = child.wait().await.map_err(|e| Error::Anyhow(e.into()))?;
     Ok(ExitStatus(status.code().unwrap_or(1) as u8))
+}
+
+/// Like `resolve_and_execute`, but captures stdout, applies a text filter,
+/// and writes the result to real stdout. Stderr remains inherited.
+async fn resolve_and_execute_with_stdout_filter(
+    resolver: &mut SubcommandResolver,
+    subcommand: SynthesizableSubcommand,
+    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
+    cwd: &AbsolutePathBuf,
+    cwd_arc: &Arc<AbsolutePath>,
+    filter: impl Fn(&str) -> Cow<'_, str>,
+) -> Result<ExitStatus, Error> {
+    let mut cmd = resolve_and_build_command(resolver, subcommand, envs, cwd, cwd_arc).await?;
+    cmd.stdout(Stdio::piped());
+
+    let child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
+    let output = child.wait_with_output().await.map_err(|e| Error::Anyhow(e.into()))?;
+
+    use std::io::Write;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let filtered = filter(&stdout);
+    let _ = std::io::stdout().lock().write_all(filtered.as_bytes());
+
+    Ok(ExitStatus(output.status.code().unwrap_or(1) as u8))
 }
 
 /// Execute a synthesizable subcommand directly (not through vite-task Session).
@@ -761,12 +797,19 @@ async fn execute_direct_subcommand(
                     let cmd = vite_str::format!("vp fmt {}", args.join(" "));
                     output::info(&cmd);
                 }
-                status = resolve_and_execute(
+                status = resolve_and_execute_with_stdout_filter(
                     &mut resolver,
                     SynthesizableSubcommand::Fmt { args },
                     &envs,
                     cwd,
                     &cwd_arc,
+                    |line| {
+                        use cow_utils::CowUtils;
+                        line.cow_replace(
+                            "Run without `--check` to fix.",
+                            "Run with `--fix` to fix.",
+                        )
+                    },
                 )
                 .await?;
                 if status != ExitStatus::SUCCESS {

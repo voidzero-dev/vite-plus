@@ -10,6 +10,7 @@ rolldown = ["dep:rolldown_binding"]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
+cow-utils = { workspace = true }
 fspy = { workspace = true }
 rustc-hash = { workspace = true }
 napi = { workspace = true }
