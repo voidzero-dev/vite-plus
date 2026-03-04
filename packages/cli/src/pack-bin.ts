@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import module from 'node:module';
 
-import { resolveConfig } from '@voidzero-dev/vite-plus-core';
 import {
   buildWithConfigs,
   resolveUserConfig,
@@ -11,6 +10,8 @@ import {
   type ResolvedConfig,
 } from '@voidzero-dev/vite-plus-core/pack';
 import { cac } from 'cac';
+
+import { resolveViteConfig } from './resolve-vite-config.js';
 
 const cli = cac('vp pack');
 cli.help();
@@ -84,7 +85,7 @@ cli
     }
 
     async function runBuild() {
-      const viteConfig = await resolveConfig({ root: process.cwd() }, 'build');
+      const viteConfig = await resolveViteConfig(process.cwd());
 
       const configFiles: string[] = [];
       if (viteConfig.configFile) {

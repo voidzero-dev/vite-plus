@@ -14,6 +14,7 @@ import type { Configuration, Options } from 'lint-staged';
 import mri from 'mri';
 
 import { vitePlusHeader } from '../../binding/index.js';
+import { resolveViteConfig } from '../resolve-vite-config.js';
 import { renderCliDoc } from '../utils/help.js';
 import { log } from '../utils/terminal.js';
 
@@ -136,9 +137,15 @@ if (args.help) {
   }
 
   // Read "staged" from vite.config.ts and pass it as an inline config object to lint-staged.
-  const stagedConfig = await resolveStagedConfig(args.cwd ?? process.cwd());
+  let stagedConfig;
+  try {
+    const viteConfig = await resolveViteConfig(args.cwd ?? process.cwd());
+    stagedConfig = viteConfig.staged;
+  } catch {
+    // vite.config.ts not found or resolve failed — fall through
+  }
   if (stagedConfig) {
-    options.config = stagedConfig;
+    options.config = stagedConfig as Configuration;
   } else {
     log('No "staged" config found in vite.config.ts. Please add a staged config:');
     log('');
@@ -173,22 +180,4 @@ if (args.help) {
 
   const success = await lintStaged(options);
   process.exit(success ? 0 : 1);
-}
-
-/**
- * Resolve the `staged` config from vite.config.ts using Vite's resolveConfig.
- * Returns the config object or `null` if not found.
- */
-async function resolveStagedConfig(cwd: string): Promise<Configuration | null> {
-  try {
-    const { resolveConfig } = await import('@voidzero-dev/vite-plus-core');
-    const config: Record<string, unknown> = await resolveConfig({ root: cwd }, 'build');
-    if (config.staged) {
-      return config.staged as Configuration;
-    }
-    return null;
-  } catch {
-    // vite.config.ts not found or resolve failed — fall through
-    return null;
-  }
 }
