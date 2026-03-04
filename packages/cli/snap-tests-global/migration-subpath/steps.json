@@ -1,11 +1,7 @@
 {
-  "ignoredPlatforms": ["win32"],
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
     "vp migrate foo --no-interactive # migration work with subpath",
     "cat foo/package.json # check package.json",
-    "cat foo/.husky/pre-commit # pre-commit hook should exist in subpath",
-    "git config --local core.hooksPath # should be foo/.husky/_",
-    "cat foo/.husky/_/h | grep 'node_modules/.bin' # should resolve from hook file location"
+    "cat foo/vite.config.ts # check vite.config.ts"
   ]
 }

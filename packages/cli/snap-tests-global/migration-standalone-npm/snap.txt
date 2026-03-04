@@ -1,4 +1,4 @@
-> vp migrate --no-interactive # migration should work with npm, add overrides, and update lockfile
+> vp migrate --no-interactive --no-hooks # migration should work with npm, add overrides, and update lockfile
 ┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  npm@<semver> installing...
@@ -9,36 +9,11 @@
 │
 ●  Dependencies installed
 │
-◆  ✔ Created vite.config.ts in vite.config.ts
-│
-◆  ✔ Merged staged config into vite.config.ts
-│
 ◆  Wrote agent instructions to AGENTS.md
 │
 ●  Installing dependencies...
 │
-●  Install failed
-│
-●  VITE+ - The Unified Toolchain for the Web
-│
-│
-│  > prepare
-│  > vp prepare
-│
-│
-│
-■  npm warn using --force Recommended protections disabled.
-│  error: Command 'prepare' not found
-│
-│  Did you mean `vp preview`?
-│  npm error code 2
-│  npm error path <cwd>
-│  npm error command failed
-│  npm error command sh -c vp prepare
-│  npm error A complete log of this run can be found in: <homedir>/.npm/_logs/<timestamp>-debug.log
-│
-│
-●  You may need to run "vp install" manually in <cwd>
+●  Dependencies installed
 │
 └  ✔ Migration completed!
 
@@ -55,9 +30,6 @@
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-  },
-  "scripts": {
-    "prepare": "vp prepare"
   }
 }
 

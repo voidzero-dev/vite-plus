@@ -805,11 +805,11 @@ export function setupGitHooks(projectPath: string): void {
   // Skip hook setup if lint-staged config exists in a format that can't be
   // auto-migrated — the config still references old commands (oxlint/oxfmt)
   // that migration can't rewrite, so vp staged would fail on the next commit.
-  const unsupported = hasUnsupportedLintStagedConfig(projectPath);
-  if (unsupported) {
+  if (hasUnsupportedLintStagedConfig(projectPath)) {
     prompts.log.warn(
       '⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.',
     );
+    return;
   }
 
   // Extract custom husky dir from the prepare script.
@@ -824,31 +824,27 @@ export function setupGitHooks(projectPath: string): void {
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
-    if (!unsupported) {
-      // rewriteScripts() already replaced husky → vp prepare.
-      // Just ensure vp prepare is present for projects that didn't have husky.
-      if (!pkg.scripts) {
-        pkg.scripts = {};
-      }
-      if (!pkg.scripts.prepare) {
-        pkg.scripts.prepare = 'vp prepare';
-      } else if (!pkg.scripts.prepare.includes('vp prepare')) {
-        pkg.scripts.prepare = `vp prepare && ${pkg.scripts.prepare}`;
-      }
+    // rewriteScripts() already replaced husky → vp prepare.
+    // Just ensure vp prepare is present for projects that didn't have husky.
+    if (!pkg.scripts) {
+      pkg.scripts = {};
+    }
+    if (!pkg.scripts.prepare) {
+      pkg.scripts.prepare = 'vp prepare';
+    } else if (!pkg.scripts.prepare.includes('vp prepare')) {
+      pkg.scripts.prepare = `vp prepare && ${pkg.scripts.prepare}`;
+    }
 
-      // Remove lint-staged key from package.json — config now lives in vite.config.ts
-      delete pkg['lint-staged'];
+    // Remove lint-staged key from package.json — config now lives in vite.config.ts
+    delete pkg['lint-staged'];
 
-      // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands).
-      // Only when config migration succeeds — if unsupported config files remain,
-      // they still reference old tooling, so removing packages would break the repo.
-      for (const name of REPLACED_HOOK_PACKAGES) {
-        if (pkg.devDependencies?.[name]) {
-          delete pkg.devDependencies[name];
-        }
-        if (pkg.dependencies?.[name]) {
-          delete pkg.dependencies[name];
-        }
+    // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands).
+    for (const name of REPLACED_HOOK_PACKAGES) {
+      if (pkg.devDependencies?.[name]) {
+        delete pkg.devDependencies[name];
+      }
+      if (pkg.dependencies?.[name]) {
+        delete pkg.dependencies[name];
       }
     }
 
@@ -856,16 +852,12 @@ export function setupGitHooks(projectPath: string): void {
   });
 
   // Add staged config to vite.config.ts if not present
-  if (!unsupported) {
-    if (!hasStagedConfigInViteConfig(projectPath) && !hasStandaloneLintStagedConfig(projectPath)) {
-      mergeStagedConfigToViteConfig(projectPath, { '*': 'vp check --fix' });
-    }
+  if (!hasStagedConfigInViteConfig(projectPath) && !hasStandaloneLintStagedConfig(projectPath)) {
+    mergeStagedConfigToViteConfig(projectPath, { '*': 'vp check --fix' });
   }
 
   // Hook file creation (no git needed — only filesystem ops)
-  if (!unsupported) {
-    createHuskyPreCommitHook(projectPath, huskyDir);
-  }
+  createHuskyPreCommitHook(projectPath, huskyDir);
 
   // vp prepare requires a git workspace — walk up to find .git
   const gitRoot = findGitRoot(projectPath);
@@ -876,26 +868,24 @@ export function setupGitHooks(projectPath: string): void {
   const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
 
   // Install git hooks via vp prepare
-  if (!unsupported) {
-    const prepareArgs = huskyDir !== '.husky' ? ['prepare', huskyDir] : ['prepare'];
-    const prepareResult = spawn.sync(vpBin, prepareArgs, {
-      cwd: projectPath,
-      stdio: 'pipe',
-    });
-    if (prepareResult.status === 0) {
-      // vp prepare outputs skip/info messages to stdout via log().
-      // An empty message means hooks were installed successfully;
-      // any non-empty output indicates a skip (HUSKY=0, hooksPath
-      // already set, .git not found, etc.).
-      const stdout = prepareResult.stdout?.toString().trim() ?? '';
-      if (stdout) {
-        prompts.log.warn(`⚠ Git hooks not configured — ${stdout}`);
-      } else {
-        prompts.log.success('✔ Git hooks configured');
-      }
+  const prepareArgs = huskyDir !== '.husky' ? ['prepare', huskyDir] : ['prepare'];
+  const prepareResult = spawn.sync(vpBin, prepareArgs, {
+    cwd: projectPath,
+    stdio: 'pipe',
+  });
+  if (prepareResult.status === 0) {
+    // vp prepare outputs skip/info messages to stdout via log().
+    // An empty message means hooks were installed successfully;
+    // any non-empty output indicates a skip (HUSKY=0, hooksPath
+    // already set, .git not found, etc.).
+    const stdout = prepareResult.stdout?.toString().trim() ?? '';
+    if (stdout) {
+      prompts.log.warn(`⚠ Git hooks not configured — ${stdout}`);
     } else {
-      prompts.log.warn('Failed to install git hooks');
+      prompts.log.success('✔ Git hooks configured');
     }
+  } else {
+    prompts.log.warn('Failed to install git hooks');
   }
 }
 

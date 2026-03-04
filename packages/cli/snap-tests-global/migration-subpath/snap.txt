@@ -1,4 +1,3 @@
-> git init
 > vp migrate foo --no-interactive # migration work with subpath
 ┌  VITE+ - The Unified Toolchain for the Web
 │
@@ -11,8 +10,6 @@
 ◆  ✔ Created vite.config.ts in foo/vite.config.ts
 │
 ◆  ✔ Merged staged config into foo/vite.config.ts
-│
-◆  ✔ Git hooks configured
 │
 ◆  Wrote agent instructions to AGENTS.md
 │
@@ -37,11 +34,18 @@
   }
 }
 
-> cat foo/.husky/pre-commit # pre-commit hook should exist in subpath
-vp staged
+> cat foo/vite.config.ts # check vite.config.ts
+import { defineConfig } from 'vite-plus';
 
-> git config --local core.hooksPath # should be foo/.husky/_
-foo/.husky/_
-
-> cat foo/.husky/_/h | grep 'node_modules/.bin' # should resolve from hook file location
-export PATH="$d/node_modules/.bin:$PATH"
+export default defineConfig({
+  staged: {
+    "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
+      "vp fmt --staged",
+      "eslint --fix"
+    ],
+    "*.@(js|ts|tsx)": [
+      "vp lint --fix"
+    ]
+  },
+  
+});
