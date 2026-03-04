@@ -15,6 +15,7 @@ Arguments:
 Options:
   --directory DIR   Target directory for the generated project.
   --agent NAME      Create an agent instructions file for the specified agent.
+  --editor NAME     Write editor config files for the specified editor.
   --no-interactive  Run in non-interactive mode
   --list            List all available templates
   -h, --help        Show this help message

@@ -15,6 +15,7 @@ import {
   selectAgentTargetPath,
   writeAgentInstructions,
 } from '../utils/agent.js';
+import { detectExistingEditor, selectEditor, writeEditorConfigs } from '../utils/editor.js';
 import { renderCliDoc } from '../utils/help.js';
 import { displayRelative } from '../utils/path.js';
 import {
@@ -68,6 +69,10 @@ const helpMessage = renderCliDoc({
         {
           label: '--agent NAME',
           description: 'Create an agent instructions file for the specified agent.',
+        },
+        {
+          label: '--editor NAME',
+          description: 'Write editor config files for the specified editor.',
         },
         { label: '--no-interactive', description: 'Run in non-interactive mode' },
         { label: '--list', description: 'List all available templates' },
@@ -156,6 +161,7 @@ export interface Options {
   list: boolean;
   help: boolean;
   agent?: string;
+  editor?: string;
 }
 
 // Parse CLI arguments: split on '--' separator
@@ -175,10 +181,11 @@ function parseArgs() {
     list?: boolean;
     help?: boolean;
     agent?: string;
+    editor?: string;
   }>(viteArgs, {
     alias: { h: 'help' },
     boolean: ['help', 'list', 'all', 'interactive'],
-    string: ['directory', 'agent'],
+    string: ['directory', 'agent', 'editor'],
     default: { interactive: defaultInteractive() },
   });
 
@@ -192,6 +199,7 @@ function parseArgs() {
       list: parsed.list || false,
       help: parsed.help || false,
       agent: parsed.agent,
+      editor: parsed.editor,
     } as Options,
     templateArgs,
   };
@@ -274,6 +282,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   let selectedTemplateName = templateName as string;
   let selectedTemplateArgs = [...templateArgs];
   let selectedAgentTargetPath: string | undefined;
+  let selectedEditor: Awaited<ReturnType<typeof selectEditor>>;
   let selectedParentDir: string | undefined;
 
   if (!selectedTemplateName) {
@@ -496,6 +505,18 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       onCancel: () => cancelAndExit(),
     }));
 
+  const existingEditor =
+    options.editor || !options.interactive
+      ? undefined
+      : detectExistingEditor(workspaceInfoOptional.rootDir);
+  selectedEditor =
+    existingEditor ??
+    (await selectEditor({
+      interactive: options.interactive,
+      editor: options.editor,
+      onCancel: () => cancelAndExit(),
+    }));
+
   // Discover template
   const templateInfo = discoverTemplate(
     selectedTemplateName,
@@ -535,6 +556,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     await writeAgentInstructions({
       projectRoot: fullPath,
       targetPath: selectedAgentTargetPath,
+      interactive: options.interactive,
+    });
+    await writeEditorConfigs({
+      projectRoot: fullPath,
+      editorId: selectedEditor,
       interactive: options.interactive,
     });
     workspaceInfo.rootDir = fullPath;
@@ -588,6 +614,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   await writeAgentInstructions({
     projectRoot: fullPath,
     targetPath: selectedAgentTargetPath,
+    interactive: options.interactive,
+  });
+  await writeEditorConfigs({
+    projectRoot: fullPath,
+    editorId: selectedEditor,
     interactive: options.interactive,
   });
 
