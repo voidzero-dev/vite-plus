@@ -19,7 +19,7 @@
 {
   "name": "migration-husky-semicolon-prepare",
   "scripts": {
-    "prepare": "vp prepare && npm run build"
+    "prepare": "npm run build; vp prepare"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",

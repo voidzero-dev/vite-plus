@@ -716,10 +716,10 @@ export function setupGitHooks(projectPath: string): void {
     );
   }
 
-  // Extract custom husky dir from the original prepare script before editing.
-  // Matches "husky [install] <dir>" in both standalone and composed scripts.
+  // Extract custom husky dir from the prepare script.
+  // By this point rewriteScripts() has already replaced "husky" → "vp prepare".
   const scripts = pkgContent.scripts as Record<string, string> | undefined;
-  const huskyDirMatch = scripts?.prepare?.match(/\bhusky(?:\s+install)?\s+([^\s&|;]+)/);
+  const huskyDirMatch = scripts?.prepare?.match(/\bvp\s+prepare\s+([^\s&|;]+)/);
   const huskyDir = huskyDirMatch?.[1] ?? '.husky';
 
   editJsonFile<{
@@ -729,44 +729,16 @@ export function setupGitHooks(projectPath: string): void {
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
     if (!unsupported) {
-      // Add or rewrite "prepare" script
+      // rewriteScripts() already replaced husky → vp prepare.
+      // Just ensure vp prepare is present for projects that didn't have husky.
       if (!pkg.scripts) {
         pkg.scripts = {};
       }
-      const currentPrepare = pkg.scripts.prepare;
-      // Match standalone husky commands, including common error-suppression
-      // idioms like "husky || true", "husky || :", "husky || exit 0".
-      const huskyMatch = currentPrepare?.match(
-        /^husky(?:\s+install)?(?:\s+(\S+))?\s*(?:\|\|\s*(?:true|:|exit\s+0))?\s*$/,
-      );
-      if (!currentPrepare || huskyMatch) {
-        const dir = huskyMatch?.[1];
-        pkg.scripts.prepare = dir ? `vp prepare ${dir}` : 'vp prepare';
-      } else if (!currentPrepare.includes('vp prepare')) {
-        const vpPrepareCmd = huskyDir !== '.husky' ? `vp prepare ${huskyDir}` : 'vp prepare';
-        pkg.scripts.prepare = `${vpPrepareCmd} && ${currentPrepare}`;
+      if (!pkg.scripts.prepare) {
+        pkg.scripts.prepare = 'vp prepare';
+      } else if (!pkg.scripts.prepare.includes('vp prepare')) {
+        pkg.scripts.prepare = `vp prepare && ${pkg.scripts.prepare}`;
       }
-
-      // Clean up leftover husky commands in composed prepare scripts
-      // e.g. "vp prepare && husky && npm run build" → "vp prepare && npm run build"
-      // Only handles && and ; operators — || has different semantics (fallback on
-      // failure) so stripping it would silently change the script's behavior.
-      // Use (?<!\S) (not preceded by non-whitespace) instead of \b to avoid matching
-      // "husky" inside paths like ".config/husky"
-      pkg.scripts.prepare = pkg.scripts.prepare
-        .replace(/(?<!\S)husky install(?:\s+\S+)?\s*(?:&&|;)\s*/g, '')
-        .replace(/\s*(?:&&|;)\s*husky install(?:\s+\S+)?$/g, '')
-        .replace(/(?<!\S)husky(?:\s+\S+)?\s*(?:&&|;)\s*/g, '')
-        .replace(/\s*(?:&&|;)\s*husky(?:\s+\S+)?$/g, '')
-        // Also strip "husky || <no-op>" error-suppression idioms in composed scripts
-        .replace(
-          /(?<!\S)husky(?:\s+install)?(?:\s+\S+)?\s*\|\|\s*(?:true|:|exit\s+0)\s*(?:&&|;)\s*/g,
-          '',
-        )
-        .replace(
-          /\s*(?:&&|;)\s*husky(?:\s+install)?(?:\s+\S+)?\s*\|\|\s*(?:true|:|exit\s+0)$/g,
-          '',
-        );
 
       // Add lint-staged config if not present (in package.json or standalone config files)
       if (!pkg['lint-staged'] && !hasStandaloneLintStagedConfig(projectPath)) {

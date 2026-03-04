@@ -19,7 +19,7 @@
 {
   "name": "migration-husky-or-prepare",
   "scripts": {
-    "prepare": "vp prepare"
+    "prepare": "vp prepare || true"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
