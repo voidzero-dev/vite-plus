@@ -81,12 +81,12 @@ When a config file already exists:
 
 Mirrors `packages/cli/src/utils/agent.ts` structure:
 
-| agent.ts | editor.ts |
-|----------|-----------|
-| `AGENTS` array | `EDITORS` array |
-| `selectAgentTargetPath()` | `selectEditor()` |
+| agent.ts                          | editor.ts                |
+| --------------------------------- | ------------------------ |
+| `AGENTS` array                    | `EDITORS` array          |
+| `selectAgentTargetPath()`         | `selectEditor()`         |
 | `detectExistingAgentTargetPath()` | `detectExistingEditor()` |
-| `writeAgentInstructions()` | `writeEditorConfigs()` |
+| `writeAgentInstructions()`        | `writeEditorConfigs()`   |
 
 Key difference from agent.ts: Uses JSON merge (via `utils/json.ts`) instead of file copy/append, since IDE configs are structured JSON.
 
@@ -125,7 +125,12 @@ The `EDITORS` array is designed to support additional editors in the future:
 
 ```typescript
 export const EDITORS = [
-  { id: 'vscode', label: 'VSCode', targetDir: '.vscode', files: ['settings.json', 'extensions.json'] },
+  {
+    id: 'vscode',
+    label: 'VSCode',
+    targetDir: '.vscode',
+    files: ['settings.json', 'extensions.json'],
+  },
   // Future: { id: 'jetbrains', label: 'JetBrains', targetDir: '.idea', files: [...] },
 ] as const;
 ```
