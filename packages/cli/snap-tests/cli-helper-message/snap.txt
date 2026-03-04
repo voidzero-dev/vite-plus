@@ -16,7 +16,7 @@ Core Commands:
   preview        Preview production build
   cache          Manage the task cache
   prepare        Set up Git hooks for the project
-  lint-staged    Run linters on staged files
+  staged         Run linters on staged files
 
 Package Manager Commands:
   install    Install all dependencies, or add packages if package names are provided

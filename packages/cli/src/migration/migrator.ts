@@ -510,6 +510,7 @@ function rewriteLintStagedConfigFile(projectPath: string): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   let hasUnsupported = false;
 
+  const hasPackageJson = fs.existsSync(packageJsonPath);
   for (const filename of LINT_STAGED_JSON_CONFIG_FILES) {
     const configPath = path.join(projectPath, filename);
     if (!fs.existsSync(configPath)) {
@@ -523,7 +524,7 @@ function rewriteLintStagedConfigFile(projectPath: string): void {
       continue;
     }
     // Inline the JSON config into package.json as "vite-staged" and delete the file
-    if (fs.existsSync(packageJsonPath)) {
+    if (hasPackageJson) {
       const config = readJsonFile(configPath);
       const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
       const finalConfig = updated ? JSON.parse(updated) : config;

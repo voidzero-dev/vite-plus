@@ -1177,7 +1177,7 @@ fn print_help() {
   {bold}preview{reset}        Preview production build
   {bold}cache{reset}          Manage the task cache
   {bold}prepare{reset}        Set up Git hooks for the project
-  {bold}lint-staged{reset}    Run linters on staged files
+  {bold}staged{reset}         Run linters on staged files
 
 {bold_underline}Package Manager Commands:{reset}
   {bold}install{reset}    Install all dependencies, or add packages if package names are provided

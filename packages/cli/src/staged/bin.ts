@@ -208,17 +208,15 @@ function findViteStagedConfig(startDir: string): Configuration | null {
   let dir = path.resolve(startDir);
   while (true) {
     const pkgPath = path.join(dir, 'package.json');
-    if (fs.existsSync(pkgPath)) {
-      try {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-        if (pkg['vite-staged']) {
-          return pkg['vite-staged'] as Configuration;
-        }
-      } catch {
-        // Malformed JSON — skip
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      if (pkg['vite-staged']) {
+        return pkg['vite-staged'] as Configuration;
       }
       // Found a package.json but no vite-staged key → stop searching
       return null;
+    } catch {
+      // File doesn't exist or malformed JSON — walk up
     }
     const parent = path.dirname(dir);
     if (parent === dir) {
