@@ -475,7 +475,6 @@ export function rewritePackageJson(
     const config = pkg['lint-staged'];
     const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
     extractedStagedConfig = updated ? JSON.parse(updated) : config;
-    delete pkg['lint-staged'];
   } else if (pkg['vite-staged']) {
     const config = pkg['vite-staged'];
     const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
@@ -682,9 +681,12 @@ function mergeStagedConfigToViteConfig(
   const tempJsonPath = path.join(projectPath, '.staged-config-temp.json');
   fs.writeFileSync(tempJsonPath, JSON.stringify(stagedConfig, null, 2));
 
-  const result = mergeJsonConfig(fullViteConfigPath, tempJsonPath, 'staged');
-  // Clean up temp file
-  fs.unlinkSync(tempJsonPath);
+  let result;
+  try {
+    result = mergeJsonConfig(fullViteConfigPath, tempJsonPath, 'staged');
+  } finally {
+    fs.unlinkSync(tempJsonPath);
+  }
 
   if (result.updated) {
     fs.writeFileSync(fullViteConfigPath, result.content);
