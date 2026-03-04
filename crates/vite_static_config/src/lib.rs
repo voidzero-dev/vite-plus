@@ -13,7 +13,7 @@ use vite_path::AbsolutePath;
 
 /// The result of statically analyzing a single config field's value.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StaticFieldValue {
+pub enum FieldValue {
     /// The field value was successfully extracted as a JSON literal.
     Json(serde_json::Value),
     /// The field exists but its value is not a pure JSON literal (e.g. contains
@@ -27,11 +27,11 @@ pub enum StaticFieldValue {
 ///   no `export default`, or the default export is not an object literal).
 ///   The caller should fall back to a runtime evaluation (e.g. NAPI).
 /// - `Some(map)` — the default export object was successfully located.
-///   - Key maps to [`StaticFieldValue::Json`] — field value was extracted.
-///   - Key maps to [`StaticFieldValue::NonStatic`] — field exists but its value
+///   - Key maps to [`FieldValue::Json`] — field value was extracted.
+///   - Key maps to [`FieldValue::NonStatic`] — field exists but its value
 ///     cannot be represented as pure JSON.
 ///   - Key absent — the field does not exist in the object.
-pub type StaticConfig = Option<FxHashMap<Box<str>, StaticFieldValue>>;
+pub type StaticConfig = Option<FxHashMap<Box<str>, FieldValue>>;
 
 /// Config file names to try, in priority order.
 /// This matches Vite's `DEFAULT_CONFIG_FILES`:
@@ -84,11 +84,7 @@ pub fn resolve_static_config(dir: &AbsolutePath) -> StaticConfig {
 fn parse_json_config(source: &str) -> StaticConfig {
     let value: serde_json::Value = serde_json::from_str(source).ok()?;
     let obj = value.as_object()?;
-    Some(
-        obj.iter()
-            .map(|(k, v)| (Box::from(k.as_str()), StaticFieldValue::Json(v.clone())))
-            .collect(),
-    )
+    Some(obj.iter().map(|(k, v)| (Box::from(k.as_str()), FieldValue::Json(v.clone()))).collect())
 }
 
 /// Parse a JS/TS config file, extracting the default export object's fields.
@@ -166,11 +162,11 @@ fn extract_config_from_expr(expr: &Expression<'_>) -> StaticConfig {
 
 /// Extract fields from an object expression, converting each value to JSON.
 /// Fields whose values cannot be represented as pure JSON are recorded as
-/// [`StaticFieldValue::NonStatic`]. Spread elements and computed properties
+/// [`FieldValue::NonStatic`]. Spread elements and computed properties
 /// are not representable so they are silently skipped (their keys are unknown).
 fn extract_object_fields(
     obj: &oxc_ast::ast::ObjectExpression<'_>,
-) -> FxHashMap<Box<str>, StaticFieldValue> {
+) -> FxHashMap<Box<str>, FieldValue> {
     let mut map = FxHashMap::default();
 
     for prop in &obj.properties {
@@ -187,28 +183,25 @@ fn extract_object_fields(
             continue;
         };
 
-        let value =
-            expr_to_json(&prop.value).map_or(StaticFieldValue::NonStatic, StaticFieldValue::Json);
+        let value = expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
         map.insert(Box::from(key.as_ref()), value);
     }
 
     map
 }
 
-/// Convert an f64 to a JSON value, preserving integers when possible.
-#[expect(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+/// Convert an f64 to a JSON value following `JSON.stringify` semantics.
+/// `NaN`, `Infinity`, `-Infinity` become `null`; `-0` becomes `0`.
 fn f64_to_json_number(value: f64) -> serde_json::Value {
-    // If the value is a whole number that fits in i64, use integer representation
+    // fract() == 0.0 ensures the value is a whole number, so the cast is lossless.
+    #[expect(clippy::cast_possible_truncation)]
     if value.fract() == 0.0
-        && value.is_finite()
-        && value >= i64::MIN as f64
-        && value <= i64::MAX as f64
+        && let Ok(i) = i64::try_from(value as i128)
     {
-        serde_json::Value::Number(serde_json::Number::from(value as i64))
-    } else if let Some(n) = serde_json::Number::from_f64(value) {
-        serde_json::Value::Number(n)
+        serde_json::Value::from(i)
     } else {
-        serde_json::Value::Null
+        // From<f64> for Value: finite → Number, NaN/Infinity → Null
+        serde_json::Value::from(value)
     }
 }
 
@@ -285,24 +278,20 @@ mod tests {
 
     /// Helper: parse JS/TS source, unwrap the `Some` (asserting it's analyzable),
     /// and return the field map.
-    fn parse(source: &str) -> FxHashMap<Box<str>, StaticFieldValue> {
+    fn parse(source: &str) -> FxHashMap<Box<str>, FieldValue> {
         parse_js_ts_config(source, "ts").expect("expected analyzable config")
     }
 
     /// Shorthand for asserting a field extracted as JSON.
-    fn assert_json(
-        map: &FxHashMap<Box<str>, StaticFieldValue>,
-        key: &str,
-        expected: serde_json::Value,
-    ) {
-        assert_eq!(map.get(key), Some(&StaticFieldValue::Json(expected)));
+    fn assert_json(map: &FxHashMap<Box<str>, FieldValue>, key: &str, expected: serde_json::Value) {
+        assert_eq!(map.get(key), Some(&FieldValue::Json(expected)));
     }
 
     /// Shorthand for asserting a field is `NonStatic`.
-    fn assert_non_static(map: &FxHashMap<Box<str>, StaticFieldValue>, key: &str) {
+    fn assert_non_static(map: &FxHashMap<Box<str>, FieldValue>, key: &str) {
         assert_eq!(
             map.get(key),
-            Some(&StaticFieldValue::NonStatic),
+            Some(&FieldValue::NonStatic),
             "expected field {key:?} to be NonStatic"
         );
     }
@@ -457,6 +446,21 @@ mod tests {
         assert_json(&result, "b", serde_json::json!(1.5));
         assert_json(&result, "c", serde_json::json!(0));
         assert_json(&result, "d", serde_json::json!(-1));
+    }
+
+    #[test]
+    fn numeric_overflow_to_infinity_is_null() {
+        // 1e999 overflows f64 to Infinity; JSON.stringify(Infinity) === "null"
+        let result = parse("export default { a: 1e999, b: -1e999 }");
+        assert_json(&result, "a", serde_json::Value::Null);
+        assert_json(&result, "b", serde_json::Value::Null);
+    }
+
+    #[test]
+    fn negative_zero_is_zero() {
+        // JSON.stringify(-0) === "0"
+        let result = parse("export default { a: -0 }");
+        assert_json(&result, "a", serde_json::json!(0));
     }
 
     #[test]

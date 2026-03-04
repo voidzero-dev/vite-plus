@@ -11,15 +11,17 @@ without needing a Node.js runtime (NAPI).
 ## Supported patterns
 
 **ESM:**
+
 ```js
 export default { run: { tasks: { build: { command: "echo build" } } } }
 export default defineConfig({ run: { cacheScripts: true } })
 ```
 
 **CJS:**
+
 ```js
-module.exports = { run: { tasks: { build: { command: "echo build" } } } }
-module.exports = defineConfig({ run: { cacheScripts: true } })
+module.exports = { run: { tasks: { build: { command: 'echo build' } } } };
+module.exports = defineConfig({ run: { cacheScripts: true } });
 ```
 
 ## Config file resolution
@@ -36,14 +38,14 @@ Searches for config files in the same order as Vite's
 
 ## Return type
 
-`resolve_static_config` returns `Option<FxHashMap<Box<str>, StaticFieldValue>>`:
+`resolve_static_config` returns `Option<FxHashMap<Box<str>, FieldValue>>`:
 
 - **`None`** — config is not statically analyzable (no config file, parse error, no
   `export default`/`module.exports`, or the exported value is not an object literal).
   Caller should fall back to runtime evaluation (e.g. NAPI).
 - **`Some(map)`** — config object was successfully located:
-  - `StaticFieldValue::Json(value)` — field value extracted as pure JSON
-  - `StaticFieldValue::NonStatic` — field exists but contains non-JSON expressions
+  - `FieldValue::Json(value)` — field value extracted as pure JSON
+  - `FieldValue::NonStatic` — field exists but contains non-JSON expressions
     (function calls, variables, template literals with interpolation, etc.)
   - Key absent — field does not exist in the config object
 
