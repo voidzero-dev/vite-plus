@@ -1738,7 +1738,7 @@ dependencies = [
 [[package]]
 name = "fspy"
 version = "0.1.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "allocator-api2",
  "anyhow",
@@ -1773,7 +1773,7 @@ dependencies = [
 [[package]]
 name = "fspy_detours_sys"
 version = "0.0.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "cc",
  "winapi",
@@ -1782,7 +1782,7 @@ dependencies = [
 [[package]]
 name = "fspy_preload_unix"
 version = "0.0.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1797,7 +1797,7 @@ dependencies = [
 [[package]]
 name = "fspy_preload_windows"
 version = "0.1.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "bincode",
  "constcat",
@@ -1813,7 +1813,7 @@ dependencies = [
 [[package]]
 name = "fspy_seccomp_unotify"
 version = "0.1.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "bincode",
  "futures-util",
@@ -1830,7 +1830,7 @@ dependencies = [
 [[package]]
 name = "fspy_shared"
 version = "0.0.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "allocator-api2",
  "bincode",
@@ -1848,7 +1848,7 @@ dependencies = [
 [[package]]
 name = "fspy_shared_unix"
 version = "0.0.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4533,7 +4533,7 @@ dependencies = [
 [[package]]
 name = "pty_terminal_test_client"
 version = "0.0.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 
 [[package]]
 name = "quinn"
@@ -7196,7 +7196,7 @@ dependencies = [
 [[package]]
 name = "vite_glob"
 version = "0.0.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "thiserror 2.0.18",
  "wax 0.7.0",
@@ -7236,7 +7236,7 @@ dependencies = [
 [[package]]
 name = "vite_graph_ser"
 version = "0.1.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "petgraph 0.8.3",
  "serde",
@@ -7317,7 +7317,7 @@ dependencies = [
 [[package]]
 name = "vite_path"
 version = "0.1.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "bincode",
  "diff-struct",
@@ -7330,7 +7330,7 @@ dependencies = [
 [[package]]
 name = "vite_select"
 version = "0.0.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "anyhow",
  "crossterm",
@@ -7357,7 +7357,7 @@ dependencies = [
 [[package]]
 name = "vite_shell"
 version = "0.0.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "bincode",
  "brush-parser",
@@ -7370,7 +7370,7 @@ dependencies = [
 [[package]]
 name = "vite_str"
 version = "0.1.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "bincode",
  "compact_str",
@@ -7381,7 +7381,7 @@ dependencies = [
 [[package]]
 name = "vite_task"
 version = "0.0.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7417,7 +7417,7 @@ dependencies = [
 [[package]]
 name = "vite_task_graph"
 version = "0.1.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7427,6 +7427,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tracing",
  "vite_graph_ser",
  "vite_path",
  "vite_str",
@@ -7436,7 +7437,7 @@ dependencies = [
 [[package]]
 name = "vite_task_plan"
 version = "0.1.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7462,7 +7463,7 @@ dependencies = [
 [[package]]
 name = "vite_workspace"
 version = "0.0.0"
-source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=9e1287e797190ea29793655b239cdaa7a55edd21#9e1287e797190ea29793655b239cdaa7a55edd21"
+source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=e0d1add82332c5256426976c03fb8649c5ed6a1c#e0d1add82332c5256426976c03fb8649c5ed6a1c"
 dependencies = [
  "clap",
  "path-clean",
@@ -7472,6 +7473,7 @@ dependencies = [
  "serde_json",
  "serde_yml",
  "thiserror 2.0.18",
+ "tracing",
  "vec1",
  "vite_glob",
  "vite_path",
