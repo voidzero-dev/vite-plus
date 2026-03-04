@@ -1,0 +1,3 @@
+{
+  "commands": ["vpx -s cowsay hello # should work without package.json"]
+}

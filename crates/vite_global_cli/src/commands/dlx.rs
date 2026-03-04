@@ -1,9 +1,13 @@
-use std::process::ExitStatus;
+use std::{collections::HashMap, process::ExitStatus};
 
-use vite_install::commands::dlx::DlxCommandOptions;
+use vite_command::run_command;
+use vite_install::{
+    commands::dlx::{DlxCommandOptions, build_npx_args},
+    package_manager::PackageManager,
+};
 use vite_path::AbsolutePathBuf;
 
-use super::{build_package_manager, prepend_js_runtime_to_path_env};
+use super::prepend_js_runtime_to_path_env;
 use crate::error::Error;
 
 /// Dlx command for executing packages without installing them as dependencies.
@@ -14,6 +18,8 @@ use crate::error::Error;
 /// - npm: npm exec
 /// - yarn@2+: yarn dlx
 /// - yarn@1: falls back to npx
+///
+/// When no package.json is found, falls back to npx directly.
 pub struct DlxCommand {
     cwd: AbsolutePathBuf,
 }
@@ -40,8 +46,6 @@ impl DlxCommand {
         let package_spec = &args[0];
         let command_args: Vec<String> = args[1..].to_vec();
 
-        let package_manager = build_package_manager(&self.cwd).await?;
-
         let dlx_command_options = DlxCommandOptions {
             packages: &packages,
             package_spec,
@@ -50,7 +54,18 @@ impl DlxCommand {
             silent,
         };
 
-        Ok(package_manager.run_dlx_command(&dlx_command_options, &self.cwd).await?)
+        match PackageManager::builder(&self.cwd).build_with_default().await {
+            Ok(pm) => Ok(pm.run_dlx_command(&dlx_command_options, &self.cwd).await?),
+            Err(vite_error::Error::WorkspaceError(vite_workspace::Error::PackageJsonNotFound(
+                _,
+            ))) => {
+                // No package.json found — fall back to npx directly
+                let args = build_npx_args(&dlx_command_options);
+                let envs = HashMap::new();
+                Ok(run_command("npx", &args, &envs, &self.cwd).await?)
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 }
 
