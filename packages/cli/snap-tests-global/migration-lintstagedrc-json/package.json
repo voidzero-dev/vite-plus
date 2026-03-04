@@ -1,6 +1,6 @@
 {
   "name": "migration-lintstagedrc",
-  "vite-staged": {
+  "lint-staged": {
     "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
       "oxfmt --staged",
       "eslint --fix"

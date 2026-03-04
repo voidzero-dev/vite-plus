@@ -2,7 +2,7 @@
   "commands": [
     { "command": "git init", "ignoreOutput": true },
     "vp migrate --no-interactive # migration should rewrite husky and lint-staged",
-    "cat package.json # check prepare rewritten, vite-staged removed, both removed from devDeps",
+    "cat package.json # check prepare rewritten, lint-staged removed, both removed from devDeps",
     "cat vite.config.ts # check staged config migrated to vite.config.ts",
     "cat .husky/pre-commit # check pre-commit hook rewritten"
   ]

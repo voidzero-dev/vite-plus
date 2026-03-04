@@ -1,5 +1,5 @@
 {
-  "name": "migration-existing-husky-lint-staged",
+  "name": "migration-chained-lint-staged-pre-commit",
   "scripts": {
     "prepare": "husky"
   },
@@ -8,7 +8,7 @@
     "lint-staged": "^16.2.6",
     "vite": "^7.0.0"
   },
-  "vite-staged": {
+  "lint-staged": {
     "*.js": "oxlint --fix"
   }
 }

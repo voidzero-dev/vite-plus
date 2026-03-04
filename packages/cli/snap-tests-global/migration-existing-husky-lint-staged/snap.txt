@@ -19,7 +19,7 @@
 └  ✔ Migration completed!
 
 
-> cat package.json # check prepare rewritten, vite-staged removed, both removed from devDeps
+> cat package.json # check prepare rewritten, lint-staged removed, both removed from devDeps
 {
   "name": "migration-existing-husky-lint-staged",
   "scripts": {

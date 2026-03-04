@@ -456,7 +456,6 @@ export function rewritePackageJson(
   pkg: {
     scripts?: Record<string, string>;
     'lint-staged'?: Record<string, string | string[]>;
-    'vite-staged'?: Record<string, string | string[]>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   },
@@ -469,20 +468,15 @@ export function rewritePackageJson(
       pkg.scripts = JSON.parse(updated);
     }
   }
-  // Extract staged config from package.json (lint-staged or vite-staged) → will be merged into vite.config.ts
+  // Extract staged config from package.json (lint-staged) → will be merged into vite.config.ts
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
   if (pkg['lint-staged']) {
     const config = pkg['lint-staged'];
     const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
     extractedStagedConfig = updated ? JSON.parse(updated) : config;
-  } else if (pkg['vite-staged']) {
-    const config = pkg['vite-staged'];
-    const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
-    extractedStagedConfig = updated ? JSON.parse(updated) : config;
   }
-  // Remove both keys from package.json — config now lives in vite.config.ts
+  // Remove lint-staged key from package.json — config now lives in vite.config.ts
   delete pkg['lint-staged'];
-  delete pkg['vite-staged'];
   const supportCatalog = isMonorepo && packageManager !== PackageManager.npm;
   let needVitePlus = false;
   for (const [key, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
@@ -827,7 +821,6 @@ export function setupGitHooks(projectPath: string): void {
   editJsonFile<{
     scripts?: Record<string, string>;
     'lint-staged'?: Record<string, string | string[]>;
-    'vite-staged'?: Record<string, string | string[]>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
@@ -843,9 +836,8 @@ export function setupGitHooks(projectPath: string): void {
         pkg.scripts.prepare = `vp prepare && ${pkg.scripts.prepare}`;
       }
 
-      // Remove lint-staged and vite-staged keys from package.json — config now lives in vite.config.ts
+      // Remove lint-staged key from package.json — config now lives in vite.config.ts
       delete pkg['lint-staged'];
-      delete pkg['vite-staged'];
 
       // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands).
       // Only when config migration succeeds — if unsupported config files remain,
