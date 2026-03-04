@@ -61,7 +61,7 @@ pub async fn download_file(
                 pb.set_style(
                     ProgressStyle::default_bar()
                         .template(
-                            "{msg}\n{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] \
+                            "{msg}\n{spinner:.green} [{elapsed_precise}] [{bar:40.blue/white}] \
                              {bytes}/{total_bytes} ({bytes_per_sec}, {eta})",
                         )
                         .expect("valid progress bar template")

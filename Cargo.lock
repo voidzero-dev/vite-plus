@@ -7209,6 +7209,7 @@ dependencies = [
  "base64-simd",
  "chrono",
  "clap",
+ "crossterm",
  "flate2",
  "junction",
  "node-semver",

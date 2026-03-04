@@ -161,7 +161,7 @@ This is clean: the rolldown-vite source change is minimal (reads an env var with
 
 ```javascript
 logger.info(
-  colors.cyan(
+  colors.blue(
     `vite v${VERSION} ${colors.green(
       `building ${environment.name} environment for ${environment.config.mode}...`,
     )}`,
@@ -175,7 +175,7 @@ logger.info(
 
 ```javascript
 logger.info(
-  colors.cyan(
+  colors.blue(
     `vite+ v${VITE_PLUS_VERSION} ${colors.green(
       `building ${environment.name} environment for ${environment.config.mode}...`,
     )}`,
@@ -236,7 +236,7 @@ pub const ARROW: &str = "\u{2192}";   // → — transitions
 
 /// Print an info message to stderr.
 pub fn info(msg: &str) {
-    eprintln!("{} {}", "info:".cyan().bold(), msg);
+    eprintln!("{} {}", "info:".bright_blue().bold(), msg);
 }
 
 /// Print a warning message to stderr.
@@ -343,7 +343,7 @@ The JS code in `packages/cli/src/utils/terminal.ts` already has `accent()`, `hea
 
 ```typescript
 export function info(msg: string) {
-  console.error(styleText(['cyan', 'bold'], 'info:'), msg);
+  console.error(styleText(['blue', 'bold'], 'info:'), msg);
 }
 
 export function warn(msg: string) {

@@ -44,13 +44,13 @@ export const confirm = (opts: ConfirmOptions) => {
           )}${hasGuide ? `\n${color.gray(S_BAR)}` : ''}`;
         }
         default: {
-          const defaultPrefix = hasGuide ? `${color.blueBright(S_BAR)}  ` : '';
-          const defaultPrefixEnd = hasGuide ? color.blueBright(S_BAR_END) : '';
+          const defaultPrefix = hasGuide ? `${color.blue(S_BAR)}  ` : '';
+          const defaultPrefixEnd = hasGuide ? color.blue(S_BAR_END) : '';
           return `${title}${defaultPrefix}${
             this.value
               ? `${color.green(S_RADIO_ACTIVE)} ${active}`
               : `${color.dim(S_RADIO_INACTIVE)} ${color.dim(active)}`
-          }${opts.vertical ? (hasGuide ? `\n${color.blueBright(S_BAR)}  ` : '\n') : ` ${color.dim('/')} `}${
+          }${opts.vertical ? (hasGuide ? `\n${color.blue(S_BAR)}  ` : '\n') : ` ${color.dim('/')} `}${
             !this.value
               ? `${color.green(S_RADIO_ACTIVE)} ${inactive}`
               : `${color.dim(S_RADIO_INACTIVE)} ${color.dim(inactive)}`

@@ -124,7 +124,7 @@ export const autocomplete = <Value>(opts: AutocompleteOptions<Value>) => {
         }
 
         default: {
-          const barColor = this.state === 'error' ? color.yellow : color.blueBright;
+          const barColor = this.state === 'error' ? color.yellow : color.blue;
           const guidePrefix = hasGuide ? `${barColor(S_BAR)}  ` : '';
           const guidePrefixEnd = hasGuide ? barColor(S_BAR_END) : '';
           // Display cursor position - show plain text in navigation mode
@@ -298,7 +298,7 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
           return `${title}${color.gray(S_BAR)}  ${color.strikethrough(color.dim(userInput))}`;
         }
         default: {
-          const barColor = this.state === 'error' ? color.yellow : color.blueBright;
+          const barColor = this.state === 'error' ? color.yellow : color.blue;
           // Instructions
           const instructions = [
             `${color.dim('↑/↓')} to navigate`,

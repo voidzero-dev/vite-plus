@@ -1806,7 +1806,7 @@ $ vp env list
 * v22.13.0 current
 ```
 
-- Current version line is highlighted in cyan
+- Current version line is highlighted in blue
 - `current` and `default` markers are shown in dimmed text
 
 ### Flags

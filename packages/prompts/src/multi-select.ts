@@ -48,7 +48,7 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
       }`;
     }
     if (state === 'active') {
-      return `${color.blueBright(S_CHECKBOX_ACTIVE)} ${label}${
+      return `${color.blue(S_CHECKBOX_ACTIVE)} ${label}${
         option.hint ? ` ${color.dim(`(${option.hint})`)}` : ''
       }`;
     }
@@ -162,7 +162,7 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
           }).join(`\n${prefix}`)}\n${footer}\n`;
         }
         default: {
-          const prefix = `${color.blueBright(S_BAR)}  `;
+          const prefix = `${color.blue(S_BAR)}  `;
           // Calculate rowPadding: title lines + footer lines (S_BAR_END + trailing newline)
           const titleLineCount = title.split('\n').length;
           const footerLineCount = 2; // S_BAR_END + trailing newline
@@ -174,7 +174,7 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
             columnPadding: prefix.length,
             rowPadding: titleLineCount + footerLineCount,
             style: styleOption,
-          }).join(`\n${prefix}`)}\n${color.blueBright(S_BAR_END)}\n`;
+          }).join(`\n${prefix}`)}\n${color.blue(S_BAR_END)}\n`;
         }
       }
     },

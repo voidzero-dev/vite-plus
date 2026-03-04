@@ -44,7 +44,7 @@ export const symbol = (state: State) => {
   switch (state) {
     case 'initial':
     case 'active':
-      return color.blueBright(S_STEP_ACTIVE);
+      return color.blue(S_STEP_ACTIVE);
     case 'cancel':
       return color.red(S_STEP_CANCEL);
     case 'error':
@@ -58,7 +58,7 @@ export const symbolBar = (state: State) => {
   switch (state) {
     case 'initial':
     case 'active':
-      return color.blueBright(S_BAR);
+      return color.blue(S_BAR);
     case 'cancel':
       return color.red(S_BAR);
     case 'error':

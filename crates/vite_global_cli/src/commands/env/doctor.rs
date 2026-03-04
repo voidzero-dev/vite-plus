@@ -217,7 +217,7 @@ async fn check_shim_mode() {
             print_check(
                 &output::CHECK.green().to_string(),
                 "Shim mode",
-                &"system-first".cyan().to_string(),
+                &"system-first".bright_blue().to_string(),
             );
 
             // Check if system Node.js is available

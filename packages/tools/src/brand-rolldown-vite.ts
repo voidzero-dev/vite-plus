@@ -52,10 +52,22 @@ function replaceInFile(
   );
 }
 
-function removeAnyInFile(filePath: string, searches: string[]): 'patched' | 'already' {
+function removeAnyInFile(
+  filePath: string,
+  searches: Array<string | RegExp>,
+): 'patched' | 'already' {
   const content = readFileSync(filePath, 'utf-8');
   for (const search of searches) {
-    if (content.includes(search)) {
+    if (typeof search === 'string') {
+      if (content.includes(search)) {
+        const newContent = content.replace(search, '');
+        writeFileSync(filePath, newContent, 'utf-8');
+        return 'patched';
+      }
+      continue;
+    }
+
+    if (search.test(content)) {
       const newContent = content.replace(search, '');
       writeFileSync(filePath, newContent, 'utf-8');
       return 'patched';
@@ -120,8 +132,8 @@ export function brandRolldownVite(rootDir: string = process.cwd()) {
   const buildFile = join(nodeDir, 'build.ts');
   const buildResults = [
     removeAnyInFile(buildFile, [
-      '    logger.info(\n      colors.cyan(\n        `vite v${VERSION} ${colors.green(\n          `building ${environment.name} environment for ${environment.config.mode}...`,\n        )}`,\n      ),\n    )\n',
-      '    logger.info(\n      colors.cyan(\n        `vite+ v${VITE_PLUS_VERSION} ${colors.green(\n          `building ${environment.name} environment for ${environment.config.mode}...`,\n        )}`,\n      ),\n    )\n',
+      / {4}logger\.info\(\n {6}colors\.[a-zA-Z]+\(\n {8}`vite v\$\{VERSION\} \$\{colors\.green\(\n {10}`building \$\{environment\.name\} environment for \$\{environment\.config\.mode\}\.\.\.`,\n {8}\)\}`,\n {6}\),\n {4}\)\n/,
+      / {4}logger\.info\(\n {6}colors\.[a-zA-Z]+\(\n {8}`vite\+ v\$\{VITE_PLUS_VERSION\} \$\{colors\.green\(\n {10}`building \$\{environment\.name\} environment for \$\{environment\.config\.mode\}\.\.\.`,\n {8}\)\}`,\n {6}\),\n {4}\)\n/,
     ]),
     replaceInFile(buildFile, '`[vite]: Rolldown failed', '`[vite+]: Rolldown failed'),
   ];

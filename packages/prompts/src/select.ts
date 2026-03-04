@@ -145,8 +145,8 @@ export const select = <Value>(opts: SelectOptions<Value>) => {
           return `${title}${wrappedLines}${hasGuide ? `\n${color.gray(S_BAR)}` : ''}`;
         }
         default: {
-          const prefix = hasGuide ? `${color.blueBright(S_BAR)}  ` : '';
-          const prefixEnd = hasGuide ? color.blueBright(S_BAR_END) : '';
+          const prefix = hasGuide ? `${color.blue(S_BAR)}  ` : '';
+          const prefixEnd = hasGuide ? color.blue(S_BAR_END) : '';
           // Calculate rowPadding: title lines + footer lines (S_BAR_END + trailing newline)
           const titleLineCount = title.split('\n').length;
           const footerLineCount = hasGuide ? 2 : 1; // S_BAR_END + trailing newline (or just trailing newline)

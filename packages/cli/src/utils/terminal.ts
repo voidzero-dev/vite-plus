@@ -6,7 +6,7 @@ export function log(message: string) {
 }
 
 export function accent(text: string) {
-  return styleText('blueBright', text);
+  return styleText('blue', text);
 }
 
 export function muted(text: string) {
@@ -26,7 +26,7 @@ export function error(text: string) {
 
 export function infoMsg(msg: string) {
   /* oxlint-disable-next-line no-console */
-  console.log(styleText(['blueBright', 'bold'], 'info:'), msg);
+  console.log(styleText(['blue', 'bold'], 'info:'), msg);
 }
 
 export function warnMsg(msg: string) {

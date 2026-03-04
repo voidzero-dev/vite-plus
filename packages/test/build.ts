@@ -541,7 +541,7 @@ async function brandVitest() {
     // Use a blue badge for both DEV and RUN.
     patchString(
       'banner color',
-      /const color = this\.ctx\.config\.watch \? "blue" : "cyan";\n\t\tconst mode = this\.ctx\.config\.watch \? "DEV" : "RUN";/,
+      /const color = this\.ctx\.config\.watch \? "blue" : "[a-z]+";\n\t\tconst mode = this\.ctx\.config\.watch \? "DEV" : "RUN";/,
       'const mode = this.ctx.config.watch ? "DEV" : "RUN";\n\t\tconst label = c.bold(c.inverse(c.blue(` ${mode} `)));',
     );
 

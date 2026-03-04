@@ -24,7 +24,7 @@ export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) =
       return color.strikethrough(color.dim(label));
     }
     if (state === 'active') {
-      return `${color.bgCyan(color.gray(` ${option.value} `))} ${label}${
+      return `${color.bgBlue(color.white(` ${option.value} `))} ${label}${
         option.hint ? ` ${color.dim(`(${option.hint})`)}` : ''
       }`;
     }
@@ -66,8 +66,8 @@ export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) =
           return `${title}${wrapped}${hasGuide ? `\n${color.gray(S_BAR)}` : ''}`;
         }
         default: {
-          const defaultPrefix = hasGuide ? `${color.blueBright(S_BAR)}  ` : '';
-          const defaultPrefixEnd = hasGuide ? color.blueBright(S_BAR_END) : '';
+          const defaultPrefix = hasGuide ? `${color.blue(S_BAR)}  ` : '';
+          const defaultPrefixEnd = hasGuide ? color.blue(S_BAR_END) : '';
           const wrapped = this.options
             .map((option, i) =>
               wrapTextWithPrefix(

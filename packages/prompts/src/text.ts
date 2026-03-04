@@ -48,8 +48,8 @@ export const text = (opts: TextOptions) => {
           return `${title}${cancelPrefix}${valueText}${value.trim() ? `\n${cancelPrefix}` : ''}`;
         }
         default: {
-          const defaultPrefix = hasGuide ? `${color.blueBright(S_BAR)}  ` : '';
-          const defaultPrefixEnd = hasGuide ? color.blueBright(S_BAR_END) : '';
+          const defaultPrefix = hasGuide ? `${color.blue(S_BAR)}  ` : '';
+          const defaultPrefixEnd = hasGuide ? color.blue(S_BAR_END) : '';
           return `${title}${defaultPrefix}${userInput}\n${defaultPrefixEnd}\n`;
         }
       }

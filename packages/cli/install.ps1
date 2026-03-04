@@ -231,7 +231,7 @@ function Setup-NodeManager {
 function Main {
     Write-Host ""
     Write-Host "Setting up " -NoNewline
-    Write-Host "VITE+" -ForegroundColor Cyan -NoNewline
+    Write-Host "VITE+" -ForegroundColor Blue -NoNewline
     Write-Host "..."
 
     # Suppress progress bars for cleaner output

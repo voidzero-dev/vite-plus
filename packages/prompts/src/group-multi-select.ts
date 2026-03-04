@@ -43,17 +43,17 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
     const prefix = isItem ? (selectableGroups ? `${isLast ? S_BAR_END : S_BAR} ` : '  ') : '';
     let spacingPrefix = '';
     if (groupSpacing > 0 && !isItem) {
-      const spacingPrefixText = `\n${color.blueBright(S_BAR)}`;
+      const spacingPrefixText = `\n${color.blue(S_BAR)}`;
       spacingPrefix = `${spacingPrefixText.repeat(groupSpacing - 1)}${spacingPrefixText}  `;
     }
 
     if (state === 'active') {
-      return `${spacingPrefix}${color.dim(prefix)}${color.blueBright(S_CHECKBOX_ACTIVE)} ${label}${
+      return `${spacingPrefix}${color.dim(prefix)}${color.blue(S_CHECKBOX_ACTIVE)} ${label}${
         option.hint ? ` ${color.dim(`(${option.hint})`)}` : ''
       }`;
     }
     if (state === 'group-active') {
-      return `${spacingPrefix}${prefix}${color.blueBright(S_CHECKBOX_ACTIVE)} ${color.dim(label)}`;
+      return `${spacingPrefix}${prefix}${color.blue(S_CHECKBOX_ACTIVE)} ${color.dim(label)}`;
     }
     if (state === 'group-active-selected') {
       return `${spacingPrefix}${prefix}${color.green(S_CHECKBOX_SELECTED)} ${color.dim(label)}`;
@@ -180,9 +180,9 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
               const prefix = i !== 0 && !optionText.startsWith('\n') ? '  ' : '';
               return `${prefix}${optionText}`;
             })
-            .join(`\n${color.blueBright(S_BAR)}`);
+            .join(`\n${color.blue(S_BAR)}`);
           const optionsPrefix = optionsText.startsWith('\n') ? '' : '  ';
-          return `${title}${color.blueBright(S_BAR)}${optionsPrefix}${optionsText}\n${color.blueBright(S_BAR_END)}\n`;
+          return `${title}${color.blue(S_BAR)}${optionsPrefix}${optionsText}\n${color.blue(S_BAR_END)}\n`;
         }
       }
     },

@@ -8,6 +8,7 @@
 #![allow(clippy::print_stderr)]
 
 mod cli;
+mod command_picker;
 mod commands;
 mod error;
 mod help;
@@ -227,7 +228,7 @@ async fn main() -> ExitCode {
     vite_shared::init_tracing();
 
     // Check for shim mode (invoked as node, npm, or npx)
-    let args: Vec<String> = std::env::args().collect();
+    let mut args: Vec<String> = std::env::args().collect();
     let argv0 = args.first().map(|s| s.as_str()).unwrap_or("vp");
     tracing::debug!("argv0: {argv0}");
 
@@ -245,6 +246,21 @@ async fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+
+    if args.len() == 1 {
+        match command_picker::pick_top_level_command_if_interactive() {
+            Ok(Some(selection)) => {
+                args.push(selection.command.to_string());
+                if selection.append_help {
+                    args.push("--help".to_string());
+                }
+            }
+            Ok(None) => {}
+            Err(err) => {
+                tracing::debug!("Failed to run top-level command picker: {err}");
+            }
+        }
+    }
 
     let mut tip_context = tips::TipContext {
         // Capture user args (excluding argv0) before normalization

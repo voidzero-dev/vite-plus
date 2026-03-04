@@ -597,7 +597,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
                 // Highlight selected item
                 execute!(
                     io::stdout(),
-                    SetForegroundColor(Color::Cyan),
+                    SetForegroundColor(Color::Blue),
                     Print("▶ "),
                     Print(format!("[{}] ", i + 1)),
                     Print(name),
