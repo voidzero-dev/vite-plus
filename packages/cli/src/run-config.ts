@@ -1,3 +1,27 @@
+export type UserGlobalCacheConfig =
+  | boolean
+  | {
+      /**
+       * Enable caching for package.json scripts not defined in the `tasks` map.
+       *
+       * When `false`, package.json scripts will not be cached.
+       * When `true`, package.json scripts will be cached with default settings.
+       *
+       * Default: `false`
+       */
+      scripts?: boolean;
+      /**
+       * Global cache kill switch for task entries.
+       *
+       * When `false`, overrides all tasks to disable caching, even tasks with `cache: true`.
+       * When `true`, respects each task's individual `cache` setting
+       * (each task's `cache` defaults to `true` if omitted).
+       *
+       * Default: `true`
+       */
+      tasks?: boolean;
+    };
+
 export type Task = {
   /**
    * The command to run for the task.
@@ -38,12 +62,12 @@ export type Task = {
 
 export type RunConfig = {
   /**
-   * Enable cache for all scripts from package.json.
+   * Root-level cache configuration.
    *
    * This option can only be set in the workspace root's config file.
    * Setting it in a package's config will result in an error.
    */
-  cacheScripts?: boolean;
+  cache?: UserGlobalCacheConfig;
   /**
    * Task definitions
    */

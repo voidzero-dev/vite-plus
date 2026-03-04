@@ -1,6 +1,6 @@
 export default {
   run: {
-    cacheScripts: true,
+    cache: true,
     tasks: {
       install: {
         command: 'vp install --production --silent',

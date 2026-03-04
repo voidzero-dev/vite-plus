@@ -1,5 +1,5 @@
 export default {
   run: {
-    cacheScripts: true,
+    cache: true,
   },
 };
