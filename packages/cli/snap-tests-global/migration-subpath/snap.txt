@@ -44,3 +44,9 @@
 
 > cat foo/.husky/pre-commit # pre-commit hook should exist in subpath
 vp lint-staged
+
+> git config --local core.hooksPath # should be foo/.husky/_
+foo/.husky/_
+
+> cat foo/.husky/_/h | grep 'node_modules/.bin' # should resolve from hook file location
+export PATH="$d/node_modules/.bin:$PATH"

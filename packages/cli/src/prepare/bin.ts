@@ -20,7 +20,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 import mri from 'mri';
 
@@ -57,7 +57,8 @@ i="\${XDG_CONFIG_HOME:-$HOME/.config}/husky/init.sh"
 
 [ "\${HUSKY-}" = "0" ] && exit 0
 
-export PATH="node_modules/.bin:$PATH"
+d=$(dirname "$(dirname "$(dirname "$0")")")
+export PATH="$d/node_modules/.bin:$PATH"
 sh -e "$s" "$@"
 c=$?
 
@@ -109,12 +110,15 @@ function install(dir = '.husky'): InstallResult {
   if (dir.includes('..')) {
     return { message: '.. not allowed', isError: false };
   }
-  if (!existsSync('.git')) {
+  const topResult = spawnSync('git', ['rev-parse', '--show-toplevel']);
+  if (topResult.status !== 0) {
     return { message: ".git can't be found", isError: false };
   }
+  const gitRoot = topResult.stdout.toString().trim();
 
   const internal = (x = '') => join(dir, '_', x);
-  const target = `${dir}/_`;
+  const rel = relative(gitRoot, process.cwd());
+  const target = rel ? `${rel}/${dir}/_` : `${dir}/_`;
   const checkResult = spawnSync('git', ['config', '--local', 'core.hooksPath']);
   const existingHooksPath = checkResult.status === 0 ? checkResult.stdout?.toString().trim() : '';
   if (existingHooksPath && existingHooksPath !== target) {

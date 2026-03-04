@@ -799,7 +799,7 @@ export function setupGitHooks(projectPath: string): void {
   if (!unsupported) {
     const prepareArgs = huskyDir !== '.husky' ? ['prepare', huskyDir] : ['prepare'];
     const prepareResult = spawn.sync(vpBin, prepareArgs, {
-      cwd: gitRoot,
+      cwd: projectPath,
       stdio: 'pipe',
     });
     if (prepareResult.status === 0) {
