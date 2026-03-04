@@ -2,7 +2,16 @@
   "commands": [
     { "command": "git init", "ignoreOutput": true },
     { "command": "git add -A && git commit -m 'init'", "ignoreOutput": true },
-    { "command": "echo 'export const foo = 1;' >> src/index.ts && git add src/index.ts", "ignoreOutput": true },
-    "vp staged # should succeed with staged config and staged files"
+    {
+      "command": "echo 'export const foo = 1;' >> src/index.ts && git add src/index.ts",
+      "ignoreOutput": true
+    },
+    "vp staged # should succeed with staged .ts files",
+    { "command": "git add -A && git commit -m 'second'", "ignoreOutput": true },
+    {
+      "command": "printf 'eval(\"code\");\\n' > src/fail.js && git add src/fail.js",
+      "ignoreOutput": true
+    },
+    "vp staged # should fail when staged .js file has lint errors"
   ]
 }

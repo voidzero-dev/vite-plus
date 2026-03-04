@@ -1,4 +1,5 @@
 {
+  "ignoredPlatforms": ["win32"],
   "commands": [
     { "command": "git init", "ignoreOutput": true },
     "vp migrate foo --no-interactive # migration work with subpath",

@@ -148,6 +148,8 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/\[PLUGIN_TIMINGS\] Warning:.*?\n(?:\s+-\s+.+?\n)*/g, '')
       // remove JS stack traces (lines starting with "    at ")
       .replaceAll(/\n\s+at .+/g, '')
+      // replace git stash hashes: "git stash (abc1234)" => "git stash (<hash>)"
+      .replaceAll(/git stash \([0-9a-f]+\)/g, 'git stash (<hash>)')
   );
 }
 
