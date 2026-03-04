@@ -1275,7 +1275,7 @@ The shim mode controls how shims resolve tools:
 $ vp env on
 ✓ Shim mode set to managed.
 
-Shims will now always use vite-plus managed Node.js.
+Shims will now always use the Vite+ managed Node.js.
 Run 'vp env off' to prefer system Node.js instead.
 
 # Enable system-first mode (prefer system Node.js)

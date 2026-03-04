@@ -20,6 +20,17 @@ use crate::{
     help,
 };
 
+#[derive(Clone, Copy, Debug)]
+pub struct RenderOptions {
+    pub show_header: bool,
+}
+
+impl Default for RenderOptions {
+    fn default() -> Self {
+        Self { show_header: true }
+    }
+}
+
 /// Vite+ Global CLI
 #[derive(Parser, Debug)]
 #[clap(
@@ -660,51 +671,34 @@ pub enum Commands {
 #[derive(clap::Args, Debug)]
 #[command(after_help = "\
 Examples:
-  vp env setup                  # Create shims for node, npm, npx
-  vp env setup --refresh        # Force refresh shims
-  vp env doctor                 # Check environment configuration
-  vp env default 20.18.0        # Set default Node.js version
-  vp env on                     # Use vite-plus managed Node.js
-  vp env off                    # Prefer system Node.js
-  vp env which node             # Show which node binary will be used
-  vp env pin 20.18.0            # Pin Node.js version in current directory
-  vp env pin lts                # Pin to latest LTS version
-  vp env unpin                  # Remove pinned version
-  vp env list                   # List locally installed Node.js versions
-  vp env list-remote            # List available remote Node.js versions
-  vp env list-remote --lts      # List only LTS versions
-  vp env list-remote 20         # List Node.js 20.x versions
-  vp env install 20.18.0        # Install Node.js 20.18.0
-  vp env install                # Install version from .node-version / package.json
-  vp env install lts            # Install latest LTS version
-  vp env uninstall 20.18.0      # Uninstall Node.js 20.18.0
-  vp env use 20                 # Use Node.js 20 for this shell session
-  vp env use lts                # Use latest LTS for this shell session
-  vp env use                    # Use project version for this shell session
-  vp env use --unset            # Remove session override
-  vp env exec --node 20 node -v # Execute 'node -v' with Node.js 20
-  vp env exec --node lts npm i  # Execute 'npm i' with latest LTS
-  vp env exec node -v           # Shim mode (version auto-resolved)
-  vp env exec npm install       # Shim mode (version auto-resolved)
+  Setup:
+    vp env setup                  # Create shims for node, npm, npx
+    vp env on                     # Use vite-plus managed Node.js
+    vp env print                  # Print shell snippet for this session
 
-Global Packages:
-  vp install -g <package>       # Install a global package
-  vp uninstall -g <package>     # Uninstall a global package
-  vp update -g [package]        # Update global package(s)
-  vp list -g [package]          # List installed global packages")]
+  Manage:
+    vp env pin lts                # Pin to latest LTS version
+    vp env install                # Install version from .node-version / package.json
+    vp env use 20                 # Use Node.js 20 for this shell session
+    vp env use --unset            # Remove session override
+
+  Inspect:
+    vp env current                # Show current resolved environment
+    vp env current --json         # JSON output for automation
+    vp env doctor                 # Check environment configuration
+    vp env which node             # Show which node binary will be used
+    vp env list-remote --lts      # List only LTS versions
+
+  Execute:
+    vp env exec --node lts npm i  # Execute 'npm i' with latest LTS
+    vp env exec node -v           # Shim mode (version auto-resolved)
+
+Related Commands:
+  vp install -g <package>       # Install a package globally
+  vp uninstall -g <package>     # Uninstall a package globally
+  vp update -g [package]        # Update global packages
+  vp list -g [package]          # List global packages")]
 pub struct EnvArgs {
-    /// Show current environment information
-    #[arg(long)]
-    pub current: bool,
-
-    /// Output in JSON format
-    #[arg(long, requires = "current")]
-    pub json: bool,
-
-    /// Print shell snippet to set environment for current session
-    #[arg(long)]
-    pub print: bool,
-
     /// Subcommand (e.g., 'default', 'setup', 'doctor', 'which')
     #[command(subcommand)]
     pub command: Option<EnvSubcommands>,
@@ -713,6 +707,16 @@ pub struct EnvArgs {
 /// Subcommands for the `env` command
 #[derive(clap::Subcommand, Debug)]
 pub enum EnvSubcommands {
+    /// Show current environment information
+    Current {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Print shell snippet to set environment for current session
+    Print,
+
     /// Set or show the global default Node.js version
     Default {
         /// Version to set as default (e.g., "20.18.0", "lts", "latest")
@@ -1434,6 +1438,15 @@ fn determine_save_dependency_type(
 
 /// Run the CLI command.
 pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus, Error> {
+    run_command_with_options(cwd, args, RenderOptions::default()).await
+}
+
+/// Run the CLI command with rendering options.
+pub async fn run_command_with_options(
+    cwd: AbsolutePathBuf,
+    args: Args,
+    render_options: RenderOptions,
+) -> Result<ExitStatus, Error> {
     // Handle --version flag (Category B: delegates to JS)
     if args.version {
         return commands::version::execute(cwd).await;
@@ -1442,7 +1455,11 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
     // If no command provided, show help and exit
     let Some(command) = args.command else {
         // Use custom help formatting to match the JS CLI output
-        command_with_help().print_help().ok();
+        if render_options.show_header {
+            command_with_help().print_help().ok();
+        } else {
+            command_with_help_with_options(render_options).print_help().ok();
+        }
         println!();
         // Return a successful exit status since help was requested implicitly
         return Ok(std::process::ExitStatus::default());
@@ -1477,7 +1494,7 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
             packages,
             pass_through_args,
         } => {
-            print_runtime_header();
+            print_runtime_header(render_options.show_header);
             // If packages are provided, redirect to Add command
             if let Some(pkgs) = packages
                 && !pkgs.is_empty()
@@ -1796,90 +1813,91 @@ pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus,
 
         // Category C: Local CLI Delegation (stubs)
         Commands::Dev { args } => {
-            if help::maybe_print_unified_delegate_help("dev", &args) {
+            if help::maybe_print_unified_delegate_help("dev", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header();
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "dev", &args).await
         }
 
         Commands::Build { args } => {
-            if help::maybe_print_unified_delegate_help("build", &args) {
+            if help::maybe_print_unified_delegate_help("build", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header();
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "build", &args).await
         }
 
         Commands::Test { args } => {
-            if help::maybe_print_unified_delegate_help("test", &args) {
+            if help::maybe_print_unified_delegate_help("test", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header();
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "test", &args).await
         }
 
         Commands::Lint { args } => {
-            if help::maybe_print_unified_delegate_help("lint", &args) {
+            if help::maybe_print_unified_delegate_help("lint", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header();
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "lint", &args).await
         }
 
         Commands::Fmt { args } => {
-            if help::maybe_print_unified_delegate_help("fmt", &args) {
+            if help::maybe_print_unified_delegate_help("fmt", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header();
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "fmt", &args).await
         }
 
         Commands::Check { args } => {
-            if help::maybe_print_unified_delegate_help("check", &args) {
+            if help::maybe_print_unified_delegate_help("check", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header();
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "check", &args).await
         }
 
         Commands::Pack { args } => {
-            if help::maybe_print_unified_delegate_help("pack", &args) {
+            if help::maybe_print_unified_delegate_help("pack", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header();
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "pack", &args).await
         }
 
         Commands::Run { args } => {
-            if help::maybe_print_unified_delegate_help("run", &args) {
+            if help::maybe_print_unified_delegate_help("run", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header();
+            print_runtime_header(render_options.show_header);
             commands::run_or_delegate::execute(cwd, &args).await
         }
 
         Commands::Exec { args } => {
-            if help::maybe_print_unified_delegate_help("exec", &args) {
+            if help::maybe_print_unified_delegate_help("exec", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header();
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "exec", &args).await
         }
 
         Commands::Preview { args } => {
-            if help::maybe_print_unified_delegate_help("preview", &args) {
+            if help::maybe_print_unified_delegate_help("preview", &args, render_options.show_header)
+            {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header();
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "preview", &args).await
         }
 
         Commands::Cache { args } => {
-            if help::maybe_print_unified_delegate_help("cache", &args) {
+            if help::maybe_print_unified_delegate_help("cache", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header();
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "cache", &args).await
         }
 
@@ -1915,21 +1933,33 @@ pub(crate) fn exit_status(code: i32) -> ExitStatus {
     }
 }
 
-fn print_runtime_header() {
+fn print_runtime_header(show_header: bool) {
+    if !show_header {
+        return;
+    }
     println!("{}", vite_shared::header::vite_plus_header());
     println!();
 }
 
 /// Build a clap Command with custom help formatting matching the JS CLI output.
 pub fn command_with_help() -> clap::Command {
-    apply_custom_help(Args::command())
+    command_with_help_with_options(RenderOptions::default())
+}
+
+/// Build a clap Command with custom help formatting and rendering options.
+pub fn command_with_help_with_options(render_options: RenderOptions) -> clap::Command {
+    apply_custom_help(Args::command(), render_options)
 }
 
 /// Apply custom help formatting to a clap Command to match the JS CLI output.
-fn apply_custom_help(cmd: clap::Command) -> clap::Command {
+fn apply_custom_help(cmd: clap::Command, render_options: RenderOptions) -> clap::Command {
     let after_help = help::render_help_doc(&help::top_level_help_doc());
     let options_heading = help::render_heading("Options");
-    let header = vite_shared::header::vite_plus_header();
+    let header = if render_options.show_header {
+        vite_shared::header::vite_plus_header()
+    } else {
+        String::new()
+    };
     let help_template = format!("{header}{{after-help}}\n{options_heading}\n{{options}}\n");
 
     cmd.after_help(after_help).help_template(help_template)
@@ -1940,7 +1970,16 @@ fn apply_custom_help(cmd: clap::Command) -> clap::Command {
 pub fn try_parse_args_from(
     args: impl IntoIterator<Item = String>,
 ) -> Result<Args, clap::error::Error> {
-    let cmd = apply_custom_help(Args::command());
+    try_parse_args_from_with_options(args, RenderOptions::default())
+}
+
+/// Parse CLI arguments from a custom args iterator with rendering options.
+/// Returns `Err` with the clap error if parsing fails (e.g., unknown command).
+pub fn try_parse_args_from_with_options(
+    args: impl IntoIterator<Item = String>,
+    render_options: RenderOptions,
+) -> Result<Args, clap::error::Error> {
+    let cmd = apply_custom_help(Args::command(), render_options);
     let matches = cmd.try_get_matches_from(args)?;
     Args::from_arg_matches(&matches).map_err(|e| e.into())
 }

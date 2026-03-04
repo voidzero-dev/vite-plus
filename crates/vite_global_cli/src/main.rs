@@ -15,14 +15,19 @@ mod js_executor;
 mod shim;
 mod tips;
 
-use std::process::ExitCode;
+use std::{
+    io::{IsTerminal, Write},
+    process::{ExitCode, ExitStatus},
+};
 
 use clap::error::{ContextKind, ContextValue};
 use owo_colors::OwoColorize;
 use vite_shared::output;
 
-use crate::cli::run_command;
 pub use crate::cli::try_parse_args_from;
+use crate::cli::{
+    RenderOptions, run_command, run_command_with_options, try_parse_args_from_with_options,
+};
 
 /// Normalize CLI arguments:
 /// - `vp list ...` / `vp ls ...` → `vp pm list ...`
@@ -55,7 +60,12 @@ fn normalize_args(args: Vec<String>) -> Vec<String> {
     }
 }
 
-fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<(String, Option<String>)> {
+struct InvalidSubcommandDetails {
+    invalid_subcommand: String,
+    suggestion: Option<String>,
+}
+
+fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<InvalidSubcommandDetails> {
     let invalid_subcommand = match error.get(ContextKind::InvalidSubcommand) {
         Some(ContextValue::String(value)) => value.as_str(),
         _ => return None,
@@ -69,24 +79,143 @@ fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<(String, Op
         _ => None,
     };
 
-    Some((invalid_subcommand.to_owned(), suggestion))
+    Some(InvalidSubcommandDetails { invalid_subcommand: invalid_subcommand.to_owned(), suggestion })
 }
 
-fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
-    let Some((invalid_subcommand, suggestion)) = extract_invalid_subcommand_details(error) else {
+fn print_invalid_subcommand_error(details: &InvalidSubcommandDetails) {
+    println!("{}", vite_shared::header::vite_plus_header());
+    println!();
+
+    let highlighted_subcommand = details.invalid_subcommand.bright_blue().to_string();
+    output::error(&format!("Command '{highlighted_subcommand}' not found"));
+}
+
+fn is_affirmative_response(input: &str) -> bool {
+    matches!(input.trim().to_ascii_lowercase().as_str(), "y" | "yes" | "ok" | "true" | "1")
+}
+
+fn should_prompt_for_correction() -> bool {
+    std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+}
+
+fn prompt_to_run_suggested_command(suggestion: &str) -> bool {
+    if !should_prompt_for_correction() {
+        return false;
+    }
+
+    eprintln!();
+    let highlighted_suggestion = format!("`vp {suggestion}`").bright_blue().to_string();
+    eprint!("Do you want to run {highlighted_suggestion}? (y/N): ");
+    if std::io::stderr().flush().is_err() {
+        return false;
+    }
+
+    let Some(input) = read_confirmation_input() else {
+        return false;
+    };
+
+    is_affirmative_response(input.trim())
+}
+
+fn read_confirmation_input() -> Option<String> {
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input).ok()?;
+    Some(input)
+}
+
+fn replace_top_level_typoed_subcommand(
+    raw_args: &[String],
+    invalid_subcommand: &str,
+    suggestion: &str,
+) -> Option<Vec<String>> {
+    let index = raw_args.iter().position(|arg| !arg.starts_with('-'))?;
+    if raw_args.get(index)? != invalid_subcommand {
+        return None;
+    }
+
+    let mut corrected = raw_args.to_vec();
+    corrected[index] = suggestion.to_owned();
+    Some(corrected)
+}
+
+fn exit_status_to_exit_code(exit_status: ExitStatus) -> ExitCode {
+    if exit_status.success() {
+        ExitCode::SUCCESS
+    } else {
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        exit_status.code().map_or(ExitCode::FAILURE, |c| ExitCode::from(c as u8))
+    }
+}
+
+async fn run_corrected_args(cwd: &vite_path::AbsolutePathBuf, raw_args: &[String]) -> ExitCode {
+    let render_options = RenderOptions { show_header: false };
+    let args_with_program = std::iter::once("vp".to_string()).chain(raw_args.iter().cloned());
+    let normalized_args = normalize_args(args_with_program.collect());
+
+    let parsed = match try_parse_args_from_with_options(normalized_args, render_options) {
+        Ok(args) => args,
+        Err(e) => {
+            e.print().ok();
+            #[allow(clippy::cast_sign_loss)]
+            return ExitCode::from(e.exit_code() as u8);
+        }
+    };
+
+    match run_command_with_options(cwd.clone(), parsed, render_options).await {
+        Ok(exit_status) => exit_status_to_exit_code(exit_status),
+        Err(e) => {
+            if matches!(&e, error::Error::UserMessage(_)) {
+                eprintln!("{e}");
+            } else {
+                output::error(&format!("{e}"));
+            }
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn extract_unknown_argument(error: &clap::Error) -> Option<String> {
+    match error.get(ContextKind::InvalidArg) {
+        Some(ContextValue::String(value)) => Some(value.to_owned()),
+        _ => None,
+    }
+}
+
+fn has_pass_as_value_suggestion(error: &clap::Error) -> bool {
+    let contains_pass_as_value = |suggestion: &str| suggestion.contains("as a value");
+
+    match error.get(ContextKind::Suggested) {
+        Some(ContextValue::String(suggestion)) => contains_pass_as_value(suggestion),
+        Some(ContextValue::Strings(suggestions)) => {
+            suggestions.iter().any(|suggestion| contains_pass_as_value(suggestion))
+        }
+        Some(ContextValue::StyledStr(suggestion)) => {
+            contains_pass_as_value(&suggestion.to_string())
+        }
+        Some(ContextValue::StyledStrs(suggestions)) => {
+            suggestions.iter().any(|suggestion| contains_pass_as_value(&suggestion.to_string()))
+        }
+        _ => false,
+    }
+}
+
+fn print_unknown_argument_error(error: &clap::Error) -> bool {
+    let Some(invalid_argument) = extract_unknown_argument(error) else {
         return false;
     };
 
     println!("{}", vite_shared::header::vite_plus_header());
     println!();
 
-    let highlighted_subcommand = invalid_subcommand.bright_blue().to_string();
-    output::error(&format!("Command '{highlighted_subcommand}' not found"));
+    let highlighted_argument = invalid_argument.bright_blue().to_string();
+    output::error(&format!("Unexpected argument '{highlighted_argument}'"));
 
-    if let Some(suggestion) = suggestion {
+    if has_pass_as_value_suggestion(error) {
         eprintln!();
-        let highlighted_suggestion = format!("`vp {suggestion}`").bright_blue().to_string();
-        eprintln!("Did you mean {highlighted_suggestion}?");
+        let pass_through_argument = format!("-- {invalid_argument}");
+        let highlighted_pass_through_argument =
+            format!("`{}`", pass_through_argument.bright_blue());
+        eprintln!("Use {highlighted_pass_through_argument} to pass the argument as a value");
     }
 
     true
@@ -135,54 +264,141 @@ async fn main() -> ExitCode {
     let exit_code = match try_parse_args_from(normalized_args) {
         Err(e) => {
             use clap::error::ErrorKind;
-            // Print custom unknown-command output to align with JS CLI, otherwise fall back to clap.
-            let printed = if matches!(e.kind(), ErrorKind::InvalidSubcommand) {
-                print_invalid_subcommand_error(&e)
-            } else {
-                false
-            };
-            if !printed {
-                e.print().ok();
-            }
 
-            // --help and --version are "errors" in clap but should exit successfully
+            // --help and --version are clap "errors" but should exit successfully.
             if matches!(e.kind(), ErrorKind::DisplayHelp | ErrorKind::DisplayVersion) {
+                e.print().ok();
                 ExitCode::SUCCESS
+            } else if matches!(e.kind(), ErrorKind::InvalidSubcommand) {
+                if let Some(details) = extract_invalid_subcommand_details(&e) {
+                    print_invalid_subcommand_error(&details);
+
+                    if let Some(suggestion) = &details.suggestion {
+                        if let Some(corrected_raw_args) = replace_top_level_typoed_subcommand(
+                            &tip_context.raw_args,
+                            &details.invalid_subcommand,
+                            suggestion,
+                        ) {
+                            if prompt_to_run_suggested_command(suggestion) {
+                                tip_context.raw_args = corrected_raw_args.clone();
+                                run_corrected_args(&cwd, &corrected_raw_args).await
+                            } else {
+                                let code = e.exit_code();
+                                tip_context.clap_error = Some(e);
+                                #[allow(clippy::cast_sign_loss)]
+                                ExitCode::from(code as u8)
+                            }
+                        } else {
+                            let code = e.exit_code();
+                            tip_context.clap_error = Some(e);
+                            #[allow(clippy::cast_sign_loss)]
+                            ExitCode::from(code as u8)
+                        }
+                    } else {
+                        let code = e.exit_code();
+                        tip_context.clap_error = Some(e);
+                        #[allow(clippy::cast_sign_loss)]
+                        ExitCode::from(code as u8)
+                    }
+                } else {
+                    e.print().ok();
+                    let code = e.exit_code();
+                    tip_context.clap_error = Some(e);
+                    #[allow(clippy::cast_sign_loss)]
+                    ExitCode::from(code as u8)
+                }
+            } else if matches!(e.kind(), ErrorKind::UnknownArgument) {
+                if !print_unknown_argument_error(&e) {
+                    e.print().ok();
+                }
+                let code = e.exit_code();
+                tip_context.clap_error = Some(e);
+                #[allow(clippy::cast_sign_loss)]
+                ExitCode::from(code as u8)
             } else {
+                e.print().ok();
                 let code = e.exit_code();
                 tip_context.clap_error = Some(e);
                 #[allow(clippy::cast_sign_loss)]
                 ExitCode::from(code as u8)
             }
         }
-        Ok(args) => {
-            match run_command(cwd.clone(), args).await {
-                Ok(exit_status) => {
-                    if exit_status.success() {
-                        ExitCode::SUCCESS
-                    } else {
-                        // Exit codes are typically 0-255 on Unix systems
-                        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                        exit_status.code().map_or(ExitCode::FAILURE, |c| ExitCode::from(c as u8))
-                    }
+        Ok(args) => match run_command(cwd.clone(), args).await {
+            Ok(exit_status) => exit_status_to_exit_code(exit_status),
+            Err(e) => {
+                if matches!(&e, error::Error::UserMessage(_)) {
+                    eprintln!("{e}");
+                } else {
+                    output::error(&format!("{e}"));
                 }
-                Err(e) => {
-                    if matches!(&e, error::Error::UserMessage(_)) {
-                        eprintln!("{e}");
-                    } else {
-                        output::error(&format!("{e}"));
-                    }
-                    ExitCode::FAILURE
-                }
+                ExitCode::FAILURE
             }
-        }
+        },
     };
 
     tip_context.exit_code = if exit_code == ExitCode::SUCCESS { 0 } else { 1 };
 
     if let Some(tip) = tips::get_tip(&tip_context) {
-        eprintln!("\n{}", format!("Tip: {tip}").bright_black());
+        eprintln!("\n{} {}", "tip:".bright_black().bold(), tip.bright_black());
     }
 
     exit_code
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::error::ErrorKind;
+
+    use super::{
+        extract_unknown_argument, has_pass_as_value_suggestion, is_affirmative_response,
+        replace_top_level_typoed_subcommand, try_parse_args_from,
+    };
+
+    #[test]
+    fn unknown_argument_detected_without_pass_as_value_hint() {
+        let error = try_parse_args_from(["vp".to_string(), "--cache".to_string()])
+            .expect_err("Expected parse error");
+        assert_eq!(error.kind(), ErrorKind::UnknownArgument);
+        assert_eq!(extract_unknown_argument(&error).as_deref(), Some("--cache"));
+        assert!(!has_pass_as_value_suggestion(&error));
+    }
+
+    #[test]
+    fn unknown_argument_detected_with_pass_as_value_hint() {
+        let error = try_parse_args_from([
+            "vp".to_string(),
+            "remove".to_string(),
+            "--stream".to_string(),
+            "foo".to_string(),
+        ])
+        .expect_err("Expected parse error");
+        assert_eq!(error.kind(), ErrorKind::UnknownArgument);
+        assert_eq!(extract_unknown_argument(&error).as_deref(), Some("--stream"));
+        assert!(has_pass_as_value_suggestion(&error));
+    }
+
+    #[test]
+    fn affirmative_response_detection() {
+        assert!(is_affirmative_response("y"));
+        assert!(is_affirmative_response("yes"));
+        assert!(is_affirmative_response("Y"));
+        assert!(!is_affirmative_response("Sure"));
+        assert!(!is_affirmative_response("n"));
+        assert!(!is_affirmative_response(""));
+    }
+
+    #[test]
+    fn replace_top_level_typoed_subcommand_preserves_trailing_args() {
+        let raw_args = vec!["fnt".to_string(), "--write".to_string(), "src".to_string()];
+        let corrected = replace_top_level_typoed_subcommand(&raw_args, "fnt", "fmt")
+            .expect("Expected typoed command to be replaced");
+        assert_eq!(corrected, vec!["fmt".to_string(), "--write".to_string(), "src".to_string()]);
+    }
+
+    #[test]
+    fn replace_top_level_typoed_subcommand_skips_nested_subcommands() {
+        let raw_args = vec!["env".to_string(), "typo".to_string()];
+        let corrected = replace_top_level_typoed_subcommand(&raw_args, "typo", "on");
+        assert!(corrected.is_none());
+    }
 }

@@ -3,7 +3,7 @@
 //! Header coloring behavior:
 //! - Colorization and truecolor capability gates
 //! - Foreground color OSC query (`ESC ] 10 ; ? ESC \\`) with timeout
-//! - ANSI magenta palette query (`ESC ] 4 ; 5 ; ? ESC \\`) with timeout
+//! - ANSI palette queries for blue/magenta with timeout
 //! - Gradient/fade generation and RGB ANSI coloring
 
 use std::{io::IsTerminal, sync::OnceLock};
@@ -23,8 +23,9 @@ const RESET: &str = "\x1b[0m";
 const HEADER_SUFFIX: &str = " - The Unified Toolchain for the Web";
 
 const RESET_FG: &str = "\x1b[39m";
+const DEFAULT_BLUE: Rgb = Rgb(88, 146, 255);
 const DEFAULT_MAGENTA: Rgb = Rgb(187, 116, 247);
-#[cfg(unix)]
+const ANSI_BLUE_INDEX: u8 = 4;
 const ANSI_MAGENTA_INDEX: u8 = 5;
 const HEADER_SUFFIX_FADE_GAMMA: f64 = 1.35;
 
@@ -34,8 +35,12 @@ static HEADER_COLORS: OnceLock<HeaderColors> = OnceLock::new();
 struct Rgb(u8, u8, u8);
 
 struct HeaderColors {
-    magenta: Rgb,
+    blue: Rgb,
     suffix_gradient: Vec<Rgb>,
+}
+
+fn bold(text: &str, enabled: bool) -> String {
+    if enabled { format!("\x1b[1m{text}\x1b[22m") } else { text.to_string() }
 }
 
 fn fg_rgb(color: Rgb) -> String {
@@ -68,6 +73,32 @@ fn gradient_eased(count: usize, start: Rgb, end: Rgb, gamma: f64) -> Vec<Rgb> {
                 lerp(start.1 as f64, end.1 as f64, t).round() as u8,
                 lerp(start.2 as f64, end.2 as f64, t).round() as u8,
             )
+        })
+        .collect()
+}
+
+fn gradient_three_stop(count: usize, start: Rgb, middle: Rgb, end: Rgb, gamma: f64) -> Vec<Rgb> {
+    let n = count.max(1);
+    let denom = (n - 1).max(1) as f64;
+
+    (0..n)
+        .map(|i| {
+            let t = i as f64 / denom;
+            if t <= 0.5 {
+                let local_t = (t / 0.5).powf(gamma);
+                Rgb(
+                    lerp(start.0 as f64, middle.0 as f64, local_t).round() as u8,
+                    lerp(start.1 as f64, middle.1 as f64, local_t).round() as u8,
+                    lerp(start.2 as f64, middle.2 as f64, local_t).round() as u8,
+                )
+            } else {
+                let local_t = ((t - 0.5) / 0.5).powf(gamma);
+                Rgb(
+                    lerp(middle.0 as f64, end.0 as f64, local_t).round() as u8,
+                    lerp(middle.1 as f64, end.1 as f64, local_t).round() as u8,
+                    lerp(middle.2 as f64, end.2 as f64, local_t).round() as u8,
+                )
+            }
         })
         .collect()
 }
@@ -137,7 +168,7 @@ fn parse_osc4_rgb(buffer: &str, index: u8) -> Option<Rgb> {
 }
 
 #[cfg(unix)]
-fn query_terminal_colors() -> (Option<Rgb>, Option<Rgb>) {
+fn query_terminal_colors(palette_indices: &[u8]) -> (Option<Rgb>, Vec<(u8, Rgb)>) {
     use std::{
         fs::OpenOptions,
         os::fd::{AsFd, AsRawFd, BorrowedFd, RawFd},
@@ -150,16 +181,16 @@ fn query_terminal_colors() -> (Option<Rgb>, Option<Rgb>) {
     };
 
     if std::env::var_os("CI").is_some() {
-        return (None, None);
+        return (None, vec![]);
     }
 
     let mut tty = match OpenOptions::new().read(true).write(true).open("/dev/tty") {
         Ok(file) => file,
-        Err(_) => return (None, None),
+        Err(_) => return (None, vec![]),
     };
 
     if !std::io::stdout().is_terminal() {
-        return (None, None);
+        return (None, vec![]);
     }
 
     struct RawGuard {
@@ -177,28 +208,32 @@ fn query_terminal_colors() -> (Option<Rgb>, Option<Rgb>) {
 
     let original = match tcgetattr(tty.as_fd()) {
         Ok(value) => value,
-        Err(_) => return (None, None),
+        Err(_) => return (None, vec![]),
     };
     let mut raw = original.clone();
     cfmakeraw(&mut raw);
     if tcsetattr(tty.as_fd(), SetArg::TCSANOW, &raw).is_err() {
-        return (None, None);
+        return (None, vec![]);
     }
     let _guard = RawGuard { fd: tty.as_raw_fd(), original };
 
-    let query = format!("{ESC}]10;?{ESC}\\{ESC}]4;{ANSI_MAGENTA_INDEX};?{ESC}\\");
+    let mut query = format!("{ESC}]10;?{ESC}\\");
+    for index in palette_indices {
+        query.push_str(&format!("{ESC}]4;{index};?{ESC}\\"));
+    }
     if tty.write_all(query.as_bytes()).is_err() {
-        return (None, None);
+        return (None, vec![]);
     }
     if tty.flush().is_err() {
-        return (None, None);
+        return (None, vec![]);
     }
 
     let deadline = Instant::now() + Duration::from_millis(100);
     let mut last_data = Instant::now();
     let mut buffer = String::new();
     let mut foreground = None;
-    let mut magenta = None;
+    let mut palette_colors: Vec<(u8, Option<Rgb>)> =
+        palette_indices.iter().copied().map(|index| (index, None)).collect();
 
     while Instant::now() < deadline {
         let remaining = deadline.saturating_duration_since(Instant::now());
@@ -239,40 +274,68 @@ fn query_terminal_colors() -> (Option<Rgb>, Option<Rgb>) {
         if foreground.is_none() {
             foreground = parse_osc10_rgb(&buffer);
         }
-        if magenta.is_none() {
-            magenta = parse_osc4_rgb(&buffer, ANSI_MAGENTA_INDEX);
+        for (index, color) in &mut palette_colors {
+            if color.is_none() {
+                *color = parse_osc4_rgb(&buffer, *index);
+            }
         }
 
-        if foreground.is_some() && magenta.is_some() {
+        if foreground.is_some() && palette_colors.iter().all(|(_, color)| color.is_some()) {
             break;
         }
     }
 
-    (foreground, magenta)
+    let resolved = palette_colors
+        .into_iter()
+        .filter_map(|(index, color)| color.map(|rgb| (index, rgb)))
+        .collect();
+    (foreground, resolved)
 }
 
 #[cfg(not(unix))]
-fn query_terminal_colors() -> (Option<Rgb>, Option<Rgb>) {
-    (None, None)
+fn query_terminal_colors(_palette_indices: &[u8]) -> (Option<Rgb>, Vec<(u8, Rgb)>) {
+    (None, vec![])
+}
+
+fn palette_color(palette: &[(u8, Rgb)], index: u8) -> Option<Rgb> {
+    palette.iter().find_map(|(palette_index, color)| (*palette_index == index).then_some(*color))
 }
 
 fn get_header_colors() -> &'static HeaderColors {
     HEADER_COLORS.get_or_init(|| {
-        let (foreground, magenta) = query_terminal_colors();
-        let magenta = magenta.unwrap_or(DEFAULT_MAGENTA);
+        let (foreground, palette) = query_terminal_colors(&[ANSI_BLUE_INDEX, ANSI_MAGENTA_INDEX]);
+        let blue = palette_color(&palette, ANSI_BLUE_INDEX).unwrap_or(DEFAULT_BLUE);
+        let magenta = palette_color(&palette, ANSI_MAGENTA_INDEX).unwrap_or(DEFAULT_MAGENTA);
 
         let suffix_gradient = match foreground {
-            Some(color) => gradient_eased(
+            Some(color) => gradient_three_stop(
                 HEADER_SUFFIX.chars().count(),
+                blue,
                 magenta,
                 color,
                 HEADER_SUFFIX_FADE_GAMMA,
             ),
-            None => vec![magenta; HEADER_SUFFIX.chars().count()],
+            None => gradient_eased(
+                HEADER_SUFFIX.chars().count(),
+                blue,
+                magenta,
+                HEADER_SUFFIX_FADE_GAMMA,
+            ),
         };
 
-        HeaderColors { magenta, suffix_gradient }
+        HeaderColors { blue, suffix_gradient }
     })
+}
+
+fn render_header_variant(
+    primary: Rgb,
+    suffix_colors: &[Rgb],
+    prefix_bold: bool,
+    suffix_bold: bool,
+) -> String {
+    let vite_plus = format!("{}VITE+{RESET_FG}", fg_rgb(primary));
+    let suffix = colorize(HEADER_SUFFIX, suffix_colors);
+    format!("{}{}", bold(&vite_plus, prefix_bold), bold(&suffix, suffix_bold))
 }
 
 /// Render the Vite+ CLI header string with JS-parity coloring behavior.
@@ -283,9 +346,7 @@ pub fn vite_plus_header() -> String {
     }
 
     let header_colors = get_header_colors();
-    let suffix = colorize(HEADER_SUFFIX, &header_colors.suffix_gradient);
-    let vite_plus = format!("{}VITE+{RESET_FG}", fg_rgb(header_colors.magenta));
-    format!("\x1b[1m{vite_plus}{suffix}\x1b[22m")
+    render_header_variant(header_colors.blue, &header_colors.suffix_gradient, true, true)
 }
 
 #[cfg(all(test, unix))]

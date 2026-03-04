@@ -3,6 +3,4 @@ VITE+ - The Unified Toolchain for the Web
 
 ℹ entry: src/index.ts
 ℹ target: node22.22.0
-
- ERROR  Error: Node.js version v<semver> does not support `exe` option. Please upgrade to Node.js <semver> or later.
-
+error: Node.js version v<semver> does not support `exe` option. Please upgrade to Node.js <semver> or later.

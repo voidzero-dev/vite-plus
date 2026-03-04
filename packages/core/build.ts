@@ -397,27 +397,111 @@ async function bundleTsdown() {
 async function brandTsdown() {
   const tsdownDistDir = join(projectDir, 'dist/tsdown');
   const buildFiles = await glob(toPosixPath(join(tsdownDistDir, 'build-*.js')), { absolute: true });
+  const mainFiles = await glob(toPosixPath(join(tsdownDistDir, 'main-*.js')), { absolute: true });
   if (buildFiles.length === 0) {
     throw new Error('brandTsdown: no build chunk found in dist/tsdown/');
+  }
+  if (mainFiles.length === 0) {
+    throw new Error('brandTsdown: no main chunk found in dist/tsdown/');
   }
 
   const search = '"tsdown <your-file>"';
   const replacement = '"vp pack <your-file>"';
+  const buildErrorPatches = [
+    {
+      search:
+        'else throw new Error(`${nameLabel} No input files, try "vp pack <your-file>" or create src/index.ts`);',
+      replacement:
+        'else throw new Error(`${nameLabel ? `${nameLabel} ` : ""}No input files, try "vp pack <your-file>" or create src/index.ts`);',
+    },
+    {
+      search:
+        'if (entries.length === 0) throw new Error(`${nameLabel} Cannot find entry: ${JSON.stringify(entry)}`);',
+      replacement:
+        'if (entries.length === 0) throw new Error(`${nameLabel ? `${nameLabel} ` : ""}Cannot find entry: ${JSON.stringify(entry)}`);',
+    },
+  ];
   let patched = false;
+  let buildErrorsPatched = false;
 
   for (const buildFile of buildFiles) {
     let content = await readFile(buildFile, 'utf-8');
+    let changed = false;
     if (!content.includes(search)) {
-      continue;
+      // Keep going to apply other safety patches below.
+    } else {
+      content = content.replace(search, replacement);
+      console.log(`Branded tsdown → vp pack in ${buildFile}`);
+      patched = true;
+      changed = true;
     }
-    content = content.replace(search, replacement);
-    await writeFile(buildFile, content, 'utf-8');
-    console.log(`Branded tsdown → vp pack in ${buildFile}`);
-    patched = true;
+
+    for (const { search, replacement } of buildErrorPatches) {
+      if (content.includes(search)) {
+        content = content.replaceAll(search, replacement);
+        buildErrorsPatched = true;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await writeFile(buildFile, content, 'utf-8');
+    }
   }
 
   if (!patched) {
     throw new Error(`brandTsdown: pattern ${search} not found in any build chunk`);
+  }
+  if (!buildErrorsPatched) {
+    throw new Error('brandTsdown: build error message patterns not found in any build chunk');
+  }
+
+  const loggerPatches = [
+    {
+      search: 'output("warn", `\\n${bgYellow` WARN `} ${message}\\n`);',
+      replacement: 'output("warn", `${bold(yellow`warn:`)} ${message}`);',
+    },
+    {
+      search: 'output("warn", `${bgYellow` WARN `} ${message}\\n`);',
+      replacement: 'output("warn", `${bold(yellow`warn:`)} ${message}`);',
+    },
+    {
+      search: 'output("error", `\\n${bgRed` ERROR `} ${format(msgs)}\\n`);',
+      replacement:
+        'output("error", `${bold(red`error:`)} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
+    },
+    {
+      search: 'output("error", `${bgRed` ERROR `} ${format(msgs)}\\n`);',
+      replacement:
+        'output("error", `${bold(red`error:`)} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
+    },
+    {
+      search: 'output("error", `${bold(red`error:`)} ${format(msgs)}`);',
+      replacement:
+        'output("error", `${bold(red`error:`)} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
+    },
+  ];
+  let loggerPatched = false;
+
+  for (const mainFile of mainFiles) {
+    let content = await readFile(mainFile, 'utf-8');
+    let changed = false;
+    for (const { search, replacement } of loggerPatches) {
+      if (content.includes(search)) {
+        content = content.replaceAll(search, replacement);
+        changed = true;
+      }
+    }
+    if (!changed) {
+      continue;
+    }
+    await writeFile(mainFile, content, 'utf-8');
+    console.log(`Branded tsdown logger prefixes in ${mainFile}`);
+    loggerPatched = true;
+  }
+
+  if (!loggerPatched) {
+    throw new Error('brandTsdown: logger prefix patterns not found in any main chunk');
   }
 }
 

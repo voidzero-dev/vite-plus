@@ -38,14 +38,18 @@ fn print_section(name: &str) {
 /// `status` should be a colored string like "✓".green(), "✗".red(), etc.
 /// Use `" "` for informational lines with no status.
 fn print_check(status: &str, key: &str, value: &str) {
-    println!("  {status} {key:<KEY_WIDTH$}{value}");
+    if status.trim().is_empty() {
+        println!("  {key:<KEY_WIDTH$}{value}");
+    } else if key.trim().is_empty() {
+        println!("  {status} {value}");
+    } else {
+        println!("  {status} {key:<KEY_WIDTH$}{value}");
+    }
 }
 
-/// Print a continuation/hint line (dimmed, aligned to value column).
+/// Print a continuation/hint line (dimmed).
 fn print_hint(text: &str) {
-    // 2 (indent) + 1 (status) + 1 (space) + KEY_WIDTH
-    let indent = 2 + 1 + 1 + KEY_WIDTH;
-    println!("{:indent$}{}", "", text.dimmed());
+    println!("  {}", format!("note: {text}").dimmed());
 }
 
 /// Abbreviate home directory to `~` for display.
@@ -416,24 +420,24 @@ fn print_path_fix(bin_dir: &vite_path::AbsolutePath) {
             home_path
         };
 
-        println!("    {}", "Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):".dimmed());
+        println!("  {}", "Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):".dimmed());
         println!();
-        println!("      . \"{home_path}/env\"");
+        println!("  . \"{home_path}/env\"");
         println!();
-        println!("    {}", "For fish shell, add to ~/.config/fish/config.fish:".dimmed());
+        println!("  {}", "For fish shell, add to ~/.config/fish/config.fish:".dimmed());
         println!();
-        println!("      source \"{home_path}/env.fish\"");
+        println!("  source \"{home_path}/env.fish\"");
         println!();
-        println!("    {}", "Then restart your terminal.".dimmed());
+        println!("  {}", "Then restart your terminal.".dimmed());
     }
 
     #[cfg(windows)]
     {
         let _ = bin_dir;
-        println!("    {}", "Add the bin directory to your PATH via:".dimmed());
-        println!("      System Properties -> Environment Variables -> Path");
+        println!("  {}", "Add the bin directory to your PATH via:".dimmed());
+        println!("  System Properties -> Environment Variables -> Path");
         println!();
-        println!("    {}", "Then restart your terminal.".dimmed());
+        println!("  {}", "Then restart your terminal.".dimmed());
     }
 }
 
@@ -510,29 +514,26 @@ fn print_ide_setup_guidance(bin_dir: &vite_path::AbsolutePath) {
 
         #[cfg(target_os = "macos")]
         {
-            println!("    {}", "macOS:".dimmed());
-            println!("      {}", "Add to ~/.zshenv or ~/.profile:".dimmed());
-            println!("        . \"{home_path}/env\"");
-            println!("      {}", "Then restart your IDE to apply changes.".dimmed());
+            println!("  {}", "macOS:".dimmed());
+            println!("  {}", "Add to ~/.zshenv or ~/.profile:".dimmed());
+            println!("  . \"{home_path}/env\"");
+            println!("  {}", "Then restart your IDE to apply changes.".dimmed());
         }
 
         #[cfg(target_os = "linux")]
         {
-            println!("    {}", "Linux:".dimmed());
-            println!("      {}", "Add to ~/.profile:".dimmed());
-            println!("        . \"{home_path}/env\"");
-            println!(
-                "      {}",
-                "Then log out and log back in for changes to take effect.".dimmed()
-            );
+            println!("  {}", "Linux:".dimmed());
+            println!("  {}", "Add to ~/.profile:".dimmed());
+            println!("  . \"{home_path}/env\"");
+            println!("  {}", "Then log out and log back in for changes to take effect.".dimmed());
         }
 
         // Fallback for other Unix platforms
         #[cfg(not(any(target_os = "macos", target_os = "linux")))]
         {
-            println!("    {}", "Add to your shell profile:".dimmed());
-            println!("      . \"{home_path}/env\"");
-            println!("    {}", "Then restart your IDE to apply changes.".dimmed());
+            println!("  {}", "Add to your shell profile:".dimmed());
+            println!("  . \"{home_path}/env\"");
+            println!("  {}", "Then restart your IDE to apply changes.".dimmed());
         }
     }
 }

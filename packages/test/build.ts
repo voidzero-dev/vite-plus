@@ -538,11 +538,11 @@ async function brandVitest() {
       'printBanner() {\n',
     );
 
-    // Use a magenta badge for both DEV and RUN.
+    // Use a blue badge for both DEV and RUN.
     patchString(
       'banner color',
       /const color = this\.ctx\.config\.watch \? "blue" : "cyan";\n\t\tconst mode = this\.ctx\.config\.watch \? "DEV" : "RUN";/,
-      'const mode = this.ctx.config.watch ? "DEV" : "RUN";\n\t\tconst label = c.bold(c.inverse(c.magenta(` ${mode} `)));',
+      'const mode = this.ctx.config.watch ? "DEV" : "RUN";\n\t\tconst label = c.bold(c.inverse(c.blue(` ${mode} `)));',
     );
 
     // Remove the version from the banner line and render a high-contrast label.

@@ -104,10 +104,8 @@ Done in <variable>ms using pnpm v<semver>
 Failed to uninstall testnpm2: Configuration error: Package testnpm2 is not installed
 
 [2]> vp rm --stream foo && should show tips to use pass through arguments when options are not supported
-error: unexpected argument '--stream' found
+VITE+ - The Unified Toolchain for the Web
 
-  tip: to pass '--stream' as a value, use '-- --stream'
+error: Unexpected argument '--stream'
 
-Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
-
-For more information, try '--help'.
+Use `-- --stream` to pass the argument as a value

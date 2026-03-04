@@ -26,13 +26,38 @@ use std::process::ExitStatus;
 
 use vite_path::AbsolutePathBuf;
 
-use crate::{cli::EnvArgs, error::Error};
+use crate::{
+    cli::{EnvArgs, EnvSubcommands},
+    error::Error,
+};
+
+fn print_env_header() {
+    println!("{}", vite_shared::header::vite_plus_header());
+    println!();
+}
+
+fn should_print_env_header(subcommand: &EnvSubcommands) -> bool {
+    match subcommand {
+        EnvSubcommands::Current { json } => !json,
+        EnvSubcommands::List { json } => !json,
+        EnvSubcommands::ListRemote { json, .. } => !json,
+        // Keep these machine-consumable / passthrough commands header-free.
+        EnvSubcommands::Use { .. } | EnvSubcommands::Exec { .. } => false,
+        _ => true,
+    }
+}
 
 /// Execute the env command based on the provided arguments.
 pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, Error> {
     // Handle subcommands first
     if let Some(subcommand) = args.command {
+        if should_print_env_header(&subcommand) {
+            print_env_header();
+        }
+
         return match subcommand {
+            crate::cli::EnvSubcommands::Current { json } => current::execute(cwd, json).await,
+            crate::cli::EnvSubcommands::Print => print_env(cwd).await,
             crate::cli::EnvSubcommands::Default { version } => default::execute(cwd, version).await,
             crate::cli::EnvSubcommands::On => on::execute().await,
             crate::cli::EnvSubcommands::Off => off::execute().await,
@@ -111,15 +136,6 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
         };
     }
 
-    // Handle flags
-    if args.current {
-        return current::execute(cwd, args.json).await;
-    }
-
-    if args.print {
-        return print_env(cwd).await;
-    }
-
     // No flags provided - show unified help to match `vp env --help`.
     if !crate::help::print_unified_clap_help_for_path(&["env"]) {
         // Fallback to clap's built-in help printer if unified rendering fails.
@@ -137,7 +153,7 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
     Ok(ExitStatus::default())
 }
 
-/// Print shell snippet for setting environment (--print flag)
+/// Print shell snippet for setting environment (`vp env print`)
 async fn print_env(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     // Resolve the Node.js version for the current directory
     let resolution = config::resolve_version(&cwd).await?;

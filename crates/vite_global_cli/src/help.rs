@@ -57,11 +57,37 @@ fn section_lines(title: &'static str, lines: Vec<&'static str>) -> HelpSection {
 
 pub fn render_heading(title: &str) -> String {
     let heading = format!("{title}:");
-    if should_style_help() { heading.bold().to_string() } else { heading }
+    if !should_style_help() {
+        return heading;
+    }
+
+    if should_accent_heading(title) {
+        heading.bold().bright_blue().to_string()
+    } else {
+        heading.bold().to_string()
+    }
 }
 
 fn render_usage_value(usage: &str) -> String {
     if should_style_help() { usage.bold().to_string() } else { usage.to_string() }
+}
+
+fn should_accent_heading(title: &str) -> bool {
+    matches!(
+        title,
+        "Start"
+            | "Develop"
+            | "Execute"
+            | "Build"
+            | "Manage Dependencies"
+            | "Maintain"
+            | "Setup"
+            | "Manage"
+            | "Inspect"
+            | "Examples"
+            | "Options"
+            | "Related Commands"
+    )
 }
 
 pub fn should_style_help() -> bool {
@@ -369,48 +395,150 @@ pub fn top_level_help_doc() -> HelpDoc {
         summary: Vec::new(),
         sections: vec![
             section_rows(
-                "Core Commands",
+                "Start",
                 vec![
                     row("create", "Create a new project from a template"),
-                    row("dev", "Run the development server"),
-                    row("build", "Build for production"),
-                    row("test", "Run tests"),
-                    row("lint", "Lint code"),
-                    row("fmt", "Format code"),
-                    row("check", "Run format, lint, and type checks"),
-                    row("pack", "Build library"),
-                    row("run", "Run tasks"),
-                    row("exec", "Execute a command from local node_modules/.bin"),
-                    row("preview", "Preview production build"),
-                    row("env", "Manage Node.js versions"),
                     row("migrate", "Migrate an existing project to Vite+"),
-                    row("cache", "Manage the task cache"),
-                ],
-            ),
-            section_rows(
-                "Package Manager Commands",
-                vec![
                     row(
                         "install, i",
                         "Install all dependencies, or add packages if package names are provided",
                     ),
-                    row("add", "Add packages to dependencies"),
-                    row("remove, rm, un, uninstall", "Remove packages from dependencies"),
-                    row("dedupe", "Deduplicate dependencies by removing older versions"),
-                    row("dlx", "Execute a package binary without installing it as a dependency"),
-                    row("info, view, show", "View package information from the registry"),
-                    row("link, ln", "Link packages for local development"),
-                    row("list, ls", "List installed packages"),
-                    row("outdated", "Check for outdated packages"),
-                    row("pm", "Forward a command to the package manager"),
-                    row("unlink", "Unlink packages"),
-                    row("update, up", "Update packages to their latest versions"),
-                    row("why, explain", "Show why a package is installed"),
+                    row("env", "Manage Node.js versions"),
                 ],
             ),
             section_rows(
-                "Maintenance Commands",
+                "Develop",
+                vec![
+                    row("dev", "Run the development server"),
+                    row("check", "Run format, lint, and type checks"),
+                    row("lint", "Lint code"),
+                    row("fmt", "Format code"),
+                    row("test", "Run tests"),
+                ],
+            ),
+            section_rows(
+                "Execute",
+                vec![
+                    row("run", "Run tasks"),
+                    row("exec", "Execute a command from local node_modules/.bin"),
+                    row("dlx", "Execute a package binary without installing it as a dependency"),
+                    row("cache", "Manage the task cache"),
+                ],
+            ),
+            section_rows(
+                "Build",
+                vec![
+                    row("build", "Build for production"),
+                    row("pack", "Build library"),
+                    row("preview", "Preview production build"),
+                ],
+            ),
+            section_rows(
+                "Manage Dependencies",
+                vec![
+                    row("add", "Add packages to dependencies"),
+                    row("remove, rm, un, uninstall", "Remove packages from dependencies"),
+                    row("update, up", "Update packages to their latest versions"),
+                    row("dedupe", "Deduplicate dependencies by removing older versions"),
+                    row("outdated", "Check for outdated packages"),
+                    row("list, ls", "List installed packages"),
+                    row("why, explain", "Show why a package is installed"),
+                    row("info, view, show", "View package information from the registry"),
+                    row("link, ln", "Link packages for local development"),
+                    row("unlink", "Unlink packages"),
+                    row("pm", "Forward a command to the package manager"),
+                ],
+            ),
+            section_rows(
+                "Maintain",
                 vec![row("upgrade", "Update vp itself to the latest version")],
+            ),
+        ],
+    }
+}
+
+fn env_help_doc() -> HelpDoc {
+    HelpDoc {
+        usage: "vp env [COMMAND]",
+        summary: vec!["Manage Node.js versions"],
+        sections: vec![
+            section_rows(
+                "Setup",
+                vec![
+                    row("setup", "Create or update shims in VITE_PLUS_HOME/bin"),
+                    row("on", "Enable managed mode - shims always use vite-plus managed Node.js"),
+                    row(
+                        "off",
+                        "Enable system-first mode - shims prefer system Node.js, fallback to managed",
+                    ),
+                    row("print", "Print shell snippet to set environment for current session"),
+                ],
+            ),
+            section_rows(
+                "Manage",
+                vec![
+                    row("default", "Set or show the global default Node.js version"),
+                    row(
+                        "pin",
+                        "Pin a Node.js version in the current directory (creates .node-version)",
+                    ),
+                    row(
+                        "unpin",
+                        "Remove the .node-version file from current directory (alias for `pin --unpin`)",
+                    ),
+                    row("use", "Use a specific Node.js version for this shell session"),
+                    row("install", "Install a Node.js version [aliases: i]"),
+                    row("uninstall", "Uninstall a Node.js version [aliases: uni]"),
+                    row("exec", "Execute a command with a specific Node.js version [aliases: run]"),
+                ],
+            ),
+            section_rows(
+                "Inspect",
+                vec![
+                    row("current", "Show current environment information"),
+                    row("doctor", "Run diagnostics and show environment status"),
+                    row("which", "Show path to the tool that would be executed"),
+                    row("list", "List locally installed Node.js versions [aliases: ls]"),
+                    row(
+                        "list-remote",
+                        "List available Node.js versions from the registry [aliases: ls-remote]",
+                    ),
+                ],
+            ),
+            section_lines(
+                "Examples",
+                vec![
+                    "  Setup:",
+                    "    vp env setup                  # Create shims for node, npm, npx",
+                    "    vp env on                     # Use vite-plus managed Node.js",
+                    "    vp env print                  # Print shell snippet for this session",
+                    "",
+                    "  Manage:",
+                    "    vp env pin lts                # Pin to latest LTS version",
+                    "    vp env install                # Install version from .node-version / package.json",
+                    "    vp env use 20                 # Use Node.js 20 for this shell session",
+                    "    vp env use --unset            # Remove session override",
+                    "",
+                    "  Inspect:",
+                    "    vp env current                # Show current resolved environment",
+                    "    vp env current --json         # JSON output for automation",
+                    "    vp env doctor                 # Check environment configuration",
+                    "    vp env which node             # Show which node binary will be used",
+                    "    vp env list-remote --lts      # List only LTS versions",
+                    "",
+                    "  Execute:",
+                    "    vp env exec --node lts npm i  # Execute 'npm i' with latest LTS",
+                    "    vp env exec node -v           # Shim mode (version auto-resolved)",
+                ],
+            ),
+            section_lines(
+                "Related Commands",
+                vec![
+                    "  vp install -g <package>       # Install a package globally",
+                    "  vp uninstall -g <package>     # Uninstall a package globally",
+                    "  vp update -g [package]        # Update global packages",
+                    "  vp list -g [package]          # List global packages",
+                ],
             ),
         ],
     }
@@ -820,6 +948,13 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
         return false;
     }
 
+    if command_path.len() == 1 && command_path[0] == "env" {
+        println!("{}", vite_shared::header::vite_plus_header());
+        println!();
+        println!("{}", render_help_doc(&env_help_doc()));
+        return true;
+    }
+
     let mut command_path_refs = Vec::with_capacity(command_path.len());
     for segment in &command_path {
         command_path_refs.push(segment.as_str());
@@ -831,7 +966,11 @@ pub fn should_print_unified_delegate_help(args: &[String]) -> bool {
     matches!(args, [arg] if is_help_flag(arg))
 }
 
-pub fn maybe_print_unified_delegate_help(command: &str, args: &[String]) -> bool {
+pub fn maybe_print_unified_delegate_help(
+    command: &str,
+    args: &[String],
+    show_header: bool,
+) -> bool {
     if !should_print_unified_delegate_help(args) {
         return false;
     }
@@ -840,13 +979,22 @@ pub fn maybe_print_unified_delegate_help(command: &str, args: &[String]) -> bool
         return false;
     };
 
-    println!("{}", vite_shared::header::vite_plus_header());
-    println!();
+    if show_header {
+        println!("{}", vite_shared::header::vite_plus_header());
+        println!();
+    }
     println!("{}", render_help_doc(&doc));
     true
 }
 
 pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
+    if command_path == ["env"] {
+        println!("{}", vite_shared::header::vite_plus_header());
+        println!();
+        println!("{}", render_help_doc(&env_help_doc()));
+        return true;
+    }
+
     let mut help_args = vec!["vp".to_string()];
     help_args.extend(command_path.iter().map(ToString::to_string));
     help_args.push("--help".to_string());

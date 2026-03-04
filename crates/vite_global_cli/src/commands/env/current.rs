@@ -4,13 +4,14 @@
 
 use std::process::ExitStatus;
 
+use owo_colors::OwoColorize;
 use serde::Serialize;
 use vite_path::AbsolutePathBuf;
 
 use super::config::resolve_version;
-use crate::error::Error;
+use crate::{error::Error, help};
 
-/// JSON output structure for --current --json
+/// JSON output structure for `vp env current --json`
 #[derive(Serialize)]
 struct CurrentEnvInfo {
     version: String,
@@ -26,6 +27,19 @@ struct ToolPaths {
     node: String,
     npm: String,
     npx: String,
+}
+
+fn accent(text: &str) -> String {
+    if help::should_style_help() { text.bright_blue().to_string() } else { text.to_string() }
+}
+
+fn print_rows(title: &str, rows: &[(&str, String)]) {
+    println!("{}", help::render_heading(title));
+    let label_width = rows.iter().map(|(label, _)| label.chars().count()).max().unwrap_or(0);
+    for (label, value) in rows {
+        let padding = " ".repeat(label_width.saturating_sub(label.chars().count()));
+        println!("  {}{}  {value}", accent(label), padding);
+    }
 }
 
 /// Execute the current command.
@@ -70,22 +84,25 @@ pub async fn execute(cwd: AbsolutePathBuf, json: bool) -> Result<ExitStatus, Err
         let json_str = serde_json::to_string_pretty(&info)?;
         println!("{json_str}");
     } else {
-        println!("Node.js Environment");
-        println!("===================");
-        println!();
-        println!("Version: {}", resolution.version);
-        println!("Source: {}", resolution.source);
+        let mut environment_rows =
+            vec![("Version", resolution.version.clone()), ("Source", resolution.source.clone())];
         if let Some(path) = &resolution.source_path {
-            println!("Source Path: {}", path.as_path().display());
+            environment_rows.push(("Source Path", path.as_path().display().to_string()));
         }
         if let Some(root) = &resolution.project_root {
-            println!("Project Root: {}", root.as_path().display());
+            environment_rows.push(("Project Root", root.as_path().display().to_string()));
         }
+
+        print_rows("Environment", &environment_rows);
         println!();
-        println!("Tool Paths:");
-        println!("  node: {}", node_path.as_path().display());
-        println!("  npm: {}", npm_path.as_path().display());
-        println!("  npx: {}", npx_path.as_path().display());
+        print_rows(
+            "Tool Paths",
+            &[
+                ("node", node_path.as_path().display().to_string()),
+                ("npm", npm_path.as_path().display().to_string()),
+                ("npx", npx_path.as_path().display().to_string()),
+            ],
+        );
     }
 
     Ok(ExitStatus::default())

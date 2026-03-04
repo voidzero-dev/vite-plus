@@ -921,6 +921,9 @@ fn handle_cli_parse_error(err: clap::Error) -> Result<ExitStatus, Error> {
     if matches!(err.kind(), ErrorKind::InvalidSubcommand) && print_invalid_subcommand_error(&err) {
         return Ok(ExitStatus(err.exit_code() as u8));
     }
+    if matches!(err.kind(), ErrorKind::UnknownArgument) && print_unknown_argument_error(&err) {
+        return Ok(ExitStatus(err.exit_code() as u8));
+    }
 
     err.print().map_err(|e| Error::Anyhow(e.into()))?;
     Ok(ExitStatus(err.exit_code() as u8))
@@ -978,6 +981,50 @@ fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
     true
 }
 
+fn extract_unknown_argument(error: &clap::Error) -> Option<String> {
+    match error.get(ContextKind::InvalidArg) {
+        Some(ContextValue::String(value)) => Some(value.to_owned()),
+        _ => None,
+    }
+}
+
+fn has_pass_as_value_suggestion(error: &clap::Error) -> bool {
+    let contains_pass_as_value = |suggestion: &str| suggestion.contains("as a value");
+
+    match error.get(ContextKind::Suggested) {
+        Some(ContextValue::String(suggestion)) => contains_pass_as_value(suggestion),
+        Some(ContextValue::Strings(suggestions)) => {
+            suggestions.iter().any(|suggestion| contains_pass_as_value(suggestion))
+        }
+        Some(ContextValue::StyledStr(suggestion)) => {
+            contains_pass_as_value(&suggestion.to_string())
+        }
+        Some(ContextValue::StyledStrs(suggestions)) => {
+            suggestions.iter().any(|suggestion| contains_pass_as_value(&suggestion.to_string()))
+        }
+        _ => false,
+    }
+}
+
+fn print_unknown_argument_error(error: &clap::Error) -> bool {
+    let Some(invalid_argument) = extract_unknown_argument(error) else {
+        return false;
+    };
+
+    let highlighted_argument = invalid_argument.bright_blue().to_string();
+    output::error(&format!("Unexpected argument '{highlighted_argument}'"));
+
+    if has_pass_as_value_suggestion(error) {
+        eprintln!();
+        let pass_through_argument = format!("-- {invalid_argument}");
+        let highlighted_pass_through_argument =
+            format!("`{}`", pass_through_argument.bright_blue());
+        eprintln!("Use {highlighted_pass_through_argument} to pass the argument as a value");
+    }
+
+    true
+}
+
 fn print_help() {
     let header = vite_shared::header::vite_plus_header();
     let bold = "\x1b[1m";
@@ -1015,7 +1062,10 @@ pub use vite_shared::init_tracing;
 mod tests {
     use std::path::PathBuf;
 
+    use clap::Parser;
     use vite_task::config::UserRunConfig;
+
+    use super::{CLIArgs, extract_unknown_argument, has_pass_as_value_suggestion};
 
     #[test]
     fn run_config_types_in_sync() {
@@ -1036,5 +1086,20 @@ mod tests {
                 "run-config.ts is out of sync. Run `VITE_UPDATE_TASK_TYPES=1 cargo test -p vite-plus-cli run_config_types_in_sync` to update."
             );
         }
+    }
+
+    #[test]
+    fn unknown_argument_detected_without_pass_as_value_hint() {
+        let error = CLIArgs::try_parse_from(["vp", "--cache"]).expect_err("Expected parse error");
+        assert_eq!(extract_unknown_argument(&error).as_deref(), Some("--cache"));
+        assert!(!has_pass_as_value_suggestion(&error));
+    }
+
+    #[test]
+    fn unknown_argument_detected_with_pass_as_value_hint() {
+        let error =
+            CLIArgs::try_parse_from(["vp", "run", "--yolo"]).expect_err("Expected parse error");
+        assert_eq!(extract_unknown_argument(&error).as_deref(), Some("--yolo"));
+        assert!(has_pass_as_value_suggestion(&error));
     }
 }

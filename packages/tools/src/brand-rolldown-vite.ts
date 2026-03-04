@@ -7,7 +7,7 @@
  *
  * Changes applied:
  * 1. constants.ts: Add VITE_PLUS_VERSION constant
- * 2. cli.ts: Import VITE_PLUS_VERSION, change CLI name/version, and make banner magenta
+ * 2. cli.ts: Import VITE_PLUS_VERSION, change CLI name/version, and make banner blue
  * 3. build.ts: Remove startup build banner and change error prefix
  * 4. logger.ts: Change default prefix from '[vite]' to '[vite+]'
  * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
@@ -107,7 +107,7 @@ export function brandRolldownVite(rootDir: string = process.cwd()) {
     replaceInFile(
       cliFile,
       "colors.green(\n            `${colors.bold('VITE+')} v${VITE_PLUS_VERSION}`,\n          )",
-      "colors.magenta(\n            `${colors.bold('VITE+')} v${VITE_PLUS_VERSION}`,\n          )",
+      "colors.blue(\n            `${colors.bold('VITE+')} v${VITE_PLUS_VERSION}`,\n          )",
     ),
   ];
   logPatch(

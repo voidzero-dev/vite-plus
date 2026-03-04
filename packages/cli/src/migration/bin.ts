@@ -63,7 +63,6 @@ const helpMessage = renderCliDoc({
           label: '--no-interactive',
           description: 'Run in non-interactive mode (skip prompts and use defaults)',
         },
-        { label: '--non-interactive', description: 'Alias for --no-interactive' },
         { label: '-h, --help', description: 'Show this help message' },
       ],
     },
@@ -96,17 +95,14 @@ function parseArgs() {
   const parsed = mri<{
     help?: boolean;
     interactive?: boolean;
-    nonInteractive?: boolean;
-    'non-interactive'?: boolean;
     agent?: string | false;
     editor?: string | false;
   }>(args, {
     alias: { h: 'help' },
-    boolean: ['help', 'interactive', 'non-interactive', 'nonInteractive'],
+    boolean: ['help', 'interactive'],
     default: { interactive: defaultInteractive() },
   });
-  const nonInteractive = parsed['non-interactive'] ?? parsed.nonInteractive;
-  const interactive = nonInteractive ? false : parsed.interactive;
+  const interactive = parsed.interactive;
 
   let projectPath = parsed._[0];
   if (projectPath) {

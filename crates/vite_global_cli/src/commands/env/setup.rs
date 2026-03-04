@@ -15,11 +15,21 @@
 
 use std::process::ExitStatus;
 
+use owo_colors::OwoColorize;
+
 use super::config::{get_bin_dir, get_vite_plus_home};
-use crate::error::Error;
+use crate::{error::Error, help};
 
 /// Tools to create shims for (node, npm, npx, vpx)
 const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "vpx"];
+
+fn accent_command(command: &str) -> String {
+    if help::should_style_help() {
+        format!("`{}`", command.bright_blue())
+    } else {
+        format!("`{command}`")
+    }
+}
 
 /// Execute the setup command.
 pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
@@ -32,12 +42,16 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     create_env_files(&vite_plus_home).await?;
 
     if env_only {
+        println!("{}", help::render_heading("Setup"));
+        println!("  Updated shell environment files.");
+        println!("  Run {} to verify setup.", accent_command("vp env doctor"));
         return Ok(ExitStatus::default());
     }
 
     let bin_dir = get_bin_dir()?;
 
-    println!("Setting up vite-plus environment...");
+    println!("{}", help::render_heading("Setup"));
+    println!("  Preparing vite-plus environment.");
     println!();
 
     // Ensure bin directory exists
@@ -65,7 +79,7 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
 
     // Print results
     if !created.is_empty() {
-        println!("Created shims:");
+        println!("{}", help::render_heading("Created Shims"));
         for tool in &created {
             let shim_path = bin_dir.join(shim_filename(tool));
             println!("  {}", shim_path.as_path().display());
@@ -73,13 +87,16 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     }
 
     if !skipped.is_empty() && !refresh {
-        println!("Skipped existing shims:");
+        if !created.is_empty() {
+            println!();
+        }
+        println!("{}", help::render_heading("Skipped Shims"));
         for tool in &skipped {
             let shim_path = bin_dir.join(shim_filename(tool));
             println!("  {}", shim_path.as_path().display());
         }
         println!();
-        println!("Use --refresh to update existing shims.");
+        println!("  Use --refresh to update existing shims.");
     }
 
     println!();
@@ -419,19 +436,20 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
         home_path
     };
 
-    println!("Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):");
+    println!("{}", help::render_heading("Next Steps"));
+    println!("  Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):");
     println!();
     println!("  . \"{home_path}/env\"");
     println!();
-    println!("For fish shell, add to ~/.config/fish/config.fish:");
+    println!("  For fish shell, add to ~/.config/fish/config.fish:");
     println!();
     println!("  source \"{home_path}/env.fish\"");
     println!();
-    println!("For PowerShell, add to your $PROFILE:");
+    println!("  For PowerShell, add to your $PROFILE:");
     println!();
     println!("  . \"{home_path}/env.ps1\"");
     println!();
-    println!("For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:");
+    println!("  For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:");
 
     #[cfg(target_os = "macos")]
     {
@@ -449,7 +467,10 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
     }
 
     println!();
-    println!("Restart your terminal and IDE, then run 'vp env doctor' to verify.");
+    println!(
+        "  Restart your terminal and IDE, then run {} to verify.",
+        accent_command("vp env doctor")
+    );
 }
 
 #[cfg(test)]

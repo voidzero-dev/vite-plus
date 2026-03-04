@@ -1,3 +1,5 @@
 > vp env install # Install version from .node-version (22.x)
+VITE+ - The Unified Toolchain for the Web
+
 Installing Node.js v<semver>...
 Installed Node.js v<semver>

@@ -4,8 +4,18 @@
 
 use std::process::ExitStatus;
 
+use owo_colors::OwoColorize;
+
 use super::config::{ShimMode, load_config, save_config};
-use crate::error::Error;
+use crate::{error::Error, help};
+
+fn accent_command(command: &str) -> String {
+    if help::should_style_help() {
+        format!("`{}`", command.bright_blue())
+    } else {
+        format!("`{command}`")
+    }
+}
 
 /// Execute the `vp env on` command.
 pub async fn execute() -> Result<ExitStatus, Error> {
@@ -13,7 +23,7 @@ pub async fn execute() -> Result<ExitStatus, Error> {
 
     if config.shim_mode == ShimMode::Managed {
         println!("Shim mode is already set to managed.");
-        println!("Shims will always use vite-plus managed Node.js.");
+        println!("Shims will always use the Vite+ managed Node.js.");
         return Ok(ExitStatus::default());
     }
 
@@ -22,8 +32,9 @@ pub async fn execute() -> Result<ExitStatus, Error> {
 
     println!("\u{2713} Shim mode set to managed.");
     println!();
-    println!("Shims will now always use vite-plus managed Node.js.");
-    println!("Run 'vp env off' to prefer system Node.js instead.");
+    println!("Shims will now always use the Vite+ managed Node.js.");
+    println!();
+    println!("Run {} to prefer system Node.js instead.", accent_command("vp env off"));
 
     Ok(ExitStatus::default())
 }

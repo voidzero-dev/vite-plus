@@ -7,9 +7,7 @@
 
 > vp pack --external node:path src/index.ts # should bundle with legacy external flag
 ℹ entry: src/index.ts
-
- WARN  `external` is deprecated. Use `deps.neverBundle` instead.
-
+warn: `external` is deprecated. Use `deps.neverBundle` instead.
 ℹ Build start
 ℹ Cleaning 1 files
 ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
