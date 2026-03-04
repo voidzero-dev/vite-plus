@@ -24,8 +24,9 @@ import { join, relative } from 'node:path';
 
 import mri from 'mri';
 
+import { vitePlusHeader } from '../../binding/index.js';
 import { renderCliDoc } from '../utils/help.js';
-import { getVitePlusHeader, log } from '../utils/terminal.js';
+import { log } from '../utils/terminal.js';
 
 const HOOKS = [
   'pre-commit',
@@ -168,7 +169,7 @@ async function main() {
         },
       ],
     });
-    log((await getVitePlusHeader()) + '\n');
+    log(vitePlusHeader() + '\n');
     log(helpMessage);
     return;
   }

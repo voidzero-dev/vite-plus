@@ -15,7 +15,9 @@
 │
 ●  Install failed
 │
-●
+●  VITE+ - The Unified Toolchain for the Web
+│
+│
 │  > prepare
 │  > vp prepare
 │

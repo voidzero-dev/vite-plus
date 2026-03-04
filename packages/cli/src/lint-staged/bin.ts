@@ -8,8 +8,9 @@ import lintStaged from 'lint-staged';
 import type { Options } from 'lint-staged';
 import mri from 'mri';
 
+import { vitePlusHeader } from '../../binding/index.js';
 import { renderCliDoc } from '../utils/help.js';
-import { getVitePlusHeader, log } from '../utils/terminal.js';
+import { log } from '../utils/terminal.js';
 
 const args = mri(process.argv.slice(3), {
   alias: {
@@ -92,7 +93,7 @@ if (args.help) {
       },
     ],
   });
-  log((await getVitePlusHeader()) + '\n');
+  log(vitePlusHeader() + '\n');
   log(helpMessage);
 } else {
   const options: Options = {};
