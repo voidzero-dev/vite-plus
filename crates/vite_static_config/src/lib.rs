@@ -15,13 +15,35 @@ use oxc_allocator::Allocator;
 use rustc_hash::FxHashMap;
 use vite_path::AbsolutePath;
 
+/// The result of statically analyzing a single config field's value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StaticFieldValue {
+    /// The field value was successfully extracted as a JSON literal.
+    Json(serde_json::Value),
+    /// The field exists but its value is not a pure JSON literal (e.g. contains
+    /// function calls, variables, template literals with expressions, etc.)
+    NonStatic,
+}
+
+/// The result of statically analyzing a vite config file.
+///
+/// - `None` — the config is not analyzable (no config file found, parse error,
+///   no `export default`, or the default export is not an object literal).
+///   The caller should fall back to a runtime evaluation (e.g. NAPI).
+/// - `Some(map)` — the default export object was successfully located.
+///   - Key maps to [`StaticFieldValue::Json`] — field value was extracted.
+///   - Key maps to [`StaticFieldValue::NonStatic`] — field exists but its value
+///     cannot be represented as pure JSON.
+///   - Key absent — the field does not exist in the object.
+pub type StaticConfig = Option<FxHashMap<Box<str>, StaticFieldValue>>;
+
 /// Config file names to try, in priority order.
 /// This matches Vite's `DEFAULT_CONFIG_FILES`:
-/// https://github.com/vitejs/vite/blob/25227bbdc7de0ed07cf7bdc9a1a733e3a9a132bc/packages/vite/src/node/constants.ts#L98-L105
+/// <https://github.com/vitejs/vite/blob/25227bbdc7de0ed07cf7bdc9a1a733e3a9a132bc/packages/vite/src/node/constants.ts#L98-L105>
 ///
 /// Vite resolves config files by iterating this list and checking `fs.existsSync` — no
-/// module resolution involved, so oxc_resolver is not needed here:
-/// https://github.com/vitejs/vite/blob/25227bbdc7de0ed07cf7bdc9a1a733e3a9a132bc/packages/vite/src/node/config.ts#L2231-L2237
+/// module resolution involved, so `oxc_resolver` is not needed here:
+/// <https://github.com/vitejs/vite/blob/25227bbdc7de0ed07cf7bdc9a1a733e3a9a132bc/packages/vite/src/node/config.ts#L2231-L2237>
 const CONFIG_FILE_NAMES: &[&str] = &[
     "vite.config.js",
     "vite.config.mjs",
@@ -46,25 +68,11 @@ fn resolve_config_path(dir: &AbsolutePath) -> Option<vite_path::AbsolutePathBuf>
 
 /// Resolve and parse a vite config file from the given directory.
 ///
-/// Returns a map of top-level field names to their JSON values for fields
-/// whose values are pure JSON literals. Fields with non-JSON values (function calls,
-/// variables, template literals, etc.) are skipped.
-///
-/// # Arguments
-/// * `dir` - The directory to search for a vite config file
-///
-/// # Returns
-/// A map of field name to JSON value for all statically extractable fields.
-/// Returns an empty map if no config file is found or if it cannot be parsed.
+/// See [`StaticConfig`] for the return type semantics.
 #[must_use]
-pub fn resolve_static_config(dir: &AbsolutePath) -> FxHashMap<Box<str>, serde_json::Value> {
-    let Some(config_path) = resolve_config_path(dir) else {
-        return FxHashMap::default();
-    };
-
-    let Ok(source) = std::fs::read_to_string(&config_path) else {
-        return FxHashMap::default();
-    };
+pub fn resolve_static_config(dir: &AbsolutePath) -> StaticConfig {
+    let config_path = resolve_config_path(dir)?;
+    let source = std::fs::read_to_string(&config_path).ok()?;
 
     let extension = config_path.as_path().extension().and_then(|e| e.to_str()).unwrap_or("");
 
@@ -76,18 +84,19 @@ pub fn resolve_static_config(dir: &AbsolutePath) -> FxHashMap<Box<str>, serde_js
 }
 
 /// Parse a JSON config file into a map of field names to values.
-fn parse_json_config(source: &str) -> FxHashMap<Box<str>, serde_json::Value> {
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(source) else {
-        return FxHashMap::default();
-    };
-    let Some(obj) = value.as_object() else {
-        return FxHashMap::default();
-    };
-    obj.iter().map(|(k, v)| (Box::from(k.as_str()), v.clone())).collect()
+/// All fields in a valid JSON object are fully static.
+fn parse_json_config(source: &str) -> StaticConfig {
+    let value: serde_json::Value = serde_json::from_str(source).ok()?;
+    let obj = value.as_object()?;
+    Some(
+        obj.iter()
+            .map(|(k, v)| (Box::from(k.as_str()), StaticFieldValue::Json(v.clone())))
+            .collect(),
+    )
 }
 
 /// Parse a JS/TS config file, extracting the default export object's fields.
-fn parse_js_ts_config(source: &str, extension: &str) -> FxHashMap<Box<str>, serde_json::Value> {
+fn parse_js_ts_config(source: &str, extension: &str) -> StaticConfig {
     let allocator = Allocator::default();
     let source_type = match extension {
         "ts" | "mts" | "cts" => SourceType::ts(),
@@ -98,7 +107,7 @@ fn parse_js_ts_config(source: &str, extension: &str) -> FxHashMap<Box<str>, serd
     let result = parser.parse();
 
     if result.panicked || !result.errors.is_empty() {
-        return FxHashMap::default();
+        return None;
     }
 
     extract_default_export_fields(&result.program)
@@ -106,10 +115,13 @@ fn parse_js_ts_config(source: &str, extension: &str) -> FxHashMap<Box<str>, serd
 
 /// Find the default export in a parsed program and extract its object fields.
 ///
+/// Returns `None` if no `export default` is found or the exported value is not
+/// an object literal (or `defineConfig({...})` call).
+///
 /// Supports two patterns:
 /// 1. `export default defineConfig({ ... })`
 /// 2. `export default { ... }`
-fn extract_default_export_fields(program: &Program<'_>) -> FxHashMap<Box<str>, serde_json::Value> {
+fn extract_default_export_fields(program: &Program<'_>) -> StaticConfig {
     for stmt in &program.body {
         let Statement::ExportDefaultDeclaration(decl) = stmt else {
             continue;
@@ -126,23 +138,28 @@ fn extract_default_export_fields(program: &Program<'_>) -> FxHashMap<Box<str>, s
             // Pattern: export default defineConfig({ ... })
             Expression::CallExpression(call) => {
                 if !is_define_config_call(&call.callee) {
-                    continue;
+                    // Unknown function call — not analyzable
+                    return None;
                 }
                 if let Some(first_arg) = call.arguments.first()
                     && let Some(Expression::ObjectExpression(obj)) = first_arg.as_expression()
                 {
-                    return extract_object_fields(obj);
+                    return Some(extract_object_fields(obj));
                 }
+                // defineConfig() with non-object arg — not analyzable
+                return None;
             }
             // Pattern: export default { ... }
             Expression::ObjectExpression(obj) => {
-                return extract_object_fields(obj);
+                return Some(extract_object_fields(obj));
             }
-            _ => {}
+            // e.g. export default 42, export default someVar — not analyzable
+            _ => return None,
         }
     }
 
-    FxHashMap::default()
+    // No export default found
+    None
 }
 
 /// Check if a callee expression is `defineConfig`.
@@ -151,19 +168,21 @@ fn is_define_config_call(callee: &Expression<'_>) -> bool {
 }
 
 /// Extract fields from an object expression, converting each value to JSON.
-/// Fields whose values cannot be represented as pure JSON are skipped.
+/// Fields whose values cannot be represented as pure JSON are recorded as
+/// [`StaticFieldValue::NonStatic`]. Spread elements and computed properties
+/// are not representable so they are silently skipped (their keys are unknown).
 fn extract_object_fields(
     obj: &oxc::ast::ast::ObjectExpression<'_>,
-) -> FxHashMap<Box<str>, serde_json::Value> {
+) -> FxHashMap<Box<str>, StaticFieldValue> {
     let mut map = FxHashMap::default();
 
     for prop in &obj.properties {
         let ObjectPropertyKind::ObjectProperty(prop) = prop else {
-            // Skip spread elements
+            // Spread elements — keys are unknown at static analysis time
             continue;
         };
 
-        // Skip computed properties
+        // Computed properties — keys are unknown at static analysis time
         if prop.computed {
             continue;
         }
@@ -172,9 +191,9 @@ fn extract_object_fields(
             continue;
         };
 
-        if let Some(value) = expr_to_json(&prop.value) {
-            map.insert(key, value);
-        }
+        let value = expr_to_json(&prop.value)
+            .map_or(StaticFieldValue::NonStatic, StaticFieldValue::Json);
+        map.insert(key, value);
     }
 
     map
@@ -321,8 +340,28 @@ mod tests {
 
     use super::*;
 
-    fn parse(source: &str) -> FxHashMap<Box<str>, serde_json::Value> {
-        parse_js_ts_config(source, "ts")
+    /// Helper: parse JS/TS source, unwrap the `Some` (asserting it's analyzable),
+    /// and return the field map.
+    fn parse(source: &str) -> FxHashMap<Box<str>, StaticFieldValue> {
+        parse_js_ts_config(source, "ts").expect("expected analyzable config")
+    }
+
+    /// Shorthand for asserting a field extracted as JSON.
+    fn assert_json(
+        map: &FxHashMap<Box<str>, StaticFieldValue>,
+        key: &str,
+        expected: serde_json::Value,
+    ) {
+        assert_eq!(map.get(key), Some(&StaticFieldValue::Json(expected)));
+    }
+
+    /// Shorthand for asserting a field is `NonStatic`.
+    fn assert_non_static(map: &FxHashMap<Box<str>, StaticFieldValue>, key: &str) {
+        assert_eq!(
+            map.get(key),
+            Some(&StaticFieldValue::NonStatic),
+            "expected field {key:?} to be NonStatic"
+        );
     }
 
     // ── Config file resolution ──────────────────────────────────────────
@@ -332,7 +371,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir.path().join("vite.config.ts"), "export default { run: {} }").unwrap();
-        let result = resolve_static_config(&dir_path);
+        let result = resolve_static_config(&dir_path).unwrap();
         assert!(result.contains_key("run"));
     }
 
@@ -341,7 +380,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir.path().join("vite.config.js"), "export default { run: {} }").unwrap();
-        let result = resolve_static_config(&dir_path);
+        let result = resolve_static_config(&dir_path).unwrap();
         assert!(result.contains_key("run"));
     }
 
@@ -350,7 +389,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir.path().join("vite.config.mts"), "export default { run: {} }").unwrap();
-        let result = resolve_static_config(&dir_path);
+        let result = resolve_static_config(&dir_path).unwrap();
         assert!(result.contains_key("run"));
     }
 
@@ -362,17 +401,16 @@ mod tests {
             .unwrap();
         std::fs::write(dir.path().join("vite.config.js"), "export default { fromJs: true }")
             .unwrap();
-        let result = resolve_static_config(&dir_path);
+        let result = resolve_static_config(&dir_path).unwrap();
         assert!(result.contains_key("fromJs"));
         assert!(!result.contains_key("fromTs"));
     }
 
     #[test]
-    fn returns_empty_for_no_config() {
+    fn returns_none_for_no_config() {
         let dir = TempDir::new().unwrap();
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
-        let result = resolve_static_config(&dir_path);
-        assert!(result.is_empty());
+        assert!(resolve_static_config(&dir_path).is_none());
     }
 
     // ── JSON config parsing ─────────────────────────────────────────────
@@ -386,9 +424,12 @@ mod tests {
             r#"export default { run: { tasks: { build: { command: "echo hello" } } } }"#,
         )
         .unwrap();
-        let result = resolve_static_config(&dir_path);
-        let run = result.get("run").unwrap();
-        assert_eq!(run, &serde_json::json!({ "tasks": { "build": { "command": "echo hello" } } }));
+        let result = resolve_static_config(&dir_path).unwrap();
+        assert_json(
+            &result,
+            "run",
+            serde_json::json!({ "tasks": { "build": { "command": "echo hello" } } }),
+        );
     }
 
     // ── export default { ... } ──────────────────────────────────────────
@@ -396,8 +437,8 @@ mod tests {
     #[test]
     fn plain_export_default_object() {
         let result = parse("export default { foo: 'bar', num: 42 }");
-        assert_eq!(result.get("foo").unwrap(), &serde_json::json!("bar"));
-        assert_eq!(result.get("num").unwrap(), &serde_json::json!(42));
+        assert_json(&result, "foo", serde_json::json!("bar"));
+        assert_json(&result, "num", serde_json::json!(42));
     }
 
     #[test]
@@ -411,16 +452,16 @@ mod tests {
     #[test]
     fn define_config_call() {
         let result = parse(
-            r#"
+            r"
             import { defineConfig } from 'vite-plus';
             export default defineConfig({
                 run: { cacheScripts: true },
                 lint: { plugins: ['a'] },
             });
-            "#,
+            ",
         );
-        assert_eq!(result.get("run").unwrap(), &serde_json::json!({ "cacheScripts": true }));
-        assert_eq!(result.get("lint").unwrap(), &serde_json::json!({ "plugins": ["a"] }));
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+        assert_json(&result, "lint", serde_json::json!({ "plugins": ["a"] }));
     }
 
     // ── Primitive values ────────────────────────────────────────────────
@@ -428,30 +469,30 @@ mod tests {
     #[test]
     fn string_values() {
         let result = parse(r#"export default { a: "double", b: 'single' }"#);
-        assert_eq!(result.get("a").unwrap(), &serde_json::json!("double"));
-        assert_eq!(result.get("b").unwrap(), &serde_json::json!("single"));
+        assert_json(&result, "a", serde_json::json!("double"));
+        assert_json(&result, "b", serde_json::json!("single"));
     }
 
     #[test]
     fn numeric_values() {
-        let result = parse("export default { a: 42, b: 3.14, c: 0, d: -1 }");
-        assert_eq!(result.get("a").unwrap(), &serde_json::json!(42));
-        assert_eq!(result.get("b").unwrap(), &serde_json::json!(3.14));
-        assert_eq!(result.get("c").unwrap(), &serde_json::json!(0));
-        assert_eq!(result.get("d").unwrap(), &serde_json::json!(-1));
+        let result = parse("export default { a: 42, b: 1.5, c: 0, d: -1 }");
+        assert_json(&result, "a", serde_json::json!(42));
+        assert_json(&result, "b", serde_json::json!(1.5));
+        assert_json(&result, "c", serde_json::json!(0));
+        assert_json(&result, "d", serde_json::json!(-1));
     }
 
     #[test]
     fn boolean_values() {
         let result = parse("export default { a: true, b: false }");
-        assert_eq!(result.get("a").unwrap(), &serde_json::json!(true));
-        assert_eq!(result.get("b").unwrap(), &serde_json::json!(false));
+        assert_json(&result, "a", serde_json::json!(true));
+        assert_json(&result, "b", serde_json::json!(false));
     }
 
     #[test]
     fn null_value() {
         let result = parse("export default { a: null }");
-        assert_eq!(result.get("a").unwrap(), &serde_json::Value::Null);
+        assert_json(&result, "a", serde_json::Value::Null);
     }
 
     // ── Arrays ──────────────────────────────────────────────────────────
@@ -459,19 +500,19 @@ mod tests {
     #[test]
     fn array_of_strings() {
         let result = parse("export default { items: ['a', 'b', 'c'] }");
-        assert_eq!(result.get("items").unwrap(), &serde_json::json!(["a", "b", "c"]));
+        assert_json(&result, "items", serde_json::json!(["a", "b", "c"]));
     }
 
     #[test]
     fn nested_arrays() {
         let result = parse("export default { matrix: [[1, 2], [3, 4]] }");
-        assert_eq!(result.get("matrix").unwrap(), &serde_json::json!([[1, 2], [3, 4]]));
+        assert_json(&result, "matrix", serde_json::json!([[1, 2], [3, 4]]));
     }
 
     #[test]
     fn empty_array() {
         let result = parse("export default { items: [] }");
-        assert_eq!(result.get("items").unwrap(), &serde_json::json!([]));
+        assert_json(&result, "items", serde_json::json!([]));
     }
 
     // ── Nested objects ──────────────────────────────────────────────────
@@ -491,9 +532,10 @@ mod tests {
                 }
             }"#,
         );
-        assert_eq!(
-            result.get("run").unwrap(),
-            &serde_json::json!({
+        assert_json(
+            &result,
+            "run",
+            serde_json::json!({
                 "tasks": {
                     "build": {
                         "command": "echo build",
@@ -501,109 +543,110 @@ mod tests {
                         "cache": true,
                     }
                 }
-            })
+            }),
         );
     }
 
-    // ── Skipping non-JSON fields ────────────────────────────────────────
+    // ── NonStatic fields ────────────────────────────────────────────────
 
     #[test]
-    fn skips_function_call_values() {
+    fn non_static_function_call_values() {
         let result = parse(
-            r#"export default {
+            r"export default {
                 run: { cacheScripts: true },
                 plugins: [myPlugin()],
-            }"#,
+            }",
         );
-        assert!(result.contains_key("run"));
-        assert!(!result.contains_key("plugins"));
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+        assert_non_static(&result, "plugins");
     }
 
     #[test]
-    fn skips_identifier_values() {
+    fn non_static_identifier_values() {
         let result = parse(
-            r#"
+            r"
             const myVar = 'hello';
             export default { a: myVar, b: 42 }
-            "#,
+            ",
         );
-        assert!(!result.contains_key("a"));
-        assert!(result.contains_key("b"));
+        assert_non_static(&result, "a");
+        assert_json(&result, "b", serde_json::json!(42));
     }
 
     #[test]
-    fn skips_template_literal_with_expressions() {
+    fn non_static_template_literal_with_expressions() {
         let result = parse(
-            r#"
+            r"
             const x = 'world';
             export default { a: `hello ${x}`, b: 'plain' }
-            "#,
+            ",
         );
-        assert!(!result.contains_key("a"));
-        assert!(result.contains_key("b"));
+        assert_non_static(&result, "a");
+        assert_json(&result, "b", serde_json::json!("plain"));
     }
 
     #[test]
     fn keeps_pure_template_literal() {
         let result = parse("export default { a: `hello` }");
-        assert_eq!(result.get("a").unwrap(), &serde_json::json!("hello"));
+        assert_json(&result, "a", serde_json::json!("hello"));
     }
 
     #[test]
-    fn skips_spread_in_object_value() {
+    fn non_static_spread_in_object_value() {
         let result = parse(
-            r#"
+            r"
             const base = { x: 1 };
             export default { a: { ...base, y: 2 }, b: 'ok' }
-            "#,
+            ",
         );
-        assert!(!result.contains_key("a"));
-        assert!(result.contains_key("b"));
+        assert_non_static(&result, "a");
+        assert_json(&result, "b", serde_json::json!("ok"));
     }
 
     #[test]
-    fn skips_spread_in_top_level() {
+    fn spread_in_top_level_skipped() {
         let result = parse(
-            r#"
+            r"
             const base = { x: 1 };
             export default { ...base, b: 'ok' }
-            "#,
+            ",
         );
-        // Spread at top level is skipped; plain fields are kept
+        // Spread at top level — keys unknown, so not in map at all
         assert!(!result.contains_key("x"));
-        assert!(result.contains_key("b"));
+        assert_json(&result, "b", serde_json::json!("ok"));
     }
 
     #[test]
-    fn skips_computed_properties() {
+    fn computed_properties_skipped() {
         let result = parse(
-            r#"
+            r"
             const key = 'dynamic';
             export default { [key]: 'value', plain: 'ok' }
-            "#,
+            ",
         );
+        // Computed key — not in map at all (key is unknown)
         assert!(!result.contains_key("dynamic"));
-        assert!(result.contains_key("plain"));
+        assert_json(&result, "plain", serde_json::json!("ok"));
     }
 
     #[test]
-    fn skips_array_with_spread() {
+    fn non_static_array_with_spread() {
         let result = parse(
-            r#"
+            r"
             const arr = [1, 2];
             export default { a: [...arr, 3], b: 'ok' }
-            "#,
+            ",
         );
-        assert!(!result.contains_key("a"));
-        assert!(result.contains_key("b"));
+        assert_non_static(&result, "a");
+        assert_json(&result, "b", serde_json::json!("ok"));
     }
 
     // ── Property key types ──────────────────────────────────────────────
 
     #[test]
     fn string_literal_keys() {
-        let result = parse(r#"export default { 'string-key': 42 }"#);
-        assert_eq!(result.get("string-key").unwrap(), &serde_json::json!(42));
+        let result = parse(r"export default { 'string-key': 42 }");
+        assert_json(&result, "string-key", serde_json::json!(42));
     }
 
     // ── Real-world patterns ─────────────────────────────────────────────
@@ -624,23 +667,24 @@ mod tests {
             };
             "#,
         );
-        assert_eq!(
-            result.get("run").unwrap(),
-            &serde_json::json!({
+        assert_json(
+            &result,
+            "run",
+            serde_json::json!({
                 "tasks": {
                     "build": {
                         "command": "echo 'build from vite.config.ts'",
                         "dependsOn": [],
                     }
                 }
-            })
+            }),
         );
     }
 
     #[test]
     fn real_world_with_non_json_fields() {
         let result = parse(
-            r#"
+            r"
             import { defineConfig } from 'vite-plus';
 
             export default defineConfig({
@@ -658,68 +702,76 @@ mod tests {
                     },
                 },
             });
-            "#,
+            ",
         );
-        assert!(result.contains_key("lint"));
-        assert!(result.contains_key("run"));
-        assert_eq!(
-            result.get("run").unwrap(),
-            &serde_json::json!({
+        assert_json(
+            &result,
+            "lint",
+            serde_json::json!({
+                "plugins": ["unicorn", "typescript"],
+                "rules": {
+                    "no-console": ["error", { "allow": ["error"] }],
+                },
+            }),
+        );
+        assert_json(
+            &result,
+            "run",
+            serde_json::json!({
                 "tasks": {
                     "build:src": {
                         "command": "vp run rolldown#build-binding:release",
                     }
                 }
-            })
+            }),
         );
     }
 
     #[test]
     fn skips_non_default_exports() {
         let result = parse(
-            r#"
+            r"
             export const config = { a: 1 };
             export default { b: 2 };
-            "#,
+            ",
         );
         assert!(!result.contains_key("a"));
-        assert!(result.contains_key("b"));
+        assert_json(&result, "b", serde_json::json!(2));
+    }
+
+    // ── Not analyzable cases (return None) ──────────────────────────────
+
+    #[test]
+    fn returns_none_for_no_default_export() {
+        assert!(parse_js_ts_config("export const config = { a: 1 };", "ts").is_none());
     }
 
     #[test]
-    fn returns_empty_for_no_default_export() {
-        let result = parse("export const config = { a: 1 };");
-        assert!(result.is_empty());
+    fn returns_none_for_non_object_default_export() {
+        assert!(parse_js_ts_config("export default 42;", "ts").is_none());
     }
 
     #[test]
-    fn returns_empty_for_non_object_default_export() {
-        let result = parse("export default 42;");
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn returns_empty_for_unknown_function_call() {
-        let result = parse("export default someOtherFn({ a: 1 });");
-        assert!(result.is_empty());
+    fn returns_none_for_unknown_function_call() {
+        assert!(parse_js_ts_config("export default someOtherFn({ a: 1 });", "ts").is_none());
     }
 
     #[test]
     fn handles_trailing_commas() {
         let result = parse(
-            r#"export default {
+            r"export default {
                 a: [1, 2, 3,],
                 b: { x: 1, y: 2, },
-            }"#,
+            }",
         );
-        assert_eq!(result.get("a").unwrap(), &serde_json::json!([1, 2, 3]));
-        assert_eq!(result.get("b").unwrap(), &serde_json::json!({ "x": 1, "y": 2 }));
+        assert_json(&result, "a", serde_json::json!([1, 2, 3]));
+        assert_json(&result, "b", serde_json::json!({ "x": 1, "y": 2 }));
     }
 
     #[test]
     fn task_with_cache_config() {
         let result = parse(
-            r#"export default {
+            r"export default {
                 run: {
                     tasks: {
                         hello: {
@@ -729,11 +781,12 @@ mod tests {
                         },
                     },
                 },
-            }"#,
+            }",
         );
-        assert_eq!(
-            result.get("run").unwrap(),
-            &serde_json::json!({
+        assert_json(
+            &result,
+            "run",
+            serde_json::json!({
                 "tasks": {
                     "hello": {
                         "command": "node hello.mjs",
@@ -741,14 +794,14 @@ mod tests {
                         "cache": true,
                     }
                 }
-            })
+            }),
         );
     }
 
     #[test]
-    fn skips_method_call_in_nested_value() {
+    fn non_static_method_call_in_nested_value() {
         let result = parse(
-            r#"export default {
+            r"export default {
                 run: {
                     tasks: {
                         'build:src': {
@@ -757,23 +810,22 @@ mod tests {
                     },
                 },
                 lint: { plugins: ['a'] },
-            }"#,
+            }",
         );
-        // `run` should be skipped because its nested value contains a method call
-        assert!(!result.contains_key("run"));
-        // `lint` is pure JSON and should be kept
-        assert!(result.contains_key("lint"));
+        // `run` is NonStatic because its nested value contains a method call
+        assert_non_static(&result, "run");
+        assert_json(&result, "lint", serde_json::json!({ "plugins": ["a"] }));
     }
 
     #[test]
     fn cache_scripts_only() {
         let result = parse(
-            r#"export default {
+            r"export default {
                 run: {
                     cacheScripts: true,
                 },
-            }"#,
+            }",
         );
-        assert_eq!(result.get("run").unwrap(), &serde_json::json!({ "cacheScripts": true }));
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
     }
 }
