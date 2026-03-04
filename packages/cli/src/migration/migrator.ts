@@ -875,21 +875,13 @@ export function setupGitHooks(projectPath: string): void {
     createHuskyPreCommitHook(projectPath, huskyDir);
   }
 
-  // vp fmt and vp prepare require a git workspace — walk up to find .git
+  // vp prepare requires a git workspace — walk up to find .git
   const gitRoot = findGitRoot(projectPath);
   if (!gitRoot) {
     return;
   }
 
-  // Format package.json to sort fields conventionally
   const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
-  const fmtResult = spawn.sync(vpBin, ['fmt', packageJsonPath], {
-    cwd: projectPath,
-    stdio: 'pipe',
-  });
-  if (fmtResult.status !== 0) {
-    prompts.log.warn('Failed to format package.json');
-  }
 
   // Install git hooks via vp prepare
   if (!unsupported) {

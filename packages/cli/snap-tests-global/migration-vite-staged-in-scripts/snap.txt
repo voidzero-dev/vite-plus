@@ -12,8 +12,6 @@
 │
 ◆  ✔ Merged staged config into vite.config.ts
 │
-▲  Failed to format package.json
-│
 ◆  ✔ Git hooks configured
 │
 ◆  Wrote agent instructions to AGENTS.md

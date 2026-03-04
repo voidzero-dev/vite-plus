@@ -49,11 +49,11 @@ export default {
     "lint-staged": "^16.2.6",
     "vite-plus": "latest"
   },
-  "packageManager": "pnpm@<semver>",
   "pnpm": {
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     }
-  }
+  },
+  "packageManager": "pnpm@<semver>"
 }

@@ -14,8 +14,6 @@
 │
 ◆  ✔ Inlined .lintstagedrc.json into "staged" in vite.config.ts
 │
-▲  Failed to format package.json
-│
 ◆  ✔ Git hooks configured
 │
 ◆  Wrote agent instructions to AGENTS.md
