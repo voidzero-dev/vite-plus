@@ -146,13 +146,13 @@ export async function writeEditorConfigs({
         }
 
         const existing = readJsonFile(filePath);
-        const merged = mergeEditorSettings(existing, incoming, fileName);
+        const merged = mergeEditorConfigs(existing, incoming, fileName);
         writeJsonFile(filePath, merged);
         prompts.log.success(`Merged editor config into ${editorConfig.targetDir}/${fileName}`);
       } else {
         // Non-interactive: always merge (safe because existing keys are never overwritten)
         const existing = readJsonFile(filePath);
-        const merged = mergeEditorSettings(existing, incoming, fileName);
+        const merged = mergeEditorConfigs(existing, incoming, fileName);
         writeJsonFile(filePath, merged);
         prompts.log.success(`Merged editor config into ${editorConfig.targetDir}/${fileName}`);
       }
@@ -164,7 +164,7 @@ export async function writeEditorConfigs({
   }
 }
 
-function mergeEditorSettings(
+function mergeEditorConfigs(
   existing: Record<string, unknown>,
   incoming: Record<string, unknown>,
   fileName: string,
