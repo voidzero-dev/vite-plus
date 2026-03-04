@@ -1,0 +1,7 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # migration should preserve || fallback semantics",
+    "cat package.json # check prepare script preserves || true fallback"
+  ]
+}

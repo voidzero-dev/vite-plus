@@ -734,7 +734,11 @@ export function setupGitHooks(projectPath: string): void {
         pkg.scripts = {};
       }
       const currentPrepare = pkg.scripts.prepare;
-      const huskyMatch = currentPrepare?.match(/^husky(?:\s+install)?(?:\s+(\S+))?\s*$/);
+      // Match standalone husky commands, including common error-suppression
+      // idioms like "husky || true", "husky || :", "husky || exit 0".
+      const huskyMatch = currentPrepare?.match(
+        /^husky(?:\s+install)?(?:\s+(\S+))?\s*(?:\|\|\s*(?:true|:|exit\s+0))?\s*$/,
+      );
       if (!currentPrepare || huskyMatch) {
         const dir = huskyMatch?.[1];
         pkg.scripts.prepare = dir ? `vp prepare ${dir}` : 'vp prepare';
@@ -745,14 +749,24 @@ export function setupGitHooks(projectPath: string): void {
 
       // Clean up leftover husky commands in composed prepare scripts
       // e.g. "vp prepare && husky && npm run build" → "vp prepare && npm run build"
-      // Handles &&, ;, and || operators
+      // Only handles && and ; operators — || has different semantics (fallback on
+      // failure) so stripping it would silently change the script's behavior.
       // Use (?<!\S) (not preceded by non-whitespace) instead of \b to avoid matching
       // "husky" inside paths like ".config/husky"
       pkg.scripts.prepare = pkg.scripts.prepare
-        .replace(/(?<!\S)husky install(?:\s+\S+)?\s*(?:&&|;|\|\|)\s*/g, '')
-        .replace(/\s*(?:&&|;|\|\|)\s*husky install(?:\s+\S+)?$/g, '')
-        .replace(/(?<!\S)husky(?:\s+\S+)?\s*(?:&&|;|\|\|)\s*/g, '')
-        .replace(/\s*(?:&&|;|\|\|)\s*husky(?:\s+\S+)?$/g, '');
+        .replace(/(?<!\S)husky install(?:\s+\S+)?\s*(?:&&|;)\s*/g, '')
+        .replace(/\s*(?:&&|;)\s*husky install(?:\s+\S+)?$/g, '')
+        .replace(/(?<!\S)husky(?:\s+\S+)?\s*(?:&&|;)\s*/g, '')
+        .replace(/\s*(?:&&|;)\s*husky(?:\s+\S+)?$/g, '')
+        // Also strip "husky || <no-op>" error-suppression idioms in composed scripts
+        .replace(
+          /(?<!\S)husky(?:\s+install)?(?:\s+\S+)?\s*\|\|\s*(?:true|:|exit\s+0)\s*(?:&&|;)\s*/g,
+          '',
+        )
+        .replace(
+          /\s*(?:&&|;)\s*husky(?:\s+install)?(?:\s+\S+)?\s*\|\|\s*(?:true|:|exit\s+0)$/g,
+          '',
+        );
 
       // Add lint-staged config if not present (in package.json or standalone config files)
       if (!pkg['lint-staged'] && !hasStandaloneLintStagedConfig(projectPath)) {
@@ -803,9 +817,13 @@ export function setupGitHooks(projectPath: string): void {
       stdio: 'pipe',
     });
     if (prepareResult.status === 0) {
-      const stderr = prepareResult.stderr?.toString() ?? '';
-      if (stderr.includes('skipping')) {
-        prompts.log.warn(`⚠ Git hooks not configured — ${stderr.trim()}`);
+      // vp prepare outputs skip/info messages to stdout via log().
+      // An empty message means hooks were installed successfully;
+      // any non-empty output indicates a skip (HUSKY=0, hooksPath
+      // already set, .git not found, etc.).
+      const stdout = prepareResult.stdout?.toString().trim() ?? '';
+      if (stdout) {
+        prompts.log.warn(`⚠ Git hooks not configured — ${stdout}`);
       } else {
         prompts.log.success('✔ Git hooks configured');
       }

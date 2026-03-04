@@ -1,0 +1,9 @@
+{
+  "env": {
+    "HUSKY": "0"
+  },
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # with HUSKY=0, vp prepare should skip and warn instead of reporting success"
+  ]
+}
