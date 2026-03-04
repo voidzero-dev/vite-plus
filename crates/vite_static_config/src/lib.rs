@@ -23,14 +23,15 @@ pub enum FieldValue {
 
 /// The result of statically analyzing a vite config file.
 ///
-/// - `None` — the config is not analyzable (no config file found, parse error,
+/// - `None` — the config file exists but is not analyzable (parse error,
 ///   no `export default`, or the default export is not an object literal).
 ///   The caller should fall back to a runtime evaluation (e.g. NAPI).
-/// - `Some(map)` — the default export object was successfully located.
+/// - `Some(map)` — the config was successfully resolved.
+///   - Empty map — no config file was found (caller can skip runtime evaluation).
 ///   - Key maps to [`FieldValue::Json`] — field value was extracted.
 ///   - Key maps to [`FieldValue::NonStatic`] — field exists but its value
 ///     cannot be represented as pure JSON.
-///   - Key absent — the field does not exist in the object.
+///   - Key absent — the field does not exist in the config.
 pub type StaticConfig = Option<FxHashMap<Box<str>, FieldValue>>;
 
 /// Config file names to try, in priority order.
@@ -67,7 +68,11 @@ fn resolve_config_path(dir: &AbsolutePath) -> Option<vite_path::AbsolutePathBuf>
 /// See [`StaticConfig`] for the return type semantics.
 #[must_use]
 pub fn resolve_static_config(dir: &AbsolutePath) -> StaticConfig {
-    let config_path = resolve_config_path(dir)?;
+    let Some(config_path) = resolve_config_path(dir) else {
+        // No config file found — return empty map so the caller can
+        // skip runtime evaluation (NAPI) entirely.
+        return Some(FxHashMap::default());
+    };
     let source = std::fs::read_to_string(&config_path).ok()?;
 
     let extension = config_path.as_path().extension().and_then(|e| e.to_str()).unwrap_or("");
@@ -139,6 +144,9 @@ fn extract_config_fields(program: &Program<'_>) -> StaticConfig {
 
 /// Extract the config object from an expression that is either:
 /// - `defineConfig({ ... })` → extract the object argument
+/// - `defineConfig(() => ({ ... }))` → extract from arrow function expression body
+/// - `defineConfig(() => { return { ... }; })` → extract from return statement
+/// - `defineConfig(function() { return { ... }; })` → extract from return statement
 /// - `{ ... }` → extract directly
 /// - anything else → not analyzable
 fn extract_config_from_expr(expr: &Expression<'_>) -> StaticConfig {
@@ -148,15 +156,107 @@ fn extract_config_from_expr(expr: &Expression<'_>) -> StaticConfig {
             if !call.callee.is_specific_id("defineConfig") {
                 return None;
             }
-            if let Some(first_arg) = call.arguments.first()
-                && let Some(Expression::ObjectExpression(obj)) = first_arg.as_expression()
-            {
-                return Some(extract_object_fields(obj));
+            let first_arg = call.arguments.first()?;
+            let first_arg_expr = first_arg.as_expression()?;
+            match first_arg_expr {
+                Expression::ObjectExpression(obj) => Some(extract_object_fields(obj)),
+                Expression::ArrowFunctionExpression(arrow) => {
+                    extract_config_from_function_body(&arrow.body)
+                }
+                Expression::FunctionExpression(func) => {
+                    extract_config_from_function_body(func.body.as_ref()?)
+                }
+                _ => None,
             }
-            None
         }
         Expression::ObjectExpression(obj) => Some(extract_object_fields(obj)),
         _ => None,
+    }
+}
+
+/// Extract the config object from the body of a function passed to `defineConfig`.
+///
+/// Handles two patterns:
+/// - Concise arrow body: `() => ({ ... })` — body has a single `ExpressionStatement`
+/// - Block body with exactly one return: `() => { ... return { ... }; }`
+///
+/// Returns `None` (not analyzable) if the body contains multiple `return` statements
+/// (at any nesting depth), since the returned config would depend on runtime control flow.
+fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> StaticConfig {
+    // Reject functions with multiple returns — the config depends on control flow.
+    if count_returns_in_stmts(&body.statements) > 1 {
+        return None;
+    }
+
+    for stmt in &body.statements {
+        match stmt {
+            Statement::ReturnStatement(ret) => {
+                let arg = ret.argument.as_ref()?;
+                if let Expression::ObjectExpression(obj) = arg.without_parentheses() {
+                    return Some(extract_object_fields(obj));
+                }
+                return None;
+            }
+            Statement::ExpressionStatement(expr_stmt) => {
+                // Concise arrow: `() => ({ ... })` is represented as ExpressionStatement
+                if let Expression::ObjectExpression(obj) =
+                    expr_stmt.expression.without_parentheses()
+                {
+                    return Some(extract_object_fields(obj));
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Count `return` statements recursively in a slice of statements.
+/// Does not descend into nested function/arrow expressions (they have their own returns).
+fn count_returns_in_stmts(stmts: &[Statement<'_>]) -> usize {
+    let mut count = 0;
+    for stmt in stmts {
+        count += count_returns_in_stmt(stmt);
+    }
+    count
+}
+
+fn count_returns_in_stmt(stmt: &Statement<'_>) -> usize {
+    match stmt {
+        Statement::ReturnStatement(_) => 1,
+        Statement::BlockStatement(block) => count_returns_in_stmts(&block.body),
+        Statement::IfStatement(if_stmt) => {
+            let mut n = count_returns_in_stmt(&if_stmt.consequent);
+            if let Some(alt) = &if_stmt.alternate {
+                n += count_returns_in_stmt(alt);
+            }
+            n
+        }
+        Statement::SwitchStatement(switch) => {
+            let mut n = 0;
+            for case in &switch.cases {
+                n += count_returns_in_stmts(&case.consequent);
+            }
+            n
+        }
+        Statement::TryStatement(try_stmt) => {
+            let mut n = count_returns_in_stmts(&try_stmt.block.body);
+            if let Some(handler) = &try_stmt.handler {
+                n += count_returns_in_stmts(&handler.body.body);
+            }
+            if let Some(finalizer) = &try_stmt.finalizer {
+                n += count_returns_in_stmts(&finalizer.body);
+            }
+            n
+        }
+        Statement::ForStatement(s) => count_returns_in_stmt(&s.body),
+        Statement::ForInStatement(s) => count_returns_in_stmt(&s.body),
+        Statement::ForOfStatement(s) => count_returns_in_stmt(&s.body),
+        Statement::WhileStatement(s) => count_returns_in_stmt(&s.body),
+        Statement::DoWhileStatement(s) => count_returns_in_stmt(&s.body),
+        Statement::LabeledStatement(s) => count_returns_in_stmt(&s.body),
+        Statement::WithStatement(s) => count_returns_in_stmt(&s.body),
+        _ => 0,
     }
 }
 
@@ -339,10 +439,11 @@ mod tests {
     }
 
     #[test]
-    fn returns_none_for_no_config() {
+    fn returns_empty_map_for_no_config() {
         let dir = TempDir::new().unwrap();
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
-        assert!(resolve_static_config(&dir_path).is_none());
+        let result = resolve_static_config(&dir_path).unwrap();
+        assert!(result.is_empty());
     }
 
     // ── JSON config parsing ─────────────────────────────────────────────
@@ -718,6 +819,95 @@ mod tests {
         );
         assert!(!result.contains_key("a"));
         assert_json(&result, "b", serde_json::json!(2));
+    }
+
+    // ── defineConfig with function argument ────────────────────────────
+
+    #[test]
+    fn define_config_arrow_block_body() {
+        let result = parse(
+            r"
+            export default defineConfig(({ mode }) => {
+                const env = loadEnv(mode, process.cwd(), '');
+                return {
+                    run: { cacheScripts: true },
+                    plugins: [vue()],
+                };
+            });
+            ",
+        );
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+        assert_non_static(&result, "plugins");
+    }
+
+    #[test]
+    fn define_config_arrow_expression_body() {
+        let result = parse(
+            r"
+            export default defineConfig(() => ({
+                run: { cacheScripts: true },
+                build: { outDir: 'dist' },
+            }));
+            ",
+        );
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+        assert_json(&result, "build", serde_json::json!({ "outDir": "dist" }));
+    }
+
+    #[test]
+    fn define_config_function_expression() {
+        let result = parse(
+            r"
+            export default defineConfig(function() {
+                return {
+                    run: { cacheScripts: true },
+                    plugins: [react()],
+                };
+            });
+            ",
+        );
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+        assert_non_static(&result, "plugins");
+    }
+
+    #[test]
+    fn define_config_arrow_no_return_object() {
+        // Arrow function that doesn't return an object literal
+        assert!(
+            parse_js_ts_config(
+                r"
+            export default defineConfig(({ mode }) => {
+                return someFunction();
+            });
+            ",
+                "ts",
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn define_config_arrow_multiple_returns() {
+        // Multiple top-level returns → not analyzable
+        assert!(
+            parse_js_ts_config(
+                r"
+            export default defineConfig(({ mode }) => {
+                if (mode === 'production') {
+                    return { run: { cacheScripts: true } };
+                }
+                return { run: { cacheScripts: false } };
+            });
+            ",
+                "ts",
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn define_config_arrow_empty_body() {
+        assert!(parse_js_ts_config("export default defineConfig(() => {});", "ts",).is_none());
     }
 
     // ── Not analyzable cases (return None) ──────────────────────────────
