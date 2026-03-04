@@ -7,7 +7,7 @@ import {
   readlinkSync,
   symlinkSync,
 } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { join, relative } from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
@@ -69,12 +69,7 @@ function linkSkills(
 ): number {
   const targetDir = join(root, agentSkillsDir);
   if (!existsSync(targetDir)) {
-    const parentDir = dirname(targetDir);
-    if (!existsSync(parentDir)) {
-      prompts.log.info(`  Skipping ${agentSkillsDir} — parent directory does not exist`);
-      return 0;
-    }
-    mkdirSync(targetDir);
+    mkdirSync(targetDir, { recursive: true });
   }
 
   let linked = 0;

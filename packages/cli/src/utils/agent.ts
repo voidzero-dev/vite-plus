@@ -46,7 +46,7 @@ const agents: Record<string, AgentConfig> = {
   amp: {
     displayName: 'Amp',
     skillsDir: '.agents/skills',
-    detect: (root) => fs.existsSync(path.join(root, '.agents')),
+    detect: (root) => fs.existsSync(path.join(root, '.amp')),
     mcpHint: DEFAULT_MCP_HINT,
   },
   codex: {
