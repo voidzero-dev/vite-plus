@@ -111,9 +111,17 @@ Both `vp create` and `vp migrate` prompt the user before setting up pre-commit h
 
 #### `vp migrate`
 
-- After migration rewrite, prompts for hooks setup
+Migration rewrite (`rewritePackageJson`) uses `vite-tools.yml` rules to rewrite tool commands (vite, oxlint, vitest, etc.) in all scripts. Crucially, the husky rule is **not** in `vite-tools.yml` — it lives in a separate `vite-prepare.yml` and is only applied to `scripts.prepare` via `rewritePrepareScript()`. This ensures husky is never accidentally rewritten in non-prepare scripts.
+
+- Prompts for hooks setup **before** migration rewrite
+- If `--no-hooks`: `rewritePrepareScript()` is never called, so the prepare script stays as-is (e.g. `"husky"` remains `"husky"`). No undo logic needed.
+- If hooks enabled: after migration rewrite, calls `rewritePrepareScript()` then `setupGitHooks()`
+
+Hook setup behavior:
+
 - **No hooks configured** — adds full setup (prepare script + lint-staged config + .husky/pre-commit)
-- **Has husky** — rewrites `"prepare": "husky"` to `"prepare": "vp prepare"`, removes husky from devDeps
+- **Has husky** — `rewritePrepareScript()` rewrites `"prepare": "husky"` to `"prepare": "vp prepare"`, `setupGitHooks()` removes husky from devDeps
+- **Has `husky install`** — `rewritePrepareScript()` collapses `"husky install"` → `"husky"` before applying the ast-grep rule, so `"husky install .hooks"` becomes `"vp prepare .hooks"`
 - **Has existing prepare script** (e.g. `"npm run build"`) — composes as `"vp prepare && npm run build"` (prepend so hooks are active before other prepare tasks; idempotent if already contains `vp prepare`)
 - **Has lint-staged** — keeps existing config (already rewritten by migration rules), removes from devDeps
 - **Has other tool (simple-git-hooks, lefthook, yorkie)** — warns and skips
@@ -144,6 +152,18 @@ Entry points bundled by rolldown into `dist/global/`:
 
 - `src/prepare/bin.ts` — built-in husky-compatible install logic
 - `src/lint-staged/bin.ts` — imports lint-staged CLI entry
+- `src/migration/bin.ts` — migration flow, calls `rewritePrepareScript()` + `setupGitHooks()`
+
+Shared modules:
+
+- `src/utils/husky.ts` — `HUSKY_BOOTSTRAP_PATTERN` regex and `stripHuskyBootstrapFromHooks()` function, shared between `prepare/bin.ts` and `migration/migrator.ts`
+
+### AST-grep Rules
+
+- `rules/vite-tools.yml` — rewrites tool commands (vite, oxlint, vitest, lint-staged, tsdown) in **all** scripts
+- `rules/vite-prepare.yml` — rewrites `husky` → `vp prepare`, applied **only** to `scripts.prepare` via `rewritePrepareScript()`
+
+The separation ensures the husky rule is never applied to non-prepare scripts (e.g. a hypothetical `"postinstall": "husky something"` won't be touched). The `husky install` → `husky` collapsing (needed because ast-grep can't match multi-word commands in bash) is done in TypeScript before applying the rule.
 
 ### Build
 
@@ -152,6 +172,8 @@ lint-staged is a devDependency of the `vite-plus` package, bundled by rolldown a
 ### Why husky cannot be bundled
 
 husky v9's `install()` function uses `new URL('husky', import.meta.url)` to resolve and `copyFileSync` its shell script (the hook dispatcher) relative to its own source location. When bundled by rolldown, `import.meta.url` points to the bundled output directory, not the original `node_modules/husky/` directory, so the shell script file cannot be found at runtime. Rather than working around this with asset copying hacks, `vp prepare` inlines the equivalent shell script as a string constant and writes it directly via `writeFileSync`.
+
+Both `vp prepare` (at runtime) and `vp migrate` (at migration time) need to strip stale husky v8 bootstrap lines (`. "…/husky.sh"`) from hook files. This logic is shared via `src/utils/husky.ts` to avoid duplication.
 
 ## Relationship to Existing Commands
 
