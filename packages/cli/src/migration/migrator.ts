@@ -862,7 +862,10 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): void {
     return;
   }
 
-  const hooksDir = '.vite-hooks';
+  // Custom husky dirs (e.g. .config/husky) stay unchanged;
+  // only the default .husky dir gets migrated to .vite-hooks.
+  const isCustomDir = oldHooksDir != null && oldHooksDir !== '.husky';
+  const hooksDir = isCustomDir ? oldHooksDir : '.vite-hooks';
 
   editJsonFile<{
     scripts?: Record<string, string>;
@@ -906,8 +909,9 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): void {
     removeLintStagedFromPackageJson(packageJsonPath);
   }
 
-  // Copy entire old husky hooks dir to .vite-hooks/ before creating pre-commit hook
-  if (oldHooksDir) {
+  // Copy default .husky/ hooks to .vite-hooks/ before creating pre-commit hook.
+  // Custom dirs (e.g. .config/husky) are kept in-place — no copy needed.
+  if (oldHooksDir && !isCustomDir) {
     const oldDir = path.join(projectPath, oldHooksDir);
     if (fs.existsSync(oldDir)) {
       const targetDir = path.join(projectPath, hooksDir);
@@ -939,7 +943,9 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): void {
   const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
 
   // Install git hooks via vp config (--hooks-only to skip agent setup, handled by migration)
-  const configArgs = ['config', '--hooks-only'];
+  const configArgs = isCustomDir
+    ? ['config', '--hooks-only', '--hooks-dir', hooksDir]
+    : ['config', '--hooks-only'];
   const configResult = spawn.sync(vpBin, configArgs, {
     cwd: projectPath,
     stdio: 'pipe',
@@ -1079,9 +1085,9 @@ export function rewritePrepareScript(rootDir: string): string | undefined {
         /\bvp config(?:\s+(?!-)([\w./-]+))?/,
         (_match: string, dir: string | undefined) => {
           // Capture the old husky dir for hook migration.
-          // Default husky dir is .husky; custom dirs come from positional arg.
+          // Default husky dir is .husky; custom dirs keep --hooks-dir flag.
           oldDir = dir ?? '.husky';
-          return 'vp config';
+          return dir ? `vp config --hooks-dir ${dir}` : 'vp config';
         },
       );
       pkg.scripts.prepare = newPrepare;

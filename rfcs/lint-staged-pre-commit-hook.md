@@ -64,10 +64,19 @@ export default defineConfig({
 ```
 
 ```json
-// package.json (migrated from husky)
+// package.json (migrated from husky — default .husky dir migrates to .vite-hooks)
 {
   "scripts": {
-    "prepare": "vp config --hooks-dir .husky"
+    "prepare": "vp config"
+  }
+}
+```
+
+```json
+// package.json (migrated from husky with custom dir — dir is preserved)
+{
+  "scripts": {
+    "prepare": "vp config --hooks-dir .config/husky"
   }
 }
 ```
@@ -82,7 +91,7 @@ If the project already has a prepare script, `vp config` is prepended:
 }
 ```
 
-### .vite-hooks/pre-commit (or .husky/pre-commit for migrated projects)
+### .vite-hooks/pre-commit (or custom dir for projects with non-default husky dir)
 
 ```
 vp staged
@@ -105,7 +114,7 @@ vp staged
 3. Creates hook scripts in `<hooks-dir>/_/` that source the user-defined hooks in `<hooks-dir>/`
 4. Agent integration: injects agent instructions and MCP config
 5. Safe to run multiple times (idempotent)
-6. Exits 0 and skips hooks if `HUSKY=0` environment variable is set
+6. Exits 0 and skips hooks if `VITE_GIT_HOOKS=0` or `HUSKY=0` environment variable is set (backwards compatible)
 7. Exits 0 and skips hooks if `.git` directory doesn't exist (safe during `npm install` in consumer projects)
 8. Exits 1 on real errors (git command not found, `git config` failed)
 9. Interactive mode: prompts on first run for hooks and agent setup; updates silently on subsequent runs
@@ -133,8 +142,8 @@ Both `vp create` and `vp migrate` prompt the user before setting up pre-commit h
 
 - After project creation and migration rewrite, prompts for hooks setup
 - If accepted, calls `rewritePrepareScript()` then `setupGitHooks()` — same as `vp migrate`
-- `rewritePrepareScript()` rewrites any template-provided `"prepare": "husky"` to `"prepare": "vp config --hooks-dir .husky"` before `setupGitHooks()` runs
-- Creates `.vite-hooks/pre-commit` (or `.husky/pre-commit` for migrated projects) with `vp staged`
+- `rewritePrepareScript()` rewrites any template-provided `"prepare": "husky"` to `"prepare": "vp config"` before `setupGitHooks()` runs
+- Creates `.vite-hooks/pre-commit` with `vp staged`
 
 #### `vp migrate`
 
@@ -148,8 +157,9 @@ Migration rewrite (`rewritePackageJson`) uses `vite-tools.yml` rules to rewrite 
 Hook setup behavior:
 
 - **No hooks configured** — adds full setup (prepare script + staged config in vite.config.ts + .vite-hooks/pre-commit)
-- **Has husky** — `rewritePrepareScript()` rewrites `"prepare": "husky"` to `"prepare": "vp config --hooks-dir .husky"`, `setupGitHooks()` removes husky from devDeps
-- **Has `husky install`** — `rewritePrepareScript()` collapses `"husky install"` → `"husky"` before applying the ast-grep rule, so `"husky install .hooks"` becomes `"vp config --hooks-dir .hooks"`
+- **Has husky (default dir)** — `rewritePrepareScript()` rewrites `"prepare": "husky"` to `"prepare": "vp config"`, `setupGitHooks()` copies `.husky/` hooks to `.vite-hooks/` and removes husky from devDeps
+- **Has husky (custom dir)** — `rewritePrepareScript()` preserves the custom dir as `"vp config --hooks-dir .config/husky"`, `setupGitHooks()` keeps hooks in the custom dir (no copy)
+- **Has `husky install`** — `rewritePrepareScript()` collapses `"husky install"` → `"husky"` before applying the ast-grep rule, so `"husky install .hooks"` becomes `"vp config --hooks-dir .hooks"` (custom dir preserved)
 - **Has existing prepare script** (e.g. `"npm run build"`) — composes as `"vp config && npm run build"` (prepend so hooks are active before other prepare tasks; idempotent if already contains `vp config`)
 - **Has lint-staged** — migrates `"lint-staged"` key to `staged` in vite.config.ts, keeps existing config (already rewritten by migration rules), removes lint-staged from devDeps
 - **Has husky <9.0.0** — detected **before** migration rewrite. Warns "please upgrade to husky v9+ first", skips hooks setup, and also skips lint-staged migration (`skipStagedMigration` flag). This preserves the `lint-staged` config in package.json and standalone config files, since `.husky/pre-commit` still references `npx lint-staged`.
@@ -189,7 +199,7 @@ Entry points bundled by rolldown into `dist/global/`:
 - `rules/vite-tools.yml` — rewrites tool commands (vite, oxlint, vitest, lint-staged, tsdown) in **all** scripts
 - `rules/vite-prepare.yml` — rewrites `husky` → `vp config`, applied **only** to `scripts.prepare` via `rewritePrepareScript()`
 
-The separation ensures the husky rule is never applied to non-prepare scripts (e.g. a hypothetical `"postinstall": "husky something"` won't be touched). The `husky install` → `husky` collapsing (needed because ast-grep can't match multi-word commands in bash) is done in TypeScript before applying the rule. After the AST-grep rewrite, post-processing converts positional dir args to `--hooks-dir` flags.
+The separation ensures the husky rule is never applied to non-prepare scripts (e.g. a hypothetical `"postinstall": "husky something"` won't be touched). The `husky install` → `husky` collapsing (needed because ast-grep can't match multi-word commands in bash) is done in TypeScript before applying the rule. After the AST-grep rewrite, post-processing handles the dir arg: custom dirs get `--hooks-dir` flags, while the default `.husky` dir is dropped (hooks are copied to `.vite-hooks/` instead).
 
 ### Build
 
