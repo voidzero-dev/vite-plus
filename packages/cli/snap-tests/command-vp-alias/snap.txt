@@ -38,5 +38,7 @@ Options:
   -F, --filter <FILTERS>   Match packages by name, directory, or glob pattern
       --ignore-depends-on  Do not run dependencies specified in `dependsOn` fields
   -v, --verbose            Show full detailed summary after execution
+      --cache              Force caching on for all tasks and scripts
+      --no-cache           Force caching off for all tasks and scripts
       --last-details       Display the detailed summary of the last run
   -h, --help               Print help (see more with '--help')
