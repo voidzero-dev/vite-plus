@@ -1,6 +1,7 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { downloadPackageManager as downloadPackageManagerBinding } from '../../binding/index.js';
+import { fmt as resolveFmt } from '../resolve-fmt.js';
 import { PackageManager } from '../types/index.js';
 import { runCommandSilently } from './command.js';
 import { accent } from './terminal.js';
@@ -70,6 +71,32 @@ export async function runViteInstall(cwd: string, interactive?: boolean, extraAr
     prompts.log.info(stdout.toString());
     prompts.log.error(stderr.toString());
     prompts.log.info(`You may need to run "vp install" manually in ${cwd}`);
+  }
+}
+
+export async function runViteFmt(cwd: string, interactive?: boolean, paths?: string[]) {
+  const spinner = getSpinner(interactive);
+  spinner.start(`Formatting code...`);
+
+  const { binPath, envs } = await resolveFmt();
+  const { exitCode, stderr, stdout } = await runCommandSilently({
+    command: binPath,
+    args: ['--write', ...(paths ?? [])],
+    cwd,
+    envs: {
+      ...process.env,
+      ...envs,
+    },
+  });
+
+  if (exitCode === 0) {
+    spinner.stop(`Code formatted`);
+  } else {
+    spinner.stop(`Format failed`);
+    prompts.log.info(stdout.toString());
+    prompts.log.error(stderr.toString());
+    const relativePaths = (paths ?? []).length > 0 ? ` ${(paths ?? []).join(' ')}` : '';
+    prompts.log.info(`You may need to run "vp fmt --write${relativePaths}" manually in ${cwd}`);
   }
 }
 

@@ -19,11 +19,11 @@ vite.config.ts
     "ready": "vp fmt && vp lint --type-aware && vp run test -r && vp run build -r",
     "dev": "vp run website#dev"
   },
-  "engines": {
-    "node": ">=22.12.0"
-  },
   "devDependencies": {
     "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "packageManager": "pnpm@<semver>"
 }
@@ -37,21 +37,21 @@ packages:
 catalogMode: prefer
 
 catalog:
-  '@types/node': ^24
+  "@types/node": ^24
   typescript: ^5
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
   vite-plus: latest
 overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite: "catalog:"
+  vitest: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
     - vitest
   allowedVersions:
-    vite: '*'
-    vitest: '*'
+    vite: "*"
+    vitest: "*"
 
 > test -d vite-plus-monorepo/.git && echo 'Git initialized' || echo 'No git' # check git init
 Git initialized
@@ -128,11 +128,11 @@ vite.config.ts
     "ready": "vp fmt && vp lint --type-aware && vp run test -r && vp run build -r",
     "dev": "vp run website#dev"
   },
-  "engines": {
-    "node": ">=22.12.0"
-  },
   "devDependencies": {
     "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "packageManager": "pnpm@<semver>"
 }
