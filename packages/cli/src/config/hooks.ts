@@ -19,8 +19,23 @@ const HOOKS = [
   'pre-auto-gc',
 ];
 
-// The shell script that dispatches to user-defined hooks in .vite-hooks/
-const HOOK_SCRIPT = `#!/usr/bin/env sh
+// Build nested dirname expression: depth 3 → dirname "$(dirname "$(dirname "$0"))"
+function nestedDirname(depth: number): string {
+  let expr = '"$0"';
+  for (let i = 0; i < depth; i++) {
+    expr = `"$(dirname ${expr})"`;
+  }
+  return expr;
+}
+
+// The shell script that dispatches to user-defined hooks in <dir>/
+// `depth` = number of path segments in `dir` + 2 (for `_` subdir + hook filename)
+function hookScript(dir: string): string {
+  // Count segments: ".vite-hooks" → 1, ".config/husky" → 2
+  const segments = dir.split('/').filter(Boolean).length;
+  const depth = segments + 2; // +2 for _ subdir and hook filename
+  const rootExpr = nestedDirname(depth);
+  return `#!/usr/bin/env sh
 { [ "$HUSKY" = "2" ] || [ "$VITE_GIT_HOOKS" = "2" ]; } && set -x
 n=$(basename "$0")
 s=$(dirname "$(dirname "$0")")/$n
@@ -33,7 +48,7 @@ i="\${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
 
 { [ "\${HUSKY-}" = "0" ] || [ "\${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
 
-d=$(dirname "$(dirname "$(dirname "$0")")")
+d=${rootExpr}
 export PATH="$d/node_modules/.bin:$PATH"
 sh -e "$s" "$@"
 c=$?
@@ -41,6 +56,7 @@ c=$?
 [ $c != 0 ] && echo "VITE+ - $n script failed (code $c)"
 [ $c = 127 ] && echo "VITE+ - command not found in PATH=$PATH"
 exit $c`;
+}
 
 export interface InstallResult {
   message: string;
@@ -86,7 +102,7 @@ export function install(dir = '.vite-hooks'): InstallResult {
   rmSync(internal('husky.sh'), { force: true });
   mkdirSync(internal(), { recursive: true });
   writeFileSync(internal('.gitignore'), '*');
-  writeFileSync(internal('h'), HOOK_SCRIPT, { mode: 0o755 });
+  writeFileSync(internal('h'), hookScript(dir), { mode: 0o755 });
   for (const hook of HOOKS) {
     writeFileSync(internal(hook), `#!/usr/bin/env sh\n. "$(dirname "$0")/h"`, { mode: 0o755 });
   }

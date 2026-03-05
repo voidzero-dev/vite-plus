@@ -998,13 +998,13 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): boolea
     const stdout = configResult.stdout?.toString().trim() ?? '';
     if (stdout) {
       prompts.log.warn(`⚠ Git hooks not configured — ${stdout}`);
-    } else {
-      prompts.log.success('✔ Git hooks configured');
+      return false;
     }
-  } else {
-    prompts.log.warn('Failed to install git hooks');
+    prompts.log.success('✔ Git hooks configured');
+    return true;
   }
-  return true;
+  prompts.log.warn('Failed to install git hooks');
+  return false;
 }
 
 /**

@@ -63,7 +63,7 @@ i="${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
 
 { [ "${HUSKY-}" = "0" ] || [ "${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
 
-d=$(dirname "$(dirname "$(dirname "$0")")")
+d="$(dirname "$(dirname "$(dirname "$0")")")"
 export PATH="$d/node_modules/.bin:$PATH"
 sh -e "$s" "$@"
 c=$?

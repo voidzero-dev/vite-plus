@@ -1,0 +1,16 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    { "command": "vp config --hooks-only --hooks-dir .config/husky", "ignoreOutput": true },
+    {
+      "command": "mkdir -p node_modules/.bin && printf '#!/usr/bin/env sh\\necho hook-path-ok' > node_modules/.bin/test-hook-cmd && chmod +x node_modules/.bin/test-hook-cmd",
+      "ignoreOutput": true
+    },
+    {
+      "command": "mkdir -p .config/husky && printf 'test-hook-cmd\\n' > .config/husky/pre-commit",
+      "ignoreOutput": true
+    },
+    { "command": "echo test > file.txt && git add file.txt", "ignoreOutput": true },
+    "git commit -m 'test' 2>&1 | grep -o 'hook-path-ok' # hook should find test-hook-cmd via PATH"
+  ]
+}

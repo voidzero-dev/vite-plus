@@ -1,0 +1,10 @@
+{
+  "name": "migration-hooks-skip-on-existing-hookspath",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "vite": "^7.0.0"
+  }
+}

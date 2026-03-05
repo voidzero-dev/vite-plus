@@ -1,0 +1,7 @@
+> git init
+> vp config --hooks-only --hooks-dir .config/husky
+> mkdir -p node_modules/.bin && printf '#!/usr/bin/env sh\necho hook-path-ok' > node_modules/.bin/test-hook-cmd && chmod +x node_modules/.bin/test-hook-cmd
+> mkdir -p .config/husky && printf 'test-hook-cmd\n' > .config/husky/pre-commit
+> echo test > file.txt && git add file.txt
+> git commit -m 'test' 2>&1 | grep -o 'hook-path-ok' # hook should find test-hook-cmd via PATH
+hook-path-ok
