@@ -1,7 +1,8 @@
 {
   "name": "migration-no-hooks-with-lint-staged-config",
   "scripts": {
-    "prepare": "husky"
+    "prepare": "husky",
+    "check-staged": "lint-staged"
   },
   "devDependencies": {
     "husky": "^9.1.7",

@@ -112,13 +112,14 @@ vp staged
 1. Built-in husky-compatible install logic (reimplementation of husky v9, not a bundled dependency)
 2. Sets `core.hooksPath` to `<hooks-dir>/_` (default: `.vite-hooks/_`)
 3. Creates hook scripts in `<hooks-dir>/_/` that source the user-defined hooks in `<hooks-dir>/`
-4. Agent integration: injects agent instructions and MCP config
+4. Agent integration: injects agent instructions and MCP config (skipped during `prepare` lifecycle — see point 11)
 5. Safe to run multiple times (idempotent)
 6. Exits 0 and skips hooks if `VITE_GIT_HOOKS=0` or `HUSKY=0` environment variable is set (backwards compatible)
 7. Exits 0 and skips hooks if `.git` directory doesn't exist (safe during `npm install` in consumer projects)
 8. Exits 1 on real errors (git command not found, `git config` failed)
 9. Interactive mode: prompts on first run for hooks and agent setup; updates silently on subsequent runs
 10. Non-interactive mode: runs everything by default
+11. `prepare` lifecycle detection: when `npm_lifecycle_event=prepare` (set by npm/pnpm/yarn during `npm install`), agent setup is skipped automatically. This ensures `"prepare": "vp config"` only installs hooks during install — agent setup is a one-time operation handled by `vp create`/`vp migrate`, not repeated on every `npm install`
 
 ### `vp staged`
 

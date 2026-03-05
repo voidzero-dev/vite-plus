@@ -464,10 +464,22 @@ const PREPARE_RULES_YAML_PATH = path.join(rulesDir, 'vite-prepare.yml');
 
 // Cache YAML content to avoid repeated disk reads (called once per package in monorepos)
 let cachedRulesYaml: string | undefined;
+let cachedRulesYamlNoLintStaged: string | undefined;
 let cachedPrepareRulesYaml: string | undefined;
 function readRulesYaml(): string {
   cachedRulesYaml ??= fs.readFileSync(RULES_YAML_PATH, 'utf8');
   return cachedRulesYaml;
+}
+function getScriptRulesYaml(skipStagedMigration?: boolean): string {
+  const yaml = readRulesYaml();
+  if (!skipStagedMigration) {
+    return yaml;
+  }
+  cachedRulesYamlNoLintStaged ??= yaml
+    .split('\n\n\n')
+    .filter((block) => !block.includes('id: replace-lint-staged'))
+    .join('\n\n\n');
+  return cachedRulesYamlNoLintStaged;
 }
 function readPrepareRulesYaml(): string {
   cachedPrepareRulesYaml ??= fs.readFileSync(PREPARE_RULES_YAML_PATH, 'utf8');
@@ -486,7 +498,10 @@ export function rewritePackageJson(
   skipStagedMigration?: boolean,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
-    const updated = rewriteScripts(JSON.stringify(pkg.scripts), readRulesYaml());
+    const updated = rewriteScripts(
+      JSON.stringify(pkg.scripts),
+      getScriptRulesYaml(skipStagedMigration),
+    );
     if (updated) {
       pkg.scripts = JSON.parse(updated);
     }

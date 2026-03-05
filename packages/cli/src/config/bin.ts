@@ -80,8 +80,8 @@ async function main() {
     }
   }
 
-  // --- Step 2: Agent setup (skipped with --hooks-only) ---
-  if (!hooksOnly) {
+  // --- Step 2: Agent setup (skipped with --hooks-only or during prepare lifecycle) ---
+  if (!hooksOnly && process.env.npm_lifecycle_event !== 'prepare') {
     const isFirstAgentRun = !hasExistingAgentInstructions(root);
     const agentSetup = await resolveAgentSetup(root, interactive && isFirstAgentRun);
 
