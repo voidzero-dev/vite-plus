@@ -231,10 +231,60 @@ impl SubcommandResolver {
         }
     }
 
-    /// Write a temporary config file and prepend `-c <path>` to args.
+    /// Write a temporary TS config file that re-exports a field from vite.config.
+    /// The temp file imports the vite config and re-exports the specified field,
+    /// so the tool (e.g. oxlint) picks it up via `-c <path>`.
+    /// The `config_file_path` must be an absolute path.
+    async fn write_temp_ts_config_import(
+        &mut self,
+        config_file_path: &str,
+        temp_filename: &str,
+        field_name: &str,
+        args: &mut Vec<String>,
+    ) -> anyhow::Result<()> {
+        let path = PathBuf::from(config_file_path);
+        if !path.is_absolute() {
+            anyhow::bail!("config_file_path must be an absolute path, got: {config_file_path}");
+        }
+
+        let config_basename = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| {
+                anyhow::anyhow!("Failed to get file name of config file: {config_file_path}")
+            })?
+            .to_string();
+
+        let config_dir = AbsolutePathBuf::new(path)
+            .and_then(|p| p.parent().map(|p| p.to_absolute_path_buf()))
+            .ok_or_else(|| {
+                anyhow::anyhow!("Failed to get parent directory of config file: {config_file_path}")
+            })?;
+
+        let config_path = config_dir.join(temp_filename);
+        let content = format!(
+            "import {{ defineConfig }} from 'oxlint';\nimport viteConfig from './{config_basename}';\nexport default defineConfig(viteConfig.{field_name} as any);\n"
+        );
+        write(&config_path, content).await?;
+
+        self.temp_config_files.push(config_path.clone());
+
+        let config_path_str = config_path
+            .as_path()
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("config path is not valid UTF-8"))?;
+        args.insert(0, config_path_str.to_string());
+        args.insert(0, "-c".to_string());
+        // Prevent oxlint from linting the temp config file itself
+        args.push("--ignore-pattern".to_string());
+        args.push(temp_filename.to_string());
+        Ok(())
+    }
+
+    /// Write a temporary JSON config file and prepend `-c <path>` to args.
     /// The file will be tracked for cleanup after command execution.
     /// The `config_file_path` must be an absolute path.
-    async fn write_temp_config_file(
+    async fn write_temp_json_config_file(
         &mut self,
         config: &serde_json::Value,
         config_file_path: &str,
@@ -311,13 +361,13 @@ impl SubcommandResolver {
                         tracing::error!("Failed to parse vite config: {vite_config_json}");
                     })?;
 
-                if let (Some(lint_config), Some(config_file)) =
+                if let (Some(_), Some(config_file)) =
                     (&resolved_vite_config.lint, &resolved_vite_config.config_file)
                 {
-                    self.write_temp_config_file(
-                        lint_config,
+                    self.write_temp_ts_config_import(
                         config_file,
-                        ".vite-plus-lint.tmp.json",
+                        ".vite-plus-lint.tmp.mts",
+                        "lint",
                         &mut args,
                     )
                     .await?;
@@ -325,7 +375,8 @@ impl SubcommandResolver {
 
                 Ok(ResolvedSubcommand {
                     program: Arc::from(OsStr::new("node")),
-                    args: iter::once(Str::from(js_path_str))
+                    args: iter::once(Str::from("--disable-warning=MODULE_TYPELESS_PACKAGE_JSON"))
+                        .chain(iter::once(Str::from(js_path_str)))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
@@ -362,7 +413,7 @@ impl SubcommandResolver {
                 if let (Some(fmt_config), Some(config_file)) =
                     (&resolved_vite_config.fmt, &resolved_vite_config.config_file)
                 {
-                    self.write_temp_config_file(
+                    self.write_temp_json_config_file(
                         fmt_config,
                         config_file,
                         ".vite-plus-fmt.tmp.json",
