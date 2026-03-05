@@ -174,7 +174,7 @@ if (args.help) {
       options.concurrent = false;
     } else {
       const num = Number(val);
-      options.concurrent = Number.isNaN(num) ? true : num;
+      options.concurrent = Number.isNaN(num) || val === '' ? true : num;
     }
   }
 

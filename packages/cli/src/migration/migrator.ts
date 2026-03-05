@@ -901,7 +901,8 @@ export function setupGitHooks(projectPath: string): void {
 
   // Add staged config to vite.config.ts if not present
   let stagedMerged = hasStagedConfigInViteConfig(projectPath);
-  if (!stagedMerged && !hasStandaloneLintStagedConfig(projectPath)) {
+  const hasStandaloneConfig = hasStandaloneLintStagedConfig(projectPath);
+  if (!stagedMerged && !hasStandaloneConfig) {
     stagedMerged = mergeStagedConfigToViteConfig(projectPath, { '*': 'vp check --fix' });
   }
 
@@ -911,8 +912,12 @@ export function setupGitHooks(projectPath: string): void {
     removeLintStagedFromPackageJson(packageJsonPath);
   }
 
-  // Hook file creation (no git needed — only filesystem ops)
-  createPreCommitHook(projectPath, hooksDir);
+  // Only create pre-commit hook if staged config is available — either in
+  // vite.config.ts or a standalone lint-staged config file. Without a config,
+  // `vp staged` would fail on every commit.
+  if (stagedMerged || hasStandaloneConfig) {
+    createPreCommitHook(projectPath, hooksDir);
+  }
 
   // vp config requires a git workspace — skip if no .git found
   if (!gitRoot) {
