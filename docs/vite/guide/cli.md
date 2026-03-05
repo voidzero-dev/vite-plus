@@ -183,6 +183,8 @@ vp fmt --ignore-path .gitignore
 ### `vp test`
 
 Run tests using Vitest.
+By default, `vp test` runs once and exits (equivalent to `vitest run`).
+Use watch mode explicitly with `vp test watch`.
 
 #### Usage
 
@@ -194,7 +196,7 @@ vp test [<ARGS>...]
 
 ```bash
 vp test
-vp test --watch
+vp test watch
 vp test run --coverage
 ```
 

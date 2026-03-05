@@ -417,12 +417,16 @@ impl SubcommandResolver {
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("test JS path is not valid UTF-8"))?;
+                let prepend_run = should_prepend_vitest_run(&args);
+                let vitest_args: Vec<Str> = if prepend_run {
+                    iter::once(Str::from("run")).chain(args.into_iter().map(Str::from)).collect()
+                } else {
+                    args.into_iter().map(Str::from).collect()
+                };
 
                 Ok(ResolvedSubcommand {
                     program: Arc::from(OsStr::new("node")),
-                    args: iter::once(Str::from(js_path_str))
-                        .chain(args.into_iter().map(Str::from))
-                        .collect(),
+                    args: iter::once(Str::from(js_path_str)).chain(vitest_args).collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         envs: None,
                         pass_through_envs: None,
@@ -986,6 +990,37 @@ fn normalize_help_args(args: Vec<String>) -> Vec<String> {
     }
 }
 
+fn is_vitest_help_flag(arg: &str) -> bool {
+    matches!(arg, "-h" | "--help")
+}
+
+fn is_vitest_watch_flag(arg: &str) -> bool {
+    matches!(arg, "-w" | "--watch")
+}
+
+fn is_vitest_test_subcommand(arg: &str) -> bool {
+    matches!(arg, "run" | "watch" | "dev" | "related" | "bench" | "init" | "list")
+}
+
+fn should_prepend_vitest_run(args: &[String]) -> bool {
+    let Some(first_arg) = args.first().map(String::as_str) else {
+        return true;
+    };
+
+    if is_vitest_test_subcommand(first_arg) {
+        return false;
+    }
+
+    for arg in args.iter().take_while(|arg| arg.as_str() != "--") {
+        let arg = arg.as_str();
+        if is_vitest_help_flag(arg) || is_vitest_watch_flag(arg) || arg == "--run" {
+            return false;
+        }
+    }
+
+    true
+}
+
 fn should_print_help(args: &[String]) -> bool {
     args.is_empty() || matches!(args, [arg] if arg == "-h" || arg == "--help")
 }
@@ -1108,7 +1143,9 @@ mod tests {
     use clap::Parser;
     use vite_task::config::UserRunConfig;
 
-    use super::{CLIArgs, extract_unknown_argument, has_pass_as_value_suggestion};
+    use super::{
+        CLIArgs, extract_unknown_argument, has_pass_as_value_suggestion, should_prepend_vitest_run,
+    };
 
     #[test]
     fn run_config_types_in_sync() {
@@ -1144,5 +1181,56 @@ mod tests {
             CLIArgs::try_parse_from(["vp", "run", "--yolo"]).expect_err("Expected parse error");
         assert_eq!(extract_unknown_argument(&error).as_deref(), Some("--yolo"));
         assert!(has_pass_as_value_suggestion(&error));
+    }
+
+    #[test]
+    fn test_without_args_defaults_to_run_mode() {
+        assert!(should_prepend_vitest_run(&[]));
+    }
+
+    #[test]
+    fn test_with_filters_defaults_to_run_mode() {
+        assert!(should_prepend_vitest_run(&["src/foo.test.ts".to_string()]));
+    }
+
+    #[test]
+    fn test_with_options_defaults_to_run_mode() {
+        assert!(should_prepend_vitest_run(&["--coverage".to_string()]));
+    }
+
+    #[test]
+    fn test_with_run_subcommand_does_not_prepend_run() {
+        assert!(!should_prepend_vitest_run(&["run".to_string(), "--coverage".to_string()]));
+    }
+
+    #[test]
+    fn test_with_watch_subcommand_does_not_prepend_run() {
+        assert!(!should_prepend_vitest_run(&["watch".to_string()]));
+    }
+
+    #[test]
+    fn test_with_watch_flag_does_not_prepend_run() {
+        assert!(!should_prepend_vitest_run(&["--watch".to_string()]));
+        assert!(!should_prepend_vitest_run(&["-w".to_string()]));
+    }
+
+    #[test]
+    fn test_with_help_flag_does_not_prepend_run() {
+        assert!(!should_prepend_vitest_run(&["--help".to_string()]));
+        assert!(!should_prepend_vitest_run(&["-h".to_string()]));
+    }
+
+    #[test]
+    fn test_with_explicit_run_flag_does_not_prepend_run() {
+        assert!(!should_prepend_vitest_run(&["--run".to_string(), "--coverage".to_string()]));
+    }
+
+    #[test]
+    fn test_ignores_flags_after_option_terminator() {
+        assert!(should_prepend_vitest_run(&[
+            "--".to_string(),
+            "--watch".to_string(),
+            "src/foo.test.ts".to_string(),
+        ]));
     }
 }
