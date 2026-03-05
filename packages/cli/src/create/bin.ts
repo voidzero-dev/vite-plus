@@ -22,6 +22,7 @@ import { displayRelative } from '../utils/path.js';
 import {
   defaultInteractive,
   downloadPackageManager,
+  runViteFmt,
   runViteInstall,
   selectPackageManager,
 } from '../utils/prompts.js';
@@ -567,6 +568,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     workspaceInfo.rootDir = fullPath;
     rewriteMonorepo(workspaceInfo);
     await runViteInstall(fullPath, options.interactive);
+    await runViteFmt(fullPath, options.interactive);
     prompts.outro(`✔ Created ${accent(projectDir)}!`);
     log(styleText('bold', 'Next steps:'));
     log(`  ${accent(`cd ${projectDir}`)}`);
@@ -685,9 +687,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
     updateWorkspaceConfig(projectDir, workspaceInfo);
     await runViteInstall(workspaceInfo.rootDir, options.interactive);
+    await runViteFmt(workspaceInfo.rootDir, options.interactive, [projectDir]);
   } else {
     rewriteStandaloneProject(fullPath, workspaceInfo);
     await runViteInstall(fullPath, options.interactive);
+    await runViteFmt(fullPath, options.interactive);
   }
 
   prompts.outro(`✔ Created ${accent(projectDir)}!`);
