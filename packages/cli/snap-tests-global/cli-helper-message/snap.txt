@@ -400,7 +400,7 @@ Arguments:
   [VERSION]  Target version (e.g., "0.2.0"). Defaults to latest
 
 Options:
-  --tag <TAG>            npm dist-tag to install (default: "latest", also: "test") [default: latest]
+  --tag <TAG>            npm dist-tag to install (default: "latest", also: "alpha") [default: latest]
   --check                Check for updates without installing
   --rollback             Revert to the previously active version
   --force                Force reinstall even if already on the target version
