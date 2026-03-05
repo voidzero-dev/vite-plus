@@ -23,7 +23,7 @@
 {
   "name": "migration-chained-lint-staged-pre-commit",
   "scripts": {
-    "prepare": "vp config --hooks-dir .husky"
+    "prepare": "vp config"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -48,5 +48,5 @@ export default defineConfig({
   
 });
 
-> cat .husky/pre-commit # check npx lint-staged replaced but --diff HEAD~1 && npm test preserved
+> cat .vite-hooks/pre-commit # check npx lint-staged replaced but --diff HEAD~1 && npm test preserved
 vp staged --diff HEAD~1 && npm test

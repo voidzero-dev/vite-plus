@@ -23,7 +23,7 @@
 {
   "name": "migration-husky-or-prepare",
   "scripts": {
-    "prepare": "vp config --hooks-dir .husky || true"
+    "prepare": "vp config || true"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",

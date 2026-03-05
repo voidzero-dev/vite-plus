@@ -23,7 +23,7 @@
 {
   "name": "migration-existing-pnpm-exec-lint-staged",
   "scripts": {
-    "prepare": "vp config --hooks-dir .husky"
+    "prepare": "vp config"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -48,5 +48,5 @@ export default defineConfig({
   
 });
 
-> cat .husky/pre-commit # check pnpm exec lint-staged replaced with vp staged
+> cat .vite-hooks/pre-commit # check pnpm exec lint-staged replaced with vp staged
 vp staged --concurrent false

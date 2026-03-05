@@ -24,7 +24,7 @@
   "name": "migration-lint-staged-ts-config",
   "type": "module",
   "scripts": {
-    "prepare": "vp config --hooks-dir .husky"
+    "prepare": "vp config"
   },
   "devDependencies": {
     "husky": "^9.1.7",

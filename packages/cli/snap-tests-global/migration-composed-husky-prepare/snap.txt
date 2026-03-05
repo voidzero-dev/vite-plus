@@ -23,7 +23,7 @@
 {
   "name": "migration-composed-husky-prepare",
   "scripts": {
-    "prepare": "vp config --hooks-dir .husky && npm run build"
+    "prepare": "vp config && npm run build"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",

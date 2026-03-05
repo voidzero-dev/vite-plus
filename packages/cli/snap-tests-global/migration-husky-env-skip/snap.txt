@@ -12,7 +12,7 @@
 │
 ◆  ✔ Merged staged config into vite.config.ts
 │
-▲  ⚠ Git hooks not configured — HUSKY=0 skip install
+▲  ⚠ Git hooks not configured — skip install (git hooks disabled)
 │
 ◆  Wrote agent instructions to AGENTS.md
 │

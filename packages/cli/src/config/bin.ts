@@ -46,26 +46,27 @@ const HOOKS = [
   'pre-auto-gc',
 ];
 
-// The shell script that dispatches to user-defined hooks in .husky/
+// The shell script that dispatches to user-defined hooks in .vite-hooks/
 const HOOK_SCRIPT = `#!/usr/bin/env sh
-[ "$HUSKY" = "2" ] && set -x
+{ [ "$HUSKY" = "2" ] || [ "$VITE_GIT_HOOKS" = "2" ]; } && set -x
 n=$(basename "$0")
 s=$(dirname "$(dirname "$0")")/$n
 
 [ ! -f "$s" ] && exit 0
 
-i="\${XDG_CONFIG_HOME:-$HOME/.config}/husky/init.sh"
+i="\${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/init.sh"
+[ ! -f "$i" ] && i="\${XDG_CONFIG_HOME:-$HOME/.config}/husky/init.sh"
 [ -f "$i" ] && . "$i"
 
-[ "\${HUSKY-}" = "0" ] && exit 0
+{ [ "\${HUSKY-}" = "0" ] || [ "\${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
 
 d=$(dirname "$(dirname "$(dirname "$0")")")
 export PATH="$d/node_modules/.bin:$PATH"
 sh -e "$s" "$@"
 c=$?
 
-[ $c != 0 ] && echo "husky - $n script failed (code $c)"
-[ $c = 127 ] && echo "husky - command not found in PATH=$PATH"
+[ $c != 0 ] && echo "Vite+ - $n script failed (code $c)"
+[ $c = 127 ] && echo "Vite+ - command not found in PATH=$PATH"
 exit $c`;
 
 interface InstallResult {
@@ -74,8 +75,8 @@ interface InstallResult {
 }
 
 function install(dir = '.vite-hooks'): InstallResult {
-  if (process.env.HUSKY === '0') {
-    return { message: 'HUSKY=0 skip install', isError: false };
+  if (process.env.HUSKY === '0' || process.env.VITE_GIT_HOOKS === '0') {
+    return { message: 'skip install (git hooks disabled)', isError: false };
   }
   if (dir.includes('..')) {
     return { message: '.. not allowed', isError: false };
@@ -376,7 +377,7 @@ async function main() {
         },
         {
           title: 'Environment',
-          rows: [{ label: 'HUSKY=0', description: 'Skip hook installation' }],
+          rows: [{ label: 'VITE_GIT_HOOKS=0', description: 'Skip hook installation' }],
         },
       ],
     });

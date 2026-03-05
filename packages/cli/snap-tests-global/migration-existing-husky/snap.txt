@@ -23,7 +23,7 @@
 {
   "name": "migration-existing-husky",
   "scripts": {
-    "prepare": "vp config --hooks-dir .husky"
+    "prepare": "vp config"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -38,5 +38,5 @@
   "packageManager": "pnpm@<semver>"
 }
 
-> cat .husky/pre-commit # check pre-commit hook rewritten to vp staged
+> cat .vite-hooks/pre-commit # check pre-commit hook rewritten to vp staged
 vp staged

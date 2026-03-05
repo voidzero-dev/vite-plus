@@ -3,6 +3,6 @@
     { "command": "git init", "ignoreOutput": true },
     "vp migrate --no-interactive # migration should rewrite husky to vp config",
     "cat package.json # check prepare script rewritten and husky removed from devDeps",
-    "cat .husky/pre-commit # check pre-commit hook rewritten to vp staged"
+    "cat .vite-hooks/pre-commit # check pre-commit hook rewritten to vp staged"
   ]
 }

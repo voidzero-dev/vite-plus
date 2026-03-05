@@ -7,6 +7,6 @@
     },
     "cat .husky/pre-commit # check pre-commit hook before migration",
     "vp migrate --no-interactive # migration should replace lint-staged in-place",
-    "cat .husky/pre-commit # check vp staged replaced npx lint-staged in-place"
+    "cat .vite-hooks/pre-commit # check vp staged replaced npx lint-staged in-place"
   ]
 }

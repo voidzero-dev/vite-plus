@@ -23,7 +23,7 @@
 {
   "name": "migration-existing-husky-lint-staged",
   "scripts": {
-    "prepare": "vp config --hooks-dir .husky"
+    "prepare": "vp config"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -48,5 +48,5 @@ export default defineConfig({
   
 });
 
-> cat .husky/pre-commit # check pre-commit hook rewritten
+> cat .vite-hooks/pre-commit # check pre-commit hook rewritten
 vp staged

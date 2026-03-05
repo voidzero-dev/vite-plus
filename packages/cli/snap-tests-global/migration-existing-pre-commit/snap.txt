@@ -25,7 +25,7 @@ secret-scan
 └  ✔ Migration completed!
 
 
-> cat .husky/pre-commit # check pre-commit hook preserves existing commands
+> cat .vite-hooks/pre-commit # check pre-commit hook preserves existing commands
 #!/usr/bin/env sh
 npm test
 secret-scan

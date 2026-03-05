@@ -245,8 +245,8 @@ async function main() {
   }
 
   if (shouldSetupHooks) {
-    rewritePrepareScript(workspaceInfo.rootDir);
-    setupGitHooks(workspaceInfo.rootDir);
+    const oldHooksDir = rewritePrepareScript(workspaceInfo.rootDir);
+    setupGitHooks(workspaceInfo.rootDir, oldHooksDir);
   }
 
   const selectedAgentTargetPaths = await selectAgentTargetPaths({

@@ -23,7 +23,7 @@
 {
   "name": "migration-lint-staged-in-scripts",
   "scripts": {
-    "prepare": "vp config --hooks-dir .husky",
+    "prepare": "vp config",
     "check-staged": "vp staged --diff HEAD~1"
   },
   "devDependencies": {

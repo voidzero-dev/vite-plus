@@ -7,6 +7,6 @@
     },
     "cat .husky/pre-commit # check existing pre-commit hook before migration",
     "vp migrate --no-interactive # migration should preserve existing pre-commit contents",
-    "cat .husky/pre-commit # check pre-commit hook preserves existing commands"
+    "cat .vite-hooks/pre-commit # check pre-commit hook preserves existing commands"
   ]
 }
