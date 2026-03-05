@@ -10,7 +10,7 @@ on:
         type: choice
         options:
           - latest
-          - test
+          - alpha
 
 permissions: {}
 
@@ -28,8 +28,13 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: ./.github/actions/set-snapshot-version
         id: version
+        with:
+          npm_tag: ${{ inputs.npm_tag }}
 
   build-rust:
     runs-on: ${{ matrix.settings.os }}
@@ -227,17 +232,8 @@ jobs:
 
       - name: Create release body
         run: |
-          if [[ "${{ inputs.npm_tag }}" == "latest" ]]; then
-            INSTALL_BASH="curl -fsSL https://staging.viteplus.dev/install.sh | bash"
-            INSTALL_PS1="irm https://staging.viteplus.dev/install.ps1 | iex"
-          else
-            INSTALL_BASH="curl -fsSL https://staging.viteplus.dev/install.sh | VITE_PLUS_VERSION=${{ env.VERSION }} bash"
-            INSTALL_PS1="\\\$env:VITE_PLUS_VERSION=\\\"${{ env.VERSION }}\\\"; irm https://staging.viteplus.dev/install.ps1 | iex"
-          fi
           cat > ./RELEASE_BODY.md <<EOF
           ## vite-plus v${{ env.VERSION }}
-
-          This is a snapshot release built from commit ${{ github.sha }}.
 
           ### Published Packages
 
@@ -249,12 +245,12 @@ jobs:
 
           **macOS/Linux:**
           \`\`\`bash
-          ${INSTALL_BASH}
+          curl -fsSL https://staging.viteplus.dev/install.sh | bash
           \`\`\`
 
           **Windows:**
           \`\`\`powershell
-          ${INSTALL_PS1}
+          irm https://staging.viteplus.dev/install.ps1 | iex
           \`\`\`
 
           View the full commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
@@ -267,7 +263,7 @@ jobs:
           body_path: ./RELEASE_BODY.md
           draft: false
           make_latest: ${{ inputs.npm_tag == 'latest' }}
-          prerelease: ${{ inputs.npm_tag != 'latest' }}
+          prerelease: ${{ inputs.npm_tag == 'alpha' }}
           name: vite-plus v${{ env.VERSION }}
           tag_name: v${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
@@ -279,7 +275,7 @@ jobs:
           webhook-url: ${{ secrets.DISCORD_RELEASES_WEBHOOK_URL }}
           embed-title: vite-plus v${{ env.VERSION }}
           embed-description: |
-            A new snapshot release is available!
+            A new release is available!
 
             **Published Packages:**
             • @voidzero-dev/vite-plus-core@${{ env.VERSION }}
