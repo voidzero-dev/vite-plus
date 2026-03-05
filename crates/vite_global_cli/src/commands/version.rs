@@ -75,6 +75,9 @@ fn find_local_vite_plus(start: &Path) -> Option<LocalVitePlus> {
         let package_json_path = dir.join("node_modules").join("vite-plus").join("package.json");
         if let Some(pkg) = read_package_json(&package_json_path) {
             let package_dir = package_json_path.parent()?.to_path_buf();
+            // Follow symlinks (pnpm links node_modules/vite-plus -> node_modules/.pnpm/.../vite-plus)
+            // so parent traversal can discover colocated dependency links.
+            let package_dir = fs::canonicalize(&package_dir).unwrap_or(package_dir);
             return Some(LocalVitePlus { version: pkg.version, package_dir });
         }
         current = dir.parent();
@@ -154,11 +157,58 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use std::{fs, path::Path};
+
     use super::format_version;
+    #[cfg(unix)]
+    use super::{ToolSpec, find_local_vite_plus, resolve_tool_version};
+
+    #[cfg(unix)]
+    fn symlink_dir(src: &Path, dst: &Path) {
+        std::os::unix::fs::symlink(src, dst).unwrap();
+    }
 
     #[test]
     fn format_version_values() {
         assert_eq!(format_version(Some("1.2.3".to_string())), "v1.2.3");
         assert_eq!(format_version(None), "Not found");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolves_tool_versions_from_pnpm_symlink_layout() {
+        let temp = tempfile::tempdir().unwrap();
+        let project = temp.path();
+
+        let pnpm_pkg_dir =
+            project.join("node_modules/.pnpm/vite-plus@1.0.0/node_modules/vite-plus");
+        fs::create_dir_all(&pnpm_pkg_dir).unwrap();
+        fs::write(pnpm_pkg_dir.join("package.json"), r#"{"version":"1.0.0"}"#).unwrap();
+
+        let core_pkg_dir = project
+            .join("node_modules/.pnpm/vite-plus@1.0.0/node_modules/@voidzero-dev/vite-plus-core");
+        fs::create_dir_all(&core_pkg_dir).unwrap();
+        fs::write(
+            core_pkg_dir.join("package.json"),
+            r#"{"version":"1.0.0","bundledVersions":{"vite":"8.0.0"}}"#,
+        )
+        .unwrap();
+
+        let node_modules_dir = project.join("node_modules");
+        fs::create_dir_all(&node_modules_dir).unwrap();
+        symlink_dir(
+            Path::new(".pnpm/vite-plus@1.0.0/node_modules/vite-plus"),
+            &node_modules_dir.join("vite-plus"),
+        );
+
+        let local = find_local_vite_plus(project).expect("expected local vite-plus to resolve");
+        let tool = ToolSpec {
+            display_name: "vite",
+            package_name: "@voidzero-dev/vite-plus-core",
+            bundled_version_key: Some("vite"),
+        };
+        let resolved = resolve_tool_version(&local, tool);
+        assert_eq!(resolved.as_deref(), Some("8.0.0"));
     }
 }

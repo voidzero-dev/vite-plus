@@ -17,7 +17,6 @@ const NEWLINE: &str = "\r\n";
 const SELECTED_COLOR: crossterm::style::Color = crossterm::style::Color::Blue;
 const SELECTED_MARKER: &str = "›";
 const UNSELECTED_MARKER: &str = " ";
-const HELP_LABEL_NOTE: &str = " (view all commands)";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PickedCommand {
@@ -99,9 +98,9 @@ const COMMANDS: &[CommandEntry] = &[
         append_help: false,
     },
     CommandEntry {
-        label: "help (view all commands)",
+        label: "help",
         command: "help",
-        summary: "Show the full command list and help details.",
+        summary: "View all commands and details",
         append_help: false,
     },
 ];
@@ -318,25 +317,59 @@ fn render_picker(
         let entry = &COMMANDS[*command_index];
         let marker = if is_selected { SELECTED_MARKER } else { UNSELECTED_MARKER };
         let label = truncate_line(entry.label, max_width);
-        let (label_main, label_note) = if entry.command == "help" {
-            if let Some(main) = label.strip_suffix(HELP_LABEL_NOTE) {
-                (main, Some(HELP_LABEL_NOTE))
-            } else {
-                (label.as_str(), None)
-            }
-        } else {
-            (label.as_str(), None)
-        };
 
-        if is_selected {
-            execute!(stdout, SetForegroundColor(SELECTED_COLOR), SetAttribute(Attribute::Bold),)?;
-            execute!(stdout, Print(format!("  {marker} {label_main}")))?;
-            execute!(stdout, SetAttribute(Attribute::Reset), ResetColor)?;
-            if let Some(note) = label_note {
+        if entry.command == "help" {
+            let (help_label, help_summary) =
+                selected_command_parts(entry.command, entry.summary, max_width);
+            execute!(
+                stdout,
+                SetForegroundColor(crossterm::style::Color::DarkGrey),
+                Print(format!("  {marker} ")),
+                ResetColor
+            )?;
+            if is_selected {
+                execute!(
+                    stdout,
+                    SetForegroundColor(SELECTED_COLOR),
+                    SetAttribute(Attribute::Bold),
+                    Print(help_label),
+                    SetAttribute(Attribute::Reset),
+                    ResetColor
+                )?;
+            } else {
+                execute!(stdout, Print(help_label))?;
+            }
+            if let Some(summary) = help_summary {
                 execute!(
                     stdout,
                     SetForegroundColor(crossterm::style::Color::DarkGrey),
-                    Print(note),
+                    Print(" "),
+                    Print(summary),
+                    ResetColor
+                )?;
+            }
+            execute!(stdout, Print(NEWLINE))?;
+            continue;
+        }
+
+        if is_selected {
+            let (selected_label, selected_summary) =
+                selected_command_parts(&label, entry.summary, max_width);
+            execute!(
+                stdout,
+                SetForegroundColor(crossterm::style::Color::DarkGrey),
+                Print(format!("  {marker} ")),
+                ResetColor
+            )?;
+            execute!(stdout, SetForegroundColor(SELECTED_COLOR), SetAttribute(Attribute::Bold),)?;
+            execute!(stdout, Print(selected_label))?;
+            execute!(stdout, SetAttribute(Attribute::Reset), ResetColor)?;
+            if let Some(summary) = selected_summary {
+                execute!(
+                    stdout,
+                    SetForegroundColor(crossterm::style::Color::DarkGrey),
+                    Print(" "),
+                    Print(summary),
                     ResetColor
                 )?;
             }
@@ -347,16 +380,8 @@ fn render_picker(
                 SetForegroundColor(crossterm::style::Color::DarkGrey),
                 Print(format!("  {marker} ")),
                 ResetColor,
-                Print(label_main),
+                Print(label),
             )?;
-            if let Some(note) = label_note {
-                execute!(
-                    stdout,
-                    SetForegroundColor(crossterm::style::Color::DarkGrey),
-                    Print(note),
-                    ResetColor
-                )?;
-            }
             execute!(stdout, Print(NEWLINE))?;
         }
     }
@@ -371,18 +396,7 @@ fn render_picker(
         )?;
     }
 
-    if let Some(command_index) = filtered_indices.get(selected_position).copied() {
-        let summary = truncate_line(COMMANDS[command_index].summary, max_width);
-        execute!(
-            stdout,
-            Print(NEWLINE),
-            SetForegroundColor(crossterm::style::Color::DarkGrey),
-            Print("  "),
-            Print(summary),
-            Print(NEWLINE),
-            ResetColor
-        )?;
-    } else {
+    if filtered_indices.is_empty() {
         let no_match = if query.is_empty() {
             "No common commands available. Run `vp help`.".to_string()
         } else {
@@ -404,8 +418,8 @@ fn render_picker(
 }
 
 fn compute_viewport_size(terminal_rows: usize, total_commands: usize) -> usize {
-    // Header + instructions + query + spacing + summary takes ~10 rows.
-    terminal_rows.saturating_sub(10).clamp(6, total_commands.max(6))
+    // Header + instructions + query + spacing takes ~9 rows.
+    terminal_rows.saturating_sub(9).clamp(6, total_commands.max(6))
 }
 
 fn align_viewport(current_start: usize, selected_index: usize, viewport_size: usize) -> usize {
@@ -433,6 +447,25 @@ fn truncate_line(line: &str, max_chars: usize) -> String {
     }
 
     line.chars().take(max_chars - 1).collect::<String>() + "…"
+}
+
+fn selected_command_parts(
+    command: &str,
+    summary: &str,
+    max_chars: usize,
+) -> (String, Option<String>) {
+    let selected_label = format!("{command}:");
+    let selected_label_width = selected_label.chars().count();
+    if max_chars <= selected_label_width {
+        return (truncate_line(&selected_label, max_chars), None);
+    }
+
+    let summary_width = max_chars - selected_label_width - 1;
+    if summary_width == 0 {
+        return (selected_label, None);
+    }
+
+    (selected_label, Some(truncate_line(summary, summary_width)))
 }
 
 fn filtered_command_indices(query: &str) -> Vec<usize> {
@@ -467,7 +500,10 @@ fn filtered_command_indices(query: &str) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{COMMANDS, align_viewport, compute_viewport_size, filtered_command_indices};
+    use super::{
+        COMMANDS, align_viewport, compute_viewport_size, filtered_command_indices,
+        selected_command_parts,
+    };
 
     #[test]
     fn commands_are_unique() {
@@ -500,7 +536,7 @@ mod tests {
     #[test]
     fn viewport_size_is_clamped() {
         assert_eq!(compute_viewport_size(12, 30), 6);
-        assert_eq!(compute_viewport_size(24, 30), 14);
+        assert_eq!(compute_viewport_size(24, 30), 15);
         assert_eq!(compute_viewport_size(100, 8), 8);
     }
 
@@ -526,5 +562,36 @@ mod tests {
         let help = filtered_command_indices("he");
         assert_eq!(help.len(), 1);
         assert_eq!(COMMANDS[help[0]].command, "help");
+    }
+
+    #[test]
+    fn selected_command_parts_appends_summary() {
+        let (label, summary) = selected_command_parts("create", "Create a new project.", 80);
+        assert_eq!(label, "create:");
+        assert_eq!(summary, Some("Create a new project.".to_string()));
+    }
+
+    #[test]
+    fn selected_command_parts_truncates_summary_to_fit_width() {
+        let (label, summary) = selected_command_parts("create", "Create a new project.", 18);
+        assert_eq!(label, "create:");
+        assert_eq!(summary, Some("Create a …".to_string()));
+    }
+
+    #[test]
+    fn selected_command_parts_truncates_label_when_width_is_tight() {
+        let (label, summary) = selected_command_parts("create", "Create a new project.", 4);
+        assert_eq!(label, "cre…");
+        assert_eq!(summary, None);
+    }
+
+    #[test]
+    fn help_entry_uses_static_inline_description() {
+        let help = COMMANDS
+            .iter()
+            .find(|entry| entry.command == "help")
+            .expect("help command should exist");
+        assert_eq!(help.label, "help");
+        assert_eq!(help.summary, "View all commands and details");
     }
 }
