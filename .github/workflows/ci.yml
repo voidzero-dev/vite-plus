@@ -389,7 +389,7 @@ jobs:
           vp upgrade --check
 
           # full upgrade: download, extract, swap
-          vp upgrade --tag test --force
+          vp upgrade --tag alpha --force
           vp --version
           vp env doctor
 
@@ -435,7 +435,7 @@ jobs:
           vp upgrade --check
 
           # full upgrade: download, extract, swap
-          vp upgrade --tag test --force
+          vp upgrade --tag alpha --force
           vp --version
           vp env doctor
 
@@ -474,7 +474,7 @@ jobs:
           vp upgrade --check
 
           REM full upgrade: download, extract, swap
-          vp upgrade --tag test --force
+          vp upgrade --tag alpha --force
           vp --version
           vp env doctor
 

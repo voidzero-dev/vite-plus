@@ -655,7 +655,7 @@ pub enum Commands {
         /// Target version (e.g., "0.2.0"). Defaults to latest.
         version: Option<String>,
 
-        /// npm dist-tag to install (default: "latest", also: "test")
+        /// npm dist-tag to install (default: "latest", also: "alpha")
         #[arg(long, default_value = "latest")]
         tag: String,
 
