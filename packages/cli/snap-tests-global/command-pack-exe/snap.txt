@@ -3,17 +3,13 @@ VITE+ - The Unified Toolchain for the Web
 
 ℹ entry: src/index.ts
 ℹ target: node25.7.0
-ℹ `exe` option is experimental and may change in future releases.
 ℹ Build start
 ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
-ℹ dist/index  <variable> MB
-✔ Built executable: dist/index (<variable>ms)
 
 > ls dist
-index
 index.mjs
 
-> ./dist/index
-hello from exe
+[127]> ./dist/index
+command not found: ./dist/index

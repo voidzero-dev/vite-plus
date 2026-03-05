@@ -1,6 +1,9 @@
-[1]> vp pack src/index.ts --exe
+> vp pack src/index.ts --exe
 VITE+ - The Unified Toolchain for the Web
 
 ℹ entry: src/index.ts
 ℹ target: node22.22.0
-error: Node.js version v<semver> does not support `exe` option. Please upgrade to Node.js <semver> or later.
+ℹ Build start
+ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
+ℹ 1 files, total: <variable> kB
+✔ Build complete in <variable>ms
