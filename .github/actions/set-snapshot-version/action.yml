@@ -1,5 +1,11 @@
-name: Set Snapshot Version
-description: Set snapshot version (0.0.2-g{sha}.{timestamp}) for pre-release builds
+name: Compute Release Version
+description: Get latest tag from GitHub and increment the patch version
+
+inputs:
+  npm_tag:
+    description: 'npm tag (latest or alpha)'
+    required: true
+    default: 'latest'
 
 outputs:
   version:
@@ -9,11 +15,12 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Set snapshot version
+    - name: Compute next patch version
       id: version
       shell: bash
       run: |
-        SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-8)
-        BUILD_TIME=$(date -u +%Y%m%d-%H%M)
-        VERSION="0.0.2-g${SHORT_SHA}.${BUILD_TIME}"
-        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        git fetch --tags --quiet
+        npm install --prefix ${{ github.action_path }} semver > /dev/null 2>&1
+        VERSION_OUTPUT=$(node ${{ github.action_path }}/compute-version.mjs "${{ inputs.npm_tag }}")
+        echo "$VERSION_OUTPUT"
+        echo "$VERSION_OUTPUT" | tail -n 1 >> $GITHUB_OUTPUT
