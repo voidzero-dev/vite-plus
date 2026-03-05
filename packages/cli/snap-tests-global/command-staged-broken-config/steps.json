@@ -1,0 +1,9 @@
+{
+  "commands": [
+    {
+      "command": "printf 'export default {\\n  staged: {\\n    \"*.ts\": \"vp check --fix\",\\n  },\\n  // syntax error: missing closing brace\\n' > vite.config.ts",
+      "ignoreOutput": true
+    },
+    "vp staged # should show actual config error, not 'No staged config found'"
+  ]
+}

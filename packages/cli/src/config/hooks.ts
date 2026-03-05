@@ -30,9 +30,10 @@ function nestedDirname(depth: number): string {
 
 // The shell script that dispatches to user-defined hooks in <dir>/
 // `depth` = number of path segments in `dir` + 2 (for `_` subdir + hook filename)
-function hookScript(dir: string): string {
+export function hookScript(dir: string): string {
   // Count segments: ".vite-hooks" → 1, ".config/husky" → 2
-  const segments = dir.split('/').filter(Boolean).length;
+  // Filter out empty strings and '.' to handle paths like "./.config/husky"
+  const segments = dir.split('/').filter((s) => s !== '' && s !== '.').length;
   const depth = segments + 2; // +2 for _ subdir and hook filename
   const rootExpr = nestedDirname(depth);
   return `#!/usr/bin/env sh

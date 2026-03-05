@@ -141,8 +141,12 @@ if (args.help) {
   try {
     const viteConfig = await resolveViteConfig(args.cwd ?? process.cwd());
     stagedConfig = viteConfig.staged;
-  } catch {
-    // vite.config.ts not found or resolve failed — fall through
+  } catch (err) {
+    // Surface real errors (syntax errors, missing imports, etc.)
+    // instead of masking them as "no config found"
+    const message = err instanceof Error ? err.message : String(err);
+    log(`Failed to load vite.config: ${message}`);
+    process.exit(1);
   }
   if (stagedConfig) {
     options.config = stagedConfig as Configuration;

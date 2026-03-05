@@ -1,0 +1,13 @@
+> printf 'export default {\n  staged: {\n    "*.ts": "vp check --fix",\n  },\n  // syntax error: missing closing brace\n' > vite.config.ts
+[1]> vp staged # should show actual config error, not 'No staged config found'
+failed to load config from <cwd>/vite.config.ts
+Failed to load vite.config: Build failed with 1 error:
+
+[PARSE_ERROR] Error: Unexpected token
+   ╭─[ vite.config.ts:5:42 ]
+   │
+ 5 │   // syntax error: missing closing brace
+   │                                          │ 
+   │                                          ╰─ 
+───╯
+

@@ -9,14 +9,6 @@ pnpm@latest installing...
 
 pnpm@<semver> installed
 
-✘ .lintstagedrc is not JSON format — please migrate to "staged" in vite.config.ts manually
-
-✘ .lintstagedrc.yaml — please migrate to "staged" in vite.config.ts manually
-
-✘ lint-staged.config.mjs — please migrate to "staged" in vite.config.ts manually
-
-Only "staged" in vite.config.ts is supported. See https://viteplus.dev/migration/#lint-staged
-
 ⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.
 
 Wrote agent instructions to AGENTS.md

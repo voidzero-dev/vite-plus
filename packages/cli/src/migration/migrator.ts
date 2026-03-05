@@ -793,15 +793,13 @@ function rewriteAllImports(projectPath: string): void {
 /**
  * Check if the project has an unsupported husky version (<9.0.0).
  * Uses `semver.coerce` to handle ranges like `^8.0.0` → `8.0.0`.
+ * Accepts pre-loaded deps to avoid re-reading package.json when called
+ * from contexts that already parsed it.
  */
-export function hasUnsupportedHuskyVersion(rootDir: string): boolean {
-  const packageJsonPath = path.join(rootDir, 'package.json');
-  if (!fs.existsSync(packageJsonPath)) {
-    return false;
-  }
-  const pkg = readJsonFile(packageJsonPath);
-  const deps = pkg.devDependencies as Record<string, string> | undefined;
-  const prodDeps = pkg.dependencies as Record<string, string> | undefined;
+function checkUnsupportedHuskyVersion(
+  deps: Record<string, string> | undefined,
+  prodDeps: Record<string, string> | undefined,
+): boolean {
   const huskyVersion = deps?.husky ?? prodDeps?.husky;
   if (!huskyVersion) {
     return false;
@@ -892,18 +890,48 @@ export function getOldHooksDir(rootDir: string): string | undefined {
 }
 
 /**
+ * Pre-flight check: verify that git hooks can be set up for this project.
+ * Returns `null` if hooks setup can proceed, or a warning reason string
+ * explaining why hooks setup should be skipped.
+ *
+ * These checks are deterministic and read-only — they do not modify
+ * the project in any way, making them safe to call before migration.
+ */
+export function preflightGitHooksSetup(projectPath: string): string | null {
+  const gitRoot = findGitRoot(projectPath);
+  if (gitRoot && path.resolve(projectPath) !== path.resolve(gitRoot)) {
+    return 'Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.';
+  }
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return null; // silently skip
+  }
+  const pkgContent = readJsonFile(packageJsonPath);
+  const deps = pkgContent.devDependencies as Record<string, string> | undefined;
+  const prodDeps = pkgContent.dependencies as Record<string, string> | undefined;
+  for (const tool of OTHER_HOOK_TOOLS) {
+    if (deps?.[tool] || prodDeps?.[tool] || pkgContent[tool]) {
+      return `Detected ${tool} — skipping git hooks setup. Please configure git hooks manually.`;
+    }
+  }
+  if (checkUnsupportedHuskyVersion(deps, prodDeps)) {
+    return 'Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.';
+  }
+  if (hasUnsupportedLintStagedConfig(projectPath)) {
+    return 'Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.';
+  }
+  return null;
+}
+
+/**
  * Set up git hooks with husky + lint-staged via vp commands.
  * Skips if another hook tool is detected (warns user).
  * Returns true if hooks were successfully set up, false if skipped.
  */
 export function setupGitHooks(projectPath: string, oldHooksDir?: string): boolean {
-  // Check git root first — subdirectory projects must not set core.hooksPath
-  // (running vp config from a subdirectory would hijack the repo-wide hooksPath)
-  const gitRoot = findGitRoot(projectPath);
-  if (gitRoot && path.resolve(projectPath) !== path.resolve(gitRoot)) {
-    prompts.log.warn(
-      '⚠ Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.',
-    );
+  const reason = preflightGitHooksSetup(projectPath);
+  if (reason) {
+    prompts.log.warn(`⚠ ${reason}`);
     return false;
   }
 
@@ -912,36 +940,7 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): boolea
     return false;
   }
 
-  // Check for other hook tools → warn and skip
-  const pkgContent = readJsonFile(packageJsonPath);
-  const deps = pkgContent.devDependencies as Record<string, string> | undefined;
-  const prodDeps = pkgContent.dependencies as Record<string, string> | undefined;
-  for (const tool of OTHER_HOOK_TOOLS) {
-    if (deps?.[tool] || prodDeps?.[tool] || pkgContent[tool]) {
-      prompts.log.warn(
-        `⚠ Detected ${tool} — skipping git hooks setup. Please configure git hooks manually.`,
-      );
-      return false;
-    }
-  }
-
-  // Check for unsupported husky version (<9.0.0) → warn and skip
-  if (hasUnsupportedHuskyVersion(projectPath)) {
-    prompts.log.warn(
-      '⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.',
-    );
-    return false;
-  }
-
-  // Skip hook setup if lint-staged config exists in a format that can't be
-  // auto-migrated — the config still references old commands (oxlint/oxfmt)
-  // that migration can't rewrite, so vp staged would fail on the next commit.
-  if (hasUnsupportedLintStagedConfig(projectPath)) {
-    prompts.log.warn(
-      '⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.',
-    );
-    return false;
-  }
+  const gitRoot = findGitRoot(projectPath);
 
   // Custom husky dirs (e.g. .config/husky) stay unchanged;
   // only the default .husky dir gets migrated to .vite-hooks.

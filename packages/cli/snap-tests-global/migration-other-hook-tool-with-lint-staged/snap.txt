@@ -1,0 +1,39 @@
+> vp migrate --no-interactive # hooks should be skipped due to simple-git-hooks
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+⚠ Detected simple-git-hooks — skipping git hooks setup. Please configure git hooks manually.
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
+
+
+> cat package.json # lint-staged config and scripts should be preserved
+{
+  "name": "migration-other-hook-tool-with-lint-staged",
+  "scripts": {
+    "check-staged": "lint-staged"
+  },
+  "devDependencies": {
+    "lint-staged": "^16.2.6",
+    "simple-git-hooks": "^2.11.1",
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "lint-staged": {
+    "*.ts": "eslint --fix"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "packageManager": "pnpm@<semver>"
+}

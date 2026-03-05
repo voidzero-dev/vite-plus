@@ -9,10 +9,6 @@ pnpm@latest installing...
 
 pnpm@<semver> installed
 
-✔ Created vite.config.ts in foo/vite.config.ts
-
-✔ Merged staged config into foo/vite.config.ts
-
 ⚠ Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.
 
 Wrote agent instructions to AGENTS.md
@@ -22,6 +18,15 @@ Wrote agent instructions to AGENTS.md
 > cat foo/package.json # check package.json
 {
   "name": "migration-subpath",
+  "lint-staged": {
+    "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
+      "oxfmt --staged",
+      "eslint --fix"
+    ],
+    "*.@(js|ts|tsx)": [
+      "oxlint --fix"
+    ]
+  },
   "pnpm": {
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -34,21 +39,8 @@ Wrote agent instructions to AGENTS.md
   "packageManager": "pnpm@<semver>"
 }
 
-> cat foo/vite.config.ts # check vite.config.ts
-import { defineConfig } from 'vite-plus';
-
-export default defineConfig({
-  staged: {
-    "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
-      "vp fmt --staged",
-      "eslint --fix"
-    ],
-    "*.@(js|ts|tsx)": [
-      "vp lint --fix"
-    ]
-  },
-  
-});
+[1]> cat foo/vite.config.ts # check vite.config.ts
+cat: foo/vite.config.ts: No such file or directory
 
 > git config --local core.hooksPath || echo 'core.hooksPath is not set' # should NOT be set
 core.hooksPath is not set

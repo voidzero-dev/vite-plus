@@ -28,8 +28,8 @@ import {
   checkVitestVersion,
   checkViteVersion,
   installGitHooks,
+  preflightGitHooksSetup,
   rewriteMonorepo,
-  hasUnsupportedHuskyVersion,
   rewriteStandaloneProject,
 } from './migrator.js';
 
@@ -225,14 +225,15 @@ async function main() {
 
   let shouldSetupHooks = await promptGitHooks(options);
 
-  if (shouldSetupHooks && hasUnsupportedHuskyVersion(workspaceInfo.rootDir)) {
-    prompts.log.warn(
-      '⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.',
-    );
-    shouldSetupHooks = false;
+  if (shouldSetupHooks) {
+    const reason = preflightGitHooksSetup(workspaceInfo.rootDir);
+    if (reason) {
+      prompts.log.warn(`⚠ ${reason}`);
+      shouldSetupHooks = false;
+    }
   }
 
-  // Skip staged migration when hooks are disabled (--no-hooks or unsupported husky).
+  // Skip staged migration when hooks are disabled (--no-hooks or preflight failed).
   // Without hooks, lint-staged config must stay in package.json so existing
   // .husky/pre-commit scripts that invoke `npx lint-staged` keep working.
   const skipStagedMigration = !shouldSetupHooks;
