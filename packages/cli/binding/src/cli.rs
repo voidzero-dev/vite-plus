@@ -1176,7 +1176,7 @@ fn print_help() {
   {bold}exec{reset}           Execute a command from local node_modules/.bin
   {bold}preview{reset}        Preview production build
   {bold}cache{reset}          Manage the task cache
-  {bold}prepare{reset}        Set up Git hooks for the project
+  {bold}config{reset}         Configure hooks and agent integration
   {bold}staged{reset}         Run linters on staged files
 
 {bold_underline}Package Manager Commands:{reset}

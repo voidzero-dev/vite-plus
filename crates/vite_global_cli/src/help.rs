@@ -399,7 +399,7 @@ pub fn top_level_help_doc() -> HelpDoc {
                 vec![
                     row("create", "Create a new project from a template"),
                     row("migrate", "Migrate an existing project to Vite+"),
-                    row("prepare", "Set up Git hooks for the project"),
+                    row("config", "Configure hooks and agent integration"),
                     row("staged", "Run linters on staged files"),
                     row(
                         "install, i",
