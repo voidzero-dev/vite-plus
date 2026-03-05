@@ -27,12 +27,10 @@ import { detectWorkspace } from '../utils/workspace.js';
 import {
   checkVitestVersion,
   checkViteVersion,
-  getOldHooksDir,
+  installGitHooks,
   rewriteMonorepo,
   hasUnsupportedHuskyVersion,
-  rewritePrepareScript,
   rewriteStandaloneProject,
-  setupGitHooks,
 } from './migrator.js';
 
 const { green } = colors;
@@ -246,10 +244,7 @@ async function main() {
   }
 
   if (shouldSetupHooks) {
-    const oldHooksDir = getOldHooksDir(workspaceInfo.rootDir);
-    if (setupGitHooks(workspaceInfo.rootDir, oldHooksDir)) {
-      rewritePrepareScript(workspaceInfo.rootDir);
-    }
+    installGitHooks(workspaceInfo.rootDir);
   }
 
   const selectedAgentTargetPaths = await selectAgentTargetPaths({

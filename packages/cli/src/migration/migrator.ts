@@ -858,6 +858,19 @@ function collapseHuskyInstall(script: string): string {
 }
 
 /**
+ * High-level helper: detect old hooks dir, set up git hooks, and rewrite
+ * the prepare script.  Returns true if hooks were successfully installed.
+ */
+export function installGitHooks(projectPath: string): boolean {
+  const oldHooksDir = getOldHooksDir(projectPath);
+  if (setupGitHooks(projectPath, oldHooksDir)) {
+    rewritePrepareScript(projectPath);
+    return true;
+  }
+  return false;
+}
+
+/**
  * Read-only probe: extract the old husky hooks directory from `scripts.prepare`
  * without modifying package.json. Returns undefined when no husky reference is found.
  */

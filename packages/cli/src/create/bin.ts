@@ -6,12 +6,10 @@ import mri from 'mri';
 
 import { vitePlusHeader } from '../../binding/index.js';
 import {
+  installGitHooks,
   rewriteMonorepo,
   rewriteMonorepoProject,
-  rewritePrepareScript,
   rewriteStandaloneProject,
-  setupGitHooks,
-  getOldHooksDir,
 } from '../migration/migrator.js';
 import { DependencyType, type WorkspaceInfo } from '../types/index.js';
 import {
@@ -581,10 +579,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     rewriteMonorepo(workspaceInfo);
     const shouldSetupHooks = await promptGitHooks(options);
     if (shouldSetupHooks) {
-      const oldHooksDir = getOldHooksDir(fullPath);
-      if (setupGitHooks(fullPath, oldHooksDir)) {
-        rewritePrepareScript(fullPath);
-      }
+      installGitHooks(fullPath);
     }
     await runViteInstall(fullPath, options.interactive);
     await runViteFmt(fullPath, options.interactive);
@@ -711,10 +706,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     rewriteStandaloneProject(fullPath, workspaceInfo);
     const shouldSetupHooks = await promptGitHooks(options);
     if (shouldSetupHooks) {
-      const oldHooksDir = getOldHooksDir(fullPath);
-      if (setupGitHooks(fullPath, oldHooksDir)) {
-        rewritePrepareScript(fullPath);
-      }
+      installGitHooks(fullPath);
     }
     await runViteInstall(fullPath, options.interactive);
     await runViteFmt(fullPath, options.interactive);

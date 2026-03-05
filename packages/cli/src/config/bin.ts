@@ -67,7 +67,7 @@ async function main() {
   let shouldSetupHooks = true;
   if (interactive && isFirstHooksRun && !dir) {
     // --hooks-dir implies agreement; only prompt when using default dir on first run
-    shouldSetupHooks = await promptGitHooks({ interactive, hooks: undefined });
+    shouldSetupHooks = await promptGitHooks({ interactive });
   }
 
   if (shouldSetupHooks) {
