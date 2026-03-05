@@ -49,3 +49,6 @@ export default defineConfig({
   },
   
 });
+
+> git config --local core.hooksPath || echo 'core.hooksPath is not set' # should NOT be set
+core.hooksPath is not set

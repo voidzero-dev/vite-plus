@@ -43,3 +43,6 @@ vp staged
 
 > test -d .husky/_ && echo 'husky shims exist' || echo 'no husky shims' # check vp prepare ran
 husky shims exist
+
+> git config --local core.hooksPath # should be set to .husky/_
+.husky/_
