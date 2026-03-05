@@ -30,23 +30,23 @@ Examples:
 
 
 > vp migrate --no-interactive # migration work with lintstagedrc.json
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  ✔ Created vite.config.ts in vite.config.ts
-│
-◆  ✔ Merged staged config into vite.config.ts
-│
-◆  ✔ Inlined .lintstagedrc.json into "staged" in vite.config.ts
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+✔ Created vite.config.ts in vite.config.ts
+
+✔ Merged staged config into vite.config.ts
+
+✔ Inlined .lintstagedrc.json into "staged" in vite.config.ts
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
 
 
 [1]> cat .lintstagedrc.json # check lintstagedrc.json (should be deleted after inlining)

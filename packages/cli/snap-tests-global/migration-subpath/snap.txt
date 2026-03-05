@@ -1,22 +1,22 @@
 > git init
 > vp migrate foo --no-interactive # migration work with subpath
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  ✔ Created vite.config.ts in foo/vite.config.ts
-│
-◆  ✔ Merged staged config into foo/vite.config.ts
-│
-▲  ⚠ Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+✔ Created vite.config.ts in foo/vite.config.ts
+
+✔ Merged staged config into foo/vite.config.ts
+
+⚠ Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
 
 
 > cat foo/package.json # check package.json

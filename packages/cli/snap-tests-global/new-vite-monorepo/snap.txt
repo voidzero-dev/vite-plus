@@ -20,11 +20,11 @@ vite.config.ts
     "dev": "vp run website#dev",
     "prepare": "vp config"
   },
-  "engines": {
-    "node": ">=22.12.0"
-  },
   "devDependencies": {
     "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "packageManager": "pnpm@<semver>"
 }
@@ -130,11 +130,11 @@ vite.config.ts
     "dev": "vp run website#dev",
     "prepare": "vp config"
   },
-  "engines": {
-    "node": ">=22.12.0"
-  },
   "devDependencies": {
     "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "packageManager": "pnpm@<semver>"
 }

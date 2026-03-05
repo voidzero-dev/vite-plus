@@ -1,18 +1,18 @@
 > git init
 > vp migrate --no-interactive # should warn about husky v8 and skip hooks setup
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-▲  ⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
 
 
 > cat package.json # husky/lint-staged should remain in devDeps, prepare should stay as husky

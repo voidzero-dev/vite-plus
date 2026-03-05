@@ -1,18 +1,18 @@
 > git init
 > vp migrate --no-interactive # should warn about husky v8, preserve lint-staged config
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-▲  ⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
 
 
 > cat package.json # lint-staged config should still be in package.json

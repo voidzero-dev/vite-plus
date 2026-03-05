@@ -10,7 +10,7 @@ Options:
   -h, --help          Show this help message
 
 Environment:
-  HUSKY=0  Skip hook installation
+  VITE_GIT_HOOKS=0  Skip hook installation
 
 
 > vp config --help
@@ -25,7 +25,7 @@ Options:
   -h, --help          Show this help message
 
 Environment:
-  HUSKY=0  Skip hook installation
+  VITE_GIT_HOOKS=0  Skip hook installation
 
 
 > vp help config
@@ -40,5 +40,5 @@ Options:
   -h, --help          Show this help message
 
 Environment:
-  HUSKY=0  Skip hook installation
+  VITE_GIT_HOOKS=0  Skip hook installation
 

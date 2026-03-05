@@ -46,6 +46,13 @@ exports[`rewritePackageJson > should rewrite devDependencies and dependencies on
 
 exports[`rewritePackageJson > should rewrite package.json scripts and extract staged config 1`] = `
 {
+  "lint-staged": {
+    "*.js": [
+      "oxlint --fix --type-aware",
+      "oxfmt --fix",
+    ],
+    "*.ts": "oxfmt --fix",
+  },
   "scripts": {
     "build": "pnpm install && vp build -r && vp run build --watch && vp pack && tsc || exit 1",
     "dev": "vp dev",
