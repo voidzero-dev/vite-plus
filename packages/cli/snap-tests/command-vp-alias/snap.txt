@@ -15,7 +15,7 @@ Core Commands:
   exec           Execute a command from local node_modules/.bin
   preview        Preview production build
   cache          Manage the task cache
-  prepare        Set up Git hooks for the project
+  config         Configure hooks and agent integration
   staged         Run linters on staged files
 
 Package Manager Commands:

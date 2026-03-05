@@ -138,9 +138,6 @@ function detectInstructionFilePath(
   if (existsSync(join(root, 'CLAUDE.md'))) {
     return 'CLAUDE.md';
   }
-  if (existsSync(join(root, 'AGENTS.md'))) {
-    return 'AGENTS.md';
-  }
   return 'AGENTS.md';
 }
 
@@ -306,11 +303,7 @@ function pickMcpTarget(root: string, targets: McpConfigTarget[]): McpConfigTarge
   if (targets.length === 1) {
     return targets[0];
   }
-  const existingTargets = targets.filter((t) => existsSync(join(root, t.filePath)));
-  if (existingTargets.length > 0) {
-    return existingTargets[0];
-  }
-  return targets[0];
+  return targets.find((t) => existsSync(join(root, t.filePath))) ?? targets[0];
 }
 
 function setupMcpConfig(root: string, selectedAgents: AgentConfig[]): void {

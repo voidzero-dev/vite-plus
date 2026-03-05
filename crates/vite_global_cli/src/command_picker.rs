@@ -89,6 +89,12 @@ const COMMANDS: &[CommandEntry] = &[
         append_help: false,
     },
     CommandEntry {
+        label: "config",
+        command: "config",
+        summary: "Configure hooks and agent integration.",
+        append_help: false,
+    },
+    CommandEntry {
         label: "outdated",
         command: "outdated",
         summary: "Check for outdated packages.",
