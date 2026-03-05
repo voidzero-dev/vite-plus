@@ -224,23 +224,29 @@ async function main() {
     cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
   }
 
-  const shouldSetupHooks = await promptGitHooks(options);
+  let shouldSetupHooks = await promptGitHooks(options);
+
+  // Check for unsupported husky version BEFORE rewriting — if Husky v8 is detected,
+  // skip staged migration to preserve lint-staged config (otherwise it would be deleted
+  // while .husky/pre-commit still references `npx lint-staged`).
+  let skipStagedMigration = false;
+  if (shouldSetupHooks && hasUnsupportedHuskyVersion(workspaceInfo.rootDir)) {
+    prompts.log.warn(
+      '⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.',
+    );
+    shouldSetupHooks = false;
+    skipStagedMigration = true;
+  }
 
   if (workspaceInfo.isMonorepo) {
-    rewriteMonorepo(workspaceInfo);
+    rewriteMonorepo(workspaceInfo, skipStagedMigration);
   } else {
-    rewriteStandaloneProject(workspaceInfo.rootDir, workspaceInfo);
+    rewriteStandaloneProject(workspaceInfo.rootDir, workspaceInfo, skipStagedMigration);
   }
 
   if (shouldSetupHooks) {
-    if (hasUnsupportedHuskyVersion(workspaceInfo.rootDir)) {
-      prompts.log.warn(
-        '⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.',
-      );
-    } else {
-      rewritePrepareScript(workspaceInfo.rootDir);
-      setupGitHooks(workspaceInfo.rootDir);
-    }
+    rewritePrepareScript(workspaceInfo.rootDir);
+    setupGitHooks(workspaceInfo.rootDir);
   }
 
   const selectedAgentTargetPaths = await selectAgentTargetPaths({

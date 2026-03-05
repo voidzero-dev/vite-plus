@@ -8,6 +8,7 @@ import { vitePlusHeader } from '../../binding/index.js';
 import {
   rewriteMonorepo,
   rewriteMonorepoProject,
+  rewritePrepareScript,
   rewriteStandaloneProject,
   setupGitHooks,
 } from '../migration/migrator.js';
@@ -579,6 +580,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     rewriteMonorepo(workspaceInfo);
     const shouldSetupHooks = await promptGitHooks(options);
     if (shouldSetupHooks) {
+      rewritePrepareScript(fullPath);
       setupGitHooks(fullPath);
     }
     await runViteInstall(fullPath, options.interactive);
@@ -706,6 +708,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     rewriteStandaloneProject(fullPath, workspaceInfo);
     const shouldSetupHooks = await promptGitHooks(options);
     if (shouldSetupHooks) {
+      rewritePrepareScript(fullPath);
       setupGitHooks(fullPath);
     }
     await runViteInstall(fullPath, options.interactive);

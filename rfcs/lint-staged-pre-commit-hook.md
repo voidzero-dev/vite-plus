@@ -119,7 +119,8 @@ Both `vp create` and `vp migrate` prompt the user before setting up pre-commit h
 #### `vp create`
 
 - After project creation and migration rewrite, prompts for hooks setup
-- If accepted, adds `"prepare": "vp prepare"` to package.json and `staged` config to vite.config.ts
+- If accepted, calls `rewritePrepareScript()` then `setupGitHooks()` — same as `vp migrate`
+- `rewritePrepareScript()` rewrites any template-provided `"prepare": "husky"` to `"prepare": "vp prepare"` before `setupGitHooks()` runs
 - Creates `.husky/pre-commit` with `vp staged` (if `.git` directory exists)
 
 #### `vp migrate`
@@ -128,6 +129,7 @@ Migration rewrite (`rewritePackageJson`) uses `vite-tools.yml` rules to rewrite 
 
 - Prompts for hooks setup **before** migration rewrite
 - If `--no-hooks`: `rewritePrepareScript()` is never called, so the prepare script stays as-is (e.g. `"husky"` remains `"husky"`). No undo logic needed.
+- If hooks enabled but Husky v8 detected: warns, sets `shouldSetupHooks = false` and `skipStagedMigration = true` **before** migration rewrite, so lint-staged config is preserved
 - If hooks enabled: after migration rewrite, calls `rewritePrepareScript()` then `setupGitHooks()`
 
 Hook setup behavior:
@@ -137,9 +139,10 @@ Hook setup behavior:
 - **Has `husky install`** — `rewritePrepareScript()` collapses `"husky install"` → `"husky"` before applying the ast-grep rule, so `"husky install .hooks"` becomes `"vp prepare .hooks"`
 - **Has existing prepare script** (e.g. `"npm run build"`) — composes as `"vp prepare && npm run build"` (prepend so hooks are active before other prepare tasks; idempotent if already contains `vp prepare`)
 - **Has lint-staged** — migrates `"lint-staged"` key to `staged` in vite.config.ts, keeps existing config (already rewritten by migration rules), removes lint-staged from devDeps
-- **Has husky <9.0.0** — warns "please upgrade to husky v9+ first" and skips hooks setup entirely. The prepare script, devDependencies, and hook files are left untouched.
+- **Has husky <9.0.0** — detected **before** migration rewrite. Warns "please upgrade to husky v9+ first", skips hooks setup, and also skips lint-staged migration (`skipStagedMigration` flag). This preserves the `lint-staged` config in package.json and standalone config files, since `.husky/pre-commit` still references `npx lint-staged`.
 - **Has other tool (simple-git-hooks, lefthook, yorkie)** — warns and skips
-- **No .git directory** — adds package.json config but doesn't create .husky/ directory
+- **Subdirectory project** (e.g. `vp migrate foo`) — if the project path differs from the git root, warns "Subdirectory project detected" and skips hooks setup entirely. This prevents `vp prepare` from setting `core.hooksPath` to a subdirectory path, which would hijack the repo-wide hooks.
+- **No .git directory** — adds package.json config and creates `.husky/pre-commit`, but skips `vp prepare` (no `core.hooksPath` to set)
 - After creating `.husky/pre-commit`, runs `vp prepare` directly to install hook shims (does not rely on npm install lifecycle, which may not run in CI or snap test contexts)
 
 ## Implementation Architecture

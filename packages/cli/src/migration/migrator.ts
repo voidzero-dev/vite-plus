@@ -96,7 +96,11 @@ function checkPackageVersion(projectPath: string, name: string, minVersion: stri
  * Rewrite standalone project to add vite-plus dependencies
  * @param projectPath - The path to the project
  */
-export function rewriteStandaloneProject(projectPath: string, workspaceInfo: WorkspaceInfo): void {
+export function rewriteStandaloneProject(
+  projectPath: string,
+  workspaceInfo: WorkspaceInfo,
+  skipStagedMigration?: boolean,
+): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return;
@@ -145,7 +149,7 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
       }
     }
 
-    extractedStagedConfig = rewritePackageJson(pkg, packageManager);
+    extractedStagedConfig = rewritePackageJson(pkg, packageManager, false, skipStagedMigration);
 
     // ensure vite-plus is in devDependencies
     if (!pkg.devDependencies?.[VITE_PLUS_NAME]) {
@@ -162,7 +166,9 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
     mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig);
   }
 
-  rewriteLintStagedConfigFile(projectPath);
+  if (!skipStagedMigration) {
+    rewriteLintStagedConfigFile(projectPath);
+  }
   mergeViteConfigFiles(projectPath);
   mergeTsdownConfigFile(projectPath);
   // rewrite imports in all TypeScript/JavaScript files
@@ -175,7 +181,7 @@ export function rewriteStandaloneProject(projectPath: string, workspaceInfo: Wor
  * Rewrite monorepo to add vite-plus dependencies
  * @param workspaceInfo - The workspace info
  */
-export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
+export function rewriteMonorepo(workspaceInfo: WorkspaceInfo, skipStagedMigration?: boolean): void {
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(workspaceInfo.rootDir);
@@ -189,10 +195,13 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
     rewriteMonorepoProject(
       path.join(workspaceInfo.rootDir, pkg.path),
       workspaceInfo.packageManager,
+      skipStagedMigration,
     );
   }
 
-  rewriteLintStagedConfigFile(workspaceInfo.rootDir);
+  if (!skipStagedMigration) {
+    rewriteLintStagedConfigFile(workspaceInfo.rootDir);
+  }
   mergeViteConfigFiles(workspaceInfo.rootDir);
   mergeTsdownConfigFile(workspaceInfo.rootDir);
   // rewrite imports in all TypeScript/JavaScript files
@@ -205,7 +214,11 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo): void {
  * Rewrite monorepo project to add vite-plus dependencies
  * @param projectPath - The path to the project
  */
-export function rewriteMonorepoProject(projectPath: string, packageManager: PackageManager): void {
+export function rewriteMonorepoProject(
+  projectPath: string,
+  packageManager: PackageManager,
+  skipStagedMigration?: boolean,
+): void {
   mergeViteConfigFiles(projectPath);
   mergeTsdownConfigFile(projectPath);
 
@@ -221,7 +234,7 @@ export function rewriteMonorepoProject(projectPath: string, packageManager: Pack
     scripts?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
     // rewrite scripts in package.json
-    extractedStagedConfig = rewritePackageJson(pkg, packageManager, true);
+    extractedStagedConfig = rewritePackageJson(pkg, packageManager, true, skipStagedMigration);
     return pkg;
   });
 
@@ -461,6 +474,7 @@ export function rewritePackageJson(
   },
   packageManager: PackageManager,
   isMonorepo?: boolean,
+  skipStagedMigration?: boolean,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(JSON.stringify(pkg.scripts), readRulesYaml());
@@ -470,13 +484,13 @@ export function rewritePackageJson(
   }
   // Extract staged config from package.json (lint-staged) → will be merged into vite.config.ts
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
-  if (pkg['lint-staged']) {
+  if (!skipStagedMigration && pkg['lint-staged']) {
     const config = pkg['lint-staged'];
     const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
     extractedStagedConfig = updated ? JSON.parse(updated) : config;
+    // Remove lint-staged key from package.json — config now lives in vite.config.ts
+    delete pkg['lint-staged'];
   }
-  // Remove lint-staged key from package.json — config now lives in vite.config.ts
-  delete pkg['lint-staged'];
   const supportCatalog = isMonorepo && packageManager !== PackageManager.npm;
   let needVitePlus = false;
   for (const [key, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
@@ -776,6 +790,16 @@ function findGitRoot(startPath: string): string | null {
  * Skips if another hook tool is detected (warns user).
  */
 export function setupGitHooks(projectPath: string): void {
+  // Check git root first — subdirectory projects must not set core.hooksPath
+  // (running vp prepare from a subdirectory would hijack the repo-wide hooksPath)
+  const gitRoot = findGitRoot(projectPath);
+  if (gitRoot && path.resolve(projectPath) !== path.resolve(gitRoot)) {
+    prompts.log.warn(
+      '⚠ Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.',
+    );
+    return;
+  }
+
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return;
@@ -859,8 +883,7 @@ export function setupGitHooks(projectPath: string): void {
   // Hook file creation (no git needed — only filesystem ops)
   createHuskyPreCommitHook(projectPath, huskyDir);
 
-  // vp prepare requires a git workspace — walk up to find .git
-  const gitRoot = findGitRoot(projectPath);
+  // vp prepare requires a git workspace — skip if no .git found
   if (!gitRoot) {
     return;
   }

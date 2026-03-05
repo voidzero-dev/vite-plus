@@ -1,3 +1,4 @@
+> git init
 > vp migrate foo --no-interactive # migration work with subpath
 ┌  VITE+ - The Unified Toolchain for the Web
 │
@@ -10,6 +11,8 @@
 ◆  ✔ Created vite.config.ts in foo/vite.config.ts
 │
 ◆  ✔ Merged staged config into foo/vite.config.ts
+│
+▲  ⚠ Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.
 │
 ◆  Wrote agent instructions to AGENTS.md
 │
@@ -28,10 +31,7 @@
   "devDependencies": {
     "vite-plus": "latest"
   },
-  "packageManager": "pnpm@<semver>",
-  "scripts": {
-    "prepare": "vp prepare"
-  }
+  "packageManager": "pnpm@<semver>"
 }
 
 > cat foo/vite.config.ts # check vite.config.ts
