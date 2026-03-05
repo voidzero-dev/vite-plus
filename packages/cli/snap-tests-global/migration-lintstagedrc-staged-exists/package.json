@@ -1,0 +1,7 @@
+{
+  "name": "migration-lintstagedrc-staged-exists",
+  "devDependencies": {
+    "lint-staged": "^16.2.6",
+    "vite": "^7.0.0"
+  }
+}

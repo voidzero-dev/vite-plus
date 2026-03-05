@@ -43,14 +43,16 @@ pnpm@<semver> installed
 
 ✔ Merged staged config into vite.config.ts
 
-✔ Inlined .lintstagedrc.json into "staged" in vite.config.ts
+⚠ .lintstagedrc.json found but "staged" already exists in vite.config.ts — please merge manually
 
 Wrote agent instructions to AGENTS.md
 ✔ Migration completed!
 
 
-[1]> cat .lintstagedrc.json # check lintstagedrc.json (should be deleted after inlining)
-cat: .lintstagedrc.json: No such file or directory
+> cat .lintstagedrc.json # check lintstagedrc.json (should be deleted after inlining)
+{
+  "*.js": "oxlint --fix"
+}
 
 > cat package.json # check package.json
 {

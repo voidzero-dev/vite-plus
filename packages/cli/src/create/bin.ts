@@ -11,6 +11,7 @@ import {
   rewritePrepareScript,
   rewriteStandaloneProject,
   setupGitHooks,
+  getOldHooksDir,
 } from '../migration/migrator.js';
 import { DependencyType, type WorkspaceInfo } from '../types/index.js';
 import {
@@ -580,8 +581,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     rewriteMonorepo(workspaceInfo);
     const shouldSetupHooks = await promptGitHooks(options);
     if (shouldSetupHooks) {
-      rewritePrepareScript(fullPath);
-      setupGitHooks(fullPath);
+      const oldHooksDir = getOldHooksDir(fullPath);
+      if (setupGitHooks(fullPath, oldHooksDir)) {
+        rewritePrepareScript(fullPath);
+      }
     }
     await runViteInstall(fullPath, options.interactive);
     await runViteFmt(fullPath, options.interactive);
@@ -708,8 +711,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     rewriteStandaloneProject(fullPath, workspaceInfo);
     const shouldSetupHooks = await promptGitHooks(options);
     if (shouldSetupHooks) {
-      rewritePrepareScript(fullPath);
-      setupGitHooks(fullPath);
+      const oldHooksDir = getOldHooksDir(fullPath);
+      if (setupGitHooks(fullPath, oldHooksDir)) {
+        rewritePrepareScript(fullPath);
+      }
     }
     await runViteInstall(fullPath, options.interactive);
     await runViteFmt(fullPath, options.interactive);

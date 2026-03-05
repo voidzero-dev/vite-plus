@@ -575,9 +575,15 @@ function rewriteLintStagedConfigFile(projectPath: string): void {
         // Merge failed — preserve the original config file so the user doesn't lose their rules
         continue;
       }
+      fs.unlinkSync(configPath);
+      prompts.log.success(
+        `✔ Inlined ${displayRelative(configPath)} into "staged" in vite.config.ts`,
+      );
+    } else {
+      prompts.log.warn(
+        `⚠ ${displayRelative(configPath)} found but "staged" already exists in vite.config.ts — please merge manually`,
+      );
     }
-    fs.unlinkSync(configPath);
-    prompts.log.success(`✔ Inlined ${displayRelative(configPath)} into "staged" in vite.config.ts`);
   }
   // Non-JSON standalone files — warn
   for (const filename of LINT_STAGED_OTHER_CONFIG_FILES) {
@@ -812,10 +818,40 @@ function findGitRoot(startPath: string): string | null {
 }
 
 /**
+ * Normalize "husky install [dir]" → "husky [dir]" so downstream regex
+ * and ast-grep rules can match a single pattern.
+ */
+function collapseHuskyInstall(script: string): string {
+  return script.replace('husky install ', 'husky ').replace('husky install', 'husky');
+}
+
+/**
+ * Read-only probe: extract the old husky hooks directory from `scripts.prepare`
+ * without modifying package.json. Returns undefined when no husky reference is found.
+ */
+export function getOldHooksDir(rootDir: string): string | undefined {
+  const packageJsonPath = path.join(rootDir, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return;
+  }
+  const pkg = readJsonFile(packageJsonPath);
+  if (!pkg.scripts?.prepare) {
+    return;
+  }
+  const prepare = collapseHuskyInstall(pkg.scripts.prepare);
+  const match = prepare.match(/\bhusky(?:\s+([\w./-]+))?/);
+  if (!match) {
+    return;
+  }
+  return match[1] ?? '.husky';
+}
+
+/**
  * Set up git hooks with husky + lint-staged via vp commands.
  * Skips if another hook tool is detected (warns user).
+ * Returns true if hooks were successfully set up, false if skipped.
  */
-export function setupGitHooks(projectPath: string, oldHooksDir?: string): void {
+export function setupGitHooks(projectPath: string, oldHooksDir?: string): boolean {
   // Check git root first — subdirectory projects must not set core.hooksPath
   // (running vp config from a subdirectory would hijack the repo-wide hooksPath)
   const gitRoot = findGitRoot(projectPath);
@@ -823,12 +859,12 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): void {
     prompts.log.warn(
       '⚠ Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.',
     );
-    return;
+    return false;
   }
 
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
-    return;
+    return false;
   }
 
   // Check for other hook tools → warn and skip
@@ -840,7 +876,7 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): void {
       prompts.log.warn(
         `⚠ Detected ${tool} — skipping git hooks setup. Please configure git hooks manually.`,
       );
-      return;
+      return false;
     }
   }
 
@@ -849,7 +885,7 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): void {
     prompts.log.warn(
       '⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.',
     );
-    return;
+    return false;
   }
 
   // Skip hook setup if lint-staged config exists in a format that can't be
@@ -859,7 +895,7 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): void {
     prompts.log.warn(
       '⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.',
     );
-    return;
+    return false;
   }
 
   // Custom husky dirs (e.g. .config/husky) stay unchanged;
@@ -872,14 +908,18 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): void {
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
-    // rewriteScripts() already replaced husky → vp config.
-    // Just ensure vp config is present for projects that didn't have husky.
+    // Ensure vp config is present for projects that didn't have husky.
+    // Skip when prepare contains "husky" — rewritePrepareScript (called after
+    // setupGitHooks succeeds) will transform husky → vp config.
     if (!pkg.scripts) {
       pkg.scripts = {};
     }
     if (!pkg.scripts.prepare) {
       pkg.scripts.prepare = 'vp config';
-    } else if (!pkg.scripts.prepare.includes('vp config')) {
+    } else if (
+      !pkg.scripts.prepare.includes('vp config') &&
+      !/\bhusky\b/.test(pkg.scripts.prepare)
+    ) {
       pkg.scripts.prepare = `vp config && ${pkg.scripts.prepare}`;
     }
 
@@ -928,16 +968,16 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): void {
     }
   }
 
-  // Only create pre-commit hook if staged config is available — either in
-  // vite.config.ts or a standalone lint-staged config file. Without a config,
-  // `vp staged` would fail on every commit.
-  if (stagedMerged || hasStandaloneConfig) {
+  // Only create pre-commit hook if staged config was merged into vite.config.ts.
+  // Standalone lint-staged config files are NOT sufficient — `vp staged` only
+  // reads from vite.config.ts, so a hook without merged config would fail.
+  if (stagedMerged) {
     createPreCommitHook(projectPath, hooksDir);
   }
 
   // vp config requires a git workspace — skip if no .git found
   if (!gitRoot) {
-    return;
+    return true;
   }
 
   const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
@@ -964,6 +1004,7 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): void {
   } else {
     prompts.log.warn('Failed to install git hooks');
   }
+  return true;
 }
 
 /**
@@ -1072,10 +1113,7 @@ export function rewritePrepareScript(rootDir: string): string | undefined {
 
     // Collapse "husky install" → "husky" so the ast-grep rule
     // produces "vp config" with any directory argument preserved.
-    // (Moved from Rust rewrite_script pre-processing)
-    let prepare = pkg.scripts.prepare;
-    prepare = prepare.replace('husky install ', 'husky ');
-    prepare = prepare.replace('husky install', 'husky');
+    const prepare = collapseHuskyInstall(pkg.scripts.prepare);
 
     const prepareJson = JSON.stringify({ prepare });
     const updated = rewriteScripts(prepareJson, readPrepareRulesYaml());

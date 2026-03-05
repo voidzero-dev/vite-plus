@@ -24,7 +24,7 @@ Wrote agent instructions to AGENTS.md
   "name": "migration-lint-staged-ts-config",
   "type": "module",
   "scripts": {
-    "prepare": "vp config"
+    "prepare": "husky"
   },
   "devDependencies": {
     "husky": "^9.1.7",

@@ -27,6 +27,7 @@ import { detectWorkspace } from '../utils/workspace.js';
 import {
   checkVitestVersion,
   checkViteVersion,
+  getOldHooksDir,
   rewriteMonorepo,
   hasUnsupportedHuskyVersion,
   rewritePrepareScript,
@@ -245,8 +246,10 @@ async function main() {
   }
 
   if (shouldSetupHooks) {
-    const oldHooksDir = rewritePrepareScript(workspaceInfo.rootDir);
-    setupGitHooks(workspaceInfo.rootDir, oldHooksDir);
+    const oldHooksDir = getOldHooksDir(workspaceInfo.rootDir);
+    if (setupGitHooks(workspaceInfo.rootDir, oldHooksDir)) {
+      rewritePrepareScript(workspaceInfo.rootDir);
+    }
   }
 
   const selectedAgentTargetPaths = await selectAgentTargetPaths({

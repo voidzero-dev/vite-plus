@@ -1,0 +1,49 @@
+> git init
+> vp migrate --no-interactive # should warn when staged already exists in vite.config.ts
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+⚠ .lintstagedrc.json found but "staged" already exists in vite.config.ts — please merge manually
+
+✔ Git hooks configured
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
+
+
+> cat package.json # check package.json
+{
+  "name": "migration-lintstagedrc-staged-exists",
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "packageManager": "pnpm@<semver>",
+  "scripts": {
+    "prepare": "vp config"
+  }
+}
+
+> test -f .lintstagedrc.json && echo 'lintstagedrc.json still exists' || echo 'lintstagedrc.json was deleted' # should still exist
+lintstagedrc.json still exists
+
+> cat vite.config.ts # vite config should be unchanged
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  staged: {
+    '*.js': 'vp check --fix',
+  },
+});

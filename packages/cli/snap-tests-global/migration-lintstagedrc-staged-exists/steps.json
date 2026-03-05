@@ -1,0 +1,9 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # should warn when staged already exists in vite.config.ts",
+    "cat package.json # check package.json",
+    "test -f .lintstagedrc.json && echo 'lintstagedrc.json still exists' || echo 'lintstagedrc.json was deleted' # should still exist",
+    "cat vite.config.ts # vite config should be unchanged"
+  ]
+}
