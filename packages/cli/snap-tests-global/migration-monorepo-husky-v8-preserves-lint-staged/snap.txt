@@ -1,0 +1,43 @@
+> vp migrate --no-interactive # should warn about husky v8, preserve all lint-staged config
+┌  VITE+ - The Unified Toolchain for the Web
+│
+●  pnpm@<semver> installing...
+│
+●  pnpm@<semver> installed
+│
+▲  ⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.
+│
+◆  Wrote agent instructions to AGENTS.md
+│
+└  ✔ Migration completed!
+
+
+> cat package.json # root lint-staged config should still be in package.json
+{
+  "name": "migration-monorepo-husky-v8-preserves-lint-staged",
+  "scripts": {
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "husky": "^8.0.0",
+    "lint-staged": "^15.0.0",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "lint-staged": {
+    "*.{js,ts}": "eslint --fix"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> cat packages/app/package.json # app lint-staged config should still be in package.json
+{
+  "name": "app",
+  "devDependencies": {
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "lint-staged": {
+    "*.css": "stylelint --fix"
+  }
+}

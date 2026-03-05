@@ -1,0 +1,48 @@
+> git init
+> vp migrate --no-interactive # should handle merge failure gracefully
+┌  VITE+ - The Unified Toolchain for the Web
+│
+●  Using default package manager: pnpm
+│
+●  pnpm@latest installing...
+│
+●  pnpm@<semver> installed
+│
+▲  ✘ Failed to merge staged config into vite.config.ts
+│
+●  Please add staged config to vite.config.ts manually, see https://viteplus.dev/config/
+│
+◆  ✔ Git hooks configured
+│
+◆  Wrote agent instructions to AGENTS.md
+│
+└  ✔ Migration completed!
+
+
+> cat package.json # check package.json
+{
+  "name": "migration-lintstagedrc-merge-fail",
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "packageManager": "pnpm@<semver>",
+  "scripts": {
+    "prepare": "vp config"
+  }
+}
+
+> cat .lintstagedrc.json # config file should be preserved when merge fails
+{
+  "*.css": "stylelint --fix"
+}
+
+> cat vite.config.ts # vite config should be unchanged (merge failed)
+const config = { plugins: [] };
+module.exports = config;

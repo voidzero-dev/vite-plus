@@ -46,3 +46,46 @@ hook shims exist
 
 > git config --local core.hooksPath # should be set to .vite-hooks/_
 .vite-hooks/_
+
+> cat .vite-hooks/_/.gitignore # internal gitignore should exclude all files
+*
+> cat .vite-hooks/_/h # hook dispatcher script content
+#!/usr/bin/env sh
+[ "$HUSKY" = "2" ] && set -x
+n=$(basename "$0")
+s=$(dirname "$(dirname "$0")")/$n
+
+[ ! -f "$s" ] && exit 0
+
+i="${XDG_CONFIG_HOME:-$HOME/.config}/husky/init.sh"
+[ -f "$i" ] && . "$i"
+
+[ "${HUSKY-}" = "0" ] && exit 0
+
+d=$(dirname "$(dirname "$(dirname "$0")")")
+export PATH="$d/node_modules/.bin:$PATH"
+sh -e "$s" "$@"
+c=$?
+
+[ $c != 0 ] && echo "husky - $n script failed (code $c)"
+[ $c = 127 ] && echo "husky - command not found in PATH=$PATH"
+exit $c
+> cat .vite-hooks/_/pre-commit # hook shim should source the dispatcher
+#!/usr/bin/env sh
+. "$(dirname "$0")/h"
+> ls .vite-hooks/_/ | sort # list all generated hook shims
+applypatch-msg
+commit-msg
+h
+post-applypatch
+post-checkout
+post-commit
+post-merge
+post-rewrite
+pre-applypatch
+pre-auto-gc
+pre-commit
+pre-merge-commit
+pre-push
+pre-rebase
+prepare-commit-msg

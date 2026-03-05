@@ -5,6 +5,10 @@
     "cat package.json # check package.json has prepare script and lint-staged config",
     "cat .vite-hooks/pre-commit # check pre-commit hook",
     "test -d .vite-hooks/_ && echo 'hook shims exist' || echo 'no hook shims' # check vp config ran",
-    "git config --local core.hooksPath # should be set to .vite-hooks/_"
+    "git config --local core.hooksPath # should be set to .vite-hooks/_",
+    "cat .vite-hooks/_/.gitignore # internal gitignore should exclude all files",
+    "cat .vite-hooks/_/h # hook dispatcher script content",
+    "cat .vite-hooks/_/pre-commit # hook shim should source the dispatcher",
+    "ls .vite-hooks/_/ | sort # list all generated hook shims"
   ]
 }

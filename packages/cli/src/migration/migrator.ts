@@ -161,9 +161,11 @@ export function rewriteStandaloneProject(
     return pkg;
   });
 
-  // Merge extracted staged config into vite.config.ts
+  // Merge extracted staged config into vite.config.ts, then remove lint-staged from package.json
   if (extractedStagedConfig) {
-    mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig);
+    if (mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig)) {
+      removeLintStagedFromPackageJson(packageJsonPath);
+    }
   }
 
   if (!skipStagedMigration) {
@@ -188,7 +190,11 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo, skipStagedMigratio
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(workspaceInfo.rootDir);
   }
-  rewriteRootWorkspacePackageJson(workspaceInfo.rootDir, workspaceInfo.packageManager);
+  rewriteRootWorkspacePackageJson(
+    workspaceInfo.rootDir,
+    workspaceInfo.packageManager,
+    skipStagedMigration,
+  );
 
   // rewrite packages
   for (const pkg of workspaceInfo.packages) {
@@ -238,9 +244,11 @@ export function rewriteMonorepoProject(
     return pkg;
   });
 
-  // Merge extracted staged config into vite.config.ts
+  // Merge extracted staged config into vite.config.ts, then remove lint-staged from package.json
   if (extractedStagedConfig) {
-    mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig);
+    if (mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig)) {
+      removeLintStagedFromPackageJson(packageJsonPath);
+    }
   }
 }
 
@@ -383,6 +391,7 @@ function rewriteCatalog(doc: YamlDocument): void {
 function rewriteRootWorkspacePackageJson(
   projectPath: string,
   packageManager: PackageManager,
+  skipStagedMigration?: boolean,
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -447,7 +456,7 @@ function rewriteRootWorkspacePackageJson(
   });
 
   // rewrite package.json
-  rewriteMonorepoProject(projectPath, packageManager);
+  rewriteMonorepoProject(projectPath, packageManager, skipStagedMigration);
 }
 
 const RULES_YAML_PATH = path.join(rulesDir, 'vite-tools.yml');
@@ -482,14 +491,14 @@ export function rewritePackageJson(
       pkg.scripts = JSON.parse(updated);
     }
   }
-  // Extract staged config from package.json (lint-staged) → will be merged into vite.config.ts
+  // Extract staged config from package.json (lint-staged) → will be merged into vite.config.ts.
+  // The lint-staged key is NOT deleted here — it's removed by the caller only after
+  // the merge into vite.config.ts succeeds, to avoid losing config on merge failure.
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
   if (!skipStagedMigration && pkg['lint-staged']) {
     const config = pkg['lint-staged'];
     const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
     extractedStagedConfig = updated ? JSON.parse(updated) : config;
-    // Remove lint-staged key from package.json — config now lives in vite.config.ts
-    delete pkg['lint-staged'];
   }
   const supportCatalog = isMonorepo && packageManager !== PackageManager.npm;
   let needVitePlus = false;
@@ -527,6 +536,18 @@ export function rewritePackageJson(
   return extractedStagedConfig;
 }
 
+// Remove the "lint-staged" key from package.json after config has been
+// successfully merged into vite.config.ts.
+function removeLintStagedFromPackageJson(packageJsonPath: string): void {
+  editJsonFile<{ 'lint-staged'?: Record<string, string | string[]> }>(packageJsonPath, (pkg) => {
+    if (pkg['lint-staged']) {
+      delete pkg['lint-staged'];
+      return pkg;
+    }
+    return undefined;
+  });
+}
+
 // Migrate standalone lint-staged config files into staged in vite.config.ts.
 // JSON-parseable files are inlined automatically; non-JSON files get a warning.
 function rewriteLintStagedConfigFile(projectPath: string): void {
@@ -550,7 +571,10 @@ function rewriteLintStagedConfigFile(projectPath: string): void {
       const config = readJsonFile(configPath);
       const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
       const finalConfig = updated ? JSON.parse(updated) : config;
-      mergeStagedConfigToViteConfig(projectPath, finalConfig);
+      if (!mergeStagedConfigToViteConfig(projectPath, finalConfig)) {
+        // Merge failed — preserve the original config file so the user doesn't lose their rules
+        continue;
+      }
     }
     fs.unlinkSync(configPath);
     prompts.log.success(`✔ Inlined ${displayRelative(configPath)} into "staged" in vite.config.ts`);
@@ -680,7 +704,7 @@ function mergeAndRemoveJsonConfig(
 function mergeStagedConfigToViteConfig(
   projectPath: string,
   stagedConfig: Record<string, string | string[]>,
-): void {
+): boolean {
   const configs = detectConfigs(projectPath);
   const viteConfig = ensureViteConfig(projectPath, configs);
   const fullViteConfigPath = path.join(projectPath, viteConfig);
@@ -699,11 +723,13 @@ function mergeStagedConfigToViteConfig(
   if (result.updated) {
     fs.writeFileSync(fullViteConfigPath, result.content);
     prompts.log.success(`✔ Merged staged config into ${displayRelative(fullViteConfigPath)}`);
+    return true;
   } else {
     prompts.log.warn(`✘ Failed to merge staged config into ${displayRelative(fullViteConfigPath)}`);
     prompts.log.info(
       `Please add staged config to ${displayRelative(fullViteConfigPath)} manually, see https://viteplus.dev/config/`,
     );
+    return false;
   }
 }
 
@@ -846,7 +872,6 @@ export function setupGitHooks(projectPath: string): void {
 
   editJsonFile<{
     scripts?: Record<string, string>;
-    'lint-staged'?: Record<string, string | string[]>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
@@ -860,9 +885,6 @@ export function setupGitHooks(projectPath: string): void {
     } else if (!pkg.scripts.prepare.includes('vp config')) {
       pkg.scripts.prepare = `vp config && ${pkg.scripts.prepare}`;
     }
-
-    // Remove lint-staged key from package.json — config now lives in vite.config.ts
-    delete pkg['lint-staged'];
 
     // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands).
     for (const name of REPLACED_HOOK_PACKAGES) {
@@ -878,8 +900,15 @@ export function setupGitHooks(projectPath: string): void {
   });
 
   // Add staged config to vite.config.ts if not present
-  if (!hasStagedConfigInViteConfig(projectPath) && !hasStandaloneLintStagedConfig(projectPath)) {
-    mergeStagedConfigToViteConfig(projectPath, { '*': 'vp check --fix' });
+  let stagedMerged = hasStagedConfigInViteConfig(projectPath);
+  if (!stagedMerged && !hasStandaloneLintStagedConfig(projectPath)) {
+    stagedMerged = mergeStagedConfigToViteConfig(projectPath, { '*': 'vp check --fix' });
+  }
+
+  // Only remove lint-staged key from package.json after staged config is
+  // confirmed in vite.config.ts — prevents losing config on merge failure
+  if (stagedMerged) {
+    removeLintStagedFromPackageJson(packageJsonPath);
   }
 
   // Hook file creation (no git needed — only filesystem ops)

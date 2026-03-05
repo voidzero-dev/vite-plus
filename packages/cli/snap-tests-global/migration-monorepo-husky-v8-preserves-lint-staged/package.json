@@ -1,0 +1,15 @@
+{
+  "name": "migration-monorepo-husky-v8-preserves-lint-staged",
+  "scripts": {
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "husky": "^8.0.0",
+    "lint-staged": "^15.0.0",
+    "vite": "catalog:"
+  },
+  "lint-staged": {
+    "*.{js,ts}": "eslint --fix"
+  },
+  "packageManager": "pnpm@10.18.0"
+}

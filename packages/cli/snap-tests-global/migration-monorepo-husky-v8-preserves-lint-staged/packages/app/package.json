@@ -1,0 +1,9 @@
+{
+  "name": "app",
+  "devDependencies": {
+    "vite": "catalog:"
+  },
+  "lint-staged": {
+    "*.css": "stylelint --fix"
+  }
+}

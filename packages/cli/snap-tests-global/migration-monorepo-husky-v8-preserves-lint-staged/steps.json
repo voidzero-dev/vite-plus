@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # should warn about husky v8, preserve all lint-staged config",
+    "cat package.json # root lint-staged config should still be in package.json",
+    "cat packages/app/package.json # app lint-staged config should still be in package.json"
+  ]
+}
