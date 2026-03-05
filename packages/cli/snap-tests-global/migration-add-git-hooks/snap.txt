@@ -57,7 +57,7 @@ s=$(dirname "$(dirname "$0")")/$n
 
 [ ! -f "$s" ] && exit 0
 
-i="${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/init.sh"
+i="${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
 [ ! -f "$i" ] && i="${XDG_CONFIG_HOME:-$HOME/.config}/husky/init.sh"
 [ -f "$i" ] && . "$i"
 
@@ -68,8 +68,8 @@ export PATH="$d/node_modules/.bin:$PATH"
 sh -e "$s" "$@"
 c=$?
 
-[ $c != 0 ] && echo "Vite+ - $n script failed (code $c)"
-[ $c = 127 ] && echo "Vite+ - command not found in PATH=$PATH"
+[ $c != 0 ] && echo "VITE+ - $n script failed (code $c)"
+[ $c = 127 ] && echo "VITE+ - command not found in PATH=$PATH"
 exit $c
 > cat .vite-hooks/_/pre-commit # hook shim should source the dispatcher
 #!/usr/bin/env sh

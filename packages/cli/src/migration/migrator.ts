@@ -834,7 +834,7 @@ export function getOldHooksDir(rootDir: string): string | undefined {
   if (!fs.existsSync(packageJsonPath)) {
     return;
   }
-  const pkg = readJsonFile(packageJsonPath);
+  const pkg = readJsonFile<{ scripts?: { prepare?: string } }>(packageJsonPath);
   if (!pkg.scripts?.prepare) {
     return;
   }
