@@ -1,8 +1,8 @@
-# RFC: Built-in Pre-commit Hook via `vp prepare` + `vp staged`
+# RFC: Built-in Pre-commit Hook via `vp config` + `vp staged`
 
 ## Summary
 
-Add `vp prepare` and `vp staged` as built-in commands. `vp prepare` is a husky-compatible reimplementation (husky itself is not a dependency), and `vp staged` bundles lint-staged and reads config from the `staged` key in `vite.config.ts`. Projects get a zero-config pre-commit hook that runs `vp check --fix` on staged files — no extra devDependencies needed.
+Add `vp config` and `vp staged` as built-in commands. `vp config` is a unified configuration command that sets up git hooks (husky-compatible reimplementation, not a bundled dependency) and agent integration. `vp staged` bundles lint-staged and reads config from the `staged` key in `vite.config.ts`. Projects get a zero-config pre-commit hook that runs `vp check --fix` on staged files — no extra devDependencies needed.
 
 ## Motivation
 
@@ -24,9 +24,10 @@ By building these capabilities into vite-plus, projects get pre-commit hooks wit
 ## Command Syntax
 
 ```bash
-# Set up git hooks (built-in husky-compatible implementation)
-vp prepare
-vp prepare -h               # Show help
+# Configure project (hooks + agent integration)
+vp config
+vp config -h                        # Show help
+vp config --hooks-dir .husky        # Custom hooks directory (default: .vite-hooks)
 
 # Run staged linters on staged files (runs bundled lint-staged with staged config)
 vp staged
@@ -54,25 +55,34 @@ export default defineConfig({
 ```
 
 ```json
-// package.json
+// package.json (new project)
 {
   "scripts": {
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   }
 }
 ```
 
-If the project already has a prepare script, `vp prepare` is prepended:
+```json
+// package.json (migrated from husky)
+{
+  "scripts": {
+    "prepare": "vp config --hooks-dir .husky"
+  }
+}
+```
+
+If the project already has a prepare script, `vp config` is prepended:
 
 ```json
 {
   "scripts": {
-    "prepare": "vp prepare && npm run build"
+    "prepare": "vp config && npm run build"
   }
 }
 ```
 
-### .husky/pre-commit
+### .vite-hooks/pre-commit (or .husky/pre-commit for migrated projects)
 
 ```
 vp staged
@@ -88,15 +98,18 @@ vp staged
 
 ## Behavior
 
-### `vp prepare`
+### `vp config`
 
 1. Built-in husky-compatible install logic (reimplementation of husky v9, not a bundled dependency)
-2. Sets `core.hooksPath` to `.husky/_`
-3. Creates hook scripts in `.husky/_/` that source the user-defined hooks in `.husky/`
-4. Safe to run multiple times (idempotent)
-5. Exits 0 and skips if `HUSKY=0` environment variable is set
-6. Exits 0 and skips if `.git` directory doesn't exist (safe during `npm install` in consumer projects)
-7. Exits 1 on real errors (git command not found, `git config` failed)
+2. Sets `core.hooksPath` to `<hooks-dir>/_` (default: `.vite-hooks/_`)
+3. Creates hook scripts in `<hooks-dir>/_/` that source the user-defined hooks in `<hooks-dir>/`
+4. Agent integration: injects agent instructions and MCP config
+5. Safe to run multiple times (idempotent)
+6. Exits 0 and skips hooks if `HUSKY=0` environment variable is set
+7. Exits 0 and skips hooks if `.git` directory doesn't exist (safe during `npm install` in consumer projects)
+8. Exits 1 on real errors (git command not found, `git config` failed)
+9. Interactive mode: prompts on first run for hooks and agent setup; updates silently on subsequent runs
+10. Non-interactive mode: runs everything by default
 
 ### `vp staged`
 
@@ -120,8 +133,8 @@ Both `vp create` and `vp migrate` prompt the user before setting up pre-commit h
 
 - After project creation and migration rewrite, prompts for hooks setup
 - If accepted, calls `rewritePrepareScript()` then `setupGitHooks()` — same as `vp migrate`
-- `rewritePrepareScript()` rewrites any template-provided `"prepare": "husky"` to `"prepare": "vp prepare"` before `setupGitHooks()` runs
-- Creates `.husky/pre-commit` with `vp staged` (if `.git` directory exists)
+- `rewritePrepareScript()` rewrites any template-provided `"prepare": "husky"` to `"prepare": "vp config --hooks-dir .husky"` before `setupGitHooks()` runs
+- Creates `.vite-hooks/pre-commit` (or `.husky/pre-commit` for migrated projects) with `vp staged`
 
 #### `vp migrate`
 
@@ -134,16 +147,16 @@ Migration rewrite (`rewritePackageJson`) uses `vite-tools.yml` rules to rewrite 
 
 Hook setup behavior:
 
-- **No hooks configured** — adds full setup (prepare script + staged config in vite.config.ts + .husky/pre-commit)
-- **Has husky** — `rewritePrepareScript()` rewrites `"prepare": "husky"` to `"prepare": "vp prepare"`, `setupGitHooks()` removes husky from devDeps
-- **Has `husky install`** — `rewritePrepareScript()` collapses `"husky install"` → `"husky"` before applying the ast-grep rule, so `"husky install .hooks"` becomes `"vp prepare .hooks"`
-- **Has existing prepare script** (e.g. `"npm run build"`) — composes as `"vp prepare && npm run build"` (prepend so hooks are active before other prepare tasks; idempotent if already contains `vp prepare`)
+- **No hooks configured** — adds full setup (prepare script + staged config in vite.config.ts + .vite-hooks/pre-commit)
+- **Has husky** — `rewritePrepareScript()` rewrites `"prepare": "husky"` to `"prepare": "vp config --hooks-dir .husky"`, `setupGitHooks()` removes husky from devDeps
+- **Has `husky install`** — `rewritePrepareScript()` collapses `"husky install"` → `"husky"` before applying the ast-grep rule, so `"husky install .hooks"` becomes `"vp config --hooks-dir .hooks"`
+- **Has existing prepare script** (e.g. `"npm run build"`) — composes as `"vp config && npm run build"` (prepend so hooks are active before other prepare tasks; idempotent if already contains `vp config`)
 - **Has lint-staged** — migrates `"lint-staged"` key to `staged` in vite.config.ts, keeps existing config (already rewritten by migration rules), removes lint-staged from devDeps
 - **Has husky <9.0.0** — detected **before** migration rewrite. Warns "please upgrade to husky v9+ first", skips hooks setup, and also skips lint-staged migration (`skipStagedMigration` flag). This preserves the `lint-staged` config in package.json and standalone config files, since `.husky/pre-commit` still references `npx lint-staged`.
 - **Has other tool (simple-git-hooks, lefthook, yorkie)** — warns and skips
-- **Subdirectory project** (e.g. `vp migrate foo`) — if the project path differs from the git root, warns "Subdirectory project detected" and skips hooks setup entirely. This prevents `vp prepare` from setting `core.hooksPath` to a subdirectory path, which would hijack the repo-wide hooks.
-- **No .git directory** — adds package.json config and creates `.husky/pre-commit`, but skips `vp prepare` (no `core.hooksPath` to set)
-- After creating `.husky/pre-commit`, runs `vp prepare` directly to install hook shims (does not rely on npm install lifecycle, which may not run in CI or snap test contexts)
+- **Subdirectory project** (e.g. `vp migrate foo`) — if the project path differs from the git root, warns "Subdirectory project detected" and skips hooks setup entirely. This prevents `vp config` from setting `core.hooksPath` to a subdirectory path, which would hijack the repo-wide hooks.
+- **No .git directory** — adds package.json config and creates hook pre-commit file, but skips `vp config` hook install (no `core.hooksPath` to set)
+- After creating the pre-commit hook, runs `vp config` directly to install hook shims (does not rely on npm install lifecycle, which may not run in CI or snap test contexts)
 
 ## Implementation Architecture
 
@@ -152,9 +165,9 @@ Hook setup behavior:
 Both commands follow Category B (JS Script Commands) pattern — same as `vp create` and `vp migrate`:
 
 ```rust
-// crates/vite_global_cli/src/commands/prepare.rs
+// crates/vite_global_cli/src/commands/config.rs
 pub async fn execute(cwd: AbsolutePathBuf, args: &[String]) -> Result<ExitStatus, Error> {
-    super::delegate::execute(cwd, "prepare", args).await
+    super::delegate::execute(cwd, "config", args).await
 }
 
 // crates/vite_global_cli/src/commands/staged.rs
@@ -167,24 +180,24 @@ pub async fn execute(cwd: AbsolutePathBuf, args: &[String]) -> Result<ExitStatus
 
 Entry points bundled by rolldown into `dist/global/`:
 
-- `src/prepare/bin.ts` — built-in husky-compatible install logic
+- `src/config/bin.ts` — unified configuration: hooks setup (husky-compatible) + agent integration
 - `src/staged/bin.ts` — imports lint-staged programmatic API, reads `staged` config from vite.config.ts
 - `src/migration/bin.ts` — migration flow, calls `rewritePrepareScript()` + `setupGitHooks()`
 
 ### AST-grep Rules
 
 - `rules/vite-tools.yml` — rewrites tool commands (vite, oxlint, vitest, lint-staged, tsdown) in **all** scripts
-- `rules/vite-prepare.yml` — rewrites `husky` → `vp prepare`, applied **only** to `scripts.prepare` via `rewritePrepareScript()`
+- `rules/vite-prepare.yml` — rewrites `husky` → `vp config`, applied **only** to `scripts.prepare` via `rewritePrepareScript()`
 
-The separation ensures the husky rule is never applied to non-prepare scripts (e.g. a hypothetical `"postinstall": "husky something"` won't be touched). The `husky install` → `husky` collapsing (needed because ast-grep can't match multi-word commands in bash) is done in TypeScript before applying the rule.
+The separation ensures the husky rule is never applied to non-prepare scripts (e.g. a hypothetical `"postinstall": "husky something"` won't be touched). The `husky install` → `husky` collapsing (needed because ast-grep can't match multi-word commands in bash) is done in TypeScript before applying the rule. After the AST-grep rewrite, post-processing converts positional dir args to `--hooks-dir` flags.
 
 ### Build
 
-lint-staged is a devDependency of the `vite-plus` package, bundled by rolldown at build time into `dist/global/`. husky is not a dependency — `vp prepare` is a standalone reimplementation of husky v9's install logic.
+lint-staged is a devDependency of the `vite-plus` package, bundled by rolldown at build time into `dist/global/`. husky is not a dependency — `vp config` is a standalone reimplementation of husky v9's install logic.
 
 ### Why husky cannot be bundled
 
-husky v9's `install()` function uses `new URL('husky', import.meta.url)` to resolve and `copyFileSync` its shell script (the hook dispatcher) relative to its own source location. When bundled by rolldown, `import.meta.url` points to the bundled output directory, not the original `node_modules/husky/` directory, so the shell script file cannot be found at runtime. Rather than working around this with asset copying hacks, `vp prepare` inlines the equivalent shell script as a string constant and writes it directly via `writeFileSync`.
+husky v9's `install()` function uses `new URL('husky', import.meta.url)` to resolve and `copyFileSync` its shell script (the hook dispatcher) relative to its own source location. When bundled by rolldown, `import.meta.url` points to the bundled output directory, not the original `node_modules/husky/` directory, so the shell script file cannot be found at runtime. Rather than working around this with asset copying hacks, `vp config` inlines the equivalent shell script as a string constant and writes it directly via `writeFileSync`.
 
 Husky <9.0.0 is not supported by auto migration — `vp migrate` detects unsupported versions and skips hooks setup with a warning.
 
@@ -194,14 +207,14 @@ Husky <9.0.0 is not supported by auto migration — `vp migrate` detects unsuppo
 | ---------------- | -------------------------------------- | --------------------------- |
 | `vp check`       | Format + lint + type check             | Manual or CI                |
 | `vp check --fix` | Auto-fix format + lint issues          | Manual or pre-commit        |
-| **`vp prepare`** | **Set up git hooks**                   | **npm `prepare` lifecycle** |
+| **`vp config`**  | **Configure project (hooks + agent)**  | **npm `prepare` lifecycle** |
 | **`vp staged`**  | **Run staged linters on staged files** | **Pre-commit hook**         |
 
 ## Comparison with Other Tools
 
-| Tool                       | Approach                                   |
-| -------------------------- | ------------------------------------------ |
-| husky + lint-staged        | Separate devDependencies, manual setup     |
-| simple-git-hooks           | Lightweight alternative to husky           |
-| lefthook                   | Go binary, config-file based               |
-| **vp prepare + vp staged** | **Built-in, zero-config, automatic setup** |
+| Tool                      | Approach                                   |
+| ------------------------- | ------------------------------------------ |
+| husky + lint-staged       | Separate devDependencies, manual setup     |
+| simple-git-hooks          | Lightweight alternative to husky           |
+| lefthook                  | Go binary, config-file based               |
+| **vp config + vp staged** | **Built-in, zero-config, automatic setup** |

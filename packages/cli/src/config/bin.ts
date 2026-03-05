@@ -1,9 +1,17 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+// Unified `vp config` command — merges the old `vp prepare` (hooks setup) and
+// `vp init` (agent integration) into a single entry point.
+//
+// Interactive mode (TTY, no CI): prompts on first run, updates silently after.
+// Non-interactive mode (scripts.prepare, CI, piped): runs everything by default.
+
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import mri from 'mri';
 
+import { vitePlusHeader } from '../../binding/index.js';
 import {
   detectAgents,
   getAgentById,
@@ -13,34 +21,107 @@ import {
 import { renderCliDoc } from '../utils/help.js';
 import { writeJsonFile, readJsonFile } from '../utils/json.js';
 import { pkgRoot } from '../utils/path.js';
+import { defaultInteractive, promptGitHooks } from '../utils/prompts.js';
 import { linkSkillsForSpecificAgents } from '../utils/skills.js';
+import { log } from '../utils/terminal.js';
 
-// --- Arg parsing ---
+// ---------------------------------------------------------------------------
+// Hooks setup (from prepare/bin.ts)
+// ---------------------------------------------------------------------------
 
-const helpMessage = renderCliDoc({
-  usage: 'vp init [OPTIONS]',
-  summary: 'Set up coding agent integration for an existing project.',
-  sections: [
-    {
-      title: 'Options',
-      rows: [{ label: '-h, --help', description: 'Show this help message' }],
-    },
-  ],
-});
+const HOOKS = [
+  'pre-commit',
+  'pre-merge-commit',
+  'prepare-commit-msg',
+  'commit-msg',
+  'post-commit',
+  'applypatch-msg',
+  'pre-applypatch',
+  'post-applypatch',
+  'pre-rebase',
+  'post-rewrite',
+  'post-checkout',
+  'post-merge',
+  'pre-push',
+  'pre-auto-gc',
+];
 
-function parseArgs(): void {
-  const argv = mri(process.argv.slice(3), {
-    boolean: ['help'],
-    alias: { h: 'help' },
-  });
+// The shell script that dispatches to user-defined hooks in .husky/
+const HOOK_SCRIPT = `#!/usr/bin/env sh
+[ "$HUSKY" = "2" ] && set -x
+n=$(basename "$0")
+s=$(dirname "$(dirname "$0")")/$n
 
-  if (argv.help) {
-    process.stdout.write(helpMessage);
-    process.exit(0);
-  }
+[ ! -f "$s" ] && exit 0
+
+i="\${XDG_CONFIG_HOME:-$HOME/.config}/husky/init.sh"
+[ -f "$i" ] && . "$i"
+
+[ "\${HUSKY-}" = "0" ] && exit 0
+
+d=$(dirname "$(dirname "$(dirname "$0")")")
+export PATH="$d/node_modules/.bin:$PATH"
+sh -e "$s" "$@"
+c=$?
+
+[ $c != 0 ] && echo "husky - $n script failed (code $c)"
+[ $c = 127 ] && echo "husky - command not found in PATH=$PATH"
+exit $c`;
+
+interface InstallResult {
+  message: string;
+  isError: boolean;
 }
 
-// --- Agent setup ---
+function install(dir = '.vite-hooks'): InstallResult {
+  if (process.env.HUSKY === '0') {
+    return { message: 'HUSKY=0 skip install', isError: false };
+  }
+  if (dir.includes('..')) {
+    return { message: '.. not allowed', isError: false };
+  }
+  const topResult = spawnSync('git', ['rev-parse', '--show-toplevel']);
+  if (topResult.status == null) {
+    return { message: 'git command not found', isError: true };
+  }
+  if (topResult.status !== 0) {
+    return { message: ".git can't be found", isError: false };
+  }
+  const gitRoot = topResult.stdout.toString().trim();
+
+  const internal = (x = '') => join(dir, '_', x);
+  const rel = relative(gitRoot, process.cwd());
+  const target = rel ? `${rel}/${dir}/_` : `${dir}/_`;
+  const checkResult = spawnSync('git', ['config', '--local', 'core.hooksPath']);
+  const existingHooksPath = checkResult.status === 0 ? checkResult.stdout?.toString().trim() : '';
+  if (existingHooksPath && existingHooksPath !== target) {
+    return {
+      message: `core.hooksPath is already set to "${existingHooksPath}", skipping`,
+      isError: false,
+    };
+  }
+
+  const { status, stderr } = spawnSync('git', ['config', 'core.hooksPath', target]);
+  if (status == null) {
+    return { message: 'git command not found', isError: true };
+  }
+  if (status) {
+    return { message: '' + stderr, isError: true };
+  }
+
+  rmSync(internal('husky.sh'), { force: true });
+  mkdirSync(internal(), { recursive: true });
+  writeFileSync(internal('.gitignore'), '*');
+  writeFileSync(internal('h'), HOOK_SCRIPT, { mode: 0o755 });
+  for (const hook of HOOKS) {
+    writeFileSync(internal(hook), `#!/usr/bin/env sh\n. "$(dirname "$0")/h"`, { mode: 0o755 });
+  }
+  return { message: '', isError: false };
+}
+
+// ---------------------------------------------------------------------------
+// Agent setup (from init/bin.ts)
+// ---------------------------------------------------------------------------
 
 interface AgentSetupSelection {
   instructionFilePath: 'CLAUDE.md' | 'AGENTS.md';
@@ -131,6 +212,19 @@ const MARKER_OPEN_RE = /<!--injected-by-vite-plus-v([\w.+-]+)-->/;
 const MARKER_CLOSE = '<!--/injected-by-vite-plus-->';
 const MARKER_BLOCK_RE =
   /<!--injected-by-vite-plus-v[\w.+-]+-->\n[\s\S]*?<!--\/injected-by-vite-plus-->/;
+
+function hasExistingAgentInstructions(root: string): boolean {
+  for (const file of ['AGENTS.md', 'CLAUDE.md']) {
+    const fullPath = join(root, file);
+    if (existsSync(fullPath)) {
+      const content = readFileSync(fullPath, 'utf-8');
+      if (MARKER_OPEN_RE.test(content)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 function injectAgentBlock(root: string, filePath: string): void {
   const fullPath = join(root, filePath);
@@ -261,35 +355,90 @@ function setupMcpConfig(root: string, selectedAgents: AgentConfig[]): void {
   }
 }
 
-// --- Main ---
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 
 async function main() {
-  parseArgs();
+  const args = mri(process.argv.slice(3), {
+    boolean: ['help', 'hooks-only'],
+    string: ['hooks-dir'],
+    alias: { h: 'help' },
+  });
 
-  const root = process.cwd();
-
-  prompts.intro('vp init');
-
-  // Step 1: Detect or select agents
-  const agentSetup = await resolveAgentSetup(root);
-
-  // Step 2: Inject agent instructions
-  injectAgentBlock(root, agentSetup.instructionFilePath);
-
-  // Step 3: MCP config (runs before skills so agent dirs like .claude/ exist)
-  setupMcpConfig(root, agentSetup.agents);
-
-  // Step 4: Link skills
-  if (agentSetup.agents.length > 0) {
-    linkSkillsForSpecificAgents(root, agentSetup.agents);
-  } else {
-    prompts.log.info('Skills linking skipped for generic agent setup');
+  if (args.help) {
+    const helpMessage = renderCliDoc({
+      usage: 'vp config [OPTIONS]',
+      summary: 'Configure Vite+ for the current project (hooks + agent integration).',
+      sections: [
+        {
+          title: 'Options',
+          rows: [
+            {
+              label: '--hooks-dir <path>',
+              description: 'Custom hooks directory (default: .vite-hooks)',
+            },
+            { label: '-h, --help', description: 'Show this help message' },
+          ],
+        },
+        {
+          title: 'Environment',
+          rows: [{ label: 'HUSKY=0', description: 'Skip hook installation' }],
+        },
+      ],
+    });
+    log(vitePlusHeader() + '\n');
+    log(helpMessage);
+    return;
   }
 
-  prompts.outro('Agent setup complete');
+  const dir = args['hooks-dir'] as string | undefined;
+  const hooksOnly = args['hooks-only'] as boolean;
+  const interactive = defaultInteractive();
+  const root = process.cwd();
+
+  // --- Step 1: Hooks setup ---
+  const hooksDir = dir ?? '.vite-hooks';
+  const isFirstHooksRun = !existsSync(join(root, hooksDir, 'pre-commit'));
+
+  let shouldSetupHooks = true;
+  if (interactive && isFirstHooksRun && !dir) {
+    // --hooks-dir implies agreement; only prompt when using default dir on first run
+    shouldSetupHooks = await promptGitHooks({ interactive, hooks: undefined });
+  }
+
+  if (shouldSetupHooks) {
+    const { message, isError } = install(dir);
+    if (message) {
+      log(message);
+      if (isError) {
+        process.exit(1);
+      }
+    }
+  }
+
+  // --- Step 2: Agent setup (skipped with --hooks-only) ---
+  if (!hooksOnly) {
+    const isFirstAgentRun = !hasExistingAgentInstructions(root);
+
+    let agentSetup: AgentSetupSelection;
+    if (interactive && isFirstAgentRun) {
+      agentSetup = await resolveAgentSetup(root);
+    } else {
+      // Non-interactive or subsequent run: auto-detect
+      const detected = detectAgents(root);
+      agentSetup = {
+        instructionFilePath: detectInstructionFilePath(root, detected),
+        agents: detected,
+      };
+    }
+
+    injectAgentBlock(root, agentSetup.instructionFilePath);
+    setupMcpConfig(root, agentSetup.agents);
+    if (agentSetup.agents.length > 0) {
+      linkSkillsForSpecificAgents(root, agentSetup.agents);
+    }
+  }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+void main();

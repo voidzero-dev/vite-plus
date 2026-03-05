@@ -81,7 +81,7 @@ cat: .oxfmtrc.json: No such file or directory
     "fmt:fix": "vp fmt --fix",
     "fmt:staged": "vp fmt --staged",
     "fmt:staged:fix": "vp fmt --staged --fix",
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",

@@ -22,7 +22,7 @@
   "scripts": {
     "version": "vp --version",
     "version:short": "vp -v",
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",

@@ -40,7 +40,7 @@ cat: .oxlintrc.json: No such file or directory
     "dev": "vp dev --port 3000",
     "build": "vp build",
     "lint": "vp lint",
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",

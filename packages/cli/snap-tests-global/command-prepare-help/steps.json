@@ -1,3 +1,0 @@
-{
-  "commands": ["vp prepare -h", "vp prepare --help", "vp help prepare"]
-}

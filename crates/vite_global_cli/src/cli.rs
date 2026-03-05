@@ -538,9 +538,9 @@ pub enum Commands {
         args: Vec<String>,
     },
 
-    /// Set up Git hooks (built-in husky-compatible implementation)
+    /// In-repo configuration (hooks, agent integration)
     #[command(disable_help_flag = true)]
-    Prepare {
+    Config {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
@@ -1825,7 +1825,7 @@ pub async fn run_command_with_options(
 
         Commands::Migrate { args } => commands::migrate::execute(cwd, &args).await,
 
-        Commands::Prepare { args } => commands::prepare::execute(cwd, &args).await,
+        Commands::Config { args } => commands::config::execute(cwd, &args).await,
 
         Commands::Staged { args } => commands::staged::execute(cwd, &args).await,
 

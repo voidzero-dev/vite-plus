@@ -60,6 +60,6 @@ export default defineConfig({
   },
   "packageManager": "pnpm@<semver>",
   "scripts": {
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   }
 }

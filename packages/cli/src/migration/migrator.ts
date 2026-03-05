@@ -791,7 +791,7 @@ function findGitRoot(startPath: string): string | null {
  */
 export function setupGitHooks(projectPath: string): void {
   // Check git root first — subdirectory projects must not set core.hooksPath
-  // (running vp prepare from a subdirectory would hijack the repo-wide hooksPath)
+  // (running vp config from a subdirectory would hijack the repo-wide hooksPath)
   const gitRoot = findGitRoot(projectPath);
   if (gitRoot && path.resolve(projectPath) !== path.resolve(gitRoot)) {
     prompts.log.warn(
@@ -836,11 +836,13 @@ export function setupGitHooks(projectPath: string): void {
     return;
   }
 
-  // Extract custom husky dir from the prepare script.
-  // By this point rewriteScripts() has already replaced "husky" → "vp prepare".
+  // Extract custom hooks dir from the prepare script.
+  // By this point rewriteScripts() has already replaced "husky" → "vp config".
   const scripts = pkgContent.scripts as Record<string, string> | undefined;
-  const huskyDirMatch = scripts?.prepare?.match(/\bvp\s+prepare\s+([^\s&|;]+)/);
-  const huskyDir = huskyDirMatch?.[1] ?? '.husky';
+  const hooksDirMatch = scripts?.prepare?.match(/\bvp\s+config\s+--hooks-dir\s+([^\s&|;]+)/);
+  // If migrating from husky (vp config --hooks-dir was set), use that dir.
+  // Otherwise default to .vite-hooks for new projects.
+  const hooksDir = hooksDirMatch?.[1] ?? '.vite-hooks';
 
   editJsonFile<{
     scripts?: Record<string, string>;
@@ -848,15 +850,15 @@ export function setupGitHooks(projectPath: string): void {
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
-    // rewriteScripts() already replaced husky → vp prepare.
-    // Just ensure vp prepare is present for projects that didn't have husky.
+    // rewriteScripts() already replaced husky → vp config.
+    // Just ensure vp config is present for projects that didn't have husky.
     if (!pkg.scripts) {
       pkg.scripts = {};
     }
     if (!pkg.scripts.prepare) {
-      pkg.scripts.prepare = 'vp prepare';
-    } else if (!pkg.scripts.prepare.includes('vp prepare')) {
-      pkg.scripts.prepare = `vp prepare && ${pkg.scripts.prepare}`;
+      pkg.scripts.prepare = 'vp config';
+    } else if (!pkg.scripts.prepare.includes('vp config')) {
+      pkg.scripts.prepare = `vp config && ${pkg.scripts.prepare}`;
     }
 
     // Remove lint-staged key from package.json — config now lives in vite.config.ts
@@ -881,27 +883,30 @@ export function setupGitHooks(projectPath: string): void {
   }
 
   // Hook file creation (no git needed — only filesystem ops)
-  createHuskyPreCommitHook(projectPath, huskyDir);
+  createPreCommitHook(projectPath, hooksDir);
 
-  // vp prepare requires a git workspace — skip if no .git found
+  // vp config requires a git workspace — skip if no .git found
   if (!gitRoot) {
     return;
   }
 
   const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
 
-  // Install git hooks via vp prepare
-  const prepareArgs = huskyDir !== '.husky' ? ['prepare', huskyDir] : ['prepare'];
-  const prepareResult = spawn.sync(vpBin, prepareArgs, {
+  // Install git hooks via vp config (--hooks-only to skip agent setup, handled by migration)
+  const configArgs =
+    hooksDir !== '.vite-hooks'
+      ? ['config', '--hooks-only', '--hooks-dir', hooksDir]
+      : ['config', '--hooks-only'];
+  const configResult = spawn.sync(vpBin, configArgs, {
     cwd: projectPath,
     stdio: 'pipe',
   });
-  if (prepareResult.status === 0) {
-    // vp prepare outputs skip/info messages to stdout via log().
+  if (configResult.status === 0) {
+    // vp config outputs skip/info messages to stdout via log().
     // An empty message means hooks were installed successfully;
     // any non-empty output indicates a skip (HUSKY=0, hooksPath
     // already set, .git not found, etc.).
-    const stdout = prepareResult.stdout?.toString().trim() ?? '';
+    const stdout = configResult.stdout?.toString().trim() ?? '';
     if (stdout) {
       prompts.log.warn(`⚠ Git hooks not configured — ${stdout}`);
     } else {
@@ -938,7 +943,7 @@ function hasUnsupportedLintStagedConfig(projectPath: string): boolean {
 }
 
 /**
- * Create .husky/pre-commit hook file.
+ * Create pre-commit hook file in the hooks directory.
  */
 // Lint-staged invocation patterns — replaced in-place with `vp staged`.
 // The optional prefix group captures env var assignments like `NODE_OPTIONS=... `.
@@ -948,7 +953,7 @@ const STALE_LINT_STAGED_PATTERNS = [
   /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)lint-staged\b/,
 ];
 
-export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): void {
+export function createPreCommitHook(projectPath: string, dir = '.vite-hooks'): void {
   const huskyDir = path.join(projectPath, dir);
   fs.mkdirSync(huskyDir, { recursive: true });
   const hookPath = path.join(huskyDir, 'pre-commit');
@@ -999,7 +1004,10 @@ export function createHuskyPreCommitHook(projectPath: string, dir = '.husky'): v
 /**
  * Rewrite only `scripts.prepare` in the root package.json using vite-prepare.yml rules.
  * Collapses "husky install" → "husky" before applying ast-grep so that the
- * replace-husky rule produces "vp prepare" with any directory argument preserved.
+ * replace-husky rule produces "vp config" with any directory argument preserved.
+ * After rewriting, converts positional dir arg to --hooks-dir flag:
+ *   "vp config .config/husky" → "vp config --hooks-dir .config/husky"
+ *   "vp config" (was "husky") → "vp config --hooks-dir .husky" (preserve default husky dir)
  * Called only when hooks are being set up (not with --no-hooks).
  */
 export function rewritePrepareScript(rootDir: string): void {
@@ -1014,7 +1022,7 @@ export function rewritePrepareScript(rootDir: string): void {
     }
 
     // Collapse "husky install" → "husky" so the ast-grep rule
-    // produces "vp prepare" with any directory argument preserved.
+    // produces "vp config" with any directory argument preserved.
     // (Moved from Rust rewrite_script pre-processing)
     let prepare = pkg.scripts.prepare;
     prepare = prepare.replace('husky install ', 'husky ');
@@ -1023,7 +1031,15 @@ export function rewritePrepareScript(rootDir: string): void {
     const prepareJson = JSON.stringify({ prepare });
     const updated = rewriteScripts(prepareJson, readPrepareRulesYaml());
     if (updated) {
-      pkg.scripts.prepare = JSON.parse(updated).prepare;
+      let newPrepare: string = JSON.parse(updated).prepare;
+      // Post-processing: convert positional dir arg to --hooks-dir flag,
+      // and add --hooks-dir .husky for the default case (user had husky with default dir).
+      newPrepare = newPrepare.replace(
+        /\bvp config(?:\s+(?!-)([\w./-]+))?/,
+        (_match: string, dir: string | undefined) =>
+          dir ? `vp config --hooks-dir ${dir}` : 'vp config --hooks-dir .husky',
+      );
+      pkg.scripts.prepare = newPrepare;
     } else if (prepare !== pkg.scripts.prepare) {
       // Pre-processing changed the script (husky install → husky)
       // but no rule matched — keep the collapsed form

@@ -54,7 +54,7 @@ export default defineConfig({
     "test:coverage": "vp test run --coverage",
     "test:watch": "vp test --watch",
     "test": "vp test",
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",

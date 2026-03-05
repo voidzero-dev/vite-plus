@@ -1,0 +1,44 @@
+> vp config -h
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp config [OPTIONS]
+
+Configure Vite+ for the current project (hooks + agent integration).
+
+Options:
+  --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
+  -h, --help          Show this help message
+
+Environment:
+  HUSKY=0  Skip hook installation
+
+
+> vp config --help
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp config [OPTIONS]
+
+Configure Vite+ for the current project (hooks + agent integration).
+
+Options:
+  --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
+  -h, --help          Show this help message
+
+Environment:
+  HUSKY=0  Skip hook installation
+
+
+> vp help config
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp config [OPTIONS]
+
+Configure Vite+ for the current project (hooks + agent integration).
+
+Options:
+  --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
+  -h, --help          Show this help message
+
+Environment:
+  HUSKY=0  Skip hook installation
+

@@ -23,7 +23,7 @@
 {
   "name": "migration-env-prefix-lint-staged",
   "scripts": {
-    "prepare": "vp prepare"
+    "prepare": "vp config --hooks-dir .husky"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",

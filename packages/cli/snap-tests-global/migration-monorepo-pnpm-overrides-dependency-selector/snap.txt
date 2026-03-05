@@ -33,7 +33,7 @@ export default defineConfig({
   "version": "1.0.0",
   "scripts": {
     "dev": "vp dev",
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   },
   "devDependencies": {
     "vite": "catalog:",

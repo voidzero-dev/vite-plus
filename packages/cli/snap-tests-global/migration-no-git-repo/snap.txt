@@ -1,4 +1,4 @@
-> vp migrate --no-interactive # migration should create .husky/pre-commit even without .git
+> vp migrate --no-interactive # migration should create .vite-hooks/pre-commit even without .git
 ┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
@@ -31,12 +31,12 @@
   },
   "packageManager": "pnpm@<semver>",
   "scripts": {
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   }
 }
 
-> test -d .husky && echo 'husky dir exists' || echo 'no husky dir'
-husky dir exists
+> test -d .vite-hooks && echo 'hooks dir exists' || echo 'no hooks dir'
+hooks dir exists
 
-> cat .husky/pre-commit # pre-commit hook should exist even without .git
+> cat .vite-hooks/pre-commit # pre-commit hook should exist even without .git
 vp staged

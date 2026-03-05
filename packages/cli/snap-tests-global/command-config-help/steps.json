@@ -1,0 +1,3 @@
+{
+  "commands": ["vp config -h", "vp config --help", "vp help config"]
+}

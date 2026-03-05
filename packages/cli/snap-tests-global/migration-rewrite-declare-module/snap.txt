@@ -65,6 +65,6 @@ declare module 'vite-plus' {
   },
   "packageManager": "pnpm@<semver>",
   "scripts": {
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   }
 }

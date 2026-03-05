@@ -54,7 +54,7 @@ cat: .oxlintrc.json: No such file or directory
     "test": "vp test",
     "lint": "vp lint",
     "fmt": "vp fmt",
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   },
   "dependencies": {
     "testnpm2": "1.0.0"

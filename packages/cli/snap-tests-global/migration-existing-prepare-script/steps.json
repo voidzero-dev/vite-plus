@@ -1,8 +1,8 @@
 {
   "commands": [
     { "command": "git init", "ignoreOutput": true },
-    "vp migrate --no-interactive # migration should compose vp prepare with existing prepare script",
-    "cat package.json # check prepare script is composed: vp prepare && npm run build",
-    "cat .husky/pre-commit # check pre-commit hook"
+    "vp migrate --no-interactive # migration should compose vp config with existing prepare script",
+    "cat package.json # check prepare script is composed: vp config && npm run build",
+    "cat .vite-hooks/pre-commit # check pre-commit hook"
   ]
 }

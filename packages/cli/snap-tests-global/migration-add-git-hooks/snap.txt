@@ -34,15 +34,15 @@
   },
   "packageManager": "pnpm@<semver>",
   "scripts": {
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   }
 }
 
-> cat .husky/pre-commit # check pre-commit hook
+> cat .vite-hooks/pre-commit # check pre-commit hook
 vp staged
 
-> test -d .husky/_ && echo 'husky shims exist' || echo 'no husky shims' # check vp prepare ran
-husky shims exist
+> test -d .vite-hooks/_ && echo 'hook shims exist' || echo 'no hook shims' # check vp config ran
+hook shims exist
 
-> git config --local core.hooksPath # should be set to .husky/_
-.husky/_
+> git config --local core.hooksPath # should be set to .vite-hooks/_
+.vite-hooks/_

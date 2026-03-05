@@ -36,7 +36,7 @@
   },
   "packageManager": "pnpm@<semver>",
   "scripts": {
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   }
 }
 
@@ -53,5 +53,5 @@ export default defineConfig({
   
 });
 
-> cat .husky/pre-commit # check pre-commit hook created
+> cat .vite-hooks/pre-commit # check pre-commit hook created
 vp staged

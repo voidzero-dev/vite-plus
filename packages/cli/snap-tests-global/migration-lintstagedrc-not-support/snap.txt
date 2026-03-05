@@ -42,7 +42,7 @@ export default {
 {
   "name": "migration-lintstagedrc-not-support",
   "scripts": {
-    "prepare": "vp prepare"
+    "prepare": "vp config --hooks-dir .husky"
   },
   "devDependencies": {
     "husky": "^9.1.7",

@@ -1,5 +1,5 @@
 > git init
-> vp migrate --no-interactive # migration should rewrite husky to vp prepare
+> vp migrate --no-interactive # migration should rewrite husky to vp config
 ┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
@@ -23,7 +23,7 @@
 {
   "name": "migration-existing-husky",
   "scripts": {
-    "prepare": "vp prepare"
+    "prepare": "vp config --hooks-dir .husky"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",

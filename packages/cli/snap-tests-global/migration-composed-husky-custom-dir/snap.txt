@@ -19,11 +19,11 @@
 └  ✔ Migration completed!
 
 
-> cat package.json # prepare should be 'vp prepare .config/husky && npm run build'
+> cat package.json # prepare should be 'vp config --hooks-dir .config/husky && npm run build'
 {
   "name": "migration-composed-husky-custom-dir",
   "scripts": {
-    "prepare": "npm run build && vp prepare .config/husky"
+    "prepare": "npm run build && vp config --hooks-dir .config/husky"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",

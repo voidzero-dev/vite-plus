@@ -1,5 +1,5 @@
 > git init
-> vp migrate --no-interactive # migration should compose vp prepare with existing prepare script
+> vp migrate --no-interactive # migration should compose vp config with existing prepare script
 ┌  VITE+ - The Unified Toolchain for the Web
 │
 ●  Using default package manager: pnpm
@@ -19,12 +19,12 @@
 └  ✔ Migration completed!
 
 
-> cat package.json # check prepare script is composed: vp prepare && npm run build
+> cat package.json # check prepare script is composed: vp config && npm run build
 {
   "name": "migration-existing-prepare-script",
   "scripts": {
     "build": "tsc",
-    "prepare": "vp prepare && npm run build"
+    "prepare": "vp config && npm run build"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -39,5 +39,5 @@
   "packageManager": "pnpm@<semver>"
 }
 
-> cat .husky/pre-commit # check pre-commit hook
+> cat .vite-hooks/pre-commit # check pre-commit hook
 vp staged

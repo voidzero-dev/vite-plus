@@ -53,7 +53,7 @@ export default defineConfig({
     "build": "vp pack",
     "build:watch": "vp pack --watch",
     "build:dts": "vp pack --dts",
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -103,7 +103,7 @@ export default defineConfig({
     "build": "vp pack",
     "build:watch": "vp pack --watch",
     "build:dts": "vp pack --dts",
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",

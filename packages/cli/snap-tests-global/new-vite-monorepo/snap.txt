@@ -18,7 +18,7 @@ vite.config.ts
   "scripts": {
     "ready": "vp fmt && vp lint --type-aware && vp run test -r && vp run build -r",
     "dev": "vp run website#dev",
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -128,7 +128,7 @@ vite.config.ts
   "scripts": {
     "ready": "vp fmt && vp lint --type-aware && vp run test -r && vp run build -r",
     "dev": "vp run website#dev",
-    "prepare": "vp prepare"
+    "prepare": "vp config"
   },
   "engines": {
     "node": ">=22.12.0"

@@ -29,5 +29,5 @@
   "packageManager": "pnpm@<semver>"
 }
 
-> test -d .husky && echo '.husky directory exists' || echo 'No .husky directory' # verify no .husky directory
-No .husky directory
+> test -d .vite-hooks && echo '.vite-hooks directory exists' || echo 'No .vite-hooks directory' # verify no .vite-hooks directory
+No .vite-hooks directory
