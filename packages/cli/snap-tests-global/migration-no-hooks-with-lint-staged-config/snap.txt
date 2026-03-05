@@ -1,6 +1,5 @@
 > git init
-> git config core.hooksPath .custom-hooks
-> vp migrate --no-interactive # should skip hooks because core.hooksPath is already set
+> vp migrate --no-hooks --no-interactive # --no-hooks should preserve lint-staged config
 VITE+ - The Unified Toolchain for the Web
 
 
@@ -10,26 +9,24 @@ pnpm@latest installing...
 
 pnpm@<semver> installed
 
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Merged staged config into vite.config.ts
-
-⚠ Git hooks not configured — core.hooksPath is already set to ".custom-hooks", skipping
-
 Wrote agent instructions to AGENTS.md
 ✔ Migration completed!
 
 
-> cat package.json # prepare should stay 'husky' and husky must remain in devDependencies
+> cat package.json # lint-staged config and deps should be preserved when hooks are skipped
 {
-  "name": "migration-hooks-skip-on-existing-hookspath",
+  "name": "migration-no-hooks-with-lint-staged-config",
   "scripts": {
     "prepare": "husky"
   },
   "devDependencies": {
     "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
+  },
+  "lint-staged": {
+    "*.ts": "eslint --fix"
   },
   "pnpm": {
     "overrides": {
@@ -39,6 +36,3 @@ Wrote agent instructions to AGENTS.md
   },
   "packageManager": "pnpm@<semver>"
 }
-
-> git config --local core.hooksPath # should still be .custom-hooks
-.custom-hooks

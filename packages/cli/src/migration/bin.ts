@@ -227,17 +227,17 @@ async function main() {
 
   let shouldSetupHooks = await promptGitHooks(options);
 
-  // Check for unsupported husky version BEFORE rewriting — if Husky v8 is detected,
-  // skip staged migration to preserve lint-staged config (otherwise it would be deleted
-  // while .husky/pre-commit still references `npx lint-staged`).
-  let skipStagedMigration = false;
   if (shouldSetupHooks && hasUnsupportedHuskyVersion(workspaceInfo.rootDir)) {
     prompts.log.warn(
       '⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.',
     );
     shouldSetupHooks = false;
-    skipStagedMigration = true;
   }
+
+  // Skip staged migration when hooks are disabled (--no-hooks or unsupported husky).
+  // Without hooks, lint-staged config must stay in package.json so existing
+  // .husky/pre-commit scripts that invoke `npx lint-staged` keep working.
+  const skipStagedMigration = !shouldSetupHooks;
 
   if (workspaceInfo.isMonorepo) {
     rewriteMonorepo(workspaceInfo, skipStagedMigration);

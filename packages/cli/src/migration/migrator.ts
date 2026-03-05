@@ -799,6 +799,23 @@ const OTHER_HOOK_TOOLS = ['simple-git-hooks', 'lefthook', 'yorkie'] as const;
 // Packages replaced by vite-plus built-in commands and should be removed from devDependencies
 const REPLACED_HOOK_PACKAGES = ['husky', 'lint-staged'] as const;
 
+function removeReplacedHookPackages(packageJsonPath: string): void {
+  editJsonFile<{
+    devDependencies?: Record<string, string>;
+    dependencies?: Record<string, string>;
+  }>(packageJsonPath, (pkg) => {
+    for (const name of REPLACED_HOOK_PACKAGES) {
+      if (pkg.devDependencies?.[name]) {
+        delete pkg.devDependencies[name];
+      }
+      if (pkg.dependencies?.[name]) {
+        delete pkg.dependencies[name];
+      }
+    }
+    return pkg;
+  });
+}
+
 /**
  * Walk up from `startPath` looking for `.git` (directory or file — submodules
  * use a `.git` file).  Returns the directory that contains `.git`, or `null`.
@@ -923,16 +940,6 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): boolea
       pkg.scripts.prepare = `vp config && ${pkg.scripts.prepare}`;
     }
 
-    // Remove husky and lint-staged from devDependencies (replaced by vp built-in commands).
-    for (const name of REPLACED_HOOK_PACKAGES) {
-      if (pkg.devDependencies?.[name]) {
-        delete pkg.devDependencies[name];
-      }
-      if (pkg.dependencies?.[name]) {
-        delete pkg.dependencies[name];
-      }
-    }
-
     return pkg;
   });
 
@@ -977,6 +984,7 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): boolea
 
   // vp config requires a git workspace — skip if no .git found
   if (!gitRoot) {
+    removeReplacedHookPackages(packageJsonPath);
     return true;
   }
 
@@ -1000,6 +1008,7 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): boolea
       prompts.log.warn(`⚠ Git hooks not configured — ${stdout}`);
       return false;
     }
+    removeReplacedHookPackages(packageJsonPath);
     prompts.log.success('✔ Git hooks configured');
     return true;
   }
