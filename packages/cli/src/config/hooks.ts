@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const HOOKS = [
   'pre-commit',
@@ -70,26 +70,19 @@ export function install(dir = '.vite-hooks'): InstallResult {
   if (dir.includes('..')) {
     return { message: '.. not allowed', isError: false };
   }
-  const topResult = spawnSync('git', ['rev-parse', '--show-toplevel']);
-  if (topResult.status == null) {
+  // Use --show-prefix to get the relative path from git root to cwd.
+  // This avoids Windows path normalization issues (MSYS paths, 8.3 short names)
+  // that make path.relative() unreliable across git and Node.js representations.
+  const prefixResult = spawnSync('git', ['rev-parse', '--show-prefix']);
+  if (prefixResult.status == null) {
     return { message: 'git command not found', isError: true };
   }
-  if (topResult.status !== 0) {
+  if (prefixResult.status !== 0) {
     return { message: ".git can't be found", isError: false };
-  }
-  let gitRoot = topResult.stdout.toString().trim();
-  if (process.platform === 'win32') {
-    // Convert MSYS-style paths (e.g. /d/a/repo) to native Windows paths (e.g. D:/a/repo)
-    if (/^\/[a-zA-Z]\//.test(gitRoot)) {
-      gitRoot = gitRoot[1].toUpperCase() + ':' + gitRoot.slice(2);
-    }
-    // Resolve 8.3 short names (e.g. RUNNER~1 vs runner) for consistent path comparison
-    gitRoot = realpathSync(gitRoot);
   }
 
   const internal = (x = '') => join(dir, '_', x);
-  const cwd = process.platform === 'win32' ? realpathSync(process.cwd()) : process.cwd();
-  const rel = relative(gitRoot, cwd);
+  const rel = prefixResult.stdout.toString().trim().replace(/\/$/, '');
   const target = rel ? `${rel}/${dir}/_` : `${dir}/_`;
   const checkResult = spawnSync('git', ['config', '--local', 'core.hooksPath']);
   const existingHooksPath = checkResult.status === 0 ? checkResult.stdout?.toString().trim() : '';
