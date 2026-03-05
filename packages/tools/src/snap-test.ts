@@ -233,6 +233,11 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
     // set CI=true make sure snap-tests are stable on GitHub Actions
     CI: 'true',
     VITE_PLUS_HOME: path.join(homedir(), '.vite-plus'),
+    // Set git identity so `git commit` works on CI runners without global git config
+    GIT_AUTHOR_NAME: 'Test',
+    GIT_COMMITTER_NAME: 'Test',
+    GIT_AUTHOR_EMAIL: 'vite-plus-test@test.com',
+    GIT_COMMITTER_EMAIL: 'vite-plus-test@test.com',
 
     // A test case can override/unset environment variables above.
     // For example, VITE_PLUS_CLI_TEST/CI can be unset to test the real-world outputs.

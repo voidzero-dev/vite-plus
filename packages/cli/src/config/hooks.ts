@@ -77,7 +77,12 @@ export function install(dir = '.vite-hooks'): InstallResult {
   if (topResult.status !== 0) {
     return { message: ".git can't be found", isError: false };
   }
-  const gitRoot = topResult.stdout.toString().trim();
+  let gitRoot = topResult.stdout.toString().trim();
+  // On Windows, git returns MSYS-style paths (e.g. /d/a/repo).
+  // Convert to native Windows paths (e.g. D:/a/repo) so path.relative() works.
+  if (process.platform === 'win32' && /^\/[a-zA-Z]\//.test(gitRoot)) {
+    gitRoot = gitRoot[1].toUpperCase() + ':' + gitRoot.slice(2);
+  }
 
   const internal = (x = '') => join(dir, '_', x);
   const rel = relative(gitRoot, process.cwd());
