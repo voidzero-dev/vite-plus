@@ -1,19 +1,19 @@
 > vp migrate --no-interactive # migration rewrites reference types
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  Rewrote imports in one file
-│
-●    src/env.d.ts
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+Rewrote imports in one file
+
+  src/env.d.ts
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
 
 
 > cat src/env.d.ts # check reference types rewritten

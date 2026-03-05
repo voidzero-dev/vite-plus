@@ -1,6 +1,6 @@
 import type { Writable } from 'node:stream';
 
-import { getColumns, settings } from '@clack/core';
+import { getColumns } from '@clack/core';
 import stringWidth from 'fast-string-width';
 import { wrapAnsi } from 'fast-wrap-ansi';
 
@@ -69,7 +69,7 @@ export const box = (message = '', title = '', opts?: BoxOptions) => {
   const titlePadding = opts?.titlePadding ?? 1;
   const contentPadding = opts?.contentPadding ?? 2;
   const width = opts?.width === undefined || opts.width === 'auto' ? 1 : Math.min(1, opts.width);
-  const hasGuide = opts?.withGuide ?? settings.withGuide;
+  const hasGuide = opts?.withGuide ?? false;
   const linePrefix = !hasGuide ? '' : `${S_BAR} `;
   const formatBorder = opts?.formatBorder ?? defaultFormatBorder;
   const symbols = (opts?.rounded ? roundedSymbols : squareSymbols).map(formatBorder);

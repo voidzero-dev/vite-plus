@@ -1,4 +1,4 @@
-import { AutocompletePrompt, settings } from '@clack/core';
+import { AutocompletePrompt } from '@clack/core';
 import color from 'picocolors';
 
 import {
@@ -7,8 +7,8 @@ import {
   S_BAR_END,
   S_CHECKBOX_INACTIVE,
   S_CHECKBOX_SELECTED,
-  S_RADIO_ACTIVE,
-  S_RADIO_INACTIVE,
+  S_POINTER_ACTIVE,
+  S_POINTER_INACTIVE,
   symbol,
 } from './common.js';
 import { limitOptions } from './limit-options.js';
@@ -41,6 +41,43 @@ function getSelectedOptions<T>(values: T[], options: Option<T>[]): Option<T>[] {
 
   return results;
 }
+
+const withMarker = (
+  marker: string,
+  label: string,
+  format: (text: string) => string,
+  firstLineSuffix = '',
+) => {
+  const lines = label.split('\n');
+  if (lines.length === 1) {
+    return `${marker} ${format(lines[0])}${firstLineSuffix}`;
+  }
+  const [firstLine, ...rest] = lines;
+  return [
+    `${marker} ${format(firstLine)}${firstLineSuffix}`,
+    ...rest.map((line) => `${S_POINTER_INACTIVE} ${format(line)}`),
+  ].join('\n');
+};
+
+const withMarkerAndIndicator = (
+  marker: string,
+  indicator: string,
+  indicatorWidth: number,
+  label: string,
+  format: (text: string) => string,
+  firstLineSuffix = '',
+) => {
+  const lines = label.split('\n');
+  const continuationPrefix = `${S_POINTER_INACTIVE} ${' '.repeat(indicatorWidth)} `;
+  if (lines.length === 1) {
+    return `${marker} ${indicator} ${format(lines[0])}${firstLineSuffix}`;
+  }
+  const [firstLine, ...rest] = lines;
+  return [
+    `${marker} ${indicator} ${format(firstLine)}${firstLineSuffix}`,
+    ...rest.map((line) => `${continuationPrefix}${format(line)}`),
+  ].join('\n');
+};
 
 interface AutocompleteSharedOptions<Value> extends CommonOptions {
   /**
@@ -96,11 +133,12 @@ export const autocomplete = <Value>(opts: AutocompleteOptions<Value>) => {
     output: opts.output,
     validate: opts.validate,
     render() {
-      const hasGuide = opts.withGuide ?? settings.withGuide;
+      const hasGuide = opts.withGuide ?? false;
+      const nestedPrefix = '  ';
       // Title and message display
       const headings = hasGuide
-        ? [color.gray(S_BAR), `${symbol(this.state)}  ${opts.message}`]
-        : [`${symbol(this.state)}  ${opts.message}`];
+        ? [color.gray(S_BAR), `${symbol(this.state)} ${opts.message}`]
+        : [`${symbol(this.state)} ${opts.message}`];
       const userInput = this.userInput;
       const options = this.options;
       const placeholder = opts.placeholder;
@@ -111,21 +149,20 @@ export const autocomplete = <Value>(opts: AutocompleteOptions<Value>) => {
         case 'submit': {
           // Show selected value
           const selected = getSelectedOptions(this.selectedValues, options);
-          const label =
-            selected.length > 0 ? `  ${color.dim(selected.map(getLabel).join(', '))}` : '';
-          const submitPrefix = hasGuide ? color.gray(S_BAR) : '';
-          return `${headings.join('\n')}\n${submitPrefix}${label}`;
+          const label = selected.length > 0 ? color.dim(selected.map(getLabel).join(', ')) : '';
+          const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
+          return `${headings.join('\n')}\n${submitPrefix}${label}\n\n`;
         }
 
         case 'cancel': {
-          const userInputText = userInput ? `  ${color.strikethrough(color.dim(userInput))}` : '';
-          const cancelPrefix = hasGuide ? color.gray(S_BAR) : '';
-          return `${headings.join('\n')}\n${cancelPrefix}${userInputText}`;
+          const userInputText = userInput ? color.strikethrough(color.dim(userInput)) : '';
+          const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
+          return `${headings.join('\n')}\n${cancelPrefix}${userInputText}\n\n`;
         }
 
         default: {
           const barColor = this.state === 'error' ? color.yellow : color.blue;
-          const guidePrefix = hasGuide ? `${barColor(S_BAR)}  ` : '';
+          const guidePrefix = hasGuide ? `${barColor(S_BAR)} ` : nestedPrefix;
           const guidePrefixEnd = hasGuide ? barColor(S_BAR_END) : '';
           // Display cursor position - show plain text in navigation mode
           let searchText = '';
@@ -178,18 +215,23 @@ export const autocomplete = <Value>(opts: AutocompleteOptions<Value>) => {
               : limitOptions({
                   cursor: this.cursor,
                   options: this.filteredOptions,
-                  columnPadding: hasGuide ? 3 : 0, // for `|  ` when guide is shown
+                  columnPadding: hasGuide ? 2 : 2,
                   rowPadding: headings.length + footers.length,
                   style: (option, active) => {
                     const label = getLabel(option);
                     const hint =
                       option.hint && option.value === this.focusedValue
-                        ? color.dim(` (${option.hint})`)
+                        ? color.gray(` (${option.hint})`)
                         : '';
 
                     return active
-                      ? `${color.green(S_RADIO_ACTIVE)} ${label}${hint}`
-                      : `${color.dim(S_RADIO_INACTIVE)} ${color.dim(label)}${hint}`;
+                      ? withMarker(
+                          color.blue(S_POINTER_ACTIVE),
+                          label,
+                          (text) => color.blue(color.bold(text)),
+                          hint,
+                        )
+                      : withMarker(color.dim(S_POINTER_INACTIVE), label, color.dim, hint);
                   },
                   maxItems: opts.maxItems,
                   output: opts.output,
@@ -236,14 +278,19 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
     const label = option.label ?? String(option.value ?? '');
     const hint =
       option.hint && focusedValue !== undefined && option.value === focusedValue
-        ? color.dim(` (${option.hint})`)
+        ? color.gray(` (${option.hint})`)
         : '';
-    const checkbox = isSelected ? color.green(S_CHECKBOX_SELECTED) : color.dim(S_CHECKBOX_INACTIVE);
-
-    if (active) {
-      return `${checkbox} ${label}${hint}`;
-    }
-    return `${checkbox} ${color.dim(label)}`;
+    const checkboxRaw = isSelected ? S_CHECKBOX_SELECTED : S_CHECKBOX_INACTIVE;
+    const checkbox = isSelected ? color.blue(checkboxRaw) : color.dim(checkboxRaw);
+    const marker = active ? color.blue(S_POINTER_ACTIVE) : color.dim(S_POINTER_INACTIVE);
+    return withMarkerAndIndicator(
+      marker,
+      checkbox,
+      checkboxRaw.length,
+      label,
+      active ? (text) => color.blue(color.bold(text)) : color.dim,
+      hint,
+    );
   };
 
   // Create text prompt which we'll use as foundation
@@ -266,8 +313,10 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
     input: opts.input,
     output: opts.output,
     render() {
+      const hasGuide = opts.withGuide ?? false;
+      const nestedPrefix = '  ';
       // Title and symbol
-      const title = `${color.gray(S_BAR)}\n${symbol(this.state)}  ${opts.message}\n`;
+      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)} ${opts.message}\n`;
 
       // Selection counter
       const userInput = this.userInput;
@@ -292,13 +341,19 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
       // Render prompt state
       switch (this.state) {
         case 'submit': {
-          return `${title}${color.gray(S_BAR)}  ${color.dim(`${this.selectedValues.length} items selected`)}`;
+          const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : '';
+          const finalPrefix = hasGuide ? submitPrefix : nestedPrefix;
+          return `${title}${finalPrefix}${color.dim(`${this.selectedValues.length} items selected`)}\n\n`;
         }
         case 'cancel': {
-          return `${title}${color.gray(S_BAR)}  ${color.strikethrough(color.dim(userInput))}`;
+          const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : '';
+          const finalPrefix = hasGuide ? cancelPrefix : nestedPrefix;
+          return `${title}${finalPrefix}${color.strikethrough(color.dim(userInput))}\n\n`;
         }
         default: {
           const barColor = this.state === 'error' ? color.yellow : color.blue;
+          const prefix = hasGuide ? `${barColor(S_BAR)} ` : nestedPrefix;
+          const footerEnd = hasGuide ? [barColor(S_BAR_END)] : [];
           // Instructions
           const instructions = [
             `${color.dim('↑/↓')} to navigate`,
@@ -310,23 +365,20 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
           // No results message
           const noResults =
             this.filteredOptions.length === 0 && userInput
-              ? [`${barColor(S_BAR)}  ${color.yellow('No matches found')}`]
+              ? [`${prefix}${color.yellow('No matches found')}`]
               : [];
 
           const errorMessage =
-            this.state === 'error' ? [`${barColor(S_BAR)}  ${color.yellow(this.error)}`] : [];
+            this.state === 'error' ? [`${prefix}${color.yellow(this.error)}`] : [];
 
           // Calculate header and footer line counts for rowPadding
           const headerLines = [
-            ...`${title}${barColor(S_BAR)}`.split('\n'),
-            `${barColor(S_BAR)}  ${color.dim('Search:')} ${searchText}${matches}`,
+            ...title.trimEnd().split('\n'),
+            `${prefix}${color.dim('Search:')} ${searchText}${matches}`,
             ...noResults,
             ...errorMessage,
           ];
-          const footerLines = [
-            `${barColor(S_BAR)}  ${instructions.join(' • ')}`,
-            barColor(S_BAR_END),
-          ];
+          const footerLines = [`${prefix}${instructions.join(' • ')}`, ...footerEnd];
 
           // Get limited options for display
           const displayOptions = limitOptions({
@@ -342,7 +394,7 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
           // Build the prompt display
           return [
             ...headerLines,
-            ...displayOptions.map((option) => `${barColor(S_BAR)}  ${option}`),
+            ...displayOptions.map((option) => `${prefix}${option}`),
             ...footerLines,
           ].join('\n');
         }

@@ -8,6 +8,8 @@ import {
   S_CHECKBOX_ACTIVE,
   S_CHECKBOX_INACTIVE,
   S_CHECKBOX_SELECTED,
+  S_POINTER_ACTIVE,
+  S_POINTER_INACTIVE,
   symbol,
   symbolBar,
 } from './common.js';
@@ -29,6 +31,26 @@ const computeLabel = (label: string, format: (text: string) => string) => {
     .join('\n');
 };
 
+const withMarkerAndCheckbox = (
+  marker: string,
+  checkbox: string,
+  checkboxWidth: number,
+  label: string,
+  format: (text: string) => string,
+  firstLineSuffix = '',
+) => {
+  const lines = label.split('\n');
+  const continuationPrefix = `${S_POINTER_INACTIVE} ${' '.repeat(checkboxWidth)} `;
+  if (lines.length === 1) {
+    return `${marker} ${checkbox} ${format(lines[0])}${firstLineSuffix}`;
+  }
+  const [firstLine, ...rest] = lines;
+  return [
+    `${marker} ${checkbox} ${format(firstLine)}${firstLineSuffix}`,
+    ...rest.map((line) => `${continuationPrefix}${format(line)}`),
+  ].join('\n');
+};
+
 export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
   const opt = (
     option: Option<Value>,
@@ -42,33 +64,60 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
       | 'disabled',
   ) => {
     const label = option.label ?? String(option.value);
+    const hint = option.hint ? ` ${color.gray(`(${option.hint})`)}` : '';
     if (state === 'disabled') {
-      return `${color.gray(S_CHECKBOX_INACTIVE)} ${computeLabel(label, (str) => color.strikethrough(color.gray(str)))}${
-        option.hint ? ` ${color.dim(`(${option.hint ?? 'disabled'})`)}` : ''
-      }`;
+      return withMarkerAndCheckbox(
+        color.gray(S_POINTER_INACTIVE),
+        color.gray(S_CHECKBOX_INACTIVE),
+        S_CHECKBOX_INACTIVE.length,
+        label,
+        (str) => color.strikethrough(color.gray(str)),
+        option.hint ? ` ${color.dim(`(${option.hint ?? 'disabled'})`)}` : '',
+      );
     }
     if (state === 'active') {
-      return `${color.blue(S_CHECKBOX_ACTIVE)} ${label}${
-        option.hint ? ` ${color.dim(`(${option.hint})`)}` : ''
-      }`;
+      return withMarkerAndCheckbox(
+        color.blue(S_POINTER_ACTIVE),
+        color.blue(S_CHECKBOX_ACTIVE),
+        S_CHECKBOX_ACTIVE.length,
+        label,
+        (text) => color.blue(color.bold(text)),
+        hint,
+      );
     }
     if (state === 'selected') {
-      return `${color.green(S_CHECKBOX_SELECTED)} ${computeLabel(label, color.dim)}${
-        option.hint ? ` ${color.dim(`(${option.hint})`)}` : ''
-      }`;
+      return withMarkerAndCheckbox(
+        color.dim(S_POINTER_INACTIVE),
+        color.blue(S_CHECKBOX_SELECTED),
+        S_CHECKBOX_SELECTED.length,
+        label,
+        color.dim,
+        hint,
+      );
     }
     if (state === 'cancelled') {
       return computeLabel(label, (text) => color.strikethrough(color.dim(text)));
     }
     if (state === 'active-selected') {
-      return `${color.green(S_CHECKBOX_SELECTED)} ${label}${
-        option.hint ? ` ${color.dim(`(${option.hint})`)}` : ''
-      }`;
+      return withMarkerAndCheckbox(
+        color.blue(S_POINTER_ACTIVE),
+        color.blue(S_CHECKBOX_SELECTED),
+        S_CHECKBOX_SELECTED.length,
+        label,
+        (text) => color.blue(color.bold(text)),
+        hint,
+      );
     }
     if (state === 'submitted') {
       return computeLabel(label, color.dim);
     }
-    return `${color.dim(S_CHECKBOX_INACTIVE)} ${computeLabel(label, color.dim)}`;
+    return withMarkerAndCheckbox(
+      color.dim(S_POINTER_INACTIVE),
+      color.dim(S_CHECKBOX_INACTIVE),
+      S_CHECKBOX_INACTIVE.length,
+      label,
+      color.dim,
+    );
   };
   const required = opts.required ?? true;
 
@@ -92,13 +141,23 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
       }
     },
     render() {
-      const wrappedMessage = wrapTextWithPrefix(
-        opts.output,
-        opts.message,
-        `${symbolBar(this.state)}  `,
-        `${symbol(this.state)}  `,
-      );
-      const title = `${color.gray(S_BAR)}\n${wrappedMessage}\n`;
+      const hasGuide = opts.withGuide ?? false;
+      const nestedPrefix = '  ';
+      const formatMessageLines = (message: string) => {
+        const lines = message.split('\n');
+        return lines
+          .map((line, index) => `${index === 0 ? `${symbol(this.state)} ` : nestedPrefix}${line}`)
+          .join('\n');
+      };
+      const wrappedMessage = hasGuide
+        ? wrapTextWithPrefix(
+            opts.output,
+            opts.message,
+            `${symbolBar(this.state)} `,
+            `${symbol(this.state)} `,
+          )
+        : formatMessageLines(opts.message);
+      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${wrappedMessage}\n`;
       const value = this.value ?? [];
 
       const styleOption = (option: Option<Value>, active: boolean) => {
@@ -122,12 +181,9 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
               .filter(({ value: optionValue }) => value.includes(optionValue))
               .map((option) => opt(option, 'submitted'))
               .join(color.dim(', ')) || color.dim('none');
-          const wrappedSubmitText = wrapTextWithPrefix(
-            opts.output,
-            submitText,
-            `${color.gray(S_BAR)}  `,
-          );
-          return `${title}${wrappedSubmitText}`;
+          const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
+          const wrappedSubmitText = wrapTextWithPrefix(opts.output, submitText, submitPrefix);
+          return `${title}${wrappedSubmitText}\n\n`;
         }
         case 'cancel': {
           const label = this.options
@@ -135,19 +191,24 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
             .map((option) => opt(option, 'cancelled'))
             .join(color.dim(', '));
           if (label.trim() === '') {
-            return `${title}${color.gray(S_BAR)}`;
+            return hasGuide ? `${title}${color.gray(S_BAR)}\n\n` : `${title.trimEnd()}\n\n`;
           }
-          const wrappedLabel = wrapTextWithPrefix(opts.output, label, `${color.gray(S_BAR)}  `);
-          return `${title}${wrappedLabel}\n${color.gray(S_BAR)}`;
+          const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
+          const wrappedLabel = wrapTextWithPrefix(opts.output, label, cancelPrefix);
+          return hasGuide
+            ? `${title}${wrappedLabel}\n${color.gray(S_BAR)}\n\n`
+            : `${title}${wrappedLabel}\n\n`;
         }
         case 'error': {
-          const prefix = `${color.yellow(S_BAR)}  `;
-          const footer = this.error
-            .split('\n')
-            .map((ln, i) =>
-              i === 0 ? `${color.yellow(S_BAR_END)}  ${color.yellow(ln)}` : `   ${ln}`,
-            )
-            .join('\n');
+          const prefix = hasGuide ? `${color.yellow(S_BAR)} ` : nestedPrefix;
+          const footer = hasGuide
+            ? this.error
+                .split('\n')
+                .map((ln, i) =>
+                  i === 0 ? `${color.yellow(S_BAR_END)} ${color.yellow(ln)}` : `  ${ln}`,
+                )
+                .join('\n')
+            : `${nestedPrefix}${color.yellow(this.error)}`;
           // Calculate rowPadding: title lines + footer lines (error message + trailing newline)
           const titleLineCount = title.split('\n').length;
           const footerLineCount = footer.split('\n').length + 1; // footer + trailing newline
@@ -162,10 +223,10 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
           }).join(`\n${prefix}`)}\n${footer}\n`;
         }
         default: {
-          const prefix = `${color.blue(S_BAR)}  `;
+          const prefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;
           // Calculate rowPadding: title lines + footer lines (S_BAR_END + trailing newline)
           const titleLineCount = title.split('\n').length;
-          const footerLineCount = 2; // S_BAR_END + trailing newline
+          const footerLineCount = hasGuide ? 2 : 1; // S_BAR_END + trailing newline
           return `${title}${prefix}${limitOptions({
             output: opts.output,
             options: this.options,
@@ -174,7 +235,7 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
             columnPadding: prefix.length,
             rowPadding: titleLineCount + footerLineCount,
             style: styleOption,
-          }).join(`\n${prefix}`)}\n${color.blue(S_BAR_END)}\n`;
+          }).join(`\n${prefix}`)}\n${hasGuide ? color.blue(S_BAR_END) : ''}\n`;
         }
       }
     },

@@ -11,7 +11,7 @@ import { editJsonFile } from '../../utils/json.js';
 import { templatesDir } from '../../utils/path.js';
 import type { ExecutionResult } from '../command.js';
 import { discoverTemplate } from '../discovery.js';
-import { copyDir, setPackageName } from '../utils.js';
+import { copyDir, formatDisplayTargetDir, setPackageName } from '../utils.js';
 import { runRemoteTemplateCommand } from './remote.js';
 import { type BuiltinTemplateInfo } from './types.js';
 
@@ -23,12 +23,31 @@ export async function executeMonorepoTemplate(
   templateInfo: BuiltinTemplateInfo,
   interactive: boolean,
 ): Promise<ExecutionResult> {
-  prompts.log.step('Creating Vite+ monorepo...');
   assert(templateInfo.packageName, 'packageName is required');
   assert(templateInfo.targetDir, 'targetDir is required');
 
   workspaceInfo.monorepoScope = getScopeFromPackageName(templateInfo.packageName);
   const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
+
+  // Ask user to init git repository before creation starts.
+  let initGit = true; // Default to yes
+  if (interactive) {
+    const selected = await prompts.confirm({
+      message: `Initialize git repository:`,
+      initialValue: true,
+    });
+    if (prompts.isCancel(selected)) {
+      prompts.log.info('Operation cancelled. Skipping git initialization');
+      initGit = false;
+    } else {
+      initGit = selected;
+    }
+  } else {
+    prompts.log.info(`Initializing git repository (default: yes)`);
+  }
+
+  prompts.log.info(`Target directory: ${formatDisplayTargetDir(templateInfo.targetDir)}`);
+  prompts.log.step('Creating Vite+ monorepo...');
 
   // Copy template files
   const templateDir = path.join(templatesDir, 'monorepo');
@@ -82,23 +101,6 @@ export async function executeMonorepoTemplate(
   }
 
   prompts.log.success('Monorepo template created');
-
-  // Ask user to init git repository or auto-init if --no-interactive
-  let initGit = true; // Default to yes
-  if (interactive) {
-    const selected = await prompts.confirm({
-      message: `Initialize git repository:`,
-      initialValue: true,
-    });
-    if (prompts.isCancel(selected)) {
-      prompts.log.info('Operation cancelled. Skipping git initialization');
-      initGit = false;
-    } else {
-      initGit = selected;
-    }
-  } else {
-    prompts.log.info(`Initializing git repository (default: yes)`);
-  }
 
   if (initGit) {
     const gitResult = spawn.sync('git', ['init'], {

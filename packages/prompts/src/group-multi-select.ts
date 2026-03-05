@@ -8,6 +8,8 @@ import {
   S_CHECKBOX_ACTIVE,
   S_CHECKBOX_INACTIVE,
   S_CHECKBOX_SELECTED,
+  S_POINTER_ACTIVE,
+  S_POINTER_INACTIVE,
   symbol,
 } from './common.js';
 import type { Option } from './select.js';
@@ -23,6 +25,29 @@ export interface GroupMultiSelectOptions<Value> extends CommonOptions {
 }
 export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) => {
   const { selectableGroups = true, groupSpacing = 0 } = opts;
+  const hasGuide = opts.withGuide ?? false;
+  const nestedPrefix = '  ';
+  const withMarkerAndPrefix = (
+    marker: string,
+    prefix: string,
+    prefixWidth: number,
+    label: string,
+    format: (text: string) => string,
+    firstLineSuffix = '',
+    spacingPrefix = '',
+  ) => {
+    const lines = label.split('\n');
+    const continuationPrefix = `${S_POINTER_INACTIVE} ${' '.repeat(prefixWidth)}`;
+    if (lines.length === 1) {
+      return `${spacingPrefix}${marker} ${prefix}${format(lines[0])}${firstLineSuffix}`;
+    }
+    const [firstLine, ...rest] = lines;
+    return [
+      `${spacingPrefix}${marker} ${prefix}${format(firstLine)}${firstLineSuffix}`,
+      ...rest.map((line) => `${continuationPrefix}${format(line)}`),
+    ].join('\n');
+  };
+
   const opt = (
     option: Option<Value> & { group: string | boolean },
     state:
@@ -37,46 +62,65 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
     options: (Option<Value> & { group: string | boolean })[] = [],
   ) => {
     const label = option.label ?? String(option.value);
+    const hint = option.hint ? ` ${color.gray(`(${option.hint})`)}` : '';
     const isItem = typeof option.group === 'string';
     const next = isItem && (options[options.indexOf(option) + 1] ?? { group: true });
     const isLast = isItem && next && next.group === true;
-    const prefix = isItem ? (selectableGroups ? `${isLast ? S_BAR_END : S_BAR} ` : '  ') : '';
+    const branchPrefixRaw = isItem
+      ? selectableGroups
+        ? `${isLast ? S_BAR_END : S_BAR} `
+        : '  '
+      : '';
     let spacingPrefix = '';
     if (groupSpacing > 0 && !isItem) {
-      const spacingPrefixText = `\n${color.blue(S_BAR)}`;
-      spacingPrefix = `${spacingPrefixText.repeat(groupSpacing - 1)}${spacingPrefixText}  `;
+      const spacingPrefixText = hasGuide ? `\n${color.blue(S_BAR)}` : '\n';
+      const spacingSuffix = hasGuide ? ' ' : '';
+      spacingPrefix = `${spacingPrefixText.repeat(groupSpacing - 1)}${spacingPrefixText}${spacingSuffix}`;
     }
 
-    if (state === 'active') {
-      return `${spacingPrefix}${color.dim(prefix)}${color.blue(S_CHECKBOX_ACTIVE)} ${label}${
-        option.hint ? ` ${color.dim(`(${option.hint})`)}` : ''
-      }`;
-    }
-    if (state === 'group-active') {
-      return `${spacingPrefix}${prefix}${color.blue(S_CHECKBOX_ACTIVE)} ${color.dim(label)}`;
-    }
-    if (state === 'group-active-selected') {
-      return `${spacingPrefix}${prefix}${color.green(S_CHECKBOX_SELECTED)} ${color.dim(label)}`;
-    }
-    if (state === 'selected') {
-      const selectedCheckbox = isItem || selectableGroups ? color.green(S_CHECKBOX_SELECTED) : '';
-      return `${spacingPrefix}${color.dim(prefix)}${selectedCheckbox} ${color.dim(label)}${
-        option.hint ? ` ${color.dim(`(${option.hint})`)}` : ''
-      }`;
-    }
     if (state === 'cancelled') {
       return color.strikethrough(color.dim(label));
-    }
-    if (state === 'active-selected') {
-      return `${spacingPrefix}${color.dim(prefix)}${color.green(S_CHECKBOX_SELECTED)} ${label}${
-        option.hint ? ` ${color.dim(`(${option.hint})`)}` : ''
-      }`;
     }
     if (state === 'submitted') {
       return color.dim(label);
     }
-    const unselectedCheckbox = isItem || selectableGroups ? color.dim(S_CHECKBOX_INACTIVE) : '';
-    return `${spacingPrefix}${color.dim(prefix)}${unselectedCheckbox} ${color.dim(label)}`;
+
+    const marker =
+      state === 'active' || state === 'active-selected'
+        ? color.blue(S_POINTER_ACTIVE)
+        : color.dim(S_POINTER_INACTIVE);
+    const branchPrefix = color.dim(branchPrefixRaw);
+    const hasCheckbox = isItem || selectableGroups;
+    const checkboxRaw = hasCheckbox
+      ? state === 'active' || state === 'group-active'
+        ? S_CHECKBOX_ACTIVE
+        : state === 'selected' || state === 'active-selected' || state === 'group-active-selected'
+          ? S_CHECKBOX_SELECTED
+          : S_CHECKBOX_INACTIVE
+      : '';
+    const checkbox = hasCheckbox
+      ? checkboxRaw === S_CHECKBOX_SELECTED
+        ? color.blue(checkboxRaw)
+        : checkboxRaw === S_CHECKBOX_ACTIVE
+          ? color.blue(checkboxRaw)
+          : color.dim(checkboxRaw)
+      : '';
+    const format =
+      state === 'active' || state === 'active-selected'
+        ? (text: string) => color.blue(color.bold(text))
+        : color.dim;
+    const styledPrefix = `${branchPrefix}${hasCheckbox ? `${checkbox} ` : ''}`;
+    const prefixWidth = branchPrefixRaw.length + (hasCheckbox ? checkboxRaw.length + 1 : 0);
+
+    return withMarkerAndPrefix(
+      marker,
+      styledPrefix,
+      prefixWidth,
+      label,
+      format,
+      hint,
+      spacingPrefix,
+    );
   };
   const required = opts.required ?? true;
 
@@ -101,7 +145,7 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
       }
     },
     render() {
-      const title = `${color.gray(S_BAR)}\n${symbol(this.state)}  ${opts.message}\n`;
+      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)} ${opts.message}\n`;
       const value = this.value ?? [];
 
       switch (this.state) {
@@ -109,27 +153,35 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
           const selectedOptions = this.options
             .filter(({ value: optionValue }) => value.includes(optionValue))
             .map((option) => opt(option, 'submitted'));
+          const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
           const optionsText =
-            selectedOptions.length === 0 ? '' : `  ${selectedOptions.join(color.dim(', '))}`;
-          return `${title}${color.gray(S_BAR)}${optionsText}`;
+            selectedOptions.length === 0 ? '' : selectedOptions.join(color.dim(', '));
+          return `${title}${submitPrefix}${optionsText}\n\n`;
         }
         case 'cancel': {
           const label = this.options
             .filter(({ value: optionValue }) => value.includes(optionValue))
             .map((option) => opt(option, 'cancelled'))
             .join(color.dim(', '));
-          return `${title}${color.gray(S_BAR)}  ${
-            label.trim() ? `${label}\n${color.gray(S_BAR)}` : ''
-          }`;
+          if (!label.trim()) {
+            return hasGuide ? `${title}${color.gray(S_BAR)}\n\n` : `${title.trimEnd()}\n\n`;
+          }
+          const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
+          return hasGuide
+            ? `${title}${cancelPrefix}${label}\n${color.gray(S_BAR)}\n\n`
+            : `${title}${cancelPrefix}${label}\n\n`;
         }
         case 'error': {
-          const footer = this.error
-            .split('\n')
-            .map((ln, i) =>
-              i === 0 ? `${color.yellow(S_BAR_END)}  ${color.yellow(ln)}` : `   ${ln}`,
-            )
-            .join('\n');
-          return `${title}${color.yellow(S_BAR)}  ${this.options
+          const prefix = hasGuide ? `${color.yellow(S_BAR)} ` : nestedPrefix;
+          const footer = hasGuide
+            ? this.error
+                .split('\n')
+                .map((ln, i) =>
+                  i === 0 ? `${color.yellow(S_BAR_END)} ${color.yellow(ln)}` : `  ${ln}`,
+                )
+                .join('\n')
+            : `${nestedPrefix}${color.yellow(this.error)}`;
+          return `${title}${prefix}${this.options
             .map((option, i, options) => {
               const selected =
                 value.includes(option.value) ||
@@ -150,7 +202,7 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
               }
               return opt(option, active ? 'active' : 'inactive', options);
             })
-            .join(`\n${color.yellow(S_BAR)}  `)}\n${footer}\n`;
+            .join(`\n${prefix}`)}\n${footer}\n`;
         }
         default: {
           const optionsText = this.options
@@ -180,9 +232,11 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
               const prefix = i !== 0 && !optionText.startsWith('\n') ? '  ' : '';
               return `${prefix}${optionText}`;
             })
-            .join(`\n${color.blue(S_BAR)}`);
-          const optionsPrefix = optionsText.startsWith('\n') ? '' : '  ';
-          return `${title}${color.blue(S_BAR)}${optionsPrefix}${optionsText}\n${color.blue(S_BAR_END)}\n`;
+            .join(hasGuide ? `\n${color.blue(S_BAR)}` : '\n');
+          const optionsPrefix = optionsText.startsWith('\n') ? '' : nestedPrefix;
+          const defaultPrefix = hasGuide ? color.blue(S_BAR) : '';
+          const defaultSuffix = hasGuide ? color.blue(S_BAR_END) : '';
+          return `${title}${defaultPrefix}${optionsPrefix}${optionsText}\n${defaultSuffix}\n`;
         }
       }
     },

@@ -1,19 +1,19 @@
 > vp migrate --no-interactive # migration should rewrite imports to vite-plus
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  Rewrote imports in one file
-│
-●    test/hello.ts
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+Rewrote imports in one file
+
+  test/hello.ts
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
 
 
 > cat package.json # check package.json

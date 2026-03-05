@@ -1,12 +1,13 @@
 [1]> vp migrate --no-interactive # migration should fail because npm version is not supported
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  npm@<semver> installing...
-│
-●  npm@<semver> installed
-│
-■  ✘ npm@<semver> is not supported by auto migration, please upgrade npm to >=8.3.0 first
-└  Vite+ cannot automatically migrate this project yet.
+VITE+ - The Unified Toolchain for the Web
+
+
+npm@<semver> installing...
+
+npm@<semver> installed
+
+✘ npm@<semver> is not supported by auto migration, please upgrade npm to >=8.3.0 first
+Vite+ cannot automatically migrate this project yet.
 
 
 > cat package.json # check package.json is not updated

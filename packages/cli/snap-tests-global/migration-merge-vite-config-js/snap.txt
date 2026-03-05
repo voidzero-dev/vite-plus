@@ -1,17 +1,17 @@
 > vp migrate --no-interactive # migration should merge vite.config.js and remove oxlintrc
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  ✔ Merged .oxlintrc.json into vite.config.js
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+✔ Merged .oxlintrc.json into vite.config.js
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
 
 
 > cat vite.config.js # check vite.config.js

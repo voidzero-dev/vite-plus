@@ -1,12 +1,12 @@
-import { ConfirmPrompt, settings } from '@clack/core';
+import { ConfirmPrompt } from '@clack/core';
 import color from 'picocolors';
 
 import {
   type CommonOptions,
   S_BAR,
   S_BAR_END,
-  S_RADIO_ACTIVE,
-  S_RADIO_INACTIVE,
+  S_POINTER_ACTIVE,
+  S_POINTER_INACTIVE,
   symbol,
 } from './common.js';
 
@@ -28,32 +28,39 @@ export const confirm = (opts: ConfirmOptions) => {
     output: opts.output,
     initialValue: opts.initialValue ?? true,
     render() {
-      const hasGuide = opts.withGuide ?? settings.withGuide;
-      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)}  ${opts.message}\n`;
+      const hasGuide = opts.withGuide ?? false;
+      const nestedPrefix = '  ';
+      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)} ${opts.message}\n`;
       const value = this.value ? active : inactive;
 
       switch (this.state) {
         case 'submit': {
-          const submitPrefix = hasGuide ? `${color.gray(S_BAR)}  ` : '';
-          return `${title}${submitPrefix}${color.dim(value)}`;
+          const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
+          return `${title}${submitPrefix}${color.dim(value)}\n\n`;
         }
         case 'cancel': {
-          const cancelPrefix = hasGuide ? `${color.gray(S_BAR)}  ` : '';
+          const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
           return `${title}${cancelPrefix}${color.strikethrough(
             color.dim(value),
-          )}${hasGuide ? `\n${color.gray(S_BAR)}` : ''}`;
+          )}${hasGuide ? `\n${color.gray(S_BAR)}` : ''}\n\n`;
         }
         default: {
-          const defaultPrefix = hasGuide ? `${color.blue(S_BAR)}  ` : '';
+          const defaultPrefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;
           const defaultPrefixEnd = hasGuide ? color.blue(S_BAR_END) : '';
           return `${title}${defaultPrefix}${
             this.value
-              ? `${color.green(S_RADIO_ACTIVE)} ${active}`
-              : `${color.dim(S_RADIO_INACTIVE)} ${color.dim(active)}`
-          }${opts.vertical ? (hasGuide ? `\n${color.blue(S_BAR)}  ` : '\n') : ` ${color.dim('/')} `}${
+              ? `${color.blue(S_POINTER_ACTIVE)} ${color.bold(active)}`
+              : `${color.dim(S_POINTER_INACTIVE)} ${color.dim(active)}`
+          }${
+            opts.vertical
+              ? hasGuide
+                ? `\n${color.blue(S_BAR)} `
+                : `\n${nestedPrefix}`
+              : ` ${color.dim('/')} `
+          }${
             !this.value
-              ? `${color.green(S_RADIO_ACTIVE)} ${inactive}`
-              : `${color.dim(S_RADIO_INACTIVE)} ${color.dim(inactive)}`
+              ? `${color.blue(S_POINTER_ACTIVE)} ${color.bold(inactive)}`
+              : `${color.dim(S_POINTER_INACTIVE)} ${color.dim(inactive)}`
           }\n${defaultPrefixEnd}\n`;
         }
       }

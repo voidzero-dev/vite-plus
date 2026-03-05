@@ -6,6 +6,7 @@ import { erase } from 'sisteransi';
 
 import {
   type CommonOptions,
+  completeColor,
   isCI as isCIFn,
   isTTY as isTTYFn,
   S_BAR,
@@ -56,7 +57,7 @@ export const taskLog = (opts: TaskLogOptions) => {
   const isTTY = !isCIFn() && isTTYFn(output);
 
   output.write(`${secondarySymbol}\n`);
-  output.write(`${color.green(S_STEP_SUBMIT)}  ${opts.title}\n`);
+  output.write(`${completeColor(S_STEP_SUBMIT)}  ${opts.title}\n`);
   for (let i = 0; i < spacing; i++) {
     output.write(`${secondarySymbol}\n`);
   }

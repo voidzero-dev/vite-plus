@@ -1,15 +1,15 @@
 > vp migrate foo --no-interactive # migration work with subpath
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
 
 
 > cat foo/package.json # check package.json

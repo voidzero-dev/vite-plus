@@ -42,7 +42,7 @@ import {
 } from './templates/index.js';
 import { InitialMonorepoAppDir } from './templates/monorepo.js';
 import { BuiltinTemplate, TemplateType } from './templates/types.js';
-import { formatTargetDir } from './utils.js';
+import { formatDisplayTargetDir, formatTargetDir } from './utils.js';
 
 const helpMessage = renderCliDoc({
   usage: 'vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]',
@@ -307,7 +307,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       });
     }
     const template = await prompts.select({
-      message: 'Which template would you like to use?',
+      message: '',
       options: [
         ...templates,
         {
@@ -541,7 +541,6 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
   // #region Handle monorepo template
   if (templateInfo.command === BuiltinTemplate.monorepo) {
-    prompts.log.info(`Target directory: ${accent(targetDir)}`);
     await checkProjectDirExists(path.join(workspaceInfo.rootDir, targetDir), options.interactive);
     const result = await executeMonorepoTemplate(
       workspaceInfo,
@@ -593,7 +592,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
         : selected.targetDir;
     }
     await checkProjectDirExists(targetDir, options.interactive);
-    prompts.log.info(`Target directory: ${accent(targetDir)}`);
+    prompts.log.info(`Target directory: ${accent(formatDisplayTargetDir(targetDir))}`);
     result = await executeBuiltinTemplate(workspaceInfo, {
       ...templateInfo,
       packageName,

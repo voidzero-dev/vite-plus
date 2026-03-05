@@ -1,7 +1,7 @@
 import type { State } from '@clack/core';
 import color from 'picocolors';
 
-import { unicodeOr } from './common.js';
+import { completeColor, unicodeOr } from './common.js';
 import { type SpinnerOptions, type SpinnerResult, spinner } from './spinner.js';
 
 const S_PROGRESS_CHAR: Record<NonNullable<ProgressOptions['style']>, string> = {
@@ -42,7 +42,7 @@ export function progress({
       case 'cancel':
         return color.red;
       case 'submit':
-        return color.green;
+        return completeColor;
       default:
         return color.magenta;
     }

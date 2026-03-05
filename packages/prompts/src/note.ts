@@ -1,13 +1,14 @@
 import process from 'node:process';
 import type { Writable } from 'node:stream';
 
-import { getColumns, settings } from '@clack/core';
+import { getColumns } from '@clack/core';
 import stringWidth from 'fast-string-width';
 import { type Options as WrapAnsiOptions, wrapAnsi } from 'fast-wrap-ansi';
 import color from 'picocolors';
 
 import {
   type CommonOptions,
+  completeColor,
   S_BAR,
   S_BAR_H,
   S_CONNECT_LEFT,
@@ -38,7 +39,7 @@ const wrapWithFormat = (message: string, width: number, format: FormatFn): strin
 
 export const note = (message = '', title = '', opts?: NoteOptions) => {
   const output: Writable = opts?.output ?? process.stdout;
-  const hasGuide = opts?.withGuide ?? settings.withGuide;
+  const hasGuide = opts?.withGuide ?? false;
   const format = opts?.format ?? defaultNoteFormatter;
   const wrapMsg = wrapWithFormat(message, getColumns(output) - 6, format);
   const lines = ['', ...wrapMsg.split('\n').map(format), ''];
@@ -51,15 +52,14 @@ export const note = (message = '', title = '', opts?: NoteOptions) => {
       }, 0),
       titleLen,
     ) + 2;
+  const lineSymbol = hasGuide ? color.gray(S_BAR) : ' ';
   const msg = lines
-    .map(
-      (ln) => `${color.gray(S_BAR)}  ${ln}${' '.repeat(len - stringWidth(ln))}${color.gray(S_BAR)}`,
-    )
+    .map((ln) => `${lineSymbol}  ${ln}${' '.repeat(len - stringWidth(ln))}${lineSymbol}`)
     .join('\n');
   const leadingBorder = hasGuide ? `${color.gray(S_BAR)}\n` : '';
   const bottomLeft = hasGuide ? S_CONNECT_LEFT : S_CORNER_BOTTOM_LEFT;
   output.write(
-    `${leadingBorder}${color.green(S_STEP_SUBMIT)}  ${color.reset(title)} ${color.gray(
+    `${leadingBorder}${completeColor(S_STEP_SUBMIT)}  ${color.reset(title)} ${color.gray(
       S_BAR_H.repeat(Math.max(len - titleLen - 1, 1)) + S_CORNER_TOP_RIGHT,
     )}\n${msg}\n${color.gray(bottomLeft + S_BAR_H.repeat(len + 2) + S_CORNER_BOTTOM_RIGHT)}\n`,
   );

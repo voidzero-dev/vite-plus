@@ -1,17 +1,17 @@
 > vp migrate --no-interactive # migration should rewrite imports to vite-plus
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  ✔ Merged tsdown.config.json into vite.config.ts
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+✔ Merged tsdown.config.json into vite.config.ts
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
 
 
 > cat tsdown.config.json && exit 1 || true # check tsdown.config.json should be removed
@@ -57,9 +57,9 @@ export default defineConfig({
 }
 
 > vp migrate --no-interactive # run migration again to check if it is idempotent
-┌  VITE+ - The Unified Toolchain for the Web
-│
-└  This project is already using Vite+! Happy coding!
+VITE+ - The Unified Toolchain for the Web
+
+This project is already using Vite+! Happy coding!
 
 
 > cat vite.config.ts # check vite.config.ts

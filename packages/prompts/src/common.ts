@@ -10,7 +10,9 @@ export const isTTY = (output: Writable): boolean => {
   return (output as Writable & { isTTY?: boolean }).isTTY === true;
 };
 export const unicodeOr = (c: string, fallback: string) => (unicode ? c : fallback);
-export const S_STEP_ACTIVE = unicodeOr('◆', '*');
+export const S_POINTER_ACTIVE = unicodeOr('›', '>');
+export const S_POINTER_INACTIVE = ' ';
+export const S_STEP_ACTIVE = S_POINTER_ACTIVE;
 export const S_STEP_CANCEL = unicodeOr('■', 'x');
 export const S_STEP_ERROR = unicodeOr('▲', 'x');
 export const S_STEP_SUBMIT = unicodeOr('◇', 'o');
@@ -21,8 +23,8 @@ export const S_BAR_END = unicodeOr('└', '—');
 export const S_BAR_START_RIGHT = unicodeOr('┐', 'T');
 export const S_BAR_END_RIGHT = unicodeOr('┘', '—');
 
-export const S_RADIO_ACTIVE = unicodeOr('●', '>');
-export const S_RADIO_INACTIVE = unicodeOr('○', ' ');
+export const S_RADIO_ACTIVE = S_POINTER_ACTIVE;
+export const S_RADIO_INACTIVE = S_POINTER_INACTIVE;
 export const S_CHECKBOX_ACTIVE = unicodeOr('◻', '[•]');
 export const S_CHECKBOX_SELECTED = unicodeOr('◼', '[+]');
 export const S_CHECKBOX_INACTIVE = unicodeOr('◻', '[ ]');
@@ -40,6 +42,8 @@ export const S_SUCCESS = unicodeOr('◆', '*');
 export const S_WARN = unicodeOr('▲', '!');
 export const S_ERROR = unicodeOr('■', 'x');
 
+export const completeColor = (value: string) => color.gray(value);
+
 export const symbol = (state: State) => {
   switch (state) {
     case 'initial':
@@ -50,7 +54,7 @@ export const symbol = (state: State) => {
     case 'error':
       return color.yellow(S_STEP_ERROR);
     case 'submit':
-      return color.green(S_STEP_SUBMIT);
+      return completeColor(S_STEP_SUBMIT);
   }
 };
 
@@ -64,7 +68,7 @@ export const symbolBar = (state: State) => {
     case 'error':
       return color.yellow(S_BAR);
     case 'submit':
-      return color.green(S_BAR);
+      return completeColor(S_BAR);
   }
 };
 

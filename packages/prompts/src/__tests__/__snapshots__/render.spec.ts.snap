@@ -1,0 +1,66 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`prompt renderers > renders autocomplete multiselect with pointer markers plus checkboxes 1`] = `
+"› Search and select
+  Search: type to filter
+    ◻ Alpha
+      Second line
+  › ◼ Beta
+  ↑/↓ to navigate • Space/Tab: select • Enter: confirm • Type: to search"
+`;
+
+exports[`prompt renderers > renders autocomplete with pointer markers and focused hint 1`] = `
+"› Search options
+  Search: type to filter
+  › Alpha (recommended)
+    Second line
+    Beta
+  ↑/↓ to select • Enter: confirm • Type: to search
+"
+`;
+
+exports[`prompt renderers > renders confirm and select-key in pointer style 1`] = `
+"› Proceed?
+  › Yes /   No
+
+
+---
+› Pick shortcut
+  ›  a  Add item
+     r  Remove item
+
+"
+`;
+
+exports[`prompt renderers > renders grouped multiselect with marker, tree branch, and checkbox alignment 1`] = `
+"› Grouped choices
+
+  ◻ Fruits
+    │ ◻ Apple (fresh)
+      Green
+  › └ ◼ Banana
+
+  ◻ Tools
+    └ ◻ Hammer
+
+"
+`;
+
+exports[`prompt renderers > renders multiselect with cursor marker plus checkbox state 1`] = `
+"› Choose multiple
+    ◻ Alpha
+      Second line
+  › ◼ Beta
+    ◻ Gamma
+
+"
+`;
+
+exports[`prompt renderers > renders select with pointer markers and aligned multiline labels 1`] = `
+"› Choose an option
+  › Alpha: recommended
+    Second line
+    Beta
+
+"
+`;

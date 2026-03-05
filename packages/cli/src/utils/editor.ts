@@ -51,20 +51,22 @@ export async function selectEditor({
   }
 
   if (interactive && !editor) {
+    const editorOptions = EDITORS.map((option) => ({
+      label: option.label,
+      value: option.id,
+      hint: option.targetDir,
+    }));
+    const noneOption = {
+      label: 'None',
+      value: null,
+      hint: 'Skip writing editor configs',
+    };
     const selectedEditor = await prompts.select({
       message: 'Which editor are you using?',
-      options: [
-        {
-          label: 'None',
-          value: null,
-          hint: 'Skip writing editor configs',
-        },
-        ...EDITORS.map((option) => ({
-          label: option.label,
-          value: option.id,
-          hint: option.targetDir,
-        })),
-      ],
+      options:
+        editorOptions.length > 0
+          ? [editorOptions[0], noneOption, ...editorOptions.slice(1)]
+          : [noneOption],
       initialValue: 'vscode',
     });
 

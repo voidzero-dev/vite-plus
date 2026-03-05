@@ -104,3 +104,19 @@ export function setPackageName(projectDir: string, packageName: string) {
     return pkg;
   });
 }
+
+export function formatDisplayTargetDir(targetDir: string) {
+  const normalized = targetDir.split(path.sep).join('/');
+  if (normalized === '' || normalized === '.') {
+    return './';
+  }
+  if (
+    normalized.startsWith('./') ||
+    normalized.startsWith('../') ||
+    normalized.startsWith('/') ||
+    normalized.startsWith('~')
+  ) {
+    return normalized;
+  }
+  return `./${normalized}`;
+}

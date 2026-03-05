@@ -28,19 +28,19 @@ Examples:
 
 
 > vp migrate --no-interactive # migration work with lintstagedrc.json
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  Using default package manager: pnpm
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  ✔ Rewrote lint-staged config in .lintstagedrc.json
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+✔ Rewrote lint-staged config in .lintstagedrc.json
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
 
 
 > cat .lintstagedrc.json # check lintstagedrc.json

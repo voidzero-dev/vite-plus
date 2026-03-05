@@ -1,25 +1,25 @@
 > vp migrate --no-interactive # migration should merge vite.config.ts and remove oxlintrc and oxfmtrc
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  pnpm@<semver> installing...
-│
-●  pnpm@<semver> installed
-│
-◆  ✔ Merged .oxlintrc.json into vite.config.ts
-│
-◆  ✔ Merged .oxfmtrc.json into vite.config.ts
-│
-◆  ✔ Created vite.config.ts in packages/only-oxlint/vite.config.ts
-│
-◆  ✔ Merged packages/only-oxlint/.oxlintrc.json into packages/only-oxlint/vite.config.ts
-│
-◆  Rewrote imports in one file
-│
-●    vite.config.ts
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+VITE+ - The Unified Toolchain for the Web
+
+
+pnpm@<semver> installing...
+
+pnpm@<semver> installed
+
+✔ Merged .oxlintrc.json into vite.config.ts
+
+✔ Merged .oxfmtrc.json into vite.config.ts
+
+✔ Created vite.config.ts in packages/only-oxlint/vite.config.ts
+
+✔ Merged packages/only-oxlint/.oxlintrc.json into packages/only-oxlint/vite.config.ts
+
+Rewrote imports in one file
+
+  vite.config.ts
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
 
 
 > cat vite.config.ts # check vite.config.ts

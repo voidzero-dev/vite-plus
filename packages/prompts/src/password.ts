@@ -1,4 +1,4 @@
-import { PasswordPrompt, settings } from '@clack/core';
+import { PasswordPrompt } from '@clack/core';
 import color from 'picocolors';
 
 import { type CommonOptions, S_BAR, S_BAR_END, S_PASSWORD_MASK, symbol } from './common.js';
@@ -17,15 +17,16 @@ export const password = (opts: PasswordOptions) => {
     input: opts.input,
     output: opts.output,
     render() {
-      const hasGuide = opts.withGuide ?? settings.withGuide;
-      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)}  ${opts.message}\n`;
+      const hasGuide = opts.withGuide ?? false;
+      const nestedPrefix = '  ';
+      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)} ${opts.message}\n`;
       const userInput = this.userInputWithCursor;
       const masked = this.masked;
 
       switch (this.state) {
         case 'error': {
-          const errorPrefix = hasGuide ? `${color.yellow(S_BAR)}  ` : '';
-          const errorPrefixEnd = hasGuide ? `${color.yellow(S_BAR_END)}  ` : '';
+          const errorPrefix = hasGuide ? `${color.yellow(S_BAR)} ` : nestedPrefix;
+          const errorPrefixEnd = hasGuide ? `${color.yellow(S_BAR_END)} ` : '';
           const maskedText = masked ?? '';
           if (opts.clearOnError) {
             this.clear();
@@ -33,19 +34,19 @@ export const password = (opts: PasswordOptions) => {
           return `${title.trim()}\n${errorPrefix}${maskedText}\n${errorPrefixEnd}${color.yellow(this.error)}\n`;
         }
         case 'submit': {
-          const submitPrefix = hasGuide ? `${color.gray(S_BAR)}  ` : '';
+          const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
           const maskedText = masked ? color.dim(masked) : '';
-          return `${title}${submitPrefix}${maskedText}`;
+          return `${title}${submitPrefix}${maskedText}\n\n`;
         }
         case 'cancel': {
-          const cancelPrefix = hasGuide ? `${color.gray(S_BAR)}  ` : '';
+          const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
           const maskedText = masked ? color.strikethrough(color.dim(masked)) : '';
           return `${title}${cancelPrefix}${maskedText}${
             masked && hasGuide ? `\n${color.gray(S_BAR)}` : ''
-          }`;
+          }\n\n`;
         }
         default: {
-          const defaultPrefix = hasGuide ? `${color.blue(S_BAR)}  ` : '';
+          const defaultPrefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;
           const defaultPrefixEnd = hasGuide ? color.blue(S_BAR_END) : '';
           return `${title}${defaultPrefix}${userInput}\n${defaultPrefixEnd}\n`;
         }

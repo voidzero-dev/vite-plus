@@ -150,7 +150,7 @@ async function main() {
         '- Inspect workspace and package manager',
         `- Run ${accent('vp install')} to prepare dependencies`,
         '- Rewrite configs and dependencies for Vite+',
-      ].join('\n'),
+      ].join('\n') + '\n',
     );
     const approved = await prompts.confirm({
       message: 'Migrate this project to Vite+?',

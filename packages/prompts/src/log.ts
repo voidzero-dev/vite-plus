@@ -1,4 +1,3 @@
-import { settings } from '@clack/core';
 import color from 'picocolors';
 
 import {
@@ -9,6 +8,7 @@ import {
   S_STEP_SUBMIT,
   S_SUCCESS,
   S_WARN,
+  completeColor,
 } from './common.js';
 
 export interface LogMessageOptions extends CommonOptions {
@@ -29,7 +29,7 @@ export const log = {
     }: LogMessageOptions = {},
   ) => {
     const parts: string[] = [];
-    const hasGuide = withGuide ?? settings.withGuide;
+    const hasGuide = withGuide ?? false;
     const spacingString = !hasGuide ? '' : secondarySymbol;
     const prefix = !hasGuide ? '' : `${symbol}  `;
     const secondaryPrefix = !hasGuide ? '' : `${secondarySymbol}  `;
@@ -60,10 +60,10 @@ export const log = {
     log.message(message, { ...opts, symbol: color.blue(S_INFO) });
   },
   success: (message: string, opts?: LogMessageOptions) => {
-    log.message(message, { ...opts, symbol: color.green(S_SUCCESS) });
+    log.message(message, { ...opts, symbol: completeColor(S_SUCCESS) });
   },
   step: (message: string, opts?: LogMessageOptions) => {
-    log.message(message, { ...opts, symbol: color.green(S_STEP_SUBMIT) });
+    log.message(message, { ...opts, symbol: completeColor(S_STEP_SUBMIT) });
   },
   warn: (message: string, opts?: LogMessageOptions) => {
     log.message(message, { ...opts, symbol: color.yellow(S_WARN) });

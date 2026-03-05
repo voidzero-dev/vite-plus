@@ -1,17 +1,17 @@
 > vp migrate --no-interactive # migration should check each package's peerDependencies
-┌  VITE+ - The Unified Toolchain for the Web
-│
-●  pnpm@latest installing...
-│
-●  pnpm@<semver> installed
-│
-◆  Rewrote imports in one file
-│
-●    packages/vite-plugin/src/index.ts
-│
-◆  Wrote agent instructions to AGENTS.md
-│
-└  ✔ Migration completed!
+VITE+ - The Unified Toolchain for the Web
+
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+Rewrote imports in one file
+
+  packages/vite-plugin/src/index.ts
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
 
 
 > cat packages/vite-plugin/src/index.ts # vite-plugin has vite in peerDeps: vite NOT rewritten, vitest rewritten

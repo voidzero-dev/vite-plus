@@ -5,6 +5,7 @@ import { cursor, erase } from 'sisteransi';
 
 import {
   type CommonOptions,
+  completeColor,
   isCI as isCIFn,
   S_BAR,
   S_STEP_CANCEL,
@@ -132,7 +133,7 @@ export const spinner = ({
     output.write(erase.down());
   };
 
-  const hasGuide = opts.withGuide ?? settings.withGuide;
+  const hasGuide = opts.withGuide ?? false;
 
   const start = (msg = ''): void => {
     isSpinnerActive = true;
@@ -184,16 +185,16 @@ export const spinner = ({
     clearPrevMessage();
     const step =
       code === 0
-        ? color.green(S_STEP_SUBMIT)
+        ? completeColor(S_STEP_SUBMIT)
         : code === 1
           ? color.red(S_STEP_CANCEL)
           : color.red(S_STEP_ERROR);
     _message = msg ?? _message;
     if (!silent) {
       if (indicator === 'timer') {
-        output.write(`${step}  ${_message} ${formatTimer(_origin)}\n`);
+        output.write(`${step} ${_message} ${formatTimer(_origin)}\n\n`);
       } else {
-        output.write(`${step}  ${_message}\n`);
+        output.write(`${step} ${_message}\n\n`);
       }
     }
     clearHooks();
@@ -203,9 +204,6 @@ export const spinner = ({
   const stop = (msg = ''): void => _stop(msg, 0);
   const cancel = (msg = ''): void => _stop(msg, 1);
   const error = (msg = ''): void => _stop(msg, 2);
-  // TODO (43081j): this will leave the initial S_BAR since we purposely
-  // don't erase that in `clearPrevMessage`. In future, we may want to treat
-  // `clear` as a special case and remove the bar too.
   const clear = (): void => _stop('', 0, true);
 
   const message = (msg = ''): void => {

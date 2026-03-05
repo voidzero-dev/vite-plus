@@ -1,4 +1,4 @@
-import { settings, TextPrompt } from '@clack/core';
+import { TextPrompt } from '@clack/core';
 import color from 'picocolors';
 
 import { type CommonOptions, S_BAR, S_BAR_END, symbol } from './common.js';
@@ -21,9 +21,9 @@ export const text = (opts: TextOptions) => {
     signal: opts.signal,
     input: opts.input,
     render() {
-      const hasGuide = opts?.withGuide ?? settings.withGuide;
-      const titlePrefix = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)}  `;
-      const title = `${titlePrefix}${opts.message}\n`;
+      const hasGuide = opts?.withGuide ?? false;
+      const nestedPrefix = '  ';
+      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)} ${opts.message}\n`;
       const placeholder = opts.placeholder
         ? color.inverse(opts.placeholder[0]) + color.dim(opts.placeholder.slice(1))
         : color.inverse(color.hidden('_'));
@@ -32,23 +32,23 @@ export const text = (opts: TextOptions) => {
 
       switch (this.state) {
         case 'error': {
-          const errorText = this.error ? `  ${color.yellow(this.error)}` : '';
-          const errorPrefix = hasGuide ? `${color.yellow(S_BAR)}  ` : '';
+          const errorText = this.error ? ` ${color.yellow(this.error)}` : '';
+          const errorPrefix = hasGuide ? `${color.yellow(S_BAR)} ` : nestedPrefix;
           const errorPrefixEnd = hasGuide ? color.yellow(S_BAR_END) : '';
           return `${title.trim()}\n${errorPrefix}${userInput}\n${errorPrefixEnd}${errorText}\n`;
         }
         case 'submit': {
-          const valueText = value ? `  ${color.dim(value)}` : '';
-          const submitPrefix = hasGuide ? color.gray(S_BAR) : '';
-          return `${title}${submitPrefix}${valueText}`;
+          const valueText = value ? color.dim(value) : '';
+          const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
+          return `${title}${submitPrefix}${valueText}\n\n`;
         }
         case 'cancel': {
-          const valueText = value ? `  ${color.strikethrough(color.dim(value))}` : '';
-          const cancelPrefix = hasGuide ? color.gray(S_BAR) : '';
-          return `${title}${cancelPrefix}${valueText}${value.trim() ? `\n${cancelPrefix}` : ''}`;
+          const valueText = value ? color.strikethrough(color.dim(value)) : '';
+          const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
+          return `${title}${cancelPrefix}${valueText}${value.trim() ? `\n${cancelPrefix}` : ''}\n\n`;
         }
         default: {
-          const defaultPrefix = hasGuide ? `${color.blue(S_BAR)}  ` : '';
+          const defaultPrefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;
           const defaultPrefixEnd = hasGuide ? color.blue(S_BAR_END) : '';
           return `${title}${defaultPrefix}${userInput}\n${defaultPrefixEnd}\n`;
         }
