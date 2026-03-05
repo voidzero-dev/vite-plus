@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const HOOKS = [
@@ -78,14 +78,18 @@ export function install(dir = '.vite-hooks'): InstallResult {
     return { message: ".git can't be found", isError: false };
   }
   let gitRoot = topResult.stdout.toString().trim();
-  // On Windows, git returns MSYS-style paths (e.g. /d/a/repo).
-  // Convert to native Windows paths (e.g. D:/a/repo) so path.relative() works.
-  if (process.platform === 'win32' && /^\/[a-zA-Z]\//.test(gitRoot)) {
-    gitRoot = gitRoot[1].toUpperCase() + ':' + gitRoot.slice(2);
+  if (process.platform === 'win32') {
+    // Convert MSYS-style paths (e.g. /d/a/repo) to native Windows paths (e.g. D:/a/repo)
+    if (/^\/[a-zA-Z]\//.test(gitRoot)) {
+      gitRoot = gitRoot[1].toUpperCase() + ':' + gitRoot.slice(2);
+    }
+    // Resolve 8.3 short names (e.g. RUNNER~1 vs runner) for consistent path comparison
+    gitRoot = realpathSync(gitRoot);
   }
 
   const internal = (x = '') => join(dir, '_', x);
-  const rel = relative(gitRoot, process.cwd());
+  const cwd = process.platform === 'win32' ? realpathSync(process.cwd()) : process.cwd();
+  const rel = relative(gitRoot, cwd);
   const target = rel ? `${rel}/${dir}/_` : `${dir}/_`;
   const checkResult = spawnSync('git', ['config', '--local', 'core.hooksPath']);
   const existingHooksPath = checkResult.status === 0 ? checkResult.stdout?.toString().trim() : '';
