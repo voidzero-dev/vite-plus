@@ -12,6 +12,9 @@ use crossterm::{
     style::{Attribute, Print, ResetColor, SetAttribute, SetForegroundColor},
     terminal::{self, ClearType},
 };
+use vite_path::AbsolutePath;
+
+use crate::commands::has_vite_plus_dependency;
 
 const NEWLINE: &str = "\r\n";
 const SELECTED_COLOR: crossterm::style::Color = crossterm::style::Color::Blue;
@@ -119,12 +122,16 @@ const CI_ENV_VARS: &[&str] = &[
     "TF_BUILD",
 ];
 
-pub fn pick_top_level_command_if_interactive() -> io::Result<TopLevelCommandPick> {
+pub fn pick_top_level_command_if_interactive(
+    cwd: &AbsolutePath,
+) -> io::Result<TopLevelCommandPick> {
     if !should_enable_picker() {
         return Ok(TopLevelCommandPick::Skipped);
     }
 
-    Ok(match run_picker()? {
+    let command_order = default_command_order(has_vite_plus_dependency(cwd));
+
+    Ok(match run_picker(&command_order)? {
         Some(selection) => TopLevelCommandPick::Selected(selection),
         None => TopLevelCommandPick::Cancelled,
     })
@@ -141,7 +148,7 @@ fn is_ci_environment() -> bool {
     CI_ENV_VARS.iter().any(|key| std::env::var_os(key).is_some())
 }
 
-fn run_picker() -> io::Result<Option<PickedCommand>> {
+fn run_picker(command_order: &[usize]) -> io::Result<Option<PickedCommand>> {
     let mut stdout = io::stdout();
     let mut selected_position = 0usize;
     let mut viewport_start = 0usize;
@@ -151,7 +158,7 @@ fn run_picker() -> io::Result<Option<PickedCommand>> {
     execute!(stdout, cursor::Hide)?;
 
     let pick_result = loop {
-        let filtered_indices = filtered_command_indices(&query);
+        let filtered_indices = filtered_command_indices(&query, command_order);
         if filtered_indices.is_empty() {
             selected_position = 0;
             viewport_start = 0;
@@ -468,19 +475,42 @@ fn selected_command_parts(
     (selected_label, Some(truncate_line(summary, summary_width)))
 }
 
-fn filtered_command_indices(query: &str) -> Vec<usize> {
+fn default_command_order(prioritize_run: bool) -> Vec<usize> {
+    let indices = (0..COMMANDS.len()).collect::<Vec<_>>();
+    if !prioritize_run {
+        return indices;
+    }
+
+    let migrate_index = COMMANDS
+        .iter()
+        .position(|command| command.command == "migrate")
+        .expect("migrate command should exist");
+    let run_index = COMMANDS
+        .iter()
+        .position(|command| command.command == "run")
+        .expect("run command should exist");
+
+    let mut ordered = Vec::with_capacity(indices.len());
+    ordered.push(run_index);
+    ordered
+        .extend(indices.into_iter().filter(|index| *index != run_index && *index != migrate_index));
+    ordered
+}
+
+fn filtered_command_indices(query: &str, command_order: &[usize]) -> Vec<usize> {
     let query = query.trim();
     if query.is_empty() {
-        return (0..COMMANDS.len()).collect();
+        return command_order.to_vec();
     }
 
     let query = query.to_ascii_lowercase();
-    let starts_with_matches = COMMANDS
+    let starts_with_matches = command_order
         .iter()
-        .enumerate()
-        .filter_map(|(index, command)| {
+        .copied()
+        .filter(|index| {
+            let command = &COMMANDS[*index];
             let command_name = command.command.to_ascii_lowercase();
-            command_name.starts_with(&query).then_some(index)
+            command_name.starts_with(&query)
         })
         .collect::<Vec<_>>();
 
@@ -488,12 +518,13 @@ fn filtered_command_indices(query: &str) -> Vec<usize> {
         return starts_with_matches;
     }
 
-    COMMANDS
+    command_order
         .iter()
-        .enumerate()
-        .filter_map(|(index, command)| {
+        .copied()
+        .filter(|index| {
+            let command = &COMMANDS[*index];
             let command_name = command.command.to_ascii_lowercase();
-            command_name.contains(&query).then_some(index)
+            command_name.contains(&query)
         })
         .collect::<Vec<_>>()
 }
@@ -501,8 +532,8 @@ fn filtered_command_indices(query: &str) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
     use super::{
-        COMMANDS, align_viewport, compute_viewport_size, filtered_command_indices,
-        selected_command_parts,
+        COMMANDS, align_viewport, compute_viewport_size, default_command_order,
+        filtered_command_indices, selected_command_parts,
     };
 
     #[test]
@@ -542,26 +573,49 @@ mod tests {
 
     #[test]
     fn filtering_is_case_insensitive_and_returns_matching_commands_only() {
-        let run = filtered_command_indices("Ru");
+        let order = default_command_order(false);
+        let run = filtered_command_indices("Ru", &order);
         assert_eq!(run.len(), 1);
         assert_eq!(COMMANDS[run[0]].command, "run");
 
-        let build = filtered_command_indices("b");
+        let build = filtered_command_indices("b", &order);
         let build_commands = build.iter().map(|index| COMMANDS[*index].command).collect::<Vec<_>>();
         assert!(build_commands.contains(&"build"));
     }
 
     #[test]
     fn filtering_with_no_matches_returns_empty() {
-        let no_match = filtered_command_indices("xyz123");
+        let order = default_command_order(false);
+        let no_match = filtered_command_indices("xyz123", &order);
         assert!(no_match.is_empty());
     }
 
     #[test]
     fn filtering_prefers_prefix_matches() {
-        let help = filtered_command_indices("he");
+        let order = default_command_order(false);
+        let help = filtered_command_indices("he", &order);
         assert_eq!(help.len(), 1);
         assert_eq!(COMMANDS[help[0]].command, "help");
+    }
+
+    #[test]
+    fn default_order_puts_create_first_for_non_vite_plus_projects() {
+        let order = default_command_order(false);
+        assert_eq!(COMMANDS[order[0]].command, "create");
+    }
+
+    #[test]
+    fn default_order_puts_run_first_for_vite_plus_projects() {
+        let order = default_command_order(true);
+        assert_eq!(COMMANDS[order[0]].command, "run");
+    }
+
+    #[test]
+    fn default_order_hides_migrate_for_vite_plus_projects() {
+        let order = default_command_order(true);
+        let ordered_commands =
+            order.iter().map(|index| COMMANDS[*index].command).collect::<Vec<_>>();
+        assert!(!ordered_commands.contains(&"migrate"));
     }
 
     #[test]

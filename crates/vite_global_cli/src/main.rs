@@ -248,7 +248,7 @@ async fn main() -> ExitCode {
     };
 
     if args.len() == 1 {
-        match command_picker::pick_top_level_command_if_interactive() {
+        match command_picker::pick_top_level_command_if_interactive(&cwd) {
             Ok(command_picker::TopLevelCommandPick::Selected(selection)) => {
                 args.push(selection.command.to_string());
                 if selection.append_help {
