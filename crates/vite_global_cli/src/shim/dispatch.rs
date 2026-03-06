@@ -60,6 +60,10 @@ fn parse_npm_global_command(args: &[String], subcommands: &[&str]) -> Option<Npm
     let mut skip_next = false;
     let mut prefix_next = false;
     let mut explicit_prefix = None;
+    // The npm subcommand must be the first positional (non-flag) arg.
+    // Once we see a positional that isn't a recognized subcommand, no later
+    // positional can be the subcommand (e.g. `npm run install -g` → not install).
+    let mut seen_positional = false;
 
     for arg in args {
         // Capture the value after --prefix
@@ -76,11 +80,6 @@ fn parse_npm_global_command(args: &[String], subcommands: &[&str]) -> Option<Npm
 
         if arg == "-g" || arg == "--global" {
             has_global = true;
-            continue;
-        }
-
-        if subcommands.contains(&arg.as_str()) && !has_subcommand {
-            has_subcommand = true;
             continue;
         }
 
@@ -104,6 +103,14 @@ fn parse_npm_global_command(args: &[String], subcommands: &[&str]) -> Option<Npm
         if arg.starts_with('-') {
             continue;
         }
+
+        // Subcommand must be the first positional arg
+        if !seen_positional && subcommands.contains(&arg.as_str()) && !has_subcommand {
+            has_subcommand = true;
+            seen_positional = true;
+            continue;
+        }
+        seen_positional = true;
 
         // This is a positional arg (package spec)
         packages.push(arg.clone());
@@ -259,13 +266,24 @@ fn check_npm_global_install_result(
                         // Managed by vp install -g — warn about the conflict
                         managed_conflicts.push((bin_name, config.package.clone()));
                     } else if config.source == BinSource::Npm && config.package != package_name {
-                        // Link exists from a different npm package — update ownership
-                        let _ = BinConfig::new_npm(
-                            bin_name.to_string(),
-                            package_name.clone(),
-                            node_version.to_string(),
-                        )
-                        .save_sync();
+                        // Link exists from a different npm package — recreate link for new owner.
+                        // The old symlink points at the previous package's binary; we must
+                        // replace it so it resolves to the new package's binary in npm's bin dir.
+                        #[cfg(unix)]
+                        let source_path = npm_bin_dir.join(&bin_name);
+                        #[cfg(windows)]
+                        let source_path = npm_bin_dir.join(vite_str::format!("{bin_name}.cmd"));
+
+                        if source_path.as_path().exists() {
+                            let _ = std::fs::remove_file(shim_path.as_path());
+                            create_bin_link(
+                                &bin_dir,
+                                &bin_name,
+                                &source_path,
+                                &package_name,
+                                node_version,
+                            );
+                        }
                     }
                 }
                 continue;
@@ -367,6 +385,22 @@ fn extract_bin_names(package_json: &serde_json::Value) -> Vec<String> {
     bins
 }
 
+/// Extract the relative path for a specific bin name from a package.json "bin" field.
+fn extract_bin_path(package_json: &serde_json::Value, bin_name: &str) -> Option<String> {
+    match package_json.get("bin")? {
+        serde_json::Value::String(path) => {
+            // Single binary — matches if the package name's last segment equals bin_name
+            let pkg_name = package_json["name"].as_str()?;
+            let expected = pkg_name.split('/').last().unwrap_or(pkg_name);
+            if expected == bin_name { Some(path.clone()) } else { None }
+        }
+        serde_json::Value::Object(map) => {
+            map.get(bin_name).and_then(|v| v.as_str()).map(str::to_string)
+        }
+        _ => None,
+    }
+}
+
 /// Create a bin link for a binary and record it via BinConfig.
 fn create_bin_link(
     bin_dir: &AbsolutePath,
@@ -432,8 +466,16 @@ fn create_bin_link(
 /// Each entry is `(bin_name, package_name)`. We only remove a link if its BinConfig
 /// has `source: Npm` AND `package` matches the package being uninstalled. This prevents
 /// removing a link that was overwritten by a later install of a different package.
+///
+/// When a bin is owned by a **different** npm package (not being uninstalled), npm may
+/// still delete its binary from `npm_bin_dir`, leaving our symlink dangling. In that
+/// case we repair the link by pointing directly at the surviving package's binary.
 #[allow(clippy::disallowed_types)]
-fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)]) {
+fn remove_npm_global_uninstall_links(
+    bin_entries: &[(String, String)],
+    npm_prefix: &AbsolutePath,
+    node_dir: &AbsolutePath,
+) {
     let Ok(bin_dir) = config::get_bin_dir() else { return };
 
     for (bin_name, package_name) in bin_entries {
@@ -442,36 +484,69 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)]) {
             continue;
         }
 
-        // Only remove if this link was npm-created AND owned by the package being uninstalled
-        if !matches!(
-            BinConfig::load_sync(bin_name),
-            Ok(Some(ref c)) if c.source == BinSource::Npm && c.package == *package_name
-        ) {
-            continue;
-        }
+        let config = match BinConfig::load_sync(bin_name) {
+            Ok(Some(c)) if c.source == BinSource::Npm => c,
+            _ => continue,
+        };
 
-        let link_path = bin_dir.join(bin_name);
-        if std::fs::symlink_metadata(link_path.as_path()).is_ok() {
-            if std::fs::remove_file(link_path.as_path()).is_ok() {
-                output::raw(&vite_str::format!(
-                    "Removed link '{bin_name}' from {}",
-                    link_path.as_path().display()
-                ));
+        if config.package == *package_name {
+            // Owned by the package being uninstalled — remove the link
+            let link_path = bin_dir.join(bin_name);
+            if std::fs::symlink_metadata(link_path.as_path()).is_ok() {
+                if std::fs::remove_file(link_path.as_path()).is_ok() {
+                    output::raw(&vite_str::format!(
+                        "Removed link '{bin_name}' from {}",
+                        link_path.as_path().display()
+                    ));
+                }
             }
-        }
 
-        // Clean up the BinConfig
-        let _ = BinConfig::delete_sync(bin_name);
+            // Clean up the BinConfig
+            let _ = BinConfig::delete_sync(bin_name);
 
-        // Also remove .cmd on Windows
-        #[cfg(windows)]
-        {
-            let cmd_path = bin_dir.join(vite_str::format!("{bin_name}.cmd"));
-            if cmd_path.as_path().exists() {
-                let _ = std::fs::remove_file(cmd_path.as_path());
+            // Also remove .cmd on Windows
+            #[cfg(windows)]
+            {
+                let cmd_path = bin_dir.join(vite_str::format!("{bin_name}.cmd"));
+                if cmd_path.as_path().exists() {
+                    let _ = std::fs::remove_file(cmd_path.as_path());
+                }
             }
-            // Also remove the shell script for Git Bash
-            // (link_path already handled above)
+        } else {
+            // Owned by a different npm package — check if our link target is now broken
+            // (npm may have deleted the binary from npm_bin_dir when uninstalling)
+            let link_path = bin_dir.join(bin_name);
+            if link_path.as_path().exists() {
+                // Target still accessible — nothing to repair
+                continue;
+            }
+
+            // Target is broken — repair by pointing to the surviving package's binary
+            let surviving_pkg = &config.package;
+            let node_modules_dir = config::get_node_modules_dir(npm_prefix, surviving_pkg);
+            let pkg_json_path = node_modules_dir.join("package.json");
+            let content = match std::fs::read_to_string(pkg_json_path.as_path()) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            let package_json = match serde_json::from_str::<serde_json::Value>(&content) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let Some(bin_rel_path) = extract_bin_path(&package_json, bin_name) else {
+                continue;
+            };
+            let source_path = node_modules_dir.join(&bin_rel_path);
+            if source_path.as_path().exists() {
+                let _ = std::fs::remove_file(link_path.as_path());
+                create_bin_link(
+                    &bin_dir,
+                    bin_name,
+                    &source_path,
+                    surviving_pkg,
+                    &config.node_version,
+                );
+            }
         }
     }
 }
@@ -685,16 +760,19 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
 
         if let Some(parsed) = parse_npm_global_uninstall(args) {
             // Collect bin names before uninstall (package.json will be gone after)
-            let bin_names = if let Ok(home_dir) = vite_shared::get_vite_plus_home() {
+            let context = if let Ok(home_dir) = vite_shared::get_vite_plus_home() {
                 let node_dir = home_dir.join("js_runtime").join("node").join(&*resolution.version);
                 let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
-                collect_bin_names_from_npm(&parsed.packages, &npm_prefix, &node_dir)
+                let bins = collect_bin_names_from_npm(&parsed.packages, &npm_prefix, &node_dir);
+                Some((bins, npm_prefix, node_dir))
             } else {
-                Vec::new()
+                None
             };
             let exit_code = exec::spawn_tool(&tool_path, args);
             if exit_code == 0 {
-                remove_npm_global_uninstall_links(&bin_names);
+                if let Some((bin_names, npm_prefix, node_dir)) = context {
+                    remove_npm_global_uninstall_links(&bin_names, &npm_prefix, &node_dir);
+                }
             }
             return exit_code;
         }
@@ -1423,6 +1501,28 @@ mod tests {
     fn test_parse_npm_global_uninstall_no_packages() {
         let result = parse_npm_global_uninstall(&s(&["uninstall", "-g"]));
         assert!(result.is_none(), "no packages should return None");
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_run_subcommand_with_install_arg() {
+        // `npm run install -g` — "run" is the first positional, so "install" is NOT the subcommand
+        let result = parse_npm_global_install(&s(&["run", "install", "-g"]));
+        assert!(result.is_none(), "install after run should not be detected as npm install");
+    }
+
+    #[test]
+    fn test_parse_npm_global_uninstall_run_subcommand_with_uninstall_arg() {
+        // `npm run uninstall -g foo` — "run" is first positional, "uninstall" is a script arg
+        let result = parse_npm_global_uninstall(&s(&["run", "uninstall", "-g", "foo"]));
+        assert!(result.is_none(), "uninstall after run should not be detected as npm uninstall");
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_flag_before_subcommand() {
+        // `npm -g install pkg` — flags don't consume the positional slot
+        let result = parse_npm_global_install(&s(&["-g", "install", "pkg"]));
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().packages, vec!["pkg"]);
     }
 
     // --- resolve_package_name tests ---

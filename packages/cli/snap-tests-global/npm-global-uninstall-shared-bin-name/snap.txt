@@ -20,6 +20,7 @@ link exists
 npm warn using --force Recommended protections disabled.
 
 added 1 package in <variable>ms
+Linked 'npm-global-shared-cli' to <vite-plus-home>/bin/npm-global-shared-cli
 
 > test -L $VITE_PLUS_HOME/bin/npm-global-shared-cli && echo 'link exists'
 link exists
@@ -38,12 +39,13 @@ shared-cli from pkg-b
 > npm uninstall -g npm-global-shared-pkg-a # Uninstall pkg-a, should NOT remove the link (owned by pkg-b now)
 
 removed 1 package in <variable>ms
+Linked 'npm-global-shared-cli' to <vite-plus-home>/bin/npm-global-shared-cli
 
 > test -L $VITE_PLUS_HOME/bin/npm-global-shared-cli && echo 'link exists' || echo 'link removed'
 link exists
 
-[127]> npm-global-shared-cli # Should still work (owned by pkg-b)
-command not found: npm-global-shared-cli
+> npm-global-shared-cli # Should still work (owned by pkg-b)
+shared-cli from pkg-b
 
 > npm uninstall -g npm-global-shared-pkg-b # Uninstall pkg-b, NOW should remove the link
 
