@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, test } from '@voidzero-dev/vite-plus-test';
+import { describe, expect, test } from '@voidzero-dev/vite-plus-test';
 
 import { isPassThroughEnv, replaceUnstableOutput } from '../utils';
 
@@ -101,17 +101,7 @@ Done in 171ms using pnpm v10.16.1
     expect(replaceUnstableOutput(output.trim(), cwd)).toMatchSnapshot();
   });
 
-  describe('Windows cwd replacement', () => {
-    const originalPlatform = process.platform;
-
-    beforeEach(() => {
-      Object.defineProperty(process, 'platform', { value: 'win32' });
-    });
-
-    afterEach(() => {
-      Object.defineProperty(process, 'platform', { value: originalPlatform });
-    });
-
+  describe.skipIf(process.platform !== 'win32')('Windows cwd replacement', () => {
     test('mixed-separator cwd matches all-backslash output', () => {
       // Simulates the CI failure: cwd has mixed separators (template literal),
       // but Vite outputs all-backslash paths (path.resolve)
@@ -125,11 +115,9 @@ Done in 171ms using pnpm v10.16.1
     });
 
     test('all-backslash cwd matches all-backslash output', () => {
-      // Avoid dots in output: on macOS, path.dirname('C:\\...') returns '.'
-      // which would corrupt any '.' via replaceAll. On real Windows this is fine.
       const cwd = 'C:\\Users\\runner\\project';
-      const output = 'error in C:\\Users\\runner\\project\\src\\index';
-      expect(replaceUnstableOutput(output, cwd)).toBe('error in <cwd>/src/index');
+      const output = 'error in C:\\Users\\runner\\project\\src\\main.ts';
+      expect(replaceUnstableOutput(output, cwd)).toBe('error in <cwd>/src/main.ts');
     });
 
     test('cwd at end of string without trailing separator', () => {
@@ -139,8 +127,6 @@ Done in 171ms using pnpm v10.16.1
     });
 
     test('parent directory replacement with backslash paths', () => {
-      // cwd must contain forward slashes so POSIX path.dirname (on macOS) can
-      // derive the parent correctly; on real Windows both separators work.
       const cwd = 'C:\\Users\\RUNNER~1\\Temp/vite-plus-test/my-test';
       const output = 'found C:\\Users\\RUNNER~1\\Temp\\vite-plus-test\\other\\file.ts';
       expect(replaceUnstableOutput(output, cwd)).toBe('found <cwd>/../other/file.ts');
