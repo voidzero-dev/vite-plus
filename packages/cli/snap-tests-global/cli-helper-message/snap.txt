@@ -55,16 +55,16 @@ VITE+ - The Unified Toolchain for the Web
 vp v<semver>
 
 Local vite-plus:
-  vite-plus  Not found
+  vite-plus  v<semver>
 
 Tools:
-  vite             Not found
-  rolldown         Not found
-  vitest           Not found
-  oxfmt            Not found
-  oxlint           Not found
-  oxlint-tsgolint  Not found
-  tsdown           Not found
+  vite             v<semver>
+  rolldown         v<semver>
+  vitest           v<semver>
+  oxfmt            v<semver>
+  oxlint           v<semver>
+  oxlint-tsgolint  v<semver>
+  tsdown           v<semver>
 
 > vp install -h # show install help message
 VITE+ - The Unified Toolchain for the Web
@@ -407,4 +407,3 @@ Options:
   --silent               Suppress output
   --registry <REGISTRY>  Custom npm registry URL
   -h, --help             Print help
-
