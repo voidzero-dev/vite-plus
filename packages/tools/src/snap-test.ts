@@ -269,12 +269,16 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
     env['PATH'] = env['Path'];
     delete env['Path'];
   }
+  // The node shim prepends ~/.vite-plus/js_runtime/node/VERSION/bin/ to PATH,
+  // which leaks into this process. Strip internal vite-plus paths so the test
+  // environment simulates a clean user PATH (only the shim bin dir + system paths).
+  const vitePlusJsRuntime = path.join(env['VITE_PLUS_HOME'], 'js_runtime');
   env['PATH'] = [
     // Extend PATH to include the package's bin directory
     // --bin-dir overrides the default for cases like global CLI tests
     // where vp should resolve to the Rust binary instead of the Node.js script
     path.resolve(expandHome(binDir || 'bin')),
-    ...env['PATH'].split(path.delimiter),
+    ...env['PATH'].split(path.delimiter).filter((p) => !p.startsWith(vitePlusJsRuntime)),
   ].join(path.delimiter);
 
   const newSnap: string[] = [];
