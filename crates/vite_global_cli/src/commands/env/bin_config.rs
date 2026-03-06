@@ -43,6 +43,11 @@ impl BinConfig {
         Ok(Self::bins_dir()?.join(format!("{bin_name}.json")))
     }
 
+    /// Check if a binary has a config file (i.e., is managed by `vp install -g`).
+    pub fn exists_sync(bin_name: &str) -> bool {
+        Self::path(bin_name).map(|p| p.as_path().exists()).unwrap_or(false)
+    }
+
     /// Load config for a binary.
     pub async fn load(bin_name: &str) -> Result<Option<Self>, Error> {
         let path = Self::path(bin_name)?;
@@ -215,6 +220,35 @@ mod tests {
 
         // Delete again should not error
         BinConfig::delete("tsc").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_exists_sync() {
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+
+        // Should not exist before saving
+        assert!(!BinConfig::exists_sync("tsc"));
+
+        let config = BinConfig::new(
+            "tsc".to_string(),
+            "typescript".to_string(),
+            "5.0.0".to_string(),
+            "20.18.0".to_string(),
+        );
+        config.save().await.unwrap();
+
+        // Should exist after saving
+        assert!(BinConfig::exists_sync("tsc"));
+
+        // Other binaries should still not exist
+        assert!(!BinConfig::exists_sync("eslint"));
+
+        // Should not exist after deletion
+        BinConfig::delete("tsc").await.unwrap();
+        assert!(!BinConfig::exists_sync("tsc"));
     }
 
     #[tokio::test]

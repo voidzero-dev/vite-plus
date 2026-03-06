@@ -1,0 +1,7 @@
+{
+  "name": "npm-global-vp-managed-pkg",
+  "version": "1.0.0",
+  "bin": {
+    "npm-global-vp-managed-cli": "./cli.js"
+  }
+}

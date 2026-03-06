@@ -1,10 +1,9 @@
 > npm install -g ./npm-global-hint-pkg # Should install and show hint + create link
 
 added 1 package in <variable>ms
-info: Linked 'npm-global-hint-cli' to <vite-plus-home>/bin/npm-global-hint-cli
+Linked 'npm-global-hint-cli' to <vite-plus-home>/bin/npm-global-hint-cli
 
-tip: For a better experience, use `vp install -g ./npm-global-hint-pkg` instead.
-     It creates managed shims that persist across Node.js version changes.
+tip: Use `vp install -g ./npm-global-hint-pkg` for managed shims that persist across Node.js version changes.
 
 > test -L $VITE_PLUS_HOME/bin/npm-global-hint-cli && echo 'link created' # Link should exist
 link created

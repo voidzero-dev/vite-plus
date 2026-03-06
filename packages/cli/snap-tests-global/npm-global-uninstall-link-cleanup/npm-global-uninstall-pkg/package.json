@@ -1,0 +1,7 @@
+{
+  "name": "npm-global-uninstall-pkg",
+  "version": "1.0.0",
+  "bin": {
+    "npm-global-uninstall-cli": "./cli.js"
+  }
+}

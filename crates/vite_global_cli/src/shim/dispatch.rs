@@ -45,6 +45,9 @@ const NPM_VALUE_FLAGS: &[&str] = &["--prefix", "--registry", "--tag", "--cache",
 /// Install subcommands recognized by npm.
 const NPM_INSTALL_SUBCOMMANDS: &[&str] = &["install", "i", "add"];
 
+/// Uninstall subcommands recognized by npm.
+const NPM_UNINSTALL_SUBCOMMANDS: &[&str] = &["uninstall", "un", "remove", "rm"];
+
 /// Parse npm args to detect `npm install -g <packages>`.
 /// Returns None if not a global install command.
 fn parse_npm_global_install(args: &[String]) -> Option<NpmGlobalInstall> {
@@ -96,6 +99,57 @@ fn parse_npm_global_install(args: &[String]) -> Option<NpmGlobalInstall> {
     }
 
     Some(NpmGlobalInstall { packages })
+}
+
+/// Parsed npm global uninstall command.
+struct NpmGlobalUninstall {
+    /// Package names extracted from args
+    packages: Vec<String>,
+}
+
+/// Parse npm args to detect `npm uninstall -g <packages>`.
+/// Returns None if not a global uninstall command.
+fn parse_npm_global_uninstall(args: &[String]) -> Option<NpmGlobalUninstall> {
+    let mut has_global = false;
+    let mut has_uninstall = false;
+    let mut packages = Vec::new();
+    let mut skip_next = false;
+
+    for arg in args {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+
+        if arg == "-g" || arg == "--global" {
+            has_global = true;
+            continue;
+        }
+
+        if NPM_UNINSTALL_SUBCOMMANDS.contains(&arg.as_str()) && !has_uninstall {
+            has_uninstall = true;
+            continue;
+        }
+
+        // Check for value-bearing flags
+        if NPM_VALUE_FLAGS.contains(&arg.as_str()) {
+            skip_next = true;
+            continue;
+        }
+
+        // Skip flags
+        if arg.starts_with('-') {
+            continue;
+        }
+
+        packages.push(arg.clone());
+    }
+
+    if !has_global || !has_uninstall || packages.is_empty() {
+        return None;
+    }
+
+    Some(NpmGlobalUninstall { packages })
 }
 
 /// Resolve package name from a spec string.
@@ -192,7 +246,9 @@ fn check_npm_global_install_result(
         }
     }
 
+    let is_interactive = std::io::stdin().is_terminal();
     let mut missing_bins: Vec<(String, AbsolutePathBuf)> = Vec::new();
+    let mut managed_conflicts: Vec<String> = Vec::new();
 
     for spec in packages {
         let Some(package_name) = resolve_package_name(spec) else { continue };
@@ -226,6 +282,10 @@ fn check_npm_global_install_result(
             // Check if binary already exists in bin_dir (vite-plus bin)
             let shim_path = bin_dir.join(&bin_name);
             if std::fs::symlink_metadata(shim_path.as_path()).is_ok() {
+                // If managed by vp install -g, warn about the conflict
+                if BinConfig::exists_sync(&bin_name) {
+                    managed_conflicts.push(bin_name);
+                }
                 continue;
             }
 
@@ -250,22 +310,29 @@ fn check_npm_global_install_result(
         }
     }
 
+    if !managed_conflicts.is_empty() {
+        for bin_name in &managed_conflicts {
+            output::raw(&vite_str::format!(
+                "'{bin_name}' is already managed by `vp install -g`. Run `vp uninstall -g` first to replace it."
+            ));
+        }
+    }
+
     if missing_bins.is_empty() {
         return;
     }
-
-    let is_interactive = std::io::stdin().is_terminal();
 
     let should_link = if is_interactive {
         // Prompt user
         let bin_list: Vec<&str> = missing_bins.iter().map(|(name, _)| name.as_str()).collect();
         let bin_display = bin_list.join(", ");
 
-        output::warn(&vite_str::format!(
-            "'{bin_display}' was installed to Node.js {node_version}'s bin directory,"
-        ));
-        eprintln!("      but is not available on your PATH.\n");
-        eprint!("      Create a link in ~/.vite-plus/bin/ to make it available? [Y/n] ");
+        output::raw(&vite_str::format!("'{bin_display}' is not available on your PATH."));
+        #[allow(clippy::disallowed_macros)]
+        {
+            print!("Create a link in ~/.vite-plus/bin/ to make it available? [Y/n] ");
+        }
+        let _ = std::io::Write::flush(&mut std::io::stdout());
 
         let mut input = String::new();
         let confirmed = std::io::stdin().read_line(&mut input).is_ok();
@@ -288,8 +355,9 @@ fn check_npm_global_install_result(
     // Always print the tip
     let pkg_names: Vec<&str> = packages.iter().map(String::as_str).collect();
     let pkg_display = pkg_names.join(" ");
-    eprintln!("\ntip: For a better experience, use `vp install -g {pkg_display}` instead.");
-    eprintln!("     It creates managed shims that persist across Node.js version changes.");
+    output::raw(&vite_str::format!(
+        "\ntip: Use `vp install -g {pkg_display}` for managed shims that persist across Node.js version changes."
+    ));
 }
 
 /// Extract binary names from a package.json value.
@@ -323,7 +391,7 @@ fn create_bin_link(bin_dir: &AbsolutePath, bin_name: &str, source_path: &Absolut
     {
         let link_path = bin_dir.join(bin_name);
         if std::os::unix::fs::symlink(source_path.as_path(), link_path.as_path()).is_ok() {
-            output::info(&vite_str::format!(
+            output::raw(&vite_str::format!(
                 "Linked '{bin_name}' to {}",
                 link_path.as_path().display()
             ));
@@ -341,7 +409,7 @@ fn create_bin_link(bin_dir: &AbsolutePath, bin_name: &str, source_path: &Absolut
             source = source_path.as_path().display()
         );
         if std::fs::write(cmd_path.as_path(), &wrapper_content).is_ok() {
-            output::info(&vite_str::format!(
+            output::raw(&vite_str::format!(
                 "Linked '{bin_name}' to {}",
                 cmd_path.as_path().display()
             ));
@@ -355,6 +423,84 @@ fn create_bin_link(bin_dir: &AbsolutePath, bin_name: &str, source_path: &Absolut
             format!("#!/bin/sh\nexec \"{}\" \"$@\"\n", source_path.as_path().display());
         let _ = std::fs::write(sh_path.as_path(), sh_content);
     }
+}
+
+/// After npm uninstall -g completes, remove bin links that were created during install.
+#[allow(clippy::disallowed_types)]
+fn remove_npm_global_uninstall_links(bin_names: &[String]) {
+    let Ok(bin_dir) = config::get_bin_dir() else { return };
+
+    for bin_name in bin_names {
+        // Skip core shims
+        if CORE_SHIMS.contains(&bin_name.as_str()) {
+            continue;
+        }
+
+        // Skip vp-managed shims (installed via `vp install -g`)
+        if BinConfig::exists_sync(bin_name) {
+            continue;
+        }
+
+        let link_path = bin_dir.join(bin_name);
+        if std::fs::symlink_metadata(link_path.as_path()).is_ok() {
+            if std::fs::remove_file(link_path.as_path()).is_ok() {
+                output::raw(&vite_str::format!(
+                    "Removed link '{bin_name}' from {}",
+                    link_path.as_path().display()
+                ));
+            }
+        }
+
+        // Also remove .cmd on Windows
+        #[cfg(windows)]
+        {
+            let cmd_path = bin_dir.join(vite_str::format!("{bin_name}.cmd"));
+            if cmd_path.as_path().exists() {
+                let _ = std::fs::remove_file(cmd_path.as_path());
+            }
+            // Also remove the shell script for Git Bash
+            // (link_path already handled above)
+        }
+    }
+}
+
+/// Collect bin names from packages before uninstall (package.json will be gone after).
+#[allow(clippy::disallowed_types)]
+fn collect_bin_names_for_uninstall(
+    packages: &[String],
+    node_version: &str,
+    npm_path: &AbsolutePath,
+) -> Vec<String> {
+    let Ok(home_dir) = vite_shared::get_vite_plus_home() else {
+        return Vec::new();
+    };
+
+    let node_dir = home_dir.join("js_runtime").join("node").join(node_version);
+    let npm_prefix = get_npm_global_prefix(npm_path, &node_dir);
+
+    let mut all_bins = Vec::new();
+
+    for spec in packages {
+        let Some(package_name) = resolve_package_name(spec) else { continue };
+
+        let package_json_content = std::fs::read_to_string(
+            config::get_node_modules_dir(&npm_prefix, &package_name).join("package.json").as_path(),
+        )
+        .ok()
+        .or_else(|| {
+            let dir = config::get_node_modules_dir(&node_dir, &package_name);
+            std::fs::read_to_string(dir.join("package.json").as_path()).ok()
+        });
+
+        let Some(content) = package_json_content else { continue };
+        let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
+            continue;
+        };
+
+        all_bins.extend(extract_bin_names(&package_json));
+    }
+
+    all_bins
 }
 
 /// Main shim dispatch entry point.
@@ -482,7 +628,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         std::env::set_var(RECURSION_ENV_VAR, "1");
     }
 
-    // For npm install -g, use spawn+wait so we can post-check binaries
+    // For npm install/uninstall -g, use spawn+wait so we can post-check/cleanup binaries
     if tool == "npm" {
         if let Some(parsed) = parse_npm_global_install(args) {
             // Use spawn instead of exec so we can run post-install checks
@@ -494,6 +640,17 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
                     original_path.as_deref(),
                     &tool_path,
                 );
+            }
+            return exit_code;
+        }
+
+        if let Some(parsed) = parse_npm_global_uninstall(args) {
+            // Collect bin names before uninstall (package.json will be gone after)
+            let bin_names =
+                collect_bin_names_for_uninstall(&parsed.packages, &resolution.version, &tool_path);
+            let exit_code = exec::spawn_tool(&tool_path, args);
+            if exit_code == 0 {
+                remove_npm_global_uninstall_links(&bin_names);
             }
             return exit_code;
         }
@@ -1174,6 +1331,54 @@ mod tests {
         let result =
             parse_npm_global_install(&s(&["install", "-g", "https://example.com/pkg.tgz"]));
         assert!(result.is_none(), "URLs should be filtered");
+    }
+
+    // --- parse_npm_global_uninstall tests ---
+
+    #[test]
+    fn test_parse_npm_global_uninstall_basic() {
+        let result = parse_npm_global_uninstall(&s(&["uninstall", "-g", "typescript"]));
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().packages, vec!["typescript"]);
+    }
+
+    #[test]
+    fn test_parse_npm_global_uninstall_shorthand_un() {
+        let result = parse_npm_global_uninstall(&s(&["un", "-g", "typescript"]));
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().packages, vec!["typescript"]);
+    }
+
+    #[test]
+    fn test_parse_npm_global_uninstall_shorthand_rm() {
+        let result = parse_npm_global_uninstall(&s(&["rm", "--global", "pkg1", "pkg2"]));
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().packages, vec!["pkg1", "pkg2"]);
+    }
+
+    #[test]
+    fn test_parse_npm_global_uninstall_remove() {
+        let result = parse_npm_global_uninstall(&s(&["remove", "-g", "@scope/pkg"]));
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().packages, vec!["@scope/pkg"]);
+    }
+
+    #[test]
+    fn test_parse_npm_global_uninstall_not_install() {
+        let result = parse_npm_global_uninstall(&s(&["install", "-g", "typescript"]));
+        assert!(result.is_none(), "install should not be detected as uninstall");
+    }
+
+    #[test]
+    fn test_parse_npm_global_uninstall_no_global_flag() {
+        let result = parse_npm_global_uninstall(&s(&["uninstall", "typescript"]));
+        assert!(result.is_none(), "no -g flag should return None");
+    }
+
+    #[test]
+    fn test_parse_npm_global_uninstall_no_packages() {
+        let result = parse_npm_global_uninstall(&s(&["uninstall", "-g"]));
+        assert!(result.is_none(), "no packages should return None");
     }
 
     // --- resolve_package_name tests ---

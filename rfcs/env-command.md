@@ -1759,9 +1759,12 @@ User runs: npm install -g codex
 │  │                                                       │  │
 │  │    → for each binary in package:                      │  │
 │  │        skip core shims (node/npm/npx/vp)              │  │
-│  │        skip if already exists in ~/.vite-plus/bin/     │  │
+│  │        if already exists in ~/.vite-plus/bin/:         │  │
+│  │          if BinConfig exists → managed_conflicts       │  │
+│  │          skip (don't overwrite)                        │  │
 │  │        check source exists in npm_bin_dir             │  │
 │  │        add to missing_bins list                       │  │
+│  │    → warn about managed conflicts                     │  │
 │  │    → interactive? prompt to create links              │  │
 │  │      non-interactive? create links directly           │  │
 │  │    → prints tip: use `vp install -g` instead          │  │
@@ -1771,31 +1774,34 @@ User runs: npm install -g codex
 └─────────────────────────────────────────────────────────────┘
 ```
 
+**Conflict with `vp install -g` shims**: If a binary already exists in `~/.vite-plus/bin/` AND has a BinConfig file (`~/.vite-plus/bins/{name}.json`), it is managed by `vp install -g`. The shim warns the user instead of silently skipping:
+
+```
+'codex' is already managed by `vp install -g`. Run `vp uninstall -g` first to replace it.
+```
+
 **Interactive mode** (stdin is a TTY):
 
 ```
-vp: 'codex' was installed to Node.js 20.18.0's bin directory,
-    but is not available on your PATH.
-
-    Create a link in ~/.vite-plus/bin/ to make it available? [Y/n]
+'codex' is not available on your PATH.
+Create a link in ~/.vite-plus/bin/ to make it available? [Y/n]
 ```
 
 If the user confirms (Y or Enter):
 
 - Creates a symlink: `~/.vite-plus/bin/codex` → `~/.vite-plus/js_runtime/node/20.18.0/bin/codex`
-- Prints: `vp: Linked 'codex' to ~/.vite-plus/bin/codex`
+- Prints: `Linked 'codex' to ~/.vite-plus/bin/codex`
 
 Then always prints the tip:
 
 ```
-tip: For a better experience, use `vp install -g codex` instead.
-     It creates managed shims that persist across Node.js version changes.
+tip: Use `vp install -g codex` for managed shims that persist across Node.js version changes.
 ```
 
 **Non-interactive mode** (piped/CI):
 
 - Creates the symlink directly (no prompt)
-- Prints: `vp: Linked 'codex' to ~/.vite-plus/bin/codex`
+- Prints: `Linked 'codex' to ~/.vite-plus/bin/codex`
 - Prints the same tip
 
 #### Call Flow: Normal `npm install react` — unaffected
@@ -1819,9 +1825,15 @@ User runs: npm install react
 └───────────────────────────────────────────────────┘
 ```
 
+#### `npm uninstall -g` Link Cleanup
+
+When `npm uninstall -g` is detected, the shim uses `spawn_tool()` (like install) to retain control after npm finishes. Before running npm, it collects bin names from the package's `package.json` (which will be removed by npm). After a successful uninstall, it removes the corresponding symlinks from `~/.vite-plus/bin/`.
+
+**Protection for `vp install -g` managed shims**: Before removing a link, the shim checks `BinConfig::exists_sync()`. If the binary has a BinConfig file, it is managed by `vp install -g` and is NOT removed. This ensures `npm uninstall -g` cannot break `vp install -g` managed shims.
+
 #### Design Decision: spawn vs exec
 
-On Unix, `exec_tool()` uses `exec()` which replaces the current process — no code runs after. For `npm install -g` specifically, we use `spawn_tool()` (spawn + wait) to retain control after npm finishes, enabling the post-install hint. All other npm commands continue to use `exec_tool()` for zero overhead.
+On Unix, `exec_tool()` uses `exec()` which replaces the current process — no code runs after. For `npm install -g` and `npm uninstall -g` specifically, we use `spawn_tool()` (spawn + wait) to retain control after npm finishes, enabling the post-install hint and post-uninstall link cleanup. All other npm commands continue to use `exec_tool()` for zero overhead.
 
 ## Exec Command
 

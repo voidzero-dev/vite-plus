@@ -1,0 +1,25 @@
+> vp install -g ./npm-global-vp-managed-pkg # Install via vp (creates managed shim)
+VITE+ - The Unified Toolchain for the Web
+
+Installing ./npm-global-vp-managed-pkg globally...
+Installed ./npm-global-vp-managed-pkg v<semver>
+Binaries: npm-global-vp-managed-cli
+
+> npm install -g ./npm-global-vp-managed-pkg # npm install (should warn about conflict)
+
+added 1 package in <variable>ms
+'npm-global-vp-managed-cli' is already managed by `vp install -g`. Run `vp uninstall -g` first to replace it.
+
+> npm uninstall -g npm-global-vp-managed-pkg # npm uninstall should NOT remove the vp-managed shim
+
+removed 1 package in <variable>ms
+
+> test -L $VITE_PLUS_HOME/bin/npm-global-vp-managed-cli && echo 'link exists' || echo 'link removed' # Shim should still exist
+link exists
+
+> npm-global-vp-managed-cli # Verify the shim still works
+npm-global-vp-managed-cli works
+
+> vp remove -g npm-global-vp-managed-pkg # Cleanup
+Uninstalling npm-global-vp-managed-pkg...
+Uninstalled npm-global-vp-managed-pkg
