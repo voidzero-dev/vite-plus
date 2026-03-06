@@ -2,19 +2,19 @@
 
 ## Overview
 
-Vite+ is a unified toolchain for modern web development that extends Vite with powerful monorepo capabilities. It combines:
+Vite+ is a unified toolchain for modern web development. It combines [Vite](https://vite.dev/), [Vitest](https://vitest.dev/), [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), [Rolldown](https://rolldown.rs/), [tsdown](https://tsdown.dev/), and [Vite Task](https://github.com/voidzero-dev/vite-task) into a single CLI:
 
-- **Dev Server**: Vite's blazing-fast development experience with native ES modules and instant HMR
-- **Build Tool**: Optimized production builds powered by Rolldown
-- **Task Runner**: Intelligent monorepo task execution with caching and dependency resolution
-- **Testing**: Built-in test runner with workspace support
-- **Linting**: Integrated oxlint for fast code quality checks
-- **Formatting**: Integrated oxfmt for consistent code formatting
-- **Code Generation**: Scaffolding for new projects and monorepo workspaces
-- **Dependency Management**: Integrated dependency management with pnpm, yarn, npm and bun(coming soon)
-- **Node.js Version Manager**: Built-in Node.js version management
+- **Runtime Management**: Manage Node.js globally and per project with `vp env`
+- **Package Management**: Install and manage dependencies with `vp install` and package-manager wrappers
+- **Dev Server**: Run Vite's native ESM dev server with instant HMR via `vp dev`
+- **Code Health**: Run type checks, linting, and formatting with `vp check`
+- **Testing**: Run tests through bundled Vitest with `vp test`
+- **Build & Pack**: Build apps with `vp build` and build libraries or standalone app binaries with `vp pack`
+- **Task Runner**: Run monorepo tasks with caching and dependency-aware scheduling via `vp run`
+- **Scaffolding & Migration**: Create new projects and migrate existing ones with `vp create` and `vp migrate`
 
 All in a single, cohesive tool designed for scale, speed, and developer sanity.
+Vite+ is fully open-source under the MIT license.
 
 ## Installation
 
@@ -23,13 +23,13 @@ Install Vite+ globally as `vp`:
 For Linux or macOS:
 
 ```bash
-curl -fsSL https://staging.viteplus.dev/install.sh | bash
+curl -fsSL https://viteplus.dev/install.sh | bash
 ```
 
 For Windows:
 
 ```bash
-irm https://staging.viteplus.dev/install.ps1 | iex
+irm https://viteplus.dev/install.ps1 | iex
 ```
 
 ::: details Supported platforms
@@ -69,22 +69,31 @@ vp create
 
 Follow the prompts to select your preferred framework and configuration.
 
-## Core Commands
+## CLI Workflows
 
-Vite+ provides built-in commands that work seamlessly in both single-package and monorepo setups:
+`vp help` organizes commands by workflow:
 
 ```bash
-# Development
+# Start
+vp create           # Scaffold a new project
+vp migrate          # Migrate an existing project
+vp install          # Install dependencies
+vp env              # Manage Node.js versions
+
+# Develop
 vp dev              # Start dev server
-
-# Build
-vp build            # Build for production
-
-# Test
+vp check            # Format, lint, and type-check
 vp test             # Run tests
 
-# Lint
-vp lint             # Lint code with oxlint
+# Execute
+vp run              # Run monorepo tasks
+vp exec             # Run local binaries
+vp dlx              # Run remote/local package binaries
+
+# Build
+vp build            # Build applications
+vp pack             # Build libraries
+vp preview          # Preview production build
 ```
 
 ## Monorepo Task Execution

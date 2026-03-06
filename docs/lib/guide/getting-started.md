@@ -2,13 +2,15 @@
 
 ## Overview
 
-Vite+ combines [Vite](https://vite.dev/), [Vitest](https://vitest.dev/), [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), [tsdown](https://tsdown.dev/) and [Rolldown](https://rolldown.rs/) as a single zero-config toolchain:
+Vite+ combines [Vite](https://vite.dev/), [Vitest](https://vitest.dev/), [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), [Rolldown](https://rolldown.rs/), [tsdown](https://tsdown.dev/), and [Vite Task](https://github.com/voidzero-dev/vite-task) as a unified zero-config toolchain:
 
-- **Dev Server:** Powered by Vite's fast development experience with native ES modules and instant HMR
-- **Build Tool:** Optimized production builds using Rolldown and Oxc
-- **Testing:** Seamless Vitest integration with fast feedback loops
-- **Linting:** Ships with Oxlint for quick code quality checks
-- **Task Runner:** Monorepo task execution with automated caching and dependency resolution
-- **Package Management:** Vite+ wraps package managers to provide a unified interface
+- **Runtime Management:** Manage Node.js globally and per-project with `vp env`
+- **Package Management:** Install and manage dependencies with `vp install` and related commands
+- **Dev Server:** Run Vite's native ESM dev server with `vp dev`
+- **Code Health:** Run type checks, linting, and formatting with `vp check`
+- **Testing:** Run tests with bundled Vitest via `vp test`
+- **Build & Pack:** Build apps with `vp build` and build libraries or standalone app binaries with `vp pack`
+- **Task Runner:** Execute monorepo tasks with `vp run` and automated caching/dependency resolution
 
 All in a single, cohesive tool designed for scale, speed, and developer sanity.
+Vite+ is fully open-source under the MIT license.
