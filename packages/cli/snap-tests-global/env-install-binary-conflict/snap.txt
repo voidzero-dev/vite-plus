@@ -1,12 +1,9 @@
 > vp install -g ./env-binary-conflict-pkg-a # Install pkg-a which provides env-binary-conflict-cli binary
 VITE+ - The Unified Toolchain for the Web
 
-  Installing ./env-binary-conflict-pkg-a globally...
-  Running npm install...
-
-added 1 package in <variable>ms
-  Installed ./env-binary-conflict-pkg-a v<semver>
-  Binaries: env-binary-conflict-cli
+Installing ./env-binary-conflict-pkg-a globally...
+Installed ./env-binary-conflict-pkg-a v<semver>
+Binaries: env-binary-conflict-cli
 
 > cat $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json # Bin config should point to pkg-a
 {
@@ -18,10 +15,7 @@ added 1 package in <variable>ms
 [1]> vp install -g ./env-binary-conflict-pkg-b # Try to install pkg-b without force - should fail
 VITE+ - The Unified Toolchain for the Web
 
-  Installing ./env-binary-conflict-pkg-b globally...
-  Running npm install...
-
-added 1 package in <variable>ms
+Installing ./env-binary-conflict-pkg-b globally...
 Failed to install ./env-binary-conflict-pkg-b: Executable 'env-binary-conflict-cli' is already installed by ./env-binary-conflict-pkg-a
 
 Please remove ./env-binary-conflict-pkg-a before installing ./env-binary-conflict-pkg-b, or use --force to auto-replace
@@ -36,15 +30,12 @@ Please remove ./env-binary-conflict-pkg-a before installing ./env-binary-conflic
 > vp install -g --force ./env-binary-conflict-pkg-b # Force install pkg-b - should auto-uninstall pkg-a
 VITE+ - The Unified Toolchain for the Web
 
-  Installing ./env-binary-conflict-pkg-b globally...
-  Running npm install...
-
-added 1 package in <variable>ms
-  Uninstalling ./env-binary-conflict-pkg-a (conflicts with ./env-binary-conflict-pkg-b)...
-  Uninstalling ./env-binary-conflict-pkg-a...
-  Uninstalled ./env-binary-conflict-pkg-a
-  Installed ./env-binary-conflict-pkg-b v<semver>
-  Binaries: env-binary-conflict-cli
+Installing ./env-binary-conflict-pkg-b globally...
+Uninstalling ./env-binary-conflict-pkg-a (conflicts with ./env-binary-conflict-pkg-b)...
+Uninstalling ./env-binary-conflict-pkg-a...
+Uninstalled ./env-binary-conflict-pkg-a
+Installed ./env-binary-conflict-pkg-b v<semver>
+Binaries: env-binary-conflict-cli
 
 > cat $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json # Bin config should now point to pkg-b
 {
@@ -54,8 +45,8 @@ added 1 package in <variable>ms
   "nodeVersion": "22.22.0"
 }
 > vp remove -g env-binary-conflict-pkg-b # Cleanup
-  Uninstalling env-binary-conflict-pkg-b...
-  Uninstalled env-binary-conflict-pkg-b
+Uninstalling env-binary-conflict-pkg-b...
+Uninstalled env-binary-conflict-pkg-b
 
 > test ! -f $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json && echo 'bin config removed' # Bin config should be deleted
 bin config removed

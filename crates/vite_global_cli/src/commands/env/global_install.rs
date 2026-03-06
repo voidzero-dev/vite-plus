@@ -1,11 +1,15 @@
 //! Global package installation handling.
 
-use std::{collections::HashSet, io::Read, process::Stdio};
+use std::{
+    collections::HashSet,
+    io::{Read, Write},
+    process::Stdio,
+};
 
 use tokio::process::Command;
 use vite_js_runtime::NodeProvider;
 use vite_path::{AbsolutePath, current_dir};
-use vite_shared::format_path_prepended;
+use vite_shared::{format_path_prepended, output};
 
 use super::{
     bin_config::BinConfig,
@@ -29,7 +33,7 @@ pub async fn install(
     // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
     let (package_name, _version_spec) = parse_package_spec(package_spec);
 
-    println!("  Installing {} globally...", package_spec);
+    output::raw(&format!("Installing {} globally...", package_spec));
 
     // 1. Resolve Node.js version
     let version = if let Some(v) = node_version {
@@ -63,22 +67,24 @@ pub async fn install(
     tokio::fs::create_dir_all(&staging_dir).await?;
 
     // 4. Run npm install with prefix set to staging directory
-    println!("  Running npm install...");
-
-    let status = Command::new(npm_path.as_path())
-        .args(["install", "-g", package_spec])
+    //    Pipe stdout/stderr so npm output is hidden on success, shown on failure
+    let output = Command::new(npm_path.as_path())
+        .args(["install", "-g", "--no-fund", package_spec])
         .env("npm_config_prefix", staging_dir.as_path())
         .env("PATH", format_path_prepended(node_bin_dir.as_path()))
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
         .await?;
 
-    if !status.success() {
+    if !output.status.success() {
         // Clean up staging directory
         let _ = tokio::fs::remove_dir_all(&staging_dir).await;
+        // Show captured output to help debug the failure
+        let _ = std::io::stdout().write_all(&output.stdout);
+        let _ = std::io::stderr().write_all(&output.stderr);
         return Err(Error::ConfigError(
-            format!("npm install failed with exit code: {:?}", status.code()).into(),
+            format!("npm install failed with exit code: {:?}", output.status.code()).into(),
         ));
     }
 
@@ -136,7 +142,7 @@ pub async fn install(
             let packages_to_remove: HashSet<_> =
                 conflicts.iter().map(|(_, pkg)| pkg.clone()).collect();
             for pkg in packages_to_remove {
-                println!("  Uninstalling {} (conflicts with {})...", pkg, package_name);
+                output::raw(&format!("Uninstalling {} (conflicts with {})...", pkg, package_name));
                 // Use Box::pin to avoid recursive async type issues
                 Box::pin(uninstall(&pkg, false)).await?;
             }
@@ -194,9 +200,9 @@ pub async fn install(
         bin_config.save().await?;
     }
 
-    println!("  Installed {} v{}", package_name, installed_version);
+    output::raw(&format!("Installed {} v{}", package_name, installed_version));
     if !bin_names.is_empty() {
-        println!("  Binaries: {}", bin_names.join(", "));
+        output::raw(&format!("Binaries: {}", bin_names.join(", ")));
     }
 
     Ok(())
@@ -230,16 +236,16 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
         let package_dir = packages_dir.join(&package_name);
         let metadata_path = PackageMetadata::metadata_path(&package_name)?;
 
-        println!("  Would uninstall {}:", package_name);
+        output::raw(&format!("Would uninstall {}:", package_name));
         for bin_name in &bins {
-            println!("    - shim: {}", bin_dir.join(bin_name).as_path().display());
+            output::raw(&format!("  - shim: {}", bin_dir.join(bin_name).as_path().display()));
         }
-        println!("    - package dir: {}", package_dir.as_path().display());
-        println!("    - metadata: {}", metadata_path.as_path().display());
+        output::raw(&format!("  - package dir: {}", package_dir.as_path().display()));
+        output::raw(&format!("  - metadata: {}", metadata_path.as_path().display()));
         return Ok(());
     }
 
-    println!("  Uninstalling {}...", package_name);
+    output::raw(&format!("Uninstalling {}...", package_name));
 
     // Remove shims and bin configs
     let bin_dir = get_bin_dir()?;
@@ -258,7 +264,7 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     // Remove metadata file
     PackageMetadata::delete(&package_name).await?;
 
-    println!("  Uninstalled {}", package_name);
+    output::raw(&format!("Uninstalled {}", package_name));
 
     Ok(())
 }
@@ -372,10 +378,10 @@ async fn create_package_shim(
 ) -> Result<(), Error> {
     // Check for conflicts with core shims
     if CORE_SHIMS.contains(&bin_name) {
-        println!(
-            "  Warning: Package '{}' provides '{}' binary, but it conflicts with a core shim. Skipping.",
+        output::warn(&format!(
+            "Package '{}' provides '{}' binary, but it conflicts with a core shim. Skipping.",
             package_name, bin_name
-        );
+        ));
         return Ok(());
     }
 
@@ -386,9 +392,13 @@ async fn create_package_shim(
     {
         let shim_path = bin_dir.join(bin_name);
 
-        // Skip if already exists (e.g., re-installing the same package)
-        if tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
-            return Ok(());
+        // Check if already a managed shim (symlink to ../current/bin/vp)
+        if let Ok(target) = tokio::fs::read_link(&shim_path).await {
+            if target == std::path::Path::new("../current/bin/vp") {
+                return Ok(());
+            }
+            // Exists but points elsewhere (e.g., npm-installed direct symlink) — replace it
+            tokio::fs::remove_file(&shim_path).await?;
         }
 
         // Create symlink to ../current/bin/vp

@@ -1626,7 +1626,7 @@ When installing a package that provides a binary already owned by another packag
 
 ```bash
 $ vp install -g eslint-v9
-  Installing eslint-v9 globally...
+Installing eslint-v9 globally...
 
 error: Executable 'eslint' is already installed by eslint
 
@@ -1645,12 +1645,11 @@ The `--force` flag automatically uninstalls the conflicting package before insta
 
 ```bash
 $ vp install -g --force eslint-v9
-  Installing eslint-v9 globally...
-  Uninstalling eslint (conflicts with eslint-v9)...
-  Uninstalled eslint
-  Running npm install...
-  Installed eslint-v9 v9.0.0
-  Binaries: eslint
+Installing eslint-v9 globally...
+Uninstalling eslint (conflicts with eslint-v9)...
+Uninstalled eslint
+Installed eslint-v9 v9.0.0
+Binaries: eslint
 ```
 
 **Important**: `--force` completely removes the conflicting package (not just the binary). This ensures a clean state without orphaned files.
@@ -1667,14 +1666,14 @@ This allows recovery even if package metadata is corrupted or manually deleted.
 ```bash
 # Normal uninstall
 $ vp remove -g typescript
-  Uninstalling typescript...
-  Uninstalled typescript
+Uninstalling typescript...
+Uninstalled typescript
 
 # Recovery mode (if typescript.json is missing)
 $ vp remove -g typescript
-  Uninstalling typescript...
-  Note: Package metadata not found, scanning for orphaned binaries...
-  Uninstalled typescript
+Uninstalling typescript...
+note: Package metadata not found, scanning for orphaned binaries...
+Uninstalled typescript
 ```
 
 #### Deterministic Binary Resolution

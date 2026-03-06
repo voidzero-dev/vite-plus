@@ -1,17 +1,14 @@
 > vp install -g ./npm-global-linked-pkg # First install via vp (creates managed shim)
 VITE+ - The Unified Toolchain for the Web
 
-  Installing ./npm-global-linked-pkg globally...
-  Running npm install...
-
-added 1 package in <variable>ms
-  Installed ./npm-global-linked-pkg v<semver>
-  Binaries: npm-global-linked-cli
+Installing ./npm-global-linked-pkg globally...
+Installed ./npm-global-linked-pkg v<semver>
+Binaries: npm-global-linked-cli
 
 > npm install -g ./npm-global-linked-pkg # Should NOT show hint (binary already exists)
 
 changed 1 package in <variable>ms
 
 > vp remove -g npm-global-linked-pkg # Cleanup
-  Uninstalling npm-global-linked-pkg...
-  Uninstalled npm-global-linked-pkg
+Uninstalling npm-global-linked-pkg...
+Uninstalled npm-global-linked-pkg
