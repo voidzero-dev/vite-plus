@@ -245,14 +245,24 @@ export async function selectAgentTargetPath({
   return targetPaths?.[0];
 }
 
-export function detectExistingAgentTargetPath(projectRoot: string) {
+export function detectExistingAgentTargetPaths(projectRoot: string) {
+  const detectedPaths: string[] = [];
+  const seenTargetPaths = new Set<string>();
   for (const option of AGENTS) {
+    if (seenTargetPaths.has(option.targetPath)) {
+      continue;
+    }
+    seenTargetPaths.add(option.targetPath);
     const targetPath = path.join(projectRoot, option.targetPath);
     if (fs.existsSync(targetPath) && !fs.lstatSync(targetPath).isSymbolicLink()) {
-      return option.targetPath;
+      detectedPaths.push(option.targetPath);
     }
   }
-  return undefined;
+  return detectedPaths.length > 0 ? detectedPaths : undefined;
+}
+
+export function detectExistingAgentTargetPath(projectRoot: string) {
+  return detectExistingAgentTargetPaths(projectRoot)?.[0];
 }
 
 export function resolveAgentTargetPaths(agent?: string | string[]) {
@@ -357,6 +367,19 @@ export async function writeAgentInstructions({
         continue;
       }
 
+      const existingContent = await fsPromises.readFile(destinationPath, 'utf-8');
+      const updatedContent = replaceMarkedAgentInstructionsSection(
+        existingContent,
+        incomingContent,
+      );
+      if (updatedContent !== undefined) {
+        if (updatedContent !== existingContent) {
+          await fsPromises.writeFile(destinationPath, updatedContent);
+        }
+        seenRealPaths.add(destinationRealPath);
+        continue;
+      }
+
       if (interactive) {
         const action = await prompts.select({
           message: `Agent instructions already exist at ${targetPathToWrite}.`,
@@ -376,18 +399,6 @@ export async function writeAgentInstructions({
         });
         if (prompts.isCancel(action) || action === 'skip') {
           prompts.log.info(`Skipped writing ${targetPathToWrite}`);
-          seenRealPaths.add(destinationRealPath);
-          continue;
-        }
-
-        const existingContent = await fsPromises.readFile(destinationPath, 'utf-8');
-        const updatedContent = replaceMarkedAgentInstructionsSection(
-          existingContent,
-          incomingContent,
-        );
-        if (updatedContent !== undefined) {
-          await fsPromises.writeFile(destinationPath, updatedContent);
-          prompts.log.success(`Updated agent instructions in ${targetPathToWrite}`);
           seenRealPaths.add(destinationRealPath);
           continue;
         }

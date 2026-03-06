@@ -6,6 +6,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  detectExistingAgentTargetPaths,
   detectExistingAgentTargetPath,
   replaceMarkedAgentInstructionsSection,
   resolveAgentTargetPaths,
@@ -259,6 +260,14 @@ describe('resolveAgentTargetPaths', () => {
 });
 
 describe('detectExistingAgentTargetPath', () => {
+  it('detects all existing regular agent files', async () => {
+    const dir = await createProjectDir();
+    await mockFs.writeFile(path.join(dir, 'AGENTS.md'), '# Agents');
+    await mockFs.writeFile(path.join(dir, 'CLAUDE.md'), '# Claude');
+
+    expect(detectExistingAgentTargetPaths(dir)).toEqual(['AGENTS.md', 'CLAUDE.md']);
+  });
+
   it('detects existing regular agent files', async () => {
     const dir = await createProjectDir();
     await mockFs.writeFile(path.join(dir, 'CLAUDE.md'), '# Claude');
@@ -339,5 +348,30 @@ describe('writeAgentInstructions symlink behavior', () => {
     expect(mockFs.isSymlink(existingClaude)).toBe(false);
     expect(await mockFs.readText(existingClaude)).toBe('existing claude instructions');
     expect(mockFs.existsSync(path.join(dir, 'AGENTS.md'))).toBe(true);
+  });
+
+  it('silently updates marker blocks without prompting in interactive mode', async () => {
+    const dir = await createProjectDir();
+    const targetPath = path.join(dir, 'AGENTS.md');
+    const existing = [
+      '# Local',
+      '<!--VITE PLUS START-->',
+      'old block',
+      '<!--VITE PLUS END-->',
+    ].join('\n');
+    await mockFs.writeFile(targetPath, existing);
+
+    const selectSpy = vi.spyOn(prompts, 'select');
+    const successSpy = vi.spyOn(prompts.log, 'success');
+
+    await writeAgentInstructions({
+      projectRoot: dir,
+      targetPaths: ['AGENTS.md'],
+      interactive: true,
+    });
+
+    expect(selectSpy).not.toHaveBeenCalled();
+    expect(await mockFs.readText(targetPath)).toContain('template block');
+    expect(successSpy).not.toHaveBeenCalledWith('Updated agent instructions in AGENTS.md');
   });
 });

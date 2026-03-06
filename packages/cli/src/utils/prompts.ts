@@ -39,8 +39,9 @@ export async function downloadPackageManager(
   packageManager: PackageManager,
   version: string,
   interactive?: boolean,
+  silent = false,
 ) {
-  const spinner = getSpinner(interactive);
+  const spinner = silent ? getSilentSpinner() : getSpinner(interactive);
   spinner.start(`${packageManager}@${version} installing...`);
   const downloadResult = await downloadPackageManagerBinding({
     name: packageManager,
@@ -168,5 +169,13 @@ export function getSpinner(interactive?: boolean) {
         prompts.log.info(msg);
       }
     },
+  };
+}
+
+function getSilentSpinner() {
+  return {
+    start: () => {},
+    stop: () => {},
+    message: () => {},
   };
 }
