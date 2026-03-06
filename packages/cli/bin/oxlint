@@ -12,9 +12,32 @@ if (!process.argv.includes('--lsp')) {
 
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
 
 const require = createRequire(import.meta.url);
 const oxlintMainPath = require.resolve('oxlint');
 const oxlintBin = join(dirname(dirname(oxlintMainPath)), 'bin', 'oxlint');
+
+try {
+  const { resolveUniversalViteConfig } = await import('../src/resolve-vite-config.js');
+  const configJson = await resolveUniversalViteConfig(null, process.cwd());
+  const config = JSON.parse(configJson);
+  if (config.lint) {
+    const cacheDir = join(process.cwd(), 'node_modules', '.cache', 'vite-plus');
+    mkdirSync(cacheDir, { recursive: true });
+    const configPath = join(cacheDir, 'oxlintrc.json');
+    writeFileSync(configPath, JSON.stringify(config.lint));
+
+    // Inject flags before --lsp in process.argv
+    const lspIndex = process.argv.indexOf('--lsp');
+    const insertArgs = ['-c', configPath];
+    if (config.configFile) {
+      insertArgs.push('--config-dir', dirname(config.configFile));
+    }
+    process.argv.splice(lspIndex, 0, ...insertArgs);
+  }
+} catch {
+  // Config resolution failed — oxlint will use its own file-based discovery
+}
 
 await import(oxlintBin);

@@ -191,8 +191,6 @@ impl ResolvedSubcommand {
 pub struct SubcommandResolver {
     cli_options: Option<CliOptions>,
     workspace_path: Arc<AbsolutePath>,
-    /// Track temporary config files created during resolution for cleanup
-    temp_config_files: Vec<AbsolutePathBuf>,
 }
 
 impl std::fmt::Debug for SubcommandResolver {
@@ -200,14 +198,13 @@ impl std::fmt::Debug for SubcommandResolver {
         f.debug_struct("SubcommandResolver")
             .field("has_cli_options", &self.cli_options.is_some())
             .field("workspace_path", &self.workspace_path)
-            .field("temp_config_files_count", &self.temp_config_files.len())
             .finish()
     }
 }
 
 impl SubcommandResolver {
     pub fn new(workspace_path: Arc<AbsolutePath>) -> Self {
-        Self { cli_options: None, workspace_path, temp_config_files: Vec::new() }
+        Self { cli_options: None, workspace_path }
     }
 
     pub fn with_cli_options(mut self, cli_options: CliOptions) -> Self {
@@ -215,110 +212,21 @@ impl SubcommandResolver {
         self
     }
 
-    /// Clean up temporary config files created during resolution.
-    /// Should be called after command execution completes (success or failure).
-    pub async fn cleanup_temp_files(&mut self) {
-        for path in self.temp_config_files.drain(..) {
-            if let Err(e) = tokio::fs::remove_file(&path).await {
-                if e.kind() != std::io::ErrorKind::NotFound {
-                    tracing::warn!(
-                        "Failed to cleanup temp config file {}: {}",
-                        path.as_path().display(),
-                        e
-                    );
-                }
-            }
-        }
-    }
-
-    /// Write a temporary TS config file that re-exports a field from vite.config.
-    /// The temp file imports the vite config and re-exports the specified field,
-    /// so the tool (e.g. oxlint) picks it up via `-c <path>`.
-    /// The `config_file_path` must be an absolute path.
-    async fn write_temp_ts_config_import(
-        &mut self,
-        config_file_path: &str,
-        temp_filename: &str,
-        field_name: &str,
-        args: &mut Vec<String>,
-    ) -> anyhow::Result<()> {
-        let path = PathBuf::from(config_file_path);
-        if !path.is_absolute() {
-            anyhow::bail!("config_file_path must be an absolute path, got: {config_file_path}");
-        }
-
-        let config_basename = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .ok_or_else(|| {
-                anyhow::anyhow!("Failed to get file name of config file: {config_file_path}")
-            })?
-            .to_string();
-
-        let config_dir = AbsolutePathBuf::new(path)
-            .and_then(|p| p.parent().map(|p| p.to_absolute_path_buf()))
-            .ok_or_else(|| {
-                anyhow::anyhow!("Failed to get parent directory of config file: {config_file_path}")
-            })?;
-
-        let config_path = config_dir.join(temp_filename);
-        let content = format!(
-            "import {{ defineConfig }} from 'oxlint';\nimport viteConfig from './{config_basename}';\nexport default defineConfig(viteConfig.{field_name} as any);\n"
-        );
-        write(&config_path, content).await?;
-
-        self.temp_config_files.push(config_path.clone());
-
-        let config_path_str = config_path
-            .as_path()
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("config path is not valid UTF-8"))?;
-        args.insert(0, config_path_str.to_string());
-        args.insert(0, "-c".to_string());
-        // Prevent oxlint from linting the temp config file itself
-        args.push("--ignore-pattern".to_string());
-        args.push(temp_filename.to_string());
-        Ok(())
-    }
-
-    /// Write a temporary JSON config file and prepend `-c <path>` to args.
-    /// The file will be tracked for cleanup after command execution.
-    /// The `config_file_path` must be an absolute path.
-    async fn write_temp_json_config_file(
-        &mut self,
+    /// Write a config JSON file to `node_modules/.cache/vite-plus/` and prepend
+    /// `-c <path>` + `--config-dir <dir>` to args so the tool resolves relative
+    /// paths from the vite config's directory rather than the cache directory.
+    async fn write_config_to_cache(
+        &self,
         config: &serde_json::Value,
         config_file_path: &str,
-        temp_filename: &str,
+        cache_filename: &str,
         args: &mut Vec<String>,
     ) -> anyhow::Result<()> {
-        let mut config = config.clone();
+        let cache_dir = self.workspace_path.join("node_modules/.cache/vite-plus");
+        tokio::fs::create_dir_all(&cache_dir).await?;
 
-        // Add temp file to ignorePatterns to prevent self-checking
-        if let Some(obj) = config.as_object_mut() {
-            if let Some(patterns) = obj.get_mut("ignorePatterns") {
-                if let Some(array) = patterns.as_array_mut() {
-                    array.push(serde_json::json!(temp_filename));
-                }
-            } else {
-                obj.insert("ignorePatterns".to_string(), serde_json::json!([temp_filename]));
-            }
-        }
-
-        let path = PathBuf::from(config_file_path);
-        if !path.is_absolute() {
-            anyhow::bail!("config_file_path must be an absolute path, got: {config_file_path}");
-        }
-
-        let config_dir = AbsolutePathBuf::new(path)
-            .and_then(|p| p.parent().map(|p| p.to_absolute_path_buf()))
-            .ok_or_else(|| {
-                anyhow::anyhow!("Failed to get parent directory of config file: {config_file_path}")
-            })?;
-
-        let config_path = config_dir.join(temp_filename);
-        write(&config_path, serde_json::to_string(&config)?).await?;
-
-        self.temp_config_files.push(config_path.clone());
+        let config_path = cache_dir.join(cache_filename);
+        write(&config_path, serde_json::to_string(config)?).await?;
 
         let config_path_str = config_path
             .as_path()
@@ -326,6 +234,21 @@ impl SubcommandResolver {
             .ok_or_else(|| anyhow::anyhow!("config path is not valid UTF-8"))?;
         args.insert(0, config_path_str.to_string());
         args.insert(0, "-c".to_string());
+
+        // --config-dir tells the tool to resolve relative paths from the
+        // vite config's directory, not from the cache directory.
+        let vite_config_dir = PathBuf::from(config_file_path);
+        let config_dir_str = vite_config_dir
+            .parent()
+            .and_then(|p| p.to_str())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Failed to get parent directory of config file: {config_file_path}"
+                )
+            })?;
+        args.push("--config-dir".to_string());
+        args.push(config_dir_str.to_string());
+
         Ok(())
     }
 
@@ -361,13 +284,13 @@ impl SubcommandResolver {
                         tracing::error!("Failed to parse vite config: {vite_config_json}");
                     })?;
 
-                if let (Some(_), Some(config_file)) =
+                if let (Some(lint_config), Some(config_file)) =
                     (&resolved_vite_config.lint, &resolved_vite_config.config_file)
                 {
-                    self.write_temp_ts_config_import(
+                    self.write_config_to_cache(
+                        lint_config,
                         config_file,
-                        ".vite-plus-lint.tmp.mts",
-                        "lint",
+                        "oxlintrc.json",
                         &mut args,
                     )
                     .await?;
@@ -413,10 +336,10 @@ impl SubcommandResolver {
                 if let (Some(fmt_config), Some(config_file)) =
                     (&resolved_vite_config.fmt, &resolved_vite_config.config_file)
                 {
-                    self.write_temp_json_config_file(
+                    self.write_config_to_cache(
                         fmt_config,
                         config_file,
-                        ".vite-plus-fmt.tmp.json",
+                        "oxfmtrc.json",
                         &mut args,
                     )
                     .await?;
@@ -649,9 +572,6 @@ impl VitePlusCommandHandler {
         Self { resolver }
     }
 
-    pub async fn cleanup_temp_files(&mut self) {
-        self.resolver.cleanup_temp_files().await;
-    }
 }
 
 #[async_trait::async_trait(?Send)]
@@ -868,7 +788,6 @@ async fn execute_direct_subcommand(
                 )
                 .await?;
                 if status != ExitStatus::SUCCESS {
-                    resolver.cleanup_temp_files().await;
                     return Ok(status);
                 }
             }
@@ -903,7 +822,6 @@ async fn execute_direct_subcommand(
                 )
                 .await?;
                 if status != ExitStatus::SUCCESS {
-                    resolver.cleanup_temp_files().await;
                     return Ok(status);
                 }
             }
@@ -930,8 +848,6 @@ async fn execute_direct_subcommand(
         }
         other => resolve_and_execute(&mut resolver, other, &envs, cwd, &cwd_arc).await?,
     };
-
-    resolver.cleanup_temp_files().await;
 
     Ok(status)
 }
@@ -976,8 +892,6 @@ async fn execute_vite_task_command(
 
     // Main execution (consumes session)
     let result = session.main(command).await.map_err(|e| Error::Anyhow(e));
-
-    command_handler.cleanup_temp_files().await;
 
     result
 }
