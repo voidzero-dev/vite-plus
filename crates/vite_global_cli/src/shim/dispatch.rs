@@ -135,18 +135,8 @@ fn resolve_package_name(spec: &str) -> Option<String> {
 /// `NPM_CONFIG_PREFIX` env var and `.npmrc` settings. Falls back to `node_dir`.
 #[allow(clippy::disallowed_types)]
 fn get_npm_global_prefix(npm_path: &AbsolutePath, node_dir: &AbsolutePathBuf) -> AbsolutePathBuf {
-    // Try NPM_CONFIG_PREFIX env var first — `npm config get prefix` can fail when the
-    // resolved prefix path contains UUID-like segments, because npm's @npmcli/redact
-    // treats them as secrets and marks the value as "protected".
-    if let Ok(prefix) = std::env::var("NPM_CONFIG_PREFIX") {
-        let prefix = prefix.trim();
-        if let Some(prefix_path) = AbsolutePathBuf::new(prefix.into()) {
-            return prefix_path;
-        }
-    }
-
-    // Fall back to `npm config get prefix` for cases where the prefix is set via
-    // .npmrc or other npm config mechanisms (not env var).
+    // `npm config get prefix` respects NPM_CONFIG_PREFIX, .npmrc, and other
+    // npm config mechanisms.
     if let Ok(output) =
         std::process::Command::new(npm_path.as_path()).args(["config", "get", "prefix"]).output()
     {

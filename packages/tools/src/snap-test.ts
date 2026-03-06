@@ -80,8 +80,10 @@ export async function snapTest() {
 
   // Create a unique temporary directory for testing
   // On macOS, `tmpdir()` is a symlink. Resolve it so that we can replace the resolved cwd in outputs.
+  // Remove hyphens from UUID to avoid npm's @npmcli/redact treating the path as containing
+  // secrets (it matches UUID patterns like `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
   const systemTmpDir = fs.realpathSync(tmpdir());
-  const tempTmpDir = `${systemTmpDir}/vite-plus-test-${randomUUID()}`;
+  const tempTmpDir = `${systemTmpDir}/vite-plus-test-${randomUUID().replaceAll('-', '')}`;
   fs.mkdirSync(tempTmpDir, { recursive: true });
 
   // Clean up stale .node-version and package.json in the system temp directory.
