@@ -233,7 +233,7 @@ fn check_npm_global_install_result(
     let is_interactive = std::io::stdin().is_terminal();
     // (bin_name, source_path, package_name)
     let mut missing_bins: Vec<(String, AbsolutePathBuf, String)> = Vec::new();
-    let mut managed_conflicts: Vec<String> = Vec::new();
+    let mut managed_conflicts: Vec<(String, String)> = Vec::new();
 
     for spec in packages {
         let Some(package_name) = resolve_package_name(spec) else { continue };
@@ -257,7 +257,7 @@ fn check_npm_global_install_result(
                 if let Ok(Some(config)) = BinConfig::load_sync(&bin_name) {
                     if config.source == BinSource::Vp {
                         // Managed by vp install -g — warn about the conflict
-                        managed_conflicts.push(bin_name);
+                        managed_conflicts.push((bin_name, config.package.clone()));
                     } else if config.source == BinSource::Npm && config.package != package_name {
                         // Link exists from a different npm package — update ownership
                         let _ = BinConfig::new_npm(
@@ -293,9 +293,9 @@ fn check_npm_global_install_result(
     }
 
     if !managed_conflicts.is_empty() {
-        for bin_name in &managed_conflicts {
+        for (bin_name, pkg) in &managed_conflicts {
             output::raw(&vite_str::format!(
-                "'{bin_name}' is already managed by `vp install -g`. Run `vp uninstall -g` first to replace it."
+                "Skipped '{bin_name}': managed by `vp install -g {pkg}`. Run `vp uninstall -g {pkg}` to remove it first."
             ));
         }
     }
