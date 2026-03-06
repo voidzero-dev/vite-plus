@@ -129,31 +129,85 @@ fn resolve_package_name(spec: &str) -> Option<String> {
     Some(spec.to_string())
 }
 
+/// Get the actual npm global prefix directory.
+///
+/// Runs `npm config get prefix` to determine the global prefix, which respects
+/// `NPM_CONFIG_PREFIX` env var and `.npmrc` settings. Falls back to `node_dir`.
+#[allow(clippy::disallowed_types)]
+fn get_npm_global_prefix(npm_path: &AbsolutePath, node_dir: &AbsolutePathBuf) -> AbsolutePathBuf {
+    // `npm config get prefix` respects NPM_CONFIG_PREFIX, .npmrc, and other
+    // npm config mechanisms without the output sanitization that `npm prefix -g`
+    // applies (which can mangle paths containing UUID-like segments).
+    if let Ok(output) =
+        std::process::Command::new(npm_path.as_path()).args(["config", "get", "prefix"]).output()
+    {
+        if let Ok(prefix) = std::str::from_utf8(&output.stdout) {
+            let prefix = prefix.trim();
+            if let Some(prefix_path) = AbsolutePathBuf::new(prefix.into()) {
+                return prefix_path;
+            }
+        }
+    }
+
+    // Fallback: default npm prefix is the Node install dir
+    node_dir.clone()
+}
+
 /// After npm install -g completes, check if installed binaries are on PATH.
-/// In interactive mode, prompt user to create bin links.
+///
+/// First determines the actual npm global bin directory (which may differ from the
+/// default if the user has set a custom prefix). If that directory is already on the
+/// user's original PATH, binaries are reachable and no action is needed.
+///
+/// Otherwise, in interactive mode, prompt user to create bin links.
 /// In non-interactive mode, create links automatically.
 /// Always print a tip suggesting `vp install -g`.
 #[allow(clippy::disallowed_macros, clippy::disallowed_types)]
-fn check_npm_global_install_result(packages: &[String], node_version: &str) {
+fn check_npm_global_install_result(
+    packages: &[String],
+    node_version: &str,
+    original_path: Option<&std::ffi::OsStr>,
+    npm_path: &AbsolutePath,
+) {
     use std::io::IsTerminal;
 
     let Ok(home_dir) = vite_shared::get_vite_plus_home() else { return };
     let Ok(bin_dir) = config::get_bin_dir() else { return };
 
     let node_dir = home_dir.join("js_runtime").join("node").join(node_version);
+    let npm_prefix = get_npm_global_prefix(npm_path, &node_dir);
+
+    // Derive bin dir from prefix (Unix: prefix/bin, Windows: prefix itself)
+    #[cfg(unix)]
+    let npm_bin_dir = npm_prefix.join("bin");
+    #[cfg(windows)]
+    let npm_bin_dir = npm_prefix.clone();
+
+    // If the npm global bin dir is already on the user's original PATH,
+    // binaries are reachable without shims — no action needed.
+    if let Some(orig) = original_path {
+        if std::env::split_paths(orig).any(|p| p == npm_bin_dir.as_path()) {
+            return;
+        }
+    }
 
     let mut missing_bins: Vec<(String, AbsolutePathBuf)> = Vec::new();
 
     for spec in packages {
         let Some(package_name) = resolve_package_name(spec) else { continue };
 
-        // Look up installed package.json in node_modules
-        let node_modules_dir = config::get_node_modules_dir(&node_dir, &package_name);
-        let package_json_path = node_modules_dir.join("package.json");
+        // Look up installed package.json in node_modules.
+        // Try the npm prefix first (handles custom prefix), then fall back to node_dir.
+        let package_json_content = std::fs::read_to_string(
+            config::get_node_modules_dir(&npm_prefix, &package_name).join("package.json").as_path(),
+        )
+        .ok()
+        .or_else(|| {
+            let dir = config::get_node_modules_dir(&node_dir, &package_name);
+            std::fs::read_to_string(dir.join("package.json").as_path()).ok()
+        });
 
-        let Ok(content) = std::fs::read_to_string(package_json_path.as_path()) else {
-            continue;
-        };
+        let Some(content) = package_json_content else { continue };
 
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
             continue;
@@ -168,7 +222,7 @@ fn check_npm_global_install_result(packages: &[String], node_version: &str) {
                 continue;
             }
 
-            // Check if binary already exists in bin_dir
+            // Check if binary already exists in bin_dir (vite-plus bin)
             let shim_path = bin_dir.join(&bin_name);
             if std::fs::symlink_metadata(shim_path.as_path()).is_ok() {
                 continue;
@@ -183,11 +237,11 @@ fn check_npm_global_install_result(packages: &[String], node_version: &str) {
                 }
             }
 
-            // Binary is missing from bin_dir
+            // Binary source in actual npm global bin dir
             #[cfg(unix)]
-            let source_path = node_dir.join("bin").join(&bin_name);
+            let source_path = npm_bin_dir.join(&bin_name);
             #[cfg(windows)]
-            let source_path = node_dir.join(format!("{bin_name}.cmd"));
+            let source_path = npm_bin_dir.join(format!("{bin_name}.cmd"));
 
             if source_path.as_path().exists() {
                 missing_bins.push((bin_name, source_path));
@@ -394,6 +448,9 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         }
     };
 
+    // Save original PATH before we modify it — needed for npm global install check
+    let original_path = std::env::var_os("PATH");
+
     // Prepare environment for recursive invocations
     // Prepend real node bin dir to PATH so child processes use the correct version
     let node_bin_dir = tool_path.parent().expect("Tool has no parent directory");
@@ -422,7 +479,12 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
             // Use spawn instead of exec so we can run post-install checks
             let exit_code = exec::spawn_tool(&tool_path, args);
             if exit_code == 0 {
-                check_npm_global_install_result(&parsed.packages, &resolution.version);
+                check_npm_global_install_result(
+                    &parsed.packages,
+                    &resolution.version,
+                    original_path.as_deref(),
+                    &tool_path,
+                );
             }
             return exit_code;
         }

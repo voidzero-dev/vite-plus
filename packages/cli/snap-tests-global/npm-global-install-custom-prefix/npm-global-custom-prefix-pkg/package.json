@@ -1,0 +1,7 @@
+{
+  "name": "npm-global-custom-prefix-pkg",
+  "version": "1.0.0",
+  "bin": {
+    "npm-global-custom-prefix-cli": "./cli.js"
+  }
+}

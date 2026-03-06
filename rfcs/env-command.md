@@ -1720,52 +1720,56 @@ User runs: npm install -g codex
 └────────────┬────────────┘
              │
              ▼
-┌───────────────────────────────────────────────────────┐
-│  dispatch("npm", ["install", "-g", "codex"])           │
-│  (crates/vite_global_cli/src/shim/dispatch.rs)         │
-│                                                         │
-│  1. vpx check          → skip                           │
-│  2. recursion check    → skip                           │
-│  3. bypass check       → skip                           │
-│  4. shim mode check    → skip                           │
-│  5. core shim? "npm"   → yes                            │
-│  6. resolve version    → 20.18.0                        │
-│  7. ensure installed   → ok                             │
-│  8. locate npm binary  → ~/.vite-plus/js_runtime/       │
-│                           node/20.18.0/bin/npm           │
-│  9. prepend node bin dir to PATH                        │
-│  10. set recursion marker                               │
-│                                                         │
-│  ┌─── npm global install detection ─────────────────┐   │
-│  │                                                   │   │
-│  │  parse_npm_global_install(args)                   │   │
-│  │    → detects "install" + "-g"                     │   │
-│  │    → extracts packages: ["codex"]                 │   │
-│  │    → returns Some(NpmGlobalInstall)               │   │
-│  │                                                   │   │
-│  │  spawn_tool(npm_path, args)    ← NOT exec!        │   │
-│  │    → runs real npm install -g codex               │   │
-│  │    → npm installs to node/20.18.0/bin/codex       │   │
-│  │    → waits for completion                         │   │
-│  │    → exit_code = 0 (success)                      │   │
-│  │                                                   │   │
-│  │  check_npm_global_install_result(["codex"], ver)  │   │
-│  │    → reads node/20.18.0/lib/node_modules/codex/   │   │
-│  │      package.json → bin: {"codex": "./bin/codex"} │   │
-│  │    → checks ~/.vite-plus/bin/codex → NOT FOUND    │   │
-│  │    → interactive? prompt to create link            │   │
-│  │      non-interactive? create link directly         │   │
-│  │    → creates symlink:                             │   │
-│  │      ~/.vite-plus/bin/codex →                     │   │
-│  │      ~/.vite-plus/js_runtime/node/20.18.0/        │   │
-│  │      bin/codex                                    │   │
-│  │    → prints tip: use `vp install -g` instead      │   │
-│  │                                                   │   │
-│  │  return exit_code (0)                             │   │
-│  └───────────────────────────────────────────────────┘   │
-│                                                         │
-│  (normal exec_tool path SKIPPED)                        │
-└─────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│  dispatch("npm", ["install", "-g", "codex"])               │
+│  (crates/vite_global_cli/src/shim/dispatch.rs)             │
+│                                                             │
+│  1–5. vpx / recursion / bypass / shim / core checks        │
+│  6. resolve version    → 20.18.0                           │
+│  7. ensure installed   → ok                                │
+│  8. locate npm binary  → ~/.vite-plus/js_runtime/          │
+│                           node/20.18.0/bin/npm              │
+│  9. save original_path = $PATH                             │
+│  10. prepend node bin dir to PATH                          │
+│  11. set recursion marker                                  │
+│                                                             │
+│  ┌─── npm global install detection ─────────────────────┐  │
+│  │                                                       │  │
+│  │  parse_npm_global_install(args)                       │  │
+│  │    → detects "install" + "-g"                         │  │
+│  │    → extracts packages: ["codex"]                     │  │
+│  │    → returns Some(NpmGlobalInstall)                   │  │
+│  │                                                       │  │
+│  │  spawn_tool(npm_path, args)    ← NOT exec!            │  │
+│  │    → runs real npm install -g codex                   │  │
+│  │    → waits for completion, exit_code = 0              │  │
+│  │                                                       │  │
+│  │  check_npm_global_install_result(                     │  │
+│  │      pkgs, ver, orig_path, npm_path)                  │  │
+│  │                                                       │  │
+│  │    ┌─ Determine actual npm global prefix ───────────┐ │  │
+│  │    │  run `npm config get prefix` → e.g. /usr/local │ │  │
+│  │    │  npm_bin_dir = <prefix>/bin/                    │ │  │
+│  │    │  (fallback: node_dir if npm fails)             │ │  │
+│  │    └────────────────────────────────────────────────┘ │  │
+│  │                                                       │  │
+│  │    ┌─ Is npm_bin_dir in original_path? ─────────────┐ │  │
+│  │    │  YES → return (binaries on PATH)               │ │  │
+│  │    │  NO  → continue to per-binary check            │ │  │
+│  │    └────────────────────────────────────────────────┘ │  │
+│  │                                                       │  │
+│  │    → for each binary in package:                      │  │
+│  │        skip core shims (node/npm/npx/vp)              │  │
+│  │        skip if already exists in ~/.vite-plus/bin/     │  │
+│  │        check source exists in npm_bin_dir             │  │
+│  │        add to missing_bins list                       │  │
+│  │    → interactive? prompt to create links              │  │
+│  │      non-interactive? create links directly           │  │
+│  │    → prints tip: use `vp install -g` instead          │  │
+│  │                                                       │  │
+│  │  return exit_code (0)                                 │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 **Interactive mode** (stdin is a TTY):

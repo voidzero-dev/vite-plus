@@ -10,7 +10,7 @@ added 1 package in <variable>ms
 
 > npm install -g ./npm-global-linked-pkg # Should NOT show hint (binary already exists)
 
-added 1 package in <variable>ms
+changed 1 package in <variable>ms
 
 > vp remove -g npm-global-linked-pkg # Cleanup
   Uninstalling npm-global-linked-pkg...

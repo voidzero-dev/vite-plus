@@ -1,0 +1,7 @@
+{
+  "name": "npm-global-on-path-pkg",
+  "version": "1.0.0",
+  "bin": {
+    "npm-global-on-path-cli": "./cli.js"
+  }
+}
