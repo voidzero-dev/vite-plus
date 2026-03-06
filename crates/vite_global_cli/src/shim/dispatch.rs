@@ -537,6 +537,11 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
             // Owned by a different npm package — check if our link target is now broken
             // (npm may have deleted the binary from npm_bin_dir when uninstalling)
             let link_path = bin_dir.join(bin_name);
+
+            // On Unix, exists() follows the symlink — if target is gone, it returns false.
+            // On Windows, the shim files are regular files that always "exist",
+            // so we always fall through to the repair check below.
+            #[cfg(unix)]
             if link_path.as_path().exists() {
                 // Target still accessible — nothing to repair
                 continue;
@@ -560,6 +565,11 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
             let source_path = node_modules_dir.join(&bin_rel_path);
             if source_path.as_path().exists() {
                 let _ = std::fs::remove_file(link_path.as_path());
+                #[cfg(windows)]
+                {
+                    let cmd_path = bin_dir.join(vite_str::format!("{bin_name}.cmd"));
+                    let _ = std::fs::remove_file(cmd_path.as_path());
+                }
                 create_bin_link(
                     &bin_dir,
                     bin_name,
@@ -733,8 +743,9 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         }
     };
 
-    // Save original PATH before we modify it — needed for npm global install check
-    let original_path = std::env::var_os("PATH");
+    // Save original PATH before we modify it — needed for npm global install check.
+    // Only captured for npm to avoid unnecessary work on node/npx hot path.
+    let original_path = if tool == "npm" { std::env::var_os("PATH") } else { None };
 
     // Prepare environment for recursive invocations
     // Prepend real node bin dir to PATH so child processes use the correct version

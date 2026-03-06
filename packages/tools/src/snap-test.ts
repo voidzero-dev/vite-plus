@@ -254,6 +254,8 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
     GIT_COMMITTER_NAME: 'Test',
     GIT_AUTHOR_EMAIL: 'vite-plus-test@test.com',
     GIT_COMMITTER_EMAIL: 'vite-plus-test@test.com',
+    // make sure npm install global packages to the temporary directory
+    NPM_CONFIG_PREFIX: path.join(tempTmpDir, 'npm-global-lib-for-snap-tests'),
 
     // A test case can override/unset environment variables above.
     // For example, VITE_PLUS_CLI_TEST/CI can be unset to test the real-world outputs.

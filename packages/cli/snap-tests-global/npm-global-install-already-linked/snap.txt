@@ -25,10 +25,39 @@ Tools:
 <vite-plus-home>/bin/node
 
 > npm --version
-11.9.0
+10.9.4
 
 > node --version
-v24.14.0
+v22.22.0
+
+> vp env doctor
+VITE+ - The Unified Toolchain for the Web
+
+Installation
+  ✓ VITE_PLUS_HOME    ~/.vite-plus
+  ✓ Bin directory     exists
+  ✓ Shims             node, npm, npx
+
+Configuration
+  ✓ Shim mode         managed
+  ✓ IDE integration   env sourced in ~/.zshenv
+
+PATH
+  ✓ vp                first in PATH
+  ✓ node              ~/.vite-plus/bin/node (vp shim)
+  ✓ npm               ~/.vite-plus/bin/npm (vp shim)
+  ✓ npx               ~/.vite-plus/bin/npx (vp shim)
+
+Version Resolution
+  Directory         <cwd>
+  Source            <cwd>/.node-version
+  Version           <semver>
+  ✓ Node binary       installed
+
+✓ All checks passed
+
+> npm config get prefix
+<cwd>/../npm-global-lib-for-snap-tests
 
 > vp install -g ./npm-global-linked-pkg # First install via vp (creates managed shim)
 VITE+ - The Unified Toolchain for the Web
@@ -37,10 +66,27 @@ Installing ./npm-global-linked-pkg globally...
 Installed ./npm-global-linked-pkg v<semver>
 Binaries: npm-global-linked-cli
 
+> npm-global-linked-cli # Should be callable via the link
+npm-global-linked-cli works
+
 > npm install -g ./npm-global-linked-pkg # Should NOT show hint (binary already exists)
 
 added 1 package in <variable>ms
 Skipped 'npm-global-linked-cli': managed by `vp install -g ./npm-global-linked-pkg`. Run `vp uninstall -g ./npm-global-linked-pkg` to remove it first.
 
+> vp ls -g
+Package                         Node version   Binaries
+---                             ---            ---
+pnpm@<semver>                    <semver>        pnpm, pnpx
+./npm-global-linked-pkg@<semver>   <semver>        npm-global-linked-cli
+
+> npm ls -g
+<cwd>/../npm-global-lib-for-snap-tests/lib
+└── npm-global-linked-pkg@<semver> -> ./../../npm-global-install-already-linked/npm-global-linked-pkg
+
+
 > vp remove -g npm-global-linked-pkg # Cleanup
 Uninstalled npm-global-linked-pkg
+
+> test -L $VITE_PLUS_HOME/bin/npm-global-linked-cli && echo 'link created' || echo 'link removed'
+link removed

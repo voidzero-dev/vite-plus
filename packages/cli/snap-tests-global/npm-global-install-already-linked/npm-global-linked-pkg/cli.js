@@ -1,2 +1,2 @@
 #!/usr/bin/env node
-console.log('linked-cli works');
+console.log('npm-global-linked-cli works');

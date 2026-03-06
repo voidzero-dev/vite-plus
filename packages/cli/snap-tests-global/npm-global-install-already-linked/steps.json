@@ -9,9 +9,15 @@
     "which node",
     "npm --version",
     "node --version",
+    "vp env doctor",
+    "npm config get prefix",
     "vp install -g ./npm-global-linked-pkg # First install via vp (creates managed shim)",
+    "npm-global-linked-cli # Should be callable via the link",
     "npm install -g ./npm-global-linked-pkg # Should NOT show hint (binary already exists)",
-    "vp remove -g npm-global-linked-pkg # Cleanup"
+    "vp ls -g",
+    "npm ls -g",
+    "vp remove -g npm-global-linked-pkg # Cleanup",
+    "test -L $VITE_PLUS_HOME/bin/npm-global-linked-cli && echo 'link created' || echo 'link removed'"
   ],
   "after": ["npm uninstall -g npm-global-linked-pkg"]
 }
