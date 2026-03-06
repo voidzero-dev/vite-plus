@@ -11,5 +11,4 @@ changed 1 package in <variable>ms
 'npm-global-linked-cli' is already managed by `vp install -g`. Run `vp uninstall -g` first to replace it.
 
 > vp remove -g npm-global-linked-pkg # Cleanup
-Uninstalling npm-global-linked-pkg...
 Uninstalled npm-global-linked-pkg

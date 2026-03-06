@@ -9,7 +9,6 @@ Binaries: command-env-install-version-alias-pkg-cli
 LTS major >= 20: true
 
 > vp remove -g command-env-install-version-alias-pkg # Cleanup
-Uninstalling command-env-install-version-alias-pkg...
 Uninstalled command-env-install-version-alias-pkg
 
 > vp install -g --node latest ./command-env-install-version-alias-pkg # Install with latest alias
@@ -23,5 +22,4 @@ Binaries: command-env-install-version-alias-pkg-cli
 Latest major >= 20: true
 
 > vp remove -g command-env-install-version-alias-pkg # Cleanup
-Uninstalling command-env-install-version-alias-pkg...
 Uninstalled command-env-install-version-alias-pkg

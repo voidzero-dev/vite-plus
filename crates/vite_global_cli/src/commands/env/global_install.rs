@@ -245,8 +245,6 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
         return Ok(());
     }
 
-    output::raw(&format!("Uninstalling {}...", package_name));
-
     // Remove shims and bin configs
     let bin_dir = get_bin_dir()?;
     for bin_name in &bins {

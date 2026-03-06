@@ -48,14 +48,8 @@ impl BinConfig {
     }
 
     /// Create a new BinConfig with `Npm` source (used by npm install -g interception).
-    pub fn new_npm(name: String, package: String) -> Self {
-        Self {
-            name,
-            package,
-            version: String::new(),
-            node_version: String::new(),
-            source: BinSource::Npm,
-        }
+    pub fn new_npm(name: String, package: String, node_version: String) -> Self {
+        Self { name, package, version: String::new(), node_version, source: BinSource::Npm }
     }
 
     /// Get the bins directory path (~/.vite-plus/bins/).
@@ -304,12 +298,16 @@ mod tests {
 
     #[test]
     fn test_new_npm_source() {
-        let config = BinConfig::new_npm("codex".to_string(), "@openai/codex".to_string());
+        let config = BinConfig::new_npm(
+            "codex".to_string(),
+            "@openai/codex".to_string(),
+            "22.22.0".to_string(),
+        );
         assert_eq!(config.source, BinSource::Npm);
         assert_eq!(config.name, "codex");
         assert_eq!(config.package, "@openai/codex");
         assert!(config.version.is_empty());
-        assert!(config.node_version.is_empty());
+        assert_eq!(config.node_version, "22.22.0");
     }
 
     #[test]
@@ -328,7 +326,11 @@ mod tests {
             vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
         );
 
-        let config = BinConfig::new_npm("codex".to_string(), "@openai/codex".to_string());
+        let config = BinConfig::new_npm(
+            "codex".to_string(),
+            "@openai/codex".to_string(),
+            "22.22.0".to_string(),
+        );
         config.save_sync().unwrap();
 
         let loaded = BinConfig::load_sync("codex").unwrap();

@@ -39,7 +39,6 @@ VITE+ - The Unified Toolchain for the Web
   Installed:  <date>
 
 > vp remove -g cowsay # Cleanup
-Uninstalling cowsay...
 Uninstalled cowsay
 
 [1]> vp env which unknown-tool # Unknown tool - error message

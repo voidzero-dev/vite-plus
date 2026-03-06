@@ -10,5 +10,4 @@ outer call
 inner call succeeded
 
 > vp remove -g recursive-cli-pkg # Cleanup
-Uninstalling recursive-cli-pkg...
 Uninstalled recursive-cli-pkg

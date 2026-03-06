@@ -34,7 +34,6 @@ VITE+ - The Unified Toolchain for the Web
 
 Installing ./env-binary-conflict-pkg-b globally...
 Uninstalling ./env-binary-conflict-pkg-a (conflicts with ./env-binary-conflict-pkg-b)...
-Uninstalling ./env-binary-conflict-pkg-a...
 Uninstalled ./env-binary-conflict-pkg-a
 Installed ./env-binary-conflict-pkg-b v<semver>
 Binaries: env-binary-conflict-cli
@@ -48,7 +47,6 @@ Binaries: env-binary-conflict-cli
   "source": "vp"
 }
 > vp remove -g env-binary-conflict-pkg-b # Cleanup
-Uninstalling env-binary-conflict-pkg-b...
 Uninstalled env-binary-conflict-pkg-b
 
 > test ! -f $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json && echo 'bin config removed' # Bin config should be deleted

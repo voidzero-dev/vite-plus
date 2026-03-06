@@ -4,6 +4,7 @@
 //! On Windows, spawns the process and waits for completion.
 
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 /// Spawn a tool as a child process and wait for completion.
 ///
@@ -13,7 +14,7 @@ pub fn spawn_tool(path: &AbsolutePath, args: &[String]) -> i32 {
     match std::process::Command::new(path.as_path()).args(args).status() {
         Ok(status) => status.code().unwrap_or(1),
         Err(e) => {
-            eprintln!("vp: Failed to execute {}: {}", path.as_path().display(), e);
+            output::error(&format!("Failed to execute {}: {}", path.as_path().display(), e));
             1
         }
     }

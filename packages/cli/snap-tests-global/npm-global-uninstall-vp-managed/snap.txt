@@ -21,5 +21,4 @@ link exists
 npm-global-vp-managed-cli works
 
 > vp remove -g npm-global-vp-managed-pkg # Cleanup
-Uninstalling npm-global-vp-managed-pkg...
 Uninstalled npm-global-vp-managed-pkg

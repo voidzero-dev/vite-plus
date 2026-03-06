@@ -210,6 +210,7 @@ fn check_npm_global_install_result(
     original_path: Option<&std::ffi::OsStr>,
     npm_prefix: &AbsolutePath,
     node_dir: &AbsolutePath,
+    node_version: &str,
 ) {
     use std::io::IsTerminal;
 
@@ -259,8 +260,12 @@ fn check_npm_global_install_result(
                         managed_conflicts.push(bin_name);
                     } else if config.source == BinSource::Npm && config.package != package_name {
                         // Link exists from a different npm package — update ownership
-                        let _ = BinConfig::new_npm(bin_name.to_string(), package_name.clone())
-                            .save_sync();
+                        let _ = BinConfig::new_npm(
+                            bin_name.to_string(),
+                            package_name.clone(),
+                            node_version.to_string(),
+                        )
+                        .save_sync();
                     }
                 }
                 continue;
@@ -325,7 +330,7 @@ fn check_npm_global_install_result(
 
     if should_link {
         for (bin_name, source_path, package_name) in &missing_bins {
-            create_bin_link(&bin_dir, bin_name, source_path, package_name);
+            create_bin_link(&bin_dir, bin_name, source_path, package_name, node_version);
         }
     }
 
@@ -368,6 +373,7 @@ fn create_bin_link(
     bin_name: &str,
     source_path: &AbsolutePath,
     package_name: &str,
+    node_version: &str,
 ) {
     let mut linked = false;
 
@@ -412,7 +418,12 @@ fn create_bin_link(
 
     // Record the link in BinConfig so we can identify it during uninstall
     if linked {
-        let _ = BinConfig::new_npm(bin_name.to_string(), package_name.to_string()).save_sync();
+        let _ = BinConfig::new_npm(
+            bin_name.to_string(),
+            package_name.to_string(),
+            node_version.to_string(),
+        )
+        .save_sync();
     }
 }
 
@@ -665,6 +676,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
                         original_path.as_deref(),
                         &npm_prefix,
                         &node_dir,
+                        &resolution.version,
                     );
                 }
             }

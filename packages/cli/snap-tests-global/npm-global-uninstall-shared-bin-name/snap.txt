@@ -13,7 +13,7 @@ link exists
   "name": "npm-global-shared-cli",
   "package": "npm-global-shared-pkg-a",
   "version": "",
-  "nodeVersion": "",
+  "nodeVersion": "24.14.0",
   "source": "npm"
 }
 > npm install -g --force ./pkg-b # Install pkg-b with force (overwrites npm-global-shared-cli)
@@ -29,7 +29,7 @@ link exists
   "name": "npm-global-shared-cli",
   "package": "npm-global-shared-pkg-b",
   "version": "",
-  "nodeVersion": "",
+  "nodeVersion": "24.14.0",
   "source": "npm"
 }
 > npm-global-shared-cli # Should print pkg-b message (latest installed)
