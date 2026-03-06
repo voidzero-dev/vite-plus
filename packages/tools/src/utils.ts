@@ -98,6 +98,9 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/npm warn Unknown env config .+?\n/g, '')
       // WARN  Issue while reading "/path/to/.npmrc". Failed to replace env in config: ${NPM_AUTH_TOKEN}
       .replaceAll(/WARN\s+Issue\s+while\s+reading .+?\n/g, '')
+      // Normalize npm "changed N package" → "added N package" for stable snapshots.
+      // npm says "changed" when re-installing an existing package, "added" on first install.
+      .replaceAll(/changed (\d+ packages?)/g, 'added $1')
       // ignore npm audited packages log
       // "removed 1 package, and audited 3 packages in 700ms" => "removed <variable> package in <variable>ms"
       // "up to date, audited 4 packages in 11ms" => "up to date in <variable>ms"
