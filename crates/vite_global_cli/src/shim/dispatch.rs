@@ -13,7 +13,7 @@ use super::{
     exec, is_core_shim_tool,
 };
 use crate::commands::env::{
-    bin_config::BinConfig,
+    bin_config::{BinConfig, BinSource},
     config::{self, ShimMode},
     global_install::CORE_SHIMS,
     package_metadata::PackageMetadata,
@@ -37,10 +37,13 @@ fn is_package_manager_tool(tool: &str) -> bool {
 struct NpmGlobalCommand {
     /// Package names/specs extracted from args (e.g., ["codex", "typescript@5"])
     packages: Vec<String>,
+    /// Explicit `--prefix <dir>` from the CLI args, if present.
+    explicit_prefix: Option<String>,
 }
 
 /// Value-bearing npm flags whose next arg should be skipped during package extraction.
-const NPM_VALUE_FLAGS: &[&str] = &["--prefix", "--registry", "--tag", "--cache", "--tmp"];
+/// Note: `--prefix` is handled separately to capture its value.
+const NPM_VALUE_FLAGS: &[&str] = &["--registry", "--tag", "--cache", "--tmp"];
 
 /// Install subcommands recognized by npm.
 const NPM_INSTALL_SUBCOMMANDS: &[&str] = &["install", "i", "add"];
@@ -55,8 +58,17 @@ fn parse_npm_global_command(args: &[String], subcommands: &[&str]) -> Option<Npm
     let mut has_subcommand = false;
     let mut packages = Vec::new();
     let mut skip_next = false;
+    let mut prefix_next = false;
+    let mut explicit_prefix = None;
 
     for arg in args {
+        // Capture the value after --prefix
+        if prefix_next {
+            prefix_next = false;
+            explicit_prefix = Some(arg.clone());
+            continue;
+        }
+
         if skip_next {
             skip_next = false;
             continue;
@@ -72,7 +84,17 @@ fn parse_npm_global_command(args: &[String], subcommands: &[&str]) -> Option<Npm
             continue;
         }
 
-        // Check for value-bearing flags
+        // Capture --prefix specially (its value is needed for prefix resolution)
+        if arg == "--prefix" {
+            prefix_next = true;
+            continue;
+        }
+        if let Some(value) = arg.strip_prefix("--prefix=") {
+            explicit_prefix = Some(value.to_string());
+            continue;
+        }
+
+        // Check for value-bearing flags (skip their values)
         if NPM_VALUE_FLAGS.contains(&arg.as_str()) {
             skip_next = true;
             continue;
@@ -91,7 +113,7 @@ fn parse_npm_global_command(args: &[String], subcommands: &[&str]) -> Option<Npm
         return None;
     }
 
-    Some(NpmGlobalCommand { packages })
+    Some(NpmGlobalCommand { packages, explicit_prefix })
 }
 
 /// Parse npm args to detect `npm install -g <packages>`.
@@ -113,9 +135,19 @@ fn parse_npm_global_uninstall(args: &[String]) -> Option<NpmGlobalCommand> {
 /// - Regular specs: "codex" → "codex", "typescript@5" → "typescript"
 /// - Scoped specs: "@scope/pkg" → "@scope/pkg", "@scope/pkg@1.0" → "@scope/pkg"
 /// - Local paths: "./foo" → reads foo/package.json → name field
+fn is_local_path(spec: &str) -> bool {
+    spec.starts_with("./")
+        || spec.starts_with("../")
+        || spec.starts_with('/')
+        || (cfg!(windows)
+            && spec.len() >= 3
+            && spec.as_bytes()[1] == b':'
+            && (spec.as_bytes()[2] == b'\\' || spec.as_bytes()[2] == b'/'))
+}
+
 fn resolve_package_name(spec: &str) -> Option<String> {
     // Local path — read package.json to get the actual name
-    if spec.starts_with("./") || spec.starts_with("../") || spec.starts_with('/') {
+    if is_local_path(spec) {
         let pkg_json_path = current_dir().ok()?.join(spec).join("package.json");
         let content = std::fs::read_to_string(pkg_json_path.as_path()).ok()?;
         let json: serde_json::Value = serde_json::from_str(&content).ok()?;
@@ -175,23 +207,19 @@ fn get_npm_global_prefix(npm_path: &AbsolutePath, node_dir: &AbsolutePathBuf) ->
 #[allow(clippy::disallowed_macros, clippy::disallowed_types)]
 fn check_npm_global_install_result(
     packages: &[String],
-    node_version: &str,
     original_path: Option<&std::ffi::OsStr>,
-    npm_path: &AbsolutePath,
+    npm_prefix: &AbsolutePath,
+    node_dir: &AbsolutePath,
 ) {
     use std::io::IsTerminal;
 
-    let Ok(home_dir) = vite_shared::get_vite_plus_home() else { return };
     let Ok(bin_dir) = config::get_bin_dir() else { return };
-
-    let node_dir = home_dir.join("js_runtime").join("node").join(node_version);
-    let npm_prefix = get_npm_global_prefix(npm_path, &node_dir);
 
     // Derive bin dir from prefix (Unix: prefix/bin, Windows: prefix itself)
     #[cfg(unix)]
     let npm_bin_dir = npm_prefix.join("bin");
     #[cfg(windows)]
-    let npm_bin_dir = npm_prefix.clone();
+    let npm_bin_dir = npm_prefix.to_path_buf();
 
     // If the npm global bin dir is already on the user's original PATH,
     // binaries are reachable without shims — no action needed.
@@ -202,12 +230,13 @@ fn check_npm_global_install_result(
     }
 
     let is_interactive = std::io::stdin().is_terminal();
-    let mut missing_bins: Vec<(String, AbsolutePathBuf)> = Vec::new();
+    // (bin_name, source_path, package_name)
+    let mut missing_bins: Vec<(String, AbsolutePathBuf, String)> = Vec::new();
     let mut managed_conflicts: Vec<String> = Vec::new();
 
     for spec in packages {
         let Some(package_name) = resolve_package_name(spec) else { continue };
-        let Some(content) = read_npm_package_json(&npm_prefix, &node_dir, &package_name) else {
+        let Some(content) = read_npm_package_json(npm_prefix, node_dir, &package_name) else {
             continue;
         };
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
@@ -225,8 +254,10 @@ fn check_npm_global_install_result(
             let shim_path = bin_dir.join(&bin_name);
             if std::fs::symlink_metadata(shim_path.as_path()).is_ok() {
                 // If managed by vp install -g, warn about the conflict
-                if BinConfig::exists_sync(&bin_name) {
-                    managed_conflicts.push(bin_name);
+                if let Ok(Some(config)) = BinConfig::load_sync(&bin_name) {
+                    if config.source == BinSource::Vp {
+                        managed_conflicts.push(bin_name);
+                    }
                 }
                 continue;
             }
@@ -247,7 +278,7 @@ fn check_npm_global_install_result(
             let source_path = npm_bin_dir.join(format!("{bin_name}.cmd"));
 
             if source_path.as_path().exists() {
-                missing_bins.push((bin_name, source_path));
+                missing_bins.push((bin_name, source_path, package_name.clone()));
             }
         }
     }
@@ -266,7 +297,7 @@ fn check_npm_global_install_result(
 
     let should_link = if is_interactive {
         // Prompt user
-        let bin_list: Vec<&str> = missing_bins.iter().map(|(name, _)| name.as_str()).collect();
+        let bin_list: Vec<&str> = missing_bins.iter().map(|(name, _, _)| name.as_str()).collect();
         let bin_display = bin_list.join(", ");
 
         output::raw(&vite_str::format!("'{bin_display}' is not available on your PATH."));
@@ -289,8 +320,8 @@ fn check_npm_global_install_result(
     };
 
     if should_link {
-        for (bin_name, source_path) in &missing_bins {
-            create_bin_link(&bin_dir, bin_name, source_path);
+        for (bin_name, source_path, package_name) in &missing_bins {
+            create_bin_link(&bin_dir, bin_name, source_path, package_name);
         }
     }
 
@@ -327,8 +358,15 @@ fn extract_bin_names(package_json: &serde_json::Value) -> Vec<String> {
     bins
 }
 
-/// Create a bin link for a binary.
-fn create_bin_link(bin_dir: &AbsolutePath, bin_name: &str, source_path: &AbsolutePath) {
+/// Create a bin link for a binary and record it via BinConfig.
+fn create_bin_link(
+    bin_dir: &AbsolutePath,
+    bin_name: &str,
+    source_path: &AbsolutePath,
+    package_name: &str,
+) {
+    let mut linked = false;
+
     #[cfg(unix)]
     {
         let link_path = bin_dir.join(bin_name);
@@ -337,6 +375,7 @@ fn create_bin_link(bin_dir: &AbsolutePath, bin_name: &str, source_path: &Absolut
                 "Linked '{bin_name}' to {}",
                 link_path.as_path().display()
             ));
+            linked = true;
         } else {
             output::error(&vite_str::format!("Failed to create link for '{bin_name}'"));
         }
@@ -355,6 +394,7 @@ fn create_bin_link(bin_dir: &AbsolutePath, bin_name: &str, source_path: &Absolut
                 "Linked '{bin_name}' to {}",
                 cmd_path.as_path().display()
             ));
+            linked = true;
         } else {
             output::error(&vite_str::format!("Failed to create link for '{bin_name}'"));
         }
@@ -364,6 +404,11 @@ fn create_bin_link(bin_dir: &AbsolutePath, bin_name: &str, source_path: &Absolut
         let sh_content =
             format!("#!/bin/sh\nexec \"{}\" \"$@\"\n", source_path.as_path().display());
         let _ = std::fs::write(sh_path.as_path(), sh_content);
+    }
+
+    // Record the link in BinConfig so we can identify it during uninstall
+    if linked {
+        let _ = BinConfig::new_npm(bin_name.to_string(), package_name.to_string()).save_sync();
     }
 }
 
@@ -378,8 +423,9 @@ fn remove_npm_global_uninstall_links(bin_names: &[String]) {
             continue;
         }
 
-        // Skip vp-managed shims (installed via `vp install -g`)
-        if BinConfig::exists_sync(bin_name) {
+        // Only remove if this link was created by npm install -g
+        if !matches!(BinConfig::load_sync(bin_name), Ok(Some(ref c)) if c.source == BinSource::Npm)
+        {
             continue;
         }
 
@@ -392,6 +438,9 @@ fn remove_npm_global_uninstall_links(bin_names: &[String]) {
                 ));
             }
         }
+
+        // Clean up the BinConfig
+        let _ = BinConfig::delete_sync(bin_name);
 
         // Also remove .cmd on Windows
         #[cfg(windows)]
@@ -445,6 +494,20 @@ fn collect_bin_names_from_npm(
     }
 
     all_bins
+}
+
+/// Resolve the npm prefix, preferring an explicit `--prefix` from CLI args.
+fn resolve_npm_prefix(
+    parsed: &NpmGlobalCommand,
+    npm_path: &AbsolutePath,
+    node_dir: &AbsolutePathBuf,
+) -> AbsolutePathBuf {
+    if let Some(ref prefix) = parsed.explicit_prefix {
+        if let Some(p) = AbsolutePathBuf::new(prefix.into()) {
+            return p;
+        }
+    }
+    get_npm_global_prefix(npm_path, node_dir)
 }
 
 /// Main shim dispatch entry point.
@@ -575,15 +638,19 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     // For npm install/uninstall -g, use spawn+wait so we can post-check/cleanup binaries
     if tool == "npm" {
         if let Some(parsed) = parse_npm_global_install(args) {
-            // Use spawn instead of exec so we can run post-install checks
             let exit_code = exec::spawn_tool(&tool_path, args);
             if exit_code == 0 {
-                check_npm_global_install_result(
-                    &parsed.packages,
-                    &resolution.version,
-                    original_path.as_deref(),
-                    &tool_path,
-                );
+                if let Ok(home_dir) = vite_shared::get_vite_plus_home() {
+                    let node_dir =
+                        home_dir.join("js_runtime").join("node").join(&*resolution.version);
+                    let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
+                    check_npm_global_install_result(
+                        &parsed.packages,
+                        original_path.as_deref(),
+                        &npm_prefix,
+                        &node_dir,
+                    );
+                }
             }
             return exit_code;
         }
@@ -592,7 +659,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
             // Collect bin names before uninstall (package.json will be gone after)
             let bin_names = if let Ok(home_dir) = vite_shared::get_vite_plus_home() {
                 let node_dir = home_dir.join("js_runtime").join("node").join(&*resolution.version);
-                let npm_prefix = get_npm_global_prefix(&tool_path, &node_dir);
+                let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
                 collect_bin_names_from_npm(&parsed.packages, &npm_prefix, &node_dir)
             } else {
                 Vec::new()
@@ -1400,5 +1467,73 @@ mod tests {
     fn test_extract_bin_names_no_bin() {
         let json: serde_json::Value = serde_json::from_str(r#"{"name": "pkg"}"#).unwrap();
         assert!(extract_bin_names(&json).is_empty());
+    }
+
+    // --- is_local_path tests ---
+
+    #[test]
+    fn test_is_local_path_relative_dot() {
+        assert!(is_local_path("./foo"));
+        assert!(is_local_path("../bar"));
+    }
+
+    #[test]
+    fn test_is_local_path_absolute() {
+        assert!(is_local_path("/usr/local/pkg"));
+    }
+
+    #[test]
+    fn test_is_local_path_package_name() {
+        assert!(!is_local_path("typescript"));
+        assert!(!is_local_path("@scope/pkg"));
+        assert!(!is_local_path("pkg@1.0.0"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_is_local_path_windows_drive() {
+        assert!(is_local_path("C:\\pkg"));
+        assert!(is_local_path("D:/projects/my-pkg"));
+        assert!(!is_local_path("C")); // too short
+    }
+
+    // --- parse_npm_global_command --prefix tests ---
+
+    #[test]
+    fn test_parse_npm_global_install_with_prefix() {
+        let result =
+            parse_npm_global_install(&s(&["install", "-g", "--prefix", "/tmp/test", "pkg"]));
+        assert!(result.is_some());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.packages, vec!["pkg"]);
+        assert_eq!(parsed.explicit_prefix.as_deref(), Some("/tmp/test"));
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_with_prefix_equals() {
+        let result = parse_npm_global_install(&s(&["install", "-g", "--prefix=/tmp/test", "pkg"]));
+        assert!(result.is_some());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.packages, vec!["pkg"]);
+        assert_eq!(parsed.explicit_prefix.as_deref(), Some("/tmp/test"));
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_without_prefix() {
+        let result = parse_npm_global_install(&s(&["install", "-g", "pkg"]));
+        assert!(result.is_some());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.packages, vec!["pkg"]);
+        assert!(parsed.explicit_prefix.is_none());
+    }
+
+    #[test]
+    fn test_parse_npm_global_uninstall_with_prefix() {
+        let result =
+            parse_npm_global_uninstall(&s(&["uninstall", "-g", "--prefix", "/custom/dir", "pkg"]));
+        assert!(result.is_some());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.packages, vec!["pkg"]);
+        assert_eq!(parsed.explicit_prefix.as_deref(), Some("/custom/dir"));
     }
 }

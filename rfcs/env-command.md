@@ -1829,7 +1829,13 @@ User runs: npm install react
 
 When `npm uninstall -g` is detected, the shim uses `spawn_tool()` (like install) to retain control after npm finishes. Before running npm, it collects bin names from the package's `package.json` (which will be removed by npm). After a successful uninstall, it removes the corresponding symlinks from `~/.vite-plus/bin/`.
 
-**Protection for `vp install -g` managed shims**: Before removing a link, the shim checks `BinConfig::exists_sync()`. If the binary has a BinConfig file, it is managed by `vp install -g` and is NOT removed. This ensures `npm uninstall -g` cannot break `vp install -g` managed shims.
+**Link tracking via BinConfig**: When `npm install -g` creates links in `~/.vite-plus/bin/`, a `BinConfig` with `source: "npm"` is written to `~/.vite-plus/bins/{name}.json`. This distinguishes npm-created links from `vp install -g` managed shims (`source: "vp"`) and user-owned binaries (no BinConfig).
+
+**Safe uninstall cleanup**: `npm uninstall -g` only removes links that have a BinConfig with `source: "npm"`. User-owned binaries and `vp install -g` managed shims are never touched.
+
+**`--prefix` support**: When `--prefix <dir>` is passed to `npm install -g` or `npm uninstall -g`, the shim uses that prefix for package.json lookups and bin dir resolution instead of running `npm config get prefix`.
+
+**Windows local path support**: `resolve_package_name()` treats drive-letter paths (`C:\...`) as local paths.
 
 #### Design Decision: spawn vs exec
 

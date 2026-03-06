@@ -1,0 +1,7 @@
+{
+  "name": "npm-global-preexist-pkg",
+  "version": "1.0.0",
+  "bin": {
+    "npm-global-preexist-cli": "./cli.js"
+  }
+}

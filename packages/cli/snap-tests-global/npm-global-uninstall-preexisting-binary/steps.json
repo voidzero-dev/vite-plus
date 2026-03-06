@@ -1,0 +1,13 @@
+{
+  "env": {},
+  "serial": true,
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "printf '#!/bin/sh\\necho preexisting-binary-works' > $VITE_PLUS_HOME/bin/npm-global-preexist-cli && chmod +x $VITE_PLUS_HOME/bin/npm-global-preexist-cli # Create user-owned binary",
+    "npm-global-preexist-cli # Verify it works before",
+    "npm install -g ./npm-global-preexist-pkg # Install pkg that declares same bin name",
+    "npm uninstall -g npm-global-preexist-pkg # Should NOT remove the pre-existing binary",
+    "npm-global-preexist-cli # Should still work",
+    "rm $VITE_PLUS_HOME/bin/npm-global-preexist-cli # Cleanup"
+  ]
+}
