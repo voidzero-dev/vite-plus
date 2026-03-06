@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, test } from '@voidzero-dev/vite-plus-test';
+import { afterEach, beforeEach, describe, expect, test } from '@voidzero-dev/vite-plus-test';
 
 import { isPassThroughEnv, replaceUnstableOutput } from '../utils';
 
@@ -99,6 +99,52 @@ Done in 171ms using pnpm v10.16.1
     const cwd = path.join(tmp, `vite-plus-unittest-${randomUUID()}`);
     const output = `${path.join(cwd, 'foo.txt')}\n${path.join(cwd, '../other/bar.txt')}`;
     expect(replaceUnstableOutput(output.trim(), cwd)).toMatchSnapshot();
+  });
+
+  describe('Windows cwd replacement', () => {
+    const originalPlatform = process.platform;
+
+    beforeEach(() => {
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', { value: originalPlatform });
+    });
+
+    test('mixed-separator cwd matches all-backslash output', () => {
+      // Simulates the CI failure: cwd has mixed separators (template literal),
+      // but Vite outputs all-backslash paths (path.resolve)
+      const cwd =
+        'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp/vite-plus-test-abc/command-staged-broken-config';
+      const output =
+        'failed to load config from C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\vite-plus-test-abc\\command-staged-broken-config\\vite.config.ts';
+      expect(replaceUnstableOutput(output, cwd)).toBe(
+        'failed to load config from <cwd>/vite.config.ts',
+      );
+    });
+
+    test('all-backslash cwd matches all-backslash output', () => {
+      // Avoid dots in output: on macOS, path.dirname('C:\\...') returns '.'
+      // which would corrupt any '.' via replaceAll. On real Windows this is fine.
+      const cwd = 'C:\\Users\\runner\\project';
+      const output = 'error in C:\\Users\\runner\\project\\src\\index';
+      expect(replaceUnstableOutput(output, cwd)).toBe('error in <cwd>/src/index');
+    });
+
+    test('cwd at end of string without trailing separator', () => {
+      const cwd = 'C:\\Users\\runner\\project';
+      const output = 'path is C:\\Users\\runner\\project';
+      expect(replaceUnstableOutput(output, cwd)).toBe('path is <cwd>');
+    });
+
+    test('parent directory replacement with backslash paths', () => {
+      // cwd must contain forward slashes so POSIX path.dirname (on macOS) can
+      // derive the parent correctly; on real Windows both separators work.
+      const cwd = 'C:\\Users\\RUNNER~1\\Temp/vite-plus-test/my-test';
+      const output = 'found C:\\Users\\RUNNER~1\\Temp\\vite-plus-test\\other\\file.ts';
+      expect(replaceUnstableOutput(output, cwd)).toBe('found <cwd>/../other/file.ts');
+    });
   });
 
   test('replace tsdown output', () => {

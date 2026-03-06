@@ -14,9 +14,22 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
   output = output.replaceAll(ANSI_ESCAPE_REGEX, '').replaceAll(/\r\n/g, '\n').replaceAll(/\r/g, '');
 
   if (cwd) {
-    output = output.replaceAll(cwd, '<cwd>');
-    if (path.dirname(cwd) !== '/') {
-      output = output.replaceAll(path.dirname(cwd), '<cwd>/..');
+    // On Windows, cwd may have mixed separators (from template literals like `${tmp}/name`)
+    // while output uses all-backslash paths (from path.resolve()). Replace the all-backslash
+    // form of each path token, with trailing separator first so the separator after the
+    // placeholder is normalized to forward slash.
+    const replacePathToken = (rawPath: string, placeholder: string) => {
+      if (process.platform === 'win32') {
+        const backslash = rawPath.replaceAll('/', '\\');
+        output = output.replaceAll(backslash + '\\', placeholder + '/');
+        output = output.replaceAll(backslash, placeholder);
+      }
+      output = output.replaceAll(rawPath, placeholder);
+    };
+    replacePathToken(cwd, '<cwd>');
+    const parent = path.dirname(cwd);
+    if (parent !== '/') {
+      replacePathToken(parent, '<cwd>/..');
     }
   }
   // On Windows, normalize path separators in file paths for consistent snapshots.
