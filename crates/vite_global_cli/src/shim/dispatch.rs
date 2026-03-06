@@ -6,7 +6,7 @@
 //! 3. Tool execution (core tools and package binaries)
 
 use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
-use vite_shared::{PrependOptions, env_vars, prepend_to_path_env};
+use vite_shared::{PrependOptions, env_vars, output, prepend_to_path_env};
 
 use super::{
     cache::{self, ResolveCache, ResolveCacheEntry},
@@ -135,16 +135,27 @@ fn resolve_package_name(spec: &str) -> Option<String> {
 /// `NPM_CONFIG_PREFIX` env var and `.npmrc` settings. Falls back to `node_dir`.
 #[allow(clippy::disallowed_types)]
 fn get_npm_global_prefix(npm_path: &AbsolutePath, node_dir: &AbsolutePathBuf) -> AbsolutePathBuf {
-    // `npm config get prefix` respects NPM_CONFIG_PREFIX, .npmrc, and other
-    // npm config mechanisms without the output sanitization that `npm prefix -g`
-    // applies (which can mangle paths containing UUID-like segments).
+    // Try NPM_CONFIG_PREFIX env var first — `npm config get prefix` can fail when the
+    // resolved prefix path contains UUID-like segments, because npm's @npmcli/redact
+    // treats them as secrets and marks the value as "protected".
+    if let Ok(prefix) = std::env::var("NPM_CONFIG_PREFIX") {
+        let prefix = prefix.trim();
+        if let Some(prefix_path) = AbsolutePathBuf::new(prefix.into()) {
+            return prefix_path;
+        }
+    }
+
+    // Fall back to `npm config get prefix` for cases where the prefix is set via
+    // .npmrc or other npm config mechanisms (not env var).
     if let Ok(output) =
         std::process::Command::new(npm_path.as_path()).args(["config", "get", "prefix"]).output()
     {
-        if let Ok(prefix) = std::str::from_utf8(&output.stdout) {
-            let prefix = prefix.trim();
-            if let Some(prefix_path) = AbsolutePathBuf::new(prefix.into()) {
-                return prefix_path;
+        if output.status.success() {
+            if let Ok(prefix) = std::str::from_utf8(&output.stdout) {
+                let prefix = prefix.trim();
+                if let Some(prefix_path) = AbsolutePathBuf::new(prefix.into()) {
+                    return prefix_path;
+                }
             }
         }
     }
@@ -260,9 +271,11 @@ fn check_npm_global_install_result(
         let bin_list: Vec<&str> = missing_bins.iter().map(|(name, _)| name.as_str()).collect();
         let bin_display = bin_list.join(", ");
 
-        eprintln!("\nvp: '{bin_display}' was installed to Node.js {node_version}'s bin directory,");
-        eprintln!("    but is not available on your PATH.\n");
-        eprint!("    Create a link in ~/.vite-plus/bin/ to make it available? [Y/n] ");
+        output::warn(&vite_str::format!(
+            "'{bin_display}' was installed to Node.js {node_version}'s bin directory,"
+        ));
+        eprintln!("      but is not available on your PATH.\n");
+        eprint!("      Create a link in ~/.vite-plus/bin/ to make it available? [Y/n] ");
 
         let mut input = String::new();
         let confirmed = std::io::stdin().read_line(&mut input).is_ok();
@@ -320,24 +333,30 @@ fn create_bin_link(bin_dir: &AbsolutePath, bin_name: &str, source_path: &Absolut
     {
         let link_path = bin_dir.join(bin_name);
         if std::os::unix::fs::symlink(source_path.as_path(), link_path.as_path()).is_ok() {
-            eprintln!("vp: Linked '{}' to {}", bin_name, link_path.as_path().display());
+            output::info(&vite_str::format!(
+                "Linked '{bin_name}' to {}",
+                link_path.as_path().display()
+            ));
         } else {
-            eprintln!("vp: Failed to create link for '{}'", bin_name);
+            output::error(&vite_str::format!("Failed to create link for '{bin_name}'"));
         }
     }
 
     #[cfg(windows)]
     {
         // Create .cmd wrapper
-        let cmd_path = bin_dir.join(format!("{bin_name}.cmd"));
-        let wrapper_content = format!(
+        let cmd_path = bin_dir.join(vite_str::format!("{bin_name}.cmd"));
+        let wrapper_content = vite_str::format!(
             "@echo off\r\n\"{source}\" %*\r\nexit /b %ERRORLEVEL%\r\n",
             source = source_path.as_path().display()
         );
         if std::fs::write(cmd_path.as_path(), &wrapper_content).is_ok() {
-            eprintln!("vp: Linked '{}' to {}", bin_name, cmd_path.as_path().display());
+            output::info(&vite_str::format!(
+                "Linked '{bin_name}' to {}",
+                cmd_path.as_path().display()
+            ));
         } else {
-            eprintln!("vp: Failed to create link for '{}'", bin_name);
+            output::error(&vite_str::format!("Failed to create link for '{bin_name}'"));
         }
 
         // Also create shell script for Git Bash
