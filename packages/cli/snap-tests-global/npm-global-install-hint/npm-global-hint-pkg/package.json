@@ -1,0 +1,7 @@
+{
+  "name": "npm-global-hint-pkg",
+  "version": "1.0.0",
+  "bin": {
+    "npm-global-hint-cli": "./cli.js"
+  }
+}

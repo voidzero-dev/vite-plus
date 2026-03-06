@@ -1,0 +1,7 @@
+{
+  "env": {},
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "npm install --help # No -g flag, should run normal npm without any hint"
+  ]
+}

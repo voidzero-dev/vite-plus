@@ -5,6 +5,20 @@
 
 use vite_path::AbsolutePath;
 
+/// Spawn a tool as a child process and wait for completion.
+///
+/// Unlike `exec_tool()`, this does NOT replace the current process on Unix,
+/// allowing the caller to run code after the tool exits.
+pub fn spawn_tool(path: &AbsolutePath, args: &[String]) -> i32 {
+    match std::process::Command::new(path.as_path()).args(args).status() {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(e) => {
+            eprintln!("vp: Failed to execute {}: {}", path.as_path().display(), e);
+            1
+        }
+    }
+}
+
 /// Execute a tool, replacing the current process on Unix.
 ///
 /// Returns an exit code on Windows or if exec fails on Unix.
@@ -37,13 +51,5 @@ fn exec_unix(path: &AbsolutePath, args: &[String]) -> i32 {
 /// Windows: Spawn the process and wait for completion.
 #[cfg(windows)]
 fn exec_windows(path: &AbsolutePath, args: &[String]) -> i32 {
-    use std::process::Command;
-
-    match Command::new(path.as_path()).args(args).status() {
-        Ok(status) => status.code().unwrap_or(1),
-        Err(e) => {
-            eprintln!("vp: Failed to execute {}: {}", path.as_path().display(), e);
-            1
-        }
-    }
+    spawn_tool(path, args)
 }

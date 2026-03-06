@@ -1,0 +1,10 @@
+{
+  "env": {},
+  "serial": true,
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp install -g ./npm-global-linked-pkg # First install via vp (creates managed shim)",
+    "npm install -g ./npm-global-linked-pkg # Should NOT show hint (binary already exists)",
+    "vp remove -g npm-global-linked-pkg # Cleanup"
+  ]
+}

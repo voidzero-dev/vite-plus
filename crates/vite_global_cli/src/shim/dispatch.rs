@@ -5,7 +5,7 @@
 //! 2. Node.js installation (if needed)
 //! 3. Tool execution (core tools and package binaries)
 
-use vite_path::{AbsolutePathBuf, current_dir};
+use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_shared::{PrependOptions, env_vars, prepend_to_path_env};
 
 use super::{
@@ -15,6 +15,7 @@ use super::{
 use crate::commands::env::{
     bin_config::BinConfig,
     config::{self, ShimMode},
+    global_install::CORE_SHIMS,
     package_metadata::PackageMetadata,
 };
 
@@ -30,6 +31,267 @@ const PACKAGE_MANAGER_TOOLS: &[&str] = &["pnpm", "yarn"];
 
 fn is_package_manager_tool(tool: &str) -> bool {
     PACKAGE_MANAGER_TOOLS.contains(&tool)
+}
+
+/// Parsed npm global install command.
+struct NpmGlobalInstall {
+    /// Package names/specs extracted from args (e.g., ["codex", "typescript@5"])
+    packages: Vec<String>,
+}
+
+/// Value-bearing npm flags whose next arg should be skipped during package extraction.
+const NPM_VALUE_FLAGS: &[&str] = &["--prefix", "--registry", "--tag", "--cache", "--tmp"];
+
+/// Install subcommands recognized by npm.
+const NPM_INSTALL_SUBCOMMANDS: &[&str] = &["install", "i", "add"];
+
+/// Parse npm args to detect `npm install -g <packages>`.
+/// Returns None if not a global install command.
+fn parse_npm_global_install(args: &[String]) -> Option<NpmGlobalInstall> {
+    let mut has_global = false;
+    let mut has_install = false;
+    let mut packages = Vec::new();
+    let mut skip_next = false;
+
+    for arg in args {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+
+        if arg == "-g" || arg == "--global" {
+            has_global = true;
+            continue;
+        }
+
+        if NPM_INSTALL_SUBCOMMANDS.contains(&arg.as_str()) && !has_install {
+            has_install = true;
+            continue;
+        }
+
+        // Check for value-bearing flags
+        if NPM_VALUE_FLAGS.contains(&arg.as_str()) {
+            skip_next = true;
+            continue;
+        }
+
+        // Skip flags
+        if arg.starts_with('-') {
+            continue;
+        }
+
+        // This is a positional arg (package spec)
+        packages.push(arg.clone());
+    }
+
+    if !has_global || !has_install {
+        return None;
+    }
+
+    // Filter out URLs and git+ prefixes (too complex to resolve package names)
+    packages.retain(|pkg| !pkg.contains("://") && !pkg.starts_with("git+"));
+
+    if packages.is_empty() {
+        return None;
+    }
+
+    Some(NpmGlobalInstall { packages })
+}
+
+/// Resolve package name from a spec string.
+///
+/// Handles:
+/// - Regular specs: "codex" → "codex", "typescript@5" → "typescript"
+/// - Scoped specs: "@scope/pkg" → "@scope/pkg", "@scope/pkg@1.0" → "@scope/pkg"
+/// - Local paths: "./foo" → reads foo/package.json → name field
+fn resolve_package_name(spec: &str) -> Option<String> {
+    // Local path — read package.json to get the actual name
+    if spec.starts_with("./") || spec.starts_with("../") || spec.starts_with('/') {
+        let pkg_json_path = current_dir().ok()?.join(spec).join("package.json");
+        let content = std::fs::read_to_string(pkg_json_path.as_path()).ok()?;
+        let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+        return json.get("name").and_then(|n| n.as_str()).map(str::to_string);
+    }
+
+    // Scoped package: @scope/name or @scope/name@version
+    if let Some(rest) = spec.strip_prefix('@') {
+        if let Some(idx) = rest.find('@') {
+            return Some(spec[..=idx].to_string());
+        }
+        return Some(spec.to_string());
+    }
+
+    // Regular package: name or name@version
+    if let Some(idx) = spec.find('@') {
+        return Some(spec[..idx].to_string());
+    }
+
+    Some(spec.to_string())
+}
+
+/// After npm install -g completes, check if installed binaries are on PATH.
+/// In interactive mode, prompt user to create bin links.
+/// In non-interactive mode, create links automatically.
+/// Always print a tip suggesting `vp install -g`.
+#[allow(clippy::disallowed_macros, clippy::disallowed_types)]
+fn check_npm_global_install_result(packages: &[String], node_version: &str) {
+    use std::io::IsTerminal;
+
+    let Ok(home_dir) = vite_shared::get_vite_plus_home() else { return };
+    let Ok(bin_dir) = config::get_bin_dir() else { return };
+
+    let node_dir = home_dir.join("js_runtime").join("node").join(node_version);
+
+    let mut missing_bins: Vec<(String, AbsolutePathBuf)> = Vec::new();
+
+    for spec in packages {
+        let Some(package_name) = resolve_package_name(spec) else { continue };
+
+        // Look up installed package.json in node_modules
+        let node_modules_dir = config::get_node_modules_dir(&node_dir, &package_name);
+        let package_json_path = node_modules_dir.join("package.json");
+
+        let Ok(content) = std::fs::read_to_string(package_json_path.as_path()) else {
+            continue;
+        };
+
+        let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
+            continue;
+        };
+
+        // Extract binary names from the bin field
+        let bin_names = extract_bin_names(&package_json);
+
+        for bin_name in bin_names {
+            // Skip core shims
+            if CORE_SHIMS.contains(&bin_name.as_str()) {
+                continue;
+            }
+
+            // Check if binary already exists in bin_dir
+            let shim_path = bin_dir.join(&bin_name);
+            if std::fs::symlink_metadata(shim_path.as_path()).is_ok() {
+                continue;
+            }
+
+            // Also check .cmd on Windows
+            #[cfg(windows)]
+            {
+                let cmd_path = bin_dir.join(format!("{bin_name}.cmd"));
+                if cmd_path.as_path().exists() {
+                    continue;
+                }
+            }
+
+            // Binary is missing from bin_dir
+            #[cfg(unix)]
+            let source_path = node_dir.join("bin").join(&bin_name);
+            #[cfg(windows)]
+            let source_path = node_dir.join(format!("{bin_name}.cmd"));
+
+            if source_path.as_path().exists() {
+                missing_bins.push((bin_name, source_path));
+            }
+        }
+    }
+
+    if missing_bins.is_empty() {
+        return;
+    }
+
+    let is_interactive = std::io::stdin().is_terminal();
+
+    let should_link = if is_interactive {
+        // Prompt user
+        let bin_list: Vec<&str> = missing_bins.iter().map(|(name, _)| name.as_str()).collect();
+        let bin_display = bin_list.join(", ");
+
+        eprintln!("\nvp: '{bin_display}' was installed to Node.js {node_version}'s bin directory,");
+        eprintln!("    but is not available on your PATH.\n");
+        eprint!("    Create a link in ~/.vite-plus/bin/ to make it available? [Y/n] ");
+
+        let mut input = String::new();
+        let confirmed = std::io::stdin().read_line(&mut input).is_ok();
+        let trimmed = input.trim();
+        confirmed
+            && (trimmed.is_empty()
+                || trimmed.eq_ignore_ascii_case("y")
+                || trimmed.eq_ignore_ascii_case("yes"))
+    } else {
+        // Non-interactive: auto-link
+        true
+    };
+
+    if should_link {
+        for (bin_name, source_path) in &missing_bins {
+            create_bin_link(&bin_dir, bin_name, source_path);
+        }
+    }
+
+    // Always print the tip
+    let pkg_names: Vec<&str> = packages.iter().map(String::as_str).collect();
+    let pkg_display = pkg_names.join(" ");
+    eprintln!("\ntip: For a better experience, use `vp install -g {pkg_display}` instead.");
+    eprintln!("     It creates managed shims that persist across Node.js version changes.");
+}
+
+/// Extract binary names from a package.json value.
+fn extract_bin_names(package_json: &serde_json::Value) -> Vec<String> {
+    let mut bins = Vec::new();
+
+    if let Some(bin) = package_json.get("bin") {
+        match bin {
+            serde_json::Value::String(_) => {
+                // Single binary with package name
+                if let Some(name) = package_json["name"].as_str() {
+                    let bin_name = name.split('/').last().unwrap_or(name);
+                    bins.push(bin_name.to_string());
+                }
+            }
+            serde_json::Value::Object(map) => {
+                for name in map.keys() {
+                    bins.push(name.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    bins
+}
+
+/// Create a bin link for a binary.
+fn create_bin_link(bin_dir: &AbsolutePath, bin_name: &str, source_path: &AbsolutePath) {
+    #[cfg(unix)]
+    {
+        let link_path = bin_dir.join(bin_name);
+        if std::os::unix::fs::symlink(source_path.as_path(), link_path.as_path()).is_ok() {
+            eprintln!("vp: Linked '{}' to {}", bin_name, link_path.as_path().display());
+        } else {
+            eprintln!("vp: Failed to create link for '{}'", bin_name);
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        // Create .cmd wrapper
+        let cmd_path = bin_dir.join(format!("{bin_name}.cmd"));
+        let wrapper_content = format!(
+            "@echo off\r\n\"{source}\" %*\r\nexit /b %ERRORLEVEL%\r\n",
+            source = source_path.as_path().display()
+        );
+        if std::fs::write(cmd_path.as_path(), &wrapper_content).is_ok() {
+            eprintln!("vp: Linked '{}' to {}", bin_name, cmd_path.as_path().display());
+        } else {
+            eprintln!("vp: Failed to create link for '{}'", bin_name);
+        }
+
+        // Also create shell script for Git Bash
+        let sh_path = bin_dir.join(bin_name);
+        let sh_content =
+            format!("#!/bin/sh\nexec \"{}\" \"$@\"\n", source_path.as_path().display());
+        let _ = std::fs::write(sh_path.as_path(), sh_content);
+    }
 }
 
 /// Main shim dispatch entry point.
@@ -154,7 +416,19 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         std::env::set_var(RECURSION_ENV_VAR, "1");
     }
 
-    // Execute the tool
+    // For npm install -g, use spawn+wait so we can post-check binaries
+    if tool == "npm" {
+        if let Some(parsed) = parse_npm_global_install(args) {
+            // Use spawn instead of exec so we can run post-install checks
+            let exit_code = exec::spawn_tool(&tool_path, args);
+            if exit_code == 0 {
+                check_npm_global_install_result(&parsed.packages, &resolution.version);
+            }
+            return exit_code;
+        }
+    }
+
+    // Execute the tool (normal path — exec replaces process on Unix)
     exec::exec_tool(&tool_path, args)
 }
 
@@ -742,5 +1016,164 @@ mod tests {
             result.is_none(),
             "Should return None when all dirs are bypassed and no real system tool exists"
         );
+    }
+
+    // --- parse_npm_global_install tests ---
+
+    fn s(strs: &[&str]) -> Vec<String> {
+        strs.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_basic() {
+        let result = parse_npm_global_install(&s(&["install", "-g", "typescript"]));
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().packages, vec!["typescript"]);
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_shorthand() {
+        let result = parse_npm_global_install(&s(&["i", "-g", "typescript@5.0.0"]));
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().packages, vec!["typescript@5.0.0"]);
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_global_first() {
+        let result = parse_npm_global_install(&s(&["-g", "install", "pkg1", "pkg2"]));
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().packages, vec!["pkg1", "pkg2"]);
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_long_global() {
+        let result = parse_npm_global_install(&s(&["install", "--global", "@scope/pkg"]));
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().packages, vec!["@scope/pkg"]);
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_not_uninstall() {
+        let result = parse_npm_global_install(&s(&["uninstall", "-g", "typescript"]));
+        assert!(result.is_none(), "uninstall should not be detected");
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_no_global_flag() {
+        let result = parse_npm_global_install(&s(&["install", "typescript"]));
+        assert!(result.is_none(), "no -g flag should return None");
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_no_packages() {
+        let result = parse_npm_global_install(&s(&["install", "-g"]));
+        assert!(result.is_none(), "no packages should return None");
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_local_path() {
+        // Local paths are supported (read package.json to resolve name)
+        let result = parse_npm_global_install(&s(&["install", "-g", "./local"]));
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().packages, vec!["./local"]);
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_skip_registry() {
+        let result =
+            parse_npm_global_install(&s(&["install", "-g", "--registry", "https://x", "pkg"]));
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().packages, vec!["pkg"]);
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_not_run_subcommand() {
+        let result = parse_npm_global_install(&s(&["run", "build", "-g"]));
+        assert!(result.is_none(), "run is not an install subcommand");
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_git_url() {
+        let result = parse_npm_global_install(&s(&["install", "-g", "git+https://repo"]));
+        assert!(result.is_none(), "git+ URLs should be filtered");
+    }
+
+    #[test]
+    fn test_parse_npm_global_install_url() {
+        let result =
+            parse_npm_global_install(&s(&["install", "-g", "https://example.com/pkg.tgz"]));
+        assert!(result.is_none(), "URLs should be filtered");
+    }
+
+    // --- resolve_package_name tests ---
+
+    #[test]
+    fn test_resolve_package_name_simple() {
+        assert_eq!(resolve_package_name("codex"), Some("codex".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_package_name_with_version() {
+        assert_eq!(resolve_package_name("typescript@5.0.0"), Some("typescript".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_package_name_scoped() {
+        assert_eq!(resolve_package_name("@scope/pkg"), Some("@scope/pkg".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_package_name_scoped_with_version() {
+        assert_eq!(resolve_package_name("@scope/pkg@1.0.0"), Some("@scope/pkg".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_package_name_local_path_with_package_json() {
+        let temp = TempDir::new().unwrap();
+        let pkg_dir = temp.path().join("my-pkg");
+        std::fs::create_dir_all(&pkg_dir).unwrap();
+        std::fs::write(pkg_dir.join("package.json"), r#"{"name": "my-actual-pkg"}"#).unwrap();
+
+        let spec = pkg_dir.to_str().unwrap();
+        // Use absolute path starting with /
+        assert_eq!(resolve_package_name(spec), Some("my-actual-pkg".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_package_name_local_path_no_package_json() {
+        assert_eq!(resolve_package_name("./nonexistent"), None);
+    }
+
+    // --- extract_bin_names tests ---
+
+    #[test]
+    fn test_extract_bin_names_single() {
+        let json: serde_json::Value =
+            serde_json::from_str(r#"{"name": "my-pkg", "bin": "./cli.js"}"#).unwrap();
+        assert_eq!(extract_bin_names(&json), vec!["my-pkg"]);
+    }
+
+    #[test]
+    fn test_extract_bin_names_scoped_single() {
+        let json: serde_json::Value =
+            serde_json::from_str(r#"{"name": "@scope/my-pkg", "bin": "./cli.js"}"#).unwrap();
+        assert_eq!(extract_bin_names(&json), vec!["my-pkg"]);
+    }
+
+    #[test]
+    fn test_extract_bin_names_object() {
+        let json: serde_json::Value = serde_json::from_str(
+            r#"{"name": "pkg", "bin": {"cli-a": "./a.js", "cli-b": "./b.js"}}"#,
+        )
+        .unwrap();
+        let mut names = extract_bin_names(&json);
+        names.sort();
+        assert_eq!(names, vec!["cli-a", "cli-b"]);
+    }
+
+    #[test]
+    fn test_extract_bin_names_no_bin() {
+        let json: serde_json::Value = serde_json::from_str(r#"{"name": "pkg"}"#).unwrap();
+        assert!(extract_bin_names(&json).is_empty());
     }
 }

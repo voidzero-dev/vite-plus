@@ -1687,6 +1687,139 @@ Binary execution uses per-binary config for deterministic lookup:
 
 This eliminates the non-deterministic behavior of filesystem iteration order.
 
+### npm Global Install Guidance
+
+When the npm shim detects `npm install -g <packages>`, it runs real npm normally but uses `spawn+wait` (instead of `exec`) so it can run post-install checks. After npm completes successfully, it checks whether the installed binaries are reachable from `$PATH` and prints a hint if they aren't.
+
+#### Why This Is Needed
+
+```
+~/.vite-plus/
+├── bin/                          ← ON $PATH (only this dir)
+│   ├── node → ../current/bin/vp  (shim)
+│   ├── npm → ../current/bin/vp   (shim)
+│   └── npx → ../current/bin/vp   (shim)
+└── js_runtime/node/20.18.0/bin/  ← NOT on $PATH
+    ├── node
+    ├── npm
+    ├── npx
+    └── codex                     ← installed by `npm i -g`, but unreachable
+```
+
+Users instinctively run `npm install -g codex`, which installs into the managed Node's bin dir — not on `$PATH`. The binary is silently unreachable.
+
+#### Call Flow: `npm install -g codex` (with post-install hint)
+
+```
+User runs: npm install -g codex
+         │
+         ▼
+┌─────────────────────────┐
+│  ~/.vite-plus/bin/npm   │  (symlink to vp binary)
+│  argv[0] = "npm"        │
+└────────────┬────────────┘
+             │
+             ▼
+┌───────────────────────────────────────────────────────┐
+│  dispatch("npm", ["install", "-g", "codex"])           │
+│  (crates/vite_global_cli/src/shim/dispatch.rs)         │
+│                                                         │
+│  1. vpx check          → skip                           │
+│  2. recursion check    → skip                           │
+│  3. bypass check       → skip                           │
+│  4. shim mode check    → skip                           │
+│  5. core shim? "npm"   → yes                            │
+│  6. resolve version    → 20.18.0                        │
+│  7. ensure installed   → ok                             │
+│  8. locate npm binary  → ~/.vite-plus/js_runtime/       │
+│                           node/20.18.0/bin/npm           │
+│  9. prepend node bin dir to PATH                        │
+│  10. set recursion marker                               │
+│                                                         │
+│  ┌─── npm global install detection ─────────────────┐   │
+│  │                                                   │   │
+│  │  parse_npm_global_install(args)                   │   │
+│  │    → detects "install" + "-g"                     │   │
+│  │    → extracts packages: ["codex"]                 │   │
+│  │    → returns Some(NpmGlobalInstall)               │   │
+│  │                                                   │   │
+│  │  spawn_tool(npm_path, args)    ← NOT exec!        │   │
+│  │    → runs real npm install -g codex               │   │
+│  │    → npm installs to node/20.18.0/bin/codex       │   │
+│  │    → waits for completion                         │   │
+│  │    → exit_code = 0 (success)                      │   │
+│  │                                                   │   │
+│  │  check_npm_global_install_result(["codex"], ver)  │   │
+│  │    → reads node/20.18.0/lib/node_modules/codex/   │   │
+│  │      package.json → bin: {"codex": "./bin/codex"} │   │
+│  │    → checks ~/.vite-plus/bin/codex → NOT FOUND    │   │
+│  │    → interactive? prompt to create link            │   │
+│  │      non-interactive? create link directly         │   │
+│  │    → creates symlink:                             │   │
+│  │      ~/.vite-plus/bin/codex →                     │   │
+│  │      ~/.vite-plus/js_runtime/node/20.18.0/        │   │
+│  │      bin/codex                                    │   │
+│  │    → prints tip: use `vp install -g` instead      │   │
+│  │                                                   │   │
+│  │  return exit_code (0)                             │   │
+│  └───────────────────────────────────────────────────┘   │
+│                                                         │
+│  (normal exec_tool path SKIPPED)                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Interactive mode** (stdin is a TTY):
+
+```
+vp: 'codex' was installed to Node.js 20.18.0's bin directory,
+    but is not available on your PATH.
+
+    Create a link in ~/.vite-plus/bin/ to make it available? [Y/n]
+```
+
+If the user confirms (Y or Enter):
+
+- Creates a symlink: `~/.vite-plus/bin/codex` → `~/.vite-plus/js_runtime/node/20.18.0/bin/codex`
+- Prints: `vp: Linked 'codex' to ~/.vite-plus/bin/codex`
+
+Then always prints the tip:
+
+```
+tip: For a better experience, use `vp install -g codex` instead.
+     It creates managed shims that persist across Node.js version changes.
+```
+
+**Non-interactive mode** (piped/CI):
+
+- Creates the symlink directly (no prompt)
+- Prints: `vp: Linked 'codex' to ~/.vite-plus/bin/codex`
+- Prints the same tip
+
+#### Call Flow: Normal `npm install react` — unaffected
+
+```
+User runs: npm install react
+         │
+         ▼
+┌───────────────────────────────────────────────────┐
+│  dispatch("npm", ["install", "react"])              │
+│                                                     │
+│  ... version resolution, PATH setup ...             │
+│                                                     │
+│  parse_npm_global_install(args)                      │
+│    → no "-g" or "--global" flag                      │
+│    → returns None                                    │
+│                                                     │
+│  (falls through to normal exec_tool)                 │
+│    → exec_tool(npm_path, args)                       │
+│       └─ replaces process with real npm (Unix exec)  │
+└───────────────────────────────────────────────────┘
+```
+
+#### Design Decision: spawn vs exec
+
+On Unix, `exec_tool()` uses `exec()` which replaces the current process — no code runs after. For `npm install -g` specifically, we use `spawn_tool()` (spawn + wait) to retain control after npm finishes, enabling the post-install hint. All other npm commands continue to use `exec_tool()` for zero overhead.
+
 ## Exec Command
 
 The `vp env exec` command executes a command with a specific Node.js version. It operates in two modes:

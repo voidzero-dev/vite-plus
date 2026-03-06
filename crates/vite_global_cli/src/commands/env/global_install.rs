@@ -359,7 +359,7 @@ fn is_javascript_binary(path: &AbsolutePath) -> bool {
 }
 
 /// Core shims that should not be overwritten by package binaries.
-const CORE_SHIMS: &[&str] = &["node", "npm", "npx", "vp"];
+pub(crate) const CORE_SHIMS: &[&str] = &["node", "npm", "npx", "vp"];
 
 /// Create a shim for a package binary.
 ///

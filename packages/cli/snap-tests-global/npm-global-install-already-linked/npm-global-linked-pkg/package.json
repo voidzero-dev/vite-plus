@@ -1,0 +1,7 @@
+{
+  "name": "npm-global-linked-pkg",
+  "version": "1.0.0",
+  "bin": {
+    "npm-global-linked-cli": "./cli.js"
+  }
+}
