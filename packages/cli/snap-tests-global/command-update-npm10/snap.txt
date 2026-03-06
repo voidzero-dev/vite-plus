@@ -82,7 +82,7 @@ npm warn config `--include=optional` to include them.
 npm warn config
 npm warn config       Default value does install optional deps unless otherwise omitted.
 
-added 1 package in <variable>ms
+changed 1 package in <variable>ms
 {
   "name": "command-update-npm10",
   "version": "1.0.0",
