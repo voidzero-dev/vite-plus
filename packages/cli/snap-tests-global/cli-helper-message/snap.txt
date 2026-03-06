@@ -407,3 +407,4 @@ Options:
   --silent               Suppress output
   --registry <REGISTRY>  Custom npm registry URL
   -h, --help             Print help
+
