@@ -928,7 +928,21 @@ async fn execute_direct_subcommand(
 
             status
         }
-        other => resolve_and_execute(&mut resolver, other, &envs, cwd, &cwd_arc).await?,
+        other => {
+            if should_suppress_subcommand_stdout(&other) {
+                resolve_and_execute_with_stdout_filter(
+                    &mut resolver,
+                    other,
+                    &envs,
+                    cwd,
+                    &cwd_arc,
+                    |_| Cow::Borrowed(""),
+                )
+                .await?
+            } else {
+                resolve_and_execute(&mut resolver, other, &envs, cwd, &cwd_arc).await?
+            }
+        }
     };
 
     resolver.cleanup_temp_files().await;
@@ -1051,6 +1065,29 @@ fn is_vitest_watch_flag(arg: &str) -> bool {
 
 fn is_vitest_test_subcommand(arg: &str) -> bool {
     matches!(arg, "run" | "watch" | "dev" | "related" | "bench" | "init" | "list")
+}
+
+fn has_flag_before_terminator(args: &[String], flag: &str) -> bool {
+    for arg in args {
+        if arg == "--" {
+            break;
+        }
+        if arg == flag || arg.starts_with(&format!("{flag}=")) {
+            return true;
+        }
+    }
+    false
+}
+
+fn should_suppress_subcommand_stdout(subcommand: &SynthesizableSubcommand) -> bool {
+    match subcommand {
+        SynthesizableSubcommand::Lint { args } => has_flag_before_terminator(args, "--init"),
+        SynthesizableSubcommand::Fmt { args } => {
+            has_flag_before_terminator(args, "--init")
+                || has_flag_before_terminator(args, "--migrate")
+        }
+        _ => false,
+    }
 }
 
 fn should_prepend_vitest_run(args: &[String]) -> bool {
@@ -1197,7 +1234,8 @@ mod tests {
     use vite_task::config::UserRunConfig;
 
     use super::{
-        CLIArgs, extract_unknown_argument, has_pass_as_value_suggestion, should_prepend_vitest_run,
+        CLIArgs, SynthesizableSubcommand, extract_unknown_argument, has_pass_as_value_suggestion,
+        should_prepend_vitest_run, should_suppress_subcommand_stdout,
     };
 
     #[test]
@@ -1285,5 +1323,24 @@ mod tests {
             "--watch".to_string(),
             "src/foo.test.ts".to_string(),
         ]));
+    }
+
+    #[test]
+    fn lint_init_suppresses_stdout() {
+        let subcommand = SynthesizableSubcommand::Lint { args: vec!["--init".to_string()] };
+        assert!(should_suppress_subcommand_stdout(&subcommand));
+    }
+
+    #[test]
+    fn fmt_migrate_suppresses_stdout() {
+        let subcommand =
+            SynthesizableSubcommand::Fmt { args: vec!["--migrate=prettier".to_string()] };
+        assert!(should_suppress_subcommand_stdout(&subcommand));
+    }
+
+    #[test]
+    fn normal_lint_does_not_suppress_stdout() {
+        let subcommand = SynthesizableSubcommand::Lint { args: vec!["src/index.ts".to_string()] };
+        assert!(!should_suppress_subcommand_stdout(&subcommand));
     }
 }

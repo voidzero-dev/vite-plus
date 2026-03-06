@@ -18,6 +18,18 @@ pub async fn execute(
     executor.delegate_to_local_cli(&cwd, &full_args).await
 }
 
+/// Execute a command by delegating to the global `vite-plus` CLI.
+pub async fn execute_global(
+    cwd: AbsolutePathBuf,
+    command: &str,
+    args: &[String],
+) -> Result<ExitStatus, Error> {
+    let mut executor = JsExecutor::new(None);
+    let mut full_args = vec![command.to_string()];
+    full_args.extend(args.iter().cloned());
+    executor.delegate_to_global_cli(&cwd, &full_args).await
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

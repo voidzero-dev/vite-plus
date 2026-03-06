@@ -1,0 +1,14 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp lint --init",
+    "cat vite.config.ts",
+    "cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed",
+    "rm vite.config.ts",
+    "vp fmt --init",
+    "cat vite.config.ts",
+    "cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is removed"
+  ]
+}

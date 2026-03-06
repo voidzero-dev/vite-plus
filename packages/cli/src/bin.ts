@@ -10,7 +10,10 @@
  * If no local installation is found, this global dist/bin.js is used as fallback.
  */
 
+import path from 'node:path';
+
 import { run } from '../binding/index.js';
+import { applyToolInitConfigToViteConfig, inspectInitCommand } from './init-config.js';
 import { doc } from './resolve-doc.js';
 import { fmt } from './resolve-fmt.js';
 import { lint } from './resolve-lint.js';
@@ -18,6 +21,7 @@ import { pack } from './resolve-pack.js';
 import { test } from './resolve-test.js';
 import { resolveUniversalViteConfig } from './resolve-vite-config.js';
 import { vite } from './resolve-vite.js';
+import { accent, log } from './utils/terminal.js';
 
 // Parse command line arguments
 let args = process.argv.slice(2);
@@ -52,21 +56,64 @@ if (command === 'create') {
   await import('./global/staged.js');
 } else {
   // All other commands — delegate to Rust core via NAPI binding
-  run({
-    lint,
-    pack,
-    fmt,
-    vite,
-    test,
-    doc,
-    resolveUniversalViteConfig,
-    args: process.argv.slice(2),
-  })
-    .then((exitCode) => {
-      process.exit(exitCode);
-    })
-    .catch((err) => {
-      console.error('[Vite+] run error:', err);
-      process.exit(1);
+  try {
+    const initInspection = inspectInitCommand(command, args.slice(1));
+    if (
+      initInspection.handled &&
+      initInspection.configKey &&
+      initInspection.hasExistingConfigKey &&
+      initInspection.existingViteConfigPath
+    ) {
+      log(
+        `Skipped initialization: '${accent(initInspection.configKey)}' already exists in '${accent(path.basename(initInspection.existingViteConfigPath))}'.`,
+      );
+      process.exit(0);
+    }
+
+    const exitCode = await run({
+      lint,
+      pack,
+      fmt,
+      vite,
+      test,
+      doc,
+      resolveUniversalViteConfig,
+      args: process.argv.slice(2),
     });
+
+    let finalExitCode = exitCode;
+    if (exitCode === 0) {
+      try {
+        const result = await applyToolInitConfigToViteConfig(command, args.slice(1));
+        if (
+          result.handled &&
+          result.action === 'added' &&
+          result.configKey &&
+          result.viteConfigPath
+        ) {
+          log(
+            `Added '${accent(result.configKey)}' to '${accent(path.basename(result.viteConfigPath))}'.`,
+          );
+        }
+        if (
+          result.handled &&
+          result.action === 'skipped-existing' &&
+          result.configKey &&
+          result.viteConfigPath
+        ) {
+          log(
+            `Skipped initialization: '${accent(result.configKey)}' already exists in '${accent(path.basename(result.viteConfigPath))}'.`,
+          );
+        }
+      } catch (err) {
+        console.error('[Vite+] Failed to initialize config in vite.config.ts:', err);
+        finalExitCode = 1;
+      }
+    }
+
+    process.exit(finalExitCode);
+  } catch (err) {
+    console.error('[Vite+] run error:', err);
+    process.exit(1);
+  }
 }

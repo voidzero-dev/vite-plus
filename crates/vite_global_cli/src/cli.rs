@@ -1450,6 +1450,29 @@ fn determine_save_dependency_type(
     }
 }
 
+fn has_flag_before_terminator(args: &[String], flag: &str) -> bool {
+    for arg in args {
+        if arg == "--" {
+            break;
+        }
+        if arg == flag || arg.starts_with(&format!("{flag}=")) {
+            return true;
+        }
+    }
+    false
+}
+
+fn should_force_global_delegate(command: &str, args: &[String]) -> bool {
+    match command {
+        "lint" => has_flag_before_terminator(args, "--init"),
+        "fmt" => {
+            has_flag_before_terminator(args, "--init")
+                || has_flag_before_terminator(args, "--migrate")
+        }
+        _ => false,
+    }
+}
+
 /// Run the CLI command.
 pub async fn run_command(cwd: AbsolutePathBuf, args: Args) -> Result<ExitStatus, Error> {
     run_command_with_options(cwd, args, RenderOptions::default()).await
@@ -1859,7 +1882,11 @@ pub async fn run_command_with_options(
                 return Ok(ExitStatus::default());
             }
             print_runtime_header(render_options.show_header);
-            commands::delegate::execute(cwd, "lint", &args).await
+            if should_force_global_delegate("lint", &args) {
+                commands::delegate::execute_global(cwd, "lint", &args).await
+            } else {
+                commands::delegate::execute(cwd, "lint", &args).await
+            }
         }
 
         Commands::Fmt { args } => {
@@ -1867,7 +1894,11 @@ pub async fn run_command_with_options(
                 return Ok(ExitStatus::default());
             }
             print_runtime_header(render_options.show_header);
-            commands::delegate::execute(cwd, "fmt", &args).await
+            if should_force_global_delegate("fmt", &args) {
+                commands::delegate::execute_global(cwd, "fmt", &args).await
+            } else {
+                commands::delegate::execute(cwd, "fmt", &args).await
+            }
         }
 
         Commands::Check { args } => {
@@ -2000,4 +2031,41 @@ pub fn try_parse_args_from_with_options(
     let cmd = apply_custom_help(Args::command(), render_options);
     let matches = cmd.try_get_matches_from(args)?;
     Args::from_arg_matches(&matches).map_err(|e| e.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{has_flag_before_terminator, should_force_global_delegate};
+
+    #[test]
+    fn detects_flag_before_option_terminator() {
+        assert!(has_flag_before_terminator(
+            &["--init".to_string(), "src/index.ts".to_string()],
+            "--init"
+        ));
+    }
+
+    #[test]
+    fn ignores_flag_after_option_terminator() {
+        assert!(!has_flag_before_terminator(
+            &["src/index.ts".to_string(), "--".to_string(), "--init".to_string(),],
+            "--init"
+        ));
+    }
+
+    #[test]
+    fn lint_init_forces_global_delegate() {
+        assert!(should_force_global_delegate("lint", &["--init".to_string()]));
+    }
+
+    #[test]
+    fn fmt_migrate_forces_global_delegate() {
+        assert!(should_force_global_delegate("fmt", &["--migrate=prettier".to_string()]));
+    }
+
+    #[test]
+    fn non_init_does_not_force_global_delegate() {
+        assert!(!should_force_global_delegate("lint", &["src/index.ts".to_string()]));
+        assert!(!should_force_global_delegate("fmt", &["--check".to_string()]));
+    }
 }

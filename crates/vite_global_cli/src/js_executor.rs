@@ -221,6 +221,28 @@ impl JsExecutor {
         self.run_js_entry(project_path, &node_binary, &bin_prefix, args).await
     }
 
+    /// Delegate to the global vite-plus CLI entrypoint directly.
+    ///
+    /// Unlike [`delegate_to_local_cli`], this bypasses project-local resolution and always runs
+    /// the global installation's `dist/bin.js`.
+    pub async fn delegate_to_global_cli(
+        &mut self,
+        project_path: &AbsolutePath,
+        args: &[String],
+    ) -> Result<ExitStatus, Error> {
+        let runtime = self.ensure_cli_runtime().await?;
+        let node_binary = runtime.get_binary_path();
+        let bin_prefix = runtime.get_bin_prefix();
+        let scripts_dir = self.get_scripts_dir()?;
+        let entry_point = scripts_dir.join("bin.js");
+
+        let mut cmd = Self::create_js_command(&node_binary, &bin_prefix);
+        cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
+
+        let status = cmd.status().await?;
+        Ok(status)
+    }
+
     /// Delegate to local or global vite-plus CLI using the CLI's own runtime.
     ///
     /// Like [`delegate_to_local_cli`], but uses the CLI's bundled runtime

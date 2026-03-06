@@ -1,0 +1,11 @@
+{
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp lint --init",
+    "cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is not created",
+    "vp fmt --init",
+    "cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is not created"
+  ]
+}

@@ -1,0 +1,28 @@
+> vp lint --init
+Added 'lint' to 'vite.config.ts'.
+
+> cat vite.config.ts
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  lint: {},
+});
+
+> cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed
+cat: .oxlintrc.json: No such file or directory
+
+> rm vite.config.ts
+> vp fmt --init
+Added 'fmt' to 'vite.config.ts'.
+
+> cat vite.config.ts
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  fmt: {
+    ignorePatterns: [],
+  },
+});
+
+> cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is removed
+cat: .oxfmtrc.json: No such file or directory
