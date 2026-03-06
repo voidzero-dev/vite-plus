@@ -1,10 +1,17 @@
 {
-  "name": "migration-other-hook-tool",
+  "name": "migration-other-hook-tool-with-lint-staged",
+  "scripts": {
+    "check-staged": "lint-staged"
+  },
   "devDependencies": {
+    "lint-staged": "^16.2.6",
     "simple-git-hooks": "^2.11.1",
     "vite": "^7.0.0"
   },
   "simple-git-hooks": {
     "pre-commit": "npx lint-staged"
+  },
+  "lint-staged": {
+    "*.ts": "eslint --fix"
   }
 }

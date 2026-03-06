@@ -1,8 +1,8 @@
 {
   "commands": [
     { "command": "git init", "ignoreOutput": true },
-    "vp migrate --no-hooks --no-interactive # migration with --no-hooks should keep husky/lint-staged",
-    "cat package.json # check prepare script reverted to husky and husky/lint-staged kept in devDependencies",
+    "vp migrate --no-hooks --no-interactive # --no-hooks should keep husky/lint-staged and preserve config",
+    "cat package.json # prepare script, lint-staged config, check-staged script, and deps should all be preserved",
     "test -d .husky && echo '.husky directory exists' || echo 'No .husky directory' # verify no .husky directory"
   ]
 }

@@ -13,7 +13,7 @@ import {
 } from '../migration/migrator.js';
 import { DependencyType, type WorkspaceInfo } from '../types/index.js';
 import {
-  detectExistingAgentTargetPath,
+  detectExistingAgentTargetPaths,
   selectAgentTargetPaths,
   writeAgentInstructions,
 } from '../utils/agent.js';
@@ -493,11 +493,14 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // Prompt for package manager or use default
   const packageManager =
     workspaceInfoOptional.packageManager ?? (await selectPackageManager(options.interactive));
+  const shouldSilencePackageManagerInstallLog =
+    isMonorepo && workspaceInfoOptional.packageManager !== undefined;
   // ensure the package manager is installed by vite-plus
   const downloadResult = await downloadPackageManager(
     packageManager,
     workspaceInfoOptional.packageManagerVersion,
     options.interactive,
+    shouldSilencePackageManagerInstallLog,
   );
   const workspaceInfo: WorkspaceInfo = {
     ...workspaceInfoOptional,
@@ -505,13 +508,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     downloadPackageManager: downloadResult,
   };
 
-  const existingAgentTargetPath =
+  const existingAgentTargetPaths =
     options.agent !== undefined || !options.interactive
       ? undefined
-      : detectExistingAgentTargetPath(workspaceInfoOptional.rootDir);
+      : detectExistingAgentTargetPaths(workspaceInfoOptional.rootDir);
   selectedAgentTargetPaths =
-    existingAgentTargetPath !== undefined
-      ? [existingAgentTargetPath]
+    existingAgentTargetPaths !== undefined
+      ? existingAgentTargetPaths
       : await selectAgentTargetPaths({
           interactive: options.interactive,
           agent: options.agent,
@@ -628,8 +631,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
   prompts.log.success(`Project directory: ${accent(projectDir)}`);
   const fullPath = path.join(workspaceInfo.rootDir, projectDir);
+  const agentInstructionsRoot = isMonorepo ? workspaceInfo.rootDir : fullPath;
   await writeAgentInstructions({
-    projectRoot: fullPath,
+    projectRoot: agentInstructionsRoot,
     targetPaths: selectedAgentTargetPaths,
     interactive: options.interactive,
   });

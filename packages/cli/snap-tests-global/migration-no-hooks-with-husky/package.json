@@ -1,11 +1,15 @@
 {
   "name": "migration-no-hooks-with-husky",
   "scripts": {
-    "prepare": "husky"
+    "prepare": "husky",
+    "check-staged": "lint-staged"
   },
   "devDependencies": {
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
     "vite": "^7.0.0"
+  },
+  "lint-staged": {
+    "*.ts": "eslint --fix"
   }
 }

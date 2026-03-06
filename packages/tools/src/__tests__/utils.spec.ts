@@ -101,6 +101,38 @@ Done in 171ms using pnpm v10.16.1
     expect(replaceUnstableOutput(output.trim(), cwd)).toMatchSnapshot();
   });
 
+  describe.skipIf(process.platform !== 'win32')('Windows cwd replacement', () => {
+    test('mixed-separator cwd matches all-backslash output', () => {
+      // Simulates the CI failure: cwd has mixed separators (template literal),
+      // but Vite outputs all-backslash paths (path.resolve)
+      const cwd =
+        'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp/vite-plus-test-abc/command-staged-broken-config';
+      const output =
+        'failed to load config from C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\vite-plus-test-abc\\command-staged-broken-config\\vite.config.ts';
+      expect(replaceUnstableOutput(output, cwd)).toBe(
+        'failed to load config from <cwd>/vite.config.ts',
+      );
+    });
+
+    test('all-backslash cwd matches all-backslash output', () => {
+      const cwd = 'C:\\Users\\runner\\project';
+      const output = 'error in C:\\Users\\runner\\project\\src\\main.ts';
+      expect(replaceUnstableOutput(output, cwd)).toBe('error in <cwd>/src/main.ts');
+    });
+
+    test('cwd at end of string without trailing separator', () => {
+      const cwd = 'C:\\Users\\runner\\project';
+      const output = 'path is C:\\Users\\runner\\project';
+      expect(replaceUnstableOutput(output, cwd)).toBe('path is <cwd>');
+    });
+
+    test('parent directory replacement with backslash paths', () => {
+      const cwd = 'C:\\Users\\RUNNER~1\\Temp/vite-plus-test/my-test';
+      const output = 'found C:\\Users\\RUNNER~1\\Temp\\vite-plus-test\\other\\file.ts';
+      expect(replaceUnstableOutput(output, cwd)).toBe('found <cwd>/../other/file.ts');
+    });
+  });
+
   test('replace tsdown output', () => {
     const output = `
 ℹ tsdown v0.15.1 powered by rolldown v0.15.1

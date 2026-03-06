@@ -1,4 +1,4 @@
-> vp migrate --no-interactive # migration should warn about simple-git-hooks
+> vp migrate --no-interactive # hooks should be skipped due to simple-git-hooks
 VITE+ - The Unified Toolchain for the Web
 
 
@@ -14,16 +14,23 @@ Wrote agent instructions to AGENTS.md
 ✔ Migration completed!
 
 
-> cat package.json # check simple-git-hooks config is untouched, no prepare script added
+> cat package.json # lint-staged config, scripts, and simple-git-hooks config should all be preserved
 {
-  "name": "migration-other-hook-tool",
+  "name": "migration-other-hook-tool-with-lint-staged",
+  "scripts": {
+    "check-staged": "lint-staged"
+  },
   "devDependencies": {
+    "lint-staged": "^16.2.6",
     "simple-git-hooks": "^2.11.1",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
   },
   "simple-git-hooks": {
     "pre-commit": "npx lint-staged"
+  },
+  "lint-staged": {
+    "*.ts": "eslint --fix"
   },
   "pnpm": {
     "overrides": {
