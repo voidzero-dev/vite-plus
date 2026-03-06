@@ -471,11 +471,7 @@ fn create_bin_link(
 /// still delete its binary from `npm_bin_dir`, leaving our symlink dangling. In that
 /// case we repair the link by pointing directly at the surviving package's binary.
 #[allow(clippy::disallowed_types)]
-fn remove_npm_global_uninstall_links(
-    bin_entries: &[(String, String)],
-    npm_prefix: &AbsolutePath,
-    node_dir: &AbsolutePath,
-) {
+fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefix: &AbsolutePath) {
     let Ok(bin_dir) = config::get_bin_dir() else { return };
 
     for (bin_name, package_name) in bin_entries {
@@ -764,14 +760,14 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
                 let node_dir = home_dir.join("js_runtime").join("node").join(&*resolution.version);
                 let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
                 let bins = collect_bin_names_from_npm(&parsed.packages, &npm_prefix, &node_dir);
-                Some((bins, npm_prefix, node_dir))
+                Some((bins, npm_prefix))
             } else {
                 None
             };
             let exit_code = exec::spawn_tool(&tool_path, args);
             if exit_code == 0 {
-                if let Some((bin_names, npm_prefix, node_dir)) = context {
-                    remove_npm_global_uninstall_links(&bin_names, &npm_prefix, &node_dir);
+                if let Some((bin_names, npm_prefix)) = context {
+                    remove_npm_global_uninstall_links(&bin_names, &npm_prefix);
                 }
             }
             return exit_code;
