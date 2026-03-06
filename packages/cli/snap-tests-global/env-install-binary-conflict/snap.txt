@@ -10,7 +10,8 @@ Binaries: env-binary-conflict-cli
   "name": "env-binary-conflict-cli",
   "package": "./env-binary-conflict-pkg-a",
   "version": "1.0.0",
-  "nodeVersion": "22.22.0"
+  "nodeVersion": "22.22.0",
+  "source": "vp"
 }
 [1]> vp install -g ./env-binary-conflict-pkg-b # Try to install pkg-b without force - should fail
 VITE+ - The Unified Toolchain for the Web
@@ -25,7 +26,8 @@ Please remove ./env-binary-conflict-pkg-a before installing ./env-binary-conflic
   "name": "env-binary-conflict-cli",
   "package": "./env-binary-conflict-pkg-a",
   "version": "1.0.0",
-  "nodeVersion": "22.22.0"
+  "nodeVersion": "22.22.0",
+  "source": "vp"
 }
 > vp install -g --force ./env-binary-conflict-pkg-b # Force install pkg-b - should auto-uninstall pkg-a
 VITE+ - The Unified Toolchain for the Web
@@ -42,7 +44,8 @@ Binaries: env-binary-conflict-cli
   "name": "env-binary-conflict-cli",
   "package": "./env-binary-conflict-pkg-b",
   "version": "2.0.0",
-  "nodeVersion": "22.22.0"
+  "nodeVersion": "22.22.0",
+  "source": "vp"
 }
 > vp remove -g env-binary-conflict-pkg-b # Cleanup
 Uninstalling env-binary-conflict-pkg-b...

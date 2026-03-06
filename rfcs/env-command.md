@@ -1831,9 +1831,9 @@ When `npm uninstall -g` is detected, the shim uses `spawn_tool()` (like install)
 
 **Link tracking via BinConfig**: When `npm install -g` creates links in `~/.vite-plus/bin/`, a `BinConfig` with `source: "npm"` is written to `~/.vite-plus/bins/{name}.json`. This distinguishes npm-created links from `vp install -g` managed shims (`source: "vp"`) and user-owned binaries (no BinConfig).
 
-**Safe uninstall cleanup**: `npm uninstall -g` only removes links that have a BinConfig with `source: "npm"`. User-owned binaries and `vp install -g` managed shims are never touched.
+**Safe uninstall cleanup**: `npm uninstall -g` only removes links that have a BinConfig with `source: "npm"` AND whose `package` field matches the package being uninstalled. This prevents removing links that were overwritten by a later install of a different package exposing the same bin name. User-owned binaries and `vp install -g` managed shims are never touched.
 
-**`--prefix` support**: When `--prefix <dir>` is passed to `npm install -g` or `npm uninstall -g`, the shim uses that prefix for package.json lookups and bin dir resolution instead of running `npm config get prefix`.
+**`--prefix` support**: When `--prefix <dir>` is passed to `npm install -g` or `npm uninstall -g`, the shim uses that prefix for package.json lookups and bin dir resolution instead of running `npm config get prefix`. Both absolute and relative paths are supported — relative paths (e.g., `./custom`, `../foo`) are resolved against the current working directory.
 
 **Windows local path support**: `resolve_package_name()` treats drive-letter paths (`C:\...`) as local paths.
 

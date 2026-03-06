@@ -253,10 +253,14 @@ fn check_npm_global_install_result(
             // Check if binary already exists in bin_dir (vite-plus bin)
             let shim_path = bin_dir.join(&bin_name);
             if std::fs::symlink_metadata(shim_path.as_path()).is_ok() {
-                // If managed by vp install -g, warn about the conflict
                 if let Ok(Some(config)) = BinConfig::load_sync(&bin_name) {
                     if config.source == BinSource::Vp {
+                        // Managed by vp install -g — warn about the conflict
                         managed_conflicts.push(bin_name);
+                    } else if config.source == BinSource::Npm && config.package != package_name {
+                        // Link exists from a different npm package — update ownership
+                        let _ = BinConfig::new_npm(bin_name.to_string(), package_name.clone())
+                            .save_sync();
                     }
                 }
                 continue;
@@ -413,19 +417,25 @@ fn create_bin_link(
 }
 
 /// After npm uninstall -g completes, remove bin links that were created during install.
+///
+/// Each entry is `(bin_name, package_name)`. We only remove a link if its BinConfig
+/// has `source: Npm` AND `package` matches the package being uninstalled. This prevents
+/// removing a link that was overwritten by a later install of a different package.
 #[allow(clippy::disallowed_types)]
-fn remove_npm_global_uninstall_links(bin_names: &[String]) {
+fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)]) {
     let Ok(bin_dir) = config::get_bin_dir() else { return };
 
-    for bin_name in bin_names {
+    for (bin_name, package_name) in bin_entries {
         // Skip core shims
         if CORE_SHIMS.contains(&bin_name.as_str()) {
             continue;
         }
 
-        // Only remove if this link was created by npm install -g
-        if !matches!(BinConfig::load_sync(bin_name), Ok(Some(ref c)) if c.source == BinSource::Npm)
-        {
+        // Only remove if this link was npm-created AND owned by the package being uninstalled
+        if !matches!(
+            BinConfig::load_sync(bin_name),
+            Ok(Some(ref c)) if c.source == BinSource::Npm && c.package == *package_name
+        ) {
             continue;
         }
 
@@ -473,13 +483,13 @@ fn read_npm_package_json(
     })
 }
 
-/// Collect bin names from packages by reading their installed package.json files.
+/// Collect (bin_name, package_name) pairs from packages by reading their installed package.json files.
 #[allow(clippy::disallowed_types)]
 fn collect_bin_names_from_npm(
     packages: &[String],
     npm_prefix: &AbsolutePath,
     node_dir: &AbsolutePath,
-) -> Vec<String> {
+) -> Vec<(String, String)> {
     let mut all_bins = Vec::new();
 
     for spec in packages {
@@ -490,21 +500,27 @@ fn collect_bin_names_from_npm(
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
             continue;
         };
-        all_bins.extend(extract_bin_names(&package_json));
+        for bin_name in extract_bin_names(&package_json) {
+            all_bins.push((bin_name, package_name.clone()));
+        }
     }
 
     all_bins
 }
 
 /// Resolve the npm prefix, preferring an explicit `--prefix` from CLI args.
+///
+/// Handles both absolute and relative `--prefix` values by resolving against cwd.
+/// `AbsolutePathBuf::join` replaces the base when the argument is absolute (like
+/// `PathBuf::join`), so `cwd.join("/abs")` → `/abs` and `cwd.join("./rel")` → `/cwd/./rel`.
 fn resolve_npm_prefix(
     parsed: &NpmGlobalCommand,
     npm_path: &AbsolutePath,
     node_dir: &AbsolutePathBuf,
 ) -> AbsolutePathBuf {
     if let Some(ref prefix) = parsed.explicit_prefix {
-        if let Some(p) = AbsolutePathBuf::new(prefix.into()) {
-            return p;
+        if let Ok(cwd) = current_dir() {
+            return cwd.join(prefix);
         }
     }
     get_npm_global_prefix(npm_path, node_dir)
@@ -1535,5 +1551,68 @@ mod tests {
         let parsed = result.unwrap();
         assert_eq!(parsed.packages, vec!["pkg"]);
         assert_eq!(parsed.explicit_prefix.as_deref(), Some("/custom/dir"));
+    }
+
+    // --- resolve_npm_prefix tests ---
+
+    #[test]
+    #[serial]
+    fn test_resolve_npm_prefix_relative() {
+        let temp = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("PWD", temp_path.as_path());
+        }
+
+        let parsed = NpmGlobalCommand {
+            packages: vec!["pkg".to_string()],
+            explicit_prefix: Some("./custom".to_string()),
+        };
+        // Use a dummy npm_path and node_dir (should not be reached)
+        let dummy_dir = temp_path.join("dummy");
+        let result = resolve_npm_prefix(&parsed, &dummy_dir, &dummy_dir);
+        // Should resolve relative to cwd, not fall back to get_npm_global_prefix
+        assert!(
+            result.as_path().ends_with("custom"),
+            "Expected path ending with 'custom', got: {}",
+            result.as_path().display()
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn test_resolve_npm_prefix_absolute() {
+        let temp = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let abs_prefix = temp_path.join("abs-prefix");
+
+        let parsed = NpmGlobalCommand {
+            packages: vec!["pkg".to_string()],
+            explicit_prefix: Some(abs_prefix.as_path().display().to_string()),
+        };
+        let dummy_dir = temp_path.join("dummy");
+        let result = resolve_npm_prefix(&parsed, &dummy_dir, &dummy_dir);
+        assert_eq!(
+            result.as_path(),
+            abs_prefix.as_path(),
+            "Absolute prefix should be returned as-is"
+        );
+    }
+
+    #[test]
+    fn test_resolve_npm_prefix_none_fallback() {
+        // When no explicit prefix, resolve_npm_prefix calls get_npm_global_prefix.
+        // We can't easily test that fallback without a real npm, so just verify
+        // it doesn't panic and returns some path.
+        let temp = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let parsed = NpmGlobalCommand { packages: vec![], explicit_prefix: None };
+        let dummy_dir = temp_path.join("dummy");
+        // This will fall back to get_npm_global_prefix, which may fail but should
+        // ultimately return node_dir as the final fallback
+        let result = resolve_npm_prefix(&parsed, &dummy_dir, &dummy_dir);
+        assert!(!result.as_path().as_os_str().is_empty());
     }
 }

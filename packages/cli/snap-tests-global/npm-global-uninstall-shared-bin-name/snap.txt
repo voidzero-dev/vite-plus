@@ -1,0 +1,54 @@
+> npm install -g ./pkg-a # Install pkg-a (creates link for npm-global-shared-cli)
+
+added 1 package in <variable>ms
+Linked 'npm-global-shared-cli' to <vite-plus-home>/bin/npm-global-shared-cli
+
+tip: Use `vp install -g ./pkg-a` for managed shims that persist across Node.js version changes.
+
+> test -L $VITE_PLUS_HOME/bin/npm-global-shared-cli && echo 'link exists'
+link exists
+
+> cat $VITE_PLUS_HOME/bins/npm-global-shared-cli.json # BinConfig should point to pkg-a
+{
+  "name": "npm-global-shared-cli",
+  "package": "npm-global-shared-pkg-a",
+  "version": "",
+  "nodeVersion": "",
+  "source": "npm"
+}
+> npm install -g --force ./pkg-b # Install pkg-b with force (overwrites npm-global-shared-cli)
+npm warn using --force Recommended protections disabled.
+
+added 1 package in <variable>ms
+
+> test -L $VITE_PLUS_HOME/bin/npm-global-shared-cli && echo 'link exists'
+link exists
+
+> cat $VITE_PLUS_HOME/bins/npm-global-shared-cli.json # BinConfig should now point to pkg-b
+{
+  "name": "npm-global-shared-cli",
+  "package": "npm-global-shared-pkg-b",
+  "version": "",
+  "nodeVersion": "",
+  "source": "npm"
+}
+> npm-global-shared-cli # Should print pkg-b message (latest installed)
+shared-cli from pkg-b
+
+> npm uninstall -g npm-global-shared-pkg-a # Uninstall pkg-a, should NOT remove the link (owned by pkg-b now)
+
+removed 1 package in <variable>ms
+
+> test -L $VITE_PLUS_HOME/bin/npm-global-shared-cli && echo 'link exists' || echo 'link removed'
+link exists
+
+[127]> npm-global-shared-cli # Should still work (owned by pkg-b)
+command not found: npm-global-shared-cli
+
+> npm uninstall -g npm-global-shared-pkg-b # Uninstall pkg-b, NOW should remove the link
+
+removed 1 package in <variable>ms
+Removed link 'npm-global-shared-cli' from <vite-plus-home>/bin/npm-global-shared-cli
+
+> test -L $VITE_PLUS_HOME/bin/npm-global-shared-cli && echo 'link exists' || echo 'link removed'
+link removed

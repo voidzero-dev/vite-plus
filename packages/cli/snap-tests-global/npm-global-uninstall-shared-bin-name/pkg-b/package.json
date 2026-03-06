@@ -1,0 +1,7 @@
+{
+  "name": "npm-global-shared-pkg-b",
+  "version": "1.0.0",
+  "bin": {
+    "npm-global-shared-cli": "./cli.js"
+  }
+}
