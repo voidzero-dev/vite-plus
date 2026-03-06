@@ -5,14 +5,16 @@ import path from 'node:path';
 import { vitePlusHeader } from '../binding/index.js';
 import { VITE_PLUS_NAME } from './utils/constants.js';
 import { renderCliDoc } from './utils/help.js';
-import { detectPackageMetadata } from './utils/package.js';
+import { detectPackageMetadata, hasVitePlusDependency } from './utils/package.js';
 import { accent, log } from './utils/terminal.js';
 
 const require = createRequire(import.meta.url);
 
 interface PackageJson {
-  version: string;
+  version?: string;
   bundledVersions?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
 }
 
 interface LocalPackageMetadata {
@@ -38,7 +40,27 @@ function getCliVersion(): string | null {
 }
 
 function getLocalMetadata(cwd: string): LocalPackageMetadata | null {
+  if (!isVitePlusDeclaredInAncestors(cwd)) {
+    return null;
+  }
   return detectPackageMetadata(cwd, VITE_PLUS_NAME) ?? null;
+}
+
+function isVitePlusDeclaredInAncestors(cwd: string): boolean {
+  let currentDir = path.resolve(cwd);
+  while (true) {
+    const packageJsonPath = path.join(currentDir, 'package.json');
+    const pkg = readPackageJsonFromPath(packageJsonPath);
+    if (pkg && hasVitePlusDependency(pkg)) {
+      return true;
+    }
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+    currentDir = parentDir;
+  }
+  return false;
 }
 
 function readPackageJsonFromPath(packageJsonPath: string): PackageJson | null {
@@ -158,18 +180,20 @@ export async function printVersion(cwd: string) {
     },
   ];
 
-  const resolvedTools = tools.map((tool) => ({
-    tool,
-    version: localMetadata ? resolveToolVersion(tool, localMetadata.path) : null,
-  }));
+  if (localMetadata) {
+    const resolvedTools = tools.map((tool) => ({
+      tool,
+      version: resolveToolVersion(tool, localMetadata.path),
+    }));
 
-  sections.push({
-    title: 'Tools',
-    rows: resolvedTools.map(({ tool, version }) => ({
-      label: accent(tool.displayName),
-      description: version ? `v${version}` : 'Not found',
-    })),
-  });
+    sections.push({
+      title: 'Tools',
+      rows: resolvedTools.map(({ tool, version }) => ({
+        label: accent(tool.displayName),
+        description: version ? `v${version}` : 'Not found',
+      })),
+    });
+  }
 
   log(renderCliDoc({ sections }));
 }

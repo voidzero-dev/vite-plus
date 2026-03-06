@@ -175,6 +175,20 @@ async function main() {
   const packageManager =
     workspaceInfoOptional.packageManager ?? (await selectPackageManager(options.interactive));
 
+  let shouldSetupHooks = await promptGitHooks(options);
+
+  const selectedAgentTargetPaths = await selectAgentTargetPaths({
+    interactive: options.interactive,
+    agent: options.agent,
+    onCancel: () => cancelAndExit(),
+  });
+
+  const selectedEditor = await selectEditor({
+    interactive: options.interactive,
+    editor: options.editor,
+    onCancel: () => cancelAndExit(),
+  });
+
   // ensure the package manager is installed by vite-plus
   const downloadResult = await downloadPackageManager(
     packageManager,
@@ -223,8 +237,6 @@ async function main() {
     cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
   }
 
-  let shouldSetupHooks = await promptGitHooks(options);
-
   if (shouldSetupHooks) {
     const reason = preflightGitHooksSetup(workspaceInfo.rootDir);
     if (reason) {
@@ -248,22 +260,10 @@ async function main() {
     installGitHooks(workspaceInfo.rootDir);
   }
 
-  const selectedAgentTargetPaths = await selectAgentTargetPaths({
-    interactive: options.interactive,
-    agent: options.agent,
-    onCancel: () => cancelAndExit(),
-  });
-
   await writeAgentInstructions({
     projectRoot: workspaceInfo.rootDir,
     targetPaths: selectedAgentTargetPaths,
     interactive: options.interactive,
-  });
-
-  const selectedEditor = await selectEditor({
-    interactive: options.interactive,
-    editor: options.editor,
-    onCancel: () => cancelAndExit(),
   });
 
   await writeEditorConfigs({
