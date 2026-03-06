@@ -1,6 +1,0 @@
-{
-  "commands": [
-    "vp migrate --no-interactive # hooks should be skipped due to simple-git-hooks",
-    "cat package.json # lint-staged config and scripts should be preserved"
-  ]
-}

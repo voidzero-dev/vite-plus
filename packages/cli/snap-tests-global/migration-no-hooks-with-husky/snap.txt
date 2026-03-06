@@ -1,5 +1,5 @@
 > git init
-> vp migrate --no-hooks --no-interactive # migration with --no-hooks should keep husky/lint-staged
+> vp migrate --no-hooks --no-interactive # --no-hooks should keep husky/lint-staged and preserve config
 VITE+ - The Unified Toolchain for the Web
 
 
@@ -13,17 +13,21 @@ Wrote agent instructions to AGENTS.md
 ✔ Migration completed!
 
 
-> cat package.json # check prepare script reverted to husky and husky/lint-staged kept in devDependencies
+> cat package.json # prepare script, lint-staged config, check-staged script, and deps should all be preserved
 {
   "name": "migration-no-hooks-with-husky",
   "scripts": {
-    "prepare": "husky"
+    "prepare": "husky",
+    "check-staged": "lint-staged"
   },
   "devDependencies": {
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
+  },
+  "lint-staged": {
+    "*.ts": "eslint --fix"
   },
   "pnpm": {
     "overrides": {

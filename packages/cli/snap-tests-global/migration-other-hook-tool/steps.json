@@ -1,6 +1,6 @@
 {
   "commands": [
-    "vp migrate --no-interactive # migration should warn about simple-git-hooks",
-    "cat package.json # check simple-git-hooks config is untouched, no prepare script added"
+    "vp migrate --no-interactive # hooks should be skipped due to simple-git-hooks",
+    "cat package.json # lint-staged config, scripts, and simple-git-hooks config should all be preserved"
   ]
 }
