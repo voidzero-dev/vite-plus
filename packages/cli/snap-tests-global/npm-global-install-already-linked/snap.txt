@@ -1,3 +1,35 @@
+> vp --version
+VITE+ - The Unified Toolchain for the Web
+
+vp v<semver>
+
+Local vite-plus:
+  vite-plus  v<semver>
+
+Tools:
+  vite             v<semver>
+  rolldown         v<semver>
+  vitest           v<semver>
+  oxfmt            v<semver>
+  oxlint           v<semver>
+  oxlint-tsgolint  v<semver>
+  tsdown           v<semver>
+
+> which vp
+<vite-plus-home>/bin/vp
+
+> which npm
+<vite-plus-home>/bin/npm
+
+> which node
+<vite-plus-home>/bin/node
+
+> npm --version
+11.9.0
+
+> node --version
+v24.14.0
+
 > vp install -g ./npm-global-linked-pkg # First install via vp (creates managed shim)
 VITE+ - The Unified Toolchain for the Web
 

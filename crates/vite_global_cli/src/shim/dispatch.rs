@@ -310,6 +310,10 @@ fn check_npm_global_install_result(
         }
     }
 
+    // Deduplicate by bin_name so that when two packages declare the same binary,
+    // only the last one is linked (matching npm's "last writer wins" behavior).
+    let missing_bins = dedup_missing_bins(missing_bins);
+
     if !managed_conflicts.is_empty() {
         for (bin_name, pkg) in &managed_conflicts {
             output::raw(&vite_str::format!(
@@ -459,6 +463,27 @@ fn create_bin_link(
         )
         .save_sync();
     }
+}
+
+/// Deduplicate missing_bins by bin_name, keeping the last entry (npm's "last writer wins").
+///
+/// When `npm install -g pkg-a pkg-b` and both declare the same binary name, we get
+/// duplicate entries. Without dedup, `create_bin_link` would fail on the second entry
+/// because the symlink already exists, leaving stale BinConfig for the first package.
+#[allow(clippy::disallowed_types)]
+fn dedup_missing_bins(
+    missing_bins: Vec<(String, AbsolutePathBuf, String)>,
+) -> Vec<(String, AbsolutePathBuf, String)> {
+    let mut seen: Vec<String> = Vec::new();
+    let mut deduped = Vec::new();
+    for entry in missing_bins.into_iter().rev() {
+        if !seen.contains(&entry.0) {
+            seen.push(entry.0.clone());
+            deduped.push(entry);
+        }
+    }
+    deduped.reverse();
+    deduped
 }
 
 /// After npm uninstall -g completes, remove bin links that were created during install.
@@ -1619,6 +1644,73 @@ mod tests {
         assert!(is_local_path("C:\\pkg"));
         assert!(is_local_path("D:/projects/my-pkg"));
         assert!(!is_local_path("C")); // too short
+    }
+
+    // --- dedup missing_bins tests ---
+
+    #[test]
+    fn test_dedup_missing_bins_keeps_last_entry() {
+        // Simulates: `npm install -g pkg-a pkg-b` where both declare bin "shared-cli".
+        // After dedup, only the last entry (pkg-b) should survive — npm's "last writer wins".
+        let temp = TempDir::new().unwrap();
+        let source_a =
+            AbsolutePathBuf::new(temp.path().join("node_modules/.bin/shared-cli")).unwrap();
+        let source_b =
+            AbsolutePathBuf::new(temp.path().join("node_modules/.bin/shared-cli")).unwrap();
+
+        let missing_bins: Vec<(String, AbsolutePathBuf, String)> = vec![
+            ("shared-cli".to_string(), source_a, "pkg-a".to_string()),
+            ("shared-cli".to_string(), source_b, "pkg-b".to_string()),
+        ];
+
+        // Apply the same dedup logic used in check_npm_global_install_result
+        let deduped = dedup_missing_bins(missing_bins);
+
+        assert_eq!(deduped.len(), 1, "Should have exactly one entry after dedup");
+        assert_eq!(deduped[0].0, "shared-cli");
+        assert_eq!(deduped[0].2, "pkg-b", "Last writer (pkg-b) should win");
+    }
+
+    #[test]
+    fn test_dedup_missing_bins_preserves_unique_entries() {
+        let temp = TempDir::new().unwrap();
+        let source_a = AbsolutePathBuf::new(temp.path().join("bin/cli-a")).unwrap();
+        let source_b = AbsolutePathBuf::new(temp.path().join("bin/cli-b")).unwrap();
+
+        let missing_bins: Vec<(String, AbsolutePathBuf, String)> = vec![
+            ("cli-a".to_string(), source_a, "pkg-a".to_string()),
+            ("cli-b".to_string(), source_b, "pkg-b".to_string()),
+        ];
+
+        let deduped = dedup_missing_bins(missing_bins);
+
+        assert_eq!(deduped.len(), 2, "Unique entries should be preserved");
+        assert_eq!(deduped[0].0, "cli-a");
+        assert_eq!(deduped[1].0, "cli-b");
+    }
+
+    #[test]
+    fn test_dedup_missing_bins_multiple_dupes() {
+        // Three packages all declare "shared" and two packages declare "other"
+        let temp = TempDir::new().unwrap();
+        let src = |name: &str| AbsolutePathBuf::new(temp.path().join(name)).unwrap();
+
+        let missing_bins: Vec<(String, AbsolutePathBuf, String)> = vec![
+            ("shared".to_string(), src("s1"), "pkg-a".to_string()),
+            ("other".to_string(), src("o1"), "pkg-a".to_string()),
+            ("shared".to_string(), src("s2"), "pkg-b".to_string()),
+            ("shared".to_string(), src("s3"), "pkg-c".to_string()),
+            ("other".to_string(), src("o2"), "pkg-c".to_string()),
+        ];
+
+        let deduped = dedup_missing_bins(missing_bins);
+
+        assert_eq!(deduped.len(), 2);
+        // "shared" last writer is pkg-c, "other" last writer is pkg-c
+        assert_eq!(deduped[0].0, "shared");
+        assert_eq!(deduped[0].2, "pkg-c");
+        assert_eq!(deduped[1].0, "other");
+        assert_eq!(deduped[1].2, "pkg-c");
     }
 
     // --- parse_npm_global_command --prefix tests ---

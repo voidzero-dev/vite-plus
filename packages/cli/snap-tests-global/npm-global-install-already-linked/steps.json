@@ -3,6 +3,12 @@
   "serial": true,
   "ignoredPlatforms": ["win32"],
   "commands": [
+    "vp --version",
+    "which vp",
+    "which npm",
+    "which node",
+    "npm --version",
+    "node --version",
     "vp install -g ./npm-global-linked-pkg # First install via vp (creates managed shim)",
     "npm install -g ./npm-global-linked-pkg # Should NOT show hint (binary already exists)",
     "vp remove -g npm-global-linked-pkg # Cleanup"
