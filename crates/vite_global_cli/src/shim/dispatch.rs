@@ -220,7 +220,7 @@ fn check_npm_global_install_result(
     #[cfg(unix)]
     let npm_bin_dir = npm_prefix.join("bin");
     #[cfg(windows)]
-    let npm_bin_dir = npm_prefix.to_path_buf();
+    let npm_bin_dir = npm_prefix.to_absolute_path_buf();
 
     // If the npm global bin dir is already on the user's original PATH,
     // binaries are reachable without shims — no action needed.
@@ -399,7 +399,7 @@ fn create_bin_link(
             "@echo off\r\n\"{source}\" %*\r\nexit /b %ERRORLEVEL%\r\n",
             source = source_path.as_path().display()
         );
-        if std::fs::write(cmd_path.as_path(), &wrapper_content).is_ok() {
+        if std::fs::write(cmd_path.as_path(), &*wrapper_content).is_ok() {
             output::raw(&vite_str::format!(
                 "Linked '{bin_name}' to {}",
                 cmd_path.as_path().display()
