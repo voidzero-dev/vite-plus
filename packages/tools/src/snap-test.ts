@@ -113,10 +113,24 @@ export async function snapTest() {
     }
   }
 
-  // Make dependencies available in the test cases
+  // Make dependencies available in the test cases.
+  // Create a real node_modules directory so we can add the CLI package itself
+  // alongside the symlinked dependencies (needed for `vite-plus/*` imports in
+  // generated config files like .vite-plus-lint.tmp.mts).
+  const tempNodeModules = path.join(tempTmpDir, 'node_modules');
+  fs.mkdirSync(tempNodeModules);
+  const cliNodeModules = path.resolve('node_modules');
+  for (const entry of fs.readdirSync(cliNodeModules)) {
+    fs.symlinkSync(
+      path.join(cliNodeModules, entry),
+      path.join(tempNodeModules, entry),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+  }
+  // Add the CLI package itself so `vite-plus/*` subpath imports resolve
   fs.symlinkSync(
-    path.resolve('node_modules'),
-    path.join(tempTmpDir, 'node_modules'),
+    path.resolve('.'),
+    path.join(tempNodeModules, 'vite-plus'),
     process.platform === 'win32' ? 'junction' : 'dir',
   );
 
