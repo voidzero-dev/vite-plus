@@ -33,8 +33,8 @@ fn is_package_manager_tool(tool: &str) -> bool {
     PACKAGE_MANAGER_TOOLS.contains(&tool)
 }
 
-/// Parsed npm global install command.
-struct NpmGlobalInstall {
+/// Parsed npm global command (install or uninstall).
+struct NpmGlobalCommand {
     /// Package names/specs extracted from args (e.g., ["codex", "typescript@5"])
     packages: Vec<String>,
 }
@@ -48,11 +48,11 @@ const NPM_INSTALL_SUBCOMMANDS: &[&str] = &["install", "i", "add"];
 /// Uninstall subcommands recognized by npm.
 const NPM_UNINSTALL_SUBCOMMANDS: &[&str] = &["uninstall", "un", "remove", "rm"];
 
-/// Parse npm args to detect `npm install -g <packages>`.
-/// Returns None if not a global install command.
-fn parse_npm_global_install(args: &[String]) -> Option<NpmGlobalInstall> {
+/// Parse npm args to detect a global command (`npm <subcommand> -g <packages>`).
+/// Returns None if the args don't match the expected pattern.
+fn parse_npm_global_command(args: &[String], subcommands: &[&str]) -> Option<NpmGlobalCommand> {
     let mut has_global = false;
-    let mut has_install = false;
+    let mut has_subcommand = false;
     let mut packages = Vec::new();
     let mut skip_next = false;
 
@@ -67,8 +67,8 @@ fn parse_npm_global_install(args: &[String]) -> Option<NpmGlobalInstall> {
             continue;
         }
 
-        if NPM_INSTALL_SUBCOMMANDS.contains(&arg.as_str()) && !has_install {
-            has_install = true;
+        if subcommands.contains(&arg.as_str()) && !has_subcommand {
+            has_subcommand = true;
             continue;
         }
 
@@ -87,69 +87,24 @@ fn parse_npm_global_install(args: &[String]) -> Option<NpmGlobalInstall> {
         packages.push(arg.clone());
     }
 
-    if !has_global || !has_install {
+    if !has_global || !has_subcommand || packages.is_empty() {
         return None;
     }
 
-    // Filter out URLs and git+ prefixes (too complex to resolve package names)
-    packages.retain(|pkg| !pkg.contains("://") && !pkg.starts_with("git+"));
-
-    if packages.is_empty() {
-        return None;
-    }
-
-    Some(NpmGlobalInstall { packages })
+    Some(NpmGlobalCommand { packages })
 }
 
-/// Parsed npm global uninstall command.
-struct NpmGlobalUninstall {
-    /// Package names extracted from args
-    packages: Vec<String>,
+/// Parse npm args to detect `npm install -g <packages>`.
+fn parse_npm_global_install(args: &[String]) -> Option<NpmGlobalCommand> {
+    let mut parsed = parse_npm_global_command(args, NPM_INSTALL_SUBCOMMANDS)?;
+    // Filter out URLs and git+ prefixes (too complex to resolve package names)
+    parsed.packages.retain(|pkg| !pkg.contains("://") && !pkg.starts_with("git+"));
+    if parsed.packages.is_empty() { None } else { Some(parsed) }
 }
 
 /// Parse npm args to detect `npm uninstall -g <packages>`.
-/// Returns None if not a global uninstall command.
-fn parse_npm_global_uninstall(args: &[String]) -> Option<NpmGlobalUninstall> {
-    let mut has_global = false;
-    let mut has_uninstall = false;
-    let mut packages = Vec::new();
-    let mut skip_next = false;
-
-    for arg in args {
-        if skip_next {
-            skip_next = false;
-            continue;
-        }
-
-        if arg == "-g" || arg == "--global" {
-            has_global = true;
-            continue;
-        }
-
-        if NPM_UNINSTALL_SUBCOMMANDS.contains(&arg.as_str()) && !has_uninstall {
-            has_uninstall = true;
-            continue;
-        }
-
-        // Check for value-bearing flags
-        if NPM_VALUE_FLAGS.contains(&arg.as_str()) {
-            skip_next = true;
-            continue;
-        }
-
-        // Skip flags
-        if arg.starts_with('-') {
-            continue;
-        }
-
-        packages.push(arg.clone());
-    }
-
-    if !has_global || !has_uninstall || packages.is_empty() {
-        return None;
-    }
-
-    Some(NpmGlobalUninstall { packages })
+fn parse_npm_global_uninstall(args: &[String]) -> Option<NpmGlobalCommand> {
+    parse_npm_global_command(args, NPM_UNINSTALL_SUBCOMMANDS)
 }
 
 /// Resolve package name from a spec string.
@@ -252,25 +207,12 @@ fn check_npm_global_install_result(
 
     for spec in packages {
         let Some(package_name) = resolve_package_name(spec) else { continue };
-
-        // Look up installed package.json in node_modules.
-        // Try the npm prefix first (handles custom prefix), then fall back to node_dir.
-        let package_json_content = std::fs::read_to_string(
-            config::get_node_modules_dir(&npm_prefix, &package_name).join("package.json").as_path(),
-        )
-        .ok()
-        .or_else(|| {
-            let dir = config::get_node_modules_dir(&node_dir, &package_name);
-            std::fs::read_to_string(dir.join("package.json").as_path()).ok()
-        });
-
-        let Some(content) = package_json_content else { continue };
-
+        let Some(content) = read_npm_package_json(&npm_prefix, &node_dir, &package_name) else {
+            continue;
+        };
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
             continue;
         };
-
-        // Extract binary names from the bin field
         let bin_names = extract_bin_names(&package_json);
 
         for bin_name in bin_names {
@@ -464,39 +406,41 @@ fn remove_npm_global_uninstall_links(bin_names: &[String]) {
     }
 }
 
-/// Collect bin names from packages before uninstall (package.json will be gone after).
+/// Read the installed package.json from npm's node_modules directory.
+/// Tries the npm prefix first (handles custom prefix), then falls back to node_dir.
 #[allow(clippy::disallowed_types)]
-fn collect_bin_names_for_uninstall(
+fn read_npm_package_json(
+    npm_prefix: &AbsolutePath,
+    node_dir: &AbsolutePath,
+    package_name: &str,
+) -> Option<String> {
+    std::fs::read_to_string(
+        config::get_node_modules_dir(npm_prefix, package_name).join("package.json").as_path(),
+    )
+    .ok()
+    .or_else(|| {
+        let dir = config::get_node_modules_dir(node_dir, package_name);
+        std::fs::read_to_string(dir.join("package.json").as_path()).ok()
+    })
+}
+
+/// Collect bin names from packages by reading their installed package.json files.
+#[allow(clippy::disallowed_types)]
+fn collect_bin_names_from_npm(
     packages: &[String],
-    node_version: &str,
-    npm_path: &AbsolutePath,
+    npm_prefix: &AbsolutePath,
+    node_dir: &AbsolutePath,
 ) -> Vec<String> {
-    let Ok(home_dir) = vite_shared::get_vite_plus_home() else {
-        return Vec::new();
-    };
-
-    let node_dir = home_dir.join("js_runtime").join("node").join(node_version);
-    let npm_prefix = get_npm_global_prefix(npm_path, &node_dir);
-
     let mut all_bins = Vec::new();
 
     for spec in packages {
         let Some(package_name) = resolve_package_name(spec) else { continue };
-
-        let package_json_content = std::fs::read_to_string(
-            config::get_node_modules_dir(&npm_prefix, &package_name).join("package.json").as_path(),
-        )
-        .ok()
-        .or_else(|| {
-            let dir = config::get_node_modules_dir(&node_dir, &package_name);
-            std::fs::read_to_string(dir.join("package.json").as_path()).ok()
-        });
-
-        let Some(content) = package_json_content else { continue };
+        let Some(content) = read_npm_package_json(npm_prefix, node_dir, &package_name) else {
+            continue;
+        };
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
             continue;
         };
-
         all_bins.extend(extract_bin_names(&package_json));
     }
 
@@ -646,8 +590,13 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
 
         if let Some(parsed) = parse_npm_global_uninstall(args) {
             // Collect bin names before uninstall (package.json will be gone after)
-            let bin_names =
-                collect_bin_names_for_uninstall(&parsed.packages, &resolution.version, &tool_path);
+            let bin_names = if let Ok(home_dir) = vite_shared::get_vite_plus_home() {
+                let node_dir = home_dir.join("js_runtime").join("node").join(&*resolution.version);
+                let npm_prefix = get_npm_global_prefix(&tool_path, &node_dir);
+                collect_bin_names_from_npm(&parsed.packages, &npm_prefix, &node_dir)
+            } else {
+                Vec::new()
+            };
             let exit_code = exec::spawn_tool(&tool_path, args);
             if exit_code == 0 {
                 remove_npm_global_uninstall_links(&bin_names);
