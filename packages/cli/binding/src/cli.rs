@@ -263,7 +263,7 @@ impl SubcommandResolver {
 
         let config_path = config_dir.join(temp_filename);
         let content = format!(
-            "import {{ defineConfig }} from 'oxlint';\nimport viteConfig from './{config_basename}';\nexport default defineConfig(viteConfig.{field_name} as any);\n"
+            "import {{ defineConfig }} from 'vite-plus/lint';\nimport viteConfig from './{config_basename}';\nexport default defineConfig(viteConfig.{field_name} as any);\n"
         );
         write(&config_path, content).await?;
 

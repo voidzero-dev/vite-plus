@@ -55,6 +55,10 @@
       "import": "./binding/index.cjs",
       "require": "./binding/index.cjs"
     },
+    "./lint": {
+      "types": "./dist/lint.d.ts",
+      "import": "./dist/lint.js"
+    },
     "./package.json": "./package.json",
     "./pack": {
       "types": "./dist/pack.d.ts",
