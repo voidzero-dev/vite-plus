@@ -1,6 +1,20 @@
 > npm install -g ./npm-global-hint-pkg # Should install and show hint + create link
+<date>T<date>.757608Z DEBUG vp: argv0: npm
+<date>T<date>.757666Z DEBUG vp::shim::dispatch: dispatch: tool: npm, args: ["install", "-g", "./npm-global-hint-pkg"]
+<date>T<date>.758532Z DEBUG vite_js_runtime::providers::node: Using cached version index (expires in <variable>ms)
+<date>T<date>.758779Z DEBUG vp::shim::dispatch: npm dispatch: parse_npm_global_install=true, args=["install", "-g", "./npm-global-hint-pkg"]
+<date>T<date>.758784Z DEBUG vp::shim::dispatch: npm install -g: packages=["./npm-global-hint-pkg"], explicit_prefix=None
 
 added 1 package in <variable>ms
+<date>T<date>.043107Z DEBUG vp::shim::dispatch: npm install -g: exit_code=0
+<date>T<date>.111691Z DEBUG vp::shim::dispatch: npm install -g: npm_prefix=<cwd>/../npm-global-lib-for-snap-tests, node_dir=<vite-plus-home>/js_runtime/node/<semver>
+<date>T<date>.111716Z DEBUG vp::shim::dispatch: check_npm_global_install_result: packages=["./npm-global-hint-pkg"], npm_prefix=<cwd>/../npm-global-lib-for-snap-tests, node_dir=<vite-plus-home>/js_runtime/node/<semver>
+<date>T<date>.111731Z DEBUG vp::shim::dispatch: check: bin_dir=<vite-plus-home>/bin, npm_bin_dir=<cwd>/../npm-global-lib-for-snap-tests/bin
+<date>T<date>.111833Z DEBUG vp::shim::dispatch: check: spec="./npm-global-hint-pkg" -> package_name="npm-global-hint-pkg"
+<date>T<date>.111863Z DEBUG vp::shim::dispatch: check: bin_names=["npm-global-hint-cli"]
+<date>T<date>.111881Z DEBUG vp::shim::dispatch: check: bin="npm-global-hint-cli", shim_path=<vite-plus-home>/bin/npm-global-hint-cli, symlink_exists=false
+<date>T<date>.111893Z DEBUG vp::shim::dispatch: check: source_path=<cwd>/../npm-global-lib-for-snap-tests/bin/npm-global-hint-cli, exists=true
+<date>T<date>.111900Z DEBUG vp::shim::dispatch: check: managed_conflicts=0, missing_bins=1, is_interactive=false
 Linked 'npm-global-hint-cli' to <vite-plus-home>/bin/npm-global-hint-cli
 
 tip: Use `vp install -g ./npm-global-hint-pkg` for managed shims that persist across Node.js version changes.
@@ -9,9 +23,16 @@ tip: Use `vp install -g ./npm-global-hint-pkg` for managed shims that persist ac
 link created
 
 > npm-global-hint-cli # Should be callable via the link
+<date>T<date>.463835Z DEBUG vp: argv0: node
+<date>T<date>.463910Z DEBUG vp::shim::dispatch: dispatch: tool: node, args: ["<vite-plus-home>/bin/npm-global-hint-cli"]
+<date>T<date>.464371Z DEBUG vp::shim::dispatch: Cache hit for <cwd>: <semver> (from default)
 npm-global-hint-cli works
 
 > rm -f $VITE_PLUS_HOME/bin/npm-global-hint-cli # Cleanup link
 > npm uninstall -g npm-global-hint-pkg # Cleanup npm install
+<date>T<date>.501396Z DEBUG vp: argv0: npm
+<date>T<date>.501444Z DEBUG vp::shim::dispatch: dispatch: tool: npm, args: ["uninstall", "-g", "npm-global-hint-pkg"]
+<date>T<date>.501712Z DEBUG vp::shim::dispatch: Cache hit for <cwd>: <semver> (from default)
+<date>T<date>.501768Z DEBUG vp::shim::dispatch: npm dispatch: parse_npm_global_install=false, args=["uninstall", "-g", "npm-global-hint-pkg"]
 
 removed 1 package in <variable>ms
