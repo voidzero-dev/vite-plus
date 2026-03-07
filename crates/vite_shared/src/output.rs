@@ -50,3 +50,9 @@ pub fn success(msg: &str) {
 pub fn raw(msg: &str) {
     println!("{msg}");
 }
+
+/// Print a raw message to stdout without a trailing newline.
+#[allow(clippy::print_stdout, clippy::disallowed_macros)]
+pub fn raw_inline(msg: &str) {
+    print!("{msg}");
+}

@@ -334,10 +334,7 @@ fn check_npm_global_install_result(
         let bin_display = bin_list.join(", ");
 
         output::raw(&vite_str::format!("'{bin_display}' is not available on your PATH."));
-        #[allow(clippy::disallowed_macros)]
-        {
-            print!("Create a link in ~/.vite-plus/bin/ to make it available? [Y/n] ");
-        }
+        output::raw_inline("Create a link in ~/.vite-plus/bin/ to make it available? [Y/n] ");
         let _ = std::io::Write::flush(&mut std::io::stdout());
 
         let mut input = String::new();
@@ -476,11 +473,10 @@ fn create_bin_link(
 fn dedup_missing_bins(
     missing_bins: Vec<(String, AbsolutePathBuf, String)>,
 ) -> Vec<(String, AbsolutePathBuf, String)> {
-    let mut seen: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut deduped = Vec::new();
     for entry in missing_bins.into_iter().rev() {
-        if !seen.contains(&entry.0) {
-            seen.push(entry.0.clone());
+        if seen.insert(entry.0.clone()) {
             deduped.push(entry);
         }
     }

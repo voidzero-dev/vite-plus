@@ -58,7 +58,7 @@ fn exec_unix(path: &AbsolutePath, args: &[String]) -> i32 {
 
     // exec replaces the current process - this only returns on error
     let err = cmd.exec();
-    eprintln!("vp: Failed to exec {}: {}", path.as_path().display(), err);
+    output::error(&format!("Failed to exec {}: {}", path.as_path().display(), err));
     1
 }
 
