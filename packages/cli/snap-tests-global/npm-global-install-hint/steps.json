@@ -3,7 +3,7 @@
   "serial": true,
   "ignoredPlatforms": ["win32"],
   "commands": [
-    "npm install -g ./npm-global-hint-pkg # Should install and show hint + create link",
+    "npm install -g ./npm-global-hint-pkg --verbose # Should install and show hint + create link",
     "test -L $VITE_PLUS_HOME/bin/npm-global-hint-cli && echo 'link created' # Link should exist",
     "npm-global-hint-cli # Should be callable via the link",
     "rm -f $VITE_PLUS_HOME/bin/npm-global-hint-cli # Cleanup link",
