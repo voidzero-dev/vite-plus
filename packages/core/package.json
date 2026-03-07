@@ -125,6 +125,8 @@
   },
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
+    "@tsdown/css": "0.21.0",
+    "@tsdown/exe": "0.21.0",
     "@types/node": "^20.19.0 || >=22.12.0",
     "@vitejs/devtools": "^0.0.0-alpha.31",
     "esbuild": "^0.27.0",
@@ -138,12 +140,17 @@
     "terser": "^5.16.0",
     "tsx": "^4.8.1",
     "typescript": "^5.0.0",
-    "unplugin-lightningcss": "^0.4.0",
     "unplugin-unused": "^0.5.0",
     "yaml": "^2.4.2"
   },
   "peerDependenciesMeta": {
     "@arethetypeswrong/core": {
+      "optional": true
+    },
+    "@tsdown/css": {
+      "optional": true
+    },
+    "@tsdown/exe": {
       "optional": true
     },
     "@vitejs/devtools": {
@@ -153,9 +160,6 @@
       "optional": true
     },
     "typescript": {
-      "optional": true
-    },
-    "unplugin-lightningcss": {
       "optional": true
     },
     "unplugin-unused": {
@@ -204,6 +208,6 @@
   "bundledVersions": {
     "vite": "8.0.0-beta.16",
     "rolldown": "1.0.0-rc.6",
-    "tsdown": "0.21.0-beta.2"
+    "tsdown": "0.21.0"
   }
 }

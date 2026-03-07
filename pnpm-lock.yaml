@@ -191,7 +191,7 @@ catalogs:
       version: 2.32.0
     rolldown-plugin-dts:
       specifier: ^0.22.0
-      version: 0.22.1
+      version: 0.22.4
     rollup:
       specifier: ^4.18.0
       version: 4.53.3
@@ -223,8 +223,8 @@ catalogs:
       specifier: ^1.0.1
       version: 1.0.2
     tsdown:
-      specifier: ^0.21.0-beta.2
-      version: 0.21.0-beta.2
+      specifier: ^0.21.0
+      version: 0.21.0
     typescript:
       specifier: ^5.9.3
       version: 5.9.3
@@ -428,13 +428,13 @@ importers:
         version: link:../../rolldown/packages/rolldown
       rolldown-plugin-dts:
         specifier: 'catalog:'
-        version: 0.22.1(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       semver:
         specifier: 'catalog:'
         version: 7.7.4
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.17)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6)
+        version: 0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.17)(typescript@5.9.3)(unplugin-unused@0.5.6)
       validate-npm-package-name:
         specifier: 'catalog:'
         version: 7.0.2
@@ -456,6 +456,12 @@ importers:
       '@oxc-project/types':
         specifier: 'catalog:'
         version: 0.115.0
+      '@tsdown/css':
+        specifier: 0.21.0
+        version: 0.21.0(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(tsdown@0.21.0)(tsx@4.21.0)(yaml@2.8.2)
+      '@tsdown/exe':
+        specifier: 0.21.0
+        version: 0.21.0
       '@types/node':
         specifier: ^20.19.0 || >=22.12.0
         version: 24.10.15
@@ -498,9 +504,6 @@ importers:
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
-      unplugin-lightningcss:
-        specifier: ^0.4.0
-        version: 0.4.3
       unplugin-unused:
         specifier: ^0.5.0
         version: 0.5.6
@@ -558,7 +561,7 @@ importers:
         version: link:../../rolldown/packages/rolldown
       rolldown-plugin-dts:
         specifier: 'catalog:'
-        version: 0.22.1(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       rollup:
         specifier: ^4.18.0
         version: 4.53.3
@@ -576,7 +579,7 @@ importers:
         version: 1.2.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.17)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6)
+        version: 0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.17)(typescript@5.9.3)(unplugin-unused@0.5.6)
       vite:
         specifier: workspace:@voidzero-dev/vite-plus-core@*
         version: 'link:'
@@ -608,7 +611,7 @@ importers:
         version: 1.3.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.17)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6)
+        version: 0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.17)(typescript@5.9.3)(unplugin-unused@0.5.6)
 
   packages/test:
     dependencies:
@@ -738,7 +741,7 @@ importers:
         version: link:../../rolldown/packages/rolldown
       rolldown-plugin-dts:
         specifier: 'catalog:'
-        version: 0.22.1(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       tinyrainbow:
         specifier: ^3.0.3
         version: 3.0.3
@@ -1170,7 +1173,7 @@ importers:
         version: 2.0.3
       rolldown-plugin-dts:
         specifier: ^0.22.1
-        version: 0.22.1(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       rollup:
         specifier: ^4.43.0
         version: 4.53.3
@@ -1335,7 +1338,7 @@ importers:
         version: 'link:'
       rolldown-plugin-dts:
         specifier: 'catalog:'
-        version: 0.22.1(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       rollup:
         specifier: 'catalog:'
         version: 4.53.3
@@ -1528,8 +1531,8 @@ packages:
     resolution: {integrity: sha512-vSH118/wwM/pLR38g/Sgk05sNtro6TlTJKuiMXDaZqPUfjTFcudpCOt00IhOfj+1BFAX+UFAlzCU+6WXr3GLFQ==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/generator@8.0.0-rc.1':
-    resolution: {integrity: sha512-3ypWOOiC4AYHKr8vYRVtWtWmyvcoItHtVqF8paFax+ydpmUdPsJpLBkBBs5ItmhdrwC3a0ZSqqFAdzls4ODP3w==}
+  '@babel/generator@8.0.0-rc.2':
+    resolution: {integrity: sha512-oCQ1IKPwkzCeJzAPb7Fv8rQ9k5+1sG8mf2uoHiMInPYvkRfrDJxbTIbH51U+jstlkghus0vAi3EBvkfvEsYNLQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
 
   '@babel/helper-annotate-as-pure@7.27.3':
@@ -1603,16 +1606,16 @@ packages:
     resolution: {integrity: sha512-qMlSxKbpRlAridDExk92nSobyDdpPijUq2DW6oDnUqd0iOGxmQjyqhMIihI9+zv4LPyZdRje2cavWPbCbWm3eA==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/helper-string-parser@8.0.0-rc.1':
-    resolution: {integrity: sha512-vi/pfmbrOtQmqgfboaBhaCU50G7mcySVu69VU8z+lYoPPB6WzI9VgV7WQfL908M4oeSH5fDkmoupIqoE0SdApw==}
+  '@babel/helper-string-parser@8.0.0-rc.2':
+    resolution: {integrity: sha512-noLx87RwlBEMrTzncWd/FvTxoJ9+ycHNg0n8yyYydIoDsLZuxknKgWRJUqcrVkNrJ74uGyhWQzQaS3q8xfGAhQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
 
   '@babel/helper-validator-identifier@7.28.5':
     resolution: {integrity: sha512-qSs4ifwzKJSV39ucNjsvc6WVHs6b7S03sOh2OcHF9UHfVPqWWALUsNUVzhSBiItjRZoLHx7nIarVjqKVusUZ1Q==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/helper-validator-identifier@8.0.0-rc.1':
-    resolution: {integrity: sha512-I4YnARytXC2RzkLNVnf5qFNFMzp679qZpmtw/V3Jt2uGnWiIxyJtaukjG7R8pSx8nG2NamICpGfljQsogj+FbQ==}
+  '@babel/helper-validator-identifier@8.0.0-rc.2':
+    resolution: {integrity: sha512-xExUBkuXWJjVuIbO7z6q7/BA9bgfJDEhVL0ggrggLMbg0IzCUWGT1hZGE8qUH7Il7/RD/a6cZ3AAFrrlp1LF/A==}
     engines: {node: ^20.19.0 || >=22.12.0}
 
   '@babel/helper-validator-option@7.27.1':
@@ -1632,8 +1635,8 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  '@babel/parser@8.0.0-rc.1':
-    resolution: {integrity: sha512-6HyyU5l1yK/7h9Ki52i5h6mDAx4qJdiLQO4FdCyJNoB/gy3T3GGJdhQzzbZgvgZCugYBvwtQiWRt94QKedHnkA==}
+  '@babel/parser@8.0.0-rc.2':
+    resolution: {integrity: sha512-29AhEtcq4x8Dp3T72qvUMZHx0OMXCj4Jy/TEReQa+KWLln524Cj1fWb3QFi0l/xSpptQBR6y9RNEXuxpFvwiUQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
@@ -2048,8 +2051,8 @@ packages:
     resolution: {integrity: sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/types@8.0.0-rc.1':
-    resolution: {integrity: sha512-ubmJ6TShyaD69VE9DQrlXcdkvJbmwWPB8qYj0H2kaJi29O7vJT9ajSdBd2W8CG34pwL9pYA74fi7RHC1qbLoVQ==}
+  '@babel/types@8.0.0-rc.2':
+    resolution: {integrity: sha512-91gAaWRznDwSX4E2tZ1YjBuIfnQVOFDCQ2r0Toby0gu4XEbyF623kXLMA8d4ZbCu+fINcrudkmEcwSUHgDDkNw==}
     engines: {node: ^20.19.0 || >=22.12.0}
 
   '@braidai/lang@1.1.2':
@@ -4613,6 +4616,23 @@ packages:
   '@tootallnate/quickjs-emscripten@0.23.0':
     resolution: {integrity: sha512-C5Mc6rdnsaJDjO3UpGW/CQTHtCKaYlScZTly4JIu97Jxo/odCiH0ITnDXSJPTOrEKk/ycSZ0AOgTmkDtkOsvIA==}
 
+  '@tsdown/css@0.21.0':
+    resolution: {integrity: sha512-wrg95zFeYXcKuUzjntwxE3S8XguPqFlLTv7/aKNTvCtAq4AvLll8ilnqYe8XZkUkjdpyofz8kqDQhwiEqnZm4g==}
+    engines: {node: '>=20.19.0'}
+    peerDependencies:
+      postcss: ^8.4.0
+      postcss-import: ^16.0.0
+      tsdown: 0.21.0
+    peerDependenciesMeta:
+      postcss:
+        optional: true
+      postcss-import:
+        optional: true
+
+  '@tsdown/exe@0.21.0':
+    resolution: {integrity: sha512-LJ62qjukM0Qs+MESx/CkKAcxWdrDTjrJNVbbH5YUmlpUuUu04NgPnQsQzoghMNOVpJhNL8UqdhGG+DpkRZTCuw==}
+    engines: {node: '>=20.19.0'}
+
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
 
@@ -5548,6 +5568,10 @@ packages:
     resolution: {integrity: sha512-b6Ilus+c3RrdDk+JhLKUAQfzzgLEPy6wcXqS7f/xe1EETvsDP6GORG7SFuOs6cID5YkqchW/LXZbX5bc8j7ZcQ==}
     engines: {node: '>=8'}
 
+  cac@7.0.0:
+    resolution: {integrity: sha512-tixWYgm5ZoOD+3g6UTea91eow5z6AAHaho3g0V9CNSNb45gM8SmflpAc+GRd1InC4AqN/07Unrgp56Y94N9hJQ==}
+    engines: {node: '>=20.19.0'}
+
   cached-factory@0.1.0:
     resolution: {integrity: sha512-IGOSWu+NuED5UzCRmBeqQPZ8z7SkgrD/nN67W2iY1Qv83CVhevyMexkGclJ86saXisIqxoOnbeiTWvsCHRqJBw==}
     engines: {node: '>=18'}
@@ -6418,8 +6442,8 @@ packages:
     resolution: {integrity: sha512-kVCxPF3vQM/N0B1PmoqVUqgHP+EeVjmZSQn+1oCRPxd2P21P2F19lIgbR3HBosbB1PUhOAoctJnfEn2GbN2eZA==}
     engines: {node: '>=18'}
 
-  get-tsconfig@4.13.1:
-    resolution: {integrity: sha512-EoY1N2xCn44xU6750Sx7OjOIT59FkmstNc3X6y5xpz7D5cBtZRe/3pSlTkDJgqsOk3WwZPkWfonhhUJfttQo3w==}
+  get-tsconfig@4.13.6:
+    resolution: {integrity: sha512-shZT/QMiSHc/YBLxxOkMtgSid5HFoauqCE3/exfsEcwg1WkeqjG+V40yBbBrsD+jW2HDXcs28xOfcbm2jI8Ddw==}
 
   get-uri@6.0.5:
     resolution: {integrity: sha512-b1O07XYq8eRuVzBNgJLstU6FYc1tS6wnMtF1I1D9lE8LxZSOGZ7LhxN54yPP6mGw5f2CkXY2BQUL9Fx41qvcIg==}
@@ -7938,14 +7962,14 @@ packages:
   rgb2hex@0.2.5:
     resolution: {integrity: sha512-22MOP1Rh7sAo1BZpDG6R5RFYzR2lYEgwq7HEmyW2qcsOqR2lQKmn+O//xV3YG/0rrhMC6KVX2hU+ZXuaw9a5bw==}
 
-  rolldown-plugin-dts@0.22.1:
-    resolution: {integrity: sha512-5E0AiM5RSQhU6cjtkDFWH6laW4IrMu0j1Mo8x04Xo1ALHmaRMs9/7zej7P3RrryVHW/DdZAp85MA7Be55p0iUw==}
+  rolldown-plugin-dts@0.22.4:
+    resolution: {integrity: sha512-pueqTPyN1N6lWYivyDGad+j+GO3DT67pzpct8s8e6KGVIezvnrDjejuw1AXFeyDRas3xTq4Ja6Lj5R5/04C5GQ==}
     engines: {node: '>=20.19.0'}
     peerDependencies:
       '@ts-macro/tsc': ^0.3.6
       '@typescript/native-preview': '>=7.0.0-dev.20250601.1'
       rolldown: workspace:rolldown@*
-      typescript: ^5.0.0
+      typescript: ^5.0.0 || ^6.0.0-beta
       vue-tsc: ~3.2.0
     peerDependenciesMeta:
       '@ts-macro/tsc':
@@ -8564,27 +8588,30 @@ packages:
       unplugin-unused:
         optional: true
 
-  tsdown@0.21.0-beta.2:
-    resolution: {integrity: sha512-OKj8mKf0ws1ucxuEi3mO/OGyfRQxO9MY2D6SoIE/7RZcbojsZSBhJr4xC4MNivMqrQvi3Ke2e+aRZDemPBWPCw==}
+  tsdown@0.21.0:
+    resolution: {integrity: sha512-Sw/ehzVhjYLD7HVBPybJHDxpcaeyFjPcaDCME23o9O4fyuEl6ibYEdrnB8W8UchYAGoayKqzWQqx/oIp3jn/Vg==}
     engines: {node: '>=20.19.0'}
     hasBin: true
     peerDependencies:
       '@arethetypeswrong/core': ^0.18.1
+      '@tsdown/css': 0.21.0
+      '@tsdown/exe': 0.21.0
       '@vitejs/devtools': '*'
       publint: ^0.3.0
       typescript: ^5.0.0
-      unplugin-lightningcss: ^0.4.0
       unplugin-unused: ^0.5.0
     peerDependenciesMeta:
       '@arethetypeswrong/core':
+        optional: true
+      '@tsdown/css':
+        optional: true
+      '@tsdown/exe':
         optional: true
       '@vitejs/devtools':
         optional: true
       publint:
         optional: true
       typescript:
-        optional: true
-      unplugin-lightningcss:
         optional: true
       unplugin-unused:
         optional: true
@@ -8761,8 +8788,8 @@ packages:
   unrs-resolver@1.11.1:
     resolution: {integrity: sha512-bSjt9pjaEBnNiGgc9rUiHGKv5l4/TGzDmYw3RhnkJGtLhbnnA/5qJj7x3dNDCRx/PJxu774LlH8lCOlB4hEfKg==}
 
-  unrun@0.2.28:
-    resolution: {integrity: sha512-LqMrI3ZEUMZ2476aCsbUTfy95CHByqez05nju4AQv4XFPkxh5yai7Di1/Qb0FoELHEEPDWhQi23EJeFyrBV0Og==}
+  unrun@0.2.30:
+    resolution: {integrity: sha512-a4W1wDADI0gvDDr14T0ho1FgMhmfjq6M8Iz8q234EnlxgH/9cMHDueUSLwTl1fwSBs5+mHrLFYH+7B8ao36EBA==}
     engines: {node: '>=20.19.0'}
     hasBin: true
     peerDependencies:
@@ -9308,10 +9335,10 @@ snapshots:
       '@jridgewell/trace-mapping': 0.3.31
       jsesc: 3.1.0
 
-  '@babel/generator@8.0.0-rc.1':
+  '@babel/generator@8.0.0-rc.2':
     dependencies:
-      '@babel/parser': 8.0.0-rc.1
-      '@babel/types': 8.0.0-rc.1
+      '@babel/parser': 8.0.0-rc.2
+      '@babel/types': 8.0.0-rc.2
       '@jridgewell/gen-mapping': 0.3.13
       '@jridgewell/trace-mapping': 0.3.31
       '@types/jsesc': 2.5.1
@@ -9418,11 +9445,11 @@ snapshots:
 
   '@babel/helper-string-parser@7.27.1': {}
 
-  '@babel/helper-string-parser@8.0.0-rc.1': {}
+  '@babel/helper-string-parser@8.0.0-rc.2': {}
 
   '@babel/helper-validator-identifier@7.28.5': {}
 
-  '@babel/helper-validator-identifier@8.0.0-rc.1': {}
+  '@babel/helper-validator-identifier@8.0.0-rc.2': {}
 
   '@babel/helper-validator-option@7.27.1': {}
 
@@ -9443,9 +9470,9 @@ snapshots:
     dependencies:
       '@babel/types': 7.29.0
 
-  '@babel/parser@8.0.0-rc.1':
+  '@babel/parser@8.0.0-rc.2':
     dependencies:
-      '@babel/types': 8.0.0-rc.1
+      '@babel/types': 8.0.0-rc.2
 
   '@babel/plugin-bugfix-firefox-class-in-computed-class-key@7.28.5(@babel/core@7.29.0)':
     dependencies:
@@ -9975,10 +10002,10 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
 
-  '@babel/types@8.0.0-rc.1':
+  '@babel/types@8.0.0-rc.2':
     dependencies:
-      '@babel/helper-string-parser': 8.0.0-rc.1
-      '@babel/helper-validator-identifier': 8.0.0-rc.1
+      '@babel/helper-string-parser': 8.0.0-rc.2
+      '@babel/helper-validator-identifier': 8.0.0-rc.2
 
   '@braidai/lang@1.1.2': {}
 
@@ -11994,6 +12021,26 @@ snapshots:
 
   '@tootallnate/quickjs-emscripten@0.23.0': {}
 
+  '@tsdown/css@0.21.0(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(tsdown@0.21.0)(tsx@4.21.0)(yaml@2.8.2)':
+    dependencies:
+      lightningcss: 1.31.1
+      postcss-load-config: 6.0.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(yaml@2.8.2)
+      rolldown: link:rolldown/packages/rolldown
+      tsdown: 0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.17)(typescript@5.9.3)(unplugin-unused@0.5.6)
+    optionalDependencies:
+      postcss: 8.5.6
+      postcss-import: 16.1.1(postcss@8.5.6)
+    transitivePeerDependencies:
+      - jiti
+      - tsx
+      - yaml
+
+  '@tsdown/exe@0.21.0':
+    dependencies:
+      obug: 2.1.1
+      semver: 7.7.4
+      tinyexec: 1.0.2
+
   '@tybys/wasm-util@0.10.1':
     dependencies:
       tslib: 2.8.1
@@ -12941,7 +12988,7 @@ snapshots:
 
   ast-kit@3.0.0-beta.1:
     dependencies:
-      '@babel/parser': 8.0.0-rc.1
+      '@babel/parser': 8.0.0-rc.2
       estree-walker: 3.0.3
       pathe: 2.0.3
 
@@ -13144,6 +13191,8 @@ snapshots:
       run-applescript: 7.1.0
 
   cac@6.7.14: {}
+
+  cac@7.0.0: {}
 
   cached-factory@0.1.0: {}
 
@@ -13653,7 +13702,7 @@ snapshots:
 
   eslint-import-context@0.1.9(unrs-resolver@1.11.1):
     dependencies:
-      get-tsconfig: 4.13.1
+      get-tsconfig: 4.13.6
       stable-hash-x: 0.2.0
     optionalDependencies:
       unrs-resolver: 1.11.1
@@ -13688,7 +13737,7 @@ snapshots:
       enhanced-resolve: 5.18.3
       eslint: 9.39.3(jiti@2.6.1)
       eslint-plugin-es-x: 7.8.0(eslint@9.39.3(jiti@2.6.1))
-      get-tsconfig: 4.13.1
+      get-tsconfig: 4.13.6
       globals: 15.15.0
       globrex: 0.1.2
       ignore: 5.3.2
@@ -14035,7 +14084,7 @@ snapshots:
       '@sec-ant/readable-stream': 0.4.1
       is-stream: 4.0.1
 
-  get-tsconfig@4.13.1:
+  get-tsconfig@4.13.6:
     dependencies:
       resolve-pkg-maps: 1.0.0
 
@@ -15662,16 +15711,16 @@ snapshots:
 
   rgb2hex@0.2.5: {}
 
-  rolldown-plugin-dts@0.22.1(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3):
+  rolldown-plugin-dts@0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3):
     dependencies:
-      '@babel/generator': 8.0.0-rc.1
-      '@babel/helper-validator-identifier': 8.0.0-rc.1
-      '@babel/parser': 8.0.0-rc.1
-      '@babel/types': 8.0.0-rc.1
+      '@babel/generator': 8.0.0-rc.2
+      '@babel/helper-validator-identifier': 8.0.0-rc.2
+      '@babel/parser': 8.0.0-rc.2
+      '@babel/types': 8.0.0-rc.2
       ast-kit: 3.0.0-beta.1
       birpc: 4.0.0
       dts-resolver: 2.1.3(oxc-resolver@11.14.0)
-      get-tsconfig: 4.13.1
+      get-tsconfig: 4.13.6
       obug: 2.1.1
       rolldown: link:rolldown/packages/rolldown
     optionalDependencies:
@@ -16256,13 +16305,13 @@ snapshots:
       obug: 2.1.1
       picomatch: 4.0.3
       rolldown: link:rolldown/packages/rolldown
-      rolldown-plugin-dts: 0.22.1(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+      rolldown-plugin-dts: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       semver: 7.7.4
       tinyexec: 1.0.2
       tinyglobby: 0.2.15
       tree-kill: 1.2.2
       unconfig-core: 7.5.0
-      unrun: 0.2.28
+      unrun: 0.2.30
     optionalDependencies:
       '@arethetypeswrong/core': 0.18.2
       publint: 0.3.17
@@ -16276,10 +16325,10 @@ snapshots:
       - synckit
       - vue-tsc
 
-  tsdown@0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.17)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6):
+  tsdown@0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.17)(typescript@5.9.3)(unplugin-unused@0.5.6):
     dependencies:
       ansis: 4.2.0
-      cac: 6.7.14
+      cac: 7.0.0
       defu: 6.1.4
       empathic: 2.0.0
       hookable: 6.0.1
@@ -16287,19 +16336,20 @@ snapshots:
       obug: 2.1.1
       picomatch: 4.0.3
       rolldown: link:rolldown/packages/rolldown
-      rolldown-plugin-dts: 0.22.1(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+      rolldown-plugin-dts: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       semver: 7.7.4
       tinyexec: 1.0.2
       tinyglobby: 0.2.15
       tree-kill: 1.2.2
       unconfig-core: 7.5.0
-      unrun: 0.2.28
+      unrun: 0.2.30
     optionalDependencies:
       '@arethetypeswrong/core': 0.18.2
+      '@tsdown/css': 0.21.0(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(tsdown@0.21.0)(tsx@4.21.0)(yaml@2.8.2)
+      '@tsdown/exe': 0.21.0
       '@vitejs/devtools': 0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3))
       publint: 0.3.17
       typescript: 5.9.3
-      unplugin-lightningcss: 0.4.3
       unplugin-unused: 0.5.6
     transitivePeerDependencies:
       - '@ts-macro/tsc'
@@ -16308,10 +16358,10 @@ snapshots:
       - synckit
       - vue-tsc
 
-  tsdown@0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.17)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6):
+  tsdown@0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.17)(typescript@5.9.3)(unplugin-unused@0.5.6):
     dependencies:
       ansis: 4.2.0
-      cac: 6.7.14
+      cac: 7.0.0
       defu: 6.1.4
       empathic: 2.0.0
       hookable: 6.0.1
@@ -16319,18 +16369,19 @@ snapshots:
       obug: 2.1.1
       picomatch: 4.0.3
       rolldown: link:rolldown/packages/rolldown
-      rolldown-plugin-dts: 0.22.1(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+      rolldown-plugin-dts: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       semver: 7.7.4
       tinyexec: 1.0.2
       tinyglobby: 0.2.15
       tree-kill: 1.2.2
       unconfig-core: 7.5.0
-      unrun: 0.2.28
+      unrun: 0.2.30
     optionalDependencies:
       '@arethetypeswrong/core': 0.18.2
+      '@tsdown/css': 0.21.0(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(tsdown@0.21.0)(tsx@4.21.0)(yaml@2.8.2)
+      '@tsdown/exe': 0.21.0
       publint: 0.3.17
       typescript: 5.9.3
-      unplugin-lightningcss: 0.4.3
       unplugin-unused: 0.5.6
     transitivePeerDependencies:
       - '@ts-macro/tsc'
@@ -16344,7 +16395,7 @@ snapshots:
   tsx@4.21.0:
     dependencies:
       esbuild: 0.27.3
-      get-tsconfig: 4.13.1
+      get-tsconfig: 4.13.6
     optionalDependencies:
       fsevents: 2.3.3
 
@@ -16477,6 +16528,7 @@ snapshots:
       lightningcss: 1.31.1
       magic-string: 0.30.21
       unplugin: 2.3.11
+    optional: true
 
   unplugin-unused@0.5.6:
     dependencies:
@@ -16527,7 +16579,7 @@ snapshots:
       '@unrs/resolver-binding-win32-ia32-msvc': 1.11.1
       '@unrs/resolver-binding-win32-x64-msvc': 1.11.1
 
-  unrun@0.2.28:
+  unrun@0.2.30:
     dependencies:
       rolldown: link:rolldown/packages/rolldown
 

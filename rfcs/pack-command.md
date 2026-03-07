@@ -55,7 +55,7 @@ vp pack src/index.ts --watch --on-success 'node dist/index.mjs'
 # Workspace mode
 vp pack --workspace --filter my-lib
 
-# Bundle as executable (experimental, Node.js >= 25.5.0)
+# Bundle as executable (experimental, Node.js >= 25.7.0)
 vp pack src/cli.ts --exe
 ```
 
@@ -88,7 +88,7 @@ vp pack src/cli.ts --exe
 
 ### Dependencies
 
-- `--external <module>` — Mark dependencies as external
+- `--deps.never-bundle <module>` — Mark dependencies as external
 - `--treeshake` — Tree-shake bundle (default: `true`)
 
 ### Quality Checks
@@ -131,9 +131,9 @@ vp pack src/cli.ts --exe
 ### Executable (Experimental)
 
 - `--exe` — Bundle as Node.js Single Executable Application (SEA)
-  - Requires Node.js >= 25.5.0
+  - Requires Node.js >= 25.7.0
   - Single entry point only
-  - Auto-sets format to CJS, disables DTS and code splitting
+  - Defaults to ESM format, DTS generation disabled by default
   - On macOS, applies ad-hoc codesigning automatically
 
 ## Configuration
@@ -207,15 +207,15 @@ The `--exe` flag bundles the output as a Node.js Single Executable Application (
 
 ### Requirements
 
-- Node.js >= 25.5.0 (uses the `node --experimental-sea` API)
+- Node.js >= 25.7.0 (uses the `node --build-sea` API)
 - Single entry point only
 
 ### Behavior
 
 When `--exe` is passed:
 
-1. tsdown auto-sets format to CJS
-2. DTS generation and code splitting are disabled
+1. tsdown defaults to ESM format
+2. DTS generation is disabled by default
 3. The bundle is embedded into a Node.js SEA blob
 4. On macOS, ad-hoc codesigning is applied automatically
 5. The resulting executable is a standalone binary
@@ -225,7 +225,7 @@ When `--exe` is passed:
 If Node.js version is too old:
 
 ```
-Node.js version v22.22.0 does not support `exe` option. Please upgrade to Node.js 25.5.0 or later.
+Node.js version v22.22.0 does not support `exe` option. Please upgrade to Node.js 25.7.0 or later.
 ```
 
 ## Relationship with `vp pm pack`
@@ -296,7 +296,7 @@ Options:
   --no-config               Disable config file
   -f, --format <format>     Bundle format: esm, cjs, iife, umd (default: esm)
   --clean                   Clean output directory, --no-clean to disable
-  --external <module>       Mark dependencies as external
+  --deps.never-bundle <module>  Mark dependencies as external
   --minify                  Minify output
   --devtools                Enable devtools integration
   --debug [feat]            Show debug logs
@@ -344,7 +344,7 @@ Tests `vp pack -h` (help output includes all options including `--exe`) and `vp 
 
 **Location**: `packages/cli/snap-tests/command-pack-exe/`
 
-Tests `vp pack src/index.ts --exe` error behavior when Node.js version is below 25.5.0.
+Tests `vp pack src/index.ts --exe` error behavior when Node.js version is below 25.7.0.
 
 ## Backward Compatibility
 
@@ -354,26 +354,33 @@ This RFC documents an existing command with no breaking changes:
 - The new `--exe` flag is purely additive
 - Config format in `vite.config.ts` is unchanged
 
-## Future Enhancements
+## Exe Advanced Configuration
 
-### 1. Programmatic `ExeOptions`
+### Programmatic `ExeOptions`
+
+The `exe` option accepts an object for advanced configuration:
 
 ```ts
 export default {
   pack: {
     entry: 'src/cli.ts',
     exe: {
-      // Future: configure SEA options
-      icon: 'assets/icon.ico',
-      name: 'my-cli',
+      seaConfig: {
+        /* Node.js SEA config overrides */
+      },
+      fileName: 'my-cli',
+      targets: [
+        { platform: 'linux', arch: 'x64', nodeVersion: '25.7.0' },
+        { platform: 'darwin', arch: 'arm64' },
+      ],
     },
   },
 };
 ```
 
-### 2. Cross-Platform Executable Building
+### Cross-Platform Executable Building
 
-Support building executables for different platforms from a single host.
+Cross-platform builds are supported via the `@tsdown/exe` package (optional peer dependency). The `targets` option accepts an array of `{ platform, arch, nodeVersion }` objects to build executables for different platforms from a single host.
 
 ## Conclusion
 
