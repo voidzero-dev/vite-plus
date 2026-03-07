@@ -143,7 +143,9 @@ fn parse_npm_global_uninstall(args: &[String]) -> Option<NpmGlobalCommand> {
 /// - Scoped specs: "@scope/pkg" → "@scope/pkg", "@scope/pkg@1.0" → "@scope/pkg"
 /// - Local paths: "./foo" → reads foo/package.json → name field
 fn is_local_path(spec: &str) -> bool {
-    spec.starts_with("./")
+    spec == "."
+        || spec == ".."
+        || spec.starts_with("./")
         || spec.starts_with("../")
         || spec.starts_with('/')
         || (cfg!(windows)
@@ -1630,6 +1632,16 @@ mod tests {
     }
 
     // --- is_local_path tests ---
+
+    #[test]
+    fn test_is_local_path_bare_dot() {
+        assert!(is_local_path("."));
+    }
+
+    #[test]
+    fn test_is_local_path_bare_dotdot() {
+        assert!(is_local_path(".."));
+    }
 
     #[test]
     fn test_is_local_path_relative_dot() {

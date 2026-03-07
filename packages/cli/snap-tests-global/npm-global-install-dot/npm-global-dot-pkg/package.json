@@ -1,0 +1,7 @@
+{
+  "name": "npm-global-dot-pkg",
+  "version": "1.0.0",
+  "bin": {
+    "npm-global-dot-cli": "./cli.js"
+  }
+}
