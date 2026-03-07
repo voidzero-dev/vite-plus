@@ -158,7 +158,7 @@ jobs:
         with:
           target: x86_64-unknown-linux-gnu
 
-      - name: Build CLI
+      - name: Install Global CLI vp
         run: |
           pnpm bootstrap-cli:ci
           echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
@@ -222,10 +222,12 @@ jobs:
         with:
           target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' ||  matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'aarch64-apple-darwin' }}
 
-      # Skip native rebuild — NAPI bindings are already built and cached by build-upstream
-      - name: Build CLI
+      - name: Check TypeScript types
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: pnpm tsgo
+
+      - name: Install Global CLI vp
         run: |
-          pnpm -F vite-plus-cli build-ts
           pnpm bootstrap-cli:ci
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
@@ -233,17 +235,13 @@ jobs:
             echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
           fi
 
-      - name: Check TypeScript types
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: pnpm tsgo
-
-      - name: Verify CLI installation
+      - name: Verify vp installation
         run: |
           which vp
           vp --version
           vp -h
 
-      - name: Run CLI check
+      - name: Run vp check
         run: vp check
 
       - name: Test global package install (powershell)
