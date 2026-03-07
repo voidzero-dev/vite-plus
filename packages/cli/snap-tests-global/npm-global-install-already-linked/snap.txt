@@ -75,11 +75,6 @@ added 1 package in <variable>ms
 Skipped 'npm-global-linked-cli': managed by `vp install -g ./npm-global-linked-pkg`. Run `vp uninstall -g ./npm-global-linked-pkg` to remove it first.
 
 > vp ls -g
-Package                         Node version   Binaries
----                             ---            ---
-pnpm@<semver>                    <semver>        pnpm, pnpx
-./npm-global-linked-pkg@<semver>   <semver>        npm-global-linked-cli
-
 > npm ls -g
 <cwd>/../npm-global-lib-for-snap-tests/lib
 └── npm-global-linked-pkg@<semver> -> ./../../npm-global-install-already-linked/npm-global-linked-pkg

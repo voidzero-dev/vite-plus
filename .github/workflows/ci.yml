@@ -369,8 +369,8 @@ jobs:
 
       - name: Run CLI snapshot tests
         run: |
-          RUST_BACKTRACE=1 pnpm -F vite-plus snap-test-global npm-global-install-already-linked
-          git diff
+          RUST_BACKTRACE=1 pnpm test
+          git diff --exit-code
 
       # Upgrade tests (merged from separate job to avoid duplicate build)
       - name: Test upgrade (bash)

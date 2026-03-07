@@ -221,18 +221,9 @@ fn check_npm_global_install_result(
 ) {
     use std::io::IsTerminal;
 
-    println!(
-        "[debug] check_npm_global_install_result: packages={packages:?}, npm_prefix={}, node_dir={}",
-        npm_prefix.as_path().display(),
-        node_dir.as_path().display()
-    );
-
     let Ok(bin_dir) = config::get_bin_dir() else {
-        println!("[debug] get_bin_dir() failed, returning early");
         return;
     };
-
-    println!("[debug] bin_dir={}", bin_dir.as_path().display());
 
     // Derive bin dir from prefix (Unix: prefix/bin, Windows: prefix itself)
     #[cfg(unix)]
@@ -240,42 +231,30 @@ fn check_npm_global_install_result(
     #[cfg(windows)]
     let npm_bin_dir = npm_prefix.to_absolute_path_buf();
 
-    println!("[debug] npm_bin_dir={}", npm_bin_dir.as_path().display());
-
     // If the npm global bin dir is already on the user's original PATH,
     // binaries are reachable without shims — no action needed.
     if let Some(orig) = original_path {
-        println!("[debug] original_path={orig:?}");
         if std::env::split_paths(orig).any(|p| p == npm_bin_dir.as_path()) {
-            println!("[debug] npm_bin_dir is on original PATH, returning early");
             return;
         }
-    } else {
-        println!("[debug] original_path=None");
     }
 
     let is_interactive = std::io::stdin().is_terminal();
-    println!("[debug] is_interactive={is_interactive}");
     // (bin_name, source_path, package_name)
     let mut missing_bins: Vec<(String, AbsolutePathBuf, String)> = Vec::new();
     let mut managed_conflicts: Vec<(String, String)> = Vec::new();
 
     for spec in packages {
         let Some(package_name) = resolve_package_name(spec) else {
-            println!("[debug] resolve_package_name({spec:?}) returned None");
             continue;
         };
-        println!("[debug] spec={spec:?} -> package_name={package_name:?}");
         let Some(content) = read_npm_package_json(npm_prefix, node_dir, &package_name) else {
-            println!("[debug] read_npm_package_json({package_name:?}) returned None");
             continue;
         };
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
-            println!("[debug] failed to parse package.json for {package_name:?}");
             continue;
         };
         let bin_names = extract_bin_names(&package_json);
-        println!("[debug] bin_names={bin_names:?}");
 
         for bin_name in bin_names {
             // Skip core shims
@@ -286,18 +265,8 @@ fn check_npm_global_install_result(
             // Check if binary already exists in bin_dir (vite-plus bin)
             let shim_path = bin_dir.join(&bin_name);
             let symlink_exists = std::fs::symlink_metadata(shim_path.as_path()).is_ok();
-            println!(
-                "[debug] bin={bin_name:?}, shim_path={}, symlink_exists={symlink_exists}",
-                shim_path.as_path().display()
-            );
             if symlink_exists {
-                let load_result = BinConfig::load_sync(&bin_name);
-                println!("[debug] BinConfig::load_sync({bin_name:?}) = {load_result:?}");
-                if let Ok(Some(config)) = load_result {
-                    println!(
-                        "[debug] config.source={:?}, config.package={:?}, package_name={package_name:?}",
-                        config.source, config.package
-                    );
+                if let Ok(Some(config)) = BinConfig::load_sync(&bin_name) {
                     if config.source == BinSource::Vp {
                         // Managed by vp install -g — warn about the conflict
                         managed_conflicts.push((bin_name, config.package.clone()));
@@ -349,11 +318,6 @@ fn check_npm_global_install_result(
     // Deduplicate by bin_name so that when two packages declare the same binary,
     // only the last one is linked (matching npm's "last writer wins" behavior).
     let missing_bins = dedup_missing_bins(missing_bins);
-
-    println!(
-        "[debug] managed_conflicts={managed_conflicts:?}, missing_bins count={}",
-        missing_bins.len()
-    );
 
     if !managed_conflicts.is_empty() {
         for (bin_name, pkg) in &managed_conflicts {
@@ -812,38 +776,13 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
 
     // For npm install/uninstall -g, use spawn+wait so we can post-check/cleanup binaries
     if tool == "npm" {
-        let parsed_install = parse_npm_global_install(args);
-        #[allow(clippy::disallowed_macros)]
-        {
-            println!("[debug] dispatch: tool={tool:?}, args={args:?}");
-            println!("[debug] dispatch: parse_npm_global_install={}", parsed_install.is_some());
-            println!("[debug] dispatch: original_path={original_path:?}");
-            println!("[debug] dispatch: tool_path={}", tool_path.as_path().display());
-            println!("[debug] dispatch: resolution.version={}", resolution.version);
-        }
-        if let Some(parsed) = parsed_install {
-            #[allow(clippy::disallowed_macros)]
-            println!(
-                "[debug] dispatch: parsed.packages={:?}, parsed.explicit_prefix={:?}",
-                parsed.packages, parsed.explicit_prefix
-            );
+        if let Some(parsed) = parse_npm_global_install(args) {
             let exit_code = exec::spawn_tool(&tool_path, args);
-            #[allow(clippy::disallowed_macros)]
-            println!("[debug] dispatch: npm exit_code={exit_code}");
             if exit_code == 0 {
-                let home_result = vite_shared::get_vite_plus_home();
-                #[allow(clippy::disallowed_macros)]
-                println!("[debug] dispatch: get_vite_plus_home={home_result:?}");
-                if let Ok(home_dir) = home_result {
+                if let Ok(home_dir) = vite_shared::get_vite_plus_home() {
                     let node_dir =
                         home_dir.join("js_runtime").join("node").join(&*resolution.version);
                     let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
-                    #[allow(clippy::disallowed_macros)]
-                    println!(
-                        "[debug] dispatch: npm_prefix={}, node_dir={}",
-                        npm_prefix.as_path().display(),
-                        node_dir.as_path().display()
-                    );
                     check_npm_global_install_result(
                         &parsed.packages,
                         original_path.as_deref(),
