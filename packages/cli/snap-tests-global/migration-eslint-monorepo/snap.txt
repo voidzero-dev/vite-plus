@@ -1,0 +1,72 @@
+> vp migrate --no-interactive # migration should detect eslint in monorepo and migrate all packages
+VITE+ - The Unified Toolchain for the Web
+
+
+ESLint configuration detected. Auto-migrating to Oxlint...
+
+pnpm@<semver> installing...
+
+pnpm@<semver> installed
+
+Migrating ESLint config to Oxlint...
+
+ESLint config migrated to .oxlintrc.json
+
+Replacing ESLint comments with Oxlint equivalents...
+
+ESLint comments replaced
+
+✔ Removed eslint.config.mjs
+
+✔ Created vite.config.ts in vite.config.ts
+
+✔ Merged .oxlintrc.json into vite.config.ts
+
+✔ Merged staged config into vite.config.ts
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
+
+
+> cat package.json # check root eslint removed and scripts rewritten
+{
+  "name": "migration-eslint-monorepo",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "lint": "vp lint .",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> cat packages/app/package.json # check app eslint removed and scripts rewritten
+{
+  "name": "app",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "lint": "vp lint .",
+    "lint:fix": "vp lint --fix ."
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
+
+> cat packages/utils/package.json # check utils eslint removed and scripts rewritten
+{
+  "name": "@test/utils",
+  "scripts": {
+    "lint": "vp lint ."
+  },
+  "devDependencies": {}
+}
+
+> cat eslint.config.mjs && exit 1 || true # check root eslint config is removed
+cat: eslint.config.mjs: No such file or directory

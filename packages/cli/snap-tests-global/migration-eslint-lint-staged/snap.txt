@@ -1,0 +1,78 @@
+> vp migrate --no-interactive # migration should detect eslint and auto-migrate including lint-staged
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+ESLint configuration detected. Auto-migrating to Oxlint...
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+Migrating ESLint config to Oxlint...
+
+ESLint config migrated to .oxlintrc.json
+
+Replacing ESLint comments with Oxlint equivalents...
+
+ESLint comments replaced
+
+✔ Removed eslint.config.mjs
+
+✔ Created vite.config.ts in vite.config.ts
+
+✔ Merged staged config into vite.config.ts
+
+✔ Merged .oxlintrc.json into vite.config.ts
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
+
+
+> cat package.json # check eslint removed, scripts rewritten, lint-staged rewritten
+{
+  "name": "migration-eslint-lint-staged",
+  "scripts": {
+    "lint": "vp lint .",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "packageManager": "pnpm@<semver>",
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  }
+}
+
+> cat vite.config.ts # check oxlint config and staged config merged into vite.config.ts
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  lint: {
+    "plugins": [
+      "oxc",
+      "typescript",
+      "unicorn",
+      "react"
+    ],
+    "categories": {
+      "correctness": "warn"
+    },
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "env": {
+      "builtin": true
+    },
+    "rules": {
+      "no-unused-vars": "error"
+    }
+  },
+  staged: {
+    "*.ts": "vp lint --fix"
+  },
+});

@@ -1,0 +1,10 @@
+{
+  "name": "migration-eslint-rerun",
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "vite-plus": "latest"
+  }
+}

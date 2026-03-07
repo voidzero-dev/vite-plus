@@ -1,0 +1,13 @@
+{
+  "name": "migration-eslint-lint-staged",
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "vite": "^7.0.0"
+  },
+  "lint-staged": {
+    "*.ts": "eslint --fix"
+  }
+}

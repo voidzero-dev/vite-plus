@@ -27,6 +27,24 @@ pub fn rewrite_scripts(scripts_json: String, rules_yaml: String) -> Result<Optio
     Ok(updated)
 }
 
+/// Rewrite ESLint scripts: rename `eslint` → `vp lint` and strip ESLint-only flags.
+///
+/// Uses brush-parser to parse shell commands, so it correctly handles env var prefixes,
+/// compound commands (`&&`, `||`, `|`), and quoted arguments.
+///
+/// # Arguments
+///
+/// * `scripts_json` - The scripts section as a JSON string
+///
+/// # Returns
+///
+/// * `updated` - The updated scripts JSON string, or `null` if no changes were made
+#[napi]
+pub fn rewrite_eslint(scripts_json: String) -> Result<Option<String>> {
+    let updated = vite_migration::rewrite_eslint(&scripts_json).map_err(anyhow::Error::from)?;
+    Ok(updated)
+}
+
 /// Result of merging JSON config into vite config
 #[napi(object)]
 pub struct MergeJsonConfigResult {

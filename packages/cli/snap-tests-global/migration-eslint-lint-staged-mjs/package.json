@@ -1,0 +1,11 @@
+{
+  "name": "migration-eslint-lint-staged-mjs",
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "vite": "^7.0.0",
+    "vite-plus": "latest"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # migration should rewrite bare eslint but leave npx wrappers unchanged",
+    "cat package.json # check eslint removed, bare eslint rewritten, npx/pnpm exec/bunx wrappers unchanged",
+    "cat eslint.config.mjs && exit 1 || true # check eslint config is removed"
+  ]
+}

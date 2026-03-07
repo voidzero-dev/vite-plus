@@ -9,11 +9,13 @@ import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 import {
   mergeJsonConfig,
   mergeTsdownConfig,
+  rewriteEslint,
   rewriteScripts,
   rewriteImportsInDirectory,
   type DownloadPackageManagerResult,
 } from '../../binding/index.js';
-import { PackageManager, type WorkspaceInfo } from '../types/index.js';
+import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../types/index.js';
+import { runCommandSilently } from '../utils/command.js';
 import {
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
@@ -22,6 +24,7 @@ import {
 import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
 import { detectPackageMetadata } from '../utils/package.js';
 import { displayRelative, rulesDir } from '../utils/path.js';
+import { getSpinner } from '../utils/prompts.js';
 import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.js';
 import { detectConfigs, type ConfigFiles } from './detector.js';
 
@@ -90,6 +93,221 @@ function checkPackageVersion(projectPath: string, name: string, minVersion: stri
     return false;
   }
   return true;
+}
+
+export function detectEslintProject(
+  projectPath: string,
+  packages?: WorkspacePackage[],
+): {
+  hasDependency: boolean;
+  configFile?: string;
+  legacyConfigFile?: string;
+} {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return { hasDependency: false };
+  }
+  const pkg = readJsonFile<{
+    devDependencies?: Record<string, string>;
+    dependencies?: Record<string, string>;
+  }>(packageJsonPath);
+  let hasDependency = !!(pkg.devDependencies?.eslint || pkg.dependencies?.eslint);
+  const configs = detectConfigs(projectPath);
+  let configFile = configs.eslintConfig;
+  const legacyConfigFile = configs.eslintLegacyConfig;
+
+  // If root doesn't have eslint dependency, check workspace packages
+  if (!hasDependency && packages) {
+    for (const wp of packages) {
+      const pkgJsonPath = path.join(projectPath, wp.path, 'package.json');
+      if (!fs.existsSync(pkgJsonPath)) {
+        continue;
+      }
+      const wpPkg = readJsonFile<{
+        devDependencies?: Record<string, string>;
+        dependencies?: Record<string, string>;
+      }>(pkgJsonPath);
+      if (wpPkg.devDependencies?.eslint || wpPkg.dependencies?.eslint) {
+        hasDependency = true;
+        break;
+      }
+    }
+  }
+
+  return { hasDependency, configFile, legacyConfigFile };
+}
+
+/**
+ * Run a `vp dlx @oxlint/migrate` step with graceful error handling.
+ * Returns true on success, false on failure (spawn error or non-zero exit).
+ */
+async function runOxlintMigrateStep(
+  vpBin: string,
+  cwd: string,
+  args: string[],
+  spinner: ReturnType<typeof getSpinner>,
+  failMessage: string,
+  manualHint: string,
+): Promise<boolean> {
+  try {
+    const result = await runCommandSilently({
+      command: vpBin,
+      args: ['dlx', '@oxlint/migrate', ...args],
+      cwd,
+      envs: process.env,
+    });
+    if (result.exitCode !== 0) {
+      spinner.stop(failMessage);
+      const stderr = result.stderr.toString().trim();
+      if (stderr) {
+        prompts.log.warn(`⚠ ${stderr}`);
+      }
+      prompts.log.info(manualHint);
+      return false;
+    }
+    return true;
+  } catch {
+    spinner.stop(failMessage);
+    prompts.log.info(manualHint);
+    return false;
+  }
+}
+
+export async function migrateEslintToOxlint(
+  projectPath: string,
+  interactive: boolean,
+  eslintConfigFile?: string,
+  packages?: WorkspacePackage[],
+): Promise<boolean> {
+  const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
+  const spinner = getSpinner(interactive);
+
+  // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
+  if (eslintConfigFile) {
+    // Step 1: Generate .oxlintrc.json from ESLint config
+    spinner.start('Migrating ESLint config to Oxlint...');
+    const migrateOk = await runOxlintMigrateStep(
+      vpBin,
+      projectPath,
+      ['--merge', '--type-aware', '--with-nursery', '--details'],
+      spinner,
+      'ESLint migration failed',
+      'You can run `vp dlx @oxlint/migrate --merge --type-aware --with-nursery --details` manually later',
+    );
+    if (!migrateOk) {
+      return false;
+    }
+    spinner.stop('ESLint config migrated to .oxlintrc.json');
+
+    // Step 2: Replace eslint-disable comments with oxlint-disable
+    spinner.start('Replacing ESLint comments with Oxlint equivalents...');
+    const replaceOk = await runOxlintMigrateStep(
+      vpBin,
+      projectPath,
+      ['--replace-eslint-comments'],
+      spinner,
+      'ESLint comment replacement failed',
+      'You can run `vp dlx @oxlint/migrate --replace-eslint-comments` manually later',
+    );
+    if (replaceOk) {
+      spinner.stop('ESLint comments replaced');
+    }
+    // Continue with cleanup regardless — .oxlintrc.json was generated successfully
+  }
+
+  // Step 3: Delete all eslint config files at root
+  deleteEslintConfigFiles(projectPath);
+
+  // Step 4: Remove eslint dependency and rewrite eslint scripts (root only)
+  rewriteEslintPackageJson(path.join(projectPath, 'package.json'));
+
+  // Step 4b: Rewrite eslint scripts in workspace packages
+  if (packages) {
+    for (const pkg of packages) {
+      rewriteEslintPackageJson(path.join(projectPath, pkg.path, 'package.json'));
+    }
+  }
+
+  // Step 5: Rewrite eslint references in lint-staged config files
+  rewriteEslintLintStagedConfigFiles(projectPath);
+
+  return true;
+}
+
+function deleteEslintConfigFiles(basePath: string): void {
+  const configs = detectConfigs(basePath);
+  for (const file of [configs.eslintConfig, configs.eslintLegacyConfig]) {
+    if (file) {
+      const configPath = path.join(basePath, file);
+      if (fs.existsSync(configPath)) {
+        fs.unlinkSync(configPath);
+        prompts.log.success(`✔ Removed ${displayRelative(configPath)}`);
+      }
+    }
+  }
+}
+
+function rewriteEslintPackageJson(packageJsonPath: string): void {
+  editJsonFile<{
+    devDependencies?: Record<string, string>;
+    dependencies?: Record<string, string>;
+    scripts?: Record<string, string>;
+    'lint-staged'?: Record<string, string | string[]>;
+  }>(packageJsonPath, (pkg) => {
+    let changed = false;
+    if (pkg.devDependencies?.eslint) {
+      delete pkg.devDependencies.eslint;
+      changed = true;
+    }
+    if (pkg.dependencies?.eslint) {
+      delete pkg.dependencies.eslint;
+      changed = true;
+    }
+    if (pkg.scripts) {
+      const updated = rewriteEslint(JSON.stringify(pkg.scripts));
+      if (updated) {
+        pkg.scripts = JSON.parse(updated);
+        changed = true;
+      }
+    }
+    if (pkg['lint-staged']) {
+      const updated = rewriteEslint(JSON.stringify(pkg['lint-staged']));
+      if (updated) {
+        pkg['lint-staged'] = JSON.parse(updated);
+        changed = true;
+      }
+    }
+    return changed ? pkg : undefined;
+  });
+}
+
+function rewriteEslintLintStagedConfigFiles(projectPath: string): void {
+  for (const filename of LINT_STAGED_JSON_CONFIG_FILES) {
+    const configPath = path.join(projectPath, filename);
+    if (!fs.existsSync(configPath)) {
+      continue;
+    }
+    if (filename === '.lintstagedrc' && !isJsonFile(configPath)) {
+      prompts.log.warn(
+        `⚠ ${displayRelative(configPath)} is not JSON — please update eslint references manually`,
+      );
+      continue;
+    }
+    editJsonFile<Record<string, string | string[]>>(configPath, (config) => {
+      const updated = rewriteEslint(JSON.stringify(config));
+      if (updated) {
+        return JSON.parse(updated);
+      }
+      return undefined;
+    });
+  }
+  for (const filename of LINT_STAGED_OTHER_CONFIG_FILES) {
+    const configPath = path.join(projectPath, filename);
+    if (!fs.existsSync(configPath)) {
+      continue;
+    }
+    prompts.log.warn(`⚠ ${displayRelative(configPath)} — please update eslint references manually`);
+  }
 }
 
 /**
@@ -677,7 +895,7 @@ function mergeTsdownConfigFile(projectPath: string): void {
 /**
  * Merge oxlint and oxfmt config into vite.config.ts
  */
-function mergeViteConfigFiles(projectPath: string): void {
+export function mergeViteConfigFiles(projectPath: string): void {
   const configs = detectConfigs(projectPath);
   if (!configs.oxfmtConfig && !configs.oxlintConfig) {
     return;

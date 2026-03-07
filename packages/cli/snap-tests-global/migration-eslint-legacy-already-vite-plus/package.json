@@ -1,0 +1,10 @@
+{
+  "name": "migration-eslint-legacy-already-vite-plus",
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^8.23.1",
+    "vite-plus": "latest"
+  }
+}

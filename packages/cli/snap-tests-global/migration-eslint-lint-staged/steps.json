@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # migration should detect eslint and auto-migrate including lint-staged",
+    "cat package.json # check eslint removed, scripts rewritten, lint-staged rewritten",
+    "cat vite.config.ts # check oxlint config and staged config merged into vite.config.ts"
+  ]
+}

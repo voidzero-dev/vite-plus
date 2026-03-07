@@ -308,16 +308,99 @@ function resolveSingleAgentTargetPath(agent: string) {
   return match?.targetPath ?? AGENTS[AGENTS.length - 1].targetPath;
 }
 
+export interface AgentConflictInfo {
+  targetPath: string;
+}
+
+/**
+ * Detect agent instruction files that would conflict (exist without markers).
+ * Returns only files that need a user decision (append or skip).
+ * Read-only — does not write or modify any files.
+ */
+export async function detectAgentConflicts({
+  projectRoot,
+  targetPaths,
+}: {
+  projectRoot: string;
+  targetPaths?: string[];
+}): Promise<AgentConflictInfo[]> {
+  if (!targetPaths || targetPaths.length === 0) {
+    return [];
+  }
+
+  const sourcePath = path.join(pkgRoot, 'AGENTS.md');
+  if (!fs.existsSync(sourcePath)) {
+    return [];
+  }
+
+  const incomingContent = await fsPromises.readFile(sourcePath, 'utf-8');
+  const shouldLinkToAgents = targetPaths.includes(AGENT_STANDARD_PATH);
+  const orderedPaths = shouldLinkToAgents
+    ? [AGENT_STANDARD_PATH, ...targetPaths.filter((p) => p !== AGENT_STANDARD_PATH)]
+    : targetPaths;
+
+  const conflicts: AgentConflictInfo[] = [];
+  const seenDestinationPaths = new Set<string>();
+  const seenRealPaths = new Set<string>();
+
+  for (const targetPathToCheck of orderedPaths) {
+    const destinationPath = path.join(projectRoot, targetPathToCheck);
+    const destinationKey = path.resolve(destinationPath);
+    if (seenDestinationPaths.has(destinationKey)) {
+      continue;
+    }
+    seenDestinationPaths.add(destinationKey);
+
+    // If linking to AGENTS.md, non-AGENTS.md paths that are not regular files get linked
+    if (shouldLinkToAgents && targetPathToCheck !== AGENT_STANDARD_PATH) {
+      const existing = await getExistingPathKind(destinationPath);
+      if (existing !== 'file') {
+        continue;
+      }
+    }
+
+    if (fs.existsSync(destinationPath)) {
+      if (fs.lstatSync(destinationPath).isSymbolicLink()) {
+        continue;
+      }
+
+      const destinationRealPath = await fsPromises.realpath(destinationPath);
+      if (seenRealPaths.has(destinationRealPath)) {
+        continue;
+      }
+
+      const existingContent = await fsPromises.readFile(destinationPath, 'utf-8');
+      const updatedContent = replaceMarkedAgentInstructionsSection(
+        existingContent,
+        incomingContent,
+      );
+      if (updatedContent !== undefined) {
+        // Has markers — will auto-update, no conflict
+        seenRealPaths.add(destinationRealPath);
+        continue;
+      }
+
+      // Conflict — needs user decision
+      conflicts.push({ targetPath: targetPathToCheck });
+      seenRealPaths.add(destinationRealPath);
+    }
+  }
+
+  return conflicts;
+}
+
 export async function writeAgentInstructions({
   projectRoot,
   targetPath,
   targetPaths,
   interactive,
+  conflictDecisions,
 }: {
   projectRoot: string;
   targetPath?: string;
   targetPaths?: string[];
   interactive: boolean;
+  conflictDecisions?: Map<string, 'append' | 'skip'>;
 }) {
   const paths = [...(targetPaths ?? []), ...(targetPath ? [targetPath] : [])];
   if (paths.length === 0) {
@@ -380,7 +463,12 @@ export async function writeAgentInstructions({
         continue;
       }
 
-      if (interactive) {
+      // Determine conflict action from pre-resolved decisions, interactive prompt, or default
+      let conflictAction: 'append' | 'skip';
+      const preResolved = conflictDecisions?.get(targetPathToWrite);
+      if (preResolved) {
+        conflictAction = preResolved;
+      } else if (interactive) {
         const action = await prompts.select({
           message: `Agent instructions already exist at ${targetPathToWrite}.`,
           options: [
@@ -397,20 +485,22 @@ export async function writeAgentInstructions({
           ],
           initialValue: 'skip',
         });
-        if (prompts.isCancel(action) || action === 'skip') {
-          prompts.log.info(`Skipped writing ${targetPathToWrite}`);
-          seenRealPaths.add(destinationRealPath);
-          continue;
-        }
-
-        const separator = existingContent.endsWith('\n') ? '' : '\n';
-        await fsPromises.appendFile(destinationPath, `${separator}\n${incomingContent}`);
-        prompts.log.success(`Appended agent instructions to ${targetPathToWrite}`);
-        seenRealPaths.add(destinationRealPath);
-        continue;
+        conflictAction = prompts.isCancel(action) || action === 'skip' ? 'skip' : 'append';
+      } else {
+        conflictAction = 'skip';
       }
 
-      prompts.log.info(`Skipped writing ${targetPathToWrite} (already exists)`);
+      if (conflictAction === 'append') {
+        await appendAgentContent(
+          destinationPath,
+          targetPathToWrite,
+          existingContent,
+          incomingContent,
+        );
+      } else {
+        const suffix = !preResolved && !interactive ? ' (already exists)' : '';
+        prompts.log.info(`Skipped writing ${targetPathToWrite}${suffix}`);
+      }
       seenRealPaths.add(destinationRealPath);
       continue;
     }
@@ -419,6 +509,17 @@ export async function writeAgentInstructions({
     prompts.log.success(`Wrote agent instructions to ${targetPathToWrite}`);
     seenRealPaths.add(await fsPromises.realpath(destinationPath));
   }
+}
+
+async function appendAgentContent(
+  destinationPath: string,
+  targetPath: string,
+  existingContent: string,
+  incomingContent: string,
+) {
+  const separator = existingContent.endsWith('\n') ? '' : '\n';
+  await fsPromises.appendFile(destinationPath, `${separator}\n${incomingContent}`);
+  prompts.log.success(`Appended agent instructions to ${targetPath}`);
 }
 
 function normalizeAgentName(value: string) {

@@ -1,0 +1,59 @@
+> vp migrate --no-interactive # should detect vite-plus + eslint and auto-migrate eslint
+VITE+ - The Unified Toolchain for the Web
+
+
+ESLint configuration detected. Auto-migrating to Oxlint...
+
+Migrating ESLint config to Oxlint...
+
+ESLint config migrated to .oxlintrc.json
+
+Replacing ESLint comments with Oxlint equivalents...
+
+ESLint comments replaced
+
+✔ Removed eslint.config.mjs
+
+✔ Merged .oxlintrc.json into vite.config.mjs
+✔ Migration completed!
+
+
+> cat package.json # check eslint removed from devDependencies and scripts rewritten
+{
+  "name": "migration-eslint-rerun-mjs",
+  "scripts": {
+    "lint": "vp lint ."
+  },
+  "devDependencies": {
+    "vite-plus": "latest"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> cat eslint.config.mjs && exit 1 || true # check eslint config is removed
+cat: eslint.config.mjs: No such file or directory
+
+> cat vite.config.mjs # check oxlint config merged into existing vite.config.mjs (not creating vite.config.ts)
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  lint: {
+    "plugins": [
+      "oxc",
+      "typescript",
+      "unicorn",
+      "react"
+    ],
+    "categories": {
+      "correctness": "warn"
+    },
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "env": {
+      "builtin": true
+    },
+    "rules": {
+      "no-unused-vars": "error"
+    }
+  },
+  
+});

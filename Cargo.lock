@@ -611,6 +611,21 @@ checksum = "22a59e5c2bac9ccb280150ef4b58e07e4169d8c5c6ce0f70170e3c0b7c7b6124"
 [[package]]
 name = "brush-parser"
 version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7367124d4f38fdcd65f4b815bda7caeb3de377b9cd95ffa1b23627989c93718"
+dependencies = [
+ "bon",
+ "cached",
+ "indenter",
+ "peg",
+ "thiserror 2.0.18",
+ "tracing",
+ "utf8-chars",
+]
+
+[[package]]
+name = "brush-parser"
+version = "0.3.0"
 source = "git+https://github.com/reubeno/brush?rev=dcb760933b10ee0433d7b740a5709b06f5c67c6b#dcb760933b10ee0433d7b740a5709b06f5c67c6b"
 dependencies = [
  "bon",
@@ -7312,6 +7327,7 @@ dependencies = [
  "ast-grep-config",
  "ast-grep-core",
  "ast-grep-language",
+ "brush-parser 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ignore",
  "regex",
  "serde_json",
@@ -7365,7 +7381,7 @@ version = "0.0.0"
 source = "git+ssh://git@github.com/voidzero-dev/vite-task.git?rev=c77d1421c356eb8d8b5b0d26415e01ce3294fbf6#c77d1421c356eb8d8b5b0d26415e01ce3294fbf6"
 dependencies = [
  "bincode",
- "brush-parser",
+ "brush-parser 0.3.0 (git+https://github.com/reubeno/brush?rev=dcb760933b10ee0433d7b740a5709b06f5c67c6b)",
  "diff-struct",
  "serde",
  "shell-escape",

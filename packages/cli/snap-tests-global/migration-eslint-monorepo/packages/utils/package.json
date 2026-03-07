@@ -1,0 +1,9 @@
+{
+  "name": "@test/utils",
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0"
+  }
+}

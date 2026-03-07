@@ -1,0 +1,9 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # should detect vite-plus + eslint and auto-migrate eslint",
+    "cat package.json # check eslint removed and scripts rewritten",
+    "cat eslint.config.mjs && exit 1 || true # check flat config is removed",
+    "cat .eslintrc && exit 1 || true # check legacy config is also removed",
+    "cat vite.config.ts # check oxlint config merged into vite.config.ts"
+  ]
+}

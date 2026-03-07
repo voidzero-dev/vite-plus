@@ -7,6 +7,8 @@ export interface ConfigFiles {
   tsdownConfig?: string;
   oxlintConfig?: string;
   oxfmtConfig?: string;
+  eslintConfig?: string;
+  eslintLegacyConfig?: string;
 }
 
 export function detectConfigs(projectPath: string): ConfigFiles {
@@ -14,7 +16,14 @@ export function detectConfigs(projectPath: string): ConfigFiles {
 
   // Check for vite.config.*
   // https://vite.dev/config/
-  const viteConfigs = ['vite.config.ts', 'vite.config.js'];
+  const viteConfigs = [
+    'vite.config.ts',
+    'vite.config.mts',
+    'vite.config.cts',
+    'vite.config.js',
+    'vite.config.mjs',
+    'vite.config.cjs',
+  ];
   for (const config of viteConfigs) {
     if (fs.existsSync(path.join(projectPath, config))) {
       configs.viteConfig = config;
@@ -24,7 +33,14 @@ export function detectConfigs(projectPath: string): ConfigFiles {
 
   // Check for vitest.config.*
   // https://vitest.dev/config/
-  const vitestConfigs = ['vitest.config.ts', 'vitest.config.js'];
+  const vitestConfigs = [
+    'vitest.config.ts',
+    'vitest.config.mts',
+    'vitest.config.cts',
+    'vitest.config.js',
+    'vitest.config.mjs',
+    'vitest.config.cjs',
+  ];
   for (const config of vitestConfigs) {
     if (fs.existsSync(path.join(projectPath, config))) {
       configs.vitestConfig = config;
@@ -68,6 +84,40 @@ export function detectConfigs(projectPath: string): ConfigFiles {
   for (const config of oxfmtConfigs) {
     if (fs.existsSync(path.join(projectPath, config))) {
       configs.oxfmtConfig = config;
+      break;
+    }
+  }
+
+  // Check for eslint configs (flat config only)
+  // https://eslint.org/docs/latest/use/configure/configuration-files
+  const eslintConfigs = [
+    'eslint.config.js',
+    'eslint.config.mjs',
+    'eslint.config.cjs',
+    'eslint.config.ts',
+    'eslint.config.mts',
+    'eslint.config.cts',
+  ];
+  for (const config of eslintConfigs) {
+    if (fs.existsSync(path.join(projectPath, config))) {
+      configs.eslintConfig = config;
+      break;
+    }
+  }
+
+  // Check for legacy eslint configs (.eslintrc*)
+  // https://eslint.org/docs/latest/use/configure/configuration-files-deprecated
+  const eslintLegacyConfigs = [
+    '.eslintrc',
+    '.eslintrc.json',
+    '.eslintrc.js',
+    '.eslintrc.cjs',
+    '.eslintrc.yaml',
+    '.eslintrc.yml',
+  ];
+  for (const config of eslintLegacyConfigs) {
+    if (fs.existsSync(path.join(projectPath, config))) {
+      configs.eslintLegacyConfig = config;
       break;
     }
   }

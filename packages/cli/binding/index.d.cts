@@ -209,6 +209,22 @@ export interface PathAccess {
 }
 
 /**
+ * Rewrite ESLint scripts: rename `eslint` → `vp lint` and strip ESLint-only flags.
+ *
+ * Uses brush-parser to parse shell commands, so it correctly handles env var prefixes,
+ * compound commands (`&&`, `||`, `|`), and quoted arguments.
+ *
+ * # Arguments
+ *
+ * * `scripts_json` - The scripts section as a JSON string
+ *
+ * # Returns
+ *
+ * * `updated` - The updated scripts JSON string, or `null` if no changes were made
+ */
+export declare function rewriteEslint(scriptsJson: string): string | null;
+
+/**
  * Rewrite imports in all TypeScript/JavaScript files under a directory
  *
  * This function finds all TypeScript and JavaScript files in the specified directory

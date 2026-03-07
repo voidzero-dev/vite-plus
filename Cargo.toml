@@ -67,6 +67,7 @@ base64-simd = "0.8.0"
 bincode = "2.0.1"
 bstr = { version = "1.12.0", default-features = false, features = ["alloc", "std"] }
 bitflags = "2.9.1"
+brush-parser = "0.3.0"
 blake3 = "1.8.2"
 chrono = { version = "0.4", features = ["serde"] }
 clap = "4.5.40"

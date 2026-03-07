@@ -1,0 +1,9 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # migration should detect eslint in monorepo and migrate all packages",
+    "cat package.json # check root eslint removed and scripts rewritten",
+    "cat packages/app/package.json # check app eslint removed and scripts rewritten",
+    "cat packages/utils/package.json # check utils eslint removed and scripts rewritten",
+    "cat eslint.config.mjs && exit 1 || true # check root eslint config is removed"
+  ]
+}

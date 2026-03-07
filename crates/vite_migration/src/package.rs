@@ -3,7 +3,7 @@ use ast_grep_language::SupportLang;
 use serde_json::{Map, Value};
 use vite_error::Error;
 
-use crate::ast_grep;
+use crate::{ast_grep, eslint::rewrite_eslint_script};
 
 // Marker to replace "cross-env " before ast-grep processing
 // Using a fake env var assignment that won't match our rules
@@ -25,28 +25,30 @@ fn rewrite_script(script: &str, rules: &[RuleConfig<SupportLang>]) -> String {
     // Step 2: Process with ast-grep
     let result = ast_grep::apply_loaded_rules(&preprocessed, rules);
 
-    // Step 3: Replace marker back with "cross-env " (only if we replaced it)
+    // Step 3: Replace cross-env marker back with "cross-env " (only if we replaced it)
     if has_cross_env { result.replace(CROSS_ENV_MARKER, CROSS_ENV_REPLACEMENT) } else { result }
 }
 
-/// rewrite scripts json content using rules from rules_yaml
-pub fn rewrite_scripts(scripts_json: &str, rules_yaml: &str) -> Result<Option<String>, Error> {
+/// Transform all script strings in a JSON object using the provided function.
+/// Handles both string values and arrays of strings (lint-staged format).
+/// Returns the updated JSON if any scripts were modified, or None if unchanged.
+fn transform_scripts_json(
+    scripts_json: &str,
+    mut transform_fn: impl FnMut(&str) -> String,
+) -> Result<Option<String>, Error> {
     let mut scripts: Map<String, Value> = serde_json::from_str(scripts_json)?;
-    let rules = ast_grep::load_rules(rules_yaml)?;
-
     let mut updated = false;
-    // get scripts field (object)
 
     for value in scripts.values_mut() {
         if value.is_array() {
-            // vite-staged/lint-staged scripts can be an array of strings
+            // lint-staged scripts can be an array of strings
             // https://github.com/lint-staged/lint-staged?tab=readme-ov-file#packagejson-example
             if let Some(sub_scripts) = value.as_array_mut() {
                 for sub_script in sub_scripts.iter_mut() {
                     if sub_script.is_string()
                         && let Some(raw_script) = sub_script.as_str()
                     {
-                        let new_script = rewrite_script(raw_script, &rules);
+                        let new_script = transform_fn(raw_script);
                         if new_script != raw_script {
                             updated = true;
                             *sub_script = Value::String(new_script);
@@ -56,7 +58,7 @@ pub fn rewrite_scripts(scripts_json: &str, rules_yaml: &str) -> Result<Option<St
             }
         } else if value.is_string() {
             if let Some(raw_script) = value.as_str() {
-                let new_script = rewrite_script(raw_script, &rules);
+                let new_script = transform_fn(raw_script);
                 if new_script != raw_script {
                     updated = true;
                     *value = Value::String(new_script);
@@ -71,6 +73,20 @@ pub fn rewrite_scripts(scripts_json: &str, rules_yaml: &str) -> Result<Option<St
     } else {
         Ok(None)
     }
+}
+
+/// Rewrite ESLint scripts in JSON content: rename `eslint` → `vp lint` and strip ESLint-only flags.
+///
+/// Uses brush-parser to parse shell commands, so it correctly handles env var prefixes,
+/// compound commands (`&&`, `||`, `|`), and quoted arguments.
+pub fn rewrite_eslint(scripts_json: &str) -> Result<Option<String>, Error> {
+    transform_scripts_json(scripts_json, rewrite_eslint_script)
+}
+
+/// rewrite scripts json content using rules from rules_yaml
+pub fn rewrite_scripts(scripts_json: &str, rules_yaml: &str) -> Result<Option<String>, Error> {
+    let rules = ast_grep::load_rules(rules_yaml)?;
+    transform_scripts_json(scripts_json, |raw_script| rewrite_script(raw_script, &rules))
 }
 
 #[cfg(test)]
@@ -226,13 +242,13 @@ fix: vp pack
             "if [ -f file.txt ]; then vp dev --port 3000; fi"
         );
         assert_eq!(
-            rewrite_script("if [ -f file.txt ]; then vite --port 3000 && npm run lint; fi", &rules),
+            rewrite_script("if [ -f file.txt ]; then vite --port 3000 && npm run lint; fi", &rules,),
             "if [ -f file.txt ]; then vp dev --port 3000 && npm run lint; fi"
         );
         assert_eq!(
             rewrite_script(
                 "if [ -f file.txt ]; then vite dev --port 3000 && npm run lint; fi",
-                &rules
+                &rules,
             ),
             "if [ -f file.txt ]; then vp dev --port 3000 && npm run lint; fi"
         );
@@ -263,6 +279,17 @@ fix: vp pack
             rewrite_script("npm run type-check && oxlint --type-aware", &rules),
             "npm run type-check && vp lint --type-aware"
         );
+        // npx/pnpx/bunx eslint wrappers remain unchanged (no preprocessing)
+        assert_eq!(rewrite_script("npx eslint .", &rules), "npx eslint .");
+        assert_eq!(rewrite_script("npx eslint --fix .", &rules), "npx eslint --fix .");
+        assert_eq!(rewrite_script("pnpx eslint .", &rules), "pnpx eslint .");
+        assert_eq!(rewrite_script("bunx eslint .", &rules), "bunx eslint .");
+        assert_eq!(rewrite_script("pnpm exec eslint --fix .", &rules), "pnpm exec eslint --fix .");
+        assert_eq!(rewrite_script("yarn exec eslint --fix .", &rules), "yarn exec eslint --fix .");
+        // npx with non-eslint tools should NOT be affected
+        assert_eq!(rewrite_script("npx prettier .", &rules), "npx prettier .");
+        // npx eslint-plugin-foo should NOT match
+        assert_eq!(rewrite_script("npx eslint-plugin-foo", &rules), "npx eslint-plugin-foo");
         // husky commands should NOT be rewritten by vite-tools rules
         // (husky rule is in separate vite-prepare.yml, applied only to scripts.prepare)
         assert_eq!(rewrite_script("husky", &rules), "husky");
@@ -375,5 +402,66 @@ fix: vp pack
         let updated = rewrite_scripts(package_json_scripts, &RULES_YAML)
             .expect("failed to rewrite package.json scripts");
         assert!(updated.is_none());
+    }
+
+    #[test]
+    fn test_rewrite_eslint_json() {
+        let scripts_json = r#"
+{
+  "lint": "eslint --fix --ext .ts,.tsx .",
+  "lint:cached": "eslint --cache --fix .",
+  "build": "vite build"
+}
+        "#;
+        let updated = rewrite_eslint(scripts_json).expect("failed to rewrite eslint");
+        assert!(updated.is_some());
+        assert_eq!(
+            updated.unwrap(),
+            r#"
+{
+  "lint": "vp lint --fix .",
+  "lint:cached": "vp lint --fix .",
+  "build": "vite build"
+}
+        "#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_rewrite_eslint_json_no_update() {
+        let scripts_json = r#"
+{
+  "lint": "vp lint --fix .",
+  "build": "vite build"
+}
+        "#;
+        let updated = rewrite_eslint(scripts_json).expect("failed to rewrite eslint");
+        assert!(updated.is_none());
+    }
+
+    #[test]
+    fn test_rewrite_eslint_json_lint_staged_array() {
+        let scripts_json = r#"
+{
+  "*.js": ["eslint --ext .ts --fix", "oxfmt --fix"],
+  "*.ts": "eslint --cache --fix"
+}
+        "#;
+        let updated = rewrite_eslint(scripts_json).expect("failed to rewrite eslint");
+        assert!(updated.is_some());
+        assert_eq!(
+            updated.unwrap(),
+            r#"
+{
+  "*.js": [
+    "vp lint --fix",
+    "oxfmt --fix"
+  ],
+  "*.ts": "vp lint --fix"
+}
+        "#
+            .trim()
+        );
     }
 }

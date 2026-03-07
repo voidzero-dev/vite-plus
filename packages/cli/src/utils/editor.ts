@@ -34,7 +34,7 @@ export const EDITORS = [
   },
 ] as const;
 
-type EditorId = (typeof EDITORS)[number]['id'];
+export type EditorId = (typeof EDITORS)[number]['id'];
 
 export async function selectEditor({
   interactive,
@@ -100,14 +100,55 @@ export function detectExistingEditor(projectRoot: string): EditorId | undefined 
   return undefined;
 }
 
+export interface EditorConflictInfo {
+  fileName: string;
+  displayPath: string;
+}
+
+/**
+ * Detect editor config files that would conflict (already exist).
+ * Read-only — does not write or modify any files.
+ */
+export function detectEditorConflicts({
+  projectRoot,
+  editorId,
+}: {
+  projectRoot: string;
+  editorId: EditorId | undefined;
+}): EditorConflictInfo[] {
+  if (!editorId) {
+    return [];
+  }
+
+  const editorConfig = EDITORS.find((e) => e.id === editorId);
+  if (!editorConfig) {
+    return [];
+  }
+
+  const conflicts: EditorConflictInfo[] = [];
+  for (const fileName of Object.keys(editorConfig.files)) {
+    const filePath = path.join(projectRoot, editorConfig.targetDir, fileName);
+    if (fs.existsSync(filePath)) {
+      conflicts.push({
+        fileName,
+        displayPath: `${editorConfig.targetDir}/${fileName}`,
+      });
+    }
+  }
+
+  return conflicts;
+}
+
 export async function writeEditorConfigs({
   projectRoot,
   editorId,
   interactive,
+  conflictDecisions,
 }: {
   projectRoot: string;
   editorId: EditorId | undefined;
   interactive: boolean;
+  conflictDecisions?: Map<string, 'merge' | 'skip'>;
 }) {
   if (!editorId) {
     return;
@@ -125,9 +166,16 @@ export async function writeEditorConfigs({
     const filePath = path.join(targetDir, fileName);
 
     if (fs.existsSync(filePath)) {
-      if (interactive) {
+      const displayPath = `${editorConfig.targetDir}/${fileName}`;
+
+      // Determine conflict action from pre-resolved decisions, interactive prompt, or default
+      let conflictAction: 'merge' | 'skip';
+      const preResolved = conflictDecisions?.get(fileName);
+      if (preResolved) {
+        conflictAction = preResolved;
+      } else if (interactive) {
         const action = await prompts.select({
-          message: `${editorConfig.targetDir}/${fileName} already exists.`,
+          message: `${displayPath} already exists.`,
           options: [
             {
               label: 'Merge',
@@ -142,21 +190,16 @@ export async function writeEditorConfigs({
           ],
           initialValue: 'skip',
         });
-        if (prompts.isCancel(action) || action === 'skip') {
-          prompts.log.info(`Skipped writing ${editorConfig.targetDir}/${fileName}`);
-          continue;
-        }
-
-        const existing = readJsonFile(filePath);
-        const merged = mergeEditorConfigs(existing, incoming, fileName);
-        writeJsonFile(filePath, merged);
-        prompts.log.success(`Merged editor config into ${editorConfig.targetDir}/${fileName}`);
+        conflictAction = prompts.isCancel(action) || action === 'skip' ? 'skip' : 'merge';
       } else {
         // Non-interactive: always merge (safe because existing keys are never overwritten)
-        const existing = readJsonFile(filePath);
-        const merged = mergeEditorConfigs(existing, incoming, fileName);
-        writeJsonFile(filePath, merged);
-        prompts.log.success(`Merged editor config into ${editorConfig.targetDir}/${fileName}`);
+        conflictAction = 'merge';
+      }
+
+      if (conflictAction === 'merge') {
+        mergeAndWriteEditorConfig(filePath, incoming, fileName, displayPath);
+      } else {
+        prompts.log.info(`Skipped writing ${displayPath}`);
       }
       continue;
     }
@@ -164,6 +207,18 @@ export async function writeEditorConfigs({
     writeJsonFile(filePath, incoming);
     prompts.log.success(`Wrote editor config to ${editorConfig.targetDir}/${fileName}`);
   }
+}
+
+function mergeAndWriteEditorConfig(
+  filePath: string,
+  incoming: Record<string, unknown>,
+  fileName: string,
+  displayPath: string,
+) {
+  const existing = readJsonFile(filePath);
+  const merged = mergeEditorConfigs(existing, incoming, fileName);
+  writeJsonFile(filePath, merged);
+  prompts.log.success(`Merged editor config into ${displayPath}`);
 }
 
 function mergeEditorConfigs(

@@ -5,11 +5,11 @@ VITE+ - The Unified Toolchain for the Web
 
 Using default package manager: pnpm
 
+⚠ Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.
+
 pnpm@latest installing...
 
 pnpm@<semver> installed
-
-⚠ Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.
 
 Wrote agent instructions to AGENTS.md
 ✔ Migration completed!

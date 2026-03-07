@@ -44,9 +44,12 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
   - Replaces `.husky/pre-commit` with `.vite-hooks/pre-commit` using `vp staged`
   - Removes `husky` and `lint-staged` from devDependencies
 
+**What this command optionally migrates** (prompted):
+
+- ✅ **ESLint → oxlint** (via `@oxlint/migrate`): converts ESLint flat config to `.oxlintrc.json`, which is then merged into `vite.config.ts` by the existing flow
+
 **What this command does NOT migrate**:
 
-- ❌ ESLint → oxlint (different tools, not a version upgrade)
 - ❌ Prettier → oxfmt (different tools, not a version upgrade)
 - ❌ Package.json scripts → vite-task.json (different feature)
 - ❌ TypeScript configuration changes
@@ -66,92 +69,90 @@ vp migrate
 
 ## Migration Process
 
-### Step 1: Detection
+The migration uses a **two-phase architecture**: all user prompts are collected upfront (Phase 1), then all work is executed without interruption (Phase 2). This lets the user see the full picture before any changes begin.
 
-Analyze the project to detect which tools are being used:
+### Phase 1: Collect User Decisions
 
-```typescript
-interface DetectionResult {
-  hasVite: boolean;
-  hasVitest: boolean;
-  hasOxlint: boolean;
-  hasOxfmt: boolean;
-  dependencies: {
-    vite?: string;
-    vitest?: string;
-    oxlint?: string;
-    oxfmt?: string;
-  };
-  configs: {
-    viteConfig?: string; // vite.config.ts
-    oxlintConfig?: string; // .oxlintrc
-    oxfmtConfig?: string; // .oxfmtrc, oxfmt.config.json
-  };
-}
-```
+All prompts are presented sequentially before any work begins:
 
-### Step 2: Preview
+1. **Confirm migration**: "Migrate this project to Vite+?"
+2. **Package manager**: Select or auto-detect (pnpm/npm/yarn)
+3. **Pre-commit hooks**: "Set up pre-commit hooks?" + preflight validation (read-only check for git root, existing hook tools)
+4. **Agent selection**: "Which agents are you using?" (multiselect)
+5. **Agent file conflicts**: Per existing file — "Agent instructions already exist at X. Append or Skip?" (only for files without auto-update markers)
+6. **Editor selection**: "Which editor are you using?"
+7. **Editor file conflicts**: Per existing file — "X already exists. Merge or Skip?"
+8. **ESLint migration**: If ESLint config detected — "Migrate ESLint rules to Oxlint?"
+9. **Migration plan summary**: Display all planned actions before execution
 
-Show user what will change:
+In non-interactive mode (`--no-interactive`), Phase 1 uses defaults (no prompts shown, no summary displayed).
 
 ```bash
 $ vp migrate
 
-◇  Analyzing project...
-│
-◆  Detected standalone tools:
-│  ✓ vite ^5.0.0
-│  ✓ vitest ^1.0.0
-│  ✓ oxlint ^0.1.0
-│  ✓ oxfmt ^0.1.0
-│
-◆  Configuration files found:
-│  • vite.config.ts
-│  • vitest.config.ts
-│  • .oxlintrc
-│  • .oxfmtrc
-│
-◆  Migration plan:
-│
-│  Dependencies (package.json):
-│  - vite: ^5.0.0
-│  - vitest: ^1.0.0
-│  - oxlint: ^0.1.0
-│  - oxfmt: ^0.1.0
-│  + vite-plus: ^0.1.0
-│
-│  Configuration:
-│  ✓ Merge vitest.config.ts → vite.config.ts
-│  ✓ Merge .oxlintrc → vite.config.ts
-│  ✓ Merge .oxfmtrc → vite.config.ts
-│  ✓ Remove redundant config files
-│
-◆  Proceed with migration?
-│  ● Yes / ○ No / ○ Preview changes
+VITE+ - The Unified Toolchain for the Web
+
+◆ Migrate this project to Vite+?
+│ Yes
+
+◆ Which package manager would you like to use?
+│ pnpm (recommended)
+
+◆ Set up pre-commit hooks?
+│ Yes
+
+◆ Which agents are you using?
+│ Claude Code
+
+◆ CLAUDE.md already exists.
+│ Append
+
+◆ Which editor are you using?
+│ VSCode
+
+◆ .vscode/settings.json already exists.
+│ Merge
+
+ESLint configuration detected (eslint.config.mjs).
+◆ Migrate ESLint rules to Oxlint?
+│ Yes
+
+Migration plan:
+- Install pnpm and dependencies
+- Rewrite configs and dependencies for Vite+
+- Migrate ESLint rules to Oxlint
+- Set up pre-commit hooks
+- Write agent instructions (CLAUDE.md, append)
+- Write editor config (.vscode/, merge)
 ```
 
-### Step 3: Transformation
+### Phase 2: Execute Without Prompts
 
-Apply migrations using ast-grep:
+All work runs sequentially with spinner feedback — no further user interaction:
+
+1. **Download package manager** + version validation
+2. **Upgrade yarn** if needed (yarn <4.10.0)
+3. **Run `vp install`** to prepare dependencies
+4. **Check vite/vitest versions** (abort if unsupported)
+5. **Migrate ESLint → Oxlint** (if approved in Phase 1, via `@oxlint/migrate`)
+6. **Rewrite configs** (dependencies, overrides, config file merging)
+7. **Install git hooks** (if approved)
+8. **Write agent instructions** (using pre-resolved conflict decisions)
+9. **Write editor configs** (using pre-resolved conflict decisions)
+10. **Reinstall dependencies** (final `vp install`)
 
 ```bash
-◇  Applying migrations...
-│  ✓ Updated package.json dependencies
-│  ✓ Added package.json overrides (vite → vite-plus)
-│  ✓ Updated vitest imports in 18 files (vitest → vite/test)
-│  ✓ Merged vitest.config.ts → vite.config.ts
-│  ✓ Merged .oxlintrc → vite.config.ts
-│  ✓ Merged .oxfmtrc → vite.config.ts
-│  ✓ Removed vitest.config.ts
-│  ✓ Removed .oxlintrc
-│  ✓ Removed .oxfmtrc
-│
-└  Migration completed!
-
-Next steps:
-  1. Review vite.config.ts to ensure configurations are correct
-  2. Run 'vp install' to update dependencies
-  3. Run 'vp build' and 'vp test' to verify everything works
+pnpm@10.x installing...
+pnpm@10.x installed
+Installing dependencies...
+Dependencies installed
+Migrating ESLint config to Oxlint...
+✔ Removed eslint.config.mjs
+✔ Merged .oxlintrc.json into vite.config.ts
+... rewriting configs ...
+Appended agent instructions to CLAUDE.md
+Merged editor config into .vscode/settings.json
+✔ Migration completed!
 ```
 
 ## Migration Rules
@@ -490,6 +491,34 @@ A successful migration should:
 11. ✅ Handle monorepo migrations efficiently
 12. ✅ Be safe and transparent about what changes
 
+## ESLint Migration
+
+When an ESLint flat config (`eslint.config.{js,mjs,cjs,ts,mts,cts}`) and `eslint` dependency are detected, `vp migrate` offers to convert the ESLint configuration to oxlint using [`@oxlint/migrate`](https://www.npmjs.com/package/@oxlint/migrate).
+
+**Flow**: ESLint → oxlint (via `@oxlint/migrate`) → vite+ (existing merge flow)
+
+**Steps**:
+
+1. Run `vpx @oxlint/migrate --merge --type-aware --with-nursery --details` to generate `.oxlintrc.json`
+2. Run `vpx @oxlint/migrate --replace-eslint-comments` to replace `eslint-disable` comments
+3. Delete the ESLint config file
+4. Remove `eslint` from `devDependencies`
+5. Rewrite `eslint` scripts in `package.json` to `vp lint`, stripping ESLint-only flags (e.g., `--ext`, `--cache`, `--rulesdir`) that are not supported by Oxlint
+6. The existing migration flow picks up `.oxlintrc.json` and merges it into `vite.config.ts`
+
+**Legacy ESLint Config Handling**:
+
+If only a legacy ESLint config (`.eslintrc*`) is detected without a flat config (`eslint.config.*`), the migration warns and skips ESLint migration. The warning guides users to upgrade to ESLint v9 first, since `@oxlint/migrate` only supports flat configs:
+
+> Legacy ESLint configuration detected (.eslintrc). Automatic migration to Oxlint requires ESLint v9+ with flat config format (eslint.config.\*). Please upgrade to ESLint v9 first: https://eslint.org/docs/latest/use/migrate-to-9.0.0
+
+**Behavior**:
+
+- Interactive mode: prompts user for confirmation upfront (Phase 1), executes later (Phase 2)
+- Non-interactive mode: auto-runs without prompting
+- Failure is non-blocking — warns and continues with the rest of migration
+- Re-runnable: if user declines initially, running `vp migrate` again offers eslint migration
+
 ## References
 
 ### Code Transformation
@@ -501,6 +530,7 @@ A successful migration should:
 ### Tools
 
 - [@ast-grep/napi](https://www.npmjs.com/package/@ast-grep/napi) - Node.js bindings for ast-grep
+- [@oxlint/migrate](https://www.npmjs.com/package/@oxlint/migrate) - ESLint to oxlint migration tool
 - [@clack/prompts](https://www.npmjs.com/package/@clack/prompts) - Beautiful CLI prompts
 - [typescript](https://www.typescriptlang.org/) - For parsing TypeScript configs
 
