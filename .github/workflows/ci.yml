@@ -70,6 +70,12 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: ./.github/actions/clone
 
+      # Disable Windows Defender real-time scanning to speed up I/O-heavy builds (~30-50% faster)
+      - name: Disable Windows Defender
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
           save-cache: ${{ github.ref_name == 'main' }}
@@ -186,6 +192,12 @@ jobs:
       - name: Configure Git for access to vite-task
         run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
 
+      # Disable Windows Defender real-time scanning to speed up I/O-heavy builds (~30-50% faster)
+      - name: Disable Windows Defender
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
       - run: |
           brew install rustup
           rustup install stable
@@ -210,9 +222,10 @@ jobs:
         with:
           target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' ||  matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'aarch64-apple-darwin' }}
 
+      # Skip native rebuild — NAPI bindings are already built and cached by build-upstream
       - name: Build CLI
         run: |
-          pnpm build
+          pnpm -F vite-plus-cli build-ts
           pnpm bootstrap-cli:ci
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
