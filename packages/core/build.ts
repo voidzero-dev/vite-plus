@@ -204,14 +204,39 @@ async function buildVite() {
             };
           },
         },
-        ...config.plugins.filter((plugin) => {
-          return !(
-            typeof plugin === 'object' &&
-            plugin !== null &&
-            'name' in plugin &&
-            plugin.name === 'rollup-plugin-license'
+        ...(() => {
+          // Check if config originally had a bundle-limit plugin
+          const hadBundleLimit = config.plugins.some(
+            (plugin) =>
+              typeof plugin === 'object' &&
+              plugin !== null &&
+              'name' in plugin &&
+              plugin.name === 'bundle-limit',
           );
-        }),
+
+          const filtered = config.plugins.filter((plugin) => {
+            if (typeof plugin !== 'object' || plugin === null || !('name' in plugin)) {
+              return true;
+            }
+            // Remove rollup-plugin-license (we have our own)
+            if (plugin.name === 'rollup-plugin-license') {
+              return false;
+            }
+            // Remove upstream bundle-limit plugin (we add our own with adjusted threshold)
+            if (plugin.name === 'bundle-limit') {
+              return false;
+            }
+            return true;
+          });
+
+          // Add our own bundle-limit plugin with increased threshold (55 kB)
+          // only if the original config had one
+          if (hadBundleLimit) {
+            filtered.push(bundleSizeLimitPlugin(55));
+          }
+
+          return filtered;
+        })(),
       ];
     }
 
@@ -634,4 +659,35 @@ async function syncLicenseFromRoot() {
   const rootLicensePath = join(projectDir, '..', '..', 'LICENSE');
   const packageLicensePath = join(projectDir, 'LICENSE');
   await copyFile(rootLicensePath, packageLicensePath);
+}
+
+/**
+ * Guard the bundle size (copied from rolldown-vite/packages/vite/rolldown.config.ts)
+ *
+ * @param limit size in kB
+ */
+function bundleSizeLimitPlugin(limit: number): import('rolldown').Plugin {
+  let size = 0;
+
+  return {
+    name: 'bundle-limit',
+    generateBundle(_, bundle) {
+      if (this.meta.watchMode) return;
+
+      size = Buffer.byteLength(
+        Object.values(bundle)
+          .map((i) => ('code' in i ? i.code : ''))
+          .join(''),
+        'utf-8',
+      );
+    },
+    closeBundle() {
+      if (this.meta.watchMode) return;
+
+      const kb = size / 1000;
+      if (kb > limit) {
+        this.error(`Bundle size exceeded ${limit} kB, current size is ${kb.toFixed(2)}kb.`);
+      }
+    },
+  };
 }
