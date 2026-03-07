@@ -5,6 +5,7 @@ import {
   readFileSync,
   readdirSync,
   readlinkSync,
+  realpathSync,
   symlinkSync,
 } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -12,6 +13,7 @@ import { join, relative } from 'node:path';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { type AgentConfig } from './agent.js';
+import { VITE_PLUS_NAME } from './constants.js';
 import { pkgRoot } from './path.js';
 
 interface SkillInfo {
@@ -109,8 +111,23 @@ function linkSkills(
   return linked;
 }
 
+function getStableSkillsDir(root: string): string {
+  const resolvedSkillsDir = join(pkgRoot, 'skills');
+  // Prefer the logical node_modules path for a cleaner, stable symlink
+  // (avoids pnpm's versioned .pnpm/pkg@version/... real path)
+  const logicalSkillsDir = join(root, 'node_modules', VITE_PLUS_NAME, 'skills');
+  try {
+    if (realpathSync(logicalSkillsDir) === realpathSync(resolvedSkillsDir)) {
+      return logicalSkillsDir;
+    }
+  } catch {
+    // Fall through to resolved path
+  }
+  return resolvedSkillsDir;
+}
+
 export function linkSkillsForSpecificAgents(root: string, agentConfigs: AgentConfig[]): number {
-  const skillsDir = join(pkgRoot, 'skills');
+  const skillsDir = getStableSkillsDir(root);
   const skills = parseSkills(skillsDir);
   if (skills.length === 0) {
     return 0;
