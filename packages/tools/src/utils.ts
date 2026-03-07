@@ -93,10 +93,6 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
         /➤ YN0000: └ Completed.* <variable>(s|ms|µs)( <variable>(s|ms|µs))?\n/g,
         '➤ YN0000: └ Completed\n',
       )
-      // Normalize npm tree characters (ASCII vs Unicode depends on terminal/locale)
-      .replaceAll('`-- ', '└── ')
-      .replaceAll('+-- ', '├── ')
-      .replaceAll('|   ', '│   ')
       // ignore npm warn
       // npm warn Unknown env config "recursive". This will stop working in the next major version of npm
       .replaceAll(/npm warn Unknown env config .+?\n/g, '')

@@ -266,6 +266,12 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
   // from leaking into snap tests (it passes through via the VITE_* pattern).
   delete env['VITE_PLUS_NODE_VERSION'];
 
+  // Unset VITE_PLUS_TOOL_RECURSION to prevent the shim recursion guard from
+  // leaking into snap tests. When `pnpm` runs the test via the `vp` shim, vp
+  // sets this marker before exec. Without clearing it, every npm/node command
+  // in the test would bypass the managed shim and fall through to the system binary.
+  delete env['VITE_PLUS_TOOL_RECURSION'];
+
   // Sometimes on Windows, the PATH variable is named 'Path'
   if ('Path' in env && !('PATH' in env)) {
     env['PATH'] = env['Path'];

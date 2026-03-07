@@ -1,33 +1,6 @@
-> npm install -g ./npm-global-hint-pkg --verbose # Should install and show hint + create link
-<date>T<date>.438656Z DEBUG vp: argv0: npm
-<date>T<date>.438700Z DEBUG vp::shim::dispatch: dispatch: tool: npm, args: ["install", "-g", "./npm-global-hint-pkg", "--verbose"]
-<date>T<date>.439333Z DEBUG vite_js_runtime::providers::node: Using cached version index (expires in <variable>ms)
-<date>T<date>.439548Z DEBUG vp::shim::dispatch: npm dispatch: parse_npm_global_install=true, args=["install", "-g", "./npm-global-hint-pkg", "--verbose"]
-<date>T<date>.439553Z DEBUG vp::shim::dispatch: npm install -g: packages=["./npm-global-hint-pkg"], explicit_prefix=None
-npm verbose cli <vite-plus-home>/js_runtime/node/<semver>/bin/node <vite-plus-home>/js_runtime/node/<semver>/bin/npm
-npm info using npm@<semver>
-npm info using node@v<semver>
-npm verbose title npm install ./npm-global-hint-pkg
-npm verbose argv "install" "--global" "./npm-global-hint-pkg" "--loglevel" "verbose"
-npm verbose logfile logs-max:10 dir:<homedir>/.npm/_logs/<date>T07_43_45_479Z-
-npm verbose logfile <homedir>/.npm/_logs/<timestamp>-debug.log
+> npm install -g ./npm-global-hint-pkg # Should install and show hint + create link
 
 added 1 package in <variable>ms
-npm verbose cwd <cwd>
-npm verbose os Darwin <semver>
-npm verbose node v<semver>
-npm verbose npm  v<semver>
-npm verbose exit 0
-npm info ok
-<date>T<date>.578882Z DEBUG vp::shim::dispatch: npm install -g: exit_code=0
-<date>T<date>.647884Z DEBUG vp::shim::dispatch: npm install -g: npm_prefix=<cwd>/../npm-global-lib-for-snap-tests, node_dir=<vite-plus-home>/js_runtime/node/<semver>
-<date>T<date>.647912Z DEBUG vp::shim::dispatch: check_npm_global_install_result: packages=["./npm-global-hint-pkg"], npm_prefix=<cwd>/../npm-global-lib-for-snap-tests, node_dir=<vite-plus-home>/js_runtime/node/<semver>
-<date>T<date>.647925Z DEBUG vp::shim::dispatch: check: bin_dir=<vite-plus-home>/bin, npm_bin_dir=<cwd>/../npm-global-lib-for-snap-tests/bin
-<date>T<date>.648005Z DEBUG vp::shim::dispatch: check: spec="./npm-global-hint-pkg" -> package_name="npm-global-hint-pkg"
-<date>T<date>.648035Z DEBUG vp::shim::dispatch: check: bin_names=["npm-global-hint-cli"]
-<date>T<date>.648050Z DEBUG vp::shim::dispatch: check: bin="npm-global-hint-cli", shim_path=<vite-plus-home>/bin/npm-global-hint-cli, symlink_exists=false
-<date>T<date>.648060Z DEBUG vp::shim::dispatch: check: source_path=<cwd>/../npm-global-lib-for-snap-tests/bin/npm-global-hint-cli, exists=true
-<date>T<date>.648066Z DEBUG vp::shim::dispatch: check: managed_conflicts=0, missing_bins=1, is_interactive=false
 Linked 'npm-global-hint-cli' to <vite-plus-home>/bin/npm-global-hint-cli
 
 tip: Use `vp install -g ./npm-global-hint-pkg` for managed shims that persist across Node.js version changes.
@@ -36,16 +9,9 @@ tip: Use `vp install -g ./npm-global-hint-pkg` for managed shims that persist ac
 link created
 
 > npm-global-hint-cli # Should be callable via the link
-<date>T<date>.938135Z DEBUG vp: argv0: node
-<date>T<date>.938201Z DEBUG vp::shim::dispatch: dispatch: tool: node, args: ["<vite-plus-home>/bin/npm-global-hint-cli"]
-<date>T<date>.938671Z DEBUG vp::shim::dispatch: Cache hit for <cwd>: <semver> (from default)
 npm-global-hint-cli works
 
 > rm -f $VITE_PLUS_HOME/bin/npm-global-hint-cli # Cleanup link
 > npm uninstall -g npm-global-hint-pkg # Cleanup npm install
-<date>T<date>.976534Z DEBUG vp: argv0: npm
-<date>T<date>.976580Z DEBUG vp::shim::dispatch: dispatch: tool: npm, args: ["uninstall", "-g", "npm-global-hint-pkg"]
-<date>T<date>.976869Z DEBUG vp::shim::dispatch: Cache hit for <cwd>: <semver> (from default)
-<date>T<date>.976927Z DEBUG vp::shim::dispatch: npm dispatch: parse_npm_global_install=false, args=["uninstall", "-g", "npm-global-hint-pkg"]
 
 removed 1 package in <variable>ms

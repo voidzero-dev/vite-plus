@@ -221,16 +221,7 @@ fn check_npm_global_install_result(
 ) {
     use std::io::IsTerminal;
 
-    tracing::debug!(
-        "check_npm_global_install_result: packages={packages:?}, npm_prefix={}, node_dir={}",
-        npm_prefix.as_path().display(),
-        node_dir.as_path().display()
-    );
-
-    let Ok(bin_dir) = config::get_bin_dir() else {
-        tracing::debug!("check_npm_global_install_result: get_bin_dir() failed");
-        return;
-    };
+    let Ok(bin_dir) = config::get_bin_dir() else { return };
 
     // Derive bin dir from prefix (Unix: prefix/bin, Windows: prefix itself)
     #[cfg(unix)]
@@ -238,17 +229,10 @@ fn check_npm_global_install_result(
     #[cfg(windows)]
     let npm_bin_dir = npm_prefix.to_absolute_path_buf();
 
-    tracing::debug!(
-        "check: bin_dir={}, npm_bin_dir={}",
-        bin_dir.as_path().display(),
-        npm_bin_dir.as_path().display()
-    );
-
     // If the npm global bin dir is already on the user's original PATH,
     // binaries are reachable without shims — no action needed.
     if let Some(orig) = original_path {
         if std::env::split_paths(orig).any(|p| p == npm_bin_dir.as_path()) {
-            tracing::debug!("check: npm_bin_dir already on PATH, returning early");
             return;
         }
     }
@@ -259,21 +243,14 @@ fn check_npm_global_install_result(
     let mut managed_conflicts: Vec<(String, String)> = Vec::new();
 
     for spec in packages {
-        let Some(package_name) = resolve_package_name(spec) else {
-            tracing::debug!("check: resolve_package_name({spec:?}) returned None");
-            continue;
-        };
-        tracing::debug!("check: spec={spec:?} -> package_name={package_name:?}");
+        let Some(package_name) = resolve_package_name(spec) else { continue };
         let Some(content) = read_npm_package_json(npm_prefix, node_dir, &package_name) else {
-            tracing::debug!("check: read_npm_package_json({package_name:?}) returned None");
             continue;
         };
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
-            tracing::debug!("check: failed to parse package.json for {package_name:?}");
             continue;
         };
         let bin_names = extract_bin_names(&package_json);
-        tracing::debug!("check: bin_names={bin_names:?}");
 
         for bin_name in bin_names {
             // Skip core shims
@@ -283,12 +260,7 @@ fn check_npm_global_install_result(
 
             // Check if binary already exists in bin_dir (vite-plus bin)
             let shim_path = bin_dir.join(&bin_name);
-            let symlink_exists = std::fs::symlink_metadata(shim_path.as_path()).is_ok();
-            tracing::debug!(
-                "check: bin={bin_name:?}, shim_path={}, symlink_exists={symlink_exists}",
-                shim_path.as_path().display()
-            );
-            if symlink_exists {
+            if std::fs::symlink_metadata(shim_path.as_path()).is_ok() {
                 if let Ok(Some(config)) = BinConfig::load_sync(&bin_name) {
                     if config.source == BinSource::Vp {
                         // Managed by vp install -g — warn about the conflict
@@ -332,11 +304,6 @@ fn check_npm_global_install_result(
             #[cfg(windows)]
             let source_path = npm_bin_dir.join(format!("{bin_name}.cmd"));
 
-            tracing::debug!(
-                "check: source_path={}, exists={}",
-                source_path.as_path().display(),
-                source_path.as_path().exists()
-            );
             if source_path.as_path().exists() {
                 missing_bins.push((bin_name, source_path, package_name.clone()));
             }
@@ -346,12 +313,6 @@ fn check_npm_global_install_result(
     // Deduplicate by bin_name so that when two packages declare the same binary,
     // only the last one is linked (matching npm's "last writer wins" behavior).
     let missing_bins = dedup_missing_bins(missing_bins);
-
-    tracing::debug!(
-        "check: managed_conflicts={}, missing_bins={}, is_interactive={is_interactive}",
-        managed_conflicts.len(),
-        missing_bins.len()
-    );
 
     if !managed_conflicts.is_empty() {
         for (bin_name, pkg) in &managed_conflicts {
@@ -810,30 +771,13 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
 
     // For npm install/uninstall -g, use spawn+wait so we can post-check/cleanup binaries
     if tool == "npm" {
-        let parsed_install = parse_npm_global_install(args);
-        tracing::debug!(
-            "npm dispatch: parse_npm_global_install={}, args={:?}",
-            parsed_install.is_some(),
-            args
-        );
-        if let Some(parsed) = parsed_install {
-            tracing::debug!(
-                "npm install -g: packages={:?}, explicit_prefix={:?}",
-                parsed.packages,
-                parsed.explicit_prefix
-            );
+        if let Some(parsed) = parse_npm_global_install(args) {
             let exit_code = exec::spawn_tool(&tool_path, args);
-            tracing::debug!("npm install -g: exit_code={exit_code}");
             if exit_code == 0 {
                 if let Ok(home_dir) = vite_shared::get_vite_plus_home() {
                     let node_dir =
                         home_dir.join("js_runtime").join("node").join(&*resolution.version);
                     let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
-                    tracing::debug!(
-                        "npm install -g: npm_prefix={}, node_dir={}",
-                        npm_prefix.as_path().display(),
-                        node_dir.as_path().display()
-                    );
                     check_npm_global_install_result(
                         &parsed.packages,
                         original_path.as_deref(),
@@ -841,8 +785,6 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
                         &node_dir,
                         &resolution.version,
                     );
-                } else {
-                    tracing::debug!("npm install -g: get_vite_plus_home failed");
                 }
             }
             return exit_code;

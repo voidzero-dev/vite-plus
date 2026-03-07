@@ -1,61 +1,3 @@
-> vp --version
-VITE+ - The Unified Toolchain for the Web
-
-vp v<semver>
-
-Local vite-plus:
-  vite-plus  v<semver>
-
-Tools:
-  vite             v<semver>
-  rolldown         v<semver>
-  vitest           v<semver>
-  oxfmt            v<semver>
-  oxlint           v<semver>
-  oxlint-tsgolint  v<semver>
-  tsdown           v<semver>
-
-> which vp
-<vite-plus-home>/bin/vp
-
-> which npm
-<vite-plus-home>/bin/npm
-
-> which node
-<vite-plus-home>/bin/node
-
-> npm --version
-10.9.4
-
-> node --version
-v22.22.0
-
-> vp env doctor
-VITE+ - The Unified Toolchain for the Web
-
-Installation
-  ✓ VITE_PLUS_HOME    ~/.vite-plus
-  ✓ Bin directory     exists
-  ✓ Shims             node, npm, npx
-
-Configuration
-  ✓ Shim mode         managed
-  ✓ IDE integration   env sourced in ~/.zshenv
-
-PATH
-  ✓ vp                first in PATH
-  ✓ node              ~/.vite-plus/bin/node (vp shim)
-  ✓ npm               ~/.vite-plus/bin/npm (vp shim)
-  ✓ npx               ~/.vite-plus/bin/npx (vp shim)
-
-Version Resolution
-  Directory         <cwd>
-  Source            <cwd>/.node-version
-  Version           <semver>
-  ✓ Node binary       installed
-
-✓ All checks passed
-
 > npm config get prefix
 <cwd>/../npm-global-lib-for-snap-tests
 
@@ -73,12 +15,6 @@ npm-global-linked-cli works
 
 added 1 package in <variable>ms
 Skipped 'npm-global-linked-cli': managed by `vp install -g ./npm-global-linked-pkg`. Run `vp uninstall -g ./npm-global-linked-pkg` to remove it first.
-
-> vp ls -g
-> npm ls -g
-<cwd>/../npm-global-lib-for-snap-tests/lib
-└── npm-global-linked-pkg@<semver> -> ./../../npm-global-install-already-linked/npm-global-linked-pkg
-
 
 > vp remove -g npm-global-linked-pkg # Cleanup
 Uninstalled npm-global-linked-pkg
