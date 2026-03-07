@@ -221,7 +221,18 @@ fn check_npm_global_install_result(
 ) {
     use std::io::IsTerminal;
 
-    let Ok(bin_dir) = config::get_bin_dir() else { return };
+    eprintln!(
+        "[debug] check_npm_global_install_result: packages={packages:?}, npm_prefix={}, node_dir={}",
+        npm_prefix.as_path().display(),
+        node_dir.as_path().display()
+    );
+
+    let Ok(bin_dir) = config::get_bin_dir() else {
+        eprintln!("[debug] get_bin_dir() failed, returning early");
+        return;
+    };
+
+    eprintln!("[debug] bin_dir={}", bin_dir.as_path().display());
 
     // Derive bin dir from prefix (Unix: prefix/bin, Windows: prefix itself)
     #[cfg(unix)]
@@ -229,28 +240,42 @@ fn check_npm_global_install_result(
     #[cfg(windows)]
     let npm_bin_dir = npm_prefix.to_absolute_path_buf();
 
+    eprintln!("[debug] npm_bin_dir={}", npm_bin_dir.as_path().display());
+
     // If the npm global bin dir is already on the user's original PATH,
     // binaries are reachable without shims — no action needed.
     if let Some(orig) = original_path {
+        eprintln!("[debug] original_path={orig:?}");
         if std::env::split_paths(orig).any(|p| p == npm_bin_dir.as_path()) {
+            eprintln!("[debug] npm_bin_dir is on original PATH, returning early");
             return;
         }
+    } else {
+        eprintln!("[debug] original_path=None");
     }
 
     let is_interactive = std::io::stdin().is_terminal();
+    eprintln!("[debug] is_interactive={is_interactive}");
     // (bin_name, source_path, package_name)
     let mut missing_bins: Vec<(String, AbsolutePathBuf, String)> = Vec::new();
     let mut managed_conflicts: Vec<(String, String)> = Vec::new();
 
     for spec in packages {
-        let Some(package_name) = resolve_package_name(spec) else { continue };
+        let Some(package_name) = resolve_package_name(spec) else {
+            eprintln!("[debug] resolve_package_name({spec:?}) returned None");
+            continue;
+        };
+        eprintln!("[debug] spec={spec:?} -> package_name={package_name:?}");
         let Some(content) = read_npm_package_json(npm_prefix, node_dir, &package_name) else {
+            eprintln!("[debug] read_npm_package_json({package_name:?}) returned None");
             continue;
         };
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
+            eprintln!("[debug] failed to parse package.json for {package_name:?}");
             continue;
         };
         let bin_names = extract_bin_names(&package_json);
+        eprintln!("[debug] bin_names={bin_names:?}");
 
         for bin_name in bin_names {
             // Skip core shims
@@ -260,8 +285,19 @@ fn check_npm_global_install_result(
 
             // Check if binary already exists in bin_dir (vite-plus bin)
             let shim_path = bin_dir.join(&bin_name);
-            if std::fs::symlink_metadata(shim_path.as_path()).is_ok() {
-                if let Ok(Some(config)) = BinConfig::load_sync(&bin_name) {
+            let symlink_exists = std::fs::symlink_metadata(shim_path.as_path()).is_ok();
+            eprintln!(
+                "[debug] bin={bin_name:?}, shim_path={}, symlink_exists={symlink_exists}",
+                shim_path.as_path().display()
+            );
+            if symlink_exists {
+                let load_result = BinConfig::load_sync(&bin_name);
+                eprintln!("[debug] BinConfig::load_sync({bin_name:?}) = {load_result:?}");
+                if let Ok(Some(config)) = load_result {
+                    eprintln!(
+                        "[debug] config.source={:?}, config.package={:?}, package_name={package_name:?}",
+                        config.source, config.package
+                    );
                     if config.source == BinSource::Vp {
                         // Managed by vp install -g — warn about the conflict
                         managed_conflicts.push((bin_name, config.package.clone()));
@@ -313,6 +349,11 @@ fn check_npm_global_install_result(
     // Deduplicate by bin_name so that when two packages declare the same binary,
     // only the last one is linked (matching npm's "last writer wins" behavior).
     let missing_bins = dedup_missing_bins(missing_bins);
+
+    eprintln!(
+        "[debug] managed_conflicts={managed_conflicts:?}, missing_bins count={}",
+        missing_bins.len()
+    );
 
     if !managed_conflicts.is_empty() {
         for (bin_name, pkg) in &managed_conflicts {
