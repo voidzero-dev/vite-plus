@@ -38,6 +38,11 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
 - ✅ **Configuration files**:
   - .oxlintrc → vite.config.ts (lint section)
   - .oxfmtrc → vite.config.ts (format section)
+- ✅ **Git hooks**: husky + lint-staged → `vp config` + `vp staged`
+  - Rewrites `prepare: "husky"` → `prepare: "vp config"`
+  - Migrates lint-staged config into `staged` in vite.config.ts
+  - Replaces `.husky/pre-commit` with `.vite-hooks/pre-commit` using `vp staged`
+  - Removes `husky` and `lint-staged` from devDependencies
 
 **What this command does NOT migrate**:
 
@@ -48,6 +53,10 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
 - ❌ Build tool changes (webpack/rollup → vite)
 
 These are **consolidation migrations**, not **feature migrations**.
+
+### Re-migration
+
+When a project already has `vite-plus` in its dependencies but still retains `husky` and/or `lint-staged`, `vp migrate` detects the remaining hooks to migrate and runs only the git hooks migration (skipping the full dependency/config migration). This handles the scenario where a project was partially migrated or adopted `vite-plus` manually without migrating its git hooks setup.
 
 ## Command Usage
 

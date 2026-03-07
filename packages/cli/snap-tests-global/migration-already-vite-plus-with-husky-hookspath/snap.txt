@@ -1,0 +1,31 @@
+> git init
+> git config core.hooksPath .husky/_
+> vp migrate --no-interactive # should override husky's core.hooksPath and migrate hooks
+VITE+ - The Unified Toolchain for the Web
+
+
+✔ Created vite.config.ts in vite.config.ts
+
+✔ Merged staged config into vite.config.ts
+
+✔ Git hooks configured
+✔ Migration completed!
+
+
+> cat package.json # husky/lint-staged should be removed, prepare should be vp config
+{
+  "name": "migration-already-vite-plus-with-husky-hookspath",
+  "scripts": {
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vite-plus": "latest"
+  }
+}
+
+> cat .vite-hooks/pre-commit # pre-commit hook should be rewritten
+vp staged
+
+> git config --local core.hooksPath # should be .vite-hooks/_
+.vite-hooks/_

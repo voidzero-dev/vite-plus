@@ -1,0 +1,30 @@
+> git init
+> vp migrate --no-interactive # should still migrate husky/lint-staged even though vite-plus exists
+VITE+ - The Unified Toolchain for the Web
+
+
+✔ Created vite.config.ts in vite.config.ts
+
+✔ Merged staged config into vite.config.ts
+
+✔ Git hooks configured
+✔ Migration completed!
+
+
+> cat package.json # husky/lint-staged should be removed, prepare should be vp config
+{
+  "name": "migration-already-vite-plus-with-husky-lint-staged",
+  "scripts": {
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vite-plus": "latest"
+  }
+}
+
+> cat .vite-hooks/pre-commit # pre-commit hook should be rewritten
+vp staged
+
+> test -d .husky && echo '.husky directory exists' || echo 'No .husky directory' # .husky should be removed
+No .husky directory

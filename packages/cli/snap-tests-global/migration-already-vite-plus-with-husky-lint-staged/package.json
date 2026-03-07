@@ -1,0 +1,15 @@
+{
+  "name": "migration-already-vite-plus-with-husky-lint-staged",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "vite": "^7.0.0",
+    "vite-plus": "latest"
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
+  }
+}

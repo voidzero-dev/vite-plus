@@ -974,7 +974,16 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): boolea
   let stagedMerged = hasStagedConfigInViteConfig(projectPath);
   const hasStandaloneConfig = hasStandaloneLintStagedConfig(projectPath);
   if (!stagedMerged && !hasStandaloneConfig) {
-    stagedMerged = mergeStagedConfigToViteConfig(projectPath, { '*': 'vp check --fix' });
+    // Use lint-staged config from package.json if available, otherwise use default
+    const pkgData = readJsonFile<{ 'lint-staged'?: Record<string, string | string[]> }>(
+      packageJsonPath,
+    );
+    const stagedConfig = pkgData?.['lint-staged'] ?? { '*': 'vp check --fix' };
+    const updated = rewriteScripts(JSON.stringify(stagedConfig), readRulesYaml());
+    const finalConfig: Record<string, string | string[]> = updated
+      ? JSON.parse(updated)
+      : stagedConfig;
+    stagedMerged = mergeStagedConfigToViteConfig(projectPath, finalConfig);
   }
 
   // Only remove lint-staged key from package.json after staged config is
@@ -999,6 +1008,8 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): boolea
         fs.copyFileSync(src, dest);
         fs.chmodSync(dest, 0o755);
       }
+      // Remove old .husky/ directory after copying hooks to .vite-hooks/
+      fs.rmSync(oldDir, { recursive: true, force: true });
     }
   }
 
@@ -1013,6 +1024,22 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): boolea
   if (!gitRoot) {
     removeReplacedHookPackages(packageJsonPath);
     return true;
+  }
+
+  // Clear husky's core.hooksPath so vp config can set the new one.
+  // Only clear if it matches the old husky directory — preserve genuinely custom paths.
+  if (oldHooksDir) {
+    const checkResult = spawn.sync('git', ['config', '--local', 'core.hooksPath'], {
+      cwd: projectPath,
+      stdio: 'pipe',
+    });
+    const existingPath = checkResult.status === 0 ? checkResult.stdout?.toString().trim() : '';
+    if (existingPath === `${oldHooksDir}/_` || existingPath === oldHooksDir) {
+      spawn.sync('git', ['config', '--local', '--unset', 'core.hooksPath'], {
+        cwd: projectPath,
+        stdio: 'pipe',
+      });
+    }
   }
 
   const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';

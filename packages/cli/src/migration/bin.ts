@@ -145,12 +145,27 @@ async function main() {
   prompts.intro(vitePlusHeader());
 
   const workspaceInfoOptional = await detectWorkspace(projectPath);
-  if (
-    hasVitePlusDependency(
-      readNearestPackageJson<PackageDependencies>(workspaceInfoOptional.rootDir),
-    )
-  ) {
-    prompts.outro(`This project is already using Vite+! ${accent(`Happy coding!`)}`);
+  const rootPkg = readNearestPackageJson<PackageDependencies>(workspaceInfoOptional.rootDir);
+  if (hasVitePlusDependency(rootPkg)) {
+    const hasHooksToMigrate =
+      rootPkg?.devDependencies?.husky ||
+      rootPkg?.dependencies?.husky ||
+      rootPkg?.devDependencies?.['lint-staged'] ||
+      rootPkg?.dependencies?.['lint-staged'];
+
+    if (!hasHooksToMigrate) {
+      prompts.outro(`This project is already using Vite+! ${accent(`Happy coding!`)}`);
+      return;
+    }
+
+    // Project has vite-plus but still needs husky/lint-staged migration
+    // installGitHooks → setupGitHooks already performs preflightGitHooksSetup internally
+    const shouldSetupHooks = await promptGitHooks(options);
+    if (shouldSetupHooks && installGitHooks(workspaceInfoOptional.rootDir)) {
+      prompts.outro(green('✔ Migration completed!'));
+    } else {
+      prompts.outro(`This project is already using Vite+! ${accent(`Happy coding!`)}`);
+    }
     return;
   }
 
