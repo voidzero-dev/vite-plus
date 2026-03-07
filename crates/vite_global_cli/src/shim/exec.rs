@@ -72,9 +72,18 @@ fn exec_windows(path: &AbsolutePath, args: &[String]) -> i32 {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn test_exit_code_from_status_normal() {
-        let status = std::process::Command::new("sh").arg("-c").arg("exit 42").status().unwrap();
+        let status =
+            std::process::Command::new("/bin/sh").arg("-c").arg("exit 42").status().unwrap();
+        assert_eq!(exit_code_from_status(status), 42);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_exit_code_from_status_normal() {
+        let status = std::process::Command::new("cmd").args(["/C", "exit 42"]).status().unwrap();
         assert_eq!(exit_code_from_status(status), 42);
     }
 
@@ -83,7 +92,7 @@ mod tests {
     fn test_exit_code_from_status_signal() {
         // Process kills itself with SIGINT (signal 2), expected exit code: 128 + 2 = 130
         let status =
-            std::process::Command::new("sh").arg("-c").arg("kill -INT $$").status().unwrap();
+            std::process::Command::new("/bin/sh").arg("-c").arg("kill -INT $$").status().unwrap();
         assert_eq!(exit_code_from_status(status), 130);
     }
 }
