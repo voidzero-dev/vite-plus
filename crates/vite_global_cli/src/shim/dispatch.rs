@@ -812,13 +812,38 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
 
     // For npm install/uninstall -g, use spawn+wait so we can post-check/cleanup binaries
     if tool == "npm" {
-        if let Some(parsed) = parse_npm_global_install(args) {
+        let parsed_install = parse_npm_global_install(args);
+        #[allow(clippy::disallowed_macros)]
+        {
+            println!("[debug] dispatch: tool={tool:?}, args={args:?}");
+            println!("[debug] dispatch: parse_npm_global_install={}", parsed_install.is_some());
+            println!("[debug] dispatch: original_path={original_path:?}");
+            println!("[debug] dispatch: tool_path={}", tool_path.as_path().display());
+            println!("[debug] dispatch: resolution.version={}", resolution.version);
+        }
+        if let Some(parsed) = parsed_install {
+            #[allow(clippy::disallowed_macros)]
+            println!(
+                "[debug] dispatch: parsed.packages={:?}, parsed.explicit_prefix={:?}",
+                parsed.packages, parsed.explicit_prefix
+            );
             let exit_code = exec::spawn_tool(&tool_path, args);
+            #[allow(clippy::disallowed_macros)]
+            println!("[debug] dispatch: npm exit_code={exit_code}");
             if exit_code == 0 {
-                if let Ok(home_dir) = vite_shared::get_vite_plus_home() {
+                let home_result = vite_shared::get_vite_plus_home();
+                #[allow(clippy::disallowed_macros)]
+                println!("[debug] dispatch: get_vite_plus_home={home_result:?}");
+                if let Ok(home_dir) = home_result {
                     let node_dir =
                         home_dir.join("js_runtime").join("node").join(&*resolution.version);
                     let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
+                    #[allow(clippy::disallowed_macros)]
+                    println!(
+                        "[debug] dispatch: npm_prefix={}, node_dir={}",
+                        npm_prefix.as_path().display(),
+                        node_dir.as_path().display()
+                    );
                     check_npm_global_install_result(
                         &parsed.packages,
                         original_path.as_deref(),
