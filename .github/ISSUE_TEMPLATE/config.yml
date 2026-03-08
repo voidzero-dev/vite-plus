@@ -1,0 +1,17 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Vite Issues
+    url: https://github.com/vitejs/vite/issues/new/choose
+    about: Report issues specific to Vite core in the Vite repository.
+  - name: Vitest Issues
+    url: https://github.com/vitest-dev/vitest/issues/new/choose
+    about: Report issues specific to Vitest in the Vitest repository.
+  - name: tsdown Issues
+    url: https://github.com/rolldown/tsdown/issues/new/choose
+    about: Report issues specific to tsdown in the tsdown repository.
+  - name: Rolldown Issues
+    url: https://github.com/rolldown/rolldown/issues/new/choose
+    about: Report issues specific to Rolldown in the Rolldown repository.
+  - name: Oxc (Oxlint/Oxfmt) Issues
+    url: https://github.com/oxc-project/oxc/issues/new/choose
+    about: Report Oxlint/Oxfmt issues in the Oxc repository.

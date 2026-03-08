@@ -1,0 +1,81 @@
+name: "\U0001F41E Bug report"
+description: Report an issue with Vite+
+labels: [pending triage]
+type: Bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report.
+
+        Please only file issues here if the bug is in Vite+ itself.
+        If the bug belongs to an underlying tool, report it in that project's tracker (linked in the "Create new issue" page).
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is. If you intend to submit a PR for this issue, tell us in the description.
+      placeholder: I am doing ... What I expect is ... What is actually happening is ...
+    validations:
+      required: true
+  - type: input
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Please provide a link to a minimal reproduction repository or a runnable stackblitz/sandbox. If a report is vague and has no reproduction, it may be closed.
+      placeholder: Reproduction URL
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide any required steps, commands, or setup details.
+      placeholder: Run `pnpm install` followed by `vp dev`
+  - type: textarea
+    id: system-info
+    attributes:
+      label: System Info
+      description: |
+        Paste the full output of both commands:
+        - `vp env current`
+        - `vp --version`
+      render: shell
+      placeholder: Paste `vp env current` and `vp --version` output here
+    validations:
+      required: true
+  - type: dropdown
+    id: package-manager
+    attributes:
+      label: Used Package Manager
+      description: Select the package manager used in your project
+      options:
+        - npm
+        - yarn
+        - pnpm
+        - bun
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Optional when a reproduction is provided. Please copy-paste text logs instead of screenshots.
+
+        If relevant, run your command with `--debug` and include the output.
+      render: shell
+  - type: checkboxes
+    id: checkboxes
+    attributes:
+      label: Validations
+      description: Before submitting the issue, please confirm the following
+      options:
+        - label: Read the [Contributing Guidelines](https://github.com/voidzero-dev/vite-plus/blob/main/CONTRIBUTING.md).
+          required: true
+        - label: Check that there isn't [already an issue](https://github.com/voidzero-dev/vite-plus/issues) for the same bug.
+          required: true
+        - label: Confirm this is a Vite+ issue and not an upstream issue (Vite, Vitest, tsdown, Rolldown, or Oxc).
+          required: true
+        - label: The provided reproduction is a [minimal reproducible example](https://stackoverflow.com/help/minimal-reproducible-example).
+          required: true

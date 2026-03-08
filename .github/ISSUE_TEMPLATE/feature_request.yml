@@ -1,0 +1,49 @@
+name: "\U0001F680 New feature proposal"
+description: Propose a new feature to be added to Vite+
+labels: [pending triage]
+type: Feature
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your interest in Vite+ and taking the time to fill out this feature report.
+
+        Please only open feature proposals here for Vite+ itself.
+        If the proposal belongs to an underlying tool, use that project's tracker (linked in the "Create new issue" page).
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Description
+      description: 'Clear and concise description of the problem. Explain use cases and motivation. If you intend to submit a PR for this issue, mention it here.'
+      placeholder: As a developer using Vite+ I want [goal / wish] so that [benefit].
+    validations:
+      required: true
+  - type: textarea
+    id: suggested-solution
+    attributes:
+      label: Suggested solution
+      description: 'Describe a possible API, behavior, or implementation direction.'
+    validations:
+      required: true
+  - type: textarea
+    id: alternative
+    attributes:
+      label: Alternative
+      description: Describe any alternative solutions or features you've considered.
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Any other context, links, or screenshots about the feature request.
+  - type: checkboxes
+    id: checkboxes
+    attributes:
+      label: Validations
+      description: Before submitting the issue, please confirm the following
+      options:
+        - label: Read the [Contributing Guidelines](https://github.com/voidzero-dev/vite-plus/blob/main/CONTRIBUTING.md).
+          required: true
+        - label: Confirm this request is for Vite+ itself and not for Vite, Vitest, tsdown, Rolldown, or Oxc.
+          required: true
+        - label: Check that there isn't already an issue requesting the same feature.
+          required: true
