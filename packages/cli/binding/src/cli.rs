@@ -127,6 +127,39 @@ pub enum SynthesizableSubcommand {
     },
 }
 
+impl SynthesizableSubcommand {
+    /// Get the args for delegate subcommands (returns None for Check which has structured fields)
+    fn args(&self) -> Option<&[String]> {
+        match self {
+            Self::Lint { args }
+            | Self::Fmt { args }
+            | Self::Build { args }
+            | Self::Test { args }
+            | Self::Pack { args }
+            | Self::Dev { args }
+            | Self::Preview { args }
+            | Self::Doc { args }
+            | Self::Install { args } => Some(args),
+            Self::Check { .. } => None,
+        }
+    }
+
+    fn name(&self) -> &str {
+        match self {
+            Self::Lint { .. } => "lint",
+            Self::Fmt { .. } => "fmt",
+            Self::Build { .. } => "build",
+            Self::Test { .. } => "test",
+            Self::Pack { .. } => "pack",
+            Self::Dev { .. } => "dev",
+            Self::Preview { .. } => "preview",
+            Self::Doc { .. } => "doc",
+            Self::Install { .. } => "install",
+            Self::Check { .. } => "check",
+        }
+    }
+}
+
 /// Top-level CLI argument parser for vite-plus.
 #[derive(Debug, Parser)]
 #[command(name = "vp", disable_help_subcommand = true)]
@@ -338,6 +371,15 @@ impl SubcommandResolver {
     ) -> anyhow::Result<ResolvedSubcommand> {
         match subcommand {
             SynthesizableSubcommand::Lint { mut args } => {
+                // Block -c/--config — vp manages oxlint config automatically
+                if has_flag_before_terminator(&args, "-c")
+                    || has_flag_before_terminator(&args, "--config")
+                {
+                    anyhow::bail!(
+                        "the `-c`/`--config` option is not supported by `vp lint`.\n       vp manages the Oxlint configuration automatically."
+                    );
+                }
+
                 let cli_options = self
                     .cli_options
                     .as_ref()
@@ -929,6 +971,17 @@ async fn execute_direct_subcommand(
             status
         }
         other => {
+            // Intercept -h/--help for delegate subcommands to show vp's own help
+            // instead of the underlying tool's help (e.g. oxlint)
+            if let Some(args) = other.args() {
+                if args.iter().any(|a| a == "-h" || a == "--help") {
+                    let name = other.name();
+                    if let Some(help) = delegate_help_text(name) {
+                        println!("{help}");
+                        return Ok(ExitStatus::SUCCESS);
+                    }
+                }
+            }
             if should_suppress_subcommand_stdout(&other) {
                 resolve_and_execute_with_stdout_filter(
                     &mut resolver,
@@ -1222,6 +1275,39 @@ fn print_help() {
 Options:
   -h, --help  Print help"
     );
+}
+
+/// Returns a help text for delegate subcommands, or None if no custom help is defined.
+fn delegate_help_text(command: &str) -> Option<String> {
+    let bold = "\x1b[1m";
+    let bold_underline = "\x1b[1;4m";
+    let reset = "\x1b[0m";
+    let header = vite_shared::header::vite_plus_header();
+
+    match command {
+        "lint" => Some(format!(
+            "{header}
+
+{bold_underline}Usage:{reset} {bold}vp lint{reset} [PATH]... [OPTIONS]
+
+Lint code.
+Options are forwarded to Oxlint.
+
+{bold_underline}Options:{reset}
+  {bold}--tsconfig <PATH>{reset}   TypeScript tsconfig path
+  {bold}--fix{reset}               Fix issues when possible
+  {bold}--type-aware{reset}        Enable rules requiring type information
+  {bold}--import-plugin{reset}     Enable import plugin
+  {bold}--rules{reset}             List registered rules
+  {bold}-h, --help{reset}          Print help
+
+{bold_underline}Examples:{reset}
+  vp lint
+  vp lint src --fix
+  vp lint --type-aware --tsconfig ./tsconfig.json"
+        )),
+        _ => None,
+    }
 }
 
 pub use vite_shared::init_tracing;

@@ -671,7 +671,6 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                 section_rows(
                     "Options",
                     vec![
-                        row("-c, --config <PATH>", "Oxlint configuration file"),
                         row("--tsconfig <PATH>", "TypeScript tsconfig path"),
                         row("--fix", "Fix issues when possible"),
                         row("--type-aware", "Enable rules requiring type information"),
