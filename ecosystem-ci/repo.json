@@ -48,7 +48,7 @@
   "oxlint-plugin-complexity": {
     "repository": "https://github.com/itaymendel/oxlint-plugin-complexity.git",
     "branch": "main",
-    "hash": "0db2fd94497ca21952ba0a000a8ce81fd4854e36"
+    "hash": "439d7df1a5d594458e95071612c5edd93ff736a5"
   },
   "vite-vue-vercel": {
     "repository": "https://github.com/fengmk2/vite-vue-vercel.git",
