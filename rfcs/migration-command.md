@@ -11,18 +11,18 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
 - Risk of missing configurations or incorrect merging
 - Tedious process when migrating multiple packages in a monorepo
 
-**Solution**: Automated migration using [ast-grep](https://ast-grep.github.io/) for intelligent code transformation.
+**Solution**: Automated migration using [ast-grep](https://ast-grep.github.io/) for code transformation and [brush-parser](https://github.com/reubeno/brush) for shell script rewriting.
 
 **Related Commands**:
 
 - `vp create` - Uses this same migration engine after generating code (see [code-generator.md](./code-generator.md))
-- `vp migration` - This command, for migrating existing projects
+- `vp migrate` - This command, for migrating existing projects
 
 ## Goals
 
 1. **Dependency Consolidation**: Replace standalone vite, vitest, oxlint, oxfmt dependencies with unified vite-plus
 2. **Configuration Unification**: Merge .oxlintrc, .oxfmtrc into vite.config.ts
-3. **Safe & Reversible**: Preview changes before applying, support rollback
+3. **Safe**: Preview changes before applying
 4. **Intelligent**: Preserve custom configurations and user overrides
 5. **Monorepo-Aware**: Migrate multiple packages efficiently
 
@@ -38,14 +38,14 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
 - ✅ **Configuration files**:
   - .oxlintrc → vite.config.ts (lint section)
   - .oxfmtrc → vite.config.ts (format section)
+
+**What this command optionally migrates** (prompted):
+
 - ✅ **Git hooks**: husky + lint-staged → `vp config` + `vp staged`
   - Rewrites `prepare: "husky"` → `prepare: "vp config"`
   - Migrates lint-staged config into `staged` in vite.config.ts
   - Replaces `.husky/pre-commit` with `.vite-hooks/pre-commit` using `vp staged`
   - Removes `husky` and `lint-staged` from devDependencies
-
-**What this command optionally migrates** (prompted):
-
 - ✅ **ESLint → oxlint** (via `@oxlint/migrate`): converts ESLint flat config to `.oxlintrc.json`, which is then merged into `vite.config.ts` by the existing flow
 
 **What this command does NOT migrate**:
@@ -146,16 +146,17 @@ All work runs sequentially with spinner feedback — no further user interaction
 10. **Reinstall dependencies** (final `vp install`)
 
 ```bash
-pnpm@10.x installing...
-pnpm@10.x installed
-Installing dependencies...
-Dependencies installed
+pnpm@latest installing...
+pnpm@<semver> installed
 Migrating ESLint config to Oxlint...
+ESLint config migrated to .oxlintrc.json
+Replacing ESLint comments with Oxlint equivalents...
+ESLint comments replaced
 ✔ Removed eslint.config.mjs
+✔ Created vite.config.ts in vite.config.ts
 ✔ Merged .oxlintrc.json into vite.config.ts
-... rewriting configs ...
-Appended agent instructions to CLAUDE.md
-Merged editor config into .vscode/settings.json
+✔ Merged staged config into vite.config.ts
+Wrote agent instructions to AGENTS.md
 ✔ Migration completed!
 ```
 
@@ -488,12 +489,9 @@ A successful migration should:
 4. ✅ Merge all configurations into vite.config.ts
 5. ✅ Preserve all user customizations and settings
 6. ✅ Remove redundant configuration files
-7. ✅ Create backups before applying changes
-8. ✅ Validate the result works correctly (build and test still work)
-9. ✅ Provide clear feedback and next steps
-10. ✅ Support rollback if something goes wrong
-11. ✅ Handle monorepo migrations efficiently
-12. ✅ Be safe and transparent about what changes
+7. ✅ Provide clear feedback and next steps
+8. ✅ Handle monorepo migrations efficiently
+9. ✅ Be safe and transparent about what changes
 
 ## ESLint Migration
 
