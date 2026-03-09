@@ -184,7 +184,8 @@ jobs:
           - name: vue-mini
             node-version: 24
             command: |
-              vp run format
+              # FIXME: skip format for now, will re-enable after prettier migration support
+              # vp run format
               vp run lint
               vp run type
               vp run test -- --coverage

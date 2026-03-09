@@ -254,6 +254,8 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
     GIT_COMMITTER_NAME: 'Test',
     GIT_AUTHOR_EMAIL: 'vite-plus-test@test.com',
     GIT_COMMITTER_EMAIL: 'vite-plus-test@test.com',
+    // Skip `vp install` inside `vp migrate` — snap tests don't need real installs
+    VITE_PLUS_SKIP_INSTALL: '1',
     // make sure npm install global packages to the temporary directory
     NPM_CONFIG_PREFIX: path.join(tempTmpDir, 'npm-global-lib-for-snap-tests'),
 

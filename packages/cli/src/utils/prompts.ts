@@ -52,8 +52,7 @@ export async function downloadPackageManager(
 }
 
 export async function runViteInstall(cwd: string, interactive?: boolean, extraArgs?: string[]) {
-  // install dependencies on non-CI environment
-  if (process.env.CI) {
+  if (process.env.VITE_PLUS_SKIP_INSTALL) {
     return;
   }
 
