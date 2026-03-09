@@ -21,7 +21,7 @@ Finished in <variable>ms on 1 file with <variable> rules using <variable> thread
 
 > echo //comment >> types.ts
 > vp run lint-typeaware # type-aware linting reads types.ts
-$ vp lint --type-aware ./src ✗ cache miss: content of input 'types.ts' changed, executing
+$ vp lint --type-aware ./src ✗ cache miss: 'types.ts' modified, executing
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 

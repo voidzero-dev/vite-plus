@@ -382,6 +382,7 @@ impl SubcommandResolver {
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         envs: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
                         pass_through_envs: None,
+                        inputs: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -430,6 +431,7 @@ impl SubcommandResolver {
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         envs: None,
                         pass_through_envs: None,
+                        inputs: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -454,6 +456,7 @@ impl SubcommandResolver {
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         envs: Some(Box::new([Str::from("VITE_*")])),
                         pass_through_envs: None,
+                        inputs: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -481,6 +484,7 @@ impl SubcommandResolver {
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         envs: None,
                         pass_through_envs: None,
+                        inputs: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -504,6 +508,7 @@ impl SubcommandResolver {
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         envs: None,
                         pass_through_envs: None,
+                        inputs: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -569,6 +574,7 @@ impl SubcommandResolver {
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         envs: None,
                         pass_through_envs: None,
+                        inputs: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -599,6 +605,7 @@ impl SubcommandResolver {
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         envs: None,
                         pass_through_envs: None,
+                        inputs: None,
                     }),
                     envs: merged_envs,
                 })

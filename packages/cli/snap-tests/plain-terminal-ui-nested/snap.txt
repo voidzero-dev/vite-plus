@@ -16,7 +16,7 @@ $ vp lint ./src ✓ cache hit, replaying
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
-$ vp lint ✗ cache miss: content of input 'a.ts' changed, executing
+$ vp lint ✗ cache miss: 'a.ts' modified, executing
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 3 files with <variable> rules using <variable> threads.
 
