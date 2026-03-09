@@ -1,8 +1,8 @@
 import { type Plugin as VitestPlugin } from '@voidzero-dev/vite-plus-test/config';
+import type { OxlintConfig } from 'oxlint';
 
 import { defineConfig } from './define-config.js';
 import type { FormatOptions } from './oxfmt-config';
-import type { OxlintConfig } from './oxlint-config';
 import type { PackUserConfig } from './pack';
 import type { RunConfig } from './run-config';
 import type { StagedConfig } from './staged-config';

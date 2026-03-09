@@ -9,5 +9,4 @@ extend-exclude = [
   "crates/fspy_detours_sys/detours",
   "crates/fspy_detours_sys/src/generated_bindings.rs",
   "packages/cli/src/oxfmt-config.ts",
-  "packages/cli/src/oxlint-config.ts",
 ]

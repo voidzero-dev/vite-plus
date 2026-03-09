@@ -32,14 +32,6 @@ export default defineConfig({
         },
       },
       {
-        files: ['packages/cli/src/oxlint-config.ts'],
-        rules: {
-          'no-shadow': 'off',
-          'typescript/no-explicit-any': 'off',
-          'typescript/no-extraneous-class': 'off',
-        },
-      },
-      {
         files: ['packages/cli/src/__tests__/index.spec.ts'],
         rules: {
           'typescript/await-thenable': 'off',
