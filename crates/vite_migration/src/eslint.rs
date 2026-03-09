@@ -13,6 +13,9 @@ const ESLINT_ONLY_VALUE_FLAGS: &[&str] = &[
     "--env",
 ];
 
+// Shell keywords after which a newline is cosmetic (not a statement terminator).
+const SHELL_CONTINUATION_KEYWORDS: &[&str] = &["then", "do", "else", "elif", "in"];
+
 // Boolean flags are stripped on their own.
 const ESLINT_ONLY_BOOLEAN_FLAGS: &[&str] = &[
     "--cache",
@@ -232,9 +235,14 @@ fn strip_eslint_flags_from_suffix(cmd: &mut ast::SimpleCommand, start_idx: usize
     }
 }
 
-/// Collapse newlines and surrounding whitespace into a single space.
+/// Collapse newlines and surrounding whitespace into single-line form.
 /// brush-parser reformats compound commands with newlines + indentation,
 /// but package.json scripts must remain single-line.
+///
+/// In shell syntax, newlines serve as statement terminators (like `;`).
+/// After keywords like `then`, `do`, `else`, `{`, the newline is cosmetic
+/// and can be replaced with a space. But before `fi`, `done`, `}`, `esac`,
+/// the newline terminates the preceding command and must become `; `.
 fn collapse_newlines(s: &str) -> String {
     if !s.contains('\n') {
         return s.to_owned();
@@ -251,13 +259,45 @@ fn collapse_newlines(s: &str) -> String {
             while chars.peek().is_some_and(|&ch| ch == ' ' || ch == '\t') {
                 chars.next();
             }
-            // Collapse to a single space
-            result.push(' ');
+            // Decide: space or semicolon?
+            // If the line ended with a keyword/separator, newline is cosmetic → space
+            // Otherwise the newline terminates a command → semicolon + space
+            if needs_semicolon(&result) {
+                result.push_str("; ");
+            } else {
+                result.push(' ');
+            }
         } else {
             result.push(c);
         }
     }
     result
+}
+
+/// Check if the content before a newline needs a semicolon to terminate the command.
+/// Returns false when the content ends with a shell keyword or separator where
+/// the newline is just cosmetic whitespace.
+fn needs_semicolon(before: &str) -> bool {
+    let trimmed = before.trim_end();
+    if trimmed.is_empty() {
+        return false;
+    }
+    // Check single-char separators
+    let last_byte = trimmed.as_bytes()[trimmed.len() - 1];
+    if matches!(last_byte, b'{' | b'(' | b';' | b'|' | b'&' | b'!') {
+        return false;
+    }
+    // Check keyword endings
+    for kw in SHELL_CONTINUATION_KEYWORDS {
+        if trimmed.ends_with(kw) {
+            // Make sure it's a whole word (preceded by whitespace or start of string)
+            let prefix_len = trimmed.len() - kw.len();
+            if prefix_len == 0 || !trimmed.as_bytes()[prefix_len - 1].is_ascii_alphanumeric() {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 /// Fix pipe spacing in brush-parser Display output.
@@ -368,13 +408,19 @@ mod tests {
         // subshell (brush-parser adds spaces inside parentheses)
         assert_eq!(rewrite_eslint_script("(eslint --cache .)"), "( vp lint . )");
 
-        // brace group
-        assert_eq!(rewrite_eslint_script("{ eslint --cache .; }"), "{ vp lint . }");
+        // brace group: must have ; before }
+        assert_eq!(rewrite_eslint_script("{ eslint --cache .; }"), "{ vp lint .; }");
 
-        // if clause
+        // if clause: must have ; before fi
         assert_eq!(
             rewrite_eslint_script("if [ -f .eslintrc ]; then eslint --cache .; fi"),
-            "if [ -f .eslintrc ]; then vp lint . fi"
+            "if [ -f .eslintrc ]; then vp lint .; fi"
+        );
+
+        // while loop
+        assert_eq!(
+            rewrite_eslint_script("while true; do eslint .; done"),
+            "while true; do vp lint .; done"
         );
     }
 
