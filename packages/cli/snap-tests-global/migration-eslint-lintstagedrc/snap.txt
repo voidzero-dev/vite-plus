@@ -75,6 +75,10 @@ export default defineConfig({
     },
     "rules": {
       "no-unused-vars": "error"
+    },
+    "options": {
+      "typeAware": true,
+      "typeCheck": true
     }
   },
   staged: {

@@ -229,7 +229,10 @@ export async function applyToolInitConfigToViteConfig(
 
   if (spec.configKey === 'lint' && hasTriggerFlag(args, ['--init'])) {
     const lintInitConfigPath = path.join(projectPath, '.vite-plus-lint-init.oxlintrc.json');
-    fs.writeFileSync(lintInitConfigPath, '{}');
+    fs.writeFileSync(
+      lintInitConfigPath,
+      JSON.stringify({ options: { typeAware: true, typeCheck: true } }),
+    );
     const mergeResult = mergeJsonConfig(viteConfigPath, lintInitConfigPath, spec.configKey);
 
     if (!mergeResult.updated) {

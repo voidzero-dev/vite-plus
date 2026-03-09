@@ -42,6 +42,10 @@ export default defineConfig({
   lint: {
     "rules": {
       "no-unused-vars": "error"
+    },
+    "options": {
+      "typeAware": true,
+      "typeCheck": true
     }
   },
   plugins: [react()],
@@ -175,6 +179,10 @@ export default defineConfig({
   lint: {
     "rules": {
       "no-unused-vars": "warn"
+    },
+    "options": {
+      "typeAware": true,
+      "typeCheck": true
     }
   },
   

@@ -30,7 +30,7 @@ describe('applyToolInitConfigToViteConfig', () => {
     ).resolves.toEqual({ handled: false });
   });
 
-  it('creates vite.config.ts and writes lint: {} for vp lint --init', async () => {
+  it('creates vite.config.ts and writes lint config with options for vp lint --init', async () => {
     const projectPath = createTempDir();
     fs.writeFileSync(
       path.join(projectPath, '.oxlintrc.json'),
@@ -54,11 +54,12 @@ describe('applyToolInitConfigToViteConfig', () => {
     const content = fs.readFileSync(viteConfigPath, 'utf8');
     expect(content).toContain('import { defineConfig } from');
     expect(content).toContain('vite-plus');
-    expect(content).toContain('lint: {}');
+    expect(content).toContain('typeAware');
+    expect(content).toContain('typeCheck');
     expect(fs.existsSync(path.join(projectPath, '.oxlintrc.json'))).toBe(false);
   });
 
-  it('ignores generated lint init defaults and still writes lint: {}', async () => {
+  it('ignores generated lint init defaults and still writes lint with options', async () => {
     const projectPath = createTempDir();
     fs.writeFileSync(
       path.join(projectPath, '.oxlintrc.json'),
@@ -112,7 +113,8 @@ describe('applyToolInitConfigToViteConfig', () => {
     expect(result.action).toBe('added');
 
     const content = fs.readFileSync(path.join(projectPath, 'vite.config.ts'), 'utf8');
-    expect(content).toContain('lint: {}');
+    expect(content).toContain('typeAware');
+    expect(content).toContain('typeCheck');
     expect(content).not.toContain('jsx-a11y');
     expect(content).not.toContain('ignorePatterns');
   });

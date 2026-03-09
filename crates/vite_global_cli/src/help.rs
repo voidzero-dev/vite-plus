@@ -722,8 +722,6 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                         row("--fix", "Auto-fix format and lint issues"),
                         row("--no-fmt", "Skip format check"),
                         row("--no-lint", "Skip lint check"),
-                        row("--no-type-aware", "Disable type-aware linting"),
-                        row("--no-type-check", "Disable TypeScript type checking"),
                         row("-h, --help", "Print help"),
                     ],
                 ),

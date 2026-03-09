@@ -115,12 +115,6 @@ pub enum SynthesizableSubcommand {
         /// Skip lint check
         #[arg(long = "no-lint")]
         no_lint: bool,
-        /// Disable type-aware linting
-        #[arg(long = "no-type-aware")]
-        no_type_aware: bool,
-        /// Disable TypeScript type checking
-        #[arg(long = "no-type-check")]
-        no_type_check: bool,
         /// File paths to check (passed through to fmt and lint)
         #[arg(trailing_var_arg = true)]
         paths: Vec<String>,
@@ -1040,14 +1034,7 @@ async fn execute_direct_subcommand(
     let cwd_arc: Arc<AbsolutePath> = cwd.clone().into();
 
     let status = match subcommand {
-        SynthesizableSubcommand::Check {
-            fix,
-            no_fmt,
-            no_lint,
-            no_type_aware,
-            no_type_check,
-            paths,
-        } => {
+        SynthesizableSubcommand::Check { fix, no_fmt, no_lint, paths } => {
             if no_fmt && no_lint {
                 output::error("No checks enabled");
                 print_summary_line(
@@ -1140,13 +1127,6 @@ async fn execute_direct_subcommand(
                 if fix {
                     args.push("--fix".to_string());
                 }
-                if !no_type_aware {
-                    args.push("--type-aware".to_string());
-                    // --type-check requires --type-aware as prerequisite
-                    if !no_type_check {
-                        args.push("--type-check".to_string());
-                    }
-                }
                 if has_paths {
                     args.extend(paths.iter().cloned());
                 }
@@ -1171,18 +1151,7 @@ async fn execute_direct_subcommand(
 
                 match analyze_lint_output(&combined_output) {
                     Some(Ok(success)) => {
-                        let type_checks_enabled = !no_type_aware && !no_type_check;
-                        let issue_label = if type_checks_enabled {
-                            if fix {
-                                "Found no warnings, lint errors, or type errors"
-                            } else {
-                                "Found no warnings, lint errors, or type errors"
-                            }
-                        } else if fix {
-                            "Found no warnings or lint errors"
-                        } else {
-                            "Found no warnings or lint errors"
-                        };
+                        let issue_label = "Found no warnings, lint errors, or type errors";
 
                         let message = format!(
                             "{issue_label} in {}",

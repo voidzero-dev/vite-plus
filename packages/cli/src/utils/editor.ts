@@ -15,7 +15,6 @@ const VSCODE_SETTINGS = {
   'editor.codeActionsOnSave': {
     'source.fixAll.oxc': 'explicit',
   },
-  'oxc.typeAware': true,
 } as const;
 
 const VSCODE_EXTENSIONS = {

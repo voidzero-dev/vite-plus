@@ -928,6 +928,19 @@ export function mergeViteConfigFiles(projectPath: string, silent = false): void 
   }
   const viteConfig = ensureViteConfig(projectPath, configs, silent);
   if (configs.oxlintConfig) {
+    // Inject options.typeAware and options.typeCheck defaults before merging
+    const fullOxlintPath = path.join(projectPath, configs.oxlintConfig);
+    const oxlintJson = JSON.parse(fs.readFileSync(fullOxlintPath, 'utf8'));
+    if (!oxlintJson.options) {
+      oxlintJson.options = {};
+    }
+    if (oxlintJson.options.typeAware === undefined) {
+      oxlintJson.options.typeAware = true;
+    }
+    if (oxlintJson.options.typeCheck === undefined) {
+      oxlintJson.options.typeCheck = true;
+    }
+    fs.writeFileSync(fullOxlintPath, JSON.stringify(oxlintJson, null, 2));
     // merge oxlint config into vite.config.ts
     mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxlintConfig, 'lint', silent);
   }

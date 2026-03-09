@@ -1,3 +1,0 @@
-> vp check --no-type-aware
-pass: All 3 files are correctly formatted (<variable>ms, <variable> threads)
-pass: Found no warnings or lint errors in 1 file (<variable>ms, <variable> threads)
