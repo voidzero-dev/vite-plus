@@ -59,7 +59,12 @@ These are **consolidation migrations**, not **feature migrations**.
 
 ### Re-migration
 
-When a project already has `vite-plus` in its dependencies but still retains `husky` and/or `lint-staged`, `vp migrate` detects the remaining hooks to migrate and runs only the git hooks migration (skipping the full dependency/config migration). This handles the scenario where a project was partially migrated or adopted `vite-plus` manually without migrating its git hooks setup.
+When a project already has `vite-plus` in its dependencies, `vp migrate` skips the full dependency/config migration and only runs remaining partial migrations:
+
+- **ESLint → Oxlint**: If `eslint` is still present with a flat config, offers ESLint migration
+- **Git hooks**: If `husky` and/or `lint-staged` are still present, offers hooks migration
+
+Both checks run independently — a project may need one, both, or neither.
 
 ## Command Usage
 
@@ -113,8 +118,7 @@ VITE+ - The Unified Toolchain for the Web
 ◆ .vscode/settings.json already exists.
 │ Merge
 
-ESLint configuration detected (eslint.config.mjs).
-◆ Migrate ESLint rules to Oxlint?
+◆ Migrate ESLint rules to Oxlint using @oxlint/migrate?
 │ Yes
 
 Migration plan:
@@ -503,8 +507,30 @@ When an ESLint flat config (`eslint.config.{js,mjs,cjs,ts,mts,cts}`) and `eslint
 2. Run `vpx @oxlint/migrate --replace-eslint-comments` to replace `eslint-disable` comments
 3. Delete the ESLint config file
 4. Remove `eslint` from `devDependencies`
-5. Rewrite `eslint` scripts in `package.json` to `vp lint`, stripping ESLint-only flags (e.g., `--ext`, `--cache`, `--rulesdir`) that are not supported by Oxlint
-6. The existing migration flow picks up `.oxlintrc.json` and merges it into `vite.config.ts`
+5. Rewrite `eslint` scripts in `package.json` to `vp lint`, stripping ESLint-only flags
+6. Rewrite `eslint` references in lint-staged configs (package.json `lint-staged` field and standalone config files like `.lintstagedrc.json`)
+7. The existing migration flow picks up `.oxlintrc.json` and merges it into `vite.config.ts`
+
+**Script Rewriting** (powered by [brush-parser](https://github.com/reubeno/brush) for shell AST parsing):
+
+| Before                                     | After                                        |
+| ------------------------------------------ | -------------------------------------------- |
+| `eslint .`                                 | `vp lint .`                                  |
+| `eslint --cache --ext .ts --fix .`         | `vp lint --fix .`                            |
+| `NODE_ENV=test eslint --cache .`           | `NODE_ENV=test vp lint .`                    |
+| `cross-env NODE_ENV=test eslint --cache .` | `cross-env NODE_ENV=test vp lint .`          |
+| `eslint . && vite build`                   | `vp lint . && vite build`                    |
+| `if [ -f .eslintrc ]; then eslint .; fi`   | `if [ -f .eslintrc ]; then vp lint . fi`     |
+| `npx eslint .`                             | `npx eslint .` (npx/bunx wrappers preserved) |
+
+Stripped ESLint-only flags: `--cache`, `--ext`, `--parser`, `--parser-options`, `--plugin`, `--rulesdir`, `--resolve-plugins-relative-to`, `--output-file`, `--env`, `--no-eslintrc`, `--no-error-on-unmatched-pattern`, `--debug`, `--no-inline-config`
+
+The rewriter handles:
+
+- **Compound commands**: `&&`, `||`, `|`, `if/then/fi`, `while/do/done`, `for`, `case`, brace groups `{ ...; }`, subshells `(...)`
+- **Environment variable prefixes**: `NODE_ENV=test eslint .`
+- **cross-env wrappers**: `cross-env NODE_ENV=test eslint .`
+- **No-op safety**: Scripts without `eslint` are returned unchanged (no formatting corruption from AST round-tripping)
 
 **Legacy ESLint Config Handling**:
 
@@ -531,6 +557,7 @@ If only a legacy ESLint config (`.eslintrc*`) is detected without a flat config 
 
 - [@ast-grep/napi](https://www.npmjs.com/package/@ast-grep/napi) - Node.js bindings for ast-grep
 - [@oxlint/migrate](https://www.npmjs.com/package/@oxlint/migrate) - ESLint to oxlint migration tool
+- [brush-parser](https://github.com/reubeno/brush) - Shell AST parser for script rewriting (Rust)
 - [@clack/prompts](https://www.npmjs.com/package/@clack/prompts) - Beautiful CLI prompts
 - [typescript](https://www.typescriptlang.org/) - For parsing TypeScript configs
 
