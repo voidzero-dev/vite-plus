@@ -10,7 +10,7 @@ import StackedBlock from './StackedBlock.vue';
 
 <template>
   <section
-    class="wrapper border-t grid grid-rows-3 lg:grid-rows-1 lg:grid-cols-3 lg:h-72 divide-y lg:divide-y-0 lg:divide-x"
+    class="wrapper border-t grid grid-rows-3 lg:grid-rows-1 lg:grid-cols-3 lg:h-80 divide-y lg:divide-y-0 lg:divide-x"
   >
     <div class="p-5 lg:p-10 flex flex-col justify-between">
       <div class="flex flex-col gap-3 h-30 lg:h-auto">

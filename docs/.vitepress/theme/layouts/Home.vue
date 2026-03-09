@@ -14,6 +14,7 @@ import HeadingSection3 from '../components/home/HeadingSection3.vue';
 import HeadingSection4 from '../components/home/HeadingSection4.vue';
 import Hero from '../components/home/Hero.vue';
 import HeroRive from '../components/home/HeroRive.vue';
+import InstallCommand from '../components/home/InstallCommand.vue';
 import PartnerLogos from '../components/home/PartnerLogos.vue';
 import ProductivityGrid from '../components/home/ProductivityGrid.vue';
 import Terminal from '../components/home/Terminal.vue';
@@ -23,14 +24,15 @@ import Testimonials from '../components/home/Testimonials.vue';
 <template>
   <Hero />
   <Terminal />
+  <InstallCommand />
   <CoreFeature3Col />
   <ProductivityGrid />
   <section id="features" data-theme="dark" class="bg-primary">
     <HeadingSection4 />
     <FeatureToolbar />
     <FeatureDevBuild />
-    <FeatureTest />
     <FeatureCheck />
+    <FeatureTest />
     <FeatureRun />
     <FeaturePack />
   </section>

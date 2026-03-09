@@ -25,7 +25,7 @@ import viteIcon from '@assets/icons/vite-light.svg';
               >Hot Module Replacement (HMR)</code
             >
           </li>
-          <li>40x faster production build than webpack</li>
+          <li>40× faster production build than webpack</li>
           <li>Opt-in full-bundle dev mode for large apps</li>
           <li>Huge ecosystem of plugins</li>
         </ul>

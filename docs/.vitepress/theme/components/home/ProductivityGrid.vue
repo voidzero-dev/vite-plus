@@ -94,9 +94,9 @@ import tileVitest from '@local-assets/tiles/vitest.png';
       <h5>Stay fast at scale</h5>
       <p class="max-w-[26rem] text-pretty">
         With low-level components written in Rust, Vite+ delivers enterprise-scale performance: up
-        to <span class="text-primary">40x faster builds</span> than webpack,
-        <span class="text-primary">~50x to ~100x faster linting</span> than ESLint, and
-        <span class="text-primary">up to 30x faster formatting</span> than Prettier.
+        to <span class="text-primary">40× faster builds</span> than webpack,
+        <span class="text-primary">~50× to ~100× faster linting</span> than ESLint, and
+        <span class="text-primary">up to 30× faster formatting</span> than Prettier.
       </p>
       <RiveAnimation
         :desktop-src="stayFastAtScaleAnimation"

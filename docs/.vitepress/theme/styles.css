@@ -55,7 +55,7 @@
 }
 
 .terminal-tone-muted {
-  color: color-mix(in srgb, var(--vp-c-text-2) 88%, white 12%);
+  color: color-mix(in srgb, var(--vp-c-text-2) 52%, white 48%);
 }
 
 .terminal-tone-brand {

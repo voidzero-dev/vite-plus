@@ -3,8 +3,8 @@ import { ref, onMounted, onUnmounted } from 'vue';
 
 const features = [
   { id: 'feature-dev-build', label: 'dev & build' },
-  { id: 'feature-test', label: 'test' },
   { id: 'feature-check', label: 'check' },
+  { id: 'feature-test', label: 'test' },
   { id: 'feature-run', label: 'run' },
   { id: 'feature-pack', label: 'pack' },
 ];
@@ -223,7 +223,7 @@ onUnmounted(() => {
             />
           </svg>
           <svg
-            v-else-if="index === 1"
+            v-else-if="index === 2"
             class="w-4"
             viewBox="0 0 17 16"
             fill="none"
@@ -246,7 +246,7 @@ onUnmounted(() => {
             />
           </svg>
           <svg
-            v-else-if="index === 2"
+            v-else-if="index === 1"
             class="w-4"
             viewBox="0 0 17 16"
             fill="none"

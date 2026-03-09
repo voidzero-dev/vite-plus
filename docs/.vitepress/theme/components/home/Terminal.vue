@@ -105,7 +105,7 @@ onUnmounted(() => {
   >
     <div
       :class="[
-        'self-stretch px-4 sm:px-8 py-5 sm:py-7 relative bg-primary rounded-tl-lg rounded-tr-lg inline-flex flex-col justify-start items-start gap-2 overflow-hidden w-[62rem] outline-1 outline-offset-[3px] outline-white/30',
+        'self-stretch px-4 sm:px-8 py-5 sm:py-7 relative bg-[#111] rounded-tl-lg rounded-tr-lg inline-flex flex-col justify-start items-start gap-2 overflow-hidden w-[62rem] outline-1 outline-offset-[3px] outline-white/30',
         'transition-transform duration-1000',
         isVisible ? 'translate-y-0' : 'translate-y-24',
       ]"
