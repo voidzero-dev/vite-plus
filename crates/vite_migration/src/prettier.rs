@@ -4,7 +4,6 @@ use brush_parser::ast;
 // Value flags consume the next token (e.g., --config .prettierrc) or use = form (--config=.prettierrc).
 const PRETTIER_ONLY_VALUE_FLAGS: &[&str] = &[
     "--config",
-    "--ignore-path",
     "--plugin",
     "--parser",
     "--cache-location",
@@ -49,6 +48,7 @@ const PRETTIER_ONLY_BOOLEAN_FLAGS: &[&str] = &[
     "--debug-print-doc",
     "--debug-benchmark",
     "--debug-repeat",
+    "--experimental-cli",
 ];
 
 // Flags that are converted to different flags.
@@ -392,8 +392,15 @@ mod tests {
         );
         assert_eq!(
             rewrite_prettier_script("prettier --ignore-path .gitignore --write ."),
-            "vp fmt ."
+            "vp fmt --ignore-path .gitignore ."
         );
+        assert_eq!(
+            rewrite_prettier_script("prettier --ignore-path=.gitignore --write ."),
+            "vp fmt --ignore-path=.gitignore ."
+        );
+
+        // --experimental-cli stripped
+        assert_eq!(rewrite_prettier_script("prettier --experimental-cli --write ."), "vp fmt .");
 
         // cross-env wrapper
         assert_eq!(
