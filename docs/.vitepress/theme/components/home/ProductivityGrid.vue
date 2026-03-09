@@ -125,7 +125,7 @@ import tileVitest from '@local-assets/tiles/vitest.png';
       <h5>Supply chain security</h5>
       <p class="max-w-[20rem] text-pretty">
         Vite+ development follows rigorous security practices, and we vet its dependencies across
-        the unified toolchain. SLAs available.
+        the unified toolchain.
       </p>
       <img
         loading="lazy"
