@@ -1,5 +1,2 @@
 > vp check --no-lint
-info: vp fmt --check
-Checking formatting...
-All matched files use the correct format.
-Finished in <variable>ms on 3 files using <variable> threads.
+pass: All 3 files are correctly formatted (<variable>ms, <variable> threads)

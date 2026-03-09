@@ -59,22 +59,17 @@ import oxcIcon from '@assets/icons/oxc-light.svg';
         >
           <div class="text-white">$ vp check</div>
           <div class="h-4" />
-          <div class="text-grey">info: <span class="terminal-blue">vp fmt --check</span></div>
           <div>
-            Checked <span class="terminal-blue">42 files</span>.
-            <span class="text-zest">0 issues</span>.
+            <span class="terminal-blue">pass:</span>
+            All <span class="text-white">42 files</span> are correctly formatted
+            <span class="text-grey">(88ms, 16 threads)</span>
           </div>
           <div class="h-4" />
           <div class="text-grey">
-            info: <span class="terminal-blue">vp lint --type-aware --type-check</span>
-          </div>
-          <div class="text-grey">
-            Found <span class="text-white">0 warnings</span> and
-            <span class="text-white">0 errors</span>.
-          </div>
-          <div class="text-grey">
-            <span class="text-zest">✓</span> Finished in <span class="text-white">184ms</span> on
-            <span class="text-white">42 files</span>.
+            <span class="terminal-blue">pass:</span>
+            Found no warnings, lint errors, or type errors in
+            <span class="text-white">42 files</span>
+            <span class="text-grey">(184ms, 16 threads)</span>
           </div>
         </div>
       </div>

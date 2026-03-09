@@ -97,6 +97,40 @@ Commands run **sequentially** with fail-fast semantics:
 
 If any step fails, `vp check` exits immediately with a non-zero exit code.
 
+## CLI Output
+
+`vp check` should print **completion summaries only** for successful phases:
+
+```text
+pass: All 989 files are correctly formatted (423ms, 16 threads)
+pass: Found no warnings, lint errors, or type errors in 150 files (452ms, 16 threads)
+```
+
+Output rules:
+
+- Do not print delegated commands such as `vp fmt --check` or `vp lint --type-aware --type-check`
+- Print one `pass:` line only after a phase completes successfully
+- Mention type checks in the lint success line only when `--type-check` is enabled
+- On failure, print a human-readable `error:` line, then raw diagnostics, then a blank line and a final summary sentence
+- Treat `vp check --no-fmt --no-lint` as an error instead of silent success
+
+Representative failure output:
+
+```text
+error: Formatting issues found
+src/index.js
+steps.json
+
+Found formatting issues in 2 files (105ms, 16 threads). Run `vp check --fix` to fix them.
+```
+
+```text
+error: Lint or type issues found
+...diagnostics...
+
+Found 3 errors and 1 warning in 2 files (452ms, 16 threads)
+```
+
 ## Decisions
 
 ### Dual mode: verify and fix

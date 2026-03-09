@@ -1,11 +1,7 @@
 [1]> vp check
-info: vp fmt --check
-Checking formatting...
-All matched files use the correct format.
-Finished in <variable>ms on 4 files using <variable> threads.
-info: vp lint --type-aware --type-check
-
-  × eslint(no-eval): eval can be harmful.
+pass: All 4 files are correctly formatted (<variable>ms, <variable> threads)
+error: Lint or type issues found
+× eslint(no-eval): eval can be harmful.
    ╭─[src/index.js:2:3]
  1 │ function hello() {
  2 │   eval("code");
@@ -14,5 +10,4 @@ info: vp lint --type-aware --type-check
    ╰────
   help: Avoid eval(). For JSON parsing use JSON.parse(); for dynamic property access use bracket notation (obj[key]); for other cases refactor to avoid evaluating strings as code.
 
-Found 0 warnings and 1 error.
-Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+Found 1 error and 0 warnings in 1 file (<variable>ms, <variable> threads)

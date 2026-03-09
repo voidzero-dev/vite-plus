@@ -52,6 +52,19 @@ Start at  15:01:23
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
 
+  test('replace parenthesized thread counts', () => {
+    const output = `
+pass: All 3 files are correctly formatted (88ms, 2 threads)
+pass: Found no warnings or lint errors in 1 file (<variable>ms, 16 threads)
+    `;
+    expect(replaceUnstableOutput(output.trim())).toBe(
+      [
+        'pass: All 3 files are correctly formatted (<variable>ms, <variable> threads)',
+        'pass: Found no warnings or lint errors in 1 file (<variable>ms, <variable> threads)',
+      ].join('\n'),
+    );
+  });
+
   test('replace unstable pnpm install output', () => {
     const outputs = [
       `

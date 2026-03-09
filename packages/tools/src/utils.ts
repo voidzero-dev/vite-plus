@@ -62,6 +62,8 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/\d{2}:\d{2}:\d{2}/g, '<date>')
       // duration
       .replaceAll(/\d+(?:\.\d+)?(?:s|ms|µs|ns)/g, '<variable>ms')
+      // parenthesized thread counts in CLI summaries
+      .replaceAll(/, \d+ threads\)/g, ', <variable> threads)')
       // oxlint
       .replaceAll(/with \d+ rules/g, 'with <variable> rules')
       .replaceAll(/using \d+ threads/g, 'using <variable> threads')

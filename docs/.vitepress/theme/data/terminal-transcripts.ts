@@ -113,21 +113,17 @@ export const terminalTranscripts: TerminalTranscript[] = [
     lines: [
       {
         segments: [
-          { text: 'info ', tone: 'muted' },
-          { text: 'All files use the correct format', tone: 'muted' },
+          { text: 'pass: ', tone: 'accent' },
+          { text: 'All 42 files are correctly formatted', tone: 'base' },
+          { text: ' (88ms, 16 threads)', tone: 'muted' },
         ],
       },
       {
         segments: [
-          { text: 'info ', tone: 'muted' },
-          { text: 'Ran 157 rules with 0 issues or type errors', tone: 'muted' },
-        ],
-      },
-      {
-        segments: [
-          { text: '✓ ', tone: 'success' },
-          { text: 'Project clean', tone: 'base' },
-          { text: ' in 184ms', tone: 'muted' },
+          { text: 'pass: ', tone: 'accent' },
+          { text: 'Found no warnings, lint errors, or type errors', tone: 'base' },
+          { text: ' in 42 files', tone: 'muted' },
+          { text: ' (184ms, 16 threads)', tone: 'muted' },
         ],
       },
     ],

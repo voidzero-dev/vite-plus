@@ -21,6 +21,12 @@ pub fn info(msg: &str) {
     println!("{} {msg}", "info:".bright_blue().bold());
 }
 
+/// Print a pass message to stdout using the same accent styling as info.
+#[allow(clippy::print_stdout, clippy::disallowed_macros)]
+pub fn pass(msg: &str) {
+    println!("{} {msg}", "pass:".bright_blue().bold());
+}
+
 /// Print a warning message to stderr.
 #[allow(clippy::print_stderr, clippy::disallowed_macros)]
 pub fn warn(msg: &str) {

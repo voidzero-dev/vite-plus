@@ -1,4 +1,2 @@
 > vp check --no-fmt
-info: vp lint --type-aware --type-check
-Found 0 warnings and 0 errors.
-Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+pass: Found no warnings, lint errors, or type errors in 1 file (<variable>ms, <variable> threads)

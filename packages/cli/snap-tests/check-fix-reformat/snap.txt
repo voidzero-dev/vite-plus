@@ -1,14 +1,7 @@
 > vp check --fix
-info: vp fmt
-info: vp lint --fix --type-aware --type-check
-Found 0 warnings and 0 errors.
-Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+pass: Formatting completed for checked files (<variable>ms)
+pass: Found no warnings, lint errors, or type errors in 1 file (<variable>ms, <variable> threads)
 
 > vp check # should pass after fix
-info: vp fmt --check
-Checking formatting...
-All matched files use the correct format.
-Finished in <variable>ms on 4 files using <variable> threads.
-info: vp lint --type-aware --type-check
-Found 0 warnings and 0 errors.
-Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+pass: All 4 files are correctly formatted (<variable>ms, <variable> threads)
+pass: Found no warnings, lint errors, or type errors in 1 file (<variable>ms, <variable> threads)
