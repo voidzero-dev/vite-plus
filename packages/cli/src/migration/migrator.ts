@@ -20,6 +20,7 @@ import {
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
+  resolve,
 } from '../utils/constants.js';
 import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
 import { detectPackageMetadata } from '../utils/package.js';
@@ -137,6 +138,13 @@ export function detectEslintProject(
   return { hasDependency, configFile, legacyConfigFile };
 }
 
+function getInstalledOxlintVersion(): string {
+  const oxlintMainPath = resolve('oxlint');
+  const oxlintPackageRoot = path.dirname(path.dirname(oxlintMainPath));
+  const pkgJson = readJsonFile<{ version: string }>(path.join(oxlintPackageRoot, 'package.json'));
+  return pkgJson.version;
+}
+
 /**
  * Run a `vp dlx @oxlint/migrate` step with graceful error handling.
  * Returns true on success, false on failure (spawn error or non-zero exit).
@@ -144,6 +152,7 @@ export function detectEslintProject(
 async function runOxlintMigrateStep(
   vpBin: string,
   cwd: string,
+  migratePackage: string,
   args: string[],
   spinner: ReturnType<typeof getSpinner>,
   failMessage: string,
@@ -152,7 +161,7 @@ async function runOxlintMigrateStep(
   try {
     const result = await runCommandSilently({
       command: vpBin,
-      args: ['dlx', '@oxlint/migrate', ...args],
+      args: ['dlx', migratePackage, ...args],
       cwd,
       envs: process.env,
     });
@@ -184,15 +193,18 @@ export async function migrateEslintToOxlint(
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {
+    const migratePackage = `@oxlint/migrate@${getInstalledOxlintVersion()}`;
+
     // Step 1: Generate .oxlintrc.json from ESLint config
     spinner.start('Migrating ESLint config to Oxlint...');
     const migrateOk = await runOxlintMigrateStep(
       vpBin,
       projectPath,
+      migratePackage,
       ['--merge', '--type-aware', '--with-nursery', '--details'],
       spinner,
       'ESLint migration failed',
-      'You can run `vp dlx @oxlint/migrate --merge --type-aware --with-nursery --details` manually later',
+      `You can run \`vp dlx ${migratePackage} --merge --type-aware --with-nursery --details\` manually later`,
     );
     if (!migrateOk) {
       return false;
@@ -204,10 +216,11 @@ export async function migrateEslintToOxlint(
     const replaceOk = await runOxlintMigrateStep(
       vpBin,
       projectPath,
+      migratePackage,
       ['--replace-eslint-comments'],
       spinner,
       'ESLint comment replacement failed',
-      'You can run `vp dlx @oxlint/migrate --replace-eslint-comments` manually later',
+      `You can run \`vp dlx ${migratePackage} --replace-eslint-comments\` manually later`,
     );
     if (replaceOk) {
       spinner.stop('ESLint comments replaced');
