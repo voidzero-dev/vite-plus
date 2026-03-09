@@ -1,0 +1,105 @@
+> vp migrate --no-interactive # migration should detect both eslint and prettier and auto-migrate
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+ESLint configuration detected. Auto-migrating to Oxlint...
+
+Prettier configuration detected. Auto-migrating to Oxfmt...
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+Migrating ESLint config to Oxlint...
+
+ESLint config migrated to .oxlintrc.json
+
+Replacing ESLint comments with Oxlint equivalents...
+
+ESLint comments replaced
+
+✔ Removed eslint.config.mjs
+
+Migrating Prettier config to Oxfmt...
+
+Prettier config migrated to .oxfmtrc.json
+
+✔ Removed .prettierrc.json
+
+✔ Merged .oxlintrc.json into vite.config.ts
+
+✔ Merged staged config into vite.config.ts
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
+
+
+> cat package.json # check eslint and prettier removed, scripts rewritten
+{
+  "name": "migration-prettier-eslint-combo",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "lint": "vp lint .",
+    "format": "vp fmt .",
+    "format:check": "vp fmt --check .",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "packageManager": "pnpm@<semver>",
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  }
+}
+
+> cat eslint.config.mjs && exit 1 || true # check eslint config is removed
+cat: eslint.config.mjs: No such file or directory
+
+> cat .prettierrc.json && exit 1 || true # check prettier config is removed
+cat: .prettierrc.json: No such file or directory
+
+> cat vite.config.ts # check oxlint and oxfmt config merged into vite.config.ts
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix"
+  },
+  lint: {
+    "plugins": [
+      "oxc",
+      "typescript",
+      "unicorn",
+      "react"
+    ],
+    "categories": {
+      "correctness": "warn"
+    },
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "env": {
+      "builtin": true
+    },
+    "rules": {
+      "no-unused-vars": "error"
+    },
+    "options": {
+      "typeAware": true,
+      "typeCheck": true
+    }
+  },
+  fmt: {
+    semi: true,
+    singleQuote: true,
+    printWidth: 80,
+    sortPackageJson: false,
+    ignorePatterns: [],
+  },
+});

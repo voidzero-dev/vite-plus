@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # migration should detect prettier and auto-migrate including lint-staged",
+    "cat package.json # check prettier removed, scripts rewritten, lint-staged rewritten",
+    "cat vite.config.ts # check oxfmt config and staged config merged into vite.config.ts"
+  ]
+}

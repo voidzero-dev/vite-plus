@@ -1,0 +1,13 @@
+{
+  "name": "migration-prettier-lint-staged",
+  "scripts": {
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.0.0",
+    "vite": "^7.0.0"
+  },
+  "lint-staged": {
+    "*.ts": "prettier --write"
+  }
+}

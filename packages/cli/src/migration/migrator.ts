@@ -10,6 +10,7 @@ import {
   mergeJsonConfig,
   mergeTsdownConfig,
   rewriteEslint,
+  rewritePrettier,
   rewriteScripts,
   rewriteImportsInDirectory,
   type DownloadPackageManagerResult,
@@ -29,7 +30,12 @@ import { displayRelative, rulesDir } from '../utils/path.js';
 import { getSpinner } from '../utils/prompts.js';
 import { hasBaseUrlInTsconfig } from '../utils/tsconfig.js';
 import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.js';
-import { detectConfigs, type ConfigFiles } from './detector.js';
+import {
+  PRETTIER_CONFIG_FILES,
+  PRETTIER_PACKAGE_JSON_CONFIG,
+  detectConfigs,
+  type ConfigFiles,
+} from './detector.js';
 
 // All known lint-staged config file names.
 // JSON-parseable ones come first so rewriteLintStagedConfigFile can rewrite them.
@@ -296,7 +302,15 @@ function rewriteEslintPackageJson(packageJsonPath: string): void {
   });
 }
 
-function rewriteEslintLintStagedConfigFiles(projectPath: string): void {
+/**
+ * Rewrite tool references in lint-staged config files (JSON ones are rewritten,
+ * non-JSON ones get a warning).
+ */
+function rewriteToolLintStagedConfigFiles(
+  projectPath: string,
+  rewriteFn: (json: string) => string | null,
+  toolName: string,
+): void {
   for (const filename of LINT_STAGED_JSON_CONFIG_FILES) {
     const configPath = path.join(projectPath, filename);
     if (!fs.existsSync(configPath)) {
@@ -304,12 +318,12 @@ function rewriteEslintLintStagedConfigFiles(projectPath: string): void {
     }
     if (filename === '.lintstagedrc' && !isJsonFile(configPath)) {
       prompts.log.warn(
-        `⚠ ${displayRelative(configPath)} is not JSON — please update eslint references manually`,
+        `⚠ ${displayRelative(configPath)} is not JSON — please update ${toolName} references manually`,
       );
       continue;
     }
     editJsonFile<Record<string, string | string[]>>(configPath, (config) => {
-      const updated = rewriteEslint(JSON.stringify(config));
+      const updated = rewriteFn(JSON.stringify(config));
       if (updated) {
         return JSON.parse(updated);
       }
@@ -321,8 +335,223 @@ function rewriteEslintLintStagedConfigFiles(projectPath: string): void {
     if (!fs.existsSync(configPath)) {
       continue;
     }
-    prompts.log.warn(`⚠ ${displayRelative(configPath)} — please update eslint references manually`);
+    prompts.log.warn(
+      `⚠ ${displayRelative(configPath)} — please update ${toolName} references manually`,
+    );
   }
+}
+
+function rewriteEslintLintStagedConfigFiles(projectPath: string): void {
+  rewriteToolLintStagedConfigFiles(projectPath, rewriteEslint, 'eslint');
+}
+
+export function detectPrettierProject(
+  projectPath: string,
+  packages?: WorkspacePackage[],
+): {
+  hasDependency: boolean;
+  configFile?: string;
+} {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return { hasDependency: false };
+  }
+  const pkg = readJsonFile<{
+    devDependencies?: Record<string, string>;
+    dependencies?: Record<string, string>;
+  }>(packageJsonPath);
+  let hasDependency = !!(pkg.devDependencies?.prettier || pkg.dependencies?.prettier);
+  const configs = detectConfigs(projectPath);
+  const configFile = configs.prettierConfig;
+
+  // If root doesn't have prettier dependency, check workspace packages
+  if (!hasDependency && packages) {
+    for (const wp of packages) {
+      const pkgJsonPath = path.join(projectPath, wp.path, 'package.json');
+      if (!fs.existsSync(pkgJsonPath)) {
+        continue;
+      }
+      const wpPkg = readJsonFile<{
+        devDependencies?: Record<string, string>;
+        dependencies?: Record<string, string>;
+      }>(pkgJsonPath);
+      if (wpPkg.devDependencies?.prettier || wpPkg.dependencies?.prettier) {
+        hasDependency = true;
+        break;
+      }
+    }
+  }
+
+  return { hasDependency, configFile };
+}
+
+/**
+ * Run `vp fmt --migrate=prettier` step with graceful error handling.
+ * Returns true on success, false on failure.
+ */
+async function runPrettierMigrateStep(
+  vpBin: string,
+  cwd: string,
+  spinner: ReturnType<typeof getSpinner>,
+  failMessage: string,
+  manualHint: string,
+): Promise<boolean> {
+  try {
+    const result = await runCommandSilently({
+      command: vpBin,
+      args: ['fmt', '--migrate=prettier'],
+      cwd,
+      envs: process.env,
+    });
+    if (result.exitCode !== 0) {
+      spinner.stop(failMessage);
+      const stderr = result.stderr.toString().trim();
+      if (stderr) {
+        prompts.log.warn(`⚠ ${stderr}`);
+      }
+      prompts.log.info(manualHint);
+      return false;
+    }
+    return true;
+  } catch {
+    spinner.stop(failMessage);
+    prompts.log.info(manualHint);
+    return false;
+  }
+}
+
+export async function migratePrettierToOxfmt(
+  projectPath: string,
+  interactive: boolean,
+  prettierConfigFile?: string,
+  packages?: WorkspacePackage[],
+): Promise<boolean> {
+  const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
+  const spinner = getSpinner(interactive);
+
+  // Step 1: Run vp fmt --migrate=prettier if there's a prettier config at root (not package.json#prettier)
+  if (prettierConfigFile && prettierConfigFile !== PRETTIER_PACKAGE_JSON_CONFIG) {
+    spinner.start('Migrating Prettier config to Oxfmt...');
+    const migrateOk = await runPrettierMigrateStep(
+      vpBin,
+      projectPath,
+      spinner,
+      'Prettier migration failed',
+      'You can run `vp fmt --migrate=prettier` manually later',
+    );
+    if (!migrateOk) {
+      return false;
+    }
+    spinner.stop('Prettier config migrated to .oxfmtrc.json');
+  }
+
+  // Step 2: Delete all prettier config files at root
+  deletePrettierConfigFiles(projectPath);
+
+  // Step 3: Remove prettier dependency and rewrite prettier scripts (root)
+  rewritePrettierPackageJson(path.join(projectPath, 'package.json'));
+
+  // Step 3b: Rewrite prettier scripts in workspace packages
+  if (packages) {
+    for (const pkg of packages) {
+      rewritePrettierPackageJson(path.join(projectPath, pkg.path, 'package.json'));
+    }
+  }
+
+  // Step 4: Rewrite prettier references in lint-staged config files
+  rewritePrettierLintStagedConfigFiles(projectPath);
+
+  // Step 5: Warn about .prettierignore if it exists
+  const prettierIgnorePath = path.join(projectPath, '.prettierignore');
+  if (fs.existsSync(prettierIgnorePath)) {
+    prompts.log.warn(
+      `⚠ ${displayRelative(prettierIgnorePath)} found — Oxfmt uses .oxfmtignore. Please migrate manually.`,
+    );
+  }
+
+  return true;
+}
+
+function deletePrettierConfigFiles(basePath: string): void {
+  // Delete detected prettier config file (like deleteEslintConfigFiles uses detectConfigs)
+  const configs = detectConfigs(basePath);
+  if (configs.prettierConfig && configs.prettierConfig !== PRETTIER_PACKAGE_JSON_CONFIG) {
+    const configPath = path.join(basePath, configs.prettierConfig);
+    if (fs.existsSync(configPath)) {
+      fs.unlinkSync(configPath);
+      prompts.log.success(`✔ Removed ${displayRelative(configPath)}`);
+    }
+  }
+  // Also clean up any stale prettier config files that detectConfigs didn't pick
+  // (prettier only uses one config, but users may have leftover files)
+  for (const file of PRETTIER_CONFIG_FILES) {
+    if (file === configs.prettierConfig) {
+      continue; // already handled above
+    }
+    const configPath = path.join(basePath, file);
+    if (fs.existsSync(configPath)) {
+      fs.unlinkSync(configPath);
+      prompts.log.success(`✔ Removed ${displayRelative(configPath)}`);
+    }
+  }
+  // Remove "prettier" key from package.json if present
+  editJsonFile<{ prettier?: unknown }>(path.join(basePath, 'package.json'), (pkg) => {
+    if (pkg.prettier) {
+      delete pkg.prettier;
+      return pkg;
+    }
+    return undefined;
+  });
+}
+
+function rewritePrettierPackageJson(packageJsonPath: string): void {
+  if (!fs.existsSync(packageJsonPath)) {
+    return;
+  }
+  editJsonFile<{
+    devDependencies?: Record<string, string>;
+    dependencies?: Record<string, string>;
+    scripts?: Record<string, string>;
+    'lint-staged'?: Record<string, string | string[]>;
+  }>(packageJsonPath, (pkg) => {
+    let changed = false;
+    // Remove prettier and prettier-plugin-* dependencies
+    if (pkg.devDependencies) {
+      for (const dep of Object.keys(pkg.devDependencies)) {
+        if (dep === 'prettier' || dep.startsWith('prettier-plugin-')) {
+          delete pkg.devDependencies[dep];
+          changed = true;
+        }
+      }
+    }
+    if (pkg.dependencies) {
+      for (const dep of Object.keys(pkg.dependencies)) {
+        if (dep === 'prettier' || dep.startsWith('prettier-plugin-')) {
+          delete pkg.dependencies[dep];
+          changed = true;
+        }
+      }
+    }
+    if (pkg.scripts) {
+      const updated = rewritePrettier(JSON.stringify(pkg.scripts));
+      if (updated) {
+        pkg.scripts = JSON.parse(updated);
+        changed = true;
+      }
+    }
+    if (pkg['lint-staged']) {
+      const updated = rewritePrettier(JSON.stringify(pkg['lint-staged']));
+      if (updated) {
+        pkg['lint-staged'] = JSON.parse(updated);
+        changed = true;
+      }
+    }
+    return changed ? pkg : undefined;
+  });
+}
+
+function rewritePrettierLintStagedConfigFiles(projectPath: string): void {
+  rewriteToolLintStagedConfigFiles(projectPath, rewritePrettier, 'prettier');
 }
 
 /**

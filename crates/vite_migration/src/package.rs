@@ -3,7 +3,7 @@ use ast_grep_language::SupportLang;
 use serde_json::{Map, Value};
 use vite_error::Error;
 
-use crate::{ast_grep, eslint::rewrite_eslint_script};
+use crate::{ast_grep, eslint::rewrite_eslint_script, prettier::rewrite_prettier_script};
 
 // Marker to replace "cross-env " before ast-grep processing
 // Using a fake env var assignment that won't match our rules
@@ -87,6 +87,14 @@ fn transform_scripts_json(
 /// compound commands (`&&`, `||`, `|`), and quoted arguments.
 pub fn rewrite_eslint(scripts_json: &str) -> Result<Option<String>, Error> {
     transform_scripts_json(scripts_json, rewrite_eslint_script)
+}
+
+/// Rewrite Prettier scripts in JSON content: rename `prettier` → `vp fmt` and strip Prettier-only flags.
+///
+/// Uses brush-parser to parse shell commands, so it correctly handles env var prefixes,
+/// compound commands (`&&`, `||`, `|`), and quoted arguments.
+pub fn rewrite_prettier(scripts_json: &str) -> Result<Option<String>, Error> {
+    transform_scripts_json(scripts_json, rewrite_prettier_script)
 }
 
 /// rewrite scripts json content using rules from rules_yaml
@@ -465,6 +473,67 @@ fix: vp pack
     "oxfmt --fix"
   ],
   "*.ts": "vp lint --fix"
+}
+        "#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_rewrite_prettier_json() {
+        let scripts_json = r#"
+{
+  "format": "prettier --write .",
+  "format:check": "prettier --check .",
+  "build": "vite build"
+}
+        "#;
+        let updated = rewrite_prettier(scripts_json).expect("failed to rewrite prettier");
+        assert!(updated.is_some());
+        assert_eq!(
+            updated.unwrap(),
+            r#"
+{
+  "format": "vp fmt .",
+  "format:check": "vp fmt --check .",
+  "build": "vite build"
+}
+        "#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_rewrite_prettier_json_no_update() {
+        let scripts_json = r#"
+{
+  "format": "vp fmt .",
+  "build": "vite build"
+}
+        "#;
+        let updated = rewrite_prettier(scripts_json).expect("failed to rewrite prettier");
+        assert!(updated.is_none());
+    }
+
+    #[test]
+    fn test_rewrite_prettier_json_lint_staged_array() {
+        let scripts_json = r#"
+{
+  "*.js": ["prettier --write", "eslint --fix"],
+  "*.ts": "prettier --write --single-quote"
+}
+        "#;
+        let updated = rewrite_prettier(scripts_json).expect("failed to rewrite prettier");
+        assert!(updated.is_some());
+        assert_eq!(
+            updated.unwrap(),
+            r#"
+{
+  "*.js": [
+    "vp fmt",
+    "eslint --fix"
+  ],
+  "*.ts": "vp fmt"
 }
         "#
             .trim()

@@ -9,7 +9,35 @@ export interface ConfigFiles {
   oxfmtConfig?: string;
   eslintConfig?: string;
   eslintLegacyConfig?: string;
+  prettierConfig?: string; // e.g. '.prettierrc.json', 'prettier.config.js', PRETTIER_PACKAGE_JSON_CONFIG
+  prettierIgnore?: boolean;
 }
+
+// Sentinel value indicating Prettier config lives inside package.json "prettier" key.
+export const PRETTIER_PACKAGE_JSON_CONFIG = 'package.json#prettier';
+
+// All known Prettier config file names (standalone files only).
+// https://prettier.io/docs/configuration
+export const PRETTIER_CONFIG_FILES = [
+  '.prettierrc',
+  '.prettierrc.json',
+  '.prettierrc.jsonc',
+  '.prettierrc.yaml',
+  '.prettierrc.yml',
+  '.prettierrc.toml',
+  '.prettierrc.js',
+  '.prettierrc.cjs',
+  '.prettierrc.mjs',
+  '.prettierrc.ts',
+  '.prettierrc.cts',
+  '.prettierrc.mts',
+  'prettier.config.js',
+  'prettier.config.cjs',
+  'prettier.config.mjs',
+  'prettier.config.ts',
+  'prettier.config.cts',
+  'prettier.config.mts',
+] as const;
 
 export function detectConfigs(projectPath: string): ConfigFiles {
   const configs: ConfigFiles = {};
@@ -120,6 +148,34 @@ export function detectConfigs(projectPath: string): ConfigFiles {
       configs.eslintLegacyConfig = config;
       break;
     }
+  }
+
+  // Check for prettier configs
+  for (const config of PRETTIER_CONFIG_FILES) {
+    if (fs.existsSync(path.join(projectPath, config))) {
+      configs.prettierConfig = config;
+      break;
+    }
+  }
+  // Check for "prettier" key in package.json if no config file found
+  if (!configs.prettierConfig) {
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      try {
+        const content = fs.readFileSync(packageJsonPath, 'utf8');
+        const pkg = JSON.parse(content);
+        if (pkg.prettier) {
+          configs.prettierConfig = PRETTIER_PACKAGE_JSON_CONFIG;
+        }
+      } catch {
+        // ignore parse errors
+      }
+    }
+  }
+
+  // Check for .prettierignore
+  if (fs.existsSync(path.join(projectPath, '.prettierignore'))) {
+    configs.prettierIgnore = true;
   }
 
   return configs;

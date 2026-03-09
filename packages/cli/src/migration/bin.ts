@@ -43,9 +43,11 @@ import {
   checkVitestVersion,
   checkViteVersion,
   detectEslintProject,
+  detectPrettierProject,
   installGitHooks,
   mergeViteConfigFiles,
   migrateEslintToOxlint,
+  migratePrettierToOxfmt,
   preflightGitHooksSetup,
   rewriteMonorepo,
   rewriteStandaloneProject,
@@ -116,9 +118,61 @@ async function promptEslintMigration(
   return true;
 }
 
+function warnPackageLevelPrettier() {
+  prompts.log.warn(
+    'Prettier detected in workspace packages but no root config found. Package-level Prettier must be migrated manually.',
+  );
+}
+
+async function confirmPrettierMigration(interactive: boolean): Promise<boolean> {
+  if (interactive) {
+    const confirmed = await prompts.confirm({
+      message: 'Migrate Prettier to Oxfmt?',
+      initialValue: true,
+    });
+    if (prompts.isCancel(confirmed)) {
+      cancelAndExit();
+    }
+    return !!confirmed;
+  }
+  prompts.log.info('Prettier configuration detected. Auto-migrating to Oxfmt...');
+  return true;
+}
+
+async function promptPrettierMigration(
+  projectPath: string,
+  interactive: boolean,
+  packages?: WorkspacePackage[],
+): Promise<boolean> {
+  const prettierProject = detectPrettierProject(projectPath, packages);
+  if (!prettierProject.hasDependency) {
+    return false;
+  }
+  if (!prettierProject.configFile) {
+    // Packages have prettier but no root config → warn and skip
+    warnPackageLevelPrettier();
+    return false;
+  }
+  const confirmed = await confirmPrettierMigration(interactive);
+  if (!confirmed) {
+    return false;
+  }
+  const ok = await migratePrettierToOxfmt(
+    projectPath,
+    interactive,
+    prettierProject.configFile,
+    packages,
+  );
+  if (!ok) {
+    cancelAndExit('Prettier migration failed. Fix the issue and re-run `vp migrate`.', 1);
+  }
+  return true;
+}
+
 const helpMessage = renderCliDoc({
   usage: 'vp migrate [PATH] [OPTIONS]',
-  summary: 'Migrate standalone Vite, Vitest, Oxlint, and Oxfmt projects to unified Vite+.',
+  summary:
+    'Migrate standalone Vite, Vitest, Oxlint, Oxfmt, and Prettier projects to unified Vite+.',
   sections: [
     {
       title: 'Arguments',
@@ -223,6 +277,8 @@ interface MigrationPlan {
   editorConflictDecisions: Map<string, 'merge' | 'skip'>;
   migrateEslint: boolean;
   eslintConfigFile?: string;
+  migratePrettier: boolean;
+  prettierConfigFile?: string;
 }
 
 async function collectMigrationPlan(
@@ -335,6 +391,15 @@ async function collectMigrationPlan(
     warnPackageLevelEslint();
   }
 
+  // 9. Prettier detection + prompt
+  const prettierProject = detectPrettierProject(rootDir, packages);
+  let migratePrettier = false;
+  if (prettierProject.hasDependency && prettierProject.configFile) {
+    migratePrettier = await confirmPrettierMigration(options.interactive);
+  } else if (prettierProject.hasDependency) {
+    warnPackageLevelPrettier();
+  }
+
   const plan: MigrationPlan = {
     packageManager,
     shouldSetupHooks,
@@ -344,9 +409,11 @@ async function collectMigrationPlan(
     editorConflictDecisions,
     migrateEslint,
     eslintConfigFile: eslintProject.configFile,
+    migratePrettier,
+    prettierConfigFile: prettierProject.configFile,
   };
 
-  // 9. Display migration plan summary
+  // 10. Display migration plan summary
   if (options.interactive) {
     displayMigrationSummary(plan);
   }
@@ -362,6 +429,10 @@ function displayMigrationSummary(plan: MigrationPlan) {
 
   if (plan.migrateEslint) {
     lines.push('- Migrate ESLint rules to Oxlint');
+  }
+
+  if (plan.migratePrettier) {
+    lines.push('- Migrate Prettier to Oxfmt');
   }
 
   if (plan.shouldSetupHooks) {
@@ -452,6 +523,19 @@ async function executeMigrationPlan(
     }
   }
 
+  // 5b. Prettier → Oxfmt migration (before main rewrite so .oxfmtrc.json gets picked up)
+  if (plan.migratePrettier) {
+    const prettierOk = await migratePrettierToOxfmt(
+      workspaceInfo.rootDir,
+      interactive,
+      plan.prettierConfigFile,
+      workspaceInfo.packages,
+    );
+    if (!prettierOk) {
+      cancelAndExit('Prettier migration failed. Fix the issue and re-run `vp migrate`.', 1);
+    }
+  }
+
   // 6. Skip staged migration when hooks are disabled (--no-hooks or preflight failed).
   // Without hooks, lint-staged config must stay in package.json so existing
   // .husky/pre-commit scripts that invoke `npx lint-staged` keep working.
@@ -517,7 +601,16 @@ async function main() {
       options.interactive,
       workspaceInfoOptional.packages,
     );
-    if (eslintMigrated) {
+
+    // Check if Prettier migration is needed
+    const prettierMigrated = await promptPrettierMigration(
+      workspaceInfoOptional.rootDir,
+      options.interactive,
+      workspaceInfoOptional.packages,
+    );
+
+    // Merge configs and reinstall once if any tool migration happened
+    if (eslintMigrated || prettierMigrated) {
       mergeViteConfigFiles(workspaceInfoOptional.rootDir);
       await runViteInstall(workspaceInfoOptional.rootDir, options.interactive);
       didMigrate = true;

@@ -767,6 +767,7 @@ module.exports.mergeJsonConfig = nativeBinding.mergeJsonConfig;
 module.exports.mergeTsdownConfig = nativeBinding.mergeTsdownConfig;
 module.exports.rewriteEslint = nativeBinding.rewriteEslint;
 module.exports.rewriteImportsInDirectory = nativeBinding.rewriteImportsInDirectory;
+module.exports.rewritePrettier = nativeBinding.rewritePrettier;
 module.exports.rewriteScripts = nativeBinding.rewriteScripts;
 module.exports.run = nativeBinding.run;
 module.exports.runCommand = nativeBinding.runCommand;

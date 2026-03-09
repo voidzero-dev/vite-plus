@@ -254,6 +254,22 @@ export declare function rewriteEslint(scriptsJson: string): string | null;
 export declare function rewriteImportsInDirectory(root: string): BatchRewriteResult;
 
 /**
+ * Rewrite Prettier scripts: rename `prettier` → `vp fmt` and strip Prettier-only flags.
+ *
+ * Uses brush-parser to parse shell commands, so it correctly handles env var prefixes,
+ * compound commands (`&&`, `||`, `|`), and quoted arguments.
+ *
+ * # Arguments
+ *
+ * * `scripts_json` - The scripts section as a JSON string
+ *
+ * # Returns
+ *
+ * * `updated` - The updated scripts JSON string, or `null` if no changes were made
+ */
+export declare function rewritePrettier(scriptsJson: string): string | null;
+
+/**
  * Rewrite scripts json content using rules from rules_yaml
  *
  * # Arguments

@@ -47,10 +47,10 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
   - Replaces `.husky/pre-commit` with `.vite-hooks/pre-commit` using `vp staged`
   - Removes `husky` and `lint-staged` from devDependencies
 - ✅ **ESLint → oxlint** (via `@oxlint/migrate`): converts ESLint flat config to `.oxlintrc.json`, which is then merged into `vite.config.ts` by the existing flow
+- ✅ **Prettier → oxfmt** (via `vp fmt --migrate=prettier`): converts Prettier config to `.oxfmtrc.json`, which is then merged into `vite.config.ts` by the existing flow
 
 **What this command does NOT migrate**:
 
-- ❌ Prettier → oxfmt (different tools, not a version upgrade)
 - ❌ Package.json scripts → vite-task.json (different feature)
 - ❌ TypeScript configuration changes
 - ❌ Build tool changes (webpack/rollup → vite)
@@ -62,9 +62,10 @@ These are **consolidation migrations**, not **feature migrations**.
 When a project already has `vite-plus` in its dependencies, `vp migrate` skips the full dependency/config migration and only runs remaining partial migrations:
 
 - **ESLint → Oxlint**: If `eslint` is still present with a flat config, offers ESLint migration
+- **Prettier → Oxfmt**: If `prettier` is still present with a config file, offers Prettier migration
 - **Git hooks**: If `husky` and/or `lint-staged` are still present, offers hooks migration
 
-Both checks run independently — a project may need one, both, or neither.
+All checks run independently — a project may need one, some, or none.
 
 ## Command Usage
 
@@ -88,7 +89,8 @@ All prompts are presented sequentially before any work begins:
 6. **Editor selection**: "Which editor are you using?"
 7. **Editor file conflicts**: Per existing file — "X already exists. Merge or Skip?"
 8. **ESLint migration**: If ESLint config detected — "Migrate ESLint rules to Oxlint?"
-9. **Migration plan summary**: Display all planned actions before execution
+9. **Prettier migration**: If Prettier config detected — "Migrate Prettier to Oxfmt?"
+10. **Migration plan summary**: Display all planned actions before execution
 
 In non-interactive mode (`--no-interactive`), Phase 1 uses defaults (no prompts shown, no summary displayed).
 
@@ -121,10 +123,14 @@ VITE+ - The Unified Toolchain for the Web
 ◆ Migrate ESLint rules to Oxlint using @oxlint/migrate?
 │ Yes
 
+◆ Migrate Prettier to Oxfmt?
+│ Yes
+
 Migration plan:
 - Install pnpm and dependencies
 - Rewrite configs and dependencies for Vite+
 - Migrate ESLint rules to Oxlint
+- Migrate Prettier to Oxfmt
 - Set up pre-commit hooks
 - Write agent instructions (CLAUDE.md, append)
 - Write editor config (.vscode/, merge)
@@ -139,6 +145,7 @@ All work runs sequentially with spinner feedback — no further user interaction
 3. **Run `vp install`** to prepare dependencies
 4. **Check vite/vitest versions** (abort if unsupported)
 5. **Migrate ESLint → Oxlint** (if approved in Phase 1, via `@oxlint/migrate`)
+   5b. **Migrate Prettier → Oxfmt** (if approved in Phase 1, via `vp fmt --migrate=prettier`)
 6. **Rewrite configs** (dependencies, overrides, config file merging)
 7. **Install git hooks** (if approved)
 8. **Write agent instructions** (using pre-resolved conflict decisions)
@@ -548,6 +555,55 @@ If only a legacy ESLint config (`.eslintrc*`) is detected without a flat config 
 - Non-interactive mode: auto-runs without prompting
 - Failure is non-blocking — warns and continues with the rest of migration
 - Re-runnable: if user declines initially, running `vp migrate` again offers eslint migration
+
+## Prettier Migration
+
+When a Prettier configuration file (`.prettierrc*`, `prettier.config.*`, or `"prettier"` key in package.json) and `prettier` dependency are detected, `vp migrate` offers to convert the Prettier configuration to oxfmt using `vp fmt --migrate=prettier`.
+
+**Flow**: Prettier → oxfmt (via `vp fmt --migrate=prettier`) → vite+ (existing merge flow)
+
+**Steps**:
+
+1. Run `vp fmt --migrate=prettier` to generate `.oxfmtrc.json` from Prettier config (if a standalone config file exists, not `package.json#prettier`)
+2. Delete all Prettier config files (`.prettierrc*`, `prettier.config.*`)
+3. Remove `"prettier"` key from package.json if present
+4. Remove `prettier` and `prettier-plugin-*` from `devDependencies`/`dependencies`
+5. Rewrite `prettier` scripts in `package.json` to `vp fmt`, stripping Prettier-only flags
+6. Rewrite `prettier` references in lint-staged configs
+7. Warn about `.prettierignore` if present (Oxfmt uses `.oxfmtignore`)
+8. The existing migration flow picks up `.oxfmtrc.json` and merges it into `vite.config.ts`
+
+**Script Rewriting** (powered by [brush-parser](https://github.com/reubeno/brush) for shell AST parsing):
+
+| Before                                            | After                                                  |
+| ------------------------------------------------- | ------------------------------------------------------ |
+| `prettier .`                                      | `vp fmt .`                                             |
+| `prettier --write .`                              | `vp fmt .`                                             |
+| `prettier --check .`                              | `vp fmt --check .`                                     |
+| `prettier --list-different .`                     | `vp fmt --check .`                                     |
+| `prettier -l .`                                   | `vp fmt --check .`                                     |
+| `prettier --write --single-quote --tab-width 4 .` | `vp fmt .`                                             |
+| `prettier --config .prettierrc --write .`         | `vp fmt .`                                             |
+| `prettier --plugin prettier-plugin-tailwindcss .` | `vp fmt .`                                             |
+| `cross-env NODE_ENV=test prettier --write .`      | `cross-env NODE_ENV=test vp fmt .`                     |
+| `prettier --write . && eslint --fix .`            | `vp fmt . && eslint --fix .`                           |
+| `npx prettier --write .`                          | `npx prettier --write .` (npx/bunx wrappers preserved) |
+
+**Stripped Prettier-only flags**:
+
+- Value flags: `--config`, `--ignore-path`, `--plugin`, `--parser`, `--cache-location`, `--cache-strategy`, `--log-level`, `--stdin-filepath`, `--cursor-offset`, `--range-start`, `--range-end`, `--config-precedence`, `--tab-width`, `--print-width`, `--trailing-comma`, `--arrow-parens`, `--prose-wrap`, `--end-of-line`, `--html-whitespace-sensitivity`, `--quote-props`, `--embedded-language-formatting`, `--experimental-ternaries`
+- Boolean flags: `--write`, `--cache`, `--no-config`, `--no-editorconfig`, `--with-node-modules`, `--require-pragma`, `--insert-pragma`, `--no-bracket-spacing`, `--single-quote`, `--no-semi`, `--jsx-single-quote`, `--bracket-same-line`, `--use-tabs`, `--debug-check`, `--debug-print-doc`, `--debug-benchmark`, `--debug-repeat`
+
+**Converted flags**: `--list-different` / `-l` → `--check`
+
+**Kept flags**: `--check`, `--fix`, `--no-error-on-unmatched-pattern`, positional args (file paths/globs)
+
+**Behavior**:
+
+- Interactive mode: prompts user for confirmation upfront (Phase 1), executes later (Phase 2)
+- Non-interactive mode: auto-runs without prompting
+- Failure is non-blocking — warns and continues with the rest of migration
+- Re-runnable: if user declines initially, running `vp migrate` again offers prettier migration
 
 ## References
 
