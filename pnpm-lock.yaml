@@ -15,9 +15,6 @@ catalogs:
     '@babel/preset-typescript':
       specifier: ^7.24.7
       version: 7.28.5
-    '@iconify/vue':
-      specifier: ^5.0.0
-      version: 5.0.0
     '@napi-rs/cli':
       specifier: ^3.4.1
       version: 3.4.1
@@ -87,9 +84,6 @@ catalogs:
     '@typescript/native-preview':
       specifier: 7.0.0-dev.20260122.2
       version: 7.0.0-dev.20260122.2
-    '@voidzero-dev/vitepress-theme':
-      specifier: 4.8.0
-      version: 4.8.0
     '@yarnpkg/fslib':
       specifier: ^3.1.3
       version: 3.1.4
@@ -332,7 +326,7 @@ importers:
   docs:
     dependencies:
       '@iconify/vue':
-        specifier: 'catalog:'
+        specifier: ^5.0.0
         version: 5.0.0(vue@3.5.27(typescript@5.9.3))
       reka-ui:
         specifier: ^2.7.0
@@ -348,7 +342,7 @@ importers:
         version: 0.16.0(vue@3.5.27(typescript@5.9.3))
     devDependencies:
       '@voidzero-dev/vitepress-theme':
-        specifier: 'catalog:'
+        specifier: 4.8.0
         version: 4.8.0(focus-trap@7.8.0)(typescript@5.9.3)(vite@packages+core)(vitepress@2.0.0-alpha.15(oxc-minify@0.110.0)(postcss@8.5.6)(typescript@5.9.3))(vue@3.5.27(typescript@5.9.3))
       oxc-minify:
         specifier: ^0.110.0
