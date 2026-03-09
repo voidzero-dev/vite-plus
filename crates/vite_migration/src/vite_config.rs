@@ -1,7 +1,8 @@
-use std::path::Path;
+use std::{borrow::Cow, path::Path, sync::LazyLock};
 
 use ast_grep_config::{GlobalRules, RuleConfig, from_yaml_string};
 use ast_grep_language::{LanguageExt, SupportLang};
+use regex::Regex;
 use vite_error::Error;
 
 use crate::ast_grep;
@@ -100,13 +101,31 @@ fn merge_json_config_content(
     // Check if the config uses a function callback (for informational purposes)
     let uses_function_callback = check_function_callback(vite_config_content)?;
 
+    // Strip "$schema" property — it's a JSON Schema annotation not valid in OxlintConfig
+    let ts_config = strip_schema_property(ts_config);
+
     // Generate the ast-grep rules with the actual config
-    let rule_yaml = generate_merge_rule(ts_config, config_key);
+    let rule_yaml = generate_merge_rule(&ts_config, config_key);
 
     // Apply the transformation
     let (content, updated) = ast_grep::apply_rules(vite_config_content, &rule_yaml)?;
 
     Ok(MergeResult { content, updated, uses_function_callback })
+}
+
+/// Regex to match `"$schema": "..."` lines (with optional trailing comma).
+static RE_SCHEMA: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"(?m)^\s*"\$schema"\s*:\s*"[^"]*"\s*,?\s*\n"#).unwrap());
+
+/// Strip the `"$schema"` property from a JSON/JSONC config string.
+///
+/// JSON config files (`.oxlintrc.json`, `.oxfmtrc.json`) often contain a
+/// `"$schema"` annotation that is meaningful only for editor validation.
+/// When the JSON content is embedded into `vite.config.ts`, the `$schema`
+/// property causes a TypeScript type error because it is not part of
+/// `OxlintConfig` / `OxfmtConfig`.
+fn strip_schema_property(config: &str) -> Cow<'_, str> {
+    RE_SCHEMA.replace_all(config, "")
 }
 
 /// Check if the vite config uses a function callback pattern
@@ -868,6 +887,52 @@ export default defineConfig({
   plugins: [],
 });"#
         );
+    }
+
+    #[test]
+    fn test_strip_schema_property() {
+        // With trailing comma
+        let input = r#"{
+  "$schema": "https://raw.githubusercontent.com/nicolo-ribaudo/tc39-proposal-json-schema/refs/heads/main/schema.json",
+  "rules": {
+    "no-console": "warn"
+  }
+}"#;
+        let result = strip_schema_property(input);
+        assert!(!result.contains("$schema"));
+        assert!(result.contains(r#""no-console": "warn""#));
+
+        // Without trailing comma
+        let input = r#"{
+  "$schema": "https://example.com/schema.json"
+}"#;
+        let result = strip_schema_property(input);
+        assert!(!result.contains("$schema"));
+
+        // No $schema - unchanged
+        let input = r#"{
+  "rules": {}
+}"#;
+        assert_eq!(strip_schema_property(input), input);
+    }
+
+    #[test]
+    fn test_merge_json_config_content_strips_schema() {
+        let vite_config = r#"import { defineConfig } from 'vite';
+
+export default defineConfig({});"#;
+
+        let oxlint_config = r#"{
+  "$schema": "https://raw.githubusercontent.com/nicolo-ribaudo/tc39-proposal-json-schema/refs/heads/main/schema.json",
+  "rules": {
+    "no-console": "warn"
+  }
+}"#;
+
+        let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
+        assert!(result.updated);
+        assert!(!result.content.contains("$schema"));
+        assert!(result.content.contains(r#""no-console": "warn""#));
     }
 
     #[test]
