@@ -172,8 +172,8 @@ catalogs:
       specifier: ^1.51.0
       version: 1.51.0
     oxlint-tsgolint:
-      specifier: ^0.15.0
-      version: 0.15.0
+      specifier: ^0.16.0
+      version: 0.16.0
     pathe:
       specifier: ^2.0.3
       version: 2.0.3
@@ -309,7 +309,7 @@ importers:
         version: 0.36.0
       oxlint:
         specifier: 'catalog:'
-        version: 1.51.0(oxlint-tsgolint@0.15.0)
+        version: 1.51.0(oxlint-tsgolint@0.16.0)
       playwright:
         specifier: 'catalog:'
         version: 1.57.0
@@ -382,10 +382,10 @@ importers:
         version: 0.36.0
       oxlint:
         specifier: 'catalog:'
-        version: 1.51.0(oxlint-tsgolint@0.15.0)
+        version: 1.51.0(oxlint-tsgolint@0.16.0)
       oxlint-tsgolint:
         specifier: 'catalog:'
-        version: 0.15.0
+        version: 0.16.0
       picocolors:
         specifier: 'catalog:'
         version: 1.1.1
@@ -443,7 +443,7 @@ importers:
         version: 7.7.4
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.17)(typescript@5.9.3)(unplugin-unused@0.5.6)
+        version: 0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.33(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6)
       validate-npm-package-name:
         specifier: 'catalog:'
         version: 7.0.2
@@ -491,7 +491,7 @@ importers:
         version: 8.5.6
       publint:
         specifier: ^0.3.0
-        version: 0.3.17
+        version: 0.3.18
       sass:
         specifier: ^1.70.0
         version: 1.97.3
@@ -539,8 +539,8 @@ importers:
         specifier: 'catalog:'
         version: 0.0.35
       '@vitejs/devtools':
-        specifier: ^0.0.0-alpha.32
-        version: 0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3))
+        specifier: ^0.0.0-alpha.33
+        version: 0.0.0-alpha.33(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3))
       es-module-lexer:
         specifier: ^1.7.0
         version: 1.7.0
@@ -588,7 +588,7 @@ importers:
         version: 1.2.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.17)(typescript@5.9.3)(unplugin-unused@0.5.6)
+        version: 0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.33(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6)
       vite:
         specifier: workspace:@voidzero-dev/vite-plus-core@*
         version: 'link:'
@@ -620,7 +620,7 @@ importers:
         version: 1.3.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.17)(typescript@5.9.3)(unplugin-unused@0.5.6)
+        version: 0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6)
 
   packages/test:
     dependencies:
@@ -829,7 +829,7 @@ importers:
         version: 1.58.2
       publint:
         specifier: ^0.3.16
-        version: 0.3.17
+        version: 0.3.18
       remove-unused-vars:
         specifier: ^0.0.12
         version: 0.0.12
@@ -955,7 +955,7 @@ importers:
         version: 1.1.1
       tsdown:
         specifier: ^0.20.3
-        version: 0.20.3(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.17)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6)
+        version: 0.20.3(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.18)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6)
 
   rolldown-vite/packages/plugin-legacy:
     dependencies:
@@ -1007,7 +1007,7 @@ importers:
         version: 1.1.1
       tsdown:
         specifier: ^0.20.3
-        version: 0.20.3(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.17)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6)
+        version: 0.20.3(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.18)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6)
       vite:
         specifier: workspace:@voidzero-dev/vite-plus-core@*
         version: link:../../../packages/core
@@ -1083,7 +1083,7 @@ importers:
         version: 0.0.5
       '@vitejs/devtools':
         specifier: ^0.0.0-alpha.32
-        version: 0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3))
+        version: 0.0.0-alpha.33(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3))
       artichokie:
         specifier: ^0.4.2
         version: 0.4.2
@@ -1140,7 +1140,7 @@ importers:
         version: 0.30.21
       mlly:
         specifier: ^1.8.0
-        version: 1.8.0
+        version: 1.8.1
       mrmime:
         specifier: ^2.0.1
         version: 2.0.1
@@ -2346,14 +2346,14 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@floating-ui/core@1.7.4':
-    resolution: {integrity: sha512-C3HlIdsBxszvm5McXlB8PeOEWfBhcGBTZGkGlWc2U0KFY5IwG5OQEuQ8rq52DZmcHDlPLd+YFBK+cZcytwIFWg==}
+  '@floating-ui/core@1.7.5':
+    resolution: {integrity: sha512-1Ih4WTWyw0+lKyFMcBHGbb5U5FtuHJuujoyyr5zTaWS5EYMeT6Jb2AuDeftsCsEuchO+mM2ij5+q9crhydzLhQ==}
 
-  '@floating-ui/dom@1.7.5':
-    resolution: {integrity: sha512-N0bD2kIPInNHUHehXhMke1rBGs1dwqvC9O9KYMyyjK7iXt7GAhnro7UlcuYcGdS/yYOlq0MAVgrow8IbWJwyqg==}
+  '@floating-ui/dom@1.7.6':
+    resolution: {integrity: sha512-9gZSAI5XM36880PPMm//9dfiEngYoC6Am2izES1FF406YFsjvyBMmeJ2g4SAju3xWwtuynNRFL2s9hgxpLI5SQ==}
 
-  '@floating-ui/utils@0.2.10':
-    resolution: {integrity: sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ==}
+  '@floating-ui/utils@0.2.11':
+    resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
 
   '@floating-ui/vue@1.1.9':
     resolution: {integrity: sha512-BfNqNW6KA83Nexspgb9DZuz578R7HT8MZw1CfK9I6Ah4QReNWEJsXWHN+SdmOVLNGmTPDi+fDT535Df5PzMLbQ==}
@@ -3976,8 +3976,18 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
+  '@oxlint-tsgolint/darwin-arm64@0.16.0':
+    resolution: {integrity: sha512-WQt5lGwRPJBw7q2KNR0mSPDAaMmZmVvDlEEti96xLO7ONhyomQc6fBZxxwZ4qTFedjJnrHX94sFelZ4OKzS7UQ==}
+    cpu: [arm64]
+    os: [darwin]
+
   '@oxlint-tsgolint/darwin-x64@0.15.0':
     resolution: {integrity: sha512-Aoai2wAkaUJqp/uEs1gml6TbaPW4YmyO5Ai/vOSkiizgHqVctjhjKqmRiWTX2xuPY94VkwOLqp+Qr3y/0qSpWQ==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@oxlint-tsgolint/darwin-x64@0.16.0':
+    resolution: {integrity: sha512-VJo29XOzdkalvCTiE2v6FU3qZlgHaM8x8hUEVJGPU2i5W+FlocPpmn00+Ld2n7Q0pqIjyD5EyvZ5UmoIEJMfqg==}
     cpu: [x64]
     os: [darwin]
 
@@ -3986,8 +3996,18 @@ packages:
     cpu: [arm64]
     os: [linux]
 
+  '@oxlint-tsgolint/linux-arm64@0.16.0':
+    resolution: {integrity: sha512-MPfqRt1+XRHv9oHomcBMQ3KpTE+CSkZz14wUxDQoqTNdUlV0HWdzwIE9q65I3D9YyxEnqpM7j4qtDQ3apqVvbQ==}
+    cpu: [arm64]
+    os: [linux]
+
   '@oxlint-tsgolint/linux-x64@0.15.0':
     resolution: {integrity: sha512-9b9xzh/1Harn3a+XiKTK/8LrWw3VcqLfYp/vhV5/zAVR2Mt0d63WSp4FL+wG7DKnI2T/CbMFUFHwc7kCQjDMzQ==}
+    cpu: [x64]
+    os: [linux]
+
+  '@oxlint-tsgolint/linux-x64@0.16.0':
+    resolution: {integrity: sha512-XQSwVUsnwLokMhe1TD6IjgvW5WMTPzOGGkdFDtXWQmlN2YeTw94s/NN0KgDrn2agM1WIgAenEkvnm0u7NgwEyw==}
     cpu: [x64]
     os: [linux]
 
@@ -3996,8 +4016,18 @@ packages:
     cpu: [arm64]
     os: [win32]
 
+  '@oxlint-tsgolint/win32-arm64@0.16.0':
+    resolution: {integrity: sha512-EWdlspQiiFGsP2AiCYdhg5dTYyAlj6y1nRyNI2dQWq4Q/LITFHiSRVPe+7m7K7lcsZCEz2icN/bCeSkZaORqIg==}
+    cpu: [arm64]
+    os: [win32]
+
   '@oxlint-tsgolint/win32-x64@0.15.0':
     resolution: {integrity: sha512-ioAY2XLpy83E2EqOLH9p1cEgj0G2qB1lmAn0a3yFV1jHQB29LIPIKGNsu/tYCClpwmHN79pT5KZAHZOgWxxqNg==}
+    cpu: [x64]
+    os: [win32]
+
+  '@oxlint-tsgolint/win32-x64@0.16.0':
+    resolution: {integrity: sha512-1ufk8cgktXJuJZHKF63zCHAkaLMwZrEXnZ89H2y6NO85PtOXqu4zbdNl0VBpPP3fCUuUBu9RvNqMFiv0VsbXWA==}
     cpu: [x64]
     os: [win32]
 
@@ -4229,8 +4259,8 @@ packages:
     resolution: {integrity: sha512-GjH0TPjbVNrPnl/BAGoFuBLJ2sFfXNKbS33lll/Ehe9yw0fyc8Kdw7kO9if37yQqn6vaa4dAHKkPllum7f/IPQ==}
     engines: {node: '>=18.12'}
 
-  '@pnpm/graceful-fs@1000.0.1':
-    resolution: {integrity: sha512-JnzaAVFJIEgwTcB55eww8N3h5B6qJdZqDA2wYkSK+OcTvvMSQb9c2STMhBP6GfkWygG1fs3w8D7JRx9SPZnxJg==}
+  '@pnpm/graceful-fs@1000.1.0':
+    resolution: {integrity: sha512-EsMX4slK0qJN2AR0/AYohY5m0HQNYGMNe+jhN74O994zp22/WbX+PbkIKyw3UQn39yQm2+z6SgwklDxbeapsmQ==}
     engines: {node: '>=18.12'}
 
   '@pnpm/logger@1001.0.1':
@@ -4243,8 +4273,8 @@ packages:
     peerDependencies:
       '@pnpm/logger': '>=1001.0.0 <1002.0.0'
 
-  '@pnpm/read-project-manifest@1001.2.4':
-    resolution: {integrity: sha512-NDQkxWeShMHFPLT5APc/6IkO4q7Y6Wugzh+hhSs2tlRBTOuR5UN//ETZPw43SRQuSmrYQQj+awdUiRjsLQZw2w==}
+  '@pnpm/read-project-manifest@1001.2.5':
+    resolution: {integrity: sha512-5ob6p6D7vBpAAGtZpqPvqlvkJlDfugb8TWnQgRDiSYr4/o8nIiV2t1ejlp3f34b0E76SbsbBuIfrJCsHAqhkrw==}
     engines: {node: '>=18.12'}
     peerDependencies:
       '@pnpm/logger': '>=1001.0.0 <1002.0.0'
@@ -4290,8 +4320,8 @@ packages:
   '@rive-app/canvas-lite@2.34.1':
     resolution: {integrity: sha512-KwUBRvwqwQpr3j7W2eDtKJ2cqtfMRe3s6N0W2T1zNaJ3nH19JnGUaJQRVMmwKea9WDouVhIibY5HcDsub2whJw==}
 
-  '@rolldown/debug@1.0.0-rc.5':
-    resolution: {integrity: sha512-BoL199chEapLJU67kzcSCC0C4U/uvxtoHsTJwI0OzQZ6n7Yt926o+ESVG7vAPJa94569M1oXLsgRUlHggipMwg==}
+  '@rolldown/debug@1.0.0-rc.7':
+    resolution: {integrity: sha512-4HLqLM4y2UXtb4yOOnfxNjurk34bVs/FHKFZTmNqya6s4UiC+YIGATpt5Yec+YG0AcKRowg5Xugl0q8u9vwPdA==}
 
   '@rollup/plugin-alias@6.0.0':
     resolution: {integrity: sha512-tPCzJOtS7uuVZd+xPhoy5W4vThe6KWXNmsFCNktaAh5RTqcLiSfT4huPQIXkgJ6YCOjJHvecOAzQxLFhPxKr+g==}
@@ -5022,24 +5052,24 @@ packages:
     resolution: {integrity: sha512-Zfq6FbIcYl9gaAmVu6ROsqUiCNwpEj3Ljz/tMX5fl12Z95OFOxzf7vlO03WE5JBU/ri1tBDFHnW41dihMINOPQ==}
     engines: {node: '>=14'}
 
-  '@vitejs/devtools-kit@0.0.0-alpha.32':
-    resolution: {integrity: sha512-FPqCXXY+yPUMZ3bP54cgyqJX4TCCmmOywlxi7rl67T9B6/e9bR01VNbVdquVeFoBhC3rukyGrPRwro+raRCuDQ==}
+  '@vitejs/devtools-kit@0.0.0-alpha.33':
+    resolution: {integrity: sha512-1cG1yQ/NQBqioHRH43Y4sID/rN6FNvrmfu0bnYl5eB1YmB/nooGWktsEK1JJA9IMYnlHp+IuNpBhaepKlTkMMA==}
     peerDependencies:
       vite: workspace:@voidzero-dev/vite-plus-core@*
 
-  '@vitejs/devtools-rolldown@0.0.0-alpha.32':
-    resolution: {integrity: sha512-zTvn+EeHSOz7dmAo3yI9/yXMr0WqhGhp2Knql+fSLGQLlJSFNKt1+Vn0My0gsLXXLbtaOtlAjvTxfSeh3u9PWw==}
+  '@vitejs/devtools-rolldown@0.0.0-alpha.33':
+    resolution: {integrity: sha512-Zt4qu/Jep4n80sn+sWXZ8I5KLVfjH8X3g2YKB/Ftkjo4zb0ayaIa1Cnl9Hg+QRMuICE4MZgEnp0vBpDRNf9jvQ==}
 
-  '@vitejs/devtools-rpc@0.0.0-alpha.32':
-    resolution: {integrity: sha512-lTolbr7EUlZnyoIIHT6C8iJbOb7vvchYOvTVaXu3XZjzr0hNsi0DOsY06O3jk5wuig8folqfemo2tQtTUWfPoQ==}
+  '@vitejs/devtools-rpc@0.0.0-alpha.33':
+    resolution: {integrity: sha512-cRLb6oUeMAbE5BCubx2x/nwD4uo2MOQuzUZ3KQ4GilD+2k7dMG3OJW6NYaEVRkLge4wXWscsDkf/BaBGh6Zk3w==}
     peerDependencies:
       ws: '*'
     peerDependenciesMeta:
       ws:
         optional: true
 
-  '@vitejs/devtools@0.0.0-alpha.32':
-    resolution: {integrity: sha512-XDNV5wmj3K106gV+Q8PSrLPv74Dhmjx/TSXIX04Nm814WTNLpzACC1CEg5gA3kblL8kHRIYjFwS+GI5x7F+tdw==}
+  '@vitejs/devtools@0.0.0-alpha.33':
+    resolution: {integrity: sha512-q1gybQuKEbkjhzzc+Amgmb97IlMt64jGVCm8sqpqJGkFIeeaPjaJZNW/AA+Y7Xve8K2vUnN/r9BQLZipNpIC6A==}
     hasBin: true
     peerDependencies:
       vite: workspace:@voidzero-dev/vite-plus-core@*
@@ -7257,8 +7287,8 @@ packages:
   mitt@3.0.1:
     resolution: {integrity: sha512-vKivATfr97l2/QBCYAkXYDbrIWPM2IIKEl7YPhjCvKlG3kE2gm+uBo6nEXK3M5/Ffh/FLpKExzOQ3JJoJGFKBw==}
 
-  mlly@1.8.0:
-    resolution: {integrity: sha512-l8D9ODSRWLe2KHJSifWGwBqpTZXIXTeo8mlKjY+E2HAakaTeNpqAyBZ8GSqLzHgw4XmHmC8whvpjJNMbFZN7/g==}
+  mlly@1.8.1:
+    resolution: {integrity: sha512-SnL6sNutTwRWWR/vcmCYHSADjiEesp5TGQQ0pXyLhW5IoeibRlF/CbSLailbB3CNqJUk9cVJ9dUDnbD7GrcHBQ==}
 
   mocha@11.7.5:
     resolution: {integrity: sha512-mTT6RgopEYABzXWFx+GcJ+ZQ32kp4fMf0xvpZIIfSq9Z8lC/++MtcCnQ9t5FP2veYEP95FIYSvW+U9fV4xrlig==}
@@ -7464,6 +7494,10 @@ packages:
 
   oxlint-tsgolint@0.15.0:
     resolution: {integrity: sha512-iwvFmhKQVZzVTFygUVI4t2S/VKEm+Mqkw3jQRJwfDuTcUYI5LCIYzdO5Dbuv4mFOkXZCcXaRRh0m+uydB5xdqw==}
+    hasBin: true
+
+  oxlint-tsgolint@0.16.0:
+    resolution: {integrity: sha512-4RuJK2jP08XwqtUu+5yhCbxEauCm6tv2MFHKEMsjbosK2+vy5us82oI3VLuHwbNyZG7ekZA26U2LLHnGR4frIA==}
     hasBin: true
 
   oxlint@1.51.0:
@@ -7780,8 +7814,8 @@ packages:
   prr@1.0.1:
     resolution: {integrity: sha512-yPw4Sng1gWghHQWj0B3ZggWUm4qVbPwPFcRG8KyxiU7J2OHFSoEHKS+EZ3fv5l1t9CyCiop6l/ZYeWbrgoQejw==}
 
-  publint@0.3.17:
-    resolution: {integrity: sha512-Q3NLegA9XM6usW+dYQRG1g9uEHiYUzcCVBJDJ7yMcWRqVU9LYZUWdqbwMZfmTCFC5PZLQpLAmhvRcQRl3exqkw==}
+  publint@0.3.18:
+    resolution: {integrity: sha512-JRJFeBTrfx4qLwEuGFPk+haJOJN97KnPuK01yj+4k/Wj5BgoOK5uNsivporiqBjk2JDaslg7qJOhGRnpltGeog==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -8691,14 +8725,11 @@ packages:
     engines: {node: '>=0.8.0'}
     hasBin: true
 
-  unconfig-core@7.4.2:
-    resolution: {integrity: sha512-VgPCvLWugINbXvMQDf8Jh0mlbvNjNC6eSUziHsBCMpxR05OPrNrvDnyatdMjRgcHaaNsCqz+wjNXxNw1kRLHUg==}
-
   unconfig-core@7.5.0:
     resolution: {integrity: sha512-Su3FauozOGP44ZmKdHy2oE6LPjk51M/TRRjHv2HNCWiDvfvCoxC2lno6jevMA91MYAdCdwP05QnWdWpSbncX/w==}
 
-  unconfig@7.4.2:
-    resolution: {integrity: sha512-nrMlWRQ1xdTjSnSUqvYqJzbTBFugoqHobQj58B2bc8qxHKBBHMNNsWQFP3Cd3/JZK907voM2geYPWqD4VK3MPQ==}
+  unconfig@7.5.0:
+    resolution: {integrity: sha512-oi8Qy2JV4D3UQ0PsopR28CzdQ3S/5A1zwsUwp/rosSbfhJ5z7b90bIyTwi/F7hCLD4SGcZVjDzd4XoUQcEanvA==}
 
   uncrypto@0.1.3:
     resolution: {integrity: sha512-Ql87qFHB3s/De2ClA9e0gsnS6zXG27SkTiSJwjCc9MebbfapQfuPzumMIUMi38ezPZVNFcHI9sUIepeQfw8J8Q==}
@@ -10230,21 +10261,21 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@floating-ui/core@1.7.4':
+  '@floating-ui/core@1.7.5':
     dependencies:
-      '@floating-ui/utils': 0.2.10
+      '@floating-ui/utils': 0.2.11
 
-  '@floating-ui/dom@1.7.5':
+  '@floating-ui/dom@1.7.6':
     dependencies:
-      '@floating-ui/core': 1.7.4
-      '@floating-ui/utils': 0.2.10
+      '@floating-ui/core': 1.7.5
+      '@floating-ui/utils': 0.2.11
 
-  '@floating-ui/utils@0.2.10': {}
+  '@floating-ui/utils@0.2.11': {}
 
   '@floating-ui/vue@1.1.9(vue@3.5.27(typescript@5.9.3))':
     dependencies:
-      '@floating-ui/dom': 1.7.5
-      '@floating-ui/utils': 0.2.10
+      '@floating-ui/dom': 1.7.6
+      '@floating-ui/utils': 0.2.11
       vue-demi: 0.14.10(vue@3.5.27(typescript@5.9.3))
     transitivePeerDependencies:
       - '@vue/composition-api'
@@ -11541,19 +11572,37 @@ snapshots:
   '@oxlint-tsgolint/darwin-arm64@0.15.0':
     optional: true
 
+  '@oxlint-tsgolint/darwin-arm64@0.16.0':
+    optional: true
+
   '@oxlint-tsgolint/darwin-x64@0.15.0':
+    optional: true
+
+  '@oxlint-tsgolint/darwin-x64@0.16.0':
     optional: true
 
   '@oxlint-tsgolint/linux-arm64@0.15.0':
     optional: true
 
+  '@oxlint-tsgolint/linux-arm64@0.16.0':
+    optional: true
+
   '@oxlint-tsgolint/linux-x64@0.15.0':
+    optional: true
+
+  '@oxlint-tsgolint/linux-x64@0.16.0':
     optional: true
 
   '@oxlint-tsgolint/win32-arm64@0.15.0':
     optional: true
 
+  '@oxlint-tsgolint/win32-arm64@0.16.0':
+    optional: true
+
   '@oxlint-tsgolint/win32-x64@0.15.0':
+    optional: true
+
+  '@oxlint-tsgolint/win32-x64@0.16.0':
     optional: true
 
   '@oxlint/binding-android-arm-eabi@1.51.0':
@@ -11688,7 +11737,7 @@ snapshots:
     dependencies:
       '@pnpm/constants': 1001.3.1
 
-  '@pnpm/graceful-fs@1000.0.1':
+  '@pnpm/graceful-fs@1000.1.0':
     dependencies:
       graceful-fs: 4.2.11
 
@@ -11706,11 +11755,11 @@ snapshots:
       '@pnpm/types': 1001.3.0
       semver: 7.7.4
 
-  '@pnpm/read-project-manifest@1001.2.4(@pnpm/logger@1001.0.1)':
+  '@pnpm/read-project-manifest@1001.2.5(@pnpm/logger@1001.0.1)':
     dependencies:
       '@gwhitney/detect-indent': 7.0.1
       '@pnpm/error': 1000.0.5
-      '@pnpm/graceful-fs': 1000.0.1
+      '@pnpm/graceful-fs': 1000.1.0
       '@pnpm/logger': 1001.0.1
       '@pnpm/manifest-utils': 1002.0.4(@pnpm/logger@1001.0.1)
       '@pnpm/text.comments-parser': 1000.0.0
@@ -11772,7 +11821,7 @@ snapshots:
 
   '@rive-app/canvas-lite@2.34.1': {}
 
-  '@rolldown/debug@1.0.0-rc.5': {}
+  '@rolldown/debug@1.0.0-rc.7': {}
 
   '@rollup/plugin-alias@6.0.0(rollup@4.53.3)':
     optionalDependencies:
@@ -12050,7 +12099,7 @@ snapshots:
       lightningcss: 1.31.1
       postcss-load-config: 6.0.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(yaml@2.8.2)
       rolldown: link:rolldown/packages/rolldown
-      tsdown: 0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.17)(typescript@5.9.3)(unplugin-unused@0.5.6)
+      tsdown: 0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.33(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6)
     optionalDependencies:
       postcss: 8.5.6
       postcss-import: 16.1.1(postcss@8.5.6)
@@ -12418,9 +12467,9 @@ snapshots:
 
   '@vercel/detect-agent@1.1.0': {}
 
-  '@vitejs/devtools-kit@0.0.0-alpha.32(typescript@5.9.3)(vite@packages+core)(ws@8.19.0)':
+  '@vitejs/devtools-kit@0.0.0-alpha.33(typescript@5.9.3)(vite@packages+core)(ws@8.19.0)':
     dependencies:
-      '@vitejs/devtools-rpc': 0.0.0-alpha.32(typescript@5.9.3)(ws@8.19.0)
+      '@vitejs/devtools-rpc': 0.0.0-alpha.33(typescript@5.9.3)(ws@8.19.0)
       birpc: 4.0.0
       immer: 11.1.4
       vite: link:packages/core
@@ -12428,31 +12477,31 @@ snapshots:
       - typescript
       - ws
 
-  '@vitejs/devtools-rolldown@0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3))':
+  '@vitejs/devtools-rolldown@0.0.0-alpha.33(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3))':
     dependencies:
-      '@floating-ui/dom': 1.7.5
-      '@pnpm/read-project-manifest': 1001.2.4(@pnpm/logger@1001.0.1)
-      '@rolldown/debug': 1.0.0-rc.5
-      '@vitejs/devtools-kit': 0.0.0-alpha.32(typescript@5.9.3)(vite@packages+core)(ws@8.19.0)
-      '@vitejs/devtools-rpc': 0.0.0-alpha.32(typescript@5.9.3)(ws@8.19.0)
+      '@floating-ui/dom': 1.7.6
+      '@pnpm/read-project-manifest': 1001.2.5(@pnpm/logger@1001.0.1)
+      '@rolldown/debug': 1.0.0-rc.7
+      '@vitejs/devtools-kit': 0.0.0-alpha.33(typescript@5.9.3)(vite@packages+core)(ws@8.19.0)
+      '@vitejs/devtools-rpc': 0.0.0-alpha.33(typescript@5.9.3)(ws@8.19.0)
       ansis: 4.2.0
       birpc: 4.0.0
-      cac: 6.7.14
+      cac: 7.0.0
       d3-shape: 3.2.0
       diff: 8.0.3
       get-port-please: 3.2.0
       h3: 1.15.5
-      mlly: 1.8.0
+      mlly: 1.8.1
       mrmime: 2.0.1
       ohash: 2.0.11
       p-limit: 7.3.0
       pathe: 2.0.3
-      publint: 0.3.17
+      publint: 0.3.18
       sirv: 3.0.2(patch_hash=c07c56eb72faea34341d465cde2314e89db472106ed378181e3447893af6bf95)
       split2: 4.2.0
       structured-clone-es: 1.0.0
       tinyglobby: 0.2.15
-      unconfig: 7.4.2
+      unconfig: 7.5.0
       unstorage: 1.17.4
       vue-virtual-scroller: 2.0.0-beta.8(vue@3.5.27(typescript@5.9.3))
       ws: 8.19.0
@@ -12483,7 +12532,7 @@ snapshots:
       - vite
       - vue
 
-  '@vitejs/devtools-rpc@0.0.0-alpha.32(typescript@5.9.3)(ws@8.19.0)':
+  '@vitejs/devtools-rpc@0.0.0-alpha.33(typescript@5.9.3)(ws@8.19.0)':
     dependencies:
       birpc: 4.0.0
       ohash: 2.0.11
@@ -12495,17 +12544,17 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@vitejs/devtools@0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3))':
+  '@vitejs/devtools@0.0.0-alpha.33(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3))':
     dependencies:
-      '@vitejs/devtools-kit': 0.0.0-alpha.32(typescript@5.9.3)(vite@packages+core)(ws@8.19.0)
-      '@vitejs/devtools-rolldown': 0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3))
-      '@vitejs/devtools-rpc': 0.0.0-alpha.32(typescript@5.9.3)(ws@8.19.0)
+      '@vitejs/devtools-kit': 0.0.0-alpha.33(typescript@5.9.3)(vite@packages+core)(ws@8.19.0)
+      '@vitejs/devtools-rolldown': 0.0.0-alpha.33(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3))
+      '@vitejs/devtools-rpc': 0.0.0-alpha.33(typescript@5.9.3)(ws@8.19.0)
       birpc: 4.0.0
-      cac: 6.7.14
+      cac: 7.0.0
       h3: 1.15.5
       immer: 11.1.4
       launch-editor: 2.13.1
-      mlly: 1.8.0
+      mlly: 1.8.1
       obug: 2.1.1
       open: 11.0.0
       pathe: 2.0.3
@@ -12554,7 +12603,7 @@ snapshots:
       mri: 1.2.0
       picocolors: 1.1.1
       prompts: 2.4.2
-      publint: 0.3.17
+      publint: 0.3.18
       semver: 7.7.4
     transitivePeerDependencies:
       - conventional-commits-filter
@@ -14687,7 +14736,7 @@ snapshots:
 
   local-pkg@1.1.2:
     dependencies:
-      mlly: 1.8.0
+      mlly: 1.8.1
       pkg-types: 2.3.0
       quansync: 0.2.11
 
@@ -14854,7 +14903,7 @@ snapshots:
 
   mitt@3.0.1: {}
 
-  mlly@1.8.0:
+  mlly@1.8.1:
     dependencies:
       acorn: 8.16.0
       pathe: 2.0.3
@@ -15207,6 +15256,15 @@ snapshots:
       '@oxlint-tsgolint/win32-arm64': 0.15.0
       '@oxlint-tsgolint/win32-x64': 0.15.0
 
+  oxlint-tsgolint@0.16.0:
+    optionalDependencies:
+      '@oxlint-tsgolint/darwin-arm64': 0.16.0
+      '@oxlint-tsgolint/darwin-x64': 0.16.0
+      '@oxlint-tsgolint/linux-arm64': 0.16.0
+      '@oxlint-tsgolint/linux-x64': 0.16.0
+      '@oxlint-tsgolint/win32-arm64': 0.16.0
+      '@oxlint-tsgolint/win32-x64': 0.16.0
+
   oxlint@1.51.0(oxlint-tsgolint@0.15.0):
     optionalDependencies:
       '@oxlint/binding-android-arm-eabi': 1.51.0
@@ -15229,6 +15287,29 @@ snapshots:
       '@oxlint/binding-win32-ia32-msvc': 1.51.0
       '@oxlint/binding-win32-x64-msvc': 1.51.0
       oxlint-tsgolint: 0.15.0
+
+  oxlint@1.51.0(oxlint-tsgolint@0.16.0):
+    optionalDependencies:
+      '@oxlint/binding-android-arm-eabi': 1.51.0
+      '@oxlint/binding-android-arm64': 1.51.0
+      '@oxlint/binding-darwin-arm64': 1.51.0
+      '@oxlint/binding-darwin-x64': 1.51.0
+      '@oxlint/binding-freebsd-x64': 1.51.0
+      '@oxlint/binding-linux-arm-gnueabihf': 1.51.0
+      '@oxlint/binding-linux-arm-musleabihf': 1.51.0
+      '@oxlint/binding-linux-arm64-gnu': 1.51.0
+      '@oxlint/binding-linux-arm64-musl': 1.51.0
+      '@oxlint/binding-linux-ppc64-gnu': 1.51.0
+      '@oxlint/binding-linux-riscv64-gnu': 1.51.0
+      '@oxlint/binding-linux-riscv64-musl': 1.51.0
+      '@oxlint/binding-linux-s390x-gnu': 1.51.0
+      '@oxlint/binding-linux-x64-gnu': 1.51.0
+      '@oxlint/binding-linux-x64-musl': 1.51.0
+      '@oxlint/binding-openharmony-arm64': 1.51.0
+      '@oxlint/binding-win32-arm64-msvc': 1.51.0
+      '@oxlint/binding-win32-ia32-msvc': 1.51.0
+      '@oxlint/binding-win32-x64-msvc': 1.51.0
+      oxlint-tsgolint: 0.16.0
 
   p-limit@3.1.0:
     dependencies:
@@ -15371,7 +15452,7 @@ snapshots:
   pkg-types@1.3.1:
     dependencies:
       confbox: 0.1.8
-      mlly: 1.8.0
+      mlly: 1.8.1
       pathe: 2.0.3
 
   pkg-types@2.3.0:
@@ -15520,7 +15601,7 @@ snapshots:
   prr@1.0.1:
     optional: true
 
-  publint@0.3.17:
+  publint@0.3.18:
     dependencies:
       '@publint/pack': 0.1.4
       package-manager-detector: 1.6.0
@@ -15681,7 +15762,7 @@ snapshots:
 
   reka-ui@2.7.0(typescript@5.9.3)(vue@3.5.27(typescript@5.9.3)):
     dependencies:
-      '@floating-ui/dom': 1.7.5
+      '@floating-ui/dom': 1.7.6
       '@floating-ui/vue': 1.1.9(vue@3.5.27(typescript@5.9.3))
       '@internationalized/date': 3.10.1
       '@internationalized/number': 3.6.5
@@ -16320,7 +16401,7 @@ snapshots:
       picomatch: 4.0.3
       typescript: 5.9.3
 
-  tsdown@0.20.3(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.17)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6):
+  tsdown@0.20.3(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.18)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6):
     dependencies:
       ansis: 4.2.0
       cac: 6.7.14
@@ -16340,7 +16421,7 @@ snapshots:
       unrun: 0.2.30
     optionalDependencies:
       '@arethetypeswrong/core': 0.18.2
-      publint: 0.3.17
+      publint: 0.3.18
       typescript: 5.9.3
       unplugin-lightningcss: 0.4.3
       unplugin-unused: 0.5.6
@@ -16351,7 +16432,7 @@ snapshots:
       - synckit
       - vue-tsc
 
-  tsdown@0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.17)(typescript@5.9.3)(unplugin-unused@0.5.6):
+  tsdown@0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.33(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6):
     dependencies:
       ansis: 4.2.0
       cac: 7.0.0
@@ -16373,8 +16454,8 @@ snapshots:
       '@arethetypeswrong/core': 0.18.2
       '@tsdown/css': 0.21.0(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(tsdown@0.21.0)(tsx@4.21.0)(yaml@2.8.2)
       '@tsdown/exe': 0.21.0
-      '@vitejs/devtools': 0.0.0-alpha.32(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3))
-      publint: 0.3.17
+      '@vitejs/devtools': 0.0.0-alpha.33(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3))
+      publint: 0.3.18
       typescript: 5.9.3
       unplugin-unused: 0.5.6
     transitivePeerDependencies:
@@ -16384,7 +16465,7 @@ snapshots:
       - synckit
       - vue-tsc
 
-  tsdown@0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.17)(typescript@5.9.3)(unplugin-unused@0.5.6):
+  tsdown@0.21.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.0)(@tsdown/exe@0.21.0)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6):
     dependencies:
       ansis: 4.2.0
       cac: 7.0.0
@@ -16406,7 +16487,7 @@ snapshots:
       '@arethetypeswrong/core': 0.18.2
       '@tsdown/css': 0.21.0(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(tsdown@0.21.0)(tsx@4.21.0)(yaml@2.8.2)
       '@tsdown/exe': 0.21.0
-      publint: 0.3.17
+      publint: 0.3.18
       typescript: 5.9.3
       unplugin-unused: 0.5.6
     transitivePeerDependencies:
@@ -16466,23 +16547,18 @@ snapshots:
   uglify-js@3.19.3:
     optional: true
 
-  unconfig-core@7.4.2:
-    dependencies:
-      '@quansync/fs': 1.0.0
-      quansync: 1.0.0
-
   unconfig-core@7.5.0:
     dependencies:
       '@quansync/fs': 1.0.0
       quansync: 1.0.0
 
-  unconfig@7.4.2:
+  unconfig@7.5.0:
     dependencies:
       '@quansync/fs': 1.0.0
       defu: 6.1.4
       jiti: 2.6.1
       quansync: 1.0.0
-      unconfig-core: 7.4.2
+      unconfig-core: 7.5.0
 
   uncrypto@0.1.3: {}
 
@@ -16759,7 +16835,7 @@ snapshots:
       json5: 2.2.3
       local-pkg: 1.1.2
       magic-string: 0.30.21
-      mlly: 1.8.0
+      mlly: 1.8.1
       muggle-string: 0.4.1
       pathe: 2.0.3
       picomatch: 4.0.3

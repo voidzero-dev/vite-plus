@@ -83,7 +83,7 @@ catalog:
   oxc-transform: =0.115.0
   oxfmt: ^0.36.0
   oxlint: ^1.51.0
-  oxlint-tsgolint: ^0.15.0
+  oxlint-tsgolint: ^0.16.0
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -111,6 +111,7 @@ catalog:
   valibot: 1.2.0
   validate-npm-package-name: ^7.0.2
   vitepress: ^2.0.0-alpha.15
+  vitepress-plugin-graphviz: ^0.0.1
   vitepress-plugin-group-icons: ^1.7.1
   vitepress-plugin-llms: ^1.1.0
   vitepress-plugin-og: ^0.0.5
