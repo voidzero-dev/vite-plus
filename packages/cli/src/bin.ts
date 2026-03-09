@@ -13,6 +13,7 @@
 import path from 'node:path';
 
 import { run } from '../binding/index.js';
+import { applyToolInitConfigToViteConfig, inspectInitCommand } from './init-config.js';
 import { doc } from './resolve-doc.js';
 import { fmt } from './resolve-fmt.js';
 import { lint } from './resolve-lint.js';
@@ -55,9 +56,6 @@ if (command === 'create') {
   await import('./global/staged.js');
 } else {
   // All other commands — delegate to Rust core via NAPI binding
-  // Lazy-import init-config to avoid loading devDependencies (detect-indent, etc.)
-  // that aren't available when the package is installed as a dependency.
-  const { applyToolInitConfigToViteConfig, inspectInitCommand } = await import('./init-config.js');
   try {
     const initInspection = inspectInitCommand(command, args.slice(1));
     if (
