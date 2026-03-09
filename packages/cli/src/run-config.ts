@@ -29,6 +29,26 @@ export type Task = {
        * Environment variable names to be passed to the task without fingerprinting.
        */
       passThroughEnvs?: Array<string>;
+      /**
+       * Files to include in the cache fingerprint.
+       *
+       * - Omitted: automatically tracks which files the task reads
+       * - `[]` (empty): disables file tracking entirely
+       * - Glob patterns (e.g. `"src/**"`) select specific files
+       * - `{auto: true}` enables automatic file tracking
+       * - Negative patterns (e.g. `"!dist/**"`) exclude matched files
+       *
+       * Patterns are relative to the package directory.
+       */
+      inputs?: Array<
+        | string
+        | {
+            /**
+             * Automatically track which files the task reads
+             */
+            auto: boolean;
+          }
+      >;
     }
   | {
       /**
