@@ -23,10 +23,11 @@ import {
   VITE_PLUS_VERSION,
   resolve,
 } from '../utils/constants.js';
-import { editJsonFile, hasBaseUrlInTsconfig, isJsonFile, readJsonFile } from '../utils/json.js';
+import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
 import { detectPackageMetadata } from '../utils/package.js';
 import { displayRelative, rulesDir } from '../utils/path.js';
 import { getSpinner } from '../utils/prompts.js';
+import { hasBaseUrlInTsconfig } from '../utils/tsconfig.js';
 import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.js';
 import { detectConfigs, type ConfigFiles } from './detector.js';
 

@@ -5,8 +5,8 @@ import { mergeJsonConfig } from '../binding/index.js';
 import { fmt as resolveFmt } from './resolve-fmt.js';
 import { runCommandSilently } from './utils/command.js';
 import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from './utils/constants.js';
-import { hasBaseUrlInTsconfig } from './utils/json.js';
 import { warnMsg } from './utils/terminal.js';
+import { hasBaseUrlInTsconfig } from './utils/tsconfig.js';
 
 interface InitCommandSpec {
   configKey: 'lint' | 'fmt';

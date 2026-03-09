@@ -371,12 +371,6 @@ importers:
       cross-spawn:
         specifier: 'catalog:'
         version: 7.0.6
-      detect-indent:
-        specifier: 'catalog:'
-        version: 7.0.2
-      detect-newline:
-        specifier: 'catalog:'
-        version: 4.0.1
       oxfmt:
         specifier: 'catalog:'
         version: 0.36.0
@@ -414,6 +408,12 @@ importers:
       '@voidzero-dev/vite-plus-tools':
         specifier: 'workspace:'
         version: link:../tools
+      detect-indent:
+        specifier: 'catalog:'
+        version: 7.0.2
+      detect-newline:
+        specifier: 'catalog:'
+        version: 4.0.1
       glob:
         specifier: 'catalog:'
         version: 13.0.0
