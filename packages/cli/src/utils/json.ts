@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 
 import detectIndent from 'detect-indent';
 import { detectNewline } from 'detect-newline';
@@ -35,6 +36,22 @@ export function isJsonFile(file: string): boolean {
   try {
     readJsonFile(file);
     return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if tsconfig.json has compilerOptions.baseUrl set.
+ * oxlint's TypeScript checker (tsgolint) does not support baseUrl,
+ * so typeAware/typeCheck must be disabled when it is present.
+ */
+export function hasBaseUrlInTsconfig(projectPath: string): boolean {
+  try {
+    const tsconfig = readJsonFile<{ compilerOptions?: { baseUrl?: string } }>(
+      path.join(projectPath, 'tsconfig.json'),
+    );
+    return tsconfig?.compilerOptions?.baseUrl !== undefined;
   } catch {
     return false;
   }

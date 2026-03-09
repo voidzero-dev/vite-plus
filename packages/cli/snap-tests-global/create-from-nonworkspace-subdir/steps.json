@@ -1,4 +1,5 @@
 {
+  "ignoredPlatforms": ["win32"],
   "commands": [
     {
       "command": "cd scripts && vp create --no-interactive vite:application # from non-monorepo subdir",

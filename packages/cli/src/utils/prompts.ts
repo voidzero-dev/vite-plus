@@ -66,7 +66,7 @@ export async function runViteInstall(
   options?: { silent?: boolean },
 ) {
   // install dependencies on non-CI environment
-  if (process.env.VITE_PLUS_SKIP_INSTALL || process.env.CI) {
+  if (process.env.VITE_PLUS_SKIP_INSTALL) {
     return { durationMs: 0, status: 'skipped' } satisfies CommandRunSummary;
   }
 

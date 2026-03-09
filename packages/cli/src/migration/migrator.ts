@@ -22,7 +22,7 @@ import {
   VITE_PLUS_VERSION,
   resolve,
 } from '../utils/constants.js';
-import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
+import { editJsonFile, hasBaseUrlInTsconfig, isJsonFile, readJsonFile } from '../utils/json.js';
 import { detectPackageMetadata } from '../utils/package.js';
 import { displayRelative, rulesDir } from '../utils/path.js';
 import { getSpinner } from '../utils/prompts.js';
@@ -934,11 +934,14 @@ export function mergeViteConfigFiles(projectPath: string, silent = false): void 
     if (!oxlintJson.options) {
       oxlintJson.options = {};
     }
-    if (oxlintJson.options.typeAware === undefined) {
-      oxlintJson.options.typeAware = true;
-    }
-    if (oxlintJson.options.typeCheck === undefined) {
-      oxlintJson.options.typeCheck = true;
+    // Skip typeAware/typeCheck when tsconfig.json has baseUrl (unsupported by tsgolint)
+    if (!hasBaseUrlInTsconfig(projectPath)) {
+      if (oxlintJson.options.typeAware === undefined) {
+        oxlintJson.options.typeAware = true;
+      }
+      if (oxlintJson.options.typeCheck === undefined) {
+        oxlintJson.options.typeCheck = true;
+      }
     }
     fs.writeFileSync(fullOxlintPath, JSON.stringify(oxlintJson, null, 2));
     // merge oxlint config into vite.config.ts
