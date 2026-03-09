@@ -92,7 +92,8 @@ jobs:
           RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
 
       # Test all crates/* packages. New crates are automatically included.
-      - run: cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done)
+      # Also test vite-plus-cli (lives outside crates/) to catch type sync issues.
+      - run: cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
 
   lint:
     needs: detect-changes
