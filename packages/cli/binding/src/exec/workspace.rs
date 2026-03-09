@@ -346,6 +346,16 @@ mod tests {
 
     use super::*;
 
+    /// Create a cross-platform absolute path for tests.
+    /// On Unix `/workspace/...`, on Windows `C:\workspace\...`.
+    fn test_absolute_path(suffix: &str) -> Arc<AbsolutePathBuf> {
+        #[cfg(windows)]
+        let base = PathBuf::from(format!("C:\\workspace{}", suffix.replace('/', "\\")));
+        #[cfg(not(windows))]
+        let base = PathBuf::from(format!("/workspace{suffix}"));
+        AbsolutePathBuf::new(base).unwrap().into()
+    }
+
     /// Build a test dependency graph:
     /// - app-a depends on lib-c
     /// - app-b has no workspace dependencies
@@ -358,28 +368,22 @@ mod tests {
         let root = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "root".into(), ..Default::default() },
             path: RelativePathBuf::default(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace")).unwrap().into(),
+            absolute_path: test_absolute_path(""),
         });
         let app_a = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "app-a".into(), ..Default::default() },
             path: RelativePathBuf::try_from("packages/app-a").unwrap(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/app-a"))
-                .unwrap()
-                .into(),
+            absolute_path: test_absolute_path("/packages/app-a"),
         });
         let app_b = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "app-b".into(), ..Default::default() },
             path: RelativePathBuf::try_from("packages/app-b").unwrap(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/app-b"))
-                .unwrap()
-                .into(),
+            absolute_path: test_absolute_path("/packages/app-b"),
         });
         let lib_c = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "lib-c".into(), ..Default::default() },
             path: RelativePathBuf::try_from("packages/lib-c").unwrap(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/lib-c"))
-                .unwrap()
-                .into(),
+            absolute_path: test_absolute_path("/packages/lib-c"),
         });
 
         // app-a depends on lib-c
@@ -434,28 +438,22 @@ mod tests {
         let root = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "root".into(), ..Default::default() },
             path: RelativePathBuf::default(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace")).unwrap().into(),
+            absolute_path: test_absolute_path(""),
         });
         let pkg_a = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "pkg-a".into(), ..Default::default() },
             path: RelativePathBuf::try_from("packages/pkg-a").unwrap(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/pkg-a"))
-                .unwrap()
-                .into(),
+            absolute_path: test_absolute_path("/packages/pkg-a"),
         });
         let pkg_b = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "pkg-b".into(), ..Default::default() },
             path: RelativePathBuf::try_from("packages/pkg-b").unwrap(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/pkg-b"))
-                .unwrap()
-                .into(),
+            absolute_path: test_absolute_path("/packages/pkg-b"),
         });
         let pkg_c = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "pkg-c".into(), ..Default::default() },
             path: RelativePathBuf::try_from("packages/pkg-c").unwrap(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/pkg-c"))
-                .unwrap()
-                .into(),
+            absolute_path: test_absolute_path("/packages/pkg-c"),
         });
 
         // Circular: pkg-a <-> pkg-b
@@ -484,28 +482,22 @@ mod tests {
         let _root = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "root".into(), ..Default::default() },
             path: RelativePathBuf::default(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace")).unwrap().into(),
+            absolute_path: test_absolute_path(""),
         });
         let a = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "a".into(), ..Default::default() },
             path: RelativePathBuf::try_from("packages/a").unwrap(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/a"))
-                .unwrap()
-                .into(),
+            absolute_path: test_absolute_path("/packages/a"),
         });
         let b = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "b".into(), ..Default::default() },
             path: RelativePathBuf::try_from("packages/b").unwrap(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/b"))
-                .unwrap()
-                .into(),
+            absolute_path: test_absolute_path("/packages/b"),
         });
         let aa = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "aa".into(), ..Default::default() },
             path: RelativePathBuf::try_from("packages/aa").unwrap(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/aa"))
-                .unwrap()
-                .into(),
+            absolute_path: test_absolute_path("/packages/aa"),
         });
 
         // Cycle: a <-> b
@@ -534,7 +526,7 @@ mod tests {
         let _root = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "root".into(), ..Default::default() },
             path: RelativePathBuf::default(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace")).unwrap().into(),
+            absolute_path: test_absolute_path(""),
         });
         // Add c FIRST so it gets a lower node index than a/b.
         // This matters because tarjan_scc's intra-SCC order can depend on
@@ -543,23 +535,17 @@ mod tests {
         let c = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "c".into(), ..Default::default() },
             path: RelativePathBuf::try_from("packages/c").unwrap(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/c"))
-                .unwrap()
-                .into(),
+            absolute_path: test_absolute_path("/packages/c"),
         });
         let a = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "a".into(), ..Default::default() },
             path: RelativePathBuf::try_from("packages/a").unwrap(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/a"))
-                .unwrap()
-                .into(),
+            absolute_path: test_absolute_path("/packages/a"),
         });
         let b = graph.add_node(PackageInfo {
             package_json: PackageJson { name: "b".into(), ..Default::default() },
             path: RelativePathBuf::try_from("packages/b").unwrap(),
-            absolute_path: AbsolutePathBuf::new(PathBuf::from("/workspace/packages/b"))
-                .unwrap()
-                .into(),
+            absolute_path: test_absolute_path("/packages/b"),
         });
 
         // Cycle: a <-> b
