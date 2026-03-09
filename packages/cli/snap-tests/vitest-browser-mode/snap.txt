@@ -13,7 +13,7 @@
 
 > echo //comment >> src/foo.js
 > vp test
-✗ cache miss: content of input 'src/foo.js' changed, executing
+✗ cache miss: 'src/foo.js' modified, executing
 
  RUN  v<semver> <cwd>
 
