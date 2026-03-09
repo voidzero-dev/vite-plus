@@ -65,6 +65,32 @@ pnpm -F vite-plus snap-test-global <name-filter>
 
 Snap tests auto-generate `snap.txt` files. Check `git diff` to verify output changes are correct.
 
+## Verified Commits
+
+All commits in PR branches should be GitHub-verified so reviewers can confirm commit authenticity.
+
+Set up local commit signing and GitHub verification first:
+
+- Follow GitHub's guide for GPG commit signature verification: https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification#gpg-commit-signature-verification
+- If you use Graphite, add the Graphite GPG key to your GitHub account from the Graphite UI as well, otherwise commits updated by Graphite won't show as verified.
+
+After setup, re-sign any existing commits in your branch so the full branch is verified:
+
+```bash
+# Re-sign each commit on your branch (replace origin/main with your branch base if needed)
+git rebase -i origin/main
+# At each stop:
+git commit --amend --date=now --no-edit -S
+# Then continue:
+git rebase --continue
+```
+
+When done, force-push the updated branch history:
+
+```bash
+git push --force-with-lease
+```
+
 ## Pull upstream dependencies
 
 > [!NOTE]

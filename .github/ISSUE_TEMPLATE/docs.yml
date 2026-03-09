@@ -1,0 +1,49 @@
+name: "\U0001F4DA Documentation"
+description: Suggest a documentation improvement for Vite+
+labels: [documentation]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this issue.
+  - type: checkboxes
+    id: documentation_is
+    attributes:
+      label: Documentation is
+      options:
+        - label: Missing
+        - label: Outdated
+        - label: Confusing
+        - label: Not sure
+  - type: textarea
+    id: description
+    attributes:
+      label: Explain in Detail
+      description: A clear and concise description of your suggestion. If you intend to submit a PR for this issue, mention it here.
+      placeholder: The description of ... is not clear. I thought it meant ... but it wasn't.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Your Suggestion for Changes
+    validations:
+      required: true
+  - type: input
+    id: reference
+    attributes:
+      label: Relevant Page
+      description: Link to the relevant doc page, section, or file.
+      placeholder: https://github.com/voidzero-dev/vite-plus/blob/main/docs/...
+  - type: input
+    id: reproduction
+    attributes:
+      label: Reproduction (Optional)
+      description: If the docs issue is tied to behavior, share a minimal reproduction link.
+      placeholder: Reproduction URL
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to reproduce (Optional)
+      description: Add steps if the docs issue is about incorrect behavior guidance.
+      placeholder: Run `pnpm install` followed by `vp dev`
