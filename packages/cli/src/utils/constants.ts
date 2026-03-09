@@ -19,6 +19,10 @@ export function resolve(path: string) {
   });
 }
 
+export const BASEURL_TSCONFIG_WARNING =
+  'Skipped typeAware/typeCheck: tsconfig.json contains baseUrl which is not yet supported by the oxlint type checker.\n' +
+  '  Run `npx @andrewbranch/ts5to6 --fixBaseUrl .` to remove baseUrl from your tsconfig.';
+
 export const DEFAULT_ENVS = {
   // Provide Node.js runtime information for oxfmt's telemetry/compatibility
   JS_RUNTIME_VERSION: process.versions.node,

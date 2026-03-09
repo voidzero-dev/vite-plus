@@ -17,6 +17,7 @@ import {
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../types/index.js';
 import { runCommandSilently } from '../utils/command.js';
 import {
+  BASEURL_TSCONFIG_WARNING,
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
@@ -942,6 +943,8 @@ export function mergeViteConfigFiles(projectPath: string, silent = false): void 
       if (oxlintJson.options.typeCheck === undefined) {
         oxlintJson.options.typeCheck = true;
       }
+    } else if (!silent) {
+      prompts.log.warn(BASEURL_TSCONFIG_WARNING);
     }
     fs.writeFileSync(fullOxlintPath, JSON.stringify(oxlintJson, null, 2));
     // merge oxlint config into vite.config.ts

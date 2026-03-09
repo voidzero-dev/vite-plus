@@ -4,8 +4,9 @@ import path from 'node:path';
 import { mergeJsonConfig } from '../binding/index.js';
 import { fmt as resolveFmt } from './resolve-fmt.js';
 import { runCommandSilently } from './utils/command.js';
-import { VITE_PLUS_NAME } from './utils/constants.js';
+import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from './utils/constants.js';
 import { hasBaseUrlInTsconfig } from './utils/json.js';
+import { warnMsg } from './utils/terminal.js';
 
 interface InitCommandSpec {
   configKey: 'lint' | 'fmt';
@@ -231,9 +232,11 @@ export async function applyToolInitConfigToViteConfig(
   if (spec.configKey === 'lint' && hasTriggerFlag(args, ['--init'])) {
     const lintInitConfigPath = path.join(projectPath, '.vite-plus-lint-init.oxlintrc.json');
     // Skip typeAware/typeCheck when tsconfig.json has baseUrl (unsupported by tsgolint)
-    const initOptions = hasBaseUrlInTsconfig(projectPath)
-      ? {}
-      : { typeAware: true, typeCheck: true };
+    const hasBaseUrl = hasBaseUrlInTsconfig(projectPath);
+    const initOptions = hasBaseUrl ? {} : { typeAware: true, typeCheck: true };
+    if (hasBaseUrl) {
+      warnMsg(BASEURL_TSCONFIG_WARNING);
+    }
     fs.writeFileSync(lintInitConfigPath, JSON.stringify({ options: initOptions }));
     const mergeResult = mergeJsonConfig(viteConfigPath, lintInitConfigPath, spec.configKey);
 
