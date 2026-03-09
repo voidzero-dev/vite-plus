@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { ref, onMounted, onUnmounted } from 'vue';
 
 const nav = [{ text: 'Docs', link: '/vite/guide' }];
@@ -256,7 +257,7 @@ onUnmounted(() => {
                 class="hover:opacity-70 transition-opacity"
                 @click="closeMobileMenu"
               >
-                <img src="@assets/social/github-light.svg" alt="GitHub" class="size-6" />
+                <Icon icon="simple-icons:github" aria-label="GitHub" class="size-5 text-white" />
               </a>
               <a
                 href="https://bsky.app/profile/voidzero.dev"
@@ -265,7 +266,7 @@ onUnmounted(() => {
                 class="hover:opacity-70 transition-opacity"
                 @click="closeMobileMenu"
               >
-                <img src="@assets/social/bluesky-light.svg" alt="Bluesky" class="size-6" />
+                <Icon icon="simple-icons:bluesky" aria-label="Bluesky" class="size-5 text-white" />
               </a>
               <a
                 href="https://x.com/voidzerodev"
@@ -274,7 +275,7 @@ onUnmounted(() => {
                 class="hover:opacity-70 transition-opacity"
                 @click="closeMobileMenu"
               >
-                <img src="@assets/social/twitter-light.svg" alt="X" class="size-6" />
+                <Icon icon="simple-icons:x" aria-label="X" class="size-5 text-white" />
               </a>
             </div>
           </div>

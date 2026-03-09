@@ -87,7 +87,8 @@
                 target="_blank"
                 rel="noopener noreferrer"
                 class="text-white text-base flex gap-3 items-center"
-                ><img src="@assets/social/github-light.svg" alt="GitHub" class="size-5" /> GitHub</a
+                ><Icon icon="simple-icons:github" aria-label="GitHub" class="size-[18px]" />
+                GitHub</a
               >
             </li>
             <li>
@@ -96,7 +97,7 @@
                 target="_blank"
                 rel="noopener noreferrer"
                 class="text-white text-base flex gap-3 items-center"
-                ><img src="@assets/social/twitter-light.svg" alt="Twitter" class="size-5" />X.com</a
+                ><Icon icon="simple-icons:x" aria-label="X" class="size-[18px]" />X.com</a
               >
             </li>
             <li>
@@ -105,11 +106,8 @@
                 target="_blank"
                 rel="noopener noreferrer"
                 class="text-white text-base flex gap-3 items-center"
-                ><img
-                  src="@assets/social/bluesky-light.svg"
-                  alt="Bluesky"
-                  class="size-5"
-                />Bluesky</a
+                ><Icon icon="simple-icons:bluesky" aria-label="Bluesky" class="size-[18px]" />
+                Bluesky</a
               >
             </li>
           </ul>
@@ -128,4 +126,5 @@
 <style scoped></style>
 <script setup lang="ts">
 import Sponsors from '@components/oss/Sponsors.vue';
+import { Icon } from '@iconify/vue';
 </script>

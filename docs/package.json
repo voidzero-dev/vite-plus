@@ -8,13 +8,14 @@
     "preview": "vitepress preview"
   },
   "dependencies": {
+    "@iconify/vue": "catalog:",
     "reka-ui": "^2.7.0",
     "typewriter-effect": "^2.22.0",
     "vue": "^3.5.27",
     "vue3-carousel": "^0.16.0"
   },
   "devDependencies": {
-    "@voidzero-dev/vitepress-theme": "4.3.0",
+    "@voidzero-dev/vitepress-theme": "catalog:",
     "oxc-minify": "^0.110.0",
     "tailwindcss": "^4.1.18",
     "vitepress": "2.0.0-alpha.15"
